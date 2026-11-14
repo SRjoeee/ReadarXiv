@@ -911,7 +911,7 @@ function accentBase(s: string, k: number, to: number): { base: string; end: numb
   return inner && skipSpaces(s, inner.end) === e - 1 ? { base: inner.base, end: e } : null
 }
 /**
- * The letter an accent command at s[i] makes (`end` past its name): \\~n, \\~{n}, \\v c, \\'\\i, \\'{\\i} → ñ, ñ, č, í, í,
+ * The letter an accent command makes, read from `end`, past its name: \\~n, \\~{n}, \\v c, \\'\\i, \\'{\\i} → ñ, ñ, č, í, í,
  * where the letter is one Unicode has, every strategy sets it (SETTABLE) and the paper keeps the accent its own (not
  * one of `own`, the accents it defines anew: \\def\\v{\\varphi}); with where its source ends, or null. A letter in its
  * word, the engine reads the word whole: El Ni{\\~n}o went out as `El Ni @d#@e#@f# o southern oscillations`, and came
@@ -919,7 +919,6 @@ function accentBase(s: string, k: number, to: number): { base: string; end: numb
  */
 function accentLetter(
   s: string,
-  i: number,
   end: number,
   name: string,
   to: number,
@@ -937,7 +936,7 @@ const LETTER_COMMANDS = new Map(
   ['o', 'O', 'ss', 'ae', 'AE', 'oe', 'OE', 'aa', 'AA', 'l', 'L'].map((n) => [n, TEXT_SYMBOLS[`\\${n}`]]),
 )
 /**
- * The letter a letter command at s[i] sets (`end` past its name), as TeX sets it in its word: the spaces after the control
+ * The letter a letter command at s[i] sets (`name`, read from s[i]), as TeX sets it in its word: the spaces after the control
  * word TeX skips, and an empty group ending it, with it — `\\L ukasz`, `\\L{}ukasz`, `Bj\\o rn`, `Stra\\ss e` are Łukasz, Bjørn,
  * Straße —; where the paper does not define the command itself (\\def\\o{\\omega}: ownLetters); with where its source ends, or
  * null.
@@ -947,7 +946,6 @@ const LETTER_COMMANDS = new Map(
 function letterCommand(
   s: string,
   i: number,
-  end: number,
   name: string,
   to: number,
   own: ReadonlySet<string> | null | undefined,
@@ -972,7 +970,7 @@ const TEXT_CHARACTERS = new Map(
   ]),
 )
 /**
- * The character a text symbol at s[i] sets (`end` past its name), as TeX sets it: a control word's skipped spaces and an empty
+ * The character a text symbol at s[i] sets (`name`, read from s[i]), as TeX sets it: a control word's skipped spaces and an empty
  * group ending it with it (`\\textless 5` is "<5"), a control symbol alone (`5\\% of` is "5% of": TeX skips no space after one),
  * an empty group right after it with it; where the paper does not define the command itself (ownLetters); with where its source
  * ends, or null. A placeholder, it went out as a marker, and Microsoft split the term there ("R&D" came back as "D", a verb, then "R&"); as
@@ -983,7 +981,6 @@ const TEXT_CHARACTERS = new Map(
 function textCharacter(
   s: string,
   i: number,
-  end: number,
   name: string,
   to: number,
   own: ReadonlySet<string> | null | undefined,
@@ -994,7 +991,7 @@ function textCharacter(
     const e = s.startsWith('{}', i + 2) ? i + 4 : i + 2
     return e <= to ? { letter: char, end: e } : null
   }
-  return letterCommand(s, i, end, name, to, own, char)
+  return letterCommand(s, i, name, to, own, char)
 }
 /** the letter commands and the text characters (textCharacter) a paper's own files define anew (\\renewcommand{\\o}{\\omega},
  *  \\def\\L{\\mathcal{L}}, \\renewcommand{\\textbar}{…}, a \\let): there the command is the paper's, and no letter is made of it */
@@ -3336,16 +3333,16 @@ function ifmmodeLetter(s: string, end: number, to: number, ctx: Ctx): Letter | n
   if (s[k] === '\\') {
     const cmd = commandAt(s, k)
     one =
-      accentLetter(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownAccents) ||
-      letterCommand(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownLetters)
+      accentLetter(s, cmd.end, cmd.name, c.elseTo, ctx.ownAccents) ||
+      letterCommand(s, k, cmd.name, c.elseTo, ctx.ownLetters)
   } else if (s[k] === '{' && s[k + 1] === '\\') {
     const g = matchGroup(s, k),
       cmd = commandAt(s, k + 1)
     const inner =
       g > 0 &&
       g <= c.elseTo &&
-      (accentLetter(s, k + 1, cmd.end, cmd.name, g - 1, ctx.ownAccents) ||
-        letterCommand(s, k + 1, cmd.end, cmd.name, g - 1, ctx.ownLetters))
+      (accentLetter(s, cmd.end, cmd.name, g - 1, ctx.ownAccents) ||
+        letterCommand(s, k + 1, cmd.name, g - 1, ctx.ownLetters))
     if (inner && inner.end === g - 1) one = { letter: inner.letter, end: g }
   }
   // (the branch the letter alone, up to its \\fi: a space after an accent's group is a word's end, `\\'{e} \\fi`, left to the walk)
@@ -4262,7 +4259,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // pieces (a copy's translations are found again by them: cache.mjs sourceHash)
       const k = skipSpaces(s, i + 1),
         accent = s[k] === '\\' ? commandAt(s, k) : null
-      const letter = accent && accentLetter(s, k, accent.end, accent.name, e - 1, ctx.ownAccents)
+      const letter = accent && accentLetter(s, accent.end, accent.name, e - 1, ctx.ownAccents)
       if (letter && skipSpaces(s, letter.end) === e - 1) {
         endText()
         b.pairId++
@@ -4278,7 +4275,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         accent &&
         k === i + 1 &&
         ctx.letters !== false &&
-        (letterCommand(s, k, accent.end, accent.name, e - 1, ctx.ownLetters) ||
+        (letterCommand(s, k, accent.name, e - 1, ctx.ownLetters) ||
           (accent.name === 'ifmmode' ? ifmmodeLetter(s, accent.end, e - 1, ctx) : null))
       if (kernelLetter && kernelLetter.end === e - 1) {
         endText()
@@ -4294,7 +4291,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         accent &&
         k === i + 1 &&
         ctx.letters !== false &&
-        textCharacter(s, k, accent.end, accent.name, e - 1, ctx.ownLetters)
+        textCharacter(s, k, accent.name, e - 1, ctx.ownLetters)
       if (character && character.end === e - 1) {
         endText()
         b.pairId += pairsOf(s, i, e, b, ctx)
@@ -5144,7 +5141,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // an accent and its letter: the letter itself in its word where it is one every strategy sets (accentLetter), else
     // one opaque piece, \'o, \'{o}, \"\i, \v c. Left as text, the letter would be translated away and the accent put on
     // whatever comes next — pdfTeX stops at a CJK character there
-    const letter = ACCENTS.has(name) && accentLetter(s, i, end, name, to, ctx.ownAccents)
+    const letter = ACCENTS.has(name) && accentLetter(s, end, name, to, ctx.ownAccents)
     if (letter) {
       endText()
       b.letter(letter.letter, s.slice(i, letter.end), i, letter.end)
@@ -5152,7 +5149,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     // a letter command, \\L ukasz, \\L{}ukasz, Bj\\o rn: the letter in its word (letterCommand), TeX's skipped spaces with it
-    const kernelLetter = ctx.letters !== false && letterCommand(s, i, end, name, to, ctx.ownLetters)
+    const kernelLetter = ctx.letters !== false && letterCommand(s, i, name, to, ctx.ownLetters)
     if (kernelLetter) {
       endText()
       b.pairId += pairsOf(s, i, kernelLetter.end, b, ctx)
@@ -5160,7 +5157,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       i = kernelLetter.end
       continue
     }
-    const character = ctx.letters !== false && textCharacter(s, i, end, name, to, ctx.ownLetters)
+    const character = ctx.letters !== false && textCharacter(s, i, name, to, ctx.ownLetters)
     if (character) {
       endText()
       b.pairId += pairsOf(s, i, character.end, b, ctx)
@@ -6425,7 +6422,7 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
   // encoding the paper declares; it is read as none of the package's own files otherwise)
   const mainRel = [normalizePath(main), normalizePath(`${main}.tex`)].find((f) => fsys.read(f)),
     bbl = mainRel ? normalizePath(`${jobName(mainRel)}.bbl`) : null
-  decoders = decodersOf(bbl && fsys.read(bbl) ? [...own, { file: bbl, text: sourceText(bbl) }] : own, sourceText, main)
+  decoders = decodersOf(bbl && fsys.read(bbl) ? [...own, { file: bbl, text: sourceText(bbl) }] : own, main)
   try {
     return readProject(fsys, main, tables, sourceText, own)
   } finally {
@@ -6435,7 +6432,7 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
 }
 /** each of the package's files that is not UTF-8, by its normalized name, with its decoding (INPUT_ENCODINGS): the one the
  *  main file declares, else latin1 */
-function decodersOf(own: readonly { file: string; text: string }[], sourceText: unknown, main: string) {
+function decodersOf(own: readonly { file: string; text: string }[], main: string) {
   const out = new Map<string, Decoder>(),
     bad = own.filter((x) => !isUtf8Text(x.text))
   if (!bad.length) return out
@@ -6458,7 +6455,7 @@ export function texFilesOf(fsys: Fsys, main: string): string[] {
     .list()
     .filter((f) => /\.(tex|sty|cls)$/i.test(f))
     .map((f) => ({ file: f, text: texText(fsys.read(f)!) }))
-  const dec = decodersOf(own, null, main)
+  const dec = decodersOf(own, main)
   return own.map((x) => {
     const d = dec.get(x.file)
     return d ? d(x.text) : UTF8_LAX.decode(latin1Bytes(x.text))
