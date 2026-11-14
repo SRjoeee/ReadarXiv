@@ -10,7 +10,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./today/source/latex-front.ts": "./src/source/latex-front.ts",
-    "./today/source/paper-meta.mjs": "./src/source/paper-meta.mjs",
+    "./today/source/paper-meta.ts": "./src/source/paper-meta.ts",
     "./today/source/tex-kernel.ts": "./src/source/tex-kernel.ts",
     "./today/source/tex-names.ts": "./src/source/tex-names.ts",
     "./today/source/text-symbols.ts": "./src/source/text-symbols.ts",

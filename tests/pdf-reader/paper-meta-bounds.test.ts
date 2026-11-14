@@ -7,8 +7,7 @@
 // files of a class: preferred names, lengths, parts included, documents, subfiles and standalone pictures), and seeded packages
 // of every such file.
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error: the module is JavaScript until its typing commit (no declaration in the package)
-import { analyze } from '../../packages/engine/src/source/paper-meta.mjs'
+import { analyze } from '../../packages/engine/src/source/paper-meta.ts'
 import { analyze as analyzeBefore } from './helpers/paper-meta-before.mjs'
 
 /** a seeded generator (mulberry32) */

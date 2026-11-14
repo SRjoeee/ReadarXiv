@@ -20,8 +20,7 @@ import * as live_js from './compile/live.mjs'
 import * as pdfLite_js from './compile/pdf-lite.ts'
 import * as units_js from './instrument/units.ts'
 import * as latexFront_js from './source/latex-front.ts'
-// @ts-ignore: JavaScript moved as it is, typed by this file alone
-import * as paperMeta_js from './source/paper-meta.mjs'
+import * as paperMeta_js from './source/paper-meta.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as paper_js from './compile/paper.mjs'
 export type { BundlePiece, BundleUnit } from './instrument/units.ts'
@@ -255,14 +254,4 @@ export interface CompileRequest {
 }
 export type { CellPlace, SourceUnit }
 export const inMemory = latexFront_js.inMemory
-export const analyze = paperMeta_js.analyze as (fsys: ReturnType<typeof inMemory>) => {
-  main: string | null
-  mainGuessed?: boolean
-  compiler?: string
-  compilerGuessed?: boolean
-  compilerFrom?: 'pdf'
-  bbl?: boolean
-  tlVersion?: string | null
-  toplevels?: number
-  documentclass?: string | null
-}
+export const analyze = paperMeta_js.analyze

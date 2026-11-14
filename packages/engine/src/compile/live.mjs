@@ -4,7 +4,7 @@
 // target keeps (keptFor). The compiled translation that grew here (the translation set by TeX, its strategies, its typesetting
 // rule and its copies' cache) was parked, then taken out (2026-11-04, the rules audit's F4): the layer draws the translation
 // over our base page, and the web's rows hold it.
-import { analyze } from '../source/paper-meta.mjs'
+import { analyze } from '../source/paper-meta.ts'
 import { paperNames, theoremNames } from '../source/paper-names.ts'
 import { CALL_TEX, classNamesTex, DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, probeSamples, refKeysOf, refsTex, regionsTex } from '../marks/marks.mjs'
 import { documentBounds, DVI_MARK_DEF, dviEngine, FONT_PROBE, inMemory, jobName, lastTexLog, latin1, latin1Bytes, loadProject, MARK_DEF, markUnits, patch, texFilesOf, texText } from '../source/latex-front.ts'
