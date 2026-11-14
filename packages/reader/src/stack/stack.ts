@@ -558,6 +558,10 @@ export function createStack(o: StackOptions): Stack {
     const d = drawingBase(content.key, content, holder)
     d.view = view
     const mine = gen
+    /** its page view finished drawing at scale k and stands at it. PDF.js's draw resolves as well where it gave the drawing
+     *  up, its canvases removed: the page view reset by a new scale while it drew, or let go; a zoom's step marks a view that
+     *  is drawing finished, undrawn, at its new scale (pdf_viewer.mjs PDFPageView#update, #draw) */
+    const finishedAt = (k: number) => view.renderingState === FINISHED && view.scale === k
     d.job = {
       rank: () => (s.next === d || s.shown === d ? (d.ahead && !s.near ? 2 : rankOf(s)) : null),
       order: () => s.n,
@@ -581,11 +585,9 @@ export function createStack(o: StackOptions): Stack {
           tell('failed', { n: s.n, key: d.key })
           return
         }
-        // (PDF.js's draw resolves as well where it gave the drawing up, its canvases removed: the page view reset by a new scale
-        // while it drew, or let go; a zoom's step marks a view that is drawing finished, undrawn, at its new scale
-        // (pdf_viewer.mjs PDFPageView#update, #draw). That is no drawing: nothing is put in place or told, and the reset's own
-        // ask draws it at its turn, at the scale it stands at)
-        if (view.renderingState !== FINISHED || view.scale !== at) return
+        // (a drawing given up is no drawing: nothing is put in place or told, and the reset's own ask draws it at its turn, at
+        // the scale it stands at)
+        if (!finishedAt(at)) return
         d.drawMs = performance.now() - td
         if (mine !== gen || disposed) return
         d.drawnAt = at
@@ -621,7 +623,7 @@ export function createStack(o: StackOptions): Stack {
           }
         }
         // (reset again while its overlay was made or the left's page drew: drawn again at its turn, put in place then)
-        if (view.renderingState !== FINISHED || view.scale !== d.drawnAt) return
+        if (!finishedAt(d.drawnAt)) return
         drawnNow(s, d)
       },
     }
