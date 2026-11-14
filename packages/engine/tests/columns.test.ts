@@ -517,10 +517,16 @@ describe('locate states each cell’s room in its column as Room.column', () => 
 // (a table cell of several lines, one unit since §18.75: how its lines stand in the cell's box, read off A as their left edges,
 // middles or right edges together within ALIGNED, Placed.inner; all three together, the cell's class; none, no reading)
 describe('locate states how the lines of a cell of several lines stand in its box (Placed.inner, §18.75)', () => {
-  /** a cell of two lines owned by one unit, its column's class `boxed`: each line's text and start (glyphs 6 pt wide) */
-  const innerOf = (boxed: 'l' | 'c' | 'r', lines: [string, number][]) => {
+  /** a cell of two lines owned by one unit, its column's class `boxed`: each line's text and start (glyphs 6 pt wide); its lines
+   *  the rows of a box it holds, a forced break between each two (a merged cell), or with `paragraph` a paragraph's (none) */
+  const innerOf = (boxed: 'l' | 'c' | 'r', lines: [string, number][], paragraph = false) => {
     const B = docOf([{ lines: lines.map(([text, x], k) => ({ text, x, y: 712 - 12 * k })) }])
-    const content = [{ t: 'text' as const, s: lines.map(([t]) => t).join(' ') }]
+    const content = paragraph
+      ? [{ t: 'text' as const, s: lines.map(([t]) => t).join(' ') }]
+      : lines.flatMap(([t], k) => [
+          ...(k ? [{ t: 'el' as const, id: String(k), kind: 'other' as const, src: '\\\\', brk: true as const }] : []),
+          { t: 'text' as const, s: t },
+        ])
     const units: InstrumentUnit[] = [
       { id: unitId('cell', content), kind: 'cell', content, cell: { table: 0, row: 0, col: 0, boxed } },
     ]
@@ -579,6 +585,18 @@ describe('locate states how the lines of a cell of several lines stand in its bo
       ]),
     ).toEqual({ lines: 2, inner: undefined })
     expect(innerOf('l', [['Errorx', 103]])).toEqual({ lines: 1, inner: undefined })
+  })
+  it('states none for a cell whose lines are a paragraph of its own (a p column, no forced break): no box of rows', () => {
+    expect(
+      innerOf(
+        'l',
+        [
+          ['Errorx', 100],
+          ['ontestset', 100],
+        ],
+        true,
+      ),
+    ).toEqual({ lines: 2, inner: undefined })
   })
 })
 
