@@ -18,7 +18,7 @@
     "./today/marks/names.ts": "./src/marks/names.ts",
     "./today/marks/marks.ts": "./src/marks/marks.ts",
     "./today/own/stream.ts": "./src/own/stream.ts",
-    "./today/own/own.mjs": "./src/own/own.mjs",
+    "./today/own/own.ts": "./src/own/own.ts",
     "./today/instrument/mt.ts": "./src/instrument/mt.ts",
     "./today/compile/tex.ts": "./src/compile/tex.ts",
     "./today/compile/tex-errors.ts": "./src/compile/tex-errors.ts",
