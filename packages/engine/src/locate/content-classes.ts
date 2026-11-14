@@ -9,7 +9,7 @@
 // An original module (no port statement). Imports nothing.
 
 /** the reader's toggles, in the order the settings list them: `always` and `never` are no toggle */
-const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'references', 'names', 'never'] as const)
+export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'references', 'names', 'never'] as const)
 
 /**
  * Each class: `toggle` (TOGGLES); `state`, what exists today — `built` (translated and drawn: the source's units, and the ink
@@ -172,7 +172,7 @@ export function unitClass(u: string | unknown[] | { readonly kind?: unknown } | 
 /** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads, tables and figures on; names (the
  *  whole author block since 2026-10-30) and references off. A direct open of the run given none (layer-proto/run.mjs openProto: the lab's gates, the tests') takes them
  *  too, and the lab's fixture maker sends no unit they hide (the gates hold no translation of it) */
-const TOGGLE_DEFAULTS = Object.freeze({
+export const TOGGLE_DEFAULTS = Object.freeze({
   heads: true,
   tables: true,
   figures: true,
