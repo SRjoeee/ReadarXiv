@@ -68,7 +68,7 @@ export function analyze(fsys) {
     // arXiv's PDF, which the page pass compares with arXiv's first pages (a wrong pick is the carry's to refuse); else a file
     // of the preferred name, else the longer body as TeX reads it, among the uncited (each file included by another: all)
     const cands = sources.length >= 2 ? sources.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
-      : (uncited.length ? uncited : withClass).sort((a, b) => preferred(b) - preferred(a) || bodies[b].length - bodies[a].length)
+      : (uncited.length ? uncited : withClass).sort((a, b) => Number(preferred(b)) - Number(preferred(a)) || bodies[b].length - bodies[a].length)
     meta.main = cands[0] ?? null
     meta.mainCandidates = withClass.length
     // (a count a 00README gave stands, its main file merely missing from the package)
