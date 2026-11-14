@@ -1961,10 +1961,12 @@ function closed(shape: { segs: ArrayLike<number> } | null): boolean {
     }
   return [...deg.values()].every((d) => d % 2 === 0)
 }
+/** whether a met stroke's segments are all level (a met stroke has one at least: figure-text.ts shapeRoom meets a unit through
+ *  a segment's part alone) */
 const flat = (shape: { segs: ArrayLike<number> }) => {
   for (let i = 0; i + 3 < shape.segs.length; i += 4)
     if (Math.abs(shape.segs[i + 1]! - shape.segs[i + 3]!) > 1e-3) return false
-  return shape.segs.length >= 4
+  return true
 }
 const inside = (g: G, x0: number, y0: number, x1: number, y1: number) =>
   (g.ix0 ?? g.x0) > x0 && (g.ix1 ?? g.x1) < x1 && g.bottom > y0 && g.top < y1
