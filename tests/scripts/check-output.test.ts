@@ -111,6 +111,13 @@ describe('a build\'s style sheets', () => {
       put(`${OUT}/assets/popup.css`, `.flex{display:flex}${only}\n`)
       expect(verdict(OWN), only).toBe('✗')
     }
+    // a word a product style sheet holds as a property's value names no class: Tailwind reads no sheet of ours, so the
+    // class came from elsewhere (`.flex-wrap` from a vendored arXiv sheet in a test fixture)
+    put('src/entrypoints/options/ui/settings.css', '.o-row { display: flex; flex-wrap: wrap; }\n')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.flex-wrap{flex-wrap:wrap}.o-row{display:flex}\n')
+    expect(verdict(OWN)).toBe('✗')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.o-row{display:flex}\n')
+    expect(verdict(OWN)).toBe('✓')
     // a word inside a longer class name is no naming of the class
     put('src/entrypoints/popup/App.tsx', 'export const App = () => <div className="top-10" />\n')
     put(`${OUT}/assets/popup.css`, '.top-1{top:1px}\n')

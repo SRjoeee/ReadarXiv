@@ -101,12 +101,14 @@ for (const path of filesUnder(OUT)) {
 // `packages/<name>/src/` names came from text that is not the product's — a test, a document, a lab file, a model's
 // bytes — which Tailwind's scan read (it brought `.top-1` from a test and `.m-2` from another, `.z-8` from a model).
 // The classes of PDF.js's own sheet, which the reader's page carries, are PDF.js's, named by no file of ours. A class
-// is named when a product file holds it as a whole token (the escapes of a selector undone)
+// is named when a product file holds it as a whole token (the escapes of a selector undone) or a product sheet defines it
 const productFiles = []
 for (const root of ['src', ...(existsSync('packages') ? readdirSync('packages').map(name => join('packages', name, 'src')) : [])]) {
   if (existsSync(root)) productFiles.push(...filesUnder(root).filter(path => !/(^|[\\/])node_modules[\\/]/.test(path)))
 }
-const productText = productFiles.map(path => readFileSync(path, 'utf8')).join('\n')
+// Tailwind reads no style sheet of ours (its scan skips `.css`): a word in one is a property's value, not a class used, and
+// a class a sheet of ours defines is built in as the sheet itself
+const productText = productFiles.filter(path => !path.endsWith('.css')).map(path => readFileSync(path, 'utf8')).join('\n')
 const classesOf = css => {
   // comments, strings and url() hold dots that are no selector's (the strings first: a data: address holds a ')')
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""').replace(/url\([^)]*\)/g, '')
@@ -118,9 +120,10 @@ const classesOf = css => {
   return found
 }
 const cssIn = dir => (existsSync(dir) ? filesUnder(dir).filter(path => path.endsWith('.css')) : [])
+const definedByProduct = new Set(productFiles.filter(path => path.endsWith('.css')).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))]))
 const pdfjsClasses = new Set(cssIn(join(OUT, 'pdfjs')).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))]))
 const namedByProduct = name => new RegExp(`(?<![A-Za-z0-9_-])${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?![A-Za-z0-9_-])`).test(productText)
-const unnamedClasses = cssIn(OUT).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))].filter(name => !pdfjsClasses.has(name) && !namedByProduct(name)).map(name => `${name} in ${relative(OUT, path)}`))
+const unnamedClasses = cssIn(OUT).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))].filter(name => !pdfjsClasses.has(name) && !definedByProduct.has(name) && !namedByProduct(name)).map(name => `${name} in ${relative(OUT, path)}`))
 const war = manifest.web_accessible_resources ?? []
 for (const [what, ok] of [
   [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
