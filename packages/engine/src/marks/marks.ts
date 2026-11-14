@@ -2126,6 +2126,12 @@ function passedOver(pieces: readonly Piece[]): Set<number> {
  * - none inside a group whose opening command reads that argument verbatim, as characters (VERBATIM_ARG), at any depth:
  *   a mark there would be printed as its own name
  */
+/** (each copy is its unit's, every field kept but its pieces: the units' own type, of their files) */
+export function layoutMarking<U extends Unit>(
+  units: readonly U[],
+  classes: readonly MarkClass[],
+  o?: MarkingOptions,
+): { units: U[]; mark: (u: U) => UnitMark }
 export function layoutMarking(
   units: readonly Unit[],
   classes: readonly MarkClass[],
