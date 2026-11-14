@@ -175,8 +175,11 @@ line). No id joins them, nor any one member to one unit: their pieces do (`join.
 one-to-one join left, written beside the sheet as `joins.json`). A unit of today joins the run of members, two or more,
 consecutive in the part's order, whose words together are its words in order (each run of letters and digits of its text
 pieces, case folded; equal, or in common for nine tenths of each, as when one front end reads `\_` as a placeholder and the
-other as text); a member joins the run of today's units, two or more, consecutive in today's order, whose words together are
-its own; on a page both stand on, each in one group at most. Each group is one unit to every measure (keyed by its first unit
+other as text; a member's read with its groups' opens and closes and without them, as a merged cell's rows are, today's unit a
+row holding none of the box round them, `\makecell{`); a member joins the run of today's units, two or more, consecutive in
+today's order, whose words together are its own; on a page both stand on, each in one group at most. A run whose first alone
+says the other's words is none (one member, one unit: no group of pieces; going on past it only adds words a tenth may hide, as a
+paragraph the one-to-one join left took the merged cell after it, 2611.03953v2-zh p8). Each group is one unit to every measure (keyed by its first unit
 of today's): each side's lines of it together, the original's facts its members' together; a member of it v2 leaves the
 original's by a rule a ruling covers shows the original's ink, its lines counted on v2's side as rows apart, as a unit's
 element kept as a crop is. `shown` reads a group's parts: the unit of today is shown where each part of it is translated in a
