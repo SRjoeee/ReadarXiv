@@ -7103,8 +7103,13 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   not only a single line's; the cell has one size, the largest not over the original's at which every line fits (the fit's states
   in the same room, no widening); its lines stand as TeX set them in the cell's box: the box, as wide as its widest laid line, in
   the room by the cell's class (`Placed.align`), each line in the box by its own (`Placed.inner`, read off arXiv's page; absent,
-  the cell's class: `breaker/place.ts` boxLines). It replaces, for these cells, each line in its own width widened half way to
-  its neighbour where clipped at the floor. A reply that sets the break at its start or end takes none (U.breaks), and the breaker
+  the cell's class: `breaker/place.ts` boxLines, one box over all its lines whichever block each is in). Its forced break ends
+  its line where the reply keeps it between words: U.breaks' maps, keyed by each line's own rectangle as the reading read it, are
+  carried onto the room's (a lead read off the page knows no pitch, so the line after the break opens a region of its own,
+  `breakAt`; with the rectangles the room's and the maps not carried, 18 of the 34 cells of two or three lines the entry laid over
+  the table's papers ran their lines together, 2608.06701v1's "Trigger \\ Rate (%)" drawn with the first character of its
+  second line's translation on its first line). It replaces, for these
+  cells, each line in its own width widened half way to its neighbour where clipped at the floor. A reply that sets the break at its start or end takes none (U.breaks), and the breaker
   fills the cell's lines, each in the room. A paragraph cell (a p, m, b or X column, a `\parbox`: no column box), a cell with a held
   line or lines on two pages, and one whose side stops short of the box are laid in their own rooms as before.
   `Placed.inner` is read by the facts pass (`locate/columns.ts` innerOf, in `facts-pass.ts` readColumns), for a cell whose lines

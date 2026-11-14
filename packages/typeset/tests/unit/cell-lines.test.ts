@@ -144,8 +144,8 @@ describe('the other side: laid in their own rooms as before', () => {
 describe("a cell whose leading is read off the page, not stated by TeX (Placed.read 'lead'): its break a block of its own", () => {
   // (2608.06701v1-zh p6 after S2: "\shortstack{\textbf{Trigger}\\\textbf{Rate (%)}}", its lead read off the page: the break pairs
   // with TeX's line but no pitch is known, so the line after it opens a region of its own (U.breaks breakAt), keyed by the line's
-  // own rectangle; the lay set every line's rectangle to the column's room and found no region, and the reply's "触发" and
-  // "率（%）" were drawn as one line, "触发率" then "（%）")
+  // own rectangle; the lay set every line's rectangle to the column's room and found no region, and the reply's two halves ran
+  // together, the first character of its second half drawn on the first line)
   const narrow: [[number, number], [number, number]] = [
     [115, 145],
     [112, 148],
@@ -154,7 +154,14 @@ describe("a cell whose leading is read off the page, not stated by TeX (Placed.r
   it('ends its first line at the break, though both halves would fit the room on one', () => {
     const [m] = layOf([read(cell(5, narrow, { column: [100, 160] }))], rowsOf({ 5: ['xxxx', 'yyyy'] }))
     expect(m!.state).toBe('laid')
-    expect(m!.lines.map((l) => l[3].map((it) => (it as { s?: string }).s ?? '').join(''))).toEqual(['xxxx', 'yyyy'])
+    expect(
+      m!.lines.map((l) =>
+        l[3]
+          .map((it) => (it as { s?: string }).s ?? '')
+          .join('')
+          .trim(),
+      ),
+    ).toEqual(['xxxx', 'yyyy'])
     for (const [a, z] of extents(m!)) {
       expect(a).toBeCloseTo(120, 5)
       expect(z).toBeCloseTo(140, 5)

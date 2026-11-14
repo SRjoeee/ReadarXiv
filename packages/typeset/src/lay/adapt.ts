@@ -324,17 +324,32 @@ export function adapt(i: AdaptInput): Adapted {
   const { m, R } = i
   if (m.why) return { stop: m.why }
   if (!m.lines.length) return { stop: 'no lines' }
-  const br = i.reading.breaks
+  const read = i.reading.breaks
   if (
-    !br &&
+    !read &&
     (m.els?.some(([, e]) => e.ends || e.opens !== undefined) || m.spans?.some(([, x]) => x.opens !== undefined))
   )
     return { stop: 'breaks (U.breaks not adapted)' }
   const lines = m.lines
   const rects = lines.map((l) => rectOf(l, m))
-  // (a cell whose room in its column the part states: that every line's room)
+  // (a cell whose room in its column the part states: that every line's room; U.breaks' maps, keyed by each line's own
+  // rectangle as the reading read it, carried onto the room's, so that a forced break whose next line opens a region of its own
+  // (a lead read off the page: no pitch, U.breaks breakAt) still ends its line there, §18.75)
   const column = columnRoomOf(m)
-  if (column) for (const [j, r] of rects.entries()) rects[j] = [r[0], r2(column[0]), r[2], r2(column[1]), r[4]]
+  const moved = new Map<string, string>()
+  if (column)
+    for (const [j, r] of rects.entries()) {
+      rects[j] = [r[0], r2(column[0]), r[2], r2(column[1]), r[4]]
+      moved.set(rectKey(r), rectKey(rects[j]!))
+    }
+  const carried = <V>(map: Map<string, V> | null): Map<string, V> | null =>
+    map && moved.size ? new Map([...map].map(([k, v]) => [moved.get(k) ?? k, v])) : map
+  const br = read && {
+    regionOf: carried(read.regionOf)!,
+    breakAt: carried(read.breakAt)!,
+    joinAt: carried(read.joinAt)!,
+    paraAt: read.paraAt && moved.size ? new Set([...read.paraAt].map((k) => moved.get(k) ?? k)) : read.paraAt,
+  }
   // (each line's frame: its run of lines on one page and column)
   const frames: number[] = []
   lines.forEach((l, j) => {

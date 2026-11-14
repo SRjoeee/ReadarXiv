@@ -98,29 +98,27 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams): void {
 }
 /** a table cell's lines as TeX set them in its box (FitBlock.box, lay/adapt.ts; docs/PDF-READER.md §18.75): the box as wide as
  *  its widest laid line, set in the cell's room (each line's slot) by the cell's class, each line in the box by its own; a line's
- *  items moved together, their spacing as placed */
+ *  items moved together, their spacing as placed. One box over every boxed line of the member, whichever block it is in (a
+ *  forced break whose next line opens a region of its own sets its lines in two blocks, the cell's one box) */
 function boxLines(lines: LaidLine[], blocks: readonly FitBlock[]): void {
-  const byBlock = new Map<number, LaidLine[]>()
-  for (const l of lines)
-    if (blocks[l.block]?.box && l.items.length) (byBlock.get(l.block) ?? byBlock.set(l.block, []).get(l.block)!).push(l)
-  for (const [k, ls] of byBlock) {
-    const { cls, inner } = blocks[k]!.box!
-    const span = (l: LaidLine) => {
-      const a = l.items[0]!,
-        z = l.items.at(-1)!
-      return [a.x as number, (z.x as number) + z.w] as const
-    }
-    const W = Math.max(...ls.map((l) => span(l)[1] - span(l)[0]))
-    for (const l of ls) {
-      const room = l.x1 - l.x0
-      const box0 = l.x0 + (cls === 'c' ? (room - W) / 2 : cls === 'r' ? room - W : 0)
-      const [a, z] = span(l)
-      const at = box0 + (inner === 'c' ? (W - (z - a)) / 2 : inner === 'r' ? W - (z - a) : 0)
-      const dx = at - a
-      if (Math.abs(dx) < 1e-9) continue
-      for (const it of l.items) it.x = (it.x as number) + dx
-      l.used = (l.used ?? 0) + dx
-    }
+  const ls = lines.filter((l) => blocks[l.block]?.box && l.items.length)
+  if (!ls.length) return
+  const { cls, inner } = blocks[ls[0]!.block]!.box!
+  const span = (l: LaidLine) => {
+    const a = l.items[0]!,
+      z = l.items.at(-1)!
+    return [a.x as number, (z.x as number) + z.w] as const
+  }
+  const W = Math.max(...ls.map((l) => span(l)[1] - span(l)[0]))
+  for (const l of ls) {
+    const room = l.x1 - l.x0
+    const box0 = l.x0 + (cls === 'c' ? (room - W) / 2 : cls === 'r' ? room - W : 0)
+    const [a, z] = span(l)
+    const at = box0 + (inner === 'c' ? (W - (z - a)) / 2 : inner === 'r' ? W - (z - a) : 0)
+    const dx = at - a
+    if (Math.abs(dx) < 1e-9) continue
+    for (const it of l.items) it.x = (it.x as number) + dx
+    l.used = (l.used ?? 0) + dx
   }
 }
 /** a fit's breaking at its state made a layout: its lines placed, and what it set and lost counted; the lines TeX's rule
