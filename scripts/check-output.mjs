@@ -97,6 +97,30 @@ for (const path of filesUnder(OUT)) {
   if (LATEX_FRONT.test(content)) frontNamed.push(path)
   if (!staging && content.includes(STAGING)) stagingNamed.push(path)
 }
+// The style sheets are made from the product's own files alone: a utility class that no file under `src/` or
+// `packages/<name>/src/` names came from text that is not the product's — a test, a document, a lab file, a model's
+// bytes — which Tailwind's scan read (it brought `.top-1` from a test and `.m-2` from another, `.z-8` from a model).
+// The classes of PDF.js's own sheet, which the reader's page carries, are PDF.js's, named by no file of ours. A class
+// is named when a product file holds it as a whole token (the escapes of a selector undone)
+const productFiles = []
+for (const root of ['src', ...(existsSync('packages') ? readdirSync('packages').map(name => join('packages', name, 'src')) : [])]) {
+  if (existsSync(root)) productFiles.push(...filesUnder(root).filter(path => !/(^|[\\/])node_modules[\\/]/.test(path)))
+}
+const productText = productFiles.map(path => readFileSync(path, 'utf8')).join('\n')
+const classesOf = css => {
+  // comments, strings and url() hold dots that are no selector's (the strings first: a data: address holds a ')')
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""').replace(/url\([^)]*\)/g, '')
+  const found = new Set()
+  for (const m of bare.matchAll(/\.((?:\\[0-9a-fA-F]{1,6} ?|\\.|[A-Za-z0-9_-])+)/g)) {
+    const name = m[1].replace(/\\([0-9a-fA-F]{1,6}) ?/g, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16))).replace(/\\(.)/g, '$1')
+    if (!/^\d/.test(name)) found.add(name)
+  }
+  return found
+}
+const cssIn = dir => (existsSync(dir) ? filesUnder(dir).filter(path => path.endsWith('.css')) : [])
+const pdfjsClasses = new Set(cssIn(join(OUT, 'pdfjs')).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))]))
+const namedByProduct = name => new RegExp(`(?<![A-Za-z0-9_-])${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?![A-Za-z0-9_-])`).test(productText)
+const unnamedClasses = cssIn(OUT).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))].filter(name => !pdfjsClasses.has(name) && !namedByProduct(name)).map(name => `${name} in ${relative(OUT, path)}`))
 const war = manifest.web_accessible_resources ?? []
 for (const [what, ok] of [
   [`the website's hosts are read from src/shared/web-app.ts: ${siteMatches.join(', ') || 'none found'}`, siteHosts.length > 0 && siteMatches.every(match => /^https:\/\/[a-z0-9.-]+\/\*$/.test(match))],
@@ -115,6 +139,7 @@ for (const [what, ok] of [
   // the dev pages (wxt.config.ts DEV_PAGES) are for development builds: a release holding one would ship a debug page
   [`${OUT} holds no dev page`, ['gallery.html', 'controls.html', 'capsule.html'].every(page => !existsSync(join(OUT, page)))],
   [`${OUT} names no loopback TeX page${loopbackNamed.length > 0 ? ` (${loopbackNamed.join(', ')})` : ''}`, loopbackNamed.length === 0],
+  [`${OUT} holds no class that no product file names (the style sheets are made from the product's own files)${unnamedClasses.length > 0 ? ` (${unnamedClasses.join(', ')})` : ''}`, unnamedClasses.length === 0],
   [`${OUT} holds no BusyTeX or texlyre file${compilerNamed.length > 0 ? ` (${compilerNamed.join(', ')})` : ''}`, compilerNamed.length === 0],
   // (a build of the reader package, AXT_READER=v2: wxt.config.ts, holds none of today's reading view: the package is its reader)
   ...(V2 ? [[`${OUT} holds the reader package's, not today's reading view${viewNamed.length > 0 ? ` (${viewNamed.join(', ')})` : ''}`, viewNamed.length === 0]] : [[`${OUT} holds the reading view, the reader${viewNamed.length > 0 ? ` (${viewNamed.join(', ')})` : ''}`, viewNamed.length > 0]]),
