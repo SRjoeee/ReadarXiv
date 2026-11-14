@@ -80,9 +80,8 @@ describe('columnBoxes: a column’s box from its entries, where they line up as 
     expect(b.get(1)).toEqual([248, 281.88])
   })
   it('states no box for a column holding a word its class does not set where it stands: an entry not read whole', () => {
-    // (an r column's number ending short of its edge: "5.26 ± 0.3" read as three words, the first two short of it; a c column's
-    // word off its middle)
-    expect(columnBoxes([at(1, 2, 'r', 281.63, 311.04)], [word(272.1, 311.04), word(300, 309)]).size).toBe(0)
+    // (an r column's word ending short of its edge past the cells' hull; a c column's word off its middle past the hull)
+    expect(columnBoxes([at(1, 2, 'r', 281.63, 311.04)], [word(272.1, 311.04), word(270, 300)]).size).toBe(0)
     expect(columnBoxes([at(1, 2, 'c', 250.25, 279.63)], [word(255.3, 274.58), word(260, 285)]).size).toBe(0)
     // (2602.23285v2 p7's "Acc" over a siunitx S column: TeX sets the numbers on their decimal marker, padded to the column's
     // format, so no word of "0.856 ± 0.012" but its ± stands on the column's middle; the ± alone, centred, is no column of TeX's
@@ -90,6 +89,26 @@ describe('columnBoxes: a column’s box from its entries, where they line up as 
     const acc = [at(1, 1, 'c', 194.43, 205.95)]
     const rows = [0, 1, 2].flatMap((): FreeWord[] => [word(178.95, 195.7), word(197.33, 203.05), word(204.69, 221.43)])
     expect(columnBoxes(acc, rows).size).toBe(0)
+  })
+  it('passes over a free word wholly inside the hull of its column’s unit cells, meeting no other column: part of an entry', () => {
+    // (the coordinator's ruling (d) of 2026-11-14: the page does not state such an entry's own ends, a name set with a script or a
+    // number with its ± in words of their own, and entries that line up by their class line up whatever their parts. "5.26 ± 0.3"
+    // in an r column: its last word ends on the column's edge, an entry; the two before it inside the hull)
+    expect(columnBoxes([at(1, 2, 'r', 281.63, 311.04)], [word(272.1, 311.04), word(300, 309)]).get(1)).toEqual([
+      272.1, 311.04,
+    ])
+    // (2611.03953v2 p7 Table 1's "P²-MOPD" row in its l column: the P on the column's edge an entry, the raised 2 and "-MOPD"
+    // inside the hull)
+    const method = [at(1, 0, 'l', 73.17, 157.25), at(2, 0, 'l', 73.17, 101.06)]
+    const p2 = [word(73.17, 78.65), word(78.65, 81.63), word(82.13, 112.51)]
+    expect(columnBoxes(method, p2).get(2)).toEqual([73.17, 157.25])
+    // (inside within ALIGNED of the hull's edge: a c column's word off its middle)
+    expect(columnBoxes([at(1, 0, 'c', 100, 130), at(2, 0, 'c', 105, 125)], [word(99.7, 104)]).get(2)).toEqual([
+      100, 130,
+    ])
+    // (as before: a word past the hull's edge speaks against the column; a column of one entry and words inside it has none)
+    expect(columnBoxes([at(1, 0, 'l', 100, 130), at(2, 0, 'l', 100, 120)], [word(120, 135)]).size).toBe(0)
+    expect(columnBoxes([at(1, 0, 'l', 100, 130)], [word(105, 112)]).size).toBe(0)
   })
   it('leaves out a word that meets two columns’ cells, and a column of one entry', () => {
     const b = columnBoxes([at(1, 0, 'l', 100, 130), at(2, 1, 'l', 150, 170)], [word(100, 160)])
