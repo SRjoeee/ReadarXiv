@@ -4081,7 +4081,7 @@ nothing). Math in a `\vbox`'s paragraph gets none, as a point after it would be 
 pass before as no alignment states no text in its own list. Every point is in a math list or a restricted list: no node in a
 page's list or a paragraph's.
 
-**The reading** (v2, `packages/engine/src/locate/today/ledger.mjs`, CHANGED): a line at least half of whose glyphs TeX set
+**The reading** (v2, `packages/engine/src/locate/ledger.ts`, CHANGED): a line at least half of whose glyphs TeX set
 in a display, not in its text mode, is the formula's (`math`), by the second rule, after code and before every rule of place
 (references, heads, notes, orphans), so that whatever its face and wherever it stands, under a footnote rule, in a box,
 beside a column, it is kept as the paper has it; a line mostly a display's text goes through the rules of place and is read
@@ -4703,7 +4703,7 @@ states, for each, what TeX knows (layout/marks.mjs POINTS_TEX); one move of the 
 - **A float of a type with no counter** (`fn<n>`, beside the float's `fs<n>` in its own box). Where `\c@\@captype` is undefined
   when the float's box ends, no `\caption` can number the float: TeX says it is no figure, table or algorithm, but the page's
   own text the float mechanism placed. NeurIPS's styles define `\ftype@noticebox` and `\@float{noticebox}[b]` and no counter;
-  so does ICML's `\@float{copyrightbox}`. The ledger (the engine's copy, `locate/today/ledger.mjs`, CHANGED) reads such a
+  so does ICML's `\@float{copyrightbox}`. The ledger (the engine's copy, `locate/ledger.ts`, CHANGED) reads such a
   float's lines at the depth of the counted floats around them, so a line in none is text outside the bodies, a note
   (`inknotes`, always translated, as ACM's permission block is). Not a Headers-and-footers unit: TeX ships the float before the
   page's last mark, so it is no foot run. ICML's copyrightbox's text is units' already (its notice and affiliations): nothing of
@@ -5276,7 +5276,7 @@ was the formula's, not the break's: no rule read it as beginning a line, and on 
 
 ### 18.45 The float lines: a float's line no unit owns, stated and counted (2026-11-11)
 
-The ledger (the engine's copy, `packages/engine/src/locate/today/ledger.mjs`) reads a line of TeX's own text inside a counted
+The ledger (the engine's copy, `packages/engine/src/locate/ledger.ts`) reads a line of TeX's own text inside a counted
 float that no unit owns as its float's text, the class `figures`, by its depth alone (RULES' last `figures`), before it could be an
 orphan: a line the reader should have read and did not was seen nowhere. Over the lab's 88 papers (r17) that is 787 lines in 32
 papers: algorithm listings (kept as the original's on purpose, the owner's ruling of 2026-11-08), tables read with no cell (a
@@ -5991,9 +5991,9 @@ built. Two size steps: not offered (5 % is what he saw). The study, its counts a
 
 On staging (round B12), 1706.03762v7 p4's display (1), `Attention(Q, K, V) = softmax(QKᵀ/√d_k)V`, was hovered as three pieces,
 each lit alone on both panes: "Attention(Q, K, V) = softmax(", the fraction, ")V"; its number "(1)" lit with none. No source unit
-owns the display (its paragraph ends at "as:", the next begins under it), so it is kept blocks (`today/ink-units.mjs`
+owns the display (its paragraph ends at "as:", the next begins under it), so it is kept blocks (`locate/ink-units.ts`
 keptUnitsOf, §17.1's "Text no unit owns is a kept block"), each a member lit whole (`lay/lit.ts` litOfA). The ledger makes a line
-of the glyphs TeX set on one baseline (0.6 of their size: `today/ledger.mjs` LINE_DY), so the display was five lines: the
+of the glyphs TeX set on one baseline (0.6 of their size: `locate/ledger.ts` LINE_DY), so the display was five lines: the
 formula's run to "softmax(" on 311.23, the numerator on 317.97, the radical on 311.53, d_k on 303.78, ")V" on 311.23. A block took
 the next line in TeX's stream only where it stood under the block's lowest baseline (0.6 of its size) and met the block across: a
 listing's rule. The numerator, 6.74 pt over the baseline and right of "softmax(", began a second block, the radical and d_k joined
@@ -6044,7 +6044,7 @@ softmax(" alone on both panes, and the rest with the paragraph before on arXiv's
   (`locate/rows.ts`: its ink's bands joined where they overlap top to bottom, two bands joined where their glyphs interleave in
   TeX's stream, a row's number with the row whose band its ink reaches), and so a unit's row reaches its number, the blank
   between them lit (over the parity's 24 pairs, 448 numbers TeX set on a row, every one in its row's box). A kept block of a
-  display now says so (`today/ink-units.mjs` keptUnitsOf's `display`, the unit's `display`, which the bundle does not carry) and
+  display now says so (`locate/ink-units.ts` keptUnitsOf's `display`, the unit's `display`, which the bundle does not carry) and
   its lines are its rows by the same rule (`geometry.ts`): a reader cannot tell a kept display from a unit's, and it looks as one.
   Over the 89 papers and 2611.03953v2 (stage 1a against round RB2a's r23e and r23e-two): 34 kept displays' members on 16 papers
   move their lines (55 member-pages; their count, extents, baselines, sizes, flags, and their lead, room and alignment read off
@@ -6308,7 +6308,7 @@ keep now carries its reason from the line that decides it, as the family before 
 - (`nameCell`, a cell or a figure text of names or markup tokens alone, `keptBy: 'name'`: gone with the rule, §18.72.)
 - `crowded`: a figure text the figure reading keeps whole as crowded (a translation with no room beside other ink, a formula it
   would tear) and for no reason of its own besides (`double`, `script` stay first). `keptBy: 'crowded'`.
-- `block`: a kept block of rule 10 (`locate/today/ink-units.mjs` keptUnitsOf: a listing, a page number, a URL alone, a
+- `block`: a kept block of rule 10 (`locate/ink-units.ts` keptUnitsOf: a listing, a page number, a URL alone, a
   bibliography not cut into entries), beside `address` for a block of e-mail addresses alone. `keptBy: 'block'`.
 - A figure text the lone-text path keeps as a line of code states `pitch`, as the paragraph path's already does
   (`locate/ink.ts`); no unit of the corpus moved by it.
@@ -6514,7 +6514,7 @@ it. Not this round's: staging drew the same at round B10's engine; the lay follo
   was read as the next page's running head's (2610.30854v1 p8, p9: flush right read as justified). An end is carried onto A before
   the partner of B's next glyph, so where A breaks the page later than B, it lands right after the next A page's head. The end
   right after a unit's last glyph is the unit's own only where, on B, it stood right after that glyph's partner, on its page
-  (`locate/ink.ts` carry keeps each end's place on B and each A glyph's place after its partner; `today/ink-units.mjs`
+  (`locate/ink.ts` carry keeps each end's place on B and each A glyph's place after its partner; `locate/ink-units.ts`
   alignOf); and the points between are read by their glyphs, A's list of points not being in glyph order (the points carried
   from B's page before come first).
 - **The end's gate**, `lab/pdf/spikes/para-end-cases.mjs`: a paragraph after a hyperref'd footnote, after a plain `\href`,
@@ -6676,7 +6676,7 @@ read it, never a word list or a share:
 - **An author command's argument a macro stores** keeps its role's kinds (`frontBlock`): ICML's `\icmlaffiliation`, which its
   class stores with `\gdef` for the footnote `\printAffiliationsAndNotice` sets, is the block's places, held and unmarked as
   before (a mark there could be set twice or never: 2608.16117 lost a page), no longer a paragraph's.
-- **The ink TeX sets of the block's own text** (locate, `today/ink-units.mjs` rule 8): a block of notes or orphans that holds
+- **The ink TeX sets of the block's own text** (locate, `locate/ink-units.ts` rule 8): a block of notes or orphans that holds
   whole the letters of an author or affiliation unit with no place of its own on A (it owns no glyph of A, or its only place is
   a paragraph that sets a unit again: 2610.22065v1's names its own `\@mkauthors` types out) is the names', and opens the block's
   stretch; outside the stretch it is turned back, the text it is (`nameBlock`: acmart's reference format, amsart's addresses at
@@ -8820,7 +8820,7 @@ page with another number there: amsart's `\llap{\thepage}` after a title as wide
 word than its words are to each other, 2610.21884v1), a number in the text's own words the unit's, translated in its flow
 (LAYOUT 25: 2010.11929v2's running head "Published as a conference paper at ICLR 2021", the same on every page, had its year
 left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders (the
-rebuilt reader's copy of the maker, `packages/engine` `locate/today/ink-units.mjs`, keeps an e-mail address in a word one too, the
+rebuilt reader's copy of the maker, `packages/engine` `locate/ink-units.ts`, keeps an e-mail address in a word one too, the
 address alone and the word's other characters text, by the front end's own pattern, `latex-front.mjs` `EMAIL_ADDRESS`: in colour
 groups no translation kept, 2609.36054v2 p1's grey addresses were drawn black, #28; and a group of local parts before their one
 domain, `ADDRESS_GROUP`, one kept run over its words and over the break of lines TeX set one right after the other, every glyph

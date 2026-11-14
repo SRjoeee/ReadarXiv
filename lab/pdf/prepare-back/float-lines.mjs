@@ -1,6 +1,6 @@
 // lab/pdf/prepare-back/float-lines.mjs: the float lines of a stage 1a run (corpus.sh's <out>), beside its orphan letters. A float
 // line is a line TeX set inside a counted float that no unit owns, which the ledger reads as its float's text by its depth alone
-// (packages/engine/src/locate/today/ledger.mjs, PDF-READER §18.45): counted, not gated, so that a miss is seen. Each paper's count
+// (packages/engine/src/locate/ledger.ts, PDF-READER §18.45): counted, not gated, so that a miss is seen. Each paper's count
 // and its letters, by why no unit owns it as far as the ledger knows (`code` an algorithm's float or a code region, `cells` a cell
 // table's text no cell owns, `nocells` a table read with no cell, `other`), and its orphan letters (the letters no unit owns once
 // the ink units own theirs: invariant (o)'s, which v2's stage 1a stated nowhere before); the total; and, against a baseline of
