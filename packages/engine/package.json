@@ -25,7 +25,7 @@
     "./today/compile/base.ts": "./src/compile/base.ts",
     "./today/compile/pdf-lite.ts": "./src/compile/pdf-lite.ts",
     "./today/compile/guard.ts": "./src/compile/guard.ts",
-    "./today/compile/live.mjs": "./src/compile/live.mjs",
+    "./today/compile/live.ts": "./src/compile/live.ts",
     "./today/compile/paper.mjs": "./src/compile/paper.mjs",
     "./today/instrument/format.ts": "./src/instrument/format.ts",
     "./today/instrument/units.ts": "./src/instrument/units.ts",

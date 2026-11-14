@@ -206,7 +206,7 @@ const planOf = (stored: StoredInstrument): ReadPlan | null => {
   }
 }
 
-/** the paper opened (compile/live.mjs openPaper), its failures the front end's */
+/** the paper opened (compile/live.ts openPaper), its failures the front end's */
 function opened(files: Map<string, Uint8Array>): Paper {
   try {
     return openPaper(files)

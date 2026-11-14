@@ -10,11 +10,11 @@ import type { PdfLike } from './compile/base.ts'
 import type { Instrument, PieceClass } from './instrument.ts'
 import type { NameKey } from './marks/names.ts'
 import type { CellPlace, SourceUnit } from './source/latex-front.ts'
+import type { Compiled, CompileRequest, Paper } from './compile/live.ts'
 import * as instrument_js from './instrument/instrument.ts'
 import * as base_js from './compile/base.ts'
 import * as guard_js from './compile/guard.ts'
-// @ts-ignore: JavaScript moved as it is, typed by this file alone
-import * as live_js from './compile/live.mjs'
+import * as live_js from './compile/live.ts'
 import * as pdfLite_js from './compile/pdf-lite.ts'
 import * as units_js from './instrument/units.ts'
 import * as latexFront_js from './source/latex-front.ts'
@@ -192,45 +192,9 @@ export const classesOf = instrument_js.classesOf
 export const elementKindOf = instrument_js.elementKindOf
 export const unitFactsOf = instrument_js.unitFactsOf
 export const instrumentOf = instrument_js.instrumentOf
-export interface Paper {
-  fsys: ReturnType<typeof inMemory>
-  meta: ReturnType<typeof analyze>
-  project: { main: string; units: SourceUnit[]; inFloat: number[]; bibliography?: string[] }
-  units: SourceUnit[]
-  inFloat: number[]
-  floatTypes?: [number, string][]
-  pseudocode?: number[]
-  /** R4's blocks (PDF-READER §18.72): each block's text cells, a cell's units by index or a cell of none that prints text */
-  tableBlocks?: ({ units: number[] } | { name: true })[][]
-  texOrder?: number[] | null
-  names: string[]
-  theoremNames?: string[]
-}
-export const openPaper = live_js.openPaper as (files: Map<string, Uint8Array>) => Paper
-export const NO_DRIVER_GROUP = live_js.NO_DRIVER_GROUP as string
-export const ranThrough = live_js.ranThrough as (c: Compiled | null | undefined) => boolean
-export interface Compiled {
-  ok: boolean
-  pdf?: Uint8Array | null
-  aux?: string | null
-  bbl?: string | null
-  log?: string
-  ms?: number
-  error?: string
-  network?: string[]
-  passes?: number
-  files?: Map<string, Uint8Array>
-}
-export interface CompileRequest {
-  main: string
-  engine: string
-  rerun: boolean
-  bibtex: boolean | null
-  overrides: Map<string, Uint8Array>
-  draft?: boolean
-  files?: boolean
-  sourceDate?: number
-}
-export type { CellPlace, SourceUnit }
+export const openPaper = live_js.openPaper
+export const NO_DRIVER_GROUP = live_js.NO_DRIVER_GROUP
+export const ranThrough = live_js.ranThrough
+export type { CellPlace, Compiled, CompileRequest, Paper, SourceUnit }
 export const inMemory = latexFront_js.inMemory
 export const analyze = paperMeta_js.analyze
