@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { LAYOUT_CLASSES, NAMES_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
-// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
-// else imported, is gone
-import { paperParams, readArgs, textless } from '../../packages/engine/src/source/arg-roles.mjs'
+import { paperParams, readArgs, textless } from '../../packages/engine/src/source/arg-roles.ts'
 
 // A unit, and a mark, are made only of text TeX typesets where it stands: an argument TeX reads as syntax — a length or
 // a number, a key, a label or a file name, a loop's variables and list — is never walked as text and never takes a mark.

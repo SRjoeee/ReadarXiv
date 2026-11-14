@@ -1,10 +1,15 @@
+// What arXiv would compile (packages/engine/src/source/paper-meta.mjs) as it was at be7ee2121, before the code change of the
+// typing lane T6 (the preferred name's sort key a number): kept here alone, verbatim but its two imports (the package's modules by
+// their paths), as the reference the change is held to (tests/pdf-reader/paper-meta-bounds.test.ts). Imported by no module of the
+// engine.
+//
 // What arXiv would compile, and the features a failure might hang on. The main file and compiler come from arXiv's own
 // 00README.json when the package carries one (arXiv writes it on submission); otherwise from the same heuristics as
 // arXiv's preflight, in simplified form.
 // Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
 // a directory under Node, which the spikes' paper-meta.mjs hands in).
-import { isMemoryError } from '../memory.ts'
-import { jobName, normalizePath, texText } from './latex-front.mjs'
+import { isMemoryError } from '../../../packages/engine/src/memory.ts'
+import { jobName, normalizePath, texText } from '../../../packages/engine/src/source/latex-front.ts'
 
 const uncomment = s => s.replace(/(^|[^\\])%.*$/gm, '$1')
 const basename = p => p.slice(p.lastIndexOf('/') + 1)

@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
-// else imported, is gone
-import { readArgs, paperParams } from '../../packages/engine/src/source/arg-roles.mjs'
+import { readArgs, paperParams } from '../../packages/engine/src/source/arg-roles.ts'
 
 // A command and its arguments are one piece of the source: no unit begins or ends between them, so nothing of the
 // reader's — a lead, a mark, a line probe — is written there. #407's review: `\vbox{…}\begin{center}` was marked

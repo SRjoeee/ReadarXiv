@@ -17,11 +17,65 @@
 // A register (\tabcolsep) is '=': TeX's assignment may follow it, `\tabcolsep=2pt`; a token register (llncs'
 // \titlerunning) `?s{x`, its value a group. A command LaTeXML reads in code past its prototype (\cmidrule[]'s
 // (trim){a-b}, acronym's \ac*{key}) is not known: its arguments are no reader's text
-import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, NOTE_PACKAGES, NOTE_POOLS, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUEST_PACKAGES, REQUEST_POOLS, REQUIRES } from './latexml-args.mjs'
-import { BREAK_HINTS, inkFree } from './tex-kernel.mjs'
+import type { ByBindings } from './latexml-args.ts'
+import {
+  BINDINGS,
+  COMMANDS,
+  ENVIRONMENTS,
+  FRONT,
+  NOTE_PACKAGES,
+  NOTE_POOLS,
+  PACKAGE_COMMANDS,
+  PACKAGE_ENVIRONMENTS,
+  REQUEST_PACKAGES,
+  REQUEST_POOLS,
+  REQUIRES,
+} from './latexml-args.ts'
+import { BREAK_HINTS, inkFree } from './tex-kernel.ts'
+
+/** a parameter of a command or an environment: its shape and its role, each a letter of the table's (above) */
+export interface Param {
+  shape: string
+  role: string
+}
+/** a command's or an environment's parameters, in order */
+export type Params = readonly Param[]
+/** a set a reader asks of a key that may be none (a pattern's group that took no part, the index of a binding LaTeXML does not
+ *  have): such a key is in none */
+export interface KeySet<K> {
+  has(key: K | undefined): boolean
+}
+/** a paper as the table reads it (paperOf): the bindings it loads by BINDINGS' index, the packages its files load by name, the
+ *  commands they define */
+export interface ArgPaper {
+  readonly bindings: KeySet<number>
+  readonly packages: KeySet<string>
+  readonly own: KeySet<string>
+}
+/** an argument as readArgs reads it: its shape and role, its parameter's index, where it starts (a group at its brace or
+ *  bracket) and ends */
+export interface Arg {
+  shape: string
+  role: string
+  param: number
+  start: number
+  end: number
+}
 
 /** the roles' names, by their letter */
-export const ROLES = Object.freeze({ t: 'text', c: 'content', a: 'arg', d: 'dimension', k: 'keys', n: 'name', v: 'verbatim', r: 'register', x: 'code', m: 'math', s: 'literal' })
+export const ROLES = Object.freeze({
+  t: 'text',
+  c: 'content',
+  a: 'arg',
+  d: 'dimension',
+  k: 'keys',
+  n: 'name',
+  v: 'verbatim',
+  r: 'register',
+  x: 'code',
+  m: 'math',
+  s: 'literal',
+})
 /** roles whose argument a page may show as letters: what a source fallback draws (textArgsOf) — a name is no such one,
  *  though some commands set ink by one (an image's file, a counter's number): textless reads it as it may be */
 const MAY_BE_TEXT = new Set(['t', 'c', 'a', 'v', 'm'])
@@ -50,77 +104,244 @@ const DELIMITED = {
   foreach: 'bxgxgc',
   etocdepthtag: 'bsgn',
 }
-const CURATED = {
+const CURATED: Readonly<Record<string, string>> = {
   // boxes and colours: the last argument the text they set. Plain TeX's line boxes, LaTeX's own (ltplain.dtx: \\line is
   // \\hb@xt@\\hsize, \\centerline#1 \\line{\\hss#1\\hss}, \\leftline#1 \\line{#1\\hss}, \\rightline#1 \\line{\\hss#1}), whose
   // argument LaTeXML leaves untyped: what the page shows, a box's content (PDF-READER §18.46)
-  centerline: '{c', leftline: '{c', rightline: '{c',
-  mbox: '{c', makebox: '[d[n{c', framebox: '[d[n{c', fbox: '{c', parbox: '[n[d[n{d{c', raisebox: '{d[d[d{c',
-  resizebox: '*s{d{d{c', scalebox: '{d[d{c', rotatebox: '[k{d{c', reflectbox: '{c', colorbox: '[n{n{c', fcolorbox: '[n{n{n{c',
-  textcolor: '[n{n{c', color: '[n{n', adjustbox: '{k{c', smash: '[n{c', phantom: '{x', hphantom: '{x', vphantom: '{x',
+  centerline: '{c',
+  leftline: '{c',
+  rightline: '{c',
+  mbox: '{c',
+  makebox: '[d[n{c',
+  framebox: '[d[n{c',
+  fbox: '{c',
+  parbox: '[n[d[n{d{c',
+  raisebox: '{d[d[d{c',
+  resizebox: '*s{d{d{c',
+  scalebox: '{d[d{c',
+  rotatebox: '[k{d{c',
+  reflectbox: '{c',
+  colorbox: '[n{n{c',
+  fcolorbox: '[n{n{n{c',
+  textcolor: '[n{n{c',
+  color: '[n{n',
+  adjustbox: '{k{c',
+  smash: '[n{c',
+  phantom: '{x',
+  hphantom: '{x',
+  vphantom: '{x',
   // (colortbl's row colour and its overhangs, \rowcolor[model]{colour}[left][right]; LaTeXML's form stops at the colour, and
   // 2610.40394v1's `[0pt][0pt]` began its row's unit, the start mark before them and before the row's \multicolumn)
   rowcolor: '[n{n[d[d',
   // space, rules and the rows of a table
-  vspace: '*s{d', hspace: '*s{d', addvspace: '{d', rule: '[d{d{d', specialrule: '{d{d{d', addlinespace: '[d', toprule: '[d',
-  midrule: '[d', bottomrule: '[d', cline: '{n', hhline: '{n', noalign: '{x', tabularnewline: '[d', linespread: '{d', fontsize: '{d{d',
-  enlargethispage: '*s{d', pagebreak: '[d', linebreak: '[d', nopagebreak: '[d', nolinebreak: '[d', multicolumn: '{d{n{c',
-  multirow: '[n{d[d{d[d{c', makecell: '[n{c', shortstack: '[n{c',
+  vspace: '*s{d',
+  hspace: '*s{d',
+  addvspace: '{d',
+  rule: '[d{d{d',
+  specialrule: '{d{d{d',
+  addlinespace: '[d',
+  toprule: '[d',
+  midrule: '[d',
+  bottomrule: '[d',
+  cline: '{n',
+  hhline: '{n',
+  noalign: '{x',
+  tabularnewline: '[d',
+  linespread: '{d',
+  fontsize: '{d{d',
+  enlargethispage: '*s{d',
+  pagebreak: '[d',
+  linebreak: '[d',
+  nopagebreak: '[d',
+  nolinebreak: '[d',
+  multicolumn: '{d{n{c',
+  multirow: '[n{d[d{d[d{c',
+  makecell: '[n{c',
+  shortstack: '[n{c',
   // lengths, counters and the paper's settings
-  setlength: '{r{d', addtolength: '{r{d', settowidth: '{r{x', settoheight: '{r{x', settodepth: '{r{x', setcounter: '{n{d',
-  addtocounter: '{n{d', stepcounter: '{n', refstepcounter: '{n', value: '{n', arabic: '{n', roman: '{n', Roman: '{n', alph: '{n',
-  Alph: '{n', fnsymbol: '{n', numberwithin: '[n{n{n', theoremstyle: '{n', pagestyle: '{n', thispagestyle: '{n', pagenumbering: '{n',
-  fontfamily: '{n', fontseries: '{n', fontshape: '{n', usefont: '{n{n{n{n', definecolor: '[n{n{n{k', colorlet: '[n{n[n{k',
-  usepackage: '[k{n[n', RequirePackage: '[k{n[n', documentclass: '[k{n[n', graphicspath: '{n', bibliographystyle: '{n',
-  bibliography: '{n', addbibresource: '[k{n', hypersetup: '{k', captionsetup: '[n{k', setlist: '[n{k', sisetup: '{k',
-  lstset: '{k', tcbset: '{k', tikzset: '{k', pgfplotsset: '{k', geometry: '{k', setstretch: '{d',
+  setlength: '{r{d',
+  addtolength: '{r{d',
+  settowidth: '{r{x',
+  settoheight: '{r{x',
+  settodepth: '{r{x',
+  setcounter: '{n{d',
+  addtocounter: '{n{d',
+  stepcounter: '{n',
+  refstepcounter: '{n',
+  value: '{n',
+  arabic: '{n',
+  roman: '{n',
+  Roman: '{n',
+  alph: '{n',
+  Alph: '{n',
+  fnsymbol: '{n',
+  numberwithin: '[n{n{n',
+  theoremstyle: '{n',
+  pagestyle: '{n',
+  thispagestyle: '{n',
+  pagenumbering: '{n',
+  fontfamily: '{n',
+  fontseries: '{n',
+  fontshape: '{n',
+  usefont: '{n{n{n{n',
+  definecolor: '[n{n{n{k',
+  colorlet: '[n{n[n{k',
+  usepackage: '[k{n[n',
+  RequirePackage: '[k{n[n',
+  documentclass: '[k{n[n',
+  graphicspath: '{n',
+  bibliographystyle: '{n',
+  bibliography: '{n',
+  addbibresource: '[k{n',
+  hypersetup: '{k',
+  captionsetup: '[n{k',
+  setlist: '[n{k',
+  sisetup: '{k',
+  lstset: '{k',
+  tcbset: '{k',
+  tikzset: '{k',
+  pgfplotsset: '{k',
+  geometry: '{k',
+  setstretch: '{d',
   // references, links, files: their names stay; a link's text is text
-  label: '[n{n', ref: '*s{n', eqref: '{n', pageref: '*s{n', autoref: '*s{n', cref: '*s{n', Cref: '*s{n', nameref: '*s{n',
-  hyperref: '[n{t', hyperlink: '{n{t', hypertarget: '{n{t', href: '[k{n{t', url: '{v', nolinkurl: '{v', includegraphics: '*s[k[k{n',
-  IfFileExists: '{n{c{c', InputIfFileExists: '{n{c{c', email: '[n{v', orcid: '[n{v', orcidlink: '{n', thanksref: '{n', inst: '{v',
+  label: '[n{n',
+  ref: '*s{n',
+  eqref: '{n',
+  pageref: '*s{n',
+  autoref: '*s{n',
+  cref: '*s{n',
+  Cref: '*s{n',
+  nameref: '*s{n',
+  hyperref: '[n{t',
+  hyperlink: '{n{t',
+  hypertarget: '{n{t',
+  href: '[k{n{t',
+  url: '{v',
+  nolinkurl: '{v',
+  includegraphics: '*s[k[k{n',
+  IfFileExists: '{n{c{c',
+  InputIfFileExists: '{n{c{c',
+  email: '[n{v',
+  orcid: '[n{v',
+  orcidlink: '{n',
+  thanksref: '{n',
+  inst: '{v',
   // etoolbox's conditionals and ifthen's \ifthenelse, which TeX reads as a macro's arguments, no \fi: the test a control
   // sequence, a name or code, the two branches the content TeX sets one of (the front end reads them as TeX's own conditionals'
   // branches, latex-front.mjs BRACE_CONDITIONALS). Unknown, the call was one placeholder, and a branch of words no unit
   // (2608.25210v2's "PVLDB Artifact Availability", in `\ifdefempty{\vldbavailabilityurl}{}{…}`)
-  ifdefempty: '{r{c{c', ifdefvoid: '{r{c{c', ifdef: '{r{c{c', ifundef: '{r{c{c', ifdefstring: '{r{x{c{c', ifcsdef: '{n{c{c',
-  ifcsundef: '{n{c{c', ifcsempty: '{n{c{c', ifcsvoid: '{n{c{c', ifbool: '{n{c{c', iftoggle: '{n{c{c', ifstrequal: '{x{x{c{c',
-  ifstrempty: '{x{c{c', ifblank: '{x{c{c', notblank: '{x{c{c', ifthenelse: '{x{c{c',
+  ifdefempty: '{r{c{c',
+  ifdefvoid: '{r{c{c',
+  ifdef: '{r{c{c',
+  ifundef: '{r{c{c',
+  ifdefstring: '{r{x{c{c',
+  ifcsdef: '{n{c{c',
+  ifcsundef: '{n{c{c',
+  ifcsempty: '{n{c{c',
+  ifcsvoid: '{n{c{c',
+  ifbool: '{n{c{c',
+  iftoggle: '{n{c{c',
+  ifstrequal: '{x{x{c{c',
+  ifstrempty: '{x{c{c',
+  ifblank: '{x{c{c',
+  notblank: '{x{c{c',
+  ifthenelse: '{x{c{c',
   // definitions: a name, an arity, a default and a body, none of them typeset where they stand
-  newcommand: '*s{r[d[x{x', renewcommand: '*s{r[d[x{x', providecommand: '*s{r[d[x{x', DeclareRobustCommand: '*s{r[d[x{x',
-  newenvironment: '*s{n[d[x{x{x', renewenvironment: '*s{n[d[x{x{x', newtheorem: '*s{n[n{n[n', newcolumntype: '{n[d[x{x',
-  DeclareMathOperator: '*s{r{x', newlength: '{r', newcounter: '{n[n', newif: '_r', let: '_r?s_r', def: '_rbx{x', gdef: '_rbx{x',
-  edef: '_rbx{x', xdef: '_rbx{x',
+  newcommand: '*s{r[d[x{x',
+  renewcommand: '*s{r[d[x{x',
+  providecommand: '*s{r[d[x{x',
+  DeclareRobustCommand: '*s{r[d[x{x',
+  newenvironment: '*s{n[d[x{x{x',
+  renewenvironment: '*s{n[d[x{x{x',
+  newtheorem: '*s{n[n{n[n',
+  newcolumntype: '{n[d[x{x',
+  DeclareMathOperator: '*s{r{x',
+  newlength: '{r',
+  newcounter: '{n[n',
+  newif: '_r',
+  let: '_r?s_r',
+  def: '_rbx{x',
+  gdef: '_rbx{x',
+  edef: '_rbx{x',
+  xdef: '_rbx{x',
   // text the reader sees, set apart: a caption outside a float (caption's \captionof), a deluxetable's; the running
   // heads' (set on every page; the front end keeps them as they are)
-  captionof: '*s{n[t{t', tablecaption: '{t', markboth: '{t{t', markright: '{t',
+  captionof: '*s{n[t{t',
+  tablecaption: '{t',
+  markboth: '{t{t',
+  markright: '{t',
   // a note's text apart from its mark; a two-column page's full-width top, ICML's title block or a teaser figure there
-  footnotetext: '[d{t', twocolumn: '[c',
+  footnotetext: '[d{t',
+  twocolumn: '[c',
   // what LaTeXML reads in code past its prototype: booktabs' \cmidrule[w](trim){a-b}, whose trim in parentheses the
   // front end passes over first; acronym's key, set as the acronym it names; aastex's table width
-  cmidrule: '[d{n', tablewidth: '{d',
-  ac: '*s{n', acp: '*s{n', acs: '*s{n', acsp: '*s{n', acl: '*s{n', aclp: '*s{n', acf: '*s{n', acfp: '*s{n', acfi: '*s{n',
-  acsu: '*s{n', aclu: '*s{n', iac: '*s{n', Iac: '*s{n', Ac: '*s{n', Acp: '*s{n', Acs: '*s{n', Acl: '*s{n', Aclp: '*s{n',
-  Acf: '*s{n', Acfp: '*s{n', acused: '{n',
+  cmidrule: '[d{n',
+  tablewidth: '{d',
+  ac: '*s{n',
+  acp: '*s{n',
+  acs: '*s{n',
+  acsp: '*s{n',
+  acl: '*s{n',
+  aclp: '*s{n',
+  acf: '*s{n',
+  acfp: '*s{n',
+  acfi: '*s{n',
+  acsu: '*s{n',
+  aclu: '*s{n',
+  iac: '*s{n',
+  Iac: '*s{n',
+  Ac: '*s{n',
+  Acp: '*s{n',
+  Acs: '*s{n',
+  Acl: '*s{n',
+  Aclp: '*s{n',
+  Acf: '*s{n',
+  Acfp: '*s{n',
+  acused: '{n',
   // a package's setting that sets no ink: soul's highlight colour
   sethlcolor: '{n',
   ...DELIMITED,
 }
 /** environments as the front end reads them, where LaTeXML's form is missing or says less: a table's position and
  *  columns (its cells are walked), a box's width, a list's options (enumitem's keys), a theorem's title */
-const CURATED_ENVS = {
-  tabular: '[n{n', 'tabular*': '{d[n{n', tabularx: '{d[n{n', tabulary: '{d[n{n', longtable: '[n{n', supertabular: '{n',
-  xtabular: '[n{n', array: '[n{n', minipage: '[n[d[n{d', multicols: '{d[c[d', 'multicols*': '{d[c[d', wrapfigure: '[d{n[d{d',
-  wraptable: '[d{n[d{d', subfigure: '[n{d', subtable: '[n{d', adjustbox: '{k', tcolorbox: '[k', mdframed: '[k', enumerate: '[k',
-  itemize: '[k', description: '[k', spacing: '{d', figure: '[n', 'figure*': '[n', table: '[n', 'table*': '[n', proof: '[t',
+const CURATED_ENVS: Readonly<Record<string, string>> = {
+  tabular: '[n{n',
+  'tabular*': '{d[n{n',
+  tabularx: '{d[n{n',
+  tabulary: '{d[n{n',
+  longtable: '[n{n',
+  supertabular: '{n',
+  xtabular: '[n{n',
+  array: '[n{n',
+  minipage: '[n[d[n{d',
+  multicols: '{d[c[d',
+  'multicols*': '{d[c[d',
+  wrapfigure: '[d{n[d{d',
+  wraptable: '[d{n[d{d',
+  subfigure: '[n{d',
+  subtable: '[n{d',
+  adjustbox: '{k',
+  tcolorbox: '[k',
+  mdframed: '[k',
+  enumerate: '[k',
+  itemize: '[k',
+  description: '[k',
+  spacing: '{d',
+  figure: '[n',
+  'figure*': '[n',
+  table: '[n',
+  'table*': '[n',
+  proof: '[t',
   thebibliography: '{n',
 }
 
-const parse = spec => (spec.match(/../g) ?? []).map(p => ({ shape: p[0], role: p[1] }))
+const parse = (spec: string): Param[] => (spec.match(/../g) ?? []).map((p) => ({ shape: p[0]!, role: p[1]! }))
 /** parameters written as the table writes them (`[t`, `*s{n[t{t`): for a definition of the paper's own */
-export const paramsOf = spec => Object.freeze(parse(spec))
-const REGISTER = Object.freeze([{ shape: '=', role: 'r' }])
-const known = spec => typeof spec === 'string' && spec !== '?' && !spec.includes('u')
-const asParams = spec => (spec === '=' ? REGISTER : parse(spec))
+export const paramsOf = (spec: string): Params => Object.freeze(parse(spec))
+const REGISTER: Params = Object.freeze([{ shape: '=', role: 'r' }])
+const known = (spec: string | undefined): spec is string =>
+  typeof spec === 'string' && spec !== '?' && !spec.includes('u')
+const asParams = (spec: string): Params => (spec === '=' ? REGISTER : parse(spec))
 const BINDING_INDEX = new Map(BINDINGS.map((b, k) => [b, k]))
 /**
  * The LaTeXML bindings a paper has: its class and packages as its files name them (\documentclass, \LoadClass,
@@ -128,71 +349,100 @@ const BINDING_INDEX = new Map(BINDINGS.map((b, k) => [b, k]))
  * binding for is read as the longest one whose name begins its name (revtex4-2 as revtex4), as LaTeXML reads it. A
  * Set of BINDINGS' indices, for commandParams
  */
-export function bindingsOf(texts) {
+export function bindingsOf(texts: readonly string[]): Set<number> {
   return bindingsOfText(texts.map(uncommented))
 }
 /** a text with its comments taken out, each to its line's end */
-const uncommented = t => t.replace(/(^|[^\\])%.*$/gm, '$1')
-function bindingsOfText(texts) {
-  const out = new Set(), queue = []
-  const add = k => { if (k !== undefined && !out.has(k)) { out.add(k); queue.push(k) } }
+const uncommented = (t: string) => t.replace(/(^|[^\\])%.*$/gm, '$1')
+function bindingsOfText(texts: readonly string[]): Set<number> {
+  const out = new Set<number>(),
+    queue: number[] = []
+  const add = (k: number | undefined) => {
+    if (k !== undefined && !out.has(k)) {
+      out.add(k)
+      queue.push(k)
+    }
+  }
   for (const text of texts) {
-    for (const m of text.matchAll(/\\(documentclass|LoadClass(?:WithOptions)?|usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g)) {
-      const cls = /class/i.test(m[1])
-      for (const raw of m[2].split(',')) {
+    for (const m of text.matchAll(
+      /\\(documentclass|LoadClass(?:WithOptions)?|usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g,
+    )) {
+      const cls = /class/i.test(m[1]!)
+      for (const raw of m[2]!.split(',')) {
         const name = raw.trim()
         if (!name) continue
         const own = BINDING_INDEX.get(`${name}.${cls ? 'cls' : 'sty'}`)
-        if (own !== undefined || !cls) { add(own); continue }
-        let best = null
-        for (const b of BINDINGS) if (b.endsWith('.cls') && name.startsWith(b.slice(0, -4)) && (!best || b.length > best.length)) best = b
+        if (own !== undefined || !cls) {
+          add(own)
+          continue
+        }
+        let best: string | null = null
+        for (const b of BINDINGS)
+          if (b.endsWith('.cls') && name.startsWith(b.slice(0, -4)) && (!best || b.length > best.length)) best = b
         if (best) add(BINDING_INDEX.get(best))
       }
     }
   }
-  while (queue.length) for (const r of REQUIRES[queue.pop()] ?? []) add(r)
+  while (queue.length) for (const r of REQUIRES[queue.pop()!] ?? []) add(r)
   return out
 }
 /** whether a paper (paperOf) loads a binding (`subfigure.sty`): its files name it, or a binding they name requires it (bindingsOf) */
-export const loads = (paper, binding) => !!paper?.bindings.has(BINDING_INDEX.get(binding))
+export const loads = (paper: ArgPaper | null | undefined, binding: string): boolean =>
+  !!paper?.bindings.has(BINDING_INDEX.get(binding))
 /** a name's parameters by the forms LaTeXML gives it: where a paper's bindings (`bindings`) define it, theirs, and none
  *  where they differ; else the engine pools'. A package's form only where the paper loads it: with no paper to tell
  *  (null), none — a paper's own \degrees is no pstricks \degrees[…] */
-const byForms = (pools, packages, name, bindings) => {
+const byForms = (
+  pools: Readonly<Record<string, string>>,
+  packages: ByBindings,
+  name: string,
+  bindings: KeySet<number> | null,
+): Params | null => {
   const pkg = packages[name]
   if (bindings && pkg) {
-    const mine = pkg.filter(([, ...bs]) => bs.some(b => bindings.has(b))).map(([s]) => s)
-    if (mine.length) return mine.length === 1 ? asParams(mine[0]) : null
+    const mine = pkg.filter(([, ...bs]) => bs.some((b) => bindings.has(b))).map(([s]) => s)
+    if (mine.length) return mine.length === 1 ? asParams(mine[0]!) : null
   }
   return pools[name] !== undefined && known(pools[name]) ? asParams(pools[name]) : null
 }
 /** a command's parameters ({ shape, role } each, by the letters above), or null where the table does not know them: as
  *  written out here, else by LaTeXML's forms for the paper's bindings (bindingsOf; null for none known) */
-export function commandParams(name, bindings = null) {
+export function commandParams(name: string, bindings: KeySet<number> | null = null): Params | null {
   return known(CURATED[name]) ? asParams(CURATED[name]) : byForms(COMMANDS, PACKAGE_COMMANDS, name, bindings)
 }
 /** the ways a paper's files define a command, its name in group 1: whatever the table says of a name the paper defines
  *  is another command's (melba.cls's \def\firstname{…}, which LaTeXML's moderncv gives an argument) */
-const OWN_COMMANDS = /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|newtoks|DeclareMathOperator\*?)\s*\{?\s*\\([A-Za-z@]+)/g
+const OWN_COMMANDS =
+  /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|newtoks|DeclareMathOperator\*?)\s*\{?\s*\\([A-Za-z@]+)/g
 /** a paper as the table reads it: the bindings its files load (bindingsOf), the packages they load by name (`packages`:
  *  \usepackage and \RequirePackage, each name of a list) and the commands they define (`own`), whose arguments the table
  *  cannot know (llncs.cls' \newtoks\titlerunning among them) — not a command defined anew only inside its own call's
  *  argument, which is the kernel's where it is called (inOwnCall), nor a fallback a package the paper loads overrides
  *  (overriddenFallback: llncs.cls' \@ifundefined{url}{\def\url#1{#1}}{} under hyperref) */
-export function paperOf(texts) {
-  const own = new Set(), plain = texts.map(uncommented), bindings = bindingsOfText(plain), packages = packagesOf(plain)
+export function paperOf(texts: readonly string[]): ArgPaper {
+  const own = new Set<string>(),
+    plain = texts.map(uncommented),
+    bindings = bindingsOfText(plain),
+    packages = packagesOf(plain)
   for (const text of plain) {
     for (const m of text.matchAll(OWN_COMMANDS)) {
-      if (own.has(m[1]) || inOwnCall(text, m.index, m[1]) || overriddenFallback(text, m.index, m[1], /^\\([A-Za-z]+)/.exec(m[0])?.[1] ?? '', packages)) continue
-      own.add(m[1])
+      if (
+        own.has(m[1]!) ||
+        inOwnCall(text, m.index, m[1]!) ||
+        overriddenFallback(text, m.index, m[1]!, /^\\([A-Za-z]+)/.exec(m[0])?.[1] ?? '', packages)
+      )
+        continue
+      own.add(m[1]!)
     }
   }
   return { bindings, packages, own }
 }
 /** the packages texts load by name: every name of each \usepackage and \RequirePackage (WithOptions too), its options aside */
-function packagesOf(texts) {
-  const out = new Set()
-  for (const text of texts) for (const m of text.matchAll(/\\(?:usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g)) for (const name of m[1].split(',')) if (name.trim()) out.add(name.trim())
+function packagesOf(texts: readonly string[]): Set<string> {
+  const out = new Set<string>()
+  for (const text of texts)
+    for (const m of text.matchAll(/\\(?:usepackage|RequirePackage(?:WithOptions)?)\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g))
+      for (const name of m[1]!.split(',')) if (name.trim()) out.add(name.trim())
   return out
 }
 /**
@@ -202,7 +452,12 @@ function packagesOf(texts) {
  * \url's synonym and \url is left as it was), nor \path, which url.sty defines only where it is undefined (a fallback before it
  * stands). A command none of whose packages the paper loads has its fallback the paper's definition, as any
  */
-const OVERRIDDEN_BY = Object.freeze({ url: ['url', 'hyperref', 'xurl'], nolinkurl: ['hyperref'], href: ['hyperref'], burl: ['breakurl'] })
+const OVERRIDDEN_BY: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  url: ['url', 'hyperref', 'xurl'],
+  nolinkurl: ['hyperref'],
+  href: ['hyperref'],
+  burl: ['breakurl'],
+})
 /** how far before a definition the test of its name being undefined is looked for */
 const FALLBACK_WINDOW = 400
 /** the definers that define only a command not defined yet */
@@ -217,17 +472,27 @@ const PROVIDERS = /^(?:providecommand|Provide(?:Expandable)?DocumentCommand|prov
  * conditional, \or or \fi between the test and the definition. A test in a comment, of another name, or nested deeper is none:
  * the definition stands, as before
  */
-export function fallbackDefinition(t, at, name, how) {
+export function fallbackDefinition(t: string, at: number, name: string, how: string): boolean {
   if (PROVIDERS.test(how)) return true
-  const from = Math.max(0, at - FALLBACK_WINDOW), before = t.slice(from, at)
-  const commented = k => /(?:^|[^\\])%/.test(t.slice(t.lastIndexOf('\n', k - 1) + 1, k))
+  const from = Math.max(0, at - FALLBACK_WINDOW),
+    before = t.slice(from, at)
+  const commented = (k: number) => /(?:^|[^\\])%/.test(t.slice(t.lastIndexOf('\n', k - 1) + 1, k))
   // (a name is letters and @, none of them special in a pattern)
-  for (const m of before.matchAll(new RegExp(String.raw`\\(?:@ifundefined|ifcsundef)\s*\{\s*${name}\s*\}|\\ifundef\s*(?:\{\s*\\${name}\s*\}|\\${name}(?![A-Za-z@]))`, 'g'))) {
-    const k = skipSpaces(t, from + m.index + m[0].length), e = t[k] === '{' ? groupEnd(t, k) : -1
+  for (const m of before.matchAll(
+    new RegExp(
+      String.raw`\\(?:@ifundefined|ifcsundef)\s*\{\s*${name}\s*\}|\\ifundef\s*(?:\{\s*\\${name}\s*\}|\\${name}(?![A-Za-z@]))`,
+      'g',
+    ),
+  )) {
+    const k = skipSpaces(t, from + m.index + m[0].length),
+      e = t[k] === '{' ? groupEnd(t, k) : -1
     if (e > at && !commented(from + m.index)) return true
   }
   // (`undef`: a test true where \name is undefined; `def`, one true where it is defined; `un`, an \unless before either)
-  const test = new RegExp(String.raw`(?<un>\\unless\s*)?(?:(?<undef>\\ifx\s*(?:\\${name}\s*\\@?undefined|\\@?undefined\s*\\${name})|\\expandafter\s*(?<un2>\\unless\s*)?\\ifx\s*\\csname\s*${name}\s*\\endcsname\s*\\relax)|(?<def>\\ifdefined\s*\\${name}|\\ifcsname\s*${name}\s*\\endcsname))(?![A-Za-z@])`, 'g')
+  const test = new RegExp(
+    String.raw`(?<un>\\unless\s*)?(?:(?<undef>\\ifx\s*(?:\\${name}\s*\\@?undefined|\\@?undefined\s*\\${name})|\\expandafter\s*(?<un2>\\unless\s*)?\\ifx\s*\\csname\s*${name}\s*\\endcsname\s*\\relax)|(?<def>\\ifdefined\s*\\${name}|\\ifcsname\s*${name}\s*\\endcsname))(?![A-Za-z@])`,
+    'g',
+  )
   const last = [...before.matchAll(test)].at(-1)
   if (!last || commented(from + last.index)) return false
   const between = before.slice(last.index + last[0].length)
@@ -241,8 +506,14 @@ export function fallbackDefinition(t, at, name, how) {
  *  is no definition of the paper's, the table reading the calls (2610.19860: llncs.cls' fallback \def\url#1{#1}, read as
  *  \url's own under hyperref, made its argument a group, and hyperref's \url printed the mark set inside it). Where no such
  *  package is loaded, the fallback is the definition TeX uses: false */
-export function overriddenFallback(t, at, name, how, packages) {
-  return !!packages && !!OVERRIDDEN_BY[name]?.some(p => packages.has(p)) && fallbackDefinition(t, at, name, how)
+export function overriddenFallback(
+  t: string,
+  at: number,
+  name: string,
+  how: string,
+  packages: KeySet<string> | null | undefined,
+): boolean {
+  return !!packages && !!OVERRIDDEN_BY[name]?.some((p) => packages.has(p)) && fallbackDefinition(t, at, name, how)
 }
 const OWN_CALL_WINDOW = 4000
 /**
@@ -250,11 +521,17 @@ const OWN_CALL_WINDOW = 4000
  * group, it is no definition of the command where it is called (CVPR's teaser, \twocolumn[{\renewcommand\twocolumn[1][]{#1}
  * \maketitle … \captionof{figure}{…}}]: the call is the kernel's, its optional argument the content it sets)
  */
-export function inOwnCall(t, at, name) {
+export function inOwnCall(t: string, at: number, name: string): boolean {
   // a call within the few thousand characters before the definition: an argument it encloses is no longer (a
   // window, so that a package's thousands of definitions are not each searched back to the file's start)
-  const call = `\\${name}`, from = Math.max(0, at - OWN_CALL_WINDOW), before = t.slice(from, at)
-  for (let r = before.lastIndexOf(call), seen = 0; r >= 0 && seen < 4; r = r > 0 ? before.lastIndexOf(call, r - 1) : -1, seen++) {
+  const call = `\\${name}`,
+    from = Math.max(0, at - OWN_CALL_WINDOW),
+    before = t.slice(from, at)
+  for (
+    let r = before.lastIndexOf(call), seen = 0;
+    r >= 0 && seen < 4;
+    r = r > 0 ? before.lastIndexOf(call, r - 1) : -1, seen++
+  ) {
     const q = from + r
     let k = q + call.length
     if (isLetter(t[k] ?? '')) continue
@@ -270,14 +547,16 @@ export function inOwnCall(t, at, name) {
   return false
 }
 /** a command's parameters for a paper (paperOf), or null: none for one the paper defines, else the paper's bindings' */
-export function paperParams(name, paper = null) {
+export function paperParams(name: string, paper: ArgPaper | null = null): Params | null {
   return paper?.own.has(name) ? null : commandParams(name, paper?.bindings ?? null)
 }
 /** an environment's parameters after its \begin{name}, or null: as written out here, else LaTeXML's environment for the
  *  paper's bindings. Not a command of its name: LaTeX's \begin{x} runs \x, but a command LaTeXML knows by a name
  *  (amsmath's \boxed{…}) is no environment a paper defines by it (comment.sty's \specialcomment{boxed}) */
-export function environmentParams(name, bindings = null) {
-  return known(CURATED_ENVS[name]) ? asParams(CURATED_ENVS[name]) : byForms(ENVIRONMENTS, PACKAGE_ENVIRONMENTS, name, bindings)
+export function environmentParams(name: string, bindings: KeySet<number> | null = null): Params | null {
+  return known(CURATED_ENVS[name])
+    ? asParams(CURATED_ENVS[name])
+    : byForms(ENVIRONMENTS, PACKAGE_ENVIRONMENTS, name, bindings)
 }
 /**
  * The front matter's commands, by what the front end makes of their text and which argument it is (1-based; 0 an
@@ -285,18 +564,60 @@ export function environmentParams(name, bindings = null) {
  * hooks (\lx@add@affiliation, \lx@add@contact[role=dedicatory] …), less those whose argument names no text: a
  * copyright's kind (acmart's \setcopyright{acmlicensed}, a key the class tests), identifiers and numbers
  */
-const NOT_FRONT_TEXT = new Set(['setcopyright', 'doi', 'acmDOI', 'acmISBN', 'ISSN', 'PII', 'arxivnumber', 'acmSubmissionID', 'acmArticle', 'acmArticleSeq', 'acmNumber', 'acmVolume', 'acmYear', 'acmMonth', 'acmPrice', 'volume', 'issue', 'pagerange', 'pubyear', 'microfiche', 'pacno', 'pacs', 'PACS', 'CRclass', 'ams', 'subclass'])
+const NOT_FRONT_TEXT = new Set([
+  'setcopyright',
+  'doi',
+  'acmDOI',
+  'acmISBN',
+  'ISSN',
+  'PII',
+  'arxivnumber',
+  'acmSubmissionID',
+  'acmArticle',
+  'acmArticleSeq',
+  'acmNumber',
+  'acmVolume',
+  'acmYear',
+  'acmMonth',
+  'acmPrice',
+  'volume',
+  'issue',
+  'pagerange',
+  'pubyear',
+  'microfiche',
+  'pacno',
+  'pacs',
+  'PACS',
+  'CRclass',
+  'ams',
+  'subclass',
+])
 /** front matter LaTeXML has no binding for: AAAI's and MELBA's \affiliations{…} (aaai2026.sty, melba.cls), achemso's
  *  \alsoaffiliation[…]{…}, the keywords environment of the classes that have one; and ICML's title, which LaTeXML lets
  *  be \title (an alias, whose hook the generator does not follow) */
-const MORE_FRONT = { affiliations: ['author', 1], alsoaffiliation: ['author', 2], icmltitle: ['title', 2], 'env:keywords': ['keywords', 0], 'env:IEEEkeywords': ['keywords', 0], 'env:abstract': ['abstract', 0] }
-export const FRONT_ROLES = Object.freeze({ ...Object.fromEntries(Object.entries(FRONT).filter(([k]) => !NOT_FRONT_TEXT.has(k.replace(/^env:/, '')))), ...MORE_FRONT })
+const MORE_FRONT: Readonly<Record<string, readonly [hook: string, param: number]>> = {
+  affiliations: ['author', 1],
+  alsoaffiliation: ['author', 2],
+  icmltitle: ['title', 2],
+  'env:keywords': ['keywords', 0],
+  'env:IEEEkeywords': ['keywords', 0],
+  'env:abstract': ['abstract', 0],
+}
+export const FRONT_ROLES: Readonly<Record<string, readonly [hook: string, param: number]>> = Object.freeze({
+  ...Object.fromEntries(Object.entries(FRONT).filter(([k]) => !NOT_FRONT_TEXT.has(k.replace(/^env:/, '')))),
+  ...MORE_FRONT,
+})
 /** a value by LaTeXML's bindings as byForms reads a form: the paper's bindings' where any defines the name (null where they
  *  differ, or where theirs is `none`: the binding defines it otherwise), else the engine pools', else null */
-const byValues = (pools, packages, name, bindings) => {
+const byValues = (
+  pools: Readonly<Record<string, string>>,
+  packages: ByBindings,
+  name: string,
+  bindings: KeySet<number> | null,
+) => {
   const pkg = packages[name]
   if (bindings && pkg) {
-    const mine = pkg.filter(([, ...bs]) => bs.some(b => bindings.has(b))).map(([v]) => v)
+    const mine = pkg.filter(([, ...bs]) => bs.some((b) => bindings.has(b))).map(([v]) => v)
     if (mine.length) return mine.length === 1 && mine[0] !== 'none' ? mine[0] : null
   }
   return pools[name] ?? null
@@ -309,14 +630,14 @@ const byValues = (pools, packages, name, bindings) => {
  * written inside an author command's argument, which is that author's whatever its command (a creator's text, LaTeXML's
  * Base_Utility.pool.ltxml:331-332)
  */
-export function noteAttachOf(name, bindings = null) {
+export function noteAttachOf(name: string, bindings: KeySet<number> | null = null): string | null {
   const v = byValues(NOTE_POOLS, NOTE_PACKAGES, name, bindings)
   return v === 'creator' || v?.startsWith('label:') ? v : null
 }
 /** the commands that request an annotation by its label, for the paper's bindings: name → its label's prefix (elsarticle's
  *  \corref → `cor`) */
-export function labelRequestsOf(bindings = null) {
-  const out = new Map()
+export function labelRequestsOf(bindings: KeySet<number> | null = null): Map<string, string> {
+  const out = new Map<string, string>()
   for (const name of new Set([...Object.keys(REQUEST_POOLS), ...Object.keys(REQUEST_PACKAGES)])) {
     const v = byValues(REQUEST_POOLS, REQUEST_PACKAGES, name, bindings)
     if (v) out.set(name, v)
@@ -325,36 +646,53 @@ export function labelRequestsOf(bindings = null) {
 }
 
 // ---------------------------------------------------------------- reading arguments as TeX takes them
-const isLetter = c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '@'
+const isLetter = (c: string) => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '@'
 /** spaces and tabs, and at most one line end: TeX lets an argument follow on the next line, but a blank line is \par;
  *  a comment goes with the line end it takes (latex-front.mjs skipSpaces) */
-const skipSpaces = (s, i) => {
-  let lines = 0, fresh = false
+const skipSpaces = (s: string, i: number): number => {
+  let lines = 0,
+    fresh = false
   while (i < s.length) {
     if (s[i] === ' ' || s[i] === '\t') i++
-    else if (s[i] === '%') { const e = s.indexOf('\n', i); if (e < 0) return s.length; i = e + 1; fresh = true }
-    else if (s[i] === '\n' && lines === 0 && !fresh) { lines++; i++; fresh = true }
-    else break
+    else if (s[i] === '%') {
+      const e = s.indexOf('\n', i)
+      if (e < 0) return s.length
+      i = e + 1
+      fresh = true
+    } else if (s[i] === '\n' && lines === 0 && !fresh) {
+      lines++
+      i++
+      fresh = true
+    } else break
   }
   return i
 }
 /** the end of a group opening at s[i], past its matching close; -1 where it does not close */
-function groupEnd(s, i, open = '{', close = '}') {
+function groupEnd(s: string, i: number, open = '{', close = '}'): number {
   let depth = 0
   for (let j = i; j < s.length; j++) {
     const c = s[j]
-    if (c === '\\') { j++; continue }
-    if (c === '%') { while (j < s.length && s[j] !== '\n') j++; continue }
+    if (c === '\\') {
+      j++
+      continue
+    }
+    if (c === '%') {
+      while (j < s.length && s[j] !== '\n') j++
+      continue
+    }
     if (c === open) depth++
     else if (c === close && --depth === 0) return j + 1
   }
   return -1
 }
 /** one token at s[k]: a control sequence (its name, a starred one's star apart) or a character; its end */
-const tokenEnd = (s, k) => {
+const tokenEnd = (s: string, k: number): number => {
   if (s[k] !== '\\') return k + 1
   let j = k + 1
-  if (j < s.length && isLetter(s[j])) { while (j < s.length && isLetter(s[j])) j++; return j }
+  if (j < s.length && isLetter(s[j]!)) {
+    while (j < s.length && isLetter(s[j]!)) j++
+    return j
+  }
   return j + 1
 }
 // TeX's number and dimension: a sign, digits or a register, a unit; glue with its plus and minus; a box's specification,
@@ -364,7 +702,9 @@ const tokenEnd = (s, k) => {
 const UNIT = String.raw`(?:true\s*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|px|fill?l?)(?![A-Za-z])`
 const FACTOR = String.raw`[-+\s]*(?:\d+(?:[.,]\d*)?|[.,]\d+)?\s*`
 const QUANTITY = String.raw`${FACTOR}(?:${UNIT}|\\[A-Za-z@]+(?:\s*\d+)?)?`
-const TEX_VALUE = new RegExp(String.raw`^\s*=?\s*(?:(?:to|spread)(?![A-Za-z])\s*)?(?:${QUANTITY})(?:\s*(?:plus|minus)\s*${QUANTITY})*`)
+const TEX_VALUE = new RegExp(
+  String.raw`^\s*=?\s*(?:(?:to|spread)(?![A-Za-z])\s*)?(?:${QUANTITY})(?:\s*(?:plus|minus)\s*${QUANTITY})*`,
+)
 /**
  * The arguments of a command whose parameters the table knows, at s[i] just after its name: each { shape, role, param,
  * start, end } (`param` its parameter's index, a group's start at its brace or bracket), an optional one or a star only
@@ -372,14 +712,36 @@ const TEX_VALUE = new RegExp(String.raw`^\s*=?\s*(?:(?:to|spread)(?![A-Za-z])\s*
  * end, and `complete` false where a required one is missing or runs past `to` (a closing brace, the text's end): what
  * TeX would take is then not known, and the caller reads the command as it reads one it does not know
  */
-export function readArgs(s, i, params, to = s.length) {
-  const args = []
+export function readArgs(
+  s: string,
+  i: number,
+  params: Params,
+  to = s.length,
+): { args: Arg[]; end: number; complete: boolean } {
+  const args: Arg[] = []
   let at = i
   for (const [param, { shape, role }] of params.entries()) {
     const k = skipSpaces(s, at)
-    if (shape === '[') { if (s[k] === '[') { const e = groupEnd(s, k, '[', ']'); if (e < 0 || e > to) return { args, end: at, complete: false }; args.push({ shape, role, param, start: k, end: e }); at = e } continue }
-    if (shape === '*') { if (s[k] === '*') { args.push({ shape, role, param, start: k, end: k + 1 }); at = k + 1 } continue }
-    if (shape === '?' || shape === '=') { if (s[k] === '=') at = k + 1; continue }
+    if (shape === '[') {
+      if (s[k] === '[') {
+        const e = groupEnd(s, k, '[', ']')
+        if (e < 0 || e > to) return { args, end: at, complete: false }
+        args.push({ shape, role, param, start: k, end: e })
+        at = e
+      }
+      continue
+    }
+    if (shape === '*') {
+      if (s[k] === '*') {
+        args.push({ shape, role, param, start: k, end: k + 1 })
+        at = k + 1
+      }
+      continue
+    }
+    if (shape === '?' || shape === '=') {
+      if (s[k] === '=') at = k + 1
+      continue
+    }
     // TeX's scanner reads a number or a dimension, never a group: \\hbox{…}'s group is its content, not its specification
     // (taken for one, the token after the box became its content: `\\vbox{…}\\begin` then `{center}` walked as text, its
     // lead written inside \\begin's name; `\\hbox{abc} more` sent `ore`)
@@ -391,16 +753,39 @@ export function readArgs(s, i, params, to = s.length) {
     // \\vskip\\number\\count0 pt
     if (shape === '_' && role === 'd') {
       const m = TEX_VALUE.exec(s.slice(at, Math.min(to, at + 200)))
-      const call = m && [...m[0].matchAll(/\\([A-Za-z@]+)/g)].find(c => { const pp = commandParams(c[1]); return !VALUES.has(c[1]) && !!pp?.length && pp !== REGISTER })
+      const call =
+        m &&
+        [...m[0].matchAll(/\\([A-Za-z@]+)/g)].find((c) => {
+          const pp = commandParams(c[1]!)
+          return !VALUES.has(c[1]!) && !!pp?.length && pp !== REGISTER
+        })
       const value = m ? (call ? m[0].slice(0, call.index) : m[0]) : ''
-      if (/\S/.test(value)) { args.push({ shape, role, param, start: at, end: at + value.length }); at += value.length }
+      if (/\S/.test(value)) {
+        args.push({ shape, role, param, start: at, end: at + value.length })
+        at += value.length
+      }
       continue
     }
-    if (shape === 'g') { if (s[k] !== '{') return { args, end: at, complete: false }; const e = groupEnd(s, k); if (e < 0 || e > to) return { args, end: at, complete: false }; args.push({ shape: '{', role, param, start: k, end: e }); at = e; continue }
-    if (shape === 'b') { let e = at; while (e < to && s[e] !== '{' && s[e] !== '%') e++; if (e >= to || s[e] !== '{') return { args, end: at, complete: false }; if (e > at) args.push({ shape, role, param, start: at, end: e }); at = e; continue }
+    if (shape === 'g') {
+      if (s[k] !== '{') return { args, end: at, complete: false }
+      const e = groupEnd(s, k)
+      if (e < 0 || e > to) return { args, end: at, complete: false }
+      args.push({ shape: '{', role, param, start: k, end: e })
+      at = e
+      continue
+    }
+    if (shape === 'b') {
+      let e = at
+      while (e < to && s[e] !== '{' && s[e] !== '%') e++
+      if (e >= to || s[e] !== '{') return { args, end: at, complete: false }
+      if (e > at) args.push({ shape, role, param, start: at, end: e })
+      at = e
+      continue
+    }
     if (shape !== '{' && shape !== '_') return { args, end: at, complete: false }
     // a bracket where a required argument is due is an optional one the table does not know of (a package's): not known
-    if (k >= to || s[k] === '}' || s[k] === '[' || /\n[ \t]*\n/.test(s.slice(at, k + 1).replace(/%[^\n]*\n/g, ''))) return { args, end: at, complete: false }
+    if (k >= to || s[k] === '}' || s[k] === '[' || /\n[ \t]*\n/.test(s.slice(at, k + 1).replace(/%[^\n]*\n/g, '')))
+      return { args, end: at, complete: false }
     // a macro's parameter (#1, in a definition's body) is one token
     const e = s[k] === '{' ? groupEnd(s, k) : s[k] === '#' && /\d/.test(s[k + 1] ?? '') ? k + 2 : tokenEnd(s, k)
     if (e < 0 || e > to) return { args, end: at, complete: false }
@@ -412,9 +797,12 @@ export function readArgs(s, i, params, to = s.length) {
 
 // ---------------------------------------------------------------- a placeholder's source
 /** a command at s[i]: its name and where it ends (a starred one's star in the name's end, as the front end reads it) */
-const commandAt = (s, i) => {
+const commandAt = (s: string, i: number): { name: string; end: number } => {
   let j = i + 1
-  if (j < s.length && isLetter(s[j])) { while (j < s.length && isLetter(s[j])) j++; return { name: s.slice(i + 1, j), end: j } }
+  if (j < s.length && isLetter(s[j]!)) {
+    while (j < s.length && isLetter(s[j]!)) j++
+    return { name: s.slice(i + 1, j), end: j }
+  }
   return { name: s[j] ?? '', end: j + 1 }
 }
 /**
@@ -426,19 +814,43 @@ const commandAt = (s, i) => {
  * a layer that draws a placeholder from its source draws its text alone (1706.03762's Table 2: "1pt-1pt0pt 0pt2.2ex"
  * drawn before a translated cell)
  */
-export function textArgsOf(src, paper = null) {
-  let out = '', i = 0
+export function textArgsOf(src: string, paper: ArgPaper | null = null): string {
+  let out = '',
+    i = 0
   while (i < src.length) {
     const c = src[i]
-    if (c === '%') { const e = src.indexOf('\n', i); i = e < 0 ? src.length : e + 1; continue }
-    if (c === '{') { const e = groupEnd(src, i); if (e < 0) { out += c; i++; continue } out += `{${textArgsOf(src.slice(i + 1, e - 1), paper)}}`; i = e; continue }
-    if (c !== '\\') { out += c; i++; continue }
+    if (c === '%') {
+      const e = src.indexOf('\n', i)
+      i = e < 0 ? src.length : e + 1
+      continue
+    }
+    if (c === '{') {
+      const e = groupEnd(src, i)
+      if (e < 0) {
+        out += c
+        i++
+        continue
+      }
+      out += `{${textArgsOf(src.slice(i + 1, e - 1), paper)}}`
+      i = e
+      continue
+    }
+    if (c !== '\\') {
+      out += c
+      i++
+      continue
+    }
     const { name, end } = commandAt(src, i)
     const params = /^[A-Za-z@]+$/.test(name) ? paperParams(name, paper) : null
-    if (!params?.length) { out += src.slice(i, end); i = end; continue }
+    if (!params?.length) {
+      out += src.slice(i, end)
+      i = end
+      continue
+    }
     const { args, end: e } = readArgs(src, end, params)
     out += src.slice(i, end)
-    let kept = false, at = end
+    let kept = false,
+      at = end
     for (const a of args) {
       const gap = src.slice(at, a.start)
       at = a.end
@@ -447,7 +859,12 @@ export function textArgsOf(src, paper = null) {
       // the space before a kept argument stays: a token given bare is no part of the control word's name
       // ($\\mathcal O$, not $\\mathcalO$)
       out += /^\s*$/.test(gap) ? gap : ''
-      out += a.shape === '[' ? `[${textArgsOf(inner.slice(1, -1), paper)}]` : inner.startsWith('{') ? `{${textArgsOf(inner.slice(1, -1), paper)}}` : textArgsOf(inner, paper)
+      out +=
+        a.shape === '['
+          ? `[${textArgsOf(inner.slice(1, -1), paper)}]`
+          : inner.startsWith('{')
+            ? `{${textArgsOf(inner.slice(1, -1), paper)}}`
+            : textArgsOf(inner, paper)
       kept = true
     }
     // a control word whose arguments went keeps its end: a letter after it is no part of its name
@@ -464,15 +881,71 @@ export function textArgsOf(src, paper = null) {
  * around one of these (\\noalign{\\vskip 4mm}, not \\noalign{\\hbox{Group A}})
  */
 const TEXTLESS = new Set([
-  'vspace', 'hspace', 'addvspace', 'vskip', 'hskip', 'kern', 'penalty', 'enlargethispage', ...BREAK_HINTS,
-  'rule', 'specialrule', 'addlinespace', 'toprule', 'midrule', 'bottomrule', 'cmidrule', 'cline', 'hhline', 'tabularnewline',
-  'setlength', 'addtolength', 'settowidth', 'settoheight', 'settodepth', 'setcounter', 'addtocounter', 'stepcounter', 'newlength', 'newcounter',
-  'fontsize', 'linespread', 'setstretch', 'tablewidth', 'phantom', 'hphantom', 'vphantom',
-  'newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand', 'def', 'gdef', 'edef', 'xdef', 'let', 'newif', 'newenvironment', 'renewenvironment', 'newcolumntype', 'DeclareMathOperator',
-  'hypersetup', 'captionsetup', 'setlist', 'sisetup', 'lstset', 'tcbset', 'tikzset', 'pgfplotsset', 'definecolor', 'colorlet',
+  'vspace',
+  'hspace',
+  'addvspace',
+  'vskip',
+  'hskip',
+  'kern',
+  'penalty',
+  'enlargethispage',
+  ...BREAK_HINTS,
+  'rule',
+  'specialrule',
+  'addlinespace',
+  'toprule',
+  'midrule',
+  'bottomrule',
+  'cmidrule',
+  'cline',
+  'hhline',
+  'tabularnewline',
+  'setlength',
+  'addtolength',
+  'settowidth',
+  'settoheight',
+  'settodepth',
+  'setcounter',
+  'addtocounter',
+  'stepcounter',
+  'newlength',
+  'newcounter',
+  'fontsize',
+  'linespread',
+  'setstretch',
+  'tablewidth',
+  'phantom',
+  'hphantom',
+  'vphantom',
+  'newcommand',
+  'renewcommand',
+  'providecommand',
+  'DeclareRobustCommand',
+  'def',
+  'gdef',
+  'edef',
+  'xdef',
+  'let',
+  'newif',
+  'newenvironment',
+  'renewenvironment',
+  'newcolumntype',
+  'DeclareMathOperator',
+  'hypersetup',
+  'captionsetup',
+  'setlist',
+  'sisetup',
+  'lstset',
+  'tcbset',
+  'tikzset',
+  'pgfplotsset',
+  'definecolor',
+  'colorlet',
   // a label (cleveref's type with it: \\label[proposition]{…}), a bibliography's style, soul's highlight colour: the
   // maker writes no row for them (layout/marks.mjs INVISIBLE, or no ink), so the layer's zero must read them so too
-  'label', 'bibliographystyle', 'sethlcolor',
+  'label',
+  'bibliographystyle',
+  'sethlcolor',
 ])
 /**
  * TeX's commands whose expansion, or whose meaning to the scanner, is a number, a dimension or glue: a value where
@@ -480,14 +953,40 @@ const TEXTLESS = new Set([
  * and \\romannumeral's value, \\value's counter, \\toks's register). The kernel's and e-TeX's, checked by hand
  * (latex.ltx, the e-TeX manual); the registers the table holds as REGISTER are values already
  */
-const VALUES = new Set(['number', 'romannumeral', 'the', 'value', 'numexpr', 'dimexpr', 'glueexpr', 'muexpr', 'fontdimen', 'dimen', 'skip', 'count', 'muskip', 'toks', 'wd', 'ht', 'dp', 'fontcharwd', 'fontcharht', 'fontchardp', 'fontcharic', 'gluestretch', 'glueshrink', 'mutoglue', 'gluetomu'])
+const VALUES = new Set([
+  'number',
+  'romannumeral',
+  'the',
+  'value',
+  'numexpr',
+  'dimexpr',
+  'glueexpr',
+  'muexpr',
+  'fontdimen',
+  'dimen',
+  'skip',
+  'count',
+  'muskip',
+  'toks',
+  'wd',
+  'ht',
+  'dp',
+  'fontcharwd',
+  'fontcharht',
+  'fontchardp',
+  'fontcharic',
+  'gluestretch',
+  'glueshrink',
+  'mutoglue',
+  'gluetomu',
+])
 /**
  * Whether a placeholder can never be a text rendering: its source one command of TEXTLESS, its arguments all there as
  * the table reads them and nothing after them, or a register's assignment (\\looseness=-1, \\parindent 0pt). What it sets, if anything (a rule's bar), is the page's own drawing,
  * never letters. Anything else is not textless: a command the table does not know, one whose arguments it cannot read,
  * one a paper defines itself (`paper`, paperOf: its \\rule is its own), one that prints its argument or a number
  */
-export function textless(src, paper = null) {
+export function textless(src: string, paper: ArgPaper | null = null): boolean {
   // booktabs' trim, (lr), before \\cmidrule's columns: what the front end passes over too
   const s = src.trim().replace(/^(\\cmidrule\s*(?:\[[^\]]*\]\s*)?)\([^()]*\)/, '$1')
   // TeX's and the kernel's own control sequences that set no ink and read nothing (tex-kernel.mjs: `\\@`, `\\-`, `\\relax`…), but
@@ -495,15 +994,30 @@ export function textless(src, paper = null) {
   if (inkFree(src)) return !paper?.own.has(/^\s*\\([A-Za-z]+)/.exec(src)?.[1])
   if (!/^\\[A-Za-z@]+/.test(s)) return false
   const { name, end } = commandAt(s, 0)
-  if ((!TEXTLESS.has(name) && name !== 'noalign' && paperParams(name, paper) !== REGISTER) || paper?.own.has(name)) return false
+  if ((!TEXTLESS.has(name) && name !== 'noalign' && paperParams(name, paper) !== REGISTER) || paper?.own.has(name))
+    return false
   const params = paperParams(name, paper)
   if (!params?.length) return false
   // a control word in a value in TeX's own syntax is a register's, or the value ends before it (\\looseness=-1\\textbf)
-  const registers = v => [...v.matchAll(/\\([A-Za-z@]+)/g)].every(m => paperParams(m[1], paper) === REGISTER)
-  if (params === REGISTER) { const m = TEX_VALUE.exec(s.slice(end)); return !!m && /\S/.test(m[0]) && !s.slice(end + m[0].length).trim() && registers(m[0]) }
+  const registers = (v: string) =>
+    [...v.matchAll(/\\([A-Za-z@]+)/g)].every((m) => paperParams(m[1]!, paper) === REGISTER)
+  if (params === REGISTER) {
+    const m = TEX_VALUE.exec(s.slice(end))
+    return !!m && /\S/.test(m[0]) && !s.slice(end + m[0].length).trim() && registers(m[0])
+  }
   const { args, end: e, complete } = readArgs(s, end, params)
-  if (!complete || s.slice(e).trim() || !args.every(a => a.shape !== '_' || s[a.start] === '{' || registers(s.slice(a.start, a.end)))) return false
+  if (
+    !complete ||
+    s.slice(e).trim() ||
+    !args.every((a) => a.shape !== '_' || s[a.start] === '{' || registers(s.slice(a.start, a.end)))
+  )
+    return false
   if (name !== 'noalign') return true
-  const inner = args[0] ? s.slice(args[0].start, args[0].end).replace(/^\{([\s\S]*)\}$/, '$1').trim() : ''
+  const inner = args[0]
+    ? s
+        .slice(args[0].start, args[0].end)
+        .replace(/^\{([\s\S]*)\}$/, '$1')
+        .trim()
+    : ''
   return !inner || textless(inner, paper)
 }

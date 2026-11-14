@@ -1,50 +1,13 @@
-// What today's ink makers (ledger.mjs, ink-units.mjs, figure-text.mjs beside this file: copies of src/pdf-reader/engine/layout's at
-// abe884b5e, run by locate over arXiv's page) import from today's other modules: each copied as it is from the file and line
-// named (abe884b5e), so that the makers read exactly what today's read; held equal to today's by
-// tests/pdf-reader/locate-ink-today.test.ts. One change, named where it is: regionsOf reads a page's body brackets paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it). What the
-// makers import of typed homes they import from there (facts.ts's classifyFont, familyKeysOf, sameFamily; ink.ts's
-// displayTextMask, PICTURE_END, PICTURE_START, regionMask); a copy here goes when its home is typed, a re-export of it first.
+// What today's ink makers (locate/ledger.ts, figure-text.ts, ink-units.ts: copies of src/pdf-reader/engine/layout's at abe884b5e,
+// run by locate over arXiv's page) take of the front half where its home is still JavaScript: each copied as it is from the file
+// and line named (abe884b5e), so that the makers read exactly what today's read, held equal to today's by
+// tests/pdf-reader/locate-ink-today.test.ts; and, re-exported, what a typed home holds (no copy is kept of a home that is typed),
+// until the makers import it from there. A copy leaves when its home is typed, and this file with the last of them.
 
-// ---- layout/stream.mjs:141-149 (spellOf)
-const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n', ς: 'σ' }
-export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}ˆˇ˘-˝]/gu, '').toLowerCase().replace(/[ßıȷøæœłđðħþŋς]/g, c => BASE_LETTERS[c]).replace(/[^\p{L}\p{N}]/gu, '')
-
-// ---- layout/stream.mjs:45, 152, 187-214 (columnsAt, regionsOf; CHANGED with today's: the body brackets paired by number)
-const BRACKET = /^([bf])([se])(\d+)$/
-const code = (body, depth) => depth * 2 + (body ? 1 : 0)
-export function columnsAt(page) {
-  let two = false
-  for (const pt of page.points ?? []) { const m = /^c([12])-\d+$/.exec(pt.name); if (m) two = m[1] === '2' }
-  if (!two) return () => 0
-  const v = page.view ?? [0, 0, 0, 0], mid = (v[0] + v[2]) / 2
-  return (x0, x1) => (x0 < mid - 4 && x1 > mid + 4 ? 2 : (x0 + x1) / 2 >= mid ? 1 : 0)
-}
-export function regionsOf(page) {
-  const { glyphs, points } = page, nBoxes = page.boxes.length / 4
-  const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
-  let body = false, depth = 0, bodies = false
-  const open = new Set()
-  const apply = name => {
-    const m = BRACKET.exec(name)
-    if (!m) return
-    if (m[1] === 'b') {
-      if (m[2] === 's') open.add(m[3])
-      else open.delete(m[3])
-      body = open.size > 0
-      bodies = true
-    } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
-  }
-  for (let q = 0, g = 0; g <= glyphs.n; g++) {
-    while (q < points.length && points[q].glyph <= g) { apply(points[q].name); at[q] = code(body, depth); q++ }
-    if (g < glyphs.n) glyph[g] = code(body, depth)
-  }
-  body = false; depth = 0; open.clear()
-  for (let q = 0, b = 0; b < nBoxes; b++) {
-    while (q < points.length && points[q].box <= b) apply(points[q++].name)
-    box[b] = code(body, depth)
-  }
-  return { glyph, box, at, bodies }
-}
+// ---- own/stream.ts spellOf, columnsAt, regionsOf, their home's own (typed by lane t4-leaves): no copy is kept of a home that is
+// typed. The copy's spellOf wrote its pattern's four characters `ˆˇ˘-˝` as themselves and the home writes
+// \u02c6\u02c7\u02d8-\u02dd: the same code points (U+02C6, U+02C7, U+02D8-U+02DD), one pattern; the rest same code
+export { columnsAt, regionsOf, spellOf } from '../../own/stream.ts'
 
 // ---- layout/own.mjs:64, 73, 773-835 (OWN_WORK, RULE_EM, lineRulesOf)
 export const OWN_WORK = 20_000_000
@@ -102,67 +65,13 @@ export function lineRulesOf(pages, glyphs, boxes, max = Infinity) {
   return { rules, work, over: false }
 }
 
-// ---- source/latex-front.mjs EMAIL_ADDRESS (an e-mail address as a text writes it, keepAddresses'), held equal to it by
-// tests/pdf-reader/locate-ink-today.test.ts
-export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
-// ---- source/latex-front.mjs ADDRESS_GROUP (several addresses at one domain written once, a group of their local parts before
-// it, keepGroups'), held equal to it by tests/pdf-reader/locate-ink-today.test.ts
-export const ADDRESS_GROUP = /(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+/
+// ---- source/latex-front.ts EMAIL_ADDRESS and ADDRESS_GROUP, their home's own (an e-mail address as a text writes it,
+// keepAddresses'; several at one domain written once, keepGroups'): no copy is kept of a home that is typed
+export { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../source/latex-front.ts'
 
-// ---- source/latex-front.mjs identifiersIn (each identifier of a text: a token with no white space holding two letters or digits
-// joined by underscores, whole, its leading and trailing sentence punctuation aside; keepIdentifiers'), with SNAKE and PAIRS, held
-// equal to it by tests/pdf-reader/locate-ink-today.test.ts
-const SNAKE = /[^\W_]_+[^\W_]/
-/** an opening and a closing bracket of a pair a token may hold (`host_label(result)`, `[sentence_1]`, `{root_question}`) */
-const PAIRS = { '(': ')', '[': ']', '{': '}' }
-/** Each identifier of a text (a reading of a unit's pieces, or an ink word's characters), its [start, end) code units: a token, a
- *  run of characters with no white space (nor U+0000, which stands for what no character of a text is: a command, a group's
- *  edge), that holds an identifier's mark (SNAKE), the whole token: `CallbackBase.host_label(result)`, `test_parser.py`,
- *  `--view_range`, `response_equal_human_example`. Its leading and trailing sentence punctuation is none of it: from its end a
- *  stop, a comma, a semicolon, a colon, an exclamation or a question mark and a quote (`'` `"` `` ` `` and every closing one,
- *  Pf), from its start a quote (every opening one, Pi); and a bracket at either edge that no bracket of its pair inside the token
- *  answers (`(see conv5_x)` the `)` of a parenthesis the sentence opened; `[sentence_1]` and `host_label(result)` keep theirs),
- *  another opening or closing bracket at its edge too (Ps, Pe). Its syntax alone: no word list, no camelCase, nothing dotted
- *  without an underscore ("e.g." is prose). The source's (keepIdentifiers), an ink unit's word's (packages/engine's copy of
- *  ink-units.mjs, addressed) and a figure text's (locate's ink.ts): the copy held equal to this by
- *  tests/pdf-reader/locate-ink-today.test.ts */
-export function identifiersIn(s) {
-  const out = []
-  const answered = (t, at, step) => {
-    // (whether the bracket at `at` of `t` has its pair inside t, walking `step` from it: depth by its own pair alone)
-    const c = t[at], open = step > 0 ? c : Object.keys(PAIRS).find(k => PAIRS[k] === c), close = PAIRS[open]
-    if (!close) return false
-    let depth = 0
-    for (let i = at; i >= 0 && i < t.length; i += step) {
-      if (t[i] === (step > 0 ? open : close)) depth++
-      else if (t[i] === (step > 0 ? close : open) && --depth === 0) return true
-    }
-    return false
-  }
-  // (the tokens: runs of characters that are no white space and no U+0000)
-  const tokens = []
-  for (let i = 0; i < s.length; ) {
-    while (i < s.length && (s[i] === '\u0000' || /\s/u.test(s[i]))) i++
-    const at = i
-    while (i < s.length && s[i] !== '\u0000' && !/\s/u.test(s[i])) i++
-    if (i > at) tokens.push([at, i])
-  }
-  for (const [a0, b0] of tokens) {
-    if (!SNAKE.test(s.slice(a0, b0))) continue
-    let a = a0, b = b0
-    for (;;) {
-      const t = s.slice(a, b), last = t.at(-1), first = t[0]
-      if (/[.,;:!?'"`\p{Pf}]/u.test(last) || (/\p{Pe}/u.test(last) && !answered(t, t.length - 1, -1))) b--
-      else if (/['"`\p{Pi}]/u.test(first) || (/\p{Ps}/u.test(first) && !answered(t, 0, 1))) a++
-      else break
-    }
-    if (SNAKE.test(s.slice(a, b))) out.push([a, b])
-  }
-  return out
-}
+// ---- source/latex-front.ts identifiersIn, its home's own (each identifier of a text; keepIdentifiers'): no copy is kept of a
+// home that is changed or typed
+export { identifiersIn } from '../../source/latex-front.ts'
 
-// ---- translate/mt.mjs:28, 31-34 (utf8)
-const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
-const DECODER = new TextDecoder()
-const ASCII = /^[\t\n\r -~]*$/
-export const utf8 = s => (ASCII.test(s) ? s : DECODER.decode(latin1Bytes(s)))
+// ---- instrument/mt.ts utf8, its home's own (no copy is kept of a home that is typed)
+export { utf8 } from '../../instrument/mt.ts'

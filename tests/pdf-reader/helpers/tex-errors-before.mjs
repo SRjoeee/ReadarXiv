@@ -1,9 +1,14 @@
+// A compile's TeX errors and the units they stand in (packages/engine/src/compile/tex-errors.mjs) as it was at 4ad80aac5, before the
+// code change of the typing lane T6 (its latin1 the engine's one, bounded-reads.ts): kept here alone, verbatim but its import (the
+// package's module by its path), as the reference the change is held to (tests/pdf-reader/tex-errors-bounds.test.ts). Imported by
+// no module of the engine.
+//
 // A compile's TeX errors and the units they stand in: live.mjs's safety net, which sets a unit TeX cannot set in the
 // source so that the rest of the paper is set translated (exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md,
 // Task 2). The same for native nonstop latexmk, which logs every error, and for the TeX page's BusyTeX, which halts on
 // the first: TeX writes each as `! <message>`, the levels of input it was reading, and at the base level `l.<n>`, the
 // line of the file it was reading and the text of that line before and after its place
-import { lastTexLog } from '../source/latex-front.mjs'
+import { lastTexLog } from '../../../packages/engine/src/source/latex-front.ts'
 
 /**
  * TeX's errors in a compile's last pass, each with the line of input TeX was reading and the text around its place:

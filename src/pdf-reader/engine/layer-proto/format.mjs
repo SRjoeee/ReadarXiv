@@ -33,8 +33,8 @@ import { checkFigures } from './figure-rows.mjs'
 import { sourceUnitsOf } from './rows.mjs'
 import { CELL, EDGES, unitStands } from './units.mjs'
 import { CLASS_IDS } from '../rules/content-classes.mjs'
-import { WHY_MAX } from '@readarxiv/engine/today/instrument/format.mjs'
-export { WHY_MAX, whyText } from '@readarxiv/engine/today/instrument/format.mjs'
+import { WHY_MAX } from '@readarxiv/engine/today/instrument/format.ts'
+export { WHY_MAX, whyText } from '@readarxiv/engine/today/instrument/format.ts'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG. 6: a part

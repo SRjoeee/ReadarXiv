@@ -4,5 +4,10 @@
 export const WHY_MAX = 300
 /** a why as a record holds it: a run of control characters (a TeX log's raw bytes, a terminal's escapes) one space, within
  *  WHY_MAX */
-// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters a why is kept without
-export const whyText = s => String(s ?? '').replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').replace(/ {2,}/g, ' ').trim().slice(0, WHY_MAX)
+export const whyText = (s: unknown) =>
+  String(s ?? '')
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters a why is kept without
+    .replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .trim()
+    .slice(0, WHY_MAX)

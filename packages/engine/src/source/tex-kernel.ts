@@ -26,7 +26,17 @@ export const INK_FREE_SYMBOLS = Object.freeze(['\\@', '\\/', '\\-', '\\,', '\\;'
  *  (skips the spaces after it), `\noindent` and `\indent` (begin a paragraph without or with its indent: an empty box), and
  *  LaTeX's `\leavevmode` (`\unhbox\voidb@x`: begins one), `\nobreak` (`\penalty\@M`), `\allowbreak` (`\penalty\z@`) and
  *  `\newline` (ends the line: `\@normalcr\relax`, a break and no ink) */
-export const INK_FREE_WORDS = Object.freeze(['relax', 'nobreak', 'allowbreak', 'ignorespaces', 'unskip', 'leavevmode', 'noindent', 'indent', 'newline'])
+export const INK_FREE_WORDS = Object.freeze([
+  'relax',
+  'nobreak',
+  'allowbreak',
+  'ignorespaces',
+  'unskip',
+  'leavevmode',
+  'noindent',
+  'indent',
+  'newline',
+])
 
 /** control words whose only argument is an optional priority from 0 to 4 (LaTeX's `\linebreak[2]`, a penalty): no ink, but a
  *  call carries its argument, so only a reader of arguments (arg-roles.mjs TEXTLESS) can say a source is one whole */
@@ -38,11 +48,14 @@ export const BREAK_HINTS = Object.freeze(['linebreak', 'nolinebreak', 'pagebreak
 export const PREFIX_WORDS = Object.freeze(['protect'])
 const PREFIX = new RegExp(String.raw`^\s*\\(?:${PREFIX_WORDS.join('|')})\s*$`)
 /** whether a placeholder's whole source is one of PREFIX_WORDS (white space round it is none of it) */
-export const prefixWord = src => PREFIX.test(src ?? '')
+export const prefixWord = (src: string | null | undefined): boolean => PREFIX.test(src ?? '')
 
 /** the symbols as a pattern: a control space is a backslash and any white space (a space, a tab or a line's end), and `\@` a
  *  symbol only where no letter follows it (`\@ifnextchar` is a macro of the kernel) */
-const SYMBOL = `@(?![A-Za-z@])|[${INK_FREE_SYMBOLS.map(s => s[1]).filter(c => c !== '@' && c !== ' ').map(c => `\\${c}`).join('')}\\s]`
+const SYMBOL = `@(?![A-Za-z@])|[${INK_FREE_SYMBOLS.map((s) => s[1])
+  .filter((c) => c !== '@' && c !== ' ')
+  .map((c) => `\\${c}`)
+  .join('')}\\s]`
 const WORD = `(?:${INK_FREE_WORDS.join('|')})(?![A-Za-z@])`
 /** the leading control sequence of a source that is one of the three tables, as the pattern source of a regular expression (the
  *  maker's INVISIBLE reads a placeholder by it; the source may go on after it) */
@@ -53,7 +66,7 @@ export const INK_FREE_LEAD = String.raw`\\(?:${SYMBOL}|${WORD}|(?:${BREAK_HINTS.
 const SOURCE = new RegExp(String.raw`^\s*\\(?:${SYMBOL}|${WORD})(?:\{\})?\s*$`)
 
 /** whether a placeholder's whole source is one of INK_FREE_SYMBOLS or INK_FREE_WORDS (a source with an argument is not) */
-export const inkFree = src => SOURCE.test(src ?? '')
+export const inkFree = (src: string | null | undefined): boolean => SOURCE.test(src ?? '')
 
 // ---------------------------------------------------------------- what sets nothing among a unit's words
 // Beside the tables above, which the maker and the layer read (a placeholder with no mark, one that draws nothing), what else
@@ -65,7 +78,44 @@ export const inkFree = src => SOURCE.test(src ?? '')
  *  forms \bf … \sl, \em), its size's (\tiny … \Huge, \normalsize, \selectfont), the paragraph's shape (\centering,
  *  \raggedright, \raggedleft), its line breaking's (\sloppy, \fussy), and an empty box: \strut (a rule of no width), \null
  *  (\hbox{}) */
-export const DECLARATION_WORDS = Object.freeze(['centering', 'raggedright', 'raggedleft', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'bfseries', 'mdseries', 'itshape', 'upshape', 'slshape', 'scshape', 'em', 'bf', 'it', 'rm', 'sf', 'tt', 'sc', 'sl', 'normalsize', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large', 'Large', 'LARGE', 'huge', 'Huge', 'selectfont', 'strut', 'null', 'sloppy', 'fussy'])
+export const DECLARATION_WORDS = Object.freeze([
+  'centering',
+  'raggedright',
+  'raggedleft',
+  'normalfont',
+  'rmfamily',
+  'sffamily',
+  'ttfamily',
+  'bfseries',
+  'mdseries',
+  'itshape',
+  'upshape',
+  'slshape',
+  'scshape',
+  'em',
+  'bf',
+  'it',
+  'rm',
+  'sf',
+  'tt',
+  'sc',
+  'sl',
+  'normalsize',
+  'small',
+  'footnotesize',
+  'scriptsize',
+  'tiny',
+  'large',
+  'Large',
+  'LARGE',
+  'huge',
+  'Huge',
+  'selectfont',
+  'strut',
+  'null',
+  'sloppy',
+  'fussy',
+])
 /** control words whose argument is a key, written to an auxiliary file (a whatsit, no ink): LaTeX's \label{…} (cleveref's
  *  optional type before it) and \index{…} */
 export const AUX_WORDS = Object.freeze(['label', 'index'])
@@ -73,24 +123,40 @@ export const AUX_WORDS = Object.freeze(['label', 'index'])
 export const PENALTY_WORDS = Object.freeze(['penalty'])
 /** what LaTeX and booktabs set between a table's rows, with their arguments (`\cline{2-3}`, `\cmidrule(lr){2-3}`,
  *  `\addlinespace[3pt]`): \noalign material, or \cline's row of its own, nothing in a cell's line */
-export const ROW_RULES = Object.freeze(['hline', 'cline', 'toprule', 'midrule', 'bottomrule', 'cmidrule', 'specialrule', 'addlinespace', 'morecmidrules'])
+export const ROW_RULES = Object.freeze([
+  'hline',
+  'cline',
+  'toprule',
+  'midrule',
+  'bottomrule',
+  'cmidrule',
+  'specialrule',
+  'addlinespace',
+  'morecmidrules',
+])
 
 // ---------------------------------------------------------------- a definition that sets one of its arguments alone
 /** the kernel's macros that expand to one of their arguments and nothing else, by name: how many they take, and which they give
  *  (latex.ltx: \@firstofone and \@iden take one, \@firstoftwo and \@secondoftwo two). A .bbl defines its field commands by them
  *  (apsrev4-2's `\providecommand \bibinfo [0]{\@secondoftwo}`) */
-const ARGUMENT_SELECTORS = Object.freeze({ '@firstofone': [1, 1], '@iden': [1, 1], '@firstoftwo': [2, 1], '@secondoftwo': [2, 2] })
+const ARGUMENT_SELECTORS: Readonly<Record<string, readonly [of: number, arg: number]>> = Object.freeze({
+  '@firstofone': [1, 1],
+  '@iden': [1, 1],
+  '@firstoftwo': [2, 1],
+  '@secondoftwo': [2, 2],
+})
 /** the argument a definition expands to alone (`params`, the arguments it declares; `body`, its replacement text, its comments
  *  out as TeX takes them, each with its line's end), as { of, arg }: how many arguments a call takes and which one, from 1, it
  *  sets — `#2` of `[2]`, \@secondoftwo of `[0]`; null for a body that sets anything else (a style, a word, a box, a space) or
  *  nothing at all. White space is TeX's: a space or a line's end before or after a parameter is a space token the call sets
  *  (`{#1 }` sets its argument and a space, `{` and a line's end then `#1}` a space and its argument), and is no identity;
  *  after a control word TeX skips it (`{\@secondoftwo }`) */
-export function selectsArgument(params, body) {
+export function selectsArgument(params: number, body: string | null): { of: number; arg: number } | null {
   if (!Number.isInteger(params) || typeof body !== 'string') return null
   const own = /^#([1-9])$/.exec(body)
   if (own) return Number(own[1]) <= params ? { of: params, arg: Number(own[1]) } : null
-  const k = /^\\(@[A-Za-z]+)\s*$/.exec(body), sel = k && params === 0 && Object.hasOwn(ARGUMENT_SELECTORS, k[1]) ? ARGUMENT_SELECTORS[k[1]] : null
+  const k = /^\\(@[A-Za-z]+)\s*$/.exec(body),
+    sel = k && params === 0 && Object.hasOwn(ARGUMENT_SELECTORS, k[1]!) ? ARGUMENT_SELECTORS[k[1]!] : null
   return sel ? { of: sel[0], arg: sel[1] } : null
 }
 
@@ -117,15 +183,17 @@ const MATH_SPACE_SYMBOLS = Object.freeze(['\\>'])
 
 /** the symbols as alternatives of a pattern: a control space is a backslash and any white space; a symbol's backslash is no
  *  forced break's second (`\\` and a line's end is a break, read from a source's end as from its start) */
-const spaceSymbol = symbols => symbols.map(s => (s === '~' ? '~' : s === '\\ ' ? '(?<!\\\\)\\\\\\s' : `(?<!\\\\)\\\\${s[1]}`)).join('|')
+const spaceSymbol = (symbols: readonly string[]) =>
+  symbols.map((s) => (s === '~' ? '~' : s === '\\ ' ? '(?<!\\\\)\\\\\\s' : `(?<!\\\\)\\\\${s[1]}`)).join('|')
 const SPACE_WORD = `\\\\(?:${SPACE_WORDS.join('|')})(?![A-Za-z@])`
 const SPACE_LENGTH = `\\\\(?:${SPACE_LENGTHS.join('|')})\\*?\\s*\\{`
 /** the leading space of a source, as the pattern source of a regular expression (the source may go on after it): a space of
  *  the table, a length's command up to its brace; `negative` the spaces of negative width too, `math` the math alone's too */
-export const spaceLead = ({ negative = true, math = false } = {}) => {
-  const symbols = SPACE_SYMBOLS.filter(s => negative || !NEGATIVE_SPACES.includes(s))
+export const spaceLead = ({ negative = true, math = false }: { negative?: boolean; math?: boolean } = {}): string => {
+  const symbols = SPACE_SYMBOLS.filter((s) => negative || !NEGATIVE_SPACES.includes(s))
   return `(?:${spaceSymbol([...symbols, ...(math ? MATH_SPACE_SYMBOLS : [])])}|${SPACE_WORD}|${SPACE_LENGTH})`
 }
 /** a source that is one space of the table whole, as the pattern source of a regular expression: a symbol or a word, alone or
  *  before an empty group, a length's command and its length; `math` the math alone's too */
-export const spaceSource = ({ math = false } = {}) => String.raw`(?:(?:${spaceSymbol([...SPACE_SYMBOLS, ...(math ? MATH_SPACE_SYMBOLS : [])])}|${SPACE_WORD})(?:\{\})?|\\(?:${SPACE_LENGTHS.join('|')})\*?\s*\{[^{}]*\})`
+export const spaceSource = ({ math = false }: { math?: boolean } = {}): string =>
+  String.raw`(?:(?:${spaceSymbol([...SPACE_SYMBOLS, ...(math ? MATH_SPACE_SYMBOLS : [])])}|${SPACE_WORD})(?:\{\})?|\\(?:${SPACE_LENGTHS.join('|')})\*?\s*\{[^{}]*\})`

@@ -16,20 +16,64 @@
  * most are one glyph in every encoding, but OT1 sets \l, \L, \aa and \AA of two (a bar or a ring over a letter), which a page's
  * text then gives as two characters, not the one: there the maker finds none and the piece stays LOST, as it was
  */
-export const TEXT_SYMBOLS = Object.freeze({
-  '\\%': '%', '\\&': '&', '\\#': '#', '\\$': '$', '\\_': '_', '\\{': '{', '\\}': '}',
-  '\\textbackslash': '\\', '\\textless': '<', '\\textgreater': '>', '\\textbar': '|', '\\textasciitilde': '~', '\\textasciicircum': '^',
-  '\\textunderscore': '_', '\\textdollar': '$', '\\textbraceleft': '{', '\\textbraceright': '}', '\\textquotesingle': "'", '\\textquotedbl': '"',
-  '\\S': '§', '\\P': '¶', '\\textsection': '§', '\\textparagraph': '¶', '\\dag': '†', '\\ddag': '‡',
-  '\\textdagger': '†', '\\textdaggerdbl': '‡', '\\copyright': '©', '\\textcopyright': '©', '\\textregistered': '®',
-  '\\texttrademark': '™', '\\pounds': '£', '\\textsterling': '£', '\\textdegree': '°', '\\textbullet': '•',
-  '\\textperiodcentered': '·', '\\ldots': '…', '\\dots': '…', '\\textellipsis': '…', '\\textendash': '–', '\\textemdash': '—',
-  '\\o': 'ø', '\\O': 'Ø', '\\ss': 'ß', '\\ae': 'æ', '\\AE': 'Æ', '\\oe': 'œ', '\\OE': 'Œ', '\\aa': 'å', '\\AA': 'Å',
-  '\\l': 'ł', '\\L': 'Ł', '\\slash': '/',
+export const TEXT_SYMBOLS: Readonly<Record<string, string>> = Object.freeze({
+  '\\%': '%',
+  '\\&': '&',
+  '\\#': '#',
+  '\\$': '$',
+  '\\_': '_',
+  '\\{': '{',
+  '\\}': '}',
+  '\\textbackslash': '\\',
+  '\\textless': '<',
+  '\\textgreater': '>',
+  '\\textbar': '|',
+  '\\textasciitilde': '~',
+  '\\textasciicircum': '^',
+  '\\textunderscore': '_',
+  '\\textdollar': '$',
+  '\\textbraceleft': '{',
+  '\\textbraceright': '}',
+  '\\textquotesingle': "'",
+  '\\textquotedbl': '"',
+  '\\S': '§',
+  '\\P': '¶',
+  '\\textsection': '§',
+  '\\textparagraph': '¶',
+  '\\dag': '†',
+  '\\ddag': '‡',
+  '\\textdagger': '†',
+  '\\textdaggerdbl': '‡',
+  '\\copyright': '©',
+  '\\textcopyright': '©',
+  '\\textregistered': '®',
+  '\\texttrademark': '™',
+  '\\pounds': '£',
+  '\\textsterling': '£',
+  '\\textdegree': '°',
+  '\\textbullet': '•',
+  '\\textperiodcentered': '·',
+  '\\ldots': '…',
+  '\\dots': '…',
+  '\\textellipsis': '…',
+  '\\textendash': '–',
+  '\\textemdash': '—',
+  '\\o': 'ø',
+  '\\O': 'Ø',
+  '\\ss': 'ß',
+  '\\ae': 'æ',
+  '\\AE': 'Æ',
+  '\\oe': 'œ',
+  '\\OE': 'Œ',
+  '\\aa': 'å',
+  '\\AA': 'Å',
+  '\\l': 'ł',
+  '\\L': 'Ł',
+  '\\slash': '/',
 })
 
 /** a symbol's text: its source one of TEXT_SYMBOLS, alone or followed by an empty group (`\%{}`, `\dots{}`), else null */
-export function symbolText(src) {
+export function symbolText(src: string | null | undefined): string | null {
   const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src ?? '')
-  return m && Object.hasOwn(TEXT_SYMBOLS, m[1]) ? TEXT_SYMBOLS[m[1]] : null
+  return m && Object.hasOwn(TEXT_SYMBOLS, m[1]!) ? TEXT_SYMBOLS[m[1]!]! : null
 }

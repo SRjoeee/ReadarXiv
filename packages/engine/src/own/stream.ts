@@ -8,7 +8,71 @@
 // mid-paragraph or at a column's head — lies outside the region of its opening point, and is cut: a region is in a
 // column's body or not, at a depth of floats.
 // Imports a label's form alone (label-form.mjs): pure arithmetic over what pageInk read.
-import { isLabelForm, LABEL_NAME, labelText } from '../marks/label-form.mjs'
+import type { InkPoint, PackedGlyphs } from '../ink.ts'
+import { isLabelForm, LABEL_NAME, labelText } from '../marks/label-form.ts'
+
+/** a page's glyphs as ownedOf reads them: packGlyphs' columns STREAM_COLUMNS (more may be there) */
+export type StreamGlyphs = Pick<PackedGlyphs, 'n' | 'x0' | 'y' | 'size' | 'u'>
+/** a page's view as PDF.js gives it (PDFPageProxy.view): x0, y0, x1, y1 */
+export type View = readonly [x0: number, y0: number, x1: number, y1: number]
+/** a page of the marked compile as pageInk read it, its glyphs packed in stream order (packGlyphs), with its view; its
+ *  paragraphs' points (marks.mjs POINTS_TEX q<n>), where a display a unit opens with begins */
+export interface StreamPage {
+  glyphs: StreamGlyphs
+  boxes: readonly number[]
+  points: readonly InkPoint[]
+  boxAt: ArrayLike<number>
+  view: View
+  paras?: readonly InkPoint[]
+}
+/** the one unmarked piece after a paper's macro (marks.mjs followsOf `split`): its opening mark's name, the text the probe
+ *  showed the macro sets, and where text follows the piece, that text as an opening's (`want`, `rest`) and the points that
+ *  may end it (`ends`), the three together */
+export type Split =
+  | { name: string; text: string; want?: undefined; rest?: undefined; ends?: undefined }
+  | { name: string; text: string; want: string; rest: string; ends: string[] }
+/** what the marking says of a piece with an opening point (marks.mjs followsOf): `closing`, it has a closing mark; `want`, the
+ *  first WANT characters of the text after it in its unit, '' for none; `ends`, the names of its unit's next marks; `blocked`,
+ *  a visible piece with no mark follows it with no text between; `through` (the erasure's), past such pieces, the next marked
+ *  piece's opening mark, else null; `rest`, the whole text after it up to its next visible piece as spellOf reads it;
+ *  `display`, the piece is a display; `group`, its display group's later displays' opening marks; `split`, the piece after a
+ *  paper's macro; `moved`, the punctuation mark its command may set before its own ink */
+export interface Follow {
+  closing: boolean
+  want: string
+  rest?: string
+  display?: boolean
+  ends: string[]
+  blocked: boolean
+  through?: string | null
+  group?: readonly string[]
+  split?: Split
+  moved?: string
+}
+/** a display a unit opens with, which the marking passes over (marks.mjs headsOf), by its unit's start mark: the opening mark's
+ *  name it would have had, its display group's later displays', and whether it is one display of no row break (`whole`) */
+export interface Head {
+  name: string
+  group?: readonly string[]
+  whole?: boolean
+}
+/** a glyph, a box or a point of the pages: its page (1-based) and its index on that page */
+export type Place = [page: number, index: number]
+/** a piece's own ink (ownedOf): how it was found (OWNED_HOW's index), its glyphs and boxes in stream order */
+export interface Owned {
+  how: number
+  glyphs: Place[]
+  boxes: Place[]
+}
+/** a page's regions (regionsOf): of each glyph, of each box, at each point; whether the page brackets any body */
+export interface Regions {
+  glyph: Int32Array
+  box: Int32Array
+  at: Int32Array
+  bodies: boolean
+}
+/** what a caller of ownedPages is handed for each piece found: its name, its entry, the window of pages held */
+export type Take = (name: string, e: Owned, pages: readonly StreamPage[]) => void
 
 /** how a piece's ink was found, or why none was: the first OWNED are owned (its glyphs and rules, maybe none), the rest
  *  are not, and the maker writes the piece LOST — but 'in the display before it', a later display of a display group,
@@ -35,12 +99,14 @@ export const OWNED_HOW = Object.freeze([
   'more glyphs than a piece may own',
   'past the glyphs a paper may own',
   'ink out of bounds',
-])
+] as const)
+/** how a piece's ink was found, or why none was */
+export type OwnedHow = (typeof OWNED_HOW)[number]
 export const OWNED = 6
 /** the glyph columns ownedOf reads of a page (ink.mjs packGlyphs), and the owned rows after it (marks.mjs): a glyph's
  *  origin, baseline, size and character */
 export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'])
-const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
+const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i])) as Readonly<Record<OwnedHow, number>>
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])(\d+)$/
 /** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
@@ -52,7 +118,8 @@ export const READ_ALONE = /^(?:ka|fn)\d+$/
  *  "Abstract", "Proof", marks.mjs NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own text:
  *  `\[x=\text{\figurename}\,1\]`), its key in any case (a primitive \uppercase's capitals), and a biblatex entry's (marks.mjs
  *  POINTS_TEX `bi<n>`): a piece alone past its unit's end owns nothing past one on its page */
-const BEGINS = /^(?:n\d+\.(?:abstract|ref|bib|contents|listfigure|listtable|appendix|index|proof|preface|glossary)\.s|bi\d+)$/i
+const BEGINS =
+  /^(?:n\d+\.(?:abstract|ref|bib|contents|listfigure|listtable|appendix|index|proof|preface|glossary)\.s|bi\d+)$/i
 /** a biblatex entry's point, and its bibliography's end: no piece's next mark either, its entry no unit of the source */
 const BIB_ITEM = /^b[iz]\d+$/
 /** a draft image frame's corner (pipeline/live.mjs DRAFT: g<n>a, g<n>b on its baseline, g<n>t at its top): no piece's next mark
@@ -62,14 +129,18 @@ const BIB_ITEM = /^b[iz]\d+$/
 const FRAME = /^g(\d+)[abt]$/
 /** each page's glyphs and boxes inside a draft frame (FRAME: from its g<n>a point to its g<n>b point on the page), 1 each:
  *  { glyph, box }; null for a page with none */
-function framedOf(page) {
-  let out = null
-  const open = new Map(), nBoxes = (page.boxes?.length ?? 0) / 4
+function framedOf(page: StreamPage) {
+  let out: { glyph: Uint8Array; box: Uint8Array } | null = null
+  const open = new Map<string, InkPoint>(),
+    nBoxes = (page.boxes?.length ?? 0) / 4
   for (const pt of page.points) {
     const m = /^g(\d+)([ab])$/.exec(pt.name)
     if (!m) continue
-    if (m[2] === 'a') { open.set(m[1], pt); continue }
-    const from = open.get(m[1])
+    if (m[2] === 'a') {
+      open.set(m[1]!, pt)
+      continue
+    }
+    const from = open.get(m[1]!)
     if (!from) continue
     out ??= { glyph: new Uint8Array(page.glyphs.n), box: new Uint8Array(nBoxes) }
     out.glyph.fill(1, from.glyph, Math.min(pt.glyph, page.glyphs.n))
@@ -85,36 +156,53 @@ const START = /^[th]?(\d+)s$/
 const UNIT_MARK = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
 /** whether a point's name is a mark of a unit numbered before `id`: the source sets its units in order, so after a piece of
  *  unit `id` it is that unit's text set again (MR 3's later occurrence), never the next unit's */
-const earlierUnit = (name, id) => {
+const earlierUnit = (name: string, id: number) => {
   const m = UNIT_MARK.exec(name)
   return !!m && Number(m[1] ?? m[2]) < id
 }
 /** a range in a region outside the column bodies (an output routine of its own: REVTeX's, multicol's) that goes from
  *  low on a page to high on it, and right by this share of the page's width and up by this share of its height, crossed
  *  into the next column: what TeX shipped between is in it, and cannot be told apart */
-const JUMP_X = 0.25, JUMP_Y = 0.25
+const JUMP_X = 0.25,
+  JUMP_Y = 0.25
 /** a piece alone at its unit's end owns its lines up to a gap this many of the page's line pitches deep, or more: TeX's skip
  *  before another block (an author block's affiliations below its names), never the leading of the lines a piece wraps over */
 const BLOCK_GAP = 1.5
 /** the baseline most of a line's glyphs stand on (to a tenth), the first met on a tie: its text's, not a mark's raised over it */
-function lineBase(G, glyphs, from, to) {
-  const n = new Map()
-  let best = G.y[glyphs[from][1]], most = 0
-  for (let q = from; q < to; q++) { const y = Math.round(G.y[glyphs[q][1]] * 10) / 10, c = (n.get(y) ?? 0) + 1; n.set(y, c); if (c > most) { most = c; best = y } }
+function lineBase(G: StreamGlyphs, glyphs: readonly Place[], from: number, to: number) {
+  const n = new Map<number, number>()
+  let best = G.y[glyphs[from]![1]]!,
+    most = 0
+  for (let q = from; q < to; q++) {
+    const y = Math.round(G.y[glyphs[q]![1]]! * 10) / 10,
+      c = (n.get(y) ?? 0) + 1
+    n.set(y, c)
+    if (c > most) {
+      most = c
+      best = y
+    }
+  }
   return best
 }
 /** a page's line pitch: the drop between consecutive lines' baselines that most of them have (to a half), where its glyphs run on
  *  a line's start (left by an em, down by half its size) and the drop is under three of its size; null where none */
-function pitchOf(G) {
-  const n = new Map()
-  let best = null, most = 0, prev = -1
+function pitchOf(G: StreamGlyphs) {
+  const n = new Map<number, number>()
+  let best: number | null = null,
+    most = 0,
+    prev = -1
   for (let g = 0; g < G.n; g++) {
     if (prev >= 0) {
-      const em = Math.min(G.size[prev], G.size[g]), drop = G.y[prev] - G.y[g]
-      if (G.x0[g] < G.x0[prev] - em && drop > 0.5 * em && drop < 3 * Math.max(G.size[prev], G.size[g])) {
-        const d = Math.round(drop * 2) / 2, c = (n.get(d) ?? 0) + 1
+      const em = Math.min(G.size[prev]!, G.size[g]!),
+        drop = G.y[prev]! - G.y[g]!
+      if (G.x0[g]! < G.x0[prev]! - em && drop > 0.5 * em && drop < 3 * Math.max(G.size[prev]!, G.size[g]!)) {
+        const d = Math.round(drop * 2) / 2,
+          c = (n.get(d) ?? 0) + 1
         n.set(d, c)
-        if (c > most) { most = c; best = d }
+        if (c > most) {
+          most = c
+          best = d
+        }
       }
     }
     prev = g
@@ -125,18 +213,21 @@ function pitchOf(G) {
  *  starts a gap BLOCK_GAP of the page's pitch or more below the line before (`anchor`, the baseline of its unit's line it opens
  *  on, the first line's where it opens on a line of its own), or all; a new line is one TeX set below the glyph before by half
  *  its size, at or left of where that glyph starts, or below it by a size or more wherever it starts (an indented block) */
-function lineEnd(G, glyphs, anchor, pitch) {
+function lineEnd(G: StreamGlyphs, glyphs: readonly Place[], anchor: number | null, pitch: number | null | undefined) {
   if (!pitch) return glyphs.length
-  let from = 0, base = anchor
+  let from = 0,
+    base = anchor
   for (let j = 1; j <= glyphs.length; j++) {
-    const a = glyphs[j - 1][1], b = glyphs[j]?.[1]
+    const a = glyphs[j - 1]![1],
+      b = glyphs[j]?.[1]
     if (b !== undefined) {
-      const em = Math.min(G.size[a], G.size[b]), drop = G.y[a] - G.y[b]
+      const em = Math.min(G.size[a]!, G.size[b]!),
+        drop = G.y[a]! - G.y[b]!
       // (a drop of a size or more is a line apart, wherever it starts: an indented or centred block after a short line)
-      if (!(drop > 0.5 * em && (G.x0[b] <= G.x0[a] || drop > Math.max(G.size[a], G.size[b])))) continue
+      if (!(drop > 0.5 * em && (G.x0[b]! <= G.x0[a]! || drop > Math.max(G.size[a]!, G.size[b]!)))) continue
     }
     const y = lineBase(G, glyphs, from, j)
-    if (from > 0 && base - y >= BLOCK_GAP * pitch) return from
+    if (from > 0 && (base as number) - y >= BLOCK_GAP * pitch) return from
     base = from === 0 && anchor !== null ? anchor : y
     from = j
   }
@@ -156,11 +247,31 @@ const WORK = 20_000_000
 // it: \\o ø, \\ae æ, \\oe œ, \\l ł — OT1 sets \\l as a bar over an l, T1 as its own glyph —, \\ss ß, \\dh đ; and a final sigma
 // is a sigma, the one letter whose lower case hangs on what follows it ("ΟΣ" lowers to "ος", its "Σ" alone to "σ"), so that a
 // text spelled a glyph at a time spells as it does whole)
-const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n', ς: 'σ' }
-export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}\u02c6\u02c7\u02d8-\u02dd]/gu, '').toLowerCase().replace(/[ßıȷøæœłđðħþŋς]/g, c => BASE_LETTERS[c]).replace(/[^\p{L}\p{N}]/gu, '')
+const BASE_LETTERS: Readonly<Record<string, string>> = {
+  ß: 'ss',
+  ı: 'i',
+  ȷ: 'j',
+  ø: 'o',
+  æ: 'ae',
+  œ: 'oe',
+  ł: 'l',
+  đ: 'd',
+  ð: 'd',
+  ħ: 'h',
+  þ: 'th',
+  ŋ: 'n',
+  ς: 'σ',
+}
+export const spellOf = (s: string) =>
+  s
+    .normalize('NFKD')
+    .replace(/[\p{M}\u02c6\u02c7\u02d8-\u02dd]/gu, '')
+    .toLowerCase()
+    .replace(/[ßıȷøæœłđðħþŋς]/g, (c) => BASE_LETTERS[c]!)
+    .replace(/[^\p{L}\p{N}]/gu, '')
 
 /** a region's code: in a column's body or not, at a depth of floats */
-const code = (body, depth) => depth * 2 + (body ? 1 : 0)
+const code = (body: boolean, depth: number) => depth * 2 + (body ? 1 : 0)
 
 /** how far below every other glyph of its page a folio stands, in its size: LaTeX's running foot is \\footskip (30pt) below the
  *  text block's last baseline, a display's or a footnote's next line one baselineskip */
@@ -175,21 +286,30 @@ const FOLIO = /^[-\u2013\u2014]?(?:\d{1,4}|[ivxlcdm]{1,8})[-\u2013\u2014]?$/
 /** where a page's folio begins among its glyphs (its glyph count where it has none, `regions` its regionsOf): the run of
  *  glyphs that ends its stream, on one baseline and outside the bodies, that spells a page number alone and stands below every
  *  other glyph of the page by FOLIO_GAP of its size or more */
-function folioOf(page, regions) {
-  const G = page.glyphs, n = G.n
+function folioOf(page: StreamPage, regions: Regions) {
+  const G = page.glyphs,
+    n = G.n
   if (!n) return 0
   let k = n - 1
-  const y = G.y[k], size = G.size[k]
-  while (k > 0 && Math.abs(G.y[k - 1] - y) < 0.5 * Math.max(size, G.size[k - 1])) k--
+  const y = G.y[k]!,
+    size = G.size[k]!
+  while (k > 0 && Math.abs(G.y[k - 1]! - y) < 0.5 * Math.max(size, G.size[k - 1]!)) k--
   let s = ''
-  for (let g = k; g < n; g++) { if (regions.glyph[g] % 2 === 1) return n; s += charOf(G.u[g] ?? '') }
+  for (let g = k; g < n; g++) {
+    if (regions.glyph[g]! % 2 === 1) return n
+    s += charOf(G.u[g] ?? '')
+  }
   if (!FOLIO.test(s)) return n
-  for (let g = 0; g < k; g++) if (G.y[g] - y < FOLIO_GAP * size) return n
+  for (let g = 0; g < k; g++) if (G.y[g]! - y < FOLIO_GAP * size) return n
   return k
 }
 /** a glyph's character as the text after a piece is compared with it: NFKC, lower case, no white space, no variation
  *  selector */
-const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_Selector}/gu, '')
+const charOf = (u: string) =>
+  u
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\s|\p{Variation_Selector}/gu, '')
 
 /** each page's regions: of each glyph, of each box, at each point; every page begins outside any body. A glyph is in a body
  *  while a body's opening point (`bs<n>`) stands before it and that body's closing one (`be<n>`, the same n) not yet: the
@@ -200,36 +320,55 @@ const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_S
 /** a page's columns as the maker reads them (make.mjs columnOf, its column count the marks file's, columnsOf): by the page's
  *  column mark (MARK_DEF's c<n>-<k>, the last of the page's) and its view's middle, an x range's column, 0 or 1 on a page of
  *  two columns, 2 across both (4 pt past the middle either way), 0 on a page of one */
-export function columnsAt(page) {
+export function columnsAt(page: { points?: readonly { name: string }[]; view?: View }) {
   let two = false
-  for (const pt of page.points ?? []) { const m = /^c([12])-\d+$/.exec(pt.name); if (m) two = m[1] === '2' }
+  for (const pt of page.points ?? []) {
+    const m = /^c([12])-\d+$/.exec(pt.name)
+    if (m) two = m[1] === '2'
+  }
   if (!two) return () => 0
-  const v = page.view ?? [0, 0, 0, 0], mid = (v[0] + v[2]) / 2
-  return (x0, x1) => (x0 < mid - 4 && x1 > mid + 4 ? 2 : (x0 + x1) / 2 >= mid ? 1 : 0)
+  const v: View = page.view ?? [0, 0, 0, 0],
+    mid = (v[0] + v[2]) / 2
+  return (x0: number, x1: number) => (x0 < mid - 4 && x1 > mid + 4 ? 2 : (x0 + x1) / 2 >= mid ? 1 : 0)
 }
 
-export function regionsOf(page) {
-  const { glyphs, points } = page, nBoxes = page.boxes.length / 4
-  const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)
-  let body = false, depth = 0, bodies = false
-  const open = new Set()
-  const apply = name => {
+export function regionsOf(page: {
+  glyphs: { n: number }
+  boxes: ArrayLike<number>
+  points: readonly InkPoint[]
+}): Regions {
+  const { glyphs, points } = page,
+    nBoxes = page.boxes.length / 4
+  const glyph = new Int32Array(glyphs.n),
+    box = new Int32Array(nBoxes),
+    at = new Int32Array(points.length)
+  let body = false,
+    depth = 0,
+    bodies = false
+  const open = new Set<string>()
+  const apply = (name: string) => {
     const m = BRACKET.exec(name)
     if (!m) return
     if (m[1] === 'b') {
-      if (m[2] === 's') open.add(m[3])
-      else open.delete(m[3])
+      if (m[2] === 's') open.add(m[3]!)
+      else open.delete(m[3]!)
       body = open.size > 0
       bodies = true
     } else depth = m[2] === 's' ? depth + 1 : Math.max(0, depth - 1)
   }
   for (let q = 0, g = 0; g <= glyphs.n; g++) {
-    while (q < points.length && points[q].glyph <= g) { apply(points[q].name); at[q] = code(body, depth); q++ }
+    while (q < points.length && points[q]!.glyph <= g) {
+      apply(points[q]!.name)
+      at[q] = code(body, depth)
+      q++
+    }
     if (g < glyphs.n) glyph[g] = code(body, depth)
   }
-  body = false; depth = 0; open.clear()
+  body = false
+  depth = 0
+  open.clear()
   for (let q = 0, b = 0; b < nBoxes; b++) {
-    while (q < points.length && points[q].box <= b) apply(points[q++].name)
+    while (q < points.length && points[q]!.box <= b) apply(points[q++]!.name)
     box[b] = code(body, depth)
   }
   return { glyph, box, at, bodies }
@@ -238,9 +377,13 @@ export function regionsOf(page) {
 /** a unit's start mark as MARK_DEF sets it: a paragraph's, a theorem's, an item's (not a cell's `t`, nor a heading's `h`) */
 const MARK_START = /^\d+s$/
 /** a glyph's line, as two glyphs on one baseline are: within half the larger size */
-const onLine = (G, g, y, size) => Math.abs(G.y[g] - y) < 0.5 * Math.max(G.size[g], size)
+const onLine = (G: StreamGlyphs, g: number, y: number, size: number) =>
+  Math.abs(G.y[g]! - y) < 0.5 * Math.max(G.size[g]!, size)
 /** a rule on a glyph's line: its middle within that line's body, from its descenders to its ascenders */
-const ruleOnLine = (box, y, size) => { const m = (box[1] + box[3]) / 2; return m >= y - 0.35 * size && m <= y + 0.75 * size }
+const ruleOnLine = (box: readonly number[], y: number, size: number) => {
+  const m = (box[1]! + box[3]!) / 2
+  return m >= y - 0.35 * size && m <= y + 0.75 * size
+}
 /** a label of a name (a theorem's, a proof's, a definition's …), not a number or a mark alone: what \\everypar sets before a display */
 const NAMED_LABEL = new RegExp(`^${LABEL_NAME}`, 'u')
 /**
@@ -260,51 +403,74 @@ const NAMED_LABEL = new RegExp(`^${LABEL_NAME}`, 'u')
  * told: the mark before is a piece's opening point (its ink runs to the next mark, this start mark: the two would share it), or no
  * glyph is left
  */
-function headInk(P, R, q, whole = false) {
-  const S = P.points[q], r = R.at[q], G = P.glyphs
+function headInk(P: StreamPage, R: Regions, q: number, whole = false) {
+  const S = P.points[q]!,
+    r = R.at[q],
+    G = P.glyphs
   // (in the start mark's region alone: a float's caption marks shipped among the display's rows are another region's)
-  let A = null
-  for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (R.at[k] === r && !BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n) && !READ_ALONE.test(n)) A = P.points[k] }
+  let A: InkPoint | null = null
+  for (let k = q - 1; k >= 0 && !A; k--) {
+    const n = P.points[k]!.name
+    if (R.at[k] === r && !BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n) && !READ_ALONE.test(n))
+      A = P.points[k]!
+  }
   if (A && OPENING.test(A.name)) return null
   // (the paragraph the display begins: its point, the last before the start mark and at or after the mark before, in its region —
   // a paragraph point's the region of the glyph it stands before)
-  let Q = null
-  for (const x of P.paras ?? []) if (x.glyph < S.glyph && x.box <= S.box && R.glyph[x.glyph] === r && (!A || x.glyph >= A.glyph) && (!Q || x.glyph >= Q.glyph)) Q = x
+  let Q: InkPoint | null = null
+  for (const x of P.paras ?? [])
+    if (
+      x.glyph < S.glyph &&
+      x.box <= S.box &&
+      R.glyph[x.glyph] === r &&
+      (!A || x.glyph >= A.glyph) &&
+      (!Q || x.glyph >= Q.glyph)
+    )
+      Q = x
   // (none on its page before the start mark in its region: the display may have begun on the page before, TeX breaking it between
   // two of its rows, and what this page holds of it is no whole display — but a display of no row break, which TeX never breaks,
   // from where its region begins on the page, a column's body after a float at its top: 2610.21084v1 p19u177)
   let from = Q ?? A
-  if (!from && whole) for (let k = q - 1; k >= 0 && !from; k--) if (R.at[k] === r && /^bs\d+$/.test(P.points[k].name)) from = P.points[k]
+  if (!from && whole)
+    for (let k = q - 1; k >= 0 && !from; k--)
+      if (R.at[k] === r && /^bs\d+$/.test(P.points[k]!.name)) from = P.points[k]!
   if (!from) return null
-  const g0 = from.glyph, b0 = from.box
-  let glyphs = [], boxes = []
+  const g0 = from.glyph,
+    b0 = from.box
+  let glyphs: number[] = [],
+    boxes: number[] = []
   for (let g = g0; g < S.glyph; g++) if (R.glyph[g] === r) glyphs.push(g)
   for (let b = b0; b < S.box; b++) if (R.box[b] === r) boxes.push(b)
   // (the line of the region's glyph before that point, and the start mark's: the region's glyph at or after it)
-  let before = -1, after = -1
+  let before = -1,
+    after = -1
   for (let g = g0 - 1; g >= 0 && before < 0; g--) if (R.glyph[g] === r) before = g
   for (let g = S.glyph; g < G.n && after < 0; g++) if (R.glyph[g] === r) after = g
-  const box = b => P.boxes.slice(4 * b, 4 * b + 4)
+  const box = (b: number) => P.boxes.slice(4 * b, 4 * b + 4)
   for (const g of before < 0 ? [] : [before]) {
-    while (glyphs.length && onLine(G, glyphs[0], G.y[g], G.size[g])) glyphs.shift()
-    boxes = boxes.filter(b => !ruleOnLine(box(b), G.y[g], G.size[g]))
+    while (glyphs.length && onLine(G, glyphs[0]!, G.y[g]!, G.size[g]!)) glyphs.shift()
+    boxes = boxes.filter((b) => !ruleOnLine(box(b), G.y[g]!, G.size[g]!))
   }
   for (const g of after < 0 ? [] : [after]) {
-    while (glyphs.length && onLine(G, glyphs.at(-1), G.y[g], G.size[g])) glyphs.pop()
-    boxes = boxes.filter(b => !ruleOnLine(box(b), G.y[g], G.size[g]))
+    while (glyphs.length && onLine(G, glyphs.at(-1)!, G.y[g]!, G.size[g]!)) glyphs.pop()
+    boxes = boxes.filter((b) => !ruleOnLine(box(b), G.y[g]!, G.size[g]!))
   }
   // (the paragraph's first line, where it stands above all the rest — a display's run of glyphs on one baseline goes on above or
   // beside it, a fraction's, a script's — and is a label of a name: none of the display's)
   if (glyphs.length) {
-    const g = glyphs[0]
+    const g = glyphs[0]!
     let n = 0
-    while (n < glyphs.length && onLine(G, glyphs[n], G.y[g], G.size[g])) n++
-    const text = glyphs.slice(0, n).map(k => G.u[k] ?? '').join('')
+    while (n < glyphs.length && onLine(G, glyphs[n]!, G.y[g]!, G.size[g]!)) n++
+    const text = glyphs
+      .slice(0, n)
+      .map((k) => G.u[k] ?? '')
+      .join('')
     let above = n < glyphs.length
-    for (let k = n; k < glyphs.length && above; k++) above = G.y[glyphs[k]] < G.y[g] - 0.5 * Math.max(G.size[g], G.size[glyphs[k]])
+    for (let k = n; k < glyphs.length && above; k++)
+      above = G.y[glyphs[k]!]! < G.y[g]! - 0.5 * Math.max(G.size[g]!, G.size[glyphs[k]!]!)
     if (above && NAMED_LABEL.test(labelText(text)) && isLabelForm(text, true)) {
-      const upTo = P.boxAt[glyphs[n]]
-      boxes = boxes.filter(b => b >= upTo || !ruleOnLine(box(b), G.y[g], G.size[g]))
+      const upTo = P.boxAt[glyphs[n]!]!
+      boxes = boxes.filter((b) => b >= upTo || !ruleOnLine(box(b), G.y[g]!, G.size[g]!))
       glyphs = glyphs.slice(n)
     }
   }
@@ -313,11 +479,23 @@ function headInk(P, R, q, whole = false) {
 /** the head displays' entries a start mark at (p, q) gives (`out`'s, in ownedOf's shape): the display's ink (headInk), `closed`
  *  between the point before and the start mark, its group's later displays (none with a point of its own: `has`) in it; none
  *  where `head` names a display with a point of its own, or its ink cannot be told */
-function headEntries(head, P, R, p, q, has, put) {
+function headEntries(
+  head: Head | null,
+  P: StreamPage,
+  R: Regions,
+  p: number,
+  q: number,
+  has: (name: string) => boolean,
+  put: (name: string, e: Owned) => void,
+) {
   if (!head || has(head.name)) return
   const ink = headInk(P, R, q, head.whole === true)
   if (!ink) return
-  put(head.name, { how: HOW[head.group?.length ? 'open, with the displays after it' : 'closed'], glyphs: ink.glyphs.map(g => [p, g]), boxes: ink.boxes.map(b => [p, b]) })
+  put(head.name, {
+    how: HOW[head.group?.length ? 'open, with the displays after it' : 'closed'],
+    glyphs: ink.glyphs.map((g) => [p, g]),
+    boxes: ink.boxes.map((b) => [p, b]),
+  })
   for (const g of head.group ?? []) if (!has(g)) put(g, { how: HOW['in the display before it'], glyphs: [], boxes: [] })
 }
 
@@ -380,29 +558,56 @@ function headEntries(head, P, R, p, q, has, put) {
  *   with no mark) or one apart (the page's foot), none (the release sweep of 2026-10-24, 2610.16663v1 p16u58: the maker left
  *   it LOST, the erasure the unit the original's).
  */
-export function ownedOf(pages, { follows, dropped = [], erasure = false, heads = null }) {
+export function ownedOf(
+  pages: readonly StreamPage[],
+  {
+    follows,
+    dropped = [],
+    erasure = false,
+    heads = null,
+  }: {
+    follows: (name: string) => Follow | null
+    dropped?: readonly string[]
+    erasure?: boolean
+    heads?: ((start: string) => Head | null) | null
+  },
+): Map<string, Owned> {
   const twice = new Set(dropped)
   const regions = pages.map(regionsOf)
   /** each page's glyphs a draft frame holds (framedOf), no reading's */
   const framed = pages.map(framedOf)
   /** each page's line pitch (pitchOf), read once where a piece alone at its unit's end asks for it */
-  const pitches = new Map()
+  const pitches = new Map<number, number | null>()
   // every point by its name, in stream order: [page, index]; the mark points in stream order (brackets and names apart)
-  const where = new Map(), seq = []
-  pages.forEach((p, i) => p.points.forEach((pt, q) => {
-    const list = where.get(pt.name)
-    if (list) list.push([i + 1, q]); else where.set(pt.name, [[i + 1, q]])
-    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name) && !FRAME.test(pt.name) && !READ_ALONE.test(pt.name)) seq.push([i + 1, q])
-  }))
-  const rank = new Map()
+  const where = new Map<string, Place[]>(),
+    seq: Place[] = []
+  // biome-ignore lint/suspicious/useIterableCallbackReturn: a concise arrow, the inner forEach's value, which no one reads
+  pages.forEach((p, i) =>
+    p.points.forEach((pt, q) => {
+      const list = where.get(pt.name)
+      if (list) list.push([i + 1, q])
+      else where.set(pt.name, [[i + 1, q]])
+      if (
+        !BRACKET.test(pt.name) &&
+        !NAME_POINT.test(pt.name) &&
+        !BIB_ITEM.test(pt.name) &&
+        !FRAME.test(pt.name) &&
+        !READ_ALONE.test(pt.name)
+      )
+        seq.push([i + 1, q])
+    }),
+  )
+  const rank = new Map<string, number>()
+  // biome-ignore lint/suspicious/useIterableCallbackReturn: a concise arrow, Map.set's value, which no one reads
   seq.forEach(([p, q], r) => rank.set(`${p}|${q}`, r))
-  const out = new Map()
+  const out = new Map<string, Owned>()
   let work = 0
-  const none = how => ({ how, glyphs: [], boxes: [] })
+  const none = (how: number): Owned => ({ how, glyphs: [], boxes: [] })
   /** what a piece owns up to the glyph `end` of its glyphs ([page, index], stream order), and the boxes before it */
-  const cut = (how, glyphs, boxes, end) => {
+  const cut = (how: number, glyphs: Place[], boxes: Place[], end: number): Owned => {
     if (end >= glyphs.length) return { how, glyphs, boxes }
-    const [p, g] = glyphs[end], upTo = pages[p - 1].boxAt[g]
+    const [p, g] = glyphs[end]!,
+      upTo = pages[p - 1]!.boxAt[g]!
     return { how, glyphs: glyphs.slice(0, end), boxes: boxes.filter(([q, b]) => q < p || (q === p && b < upTo)) }
   }
   for (const [name, list] of where) {
@@ -410,66 +615,112 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
     if (!m) continue
     const f = follows(name)
     if (!f) continue
-    const close = `${name.slice(0, -1)}b`, closes = where.get(close) ?? []
-    if (list.length > 1 || closes.length > 1 || twice.has(name) || twice.has(close)) { out.set(name, none(HOW['a mark set twice'])); continue }
-    if (work > WORK) { out.set(name, none(HOW['past the glyphs a paper may own'])); continue }
-    const [pa, qa] = list[0], A = pages[pa - 1].points[qa], rA = regions[pa - 1].at[qa]
+    const close = `${name.slice(0, -1)}b`,
+      closes = where.get(close) ?? []
+    if (list.length > 1 || closes.length > 1 || twice.has(name) || twice.has(close)) {
+      out.set(name, none(HOW['a mark set twice']))
+      continue
+    }
+    if (work > WORK) {
+      out.set(name, none(HOW['past the glyphs a paper may own']))
+      continue
+    }
+    const [pa, qa] = list[0]!,
+      A = pages[pa - 1]!.points[qa]!,
+      rA = regions[pa - 1]!.at[qa]!
     /** the glyphs and boxes of page p from (g0, b0) to (g1, b1) in A's region, onto `glyphs` and `boxes` */
-    const take = (glyphs, boxes, p, g0, g1, b0, b1) => {
-      const R = regions[p - 1], F = framed[p - 1]?.glyph
+    const take = (glyphs: Place[], boxes: Place[], p: number, g0: number, g1: number, b0: number, b1: number) => {
+      const R = regions[p - 1]!,
+        F = framed[p - 1]?.glyph
       work += g1 - g0 + b1 - b0
       for (let g = g0; g < g1; g++) if (R.glyph[g] === rA && !F?.[g]) glyphs.push([p, g])
       for (let b = b0; b < b1; b++) if (R.box[b] === rA) boxes.push([p, b])
     }
     /** what A's region holds from A to the point `to` ([page, index], null: the paper's end), page by page */
-    const takeTo = to => {
-      const glyphs = [], boxes = []
+    const takeTo = (to: Place | null | undefined) => {
+      const glyphs: Place[] = [],
+        boxes: Place[] = []
       const last = to ? to[0] : pages.length
       for (let p = pa; p <= last; p++) {
-        const P = pages[p - 1], T = to && p === to[0] ? P.points[to[1]] : null
-        take(glyphs, boxes, p, p === pa ? A.glyph : 0, T ? T.glyph : P.glyphs.n, p === pa ? A.box : 0, T ? T.box : P.boxes.length / 4)
+        const P = pages[p - 1]!,
+          T = to && p === to[0] ? P.points[to[1]] : null
+        take(
+          glyphs,
+          boxes,
+          p,
+          p === pa ? A.glyph : 0,
+          T ? T.glyph : P.glyphs.n,
+          p === pa ? A.box : 0,
+          T ? T.box : P.boxes.length / 4,
+        )
       }
       return { glyphs, boxes }
     }
     /** a jump from low on a page to high and right on it, outside the bodies: across a column */
-    const jumps = glyphs => {
+    const jumps = (glyphs: readonly Place[]) => {
       if (rA !== 0) return false
       for (let j = 1; j < glyphs.length; j++) {
-        const [p, g] = glyphs[j], [o, h] = glyphs[j - 1]
+        const [p, g] = glyphs[j]!,
+          [o, h] = glyphs[j - 1]!
         if (p !== o) continue
-        const v = pages[p - 1].view, G = pages[p - 1].glyphs
-        if (G.y[g] - G.y[h] > JUMP_Y * (v[3] - v[1]) && G.x0[g] - G.x0[h] > JUMP_X * (v[2] - v[0])) return true
+        const v = pages[p - 1]!.view,
+          G = pages[p - 1]!.glyphs
+        if (G.y[g]! - G.y[h]! > JUMP_Y * (v[3] - v[1]) && G.x0[g]! - G.x0[h]! > JUMP_X * (v[2] - v[0])) return true
       }
       return false
     }
     /** where the text after the piece begins among `glyphs`, which run to the point named `to` (textAt; where
      *  that point is its unit's next mark, so that the text after it runs to it: textTo) */
-    const textEnd = (glyphs, to) => (typeof f.rest === 'string' && to !== null && f.ends.includes(to) ? textTo(pages, glyphs, f.want, f.rest, erasure) : textAt(pages, glyphs, f.want, erasure))
+    const textEnd = (glyphs: readonly Place[], to: string | null) =>
+      typeof f.rest === 'string' && to !== null && f.ends.includes(to)
+        ? textTo(pages, glyphs, f.want, f.rest, erasure)
+        : textAt(pages, glyphs, f.want, erasure)
     if (closes.length) {
-      const [pb, qb] = closes[0]
-      if (pb < pa || (pb === pa && qb < qa)) { out.set(name, none(HOW['marks out of order'])); continue }
-      if (regions[pb - 1].at[qb] !== rA) { out.set(name, none(HOW['its marks in two regions'])); continue }
-      if (pb !== pa && rA % 2 === 0) { out.set(name, none(HOW['across a page, unbracketed'])); continue }
+      const [pb, qb] = closes[0]!
+      if (pb < pa || (pb === pa && qb < qa)) {
+        out.set(name, none(HOW['marks out of order']))
+        continue
+      }
+      if (regions[pb - 1]!.at[qb] !== rA) {
+        out.set(name, none(HOW['its marks in two regions']))
+        continue
+      }
+      if (pb !== pa && rA % 2 === 0) {
+        out.set(name, none(HOW['across a page, unbracketed']))
+        continue
+      }
       let { glyphs, boxes } = takeTo([pb, qb])
       // (a punctuation mark its command set before its own ink, moved from after it (marks.mjs followsOf `moved`, TeX's 3: the
       // closing mark after that mark), the text's, not the piece's: its first glyph where that is the mark, more follow, and no such
       // mark stands right after the closing point — TeX's own output telling the moved mark from a piece's own ink that opens
       // with it: `\url{../data}.` keeps its dot, the full stop after its closing point, the review of #501)
       if (f.moved && glyphs.length > 1) {
-        const [p0, g0] = glyphs[0], B = pages[pb - 1], G = B.glyphs
-        let next = B.points[qb].glyph
+        const [p0, g0] = glyphs[0]!,
+          B = pages[pb - 1]!,
+          G = B.glyphs
+        let next = B.points[qb]!.glyph
         while (next < G.n && !setAs(G.u[next] ?? '')) next++
-        if (pages[p0 - 1].glyphs.u[g0] === f.moved && !(next < G.n && G.u[next] === f.moved)) { const [p1, g1] = glyphs[1], from = pages[p1 - 1].boxAt[g1]; glyphs = glyphs.slice(1); boxes = boxes.filter(([q, b]) => q > p1 || (q === p1 && b >= from)) }
+        if (pages[p0 - 1]!.glyphs.u[g0] === f.moved && !(next < G.n && G.u[next] === f.moved)) {
+          const [p1, g1] = glyphs[1]!,
+            from = pages[p1 - 1]!.boxAt[g1]!
+          glyphs = glyphs.slice(1)
+          boxes = boxes.filter(([q, b]) => q > p1 || (q === p1 && b >= from))
+        }
       }
       out.set(name, jumps(glyphs) ? none(HOW['across a column, unbracketed']) : { how: HOW.closed, glyphs, boxes })
       continue
     }
-    if (f.closing) { out.set(name, none(HOW['closing point not read'])); continue }
+    if (f.closing) {
+      out.set(name, none(HOW['closing point not read']))
+      continue
+    }
     /** an opening point alone: to the next mark's point, on its page */
     /** the piece's ink up to the point N where other text begins on its page, a later unit's start: that text's label not the
      *  piece's — the glyphs on N's line before it, the boxes after the first of them */
-    const toStart = (glyphs, boxes, N) => {
-      const P = pages[pa - 1], G = P.glyphs, after = N.glyph
+    const toStart = (glyphs: Place[], boxes: Place[], N: InkPoint): Owned => {
+      const P = pages[pa - 1]!,
+        G = P.glyphs,
+        after = N.glyph
       // (a piece that is no display, alone at its unit's end, owns its lines up to TeX's skip before another block, no further:
       // the next unit may start many lines on — the last author's \\orcidlink of 2609.20976v1 ran to the abstract's label over
       // the affiliations and the e-mail below the names, which no unit then owned and no ink unit was made of; a reference's
@@ -477,48 +728,77 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       let line = glyphs.length
       if (!f.display && glyphs.length) {
         // (the unit's line it opens on: the glyph before its first, on that glyph's line)
-        const g0 = glyphs[0][1], before = g0 - 1
-        const anchor = before >= 0 && Math.abs(G.y[before] - G.y[g0]) < Math.max(G.size[before], G.size[g0]) ? G.y[before] : null
+        const g0 = glyphs[0]![1],
+          before = g0 - 1
+        const anchor =
+          before >= 0 && Math.abs(G.y[before]! - G.y[g0]!) < Math.max(G.size[before]!, G.size[g0]!)
+            ? G.y[before]!
+            : null
         line = lineEnd(G, glyphs, anchor, pitches.get(pa) ?? pitches.set(pa, pitchOf(G)).get(pa))
       }
-      if (line < glyphs.length) { const upTo = P.boxAt[glyphs[line][1]]; glyphs = glyphs.slice(0, line); boxes = boxes.filter(([, b]) => b < upTo) }
+      if (line < glyphs.length) {
+        const upTo = P.boxAt[glyphs[line]![1]]!
+        glyphs = glyphs.slice(0, line)
+        boxes = boxes.filter(([, b]) => b < upTo)
+      }
       let end = glyphs.length
-      while (after < G.n && end > 0 && Math.abs(G.y[glyphs[end - 1][1]] - G.y[after]) < 0.5 * Math.max(G.size[glyphs[end - 1][1]], G.size[after])) end--
-      const upTo = end < glyphs.length ? P.boxAt[glyphs[end][1]] : N.box
-      return { how: HOW["open, to its unit's next mark"], glyphs: glyphs.slice(0, end), boxes: boxes.filter(([, b]) => b < upTo) }
+      while (
+        after < G.n &&
+        end > 0 &&
+        Math.abs(G.y[glyphs[end - 1]![1]]! - G.y[after]!) < 0.5 * Math.max(G.size[glyphs[end - 1]![1]]!, G.size[after]!)
+      )
+        end--
+      const upTo = end < glyphs.length ? P.boxAt[glyphs[end]![1]]! : N.box
+      return {
+        how: HOW["open, to its unit's next mark"],
+        glyphs: glyphs.slice(0, end),
+        boxes: boxes.filter(([, b]) => b < upTo),
+      }
     }
-    const alone = () => {
+    const alone = (): Owned => {
       // (past its unit's end mark — MARK_DEF sets it before a display that ends the unit —, nothing after it is its unit's: the
       // text that begins on its page after it with no unit's mark, a block's babel name or a biblatex entry, is another's.
       // 2608.08872v1's proof ends in a display, and the whole bibliography after it on the page, its "References" and every
       // entry, was that display's ink. A name before the unit's end mark is the unit's own text)
-      const past = !f.want && [`${m[2]}e`, `t${m[2]}e`, `h${m[2]}e`].some(n => (where.get(n) ?? []).some(([p, q]) => p < pa || (p === pa && q < qa)))
+      const past =
+        !f.want &&
+        [`${m[2]}e`, `t${m[2]}e`, `h${m[2]}e`].some((n) =>
+          (where.get(n) ?? []).some(([p, q]) => p < pa || (p === pa && q < qa)),
+        )
       if (past) {
-        const pts = pages[pa - 1].points, next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
+        const pts = pages[pa - 1]!.points,
+          next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
         for (let q = qa + 1; q < pts.length && !(next && next[0] === pa && q >= next[1]); q++) {
-          if (!BEGINS.test(pts[q].name)) continue
+          if (!BEGINS.test(pts[q]!.name)) continue
           const { glyphs, boxes } = takeTo([pa, q])
           if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
           if (f.blocked && (glyphs.length || boxes.length)) return none(HOW['open, an unmarked piece follows'])
           // (as to a later unit's start: a numeric entry's label, which the list's \\item set before its point, the entry's; a piece
           // that is no display, its lines to TeX's skip before another block)
-          return toStart(glyphs, boxes, pts[q])
+          return toStart(glyphs, boxes, pts[q]!)
         }
       }
       const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
       if (!next || next[0] !== pa) return none(HOW['open, the next mark on another page'])
-      const P = pages[pa - 1], N = P.points[next[1]]
+      const P = pages[pa - 1]!,
+        N = P.points[next[1]]!
       // (an earlier unit's marks right after it, in its region, before the text after it: that unit's text TeX set again inside
       // this piece's own ink — MR 3's later occurrence, a class keeping a title's or an author's argument, marks and all, that a
       // paper's macro sets once more: acmart's \shorttitle and \authors where VLDB's Reference Format calls \vldbtitle and
       // \vldbauthors, 2608.25210v2 p1, whose \vldbtitle owned nothing, its next point the title's start mark set again. No bound
       // of the piece's: its ink runs past them to where the text after it begins; where that text is not found there, or where
       // its own ink stands before them (nothing then tells them its ink's), as before)
-      if (f.want && !f.blocked && earlierUnit(N.name, Number(m[2])) && regions[pa - 1].at[next[1]] === rA) {
+      if (f.want && !f.blocked && earlierUnit(N.name, Number(m[2])) && regions[pa - 1]!.at[next[1]] === rA) {
         const lead = takeTo(next)
-        let r = rank.get(`${next[0]}|${next[1]}`) + 1
-        while (seq[r] && seq[r][0] === pa && regions[pa - 1].at[seq[r][1]] === rA && earlierUnit(P.points[seq[r][1]].name, Number(m[2]))) r++
-        if (!lead.glyphs.length && !lead.boxes.length && seq[r] && seq[r][0] === pa) {
+        let r = rank.get(`${next[0]}|${next[1]}`)! + 1
+        while (
+          seq[r] &&
+          seq[r]![0] === pa &&
+          regions[pa - 1]!.at[seq[r]![1]] === rA &&
+          earlierUnit(P.points[seq[r]![1]]!.name, Number(m[2]))
+        )
+          r++
+        if (!lead.glyphs.length && !lead.boxes.length && seq[r] && seq[r]![0] === pa) {
           const { glyphs, boxes } = takeTo(seq[r])
           const end = textAt(pages, glyphs, f.want, erasure)
           if (end > 0 && !jumps(glyphs.slice(0, end))) return cut(HOW['open, to the text after it'], glyphs, boxes, end)
@@ -526,12 +806,18 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       }
       // nothing after it in its unit, its next mark outside the bodies (a footnote's, shipped below its column): the piece
       // ends with its column's body, where no body begins again before that mark
-      if (!f.want && rA % 2 === 1 && regions[pa - 1].at[next[1]] % 2 === 0) {
-        let E = null
-        for (let q = qa + 1; q < next[1]; q++) { const n = P.points[q].name; if (/^be\d+$/.test(n)) E = q; else if (/^bs\d+$/.test(n)) E = null }
+      if (!f.want && rA % 2 === 1 && regions[pa - 1]!.at[next[1]]! % 2 === 0) {
+        let E: number | null = null
+        for (let q = qa + 1; q < next[1]; q++) {
+          const n = P.points[q]!.name
+          if (/^be\d+$/.test(n)) E = q
+          else if (/^bs\d+$/.test(n)) E = null
+        }
         if (E !== null) {
           const { glyphs, boxes } = takeTo([pa, E])
-          return f.blocked && (glyphs.length || boxes.length) ? none(HOW['open, an unmarked piece follows']) : { how: HOW["open, to its column's end"], glyphs, boxes }
+          return f.blocked && (glyphs.length || boxes.length)
+            ? none(HOW['open, an unmarked piece follows'])
+            : { how: HOW["open, to its column's end"], glyphs, boxes }
         }
       }
       let { glyphs, boxes } = takeTo(next)
@@ -539,8 +825,10 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       // (nothing of its region before its next mark, that mark another region's, text after it in its unit: a float TeX set
       // right after its point, the text after it past that float, not found yet (pastOther). 2608.06701v1's u221,
       // `Specifically, \approach significantly …`, a figure set after the line its point ends, owned nothing and was LOST)
-      if (!glyphs.length && !boxes.length && f.want && regions[pa - 1].at[next[1]] !== rA) return none(HOW['open, the text after it not found'])
-      if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
+      if (!glyphs.length && !boxes.length && f.want && regions[pa - 1]!.at[next[1]] !== rA)
+        return none(HOW['open, the text after it not found'])
+      if (!glyphs.length && !boxes.length)
+        return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
         // (the erasure's: a later unit's opening as its start mark only where that unit's start mark follows it on the page — the
         // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it. And the maker's
@@ -548,8 +836,9 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
         // block of its own, never LOST outside its unit's lines while the wrap hides it with its unit's placeholders, 2610.20595v1
         // p19u153)
         const opening = erasure || (f.display && past) ? OPENING.exec(N.name) : null
-        const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
-        const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
+        const startsAfter = (id: string) =>
+          [`${id}s`, `h${id}s`, `t${id}s`].some((n) => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
+        const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]!) ? [N.name, opening[2]] : null)
         const S = f.blocked ? f.split : null
         if (S && (S.ends ? S.ends.includes(N.name) : f.through && N.name === f.through)) {
           // (a paper's macro and the one unmarked piece right after it, which no mark could stand before (marks.mjs followsOf
@@ -559,15 +848,35 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
           // macro's word, which its text then did not hold whole, none. The maker's reading parts the two; the erasure's owns them
           // as the macro's, one ink of its unit's as `through` reads it)
           const end = textedTo(pages, glyphs, S.text)
-          const stop = end > 0 && end < glyphs.length && !runsOn(pages, glyphs, end) ? (S.ends ? afterText(pages, glyphs, end, S, erasure) : glyphs.length) : -1
+          const stop =
+            end > 0 && end < glyphs.length && !runsOn(pages, glyphs, end)
+              ? S.ends
+                ? afterText(pages, glyphs, end, S, erasure)
+                : glyphs.length
+              : -1
           if (stop > end) {
-            if (erasure) return cut(HOW[S.ends ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes, stop)
-            const [p, g] = glyphs[end], from = pages[p - 1].boxAt[g], piece = cut(HOW["open, to its unit's next mark"], glyphs, boxes, stop)
-            out.set(S.name, { how: piece.how, glyphs: piece.glyphs.slice(end), boxes: piece.boxes.filter(([q, b]) => q > p || (q === p && b >= from)) })
+            if (erasure)
+              return cut(
+                HOW[S.ends ? 'open, to the text after it' : "open, to its unit's next mark"],
+                glyphs,
+                boxes,
+                stop,
+              )
+            const [p, g] = glyphs[end]!,
+              from = pages[p - 1]!.boxAt[g]!,
+              piece = cut(HOW["open, to its unit's next mark"], glyphs, boxes, stop)
+            out.set(S.name, {
+              how: piece.how,
+              glyphs: piece.glyphs.slice(end),
+              boxes: piece.boxes.filter(([q, b]) => q > p || (q === p && b >= from)),
+            })
             return cut(HOW["open, to its unit's next mark"], glyphs, boxes, end)
           }
         }
-        if (f.blocked) return erasure && f.through && N.name === f.through ? { how: HOW["open, to its unit's next mark"], glyphs, boxes } : none(HOW['open, an unmarked piece follows'])
+        if (f.blocked)
+          return erasure && f.through && N.name === f.through
+            ? { how: HOW["open, to its unit's next mark"], glyphs, boxes }
+            : none(HOW['open, an unmarked piece follows'])
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
         if (later && Number(later[1]) > Number(m[2])) return toStart(glyphs, boxes, N)
         return none(HOW["open, the next mark not its unit's"])
@@ -579,36 +888,49 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
         // REVTeX's swapped punctuation sets none)
         // (a rule under or over the text after it — ulem's \\uline, soul's \\hl paint theirs before the word — is that text's, not
         // the piece's: none where a rule reaches past the first glyph of the text after it on its line)
-        const [p0, g0] = glyphs[0], P0 = pages[p0 - 1], ruled = boxes.filter(([q, b]) => q < p0 || (q === p0 && b < P0.boxAt[g0]))
-        const under = ([q, b]) => q === p0 && P0.boxes[4 * b + 2] > P0.glyphs.x0[g0] + 0.1 * P0.glyphs.size[g0] && P0.boxes[4 * b + 1] < P0.glyphs.y[g0] + P0.glyphs.size[g0] && P0.boxes[4 * b + 3] > P0.glyphs.y[g0] - 0.5 * P0.glyphs.size[g0]
-        if (erasure && ruled.length && !ruled.some(under)) return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
+        const [p0, g0] = glyphs[0]!,
+          P0 = pages[p0 - 1]!,
+          ruled = boxes.filter(([q, b]) => q < p0 || (q === p0 && b < P0.boxAt[g0]!))
+        const under = ([q, b]: Place) =>
+          q === p0 &&
+          P0.boxes[4 * b + 2]! > P0.glyphs.x0[g0]! + 0.1 * P0.glyphs.size[g0]! &&
+          P0.boxes[4 * b + 1]! < P0.glyphs.y[g0]! + P0.glyphs.size[g0]! &&
+          P0.boxes[4 * b + 3]! > P0.glyphs.y[g0]! - 0.5 * P0.glyphs.size[g0]!
+        if (erasure && ruled.length && !ruled.some(under))
+          return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
         // (and the maker's where they are a draft image frame's outline alone: the final pass's image in its place, FRAME)
-        if (ruled.length && ruled.every(([q, b]) => framed[q - 1]?.box[b])) return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
+        if (ruled.length && ruled.every(([q, b]) => framed[q - 1]?.box[b]))
+          return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
         return none(HOW['open, nothing before the text after it'])
       }
       return cut(HOW['open, to the text after it'], glyphs, boxes, end)
     }
     /** an opening point alone in a column's body, its next mark past that body's end, or null where it is not so */
-    const pastColumn = () => {
+    const pastColumn = (): Owned | null => {
       if (rA % 2 !== 1) return null
       // its stop: the first mark after it in its region (a footnote's or a float's, shipped elsewhere, passed over)
-      let stop = null
-      for (let r = (rank.get(`${pa}|${qa}`) ?? -2) + 1; r >= 1 && r < seq.length && !stop; r++) if (regions[seq[r][0] - 1].at[seq[r][1]] === rA) stop = seq[r]
+      let stop: Place | null = null
+      for (let r = (rank.get(`${pa}|${qa}`) ?? -2) + 1; r >= 1 && r < seq.length && !stop; r++)
+        if (regions[seq[r]![0] - 1]!.at[seq[r]![1]] === rA) stop = seq[r]!
       // the first end of a body after it, before its stop
-      let E = null
+      let E: Place | null = null
       for (let p = pa; p <= (stop ? stop[0] : pages.length) && !E; p++) {
-        const pts = pages[p - 1].points
-        for (let q = p === pa ? qa + 1 : 0; q < (stop && p === stop[0] ? stop[1] : pts.length); q++) if (/^be\d+$/.test(pts[q].name)) { E = [p, q]; break }
+        const pts = pages[p - 1]!.points
+        for (let q = p === pa ? qa + 1 : 0; q < (stop && p === stop[0] ? stop[1] : pts.length); q++)
+          if (/^be\d+$/.test(pts[q]!.name)) {
+            E = [p, q]
+            break
+          }
       }
       if (!E) return null
       if (f.want) {
         const { glyphs, boxes } = takeTo(stop)
-        const end = textEnd(glyphs, stop ? pages[stop[0] - 1].points[stop[1]].name : null)
+        const end = textEnd(glyphs, stop ? pages[stop[0] - 1]!.points[stop[1]]!.name : null)
         return end > 0 ? cut(HOW["open, past its column's end"], glyphs, boxes, end) : null
       }
       if (f.blocked) return null
       // with no text after it: to its body's end, or through to its unit's next mark where that is its stop
-      const stopName = stop ? pages[stop[0] - 1].points[stop[1]].name : null
+      const stopName = stop ? pages[stop[0] - 1]!.points[stop[1]]!.name : null
       const through = stopName !== null && f.ends.includes(stopName)
       const { glyphs, boxes } = takeTo(through ? stop : E)
       return { how: HOW[through ? "open, past its column's end" : "open, to its column's end"], glyphs, boxes }
@@ -623,24 +945,41 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
      *  line, centred) stands \\footskip below the text block. None on a page with no folio to tell where it ends (a running
      *  foot's text would be hidden with it), where a line starts nearer or stands apart, or for a piece that is no display (an
      *  inline formula or a citation ends with its own ink, which this reading cannot tell from what follows it) */
-    const footEnd = () => {
-      if (!f.display || rA % 2 !== 0 || f.want || f.blocked || f.ends.some(n => OPENING.test(n))) return null
-      const end = f.ends.flatMap(n => where.get(n) ?? []).find(([p, q]) => p === pa && q < qa)
+    const footEnd = (): Owned | null => {
+      if (!f.display || rA % 2 !== 0 || f.want || f.blocked || f.ends.some((n) => OPENING.test(n))) return null
+      const end = f.ends.flatMap((n) => where.get(n) ?? []).find(([p, q]) => p === pa && q < qa)
       if (!end) return null
-      const P = pages[pa - 1], G = P.glyphs, R = regions[pa - 1], stop = folioOf(P, R), glyphs = [], boxes = []
+      const P = pages[pa - 1]!,
+        G = P.glyphs,
+        R = regions[pa - 1]!,
+        stop = folioOf(P, R),
+        glyphs: Place[] = [],
+        boxes: Place[] = []
       if (stop < A.glyph || stop >= G.n) return null
-      take(glyphs, boxes, pa, A.glyph, stop, A.box, P.boxAt[stop])
+      take(glyphs, boxes, pa, A.glyph, stop, A.box, P.boxAt[stop]!)
       if (!glyphs.length) return null
       // (the footnote's own text on this page: from its start mark there, else the page's start, to its end mark)
-      const start = [`${m[2]}s`, `t${m[2]}s`, `h${m[2]}s`].flatMap(n => where.get(n) ?? []).find(([p, q]) => p === pa && q < end[1])
+      const start = [`${m[2]}s`, `t${m[2]}s`, `h${m[2]}s`]
+        .flatMap((n) => where.get(n) ?? [])
+        .find(([p, q]) => p === pa && q < end[1])
       let edge = Infinity
-      for (let g = start ? P.points[start[1]].glyph : 0; g < P.points[end[1]].glyph; g++) if (R.glyph[g] === rA && /\S/.test(G.u[g] ?? '')) edge = Math.min(edge, G.x0[g])
+      for (let g = start ? P.points[start[1]]!.glyph : 0; g < P.points[end[1]]!.glyph; g++)
+        if (R.glyph[g] === rA && /\S/.test(G.u[g] ?? '')) edge = Math.min(edge, G.x0[g]!)
       if (edge === Infinity) return null
-      let before = null
-      for (let j = 0; j < glyphs.length;) {
-        let k = j, x0 = Infinity, size = 0
-        const y = G.y[glyphs[j][1]]
-        while (k < glyphs.length && Math.abs(G.y[glyphs[k][1]] - y) < 0.5 * Math.max(G.size[glyphs[k][1]], G.size[glyphs[j][1]])) { x0 = Math.min(x0, G.x0[glyphs[k][1]]); size = Math.max(size, G.size[glyphs[k][1]]); k++ }
+      let before: { y: number; size: number } | null = null
+      for (let j = 0; j < glyphs.length; ) {
+        let k = j,
+          x0 = Infinity,
+          size = 0
+        const y = G.y[glyphs[j]![1]]!
+        while (
+          k < glyphs.length &&
+          Math.abs(G.y[glyphs[k]![1]]! - y) < 0.5 * Math.max(G.size[glyphs[k]![1]]!, G.size[glyphs[j]![1]]!)
+        ) {
+          x0 = Math.min(x0, G.x0[glyphs[k]![1]]!)
+          size = Math.max(size, G.size[glyphs[k]![1]]!)
+          k++
+        }
         if (x0 < edge + FOOT_DISPLAY_INDENT * size) return null
         if (before && Math.abs(before.y - y) > FOOT_DISPLAY_GAP * Math.max(before.size, size)) return null
         before = { y, size }
@@ -651,26 +990,29 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
     /** an opening point alone whose next mark is another region's (a float or a note TeX shipped into the stream after it, before
      *  the text after it): its ink is what its own region holds from it to the next mark there, on its page, up to the text after
      *  it (`want`), as `take` reads a region alone; or null where it is not so */
-    const pastOther = () => {
+    const pastOther = (): Owned | null => {
       if (!f.want) return null
       const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
-      if (!next || next[0] !== pa || regions[pa - 1].at[next[1]] === rA) return null
-      let stop = null
-      for (let r = (rank.get(`${pa}|${qa}`) ?? -2) + 1; r >= 1 && r < seq.length && !stop; r++) if (regions[seq[r][0] - 1].at[seq[r][1]] === rA) stop = seq[r]
+      if (!next || next[0] !== pa || regions[pa - 1]!.at[next[1]] === rA) return null
+      let stop: Place | null = null
+      for (let r = (rank.get(`${pa}|${qa}`) ?? -2) + 1; r >= 1 && r < seq.length && !stop; r++)
+        if (regions[seq[r]![0] - 1]!.at[seq[r]![1]] === rA) stop = seq[r]!
       if (!stop || stop[0] !== pa) return null
       const { glyphs, boxes } = takeTo(stop)
       if (jumps(glyphs)) return null
-      const end = textEnd(glyphs, pages[pa - 1].points[stop[1]].name)
+      const end = textEnd(glyphs, pages[pa - 1]!.points[stop[1]]!.name)
       return end > 0 ? cut(HOW['open, to the text after it'], glyphs, boxes, end) : null
     }
     let e = alone()
     if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? e
-    if (e.how === HOW['open, the next mark on another page'] || e.how === HOW['open, the text after it not found']) e = pastColumn() ?? e
+    if (e.how === HOW['open, the next mark on another page'] || e.how === HOW['open, the text after it not found'])
+      e = pastColumn() ?? e
     if (e.how === HOW['open, the next mark on another page']) e = footEnd() ?? e
     // (a reading past a draft image frame that the text after it does not end — it runs to its unit's next mark, its column's
     // end —: what TeX set between is not told, a figure after a heading's last piece (2010.11929v2's wrapfigure after
     // `\subsection{Inspecting \oursfull{}}`), nothing owned, as where the frame's mark stopped it before; FRAME)
-    if (e.how < OWNED && e.how !== HOW['open, to the text after it'] && e.boxes.some(([q, b]) => framed[q - 1]?.box[b])) e = none(HOW["open, the next mark not its unit's"])
+    if (e.how < OWNED && e.how !== HOW['open, to the text after it'] && e.boxes.some(([q, b]) => framed[q - 1]?.box[b]))
+      e = none(HOW["open, the next mark not its unit's"])
     if (f.group?.length && e.how < OWNED) {
       e = { ...e, how: HOW['open, with the displays after it'] }
       for (const g of f.group) if (!where.has(g)) out.set(g, none(HOW['in the display before it']))
@@ -678,18 +1020,43 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
     out.set(name, e)
   }
   // a display its unit opens with, no point of its own (headEntries): by its unit's start mark, set once
-  if (heads) for (const [name, list] of where) {
-    if (!MARK_START.test(name) || list.length > 1 || twice.has(name)) continue
-    const [p, q] = list[0]
-    headEntries(heads(name), pages[p - 1], regions[p - 1], p, q, n => where.has(n) || out.has(n), (n, e) => out.set(n, e))
-  }
+  if (heads)
+    for (const [name, list] of where) {
+      if (!MARK_START.test(name) || list.length > 1 || twice.has(name)) continue
+      const [p, q] = list[0]!
+      headEntries(
+        heads(name),
+        pages[p - 1]!,
+        regions[p - 1]!,
+        p,
+        q,
+        (n) => where.has(n) || out.has(n),
+        (n, e) => out.set(n, e),
+      )
+    }
   return out
 }
 
+/** a piece ownedPages has read the opening point of: its name, its point's index, its closing point's name, the page its
+ *  closing point is awaited to (null: none), whether its stop is found, its region */
+interface OpenPiece {
+  name: string
+  q: number
+  close: string
+  needPage: number | null
+  stop: boolean
+  r: number
+}
 /** a piece's closing point: a placeholder's (p) or a footnote call's (n) */
 const CLOSING = /^[pn]\d+\.\d+b$/
 /** a page of nothing, in a window's place for a page the window does not hold */
-const EMPTY = Object.freeze({ glyphs: Object.freeze({ n: 0 }), boxes: Object.freeze([]), points: Object.freeze([]), boxAt: new Int32Array(0), view: Object.freeze([0, 0, 0, 0]) })
+const EMPTY: StreamPage = Object.freeze({
+  glyphs: Object.freeze({ n: 0 }) as StreamGlyphs,
+  boxes: Object.freeze([]),
+  points: Object.freeze([]),
+  boxAt: new Int32Array(0),
+  view: Object.freeze([0, 0, 0, 0] as const),
+})
 
 /**
  * ownedOf a page at a time (the page stream, E2a): the pages added in order, each piece found once every page it may read
@@ -705,16 +1072,30 @@ const EMPTY = Object.freeze({ glyphs: Object.freeze({ n: 0 }), boxes: Object.fre
  * e, pages)` is called for each piece found, `e` ownedOf's entry, `pages` the window (pages[p - 1] page p) while it is
  * held. `end(take)`: no page after; every piece left is found
  */
-export function ownedPages({ follows, dropped = [], closing = () => null, heads = null }) {
-  const held = new Map(), regions = new Map(), counts = new Map(), opened = new Set(), early = new Map()
+export function ownedPages({
+  follows,
+  dropped = [],
+  closing = () => null,
+  heads = null,
+}: {
+  follows: (name: string) => Follow | null
+  dropped?: readonly string[]
+  closing?: (name: string) => number | null
+  heads?: ((start: string) => Head | null) | null
+}) {
+  const held = new Map<number, StreamPage>(),
+    regions = new Map<number, Regions>(),
+    counts = new Map<string, number>(),
+    opened = new Set<string>(),
+    early = new Map<string, Place>()
   /** the point names read a second time since `repeats()` was last asked */
-  let fresh = []
+  let fresh: string[] = []
   /** pages added, in order; their pieces, each { name, q, close, needPage, stop } */
-  const queue = []
+  const queue: { p: number; pieces: OpenPiece[] }[] = []
   let last = 0
-  const seqPoint = name => !BRACKET.test(name) && !NAME_POINT.test(name) && !READ_ALONE.test(name)
+  const seqPoint = (name: string) => !BRACKET.test(name) && !NAME_POINT.test(name) && !READ_ALONE.test(name)
   /** whether page pa's pieces can be found: every page each may read is in */
-  const ready = (entry, ended) => {
+  const ready = (entry: { pieces: readonly OpenPiece[] }, ended: boolean) => {
     if (ended) return true
     for (const x of entry.pieces) {
       if (x.needPage !== null && last < x.needPage && !counts.has(x.close)) return false
@@ -723,38 +1104,46 @@ export function ownedPages({ follows, dropped = [], closing = () => null, heads 
     return true
   }
   /** the first point after (p, q) in region r on the pages held from p to the last: found where one is */
-  const stopFrom = (p, q, r) => {
+  const stopFrom = (p: number, q: number, r: number) => {
     for (let s = p; s <= last; s++) {
-      const P = held.get(s), at = regions.get(s).at
-      for (let k = s === p ? q + 1 : 0; k < P.points.length; k++) if (seqPoint(P.points[k].name) && at[k] === r) return true
+      const P = held.get(s)!,
+        at = regions.get(s)!.at
+      for (let k = s === p ? q + 1 : 0; k < P.points.length; k++)
+        if (seqPoint(P.points[k]!.name) && at[k] === r) return true
     }
     return false
   }
-  const find = (entry, take) => {
-    const pa = entry.p, W = new Array(last).fill(EMPTY)
-    for (let p = pa; p <= last; p++) W[p - 1] = held.get(p)
-    const mine = new Set(entry.pieces.map(x => x.name))
+  const find = (entry: { p: number; pieces: readonly OpenPiece[] }, take: Take) => {
+    const pa = entry.p,
+      W = new Array<StreamPage>(last).fill(EMPTY)
+    for (let p = pa; p <= last; p++) W[p - 1] = held.get(p)!
+    const mine = new Set(entry.pieces.map((x) => x.name))
     for (const x of entry.pieces) {
       const e = early.get(x.close)
-      if (e && e[0] < pa && W[e[0] - 1] === EMPTY) W[e[0] - 1] = { ...EMPTY, points: [{ name: x.close, glyph: 0, box: 0 }] }
+      if (e && e[0] < pa && W[e[0] - 1] === EMPTY)
+        W[e[0] - 1] = { ...EMPTY, points: [{ name: x.close, glyph: 0, box: 0 }] }
     }
-    const out = ownedOf(W, { follows: name => (mine.has(name) ? follows(name) : null), dropped })
+    const out = ownedOf(W, { follows: (name) => (mine.has(name) ? follows(name) : null), dropped })
     for (const [name, e] of out) take(name, e, W)
   }
-  const drain = (take, ended = false) => {
-    while (queue.length && ready(queue[0], ended)) find(queue.shift(), take)
+  const drain = (take: Take, ended = false) => {
+    while (queue.length && ready(queue[0]!, ended)) find(queue.shift()!, take)
     // the pages no piece left may read
-    const low = queue.length ? queue[0].p : last + 1
-    for (const p of [...held.keys()]) if (p < low) { held.delete(p); regions.delete(p) }
+    const low = queue.length ? queue[0]!.p : last + 1
+    for (const p of [...held.keys()])
+      if (p < low) {
+        held.delete(p)
+        regions.delete(p)
+      }
   }
   return {
-    add(p, page, take) {
+    add(p: number, page: StreamPage, take: Take) {
       if (p !== last + 1) throw new RangeError(`page ${p} added after page ${last}`)
       last = p
       held.set(p, page)
       const R = regionsOf(page)
       regions.set(p, R)
-      const pieces = []
+      const pieces: OpenPiece[] = []
       page.points.forEach((pt, q) => {
         const name = pt.name
         const seen = (counts.get(name) ?? 0) + 1
@@ -765,33 +1154,66 @@ export function ownedPages({ follows, dropped = [], closing = () => null, heads 
         opened.add(name)
         const f = follows(name)
         if (!f) return
-        const close = `${name.slice(0, -1)}b`, at = closing(name)
+        const close = `${name.slice(0, -1)}b`,
+          at = closing(name)
         // a closing point to wait for (its destination's page; with none known, the document's end), or a stop where it has none
-        pieces.push({ name, q, close, needPage: f.closing ? (Number.isInteger(at) ? at : Infinity) : null, stop: f.closing || R.at[q] % 2 !== 1, r: R.at[q] })
+        pieces.push({
+          name,
+          q,
+          close,
+          needPage: f.closing ? (Number.isInteger(at) ? at : Infinity) : null,
+          stop: f.closing || R.at[q]! % 2 !== 1,
+          r: R.at[q]!,
+        })
       })
       // the stops looked for again with each page: the pieces' pages' and this one's
-      for (const entry of [...queue, { p, pieces }]) for (const x of entry.pieces) if (x.stop === false && stopFrom(entry.p, x.q, x.r)) x.stop = true
+      for (const entry of [...queue, { p, pieces }])
+        for (const x of entry.pieces) if (x.stop === false && stopFrom(entry.p, x.q, x.r)) x.stop = true
       queue.push({ p, pieces })
       drain(take)
       // (a display its unit opens with, by the start mark: its own page alone, so found with it; a start mark read again later is
       // told by twice(), the caller's to apply as for any point)
       if (heads) {
-        let W = null
-        const window = () => { if (!W) { W = new Array(p).fill(EMPTY); W[p - 1] = page } return W }
+        let W: StreamPage[] | null = null
+        const window = () => {
+          if (!W) {
+            W = new Array<StreamPage>(p).fill(EMPTY)
+            W[p - 1] = page
+          }
+          return W
+        }
         page.points.forEach((pt, q) => {
-          if (!MARK_START.test(pt.name) || counts.get(pt.name) > 1 || dropped.includes(pt.name)) return
-          headEntries(heads(pt.name), page, R, p, q, n => opened.has(n), (n, e) => take(n, e, window()))
+          if (!MARK_START.test(pt.name) || counts.get(pt.name)! > 1 || dropped.includes(pt.name)) return
+          headEntries(
+            heads(pt.name),
+            page,
+            R,
+            p,
+            q,
+            (n) => opened.has(n),
+            (n, e) => take(n, e, window()),
+          )
         })
       }
     },
-    end(take) { drain(take, true) },
+    end(take: Take) {
+      drain(take, true)
+    },
     /** the point names read more than once, on every page added */
-    twice() { return new Set([...counts].filter(([, n]) => n > 1).map(([name]) => name)) },
+    twice() {
+      return new Set([...counts].filter(([, n]) => n > 1).map(([name]) => name))
+    },
     /** the point names read a second time since this was last asked, in the order read: `twice()` a page at a time */
-    repeats() { const out = fresh; fresh = []; return out },
+    repeats() {
+      const out = fresh
+      fresh = []
+      return out
+    },
     /** the least page an opening point still to be found stands on (one past the last page added where none is): every
      *  piece whose opening point stands before it has been taken */
-    found() { return queue.length ? queue[0].p : last + 1 },
+    found() {
+      return queue.length ? queue[0]!.p : last + 1
+    },
   }
 }
 
@@ -799,7 +1221,7 @@ export function ownedPages({ follows, dropped = [], closing = () => null, heads 
  *  which their characters spell it (a hyphen the text has not passed over, white space never compared, the last glyph's
  *  characters past its end: a ligature), or from which they spell the start of it up to the last glyph (the text runs
  *  to the next point); -1 where it is nowhere */
-function textAt(pages, glyphs, want, quotes = false) {
+function textAt(pages: readonly StreamPage[], glyphs: readonly Place[], want: string, quotes = false) {
   for (const e of textStarts(pages, glyphs, want, quotes)) return e
   return -1
 }
@@ -808,16 +1230,19 @@ function textAt(pages, glyphs, want, quotes = false) {
  *  text as spellOf reads it): the first place textAt would take from which the glyphs to their end spell `rest` exactly, else
  *  textAt's. The first WANT characters of the text after a piece may stand in the piece's own ink first: a display's
  *  \\text{for every} before "For", a URL's dots before the full stop after it (2610.16663v1 p45u229, 2610.21376v1 p9u88) */
-function textTo(pages, glyphs, want, rest, quotes) {
-  const spelled = glyphs.map(([p, g]) => spellOf(pages[p - 1].glyphs.u[g] ?? ''))
-  const at = new Array(glyphs.length)
+function textTo(pages: readonly StreamPage[], glyphs: readonly Place[], want: string, rest: string, quotes: boolean) {
+  const spelled = glyphs.map(([p, g]) => spellOf(pages[p - 1]!.glyphs.u[g] ?? ''))
+  const at = new Array<number>(glyphs.length)
   let n = 0
-  for (let j = 0; j < glyphs.length; j++) { at[j] = n; n += spelled[j].length }
+  for (let j = 0; j < glyphs.length; j++) {
+    at[j] = n
+    n += spelled[j]!.length
+  }
   const all = spelled.join('')
   let first = -1
   for (const e of textStarts(pages, glyphs, want, quotes)) {
     if (first < 0) first = e
-    if (n - at[e] === rest.length && all.endsWith(rest)) return e
+    if (n - at[e]! === rest.length && all.endsWith(rest)) return e
   }
   return first
 }
@@ -825,16 +1250,20 @@ function textTo(pages, glyphs, want, rest, quotes) {
 /** one glyph of any text but none in a text the probe showed (marks.mjs INK_ANY: a formula's glyph no character spells) */
 const INK_ANY = '\uFFFC'
 /** a glyph's or a text's characters as the split reads them: NFKC, white space out */
-const setAs = s => s.normalize('NFKC').replace(/\s/g, '')
+const setAs = (s: string) => s.normalize('NFKC').replace(/\s/g, '')
 /** the glyph after the first of `glyphs` that set `text` whole from their first, character for character (a glyph's own
  *  characters a run of the text's, a blank glyph passed over, INK_ANY one glyph of any text but none), the glyph that completes
  *  it the last; -1 where they do not begin so */
-function textedTo(pages, glyphs, text) {
+function textedTo(pages: readonly StreamPage[], glyphs: readonly Place[], text: string) {
   const want = setAs(text)
   let n = 0
   for (let j = 0; j < glyphs.length && n < want.length; j++) {
-    const [p, g] = glyphs[j], t = setAs(pages[p - 1].glyphs.u[g] ?? '')
-    if (want[n] === INK_ANY) { if (!t) return -1; n++ } else if (!t) continue
+    const [p, g] = glyphs[j]!,
+      t = setAs(pages[p - 1]!.glyphs.u[g] ?? '')
+    if (want[n] === INK_ANY) {
+      if (!t) return -1
+      n++
+    } else if (!t) continue
     else if (want.startsWith(t, n) && !want.slice(n, n + t.length).includes(INK_ANY)) n += t.length
     else return -1
     if (n === want.length) return j + 1
@@ -843,37 +1272,58 @@ function textedTo(pages, glyphs, text) {
 }
 /** where the text after a split's piece begins among `glyphs` from `end` on (textTo with its `rest`, the glyphs running to a
  *  piece of its unit's ends), as an index into `glyphs`; -1 where it is not found, or the piece would own nothing */
-function afterText(pages, glyphs, end, S, quotes) {
+function afterText(
+  pages: readonly StreamPage[],
+  glyphs: readonly Place[],
+  end: number,
+  S: { want: string; rest: string },
+  quotes: boolean,
+) {
   const e = textTo(pages, glyphs.slice(end), S.want, S.rest, quotes)
   return e > 0 ? end + e : -1
 }
 /** whether the glyph at `end` (the first not blank from it) runs on as the word the glyph before it ends: both a letter or a
  *  digit, on one page, on one baseline and at one size (within a twentieth of it) — the macro's text then ended inside its word
  *  (a state its probe's call did not have), and what follows is no other piece's ink alone */
-function runsOn(pages, glyphs, end) {
+function runsOn(pages: readonly StreamPage[], glyphs: readonly Place[], end: number) {
   const word = /[\p{L}\p{N}]/u
-  const [p0, g0] = glyphs[end - 1], G0 = pages[p0 - 1].glyphs
+  const [p0, g0] = glyphs[end - 1]!,
+    G0 = pages[p0 - 1]!.glyphs
   let j = end
-  while (j < glyphs.length && !setAs(pages[glyphs[j][0] - 1].glyphs.u[glyphs[j][1]] ?? '')) j++
+  while (j < glyphs.length && !setAs(pages[glyphs[j]![0] - 1]!.glyphs.u[glyphs[j]![1]] ?? '')) j++
   if (j >= glyphs.length) return false
-  const [p1, g1] = glyphs[j], G1 = pages[p1 - 1].glyphs, a = setAs(G0.u[g0] ?? ''), b = setAs(G1.u[g1] ?? '')
-  return p0 === p1 && word.test(a.at(-1) ?? '') && word.test(b[0] ?? '') && Math.abs(G0.y[g0] - G1.y[g1]) < 0.05 * G0.size[g0] && Math.abs(G0.size[g0] - G1.size[g1]) < 0.05 * G0.size[g0]
+  const [p1, g1] = glyphs[j]!,
+    G1 = pages[p1 - 1]!.glyphs,
+    a = setAs(G0.u[g0] ?? ''),
+    b = setAs(G1.u[g1] ?? '')
+  return (
+    p0 === p1 &&
+    word.test(a.at(-1) ?? '') &&
+    word.test(b[0] ?? '') &&
+    Math.abs(G0.y[g0]! - G1.y[g1]!) < 0.05 * G0.size[g0]! &&
+    Math.abs(G0.size[g0]! - G1.size[g1]!) < 0.05 * G0.size[g0]!
+  )
 }
 
 /** each place textAt's text begins at, in order */
-function* textStarts(pages, glyphs, want, quotes) {
+function* textStarts(pages: readonly StreamPage[], glyphs: readonly Place[], want: string, quotes: boolean) {
   // (`quotes`: TeX's quotes as one, a straight one set as a curly one by OT1 and the source's '' read as ”)
-  const fold = c => (quotes ? c.replace(/[\u201c\u201d\u201e\u201f\u2033"]/g, '"').replace(/[\u2018\u2019\u201a\u201b\u2032']/g, "'") : c)
+  const fold = (c: string) =>
+    quotes ? c.replace(/[\u201c\u201d\u201e\u201f\u2033"]/g, '"').replace(/[\u2018\u2019\u201a\u201b\u2032']/g, "'") : c
   want = fold(want)
-  const chars = glyphs.map(([p, g]) => fold(charOf(pages[p - 1].glyphs.u[g])))
+  const chars = glyphs.map(([p, g]) => fold(charOf(pages[p - 1]!.glyphs.u[g]!)))
   for (let e = 0; e < chars.length; e++) {
     if (!chars[e]) continue
-    let w = 0, h = e
+    let w = 0,
+      h = e
     for (; h < chars.length && w < want.length; h++) {
       const c = chars[h]
       if (!c) continue
       // a glyph of several characters (a ligature) may run past the characters looked for
-      if (want.startsWith(c, w) || (w + c.length > want.length && c.startsWith(want.slice(w)))) { w += c.length; continue }
+      if (want.startsWith(c, w) || (w + c.length > want.length && c.startsWith(want.slice(w)))) {
+        w += c.length
+        continue
+      }
       if ((c === '-' || c === '‐') && h > e) continue
       break
     }
