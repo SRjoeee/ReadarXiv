@@ -519,12 +519,24 @@ describe('locate states each cell’s room in its column as Room.column', () => 
 describe('locate states how the lines of a cell of several lines stand in its box (Placed.inner, §18.75)', () => {
   /** a cell of two lines owned by one unit, its column's class `boxed`: each line's text and start (glyphs 6 pt wide); its lines
    *  the rows of a box it holds, a forced break between each two (a merged cell), or with `paragraph` a paragraph's (none) */
-  const innerOf = (boxed: 'l' | 'c' | 'r', lines: [string, number][], paragraph = false) => {
+  const innerOf = (boxed: 'l' | 'c' | 'r', lines: [string, number][], paragraph = false, breaks?: number[]) => {
     const B = docOf([{ lines: lines.map(([text, x], k) => ({ text, x, y: 712 - 12 * k })) }])
+    // (`breaks`: the lines a forced break follows, where they are not every one: a paragraph's \\newline among its wrapped lines)
+    const after = new Set(breaks ?? lines.slice(1).map((_, k) => k + 1))
     const content = paragraph
       ? [{ t: 'text' as const, s: lines.map(([t]) => t).join(' ') }]
       : lines.flatMap(([t], k) => [
-          ...(k ? [{ t: 'el' as const, id: String(k), kind: 'other' as const, src: '\\\\', brk: true as const }] : []),
+          ...(after.has(k)
+            ? [
+                {
+                  t: 'el' as const,
+                  id: String(k),
+                  kind: 'other' as const,
+                  src: k % 2 ? '\\\\' : '\\newline',
+                  brk: true as const,
+                },
+              ]
+            : []),
           { t: 'text' as const, s: t },
         ])
     const units: InstrumentUnit[] = [
@@ -585,6 +597,22 @@ describe('locate states how the lines of a cell of several lines stand in its bo
       ]),
     ).toEqual({ lines: 2, inner: undefined })
     expect(innerOf('l', [['Errorx', 103]])).toEqual({ lines: 1, inner: undefined })
+  })
+  it('states none for a paragraph cell whose forced break is one among lines TeX wrapped (a p column’s \\newline): no rows', () => {
+    // (four lines, a \newline after the second: 2608.27043v1's "Best: … \newline Worst: …", each part wrapped on two lines)
+    expect(
+      innerOf(
+        'l',
+        [
+          ['Bestxx', 100],
+          ['scorex', 100],
+          ['Worstx', 100],
+          ['scorey', 100],
+        ],
+        false,
+        [2],
+      ),
+    ).toEqual({ lines: 4, inner: undefined })
   })
   it('states none for a cell whose lines are a paragraph of its own (a p column, no forced break): no box of rows', () => {
     expect(
