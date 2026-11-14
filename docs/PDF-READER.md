@@ -7077,6 +7077,27 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
 - **The names rules read the whole text**: R1 and R2 (`instrument/language.ts`) read a forced break as a space, so a cell is kept
   only where no token of any of its lines is a word; R4 reads it as one text cell of one unit, its key its content (the break an
   element of it, as a cell's `\hline` is).
+- **The marking: the start mark before the box** (`source/latex-front.ts` startOf, for a cell). The cell's lines are the rows
+  of a box it holds, and a start mark inside the box defined the cell's index in the box's first entry (LAYOUT_TEX's `\axt@cs`,
+  carried to the innermost alignment entry): that template wrote the box's class (`AXT-CELL`) and set §18.74's end point after
+  the box's first line, and a `\shortstack`'s own `\halign`, no template of LaTeX's, wrote neither. So where every forced break
+  of a cell stands inside a group of it, its start mark goes before the open piece of the innermost group that holds them all
+  (`\makecell{`, `\shortstack{`, a nested tabular's `\begin`, a paper macro's pair, a `\parbox`), a `\multicolumn` passed
+  through (its `\omit` opens the entry: no mark before it), where the head's start stands inside that group (a cell whose first
+  word stands before the box keeps its mark there); where no group holds them all (two boxes side by side), before the outermost
+  group the start stands in. The outer template then writes one `AXT-CELL`, the outer column's class, and sets one end point
+  after the whole box; the inner templates write nothing for it. The end mark stays after the last word, inside the box; a
+  forced break gets no mark (the marking reads `\\` as invisible), nor does a rule that opens an inner row (`A\\ \hline B`: a
+  rule's placeholder sets no letter, and a mark after a row's end is passed over). The instrument reads the start piece by the
+  same rule (boundedEmpty, outsidePieces). Proven at TeX (`lab/pdf/spikes/layout-cell-cases.mjs`, its merged cases: ten boxes, each
+  in an l, a c and an r column, and six under `\multirow`, `\multicolumn` and after a `\cellcolor`; both pinned years, pdfLaTeX,
+  XeLaTeX, LuaLaTeX and latex with dvipdfmx): every merged cell writes one `AXT-CELL`, its outer column's class (a `\parbox`'s its
+  paragraph's, j), and sets one end point after the box, nothing between its end mark and it; each page's glyphs and rules those
+  of the same document without our marks (pdfLaTeX's to 0.001 pt, LuaLaTeX's within 0.011, under dvipdfmx a run a point splits
+  placed anew by the writer within 0.01); 240 of 240 compiles with every earlier case. Red with the start mark inside the box:
+  16 of 16 compiles wrong (the box's class, the end point before the end mark, a `\shortstack` with neither). Under XeLaTeX a
+  `\makecell[r]` in an r column has its last glyph 0.0114 pt past the end point TeX set at it (pdfLaTeX's and LuaLaTeX's within
+  0.0001): the gate holds an end point to its cell's last ink within 0.02 pt under dvipdfmx, its writer's placement.
 - **The lay: a line of a grid cell is laid in the cell's room in its column, whichever line it is** (the coordinator's statement,
   `packages/typeset/src/lay/adapt.ts` `columnRoomOf`): where the part states the cell's `Room.column`, every line's room is it,
   not only a single line's; the cell has one size, the largest not over the original's at which every line fits (the fit's states
