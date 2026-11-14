@@ -444,9 +444,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       had.first ||= m.lines[0]?.[0] === n
       had.last ||= m.lines.at(-1)?.[0] === n
       had.parts.push(m.ord)
+      had.partLines.set(m.ord, lines)
       continue
     }
-    orig.set(key, { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, parts: [m.ord], size: m.style.size, label: m.label ?? null, pitch: m.pitch ?? null })
+    orig.set(key, { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, parts: [m.ord], partLines: new Map([[m.ord, lines]]), size: m.style.size, label: m.label ?? null, pitch: m.pitch ?? null })
   }
   // (a caption's label on a line of its own (Label with no `line`, PDF-READER §18.34): v2 draws its relabel as a row of its own on
   // the label's baseline, today keeps the original's ink there. The row is no line of the unit's text: the anchor, the line
@@ -563,12 +564,15 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     v2.toggles !== 'on' && unitClass(facts.get(o)?.kind) === 'names'
       ? 'names'
       : (['pitch', 'address', 'identifier', 'formula', 'double', 'script'].find((k) => (v2[k] ?? []).includes(o)) ?? null)
+  // (and its lines are none of the lines the group lays, as a kept element's are: `keptLines`, fidelity.mjs laidLinesOf)
   for (const [key, g] of groupOfKey)
     for (const o of g.members) {
       const m = facts.get(o)
       if (drawnMembers.has(o) || !m || !ruledMarkOf(o)) continue
       const rows = m.lines.filter((l) => l[0] === n).length
       if (rows) cropRows.v2.set(key, (cropRows.v2.get(key) ?? 0) + rows)
+      const at = orig.get(key)
+      if (at) at.keptLines = [...(at.keptLines ?? []), ...(at.partLines?.get(o) ?? [])]
     }
 
   // ------------------------------------------------ per unit, each side's distances from the original
