@@ -342,10 +342,8 @@ export const RULES: readonly LineRule[] = Object.freeze(
     ] satisfies [ClassId, (l: RuledLine) => boolean | undefined][]
   ).map(([cls, test]) => Object.freeze({ cls, code: CLASS_CODE[cls], test })),
 )
-/** ADDED: the line rule that reads a line no unit owns inside a float as that float's text by its depth alone: the last `figures`
- *  rule of RULES (read by ES2022's filter and at, the library the engine's entries are checked under: Array's findLast is
- *  ES2023's) */
-const DEPTH_RULE = RULES.filter((r) => r.cls === 'figures').at(-1)
+/** ADDED: the line rule that reads a line no unit owns inside a float as that float's text by its depth alone */
+const DEPTH_RULE = RULES.findLast((r) => r.cls === 'figures')
 
 /** a glyph's owner as own.mjs names its group: a unit's id, or a babel name's (`name`) */
 const UNIT_GROUP = /^u(\d+)(?:\.[pl])?$/
