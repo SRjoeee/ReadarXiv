@@ -1,10 +1,11 @@
 // U.rename on synthetic references, the branches the tap's sample does not show (a citation's note, a conjunction in the
 // target's or the paper's own word, babel's name of a counter type and its letter-spacing dropped, a type's singular read
-// in a target that does not inflect, a part with no word), and nameOfRow. Each expectation is what today's renameRefs and
-// nameOfRow (engine 065c1d973) answered on the same case over today's tex-names.json; the table here holds the entries of it
-// the cases read, as they stand there.
+// in a target that does not inflect, a part with no word), and the paper's own names read from their rows (ownNamesOf). Each
+// expectation is what today's renameRefs and nameOfRow (engine 065c1d973) answered on the same case over today's
+// tex-names.json; the table here holds the entries of it the cases read, as they stand there.
+import type { Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
-import { nameOfRow, refNamesOf, rename, type TexNamesData } from '../../src/unit/rename.ts'
+import { ownNamesOf, refNamesOf, rename, type TexNamesData } from '../../src/unit/rename.ts'
 
 const NAMES: TexNamesData = {
   types: {
@@ -133,25 +134,39 @@ describe('U.rename', () => {
     expect(of('zh', [ref('3', '\\labelcref{a}')])).toEqual([])
   })
 
-  it('reads a name unit’s row as its English and the target’s word', () => {
-    expect(
-      nameOfRow({
-        kind: 'name',
-        src: ' Main\n Claim ',
-        state: 'whole',
-        pieces: [
-          { t: 'text', s: ' \u4e3b\u306a ' },
-          { t: 'ph', s: 'x' },
-          { t: 'text', s: '\u4e3b\u5f35\u3002' },
-        ],
-      }),
-    ).toEqual(['Main Claim', '\u4e3b\u306a \u4e3b\u5f35'])
-    expect(nameOfRow({ kind: 'name', src: 'Lemma', state: 'partial', pieces: [{ t: 'text', s: 'Lemme' }] })).toEqual([
-      'Lemma',
-      'Lemme',
+  it('reads a name unit’s row as the target’s word for its English', () => {
+    const rows = new Map<string, Row>([
+      [
+        'u1',
+        {
+          id: 'u1',
+          ok: true,
+          by: 'test',
+          content: [
+            { t: 'text', s: ' \u4e3b\u306a ' },
+            { t: 'el', id: 'x' },
+            { t: 'span', id: 's', content: [{ t: 'text', s: '\u4e3b\u5f35\u3002' }] },
+          ],
+        },
+      ],
+      ['u2', { id: 'u2', ok: true, by: 'test', content: [{ t: 'text', s: 'Lemme' }] }],
+      ['u3', { id: 'u3', ok: false, why: { kind: 'refused' } }],
+      ['u4', { id: 'u4', ok: true, by: 'test', content: [{ t: 'text', s: ' \uff0e' }] }],
     ])
-    expect(nameOfRow({ kind: 'name', src: 'Lemma', state: 'none', pieces: [{ t: 'text', s: 'Lemme' }] })).toBeNull()
-    expect(nameOfRow({ kind: 'para', src: 'Lemma', state: 'whole', pieces: [{ t: 'text', s: 'Lemme' }] })).toBeNull()
-    expect(nameOfRow({ kind: 'name', src: 'Lemma', state: 'whole', pieces: [{ t: 'text', s: ' \uff0e' }] })).toBeNull()
+    const own = ownNamesOf(
+      [
+        [' Main\n Claim ', 'u1'],
+        ['Lemma', 'u2'],
+        ['Remark', 'u3'],
+        ['Claim', 'u4'],
+        ['Fact', 'u5'],
+      ],
+      rows,
+    )
+    expect(own.get('Main Claim')).toBe('\u4e3b\u306a \u4e3b\u5f35')
+    expect(own.get('Lemma')).toBe('Lemme')
+    // (a row of no translation, an empty word, no row)
+    expect([own.get('Remark'), own.get('Claim'), own.get('Fact')]).toEqual([undefined, undefined, undefined])
+    expect([...own.keys()]).toEqual(['Main Claim', 'Lemma', 'Remark', 'Claim', 'Fact'])
   })
 })

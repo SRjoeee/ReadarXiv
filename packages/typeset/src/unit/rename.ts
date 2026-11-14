@@ -236,8 +236,6 @@ export function rename<K>(
   return out
 }
 
-/** a row of today's (rows.mjs unitOf) as nameOfRow reads it */
-export type NameRow = { kind?: string; src?: unknown; state?: string; pieces?: readonly { t?: string; s?: unknown }[] }
 /** a name's translation as the target's word: its text pieces joined, white space one space, an ideographic full stop the
  *  translator ends a word with gone (L2:1269) */
 const wordOf = (texts: readonly string[]) =>
@@ -247,21 +245,6 @@ const wordOf = (texts: readonly string[]) =>
     .trim()
     .replace(/[\u3002\uff0e]$/u, '')
     .trim()
-/** a structural name's row as [its English, the target's word for it]: its source's text and its translation's text
- *  pieces joined, white space one space, an ideographic full stop at its end gone; null for another unit, a row of no
- *  translation or an empty one (L2:1266 nameOfRow) */
-export function nameOfRow(u: NameRow | null | undefined): [english: string, word: string] | null {
-  if (
-    u?.kind !== 'name' ||
-    typeof u.src !== 'string' ||
-    !Array.isArray(u.pieces) ||
-    (u.state !== 'whole' && u.state !== 'partial')
-  )
-    return null
-  const english = u.src.replace(/\s+/g, ' ').trim()
-  const word = wordOf(u.pieces.filter((q) => q?.t === 'text' && typeof q.s === 'string').map((q) => q.s as string))
-  return english && word ? [english, word] : null
-}
 
 /** a row's text pieces in order, its groups' with them (a v0 row's text between a group's open and close is its own) */
 function textsOf(content: readonly OutPiece[], out: string[] = []): string[] {
