@@ -110,7 +110,8 @@ export const FACES: Readonly<Record<string, CatalogueFace>> = {
   'pt-mono-bold': { family: 'axt-slab-mono', weight: 700, style: 'normal', size: 1 },
 }
 
-/** each face's alphabets whose every letter it holds (a language's own, and a script's bare letters): its file's cmap */
+/** each face's alphabets whose every letter it holds (a language's own, and a script's bare letters): its file's cmap, the
+ *  OpenType character map (its best Unicode subtable), as the header says */
 export const HOLDS: Readonly<Record<string, readonly string[]>> = {
   'biolinum-bold': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
   'biolinum-bolditalic': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
@@ -197,7 +198,7 @@ export const HOLDS: Readonly<Record<string, readonly string[]>> = {
   'xcharter-regular': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
 }
 
-/** the faces that draw small capitals by their smcp feature: their file's GSUB */
+/** the faces that draw small capitals by their smcp feature: their file's GSUB, the OpenType `smcp` feature */
 export const SMCP: readonly string[] = [
   'biolinum-bold',
   'biolinum-bolditalic',
