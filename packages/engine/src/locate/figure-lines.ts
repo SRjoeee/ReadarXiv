@@ -18,7 +18,7 @@ import {
   type TodayMet,
   type TodayShape,
   interiorOf,
-} from './today/figure-text.types.ts'
+} from './figure-text.ts'
 import { scriptsOf } from './today/ink-units.types.ts'
 import type { TodayPage } from './ledger.ts'
 import type { DocGlyph } from '../doc.ts'

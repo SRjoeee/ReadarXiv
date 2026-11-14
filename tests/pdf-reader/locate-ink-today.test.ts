@@ -4,7 +4,7 @@
 // owners and units in, the same units out.
 import { describe, expect, it } from 'vitest'
 import * as P from '../../packages/engine/src/locate/ink.ts'
-import * as TF from '../../packages/engine/src/locate/today/figure-text.types.ts'
+import * as TF from '../../packages/engine/src/locate/figure-text.ts'
 import * as TI from '../../packages/engine/src/locate/today/ink-units.types.ts'
 import * as TL from '../../packages/engine/src/locate/ledger.ts'
 import * as TD from '../../packages/engine/src/locate/today/today.types.ts'

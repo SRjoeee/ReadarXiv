@@ -29,7 +29,7 @@ import {
   unitSize,
 } from './facts.ts'
 import { identifiersIn } from './today/today.types.ts'
-import { figureGroup, figureUnitsOf, SPACE_GAP } from './today/figure-text.types.ts'
+import { figureGroup, figureUnitsOf, SPACE_GAP } from './figure-text.ts'
 import {
   statedClassOf as classOf,
   claimInk,
