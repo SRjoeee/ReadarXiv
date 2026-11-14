@@ -24,7 +24,7 @@
     "./today/compile/tex-errors.ts": "./src/compile/tex-errors.ts",
     "./today/compile/base.ts": "./src/compile/base.ts",
     "./today/compile/pdf-lite.ts": "./src/compile/pdf-lite.ts",
-    "./today/compile/guard.mjs": "./src/compile/guard.mjs",
+    "./today/compile/guard.ts": "./src/compile/guard.ts",
     "./today/compile/live.mjs": "./src/compile/live.mjs",
     "./today/compile/paper.mjs": "./src/compile/paper.mjs",
     "./today/instrument/format.ts": "./src/instrument/format.ts",

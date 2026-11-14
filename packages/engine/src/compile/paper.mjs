@@ -26,7 +26,7 @@ import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, 
 import { completeLog } from './tex.ts'
 import { bundleUnitsOf } from '../instrument/units.ts'
 import { isMemoryError } from '../memory.ts'
-import { auxUnits, contextUnits, copiesOutOfPlace, cutCopyUnits, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
+import { auxUnits, contextUnits, copiesOutOfPlace, cutCopyUnits, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.ts'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, markTextOf } from './base.ts'
 import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from '../marks/marks.ts'
 

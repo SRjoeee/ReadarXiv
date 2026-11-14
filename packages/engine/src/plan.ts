@@ -10,7 +10,7 @@ import { openPaper, type Paper } from './front.types.ts'
 import { isMemoryError } from './memory.ts'
 
 /** what arXiv's PDF says that the front half reads: its page count, its day (seconds since the epoch: compile/base.mjs
- *  creationEpochOf), the TeX Live year its pdfTeX banner names (compile/guard.mjs texLiveOfPdf) */
+ *  creationEpochOf), the TeX Live year its pdfTeX banner names (compile/guard.ts texLiveOfPdf) */
 export interface OriginalFacts {
   pages: number
   day: number | null

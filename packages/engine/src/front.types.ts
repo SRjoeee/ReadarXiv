@@ -12,8 +12,7 @@ import type { NameKey } from './marks/names.ts'
 import type { CellPlace, SourceUnit } from './source/latex-front.ts'
 import * as instrument_js from './instrument/instrument.ts'
 import * as base_js from './compile/base.ts'
-// @ts-ignore: JavaScript moved as it is, typed by this file alone
-import * as guard_js from './compile/guard.mjs'
+import * as guard_js from './compile/guard.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as live_js from './compile/live.mjs'
 import * as pdfLite_js from './compile/pdf-lite.ts'
@@ -31,12 +30,10 @@ export const driverOutputGiven = base_js.driverOutputGiven
 export const driverOutputTruncated = base_js.driverOutputTruncated
 export const textOfPdf = base_js.textOfPdf
 export const creationEpochOf = base_js.creationEpochOf
-export const texLiveOfPdf = guard_js.texLiveOfPdf as (doc: PdfLike) => Promise<string | null>
-export const compilerOfPdf = guard_js.compilerOfPdf as (
-  doc: PdfLike,
-) => Promise<'latex' | 'pdflatex' | 'xelatex' | 'lualatex' | null>
-export const texRan = guard_js.texRan as (log: string | null | undefined) => boolean
-export const limitOf = guard_js.limitOf as (c: (Compiled & { limit?: string }) | null | undefined) => string | null
+export const texLiveOfPdf = guard_js.texLiveOfPdf
+export const compilerOfPdf = guard_js.compilerOfPdf
+export const texRan = guard_js.texRan
+export const limitOf = guard_js.limitOf
 export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro' | 'number'
 export type Switches = Record<string, string>
 export type Complete = Record<string, number>

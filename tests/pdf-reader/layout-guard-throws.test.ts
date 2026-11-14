@@ -9,7 +9,7 @@ import { type Compiled, type CompileRequest, openPaper } from '@/pdf-reader/engi
 // (`skip`: the calls of the check answered as they are before it throws)
 const fault = vi.hoisted(() => ({ at: null as null | 'braces' | 'aux', error: null as unknown, skip: 0 }))
 // (the guard where its code lives: the moved compile/paper.mjs imports it there, not through its old path)
-vi.mock('../../packages/engine/src/compile/guard.mjs', async importOriginal => {
+vi.mock('../../packages/engine/src/compile/guard.ts', async importOriginal => {
   const real = await importOriginal<typeof import('@/pdf-reader/engine/layout/guard.mjs')>()
   const thrower = <F extends (...a: never[]) => unknown>(at: 'braces' | 'aux', f: F) => ((...a: Parameters<F>) => { if (fault.at === at && fault.skip-- <= 0) throw fault.error; return f(...a) }) as F
   return { ...real, unbalancedUnits: thrower('braces', real.unbalancedUnits), auxUnits: thrower('aux', real.auxUnits) }
