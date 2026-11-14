@@ -11,7 +11,7 @@ import { Icon } from '@readarxiv/ui'
 import { capsuleMotion, type Motion } from './capsule-motion.ts'
 import { type CapsuleWords, textOf } from './capsule-words.ts'
 
-export interface CapsuleProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
+interface CapsuleProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   kind: string
   icon: IconNode | 'spinner'
   words: CapsuleWords

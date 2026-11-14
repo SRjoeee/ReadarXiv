@@ -38,7 +38,7 @@ export const ATTRIBUTE = 'data-axt-layer-text'
 const PX_PER_UNIT = 4 / 3
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
-export type LayerText = 'auto' | 'precise'
+type LayerText = 'auto' | 'precise'
 /** a run of one place, as the probe lays it out again: its text, its face's class, its size (PDF units) */
 export interface ProbeWord {
   text: string

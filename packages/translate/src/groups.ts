@@ -370,7 +370,7 @@ function wholeOf(content: readonly Piece[]): Set<string> {
  *  their 200,000 characters: the coordinator's ruling of 2026-11-11) */
 const BIBLIOGRAPHY = new Set(['reference', 'refnames', 'inkreferences'])
 /** A group a reference is asked for, and the unit it is asked as: the group's text alone */
-export interface ReferenceGroup {
+interface ReferenceGroup {
   id: string
   unit: UnitIn
 }

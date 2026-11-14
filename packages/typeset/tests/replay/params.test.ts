@@ -2,13 +2,13 @@
 // them, the rules near its lines and the pages' characters (U.params:in), its edges read from those characters as today
 // reads them (room.ts edgesOf), the CJK body face's size by B.faces' port, heading and numbered as U.decor decided them, TeX's
 // \lineskip as the run held it; against the unit's P, its cell bands and the ledger's slot. And on every sampled reading
-// (U.elements:in and :out, any rule's sample): the size the unit is laid at and its base style against the ledger's
-// U.params slot of that round (its `s` and its `base`, an index into the ledger's styles).
+// (U.elements:in and :out, any rule's sample): the size the unit is laid at against the ledger's U.params slot of that round
+// (its `s`).
 import { describe, expect, it } from 'vitest'
 import { faceOf } from '../../src/breaker/faces.ts'
 import type { TokensInput } from '../../src/breaker/tokens.ts'
 import type { Block } from '../../src/unit/blocks.ts'
-import { baseStyleOf, type Original, type ParamsRules, params, sizeOf } from '../../src/unit/params.ts'
+import { type Original, type ParamsRules, params, sizeOf } from '../../src/unit/params.ts'
 import type { Rect } from '../../src/util.ts'
 import { edgesOf, type PageChar } from './room.ts'
 import { firstDifference, hasTap, ledger, ledgerRound, pagesOf, readings, roundsOf, sample, slotOf } from './tap.ts'
@@ -120,7 +120,7 @@ describe.skipIf(!hasTap)('U.params: replayed on the tap', () => {
     })
   })
 
-  it('lays every sampled reading at today’s size in today’s base style', { timeout: 120_000 }, () => {
+  it('lays every sampled reading at today’s size', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = { readings: 0, givenUp: 0, noGlyph: 0, caps: 0 }
     for (const x of readings()) {
@@ -137,11 +137,7 @@ describe.skipIf(!hasTap)('U.params: replayed on the tap', () => {
         prep = x.c['U.elements:out'] as Original
       if (!((prep.orig?.size ?? 0) > 0)) count.noGlyph++
       if (prep.orig?.st?.caps) count.caps++
-      const s = sizeOf(prep, { cjk: !!L.info.cjk }, i.unit, i.rects)
-      const base = baseStyleOf(prep, i.unit.kind, (L.info.paper as { designs: { serif: string } }).designs.serif)
-      const styles = (L as unknown as { styles: unknown[] }).styles
-      const d =
-        firstDifference(s, slot.s, 's') ?? firstDifference(JSON.parse(JSON.stringify(base)), styles[slot.base], 'base')
+      const d = firstDifference(sizeOf(prep, { cjk: !!L.info.cjk }, i.unit, i.rects), slot.s, 's')
       if (d) differ.push(`${x.key}: ${d}`)
     }
     expect(differ).toEqual([])

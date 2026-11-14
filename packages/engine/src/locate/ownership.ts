@@ -64,7 +64,7 @@ export interface Claims extends Owned {
 }
 
 /** what `locate` holds */
-export interface Ownership extends Claims {
+interface Ownership extends Claims {
   /** no write after this: `take`, `takeAsStated`, `hold`, `release` and `asElement` throw. Returns the read-only face */
   freeze(): Owned
 }

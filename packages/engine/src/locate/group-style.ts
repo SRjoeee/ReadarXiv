@@ -42,14 +42,14 @@ type El = Extract<Piece, { t: 'el' }>
 type Span = Extract<Piece, { t: 'span' }>
 
 /** a face's slant and weight */
-export interface Face {
+interface Face {
   bold: boolean
   italic: boolean
 }
 /** what a unit's text is set in by its groups: for its fill and its face, its own (undefined where no glyph of it tells
  *  one), each group's set apart (by its open piece's id: a fill; a face as the Style its own glyphs are set in), and whether
  *  any scope's value is not the one around it */
-export interface GroupStyle {
+interface GroupStyle {
   fill: { own: number | undefined; groups: [id: string, fill: number][]; apart: boolean }
   face: { own: Face | undefined; groups: [id: string, style: Style][]; apart: boolean }
 }

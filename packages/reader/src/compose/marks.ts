@@ -23,7 +23,7 @@ export interface MarkBox {
   box: [number, number, number, number]
 }
 
-export interface Marks {
+interface Marks {
   /** page n's indicator over `slot`, one mark a box (none: its indicator goes); `view` the page's view box, `rotation` its
    *  view's; a page turned carries none (the boxes are in the page's own frame) */
   mark(n: number, slot: HTMLElement, view: readonly number[] | null, rotation: number, boxes: readonly MarkBox[]): void

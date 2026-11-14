@@ -15,11 +15,11 @@
 // kept whole) is not ported: a translator's reply decides nothing here.
 
 /** a cell's grid place: its row, its first column, the columns it spans, 1 a header's (Placed.cell) */
-export type CellPlace = readonly [row: number, col: number, span: number, head: 0 | 1]
+type CellPlace = readonly [row: number, col: number, span: number, head: 0 | 1]
 
 /** a cell's group in its table (groups.mjs groupOf): `h` the header's cells, `c<col>` a column's, `c<col>+<span>` the cells
  *  spanning the same columns */
-export const groupKey = (at: CellPlace): string => (at[3] ? 'h' : `c${at[1]}${at[2] > 1 ? `+${at[2]}` : ''}`)
+const groupKey = (at: CellPlace): string => (at[3] ? 'h' : `c${at[1]}${at[2] > 1 ? `+${at[2]}` : ''}`)
 
 /** a group of a table: its key, whether it is the header's, its cells (each its members' ords), in the tie's order */
 export type TableGroup = { key: string; head: boolean; cells: (readonly number[])[] }

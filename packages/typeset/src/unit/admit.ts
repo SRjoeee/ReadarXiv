@@ -50,8 +50,7 @@ const MACROS = new Set(['macro', 'umacro'])
 const JUDGED: Record<string, string> = { unlocated: 'unlocated', pieces: 'pieces', 'no row': 'noRow', lost: 'lost' }
 
 /** whether a row is translated, whole or in part (RUN:844) */
-export const translated = (u: V0Row | undefined): u is V0Row =>
-  !!u?.pieces && (u.state === 'whole' || u.state === 'partial')
+const translated = (u: V0Row | undefined): u is V0Row => !!u?.pieces && (u.state === 'whole' || u.state === 'partial')
 
 /** whether a row holds what v0 reads of a unit, of the types it reads them as (RUN:1173 shapely) */
 function shapely(u: V0Row): boolean {
@@ -88,7 +87,7 @@ export function refusalOf(i: Pick<AdmitInput, 'lu' | 'kind' | 'group'>, u: V0Row
 
 /** each of the row's pieces' source index, from the units file's pieces of the unit, which hold the row's one to one; null
  *  where they do not (TEX:35 kOfPieces) */
-export function kOfPieces(
+function kOfPieces(
   pieces: readonly V0Piece[],
   trPieces: readonly (readonly unknown[])[] | null | undefined,
 ): number[] | null {
@@ -109,7 +108,7 @@ export function kOfPieces(
 }
 
 /** whether the file locates the unit whole as the row has it (TEX:66 locatedWhole) */
-export function locatedWhole(
+function locatedWhole(
   lu: AdmitInput['lu'],
   pieces: readonly V0Piece[],
   trPieces: AdmitInput['pieces'],

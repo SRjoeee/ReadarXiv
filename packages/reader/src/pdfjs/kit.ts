@@ -16,14 +16,14 @@ import type * as Lib from 'pdfjs-dist'
 import type * as Viewer from 'pdfjs-dist/web/pdf_viewer.mjs'
 
 /** the documents a reader opens, each on a worker of its own: the left pane's original, the composed document */
-export type Role = 'original' | 'composed'
+type Role = 'original' | 'composed'
 
 export interface PdfModules {
   lib: typeof Lib
   viewer: typeof Viewer
 }
 
-export interface KitOptions {
+interface KitOptions {
   /** where the data files and the worker are served (a path or a URL ending in `/`); default `/pdfjs/<version>/` */
   base?: string
   /** the modules (the host's build may give its own: the website's legacy build, `@readarxiv/reader/pdfjs-legacy`); default

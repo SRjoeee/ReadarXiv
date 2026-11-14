@@ -10,9 +10,9 @@ import type { LaidLine } from '../fit/types.ts'
 import type { LineRun, TextRun } from './display.ts'
 
 /** the most work a member's links may spend, a count of point-against-box tests (links.mjs WORK_MAX); unmeasured */
-export const WORK_MAX = 2e7
+const WORK_MAX = 2e7
 /** how far a browser's advances may part from the layout's measure, a share of the distance from a run's start (DRIFT_BOUND) */
-export const DRIFT_BOUND = 0.06
+const DRIFT_BOUND = 0.06
 
 /** an annotation as the match reads it: its target, its glyph points under it (g2), its boxes, its text, its border; `at` its
  *  place in its member's annotations' order on A where the caller states it (lay/links.ts inReading: the PDF's annotation
@@ -257,7 +257,7 @@ function normed(chars: readonly string[], keep: RegExp) {
 
 /** a laid line with its runs (D.display's lineRuns): a run's items [index on the line, offset in its text], its text */
 type Run = TextRun
-export type RunLine = { line: LaidLine; runs: readonly LineRun[] }
+type RunLine = { line: LaidLine; runs: readonly LineRun[] }
 type Edge = (line: LaidLine, run: Run, at: number) => number
 type Band = (t: unknown, line: LaidLine) => { top: number; bottom: number }
 type D = { ch: string; li: number; run: Run; at: number; end: number; n: number }
@@ -269,7 +269,7 @@ type Tok = {
   ph?: unknown
   st?: { link?: unknown }
 }
-export type LinkRecord = {
+type LinkRecord = {
   boxes: number[]
   url?: string
   dest?: unknown

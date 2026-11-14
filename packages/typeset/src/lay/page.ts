@@ -44,7 +44,7 @@ export type UnitLay = {
   at?: FitState
   lines?: [page: number, baseline: number, size: number][]
 }
-export type PreparedPage = {
+type PreparedPage = {
   page: number
   members: PageMember[]
   passes: { page: number; target: FillTarget | null }[]
@@ -75,7 +75,7 @@ const pastBottom = (L: Layout, blocks: readonly FitBlock[]) =>
 /** a part's tie as the page lays it: a table group's members' ords (`cells`), or members laid at one size (`size`: one paragraph
  *  of TeX's the front end cut at a float, a run-in head and its paragraph; a figure's set is no tie the page lays, each of its
  *  texts at its own size: lay/entry.ts) */
-export type PageTie = CellTie | { rule: 'size'; ords: readonly number[] }
+type PageTie = CellTie | { rule: 'size'; ords: readonly number[] }
 /** a table group as the page settles it: its members' ords, and those of them whose box is the others' too (`spanning`: one
  *  the part's tie states spanning, or whose grid place spans columns), which hold the group where they cannot be drawn */
 export type CellTie = { rule: 'cells'; cells: readonly number[]; spanning?: readonly number[] }

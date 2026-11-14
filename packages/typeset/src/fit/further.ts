@@ -14,7 +14,7 @@ type Walk = (
   P: FitParams,
   failed?: FitParams | null,
 ) => Layout | null
-export type FurtherInput = {
+type FurtherInput = {
   /** the target's rules: its further steps, its floor and the floor's floor */
   rules: { further?: readonly string[]; floor: number; floorMin: number }
   tokens: readonly Token[]
@@ -28,7 +28,7 @@ export type FurtherInput = {
   /** a CJK cell's bands over the widened lines (U.params' cellBands), or null */
   clearOf: (blocks: FitBlock[]) => { cap: number } | null
 }
-export type Further = { layout: Layout; blocks: FitBlock[]; P?: FitParams; clear?: { cap: number } | null } | null
+type Further = { layout: Layout; blocks: FitBlock[]; P?: FitParams; clear?: { cap: number } | null } | null
 
 /** X.further (RUN:1796 fitFurther) */
 export function fitFurther(i: FurtherInput, layoutUnit2: Walk): Further {

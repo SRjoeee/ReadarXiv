@@ -14,7 +14,7 @@ import type { LaidLine, Layout } from '../fit/types.ts'
 
 /** the most items a page's layer holds, a count of text items (textlayer.mjs TEXT_ITEMS_MAX): past it a line's neighbours
  *  are merged (PDF-READER §11.11); a ruling, unmeasured */
-export const TEXT_ITEMS_MAX = 2000
+const TEXT_ITEMS_MAX = 2000
 /** a compact item's fields, a count of numbers an item: x, baseline, width, size, ascent, flags (textlayer.mjs F, the layout
  *  its itemsOf writes Compact.num in): the stride of the layout, no bound of work */
 const F = 6
@@ -25,7 +25,7 @@ const BLANK_END = /\s$/u,
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
 /** a page's items as itemsOf compacts them: their texts and, F a item, x, baseline, width, size, ascent, flags */
-export type Compact = { n: number; str: readonly string[]; num: ArrayLike<number> }
+type Compact = { n: number; str: readonly string[]; num: ArrayLike<number> }
 /** a text segment of a member's line, or a crop's: its source page and rectangle, its drawn box, its copy text */
 export type TextSeg =
   | { str: string; x: number; y: number; w: number; h: number; base: number; size: number; lx0?: number; lx1?: number }
@@ -155,7 +155,7 @@ export function nameSeg(text: string, x: number, w: number, base: number, size: 
 
 /** an item of the layer: its text, its box (x, y its left and bottom), its baseline, the size it is drawn at, where it comes
  *  from, the member that drew it, whether a copy breaks the line after it */
-export type TextItem = {
+type TextItem = {
   str: string
   x: number
   y: number

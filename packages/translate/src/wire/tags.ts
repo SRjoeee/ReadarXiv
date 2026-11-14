@@ -30,8 +30,8 @@ import {
   standInOf,
 } from './text.ts'
 
-export type TagSlot = { t: 'void'; out: OutPiece[]; own: boolean } | { t: 'pair'; id: string }
-export interface TagsPlan {
+type TagSlot = { t: 'void'; out: OutPiece[]; own: boolean } | { t: 'pair'; id: string }
+interface TagsPlan {
   /** what is sent: the wire with its boundary markers */
   wire: string
   slots: TagSlot[]
@@ -57,7 +57,7 @@ export interface TagsPlan {
  *  `</t>`; HTML's own inline element (TagSpelling 'html'), an open `<span id="1" …>` (the next three) and a close `</span>`:
  *  what a span is, an element holding its token or a group holding its words, its id says (the unit's slot), never its
  *  attributes (readTags) */
-export const TAG_RE =
+const TAG_RE =
   /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x\s*>)|<t\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*>|<\/t\s*>|<span\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))[^<>]*>|<\/span\s*>/g
 const SPAN_CLOSE = /<\/span\s*>/y
 
@@ -83,16 +83,16 @@ const SPAN_CLOSE = /<\/span\s*>/y
  * words read in their sentences (顺序, "m 个"); 3 of 122 units refused by the token contract (Google moved an element and
  * left its token as text: the next translator's)
  */
-export type TagSpelling = 'void' | 'html'
+type TagSpelling = 'void' | 'html'
 /** the token an element written as a word holds: its slot's number after an `x` */
-export const tokenOf = (n: number): string => `x${n}`
+const tokenOf = (n: number): string => `x${n}`
 const elementTag = (as: TagSpelling, n: number): string =>
   as === 'html' ? `<span id="${n}" translate="no">${tokenOf(n)}</span>` : `<x id="${n}"/>`
 const openTag = (as: TagSpelling, n: number): string => (as === 'html' ? `<span id="${n}">` : `<t id="${n}">`)
 const closeTag = (as: TagSpelling): string => (as === 'html' ? '</span>' : '</t>')
 /** a string of the tokens' form standing as a token would: `x` and digits, with no ASCII letter, digit or underscore right
  *  before it (inside a longer word or number it is none: `max1`, `0x1F`) and no digit right after it (`x12` holds no `x1`) */
-export const TOKEN_FORM = /(?<![A-Za-z0-9_])x[0-9]+(?![0-9])/g
+const TOKEN_FORM = /(?<![A-Za-z0-9_])x[0-9]+(?![0-9])/g
 /** a text of the wire as the reading keeps it: its entities read (a character reference is one character), its invisible
  *  code points out */
 const keptOf = (s: string): string => decode(s).replace(INVISIBLE, '')

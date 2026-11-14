@@ -33,15 +33,15 @@ export const STALL_MS = 10_000
 export const RANGE_TRIES = 2
 /** the pause before a read the network failed at once is asked again, ms, doubled at each failure, to RETRY_MAX_MS;
  *  unmeasured */
-export const RETRY_MS = 1_000
+const RETRY_MS = 1_000
 /** the longest that pause, ms; unmeasured */
-export const RETRY_MAX_MS = 30_000
+const RETRY_MAX_MS = 30_000
 
 /** why a source is refused: no such object at its address (`missing`: a 404 or a 410 before any byte of it was read, the
  *  paper not there; one after is the network's), its answers not the object (`bytes`), a chunk not the one the head names,
  *  or before the head not the one first read (`digest`), the network failing its reads (`network`), or the source let go by
  *  its owner (`gone`: never told) */
-export type RefusalKind = 'missing' | 'bytes' | 'digest' | 'network' | 'gone'
+type RefusalKind = 'missing' | 'bytes' | 'digest' | 'network' | 'gone'
 export class RangeRefusal extends Error {
   readonly kind: RefusalKind
   readonly why: string
@@ -61,7 +61,7 @@ export interface Bound {
 }
 
 /** the browser's word on being online, and a wait for it (the reader's Env; the document's by default) */
-export interface Online {
+interface Online {
   now(): boolean
   /** resolves once the browser says it is online, or `signal` aborts */
   wait(signal: AbortSignal): Promise<void>
@@ -74,7 +74,7 @@ export const realTimers: Timers = {
   later: (f, ms) => setTimeout(f, ms),
   clear: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
 }
-export const browserOnline: Online = {
+const browserOnline: Online = {
   now: () => (globalThis as { navigator?: { onLine?: boolean } }).navigator?.onLine !== false,
   wait: (signal) =>
     new Promise<void>((resolve) => {
@@ -95,7 +95,7 @@ export const browserOnline: Online = {
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>
 
-export interface SourceOptions {
+interface SourceOptions {
   /** the host's fetch: the reader's only network */
   fetch: Fetch
   /** the object's address: a path on our server (`own`) or arXiv's absolute URL */

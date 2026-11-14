@@ -139,7 +139,7 @@ function aheadOf(s: State): boolean {
   )
 }
 /** what the view shown has of the translation, and whether it waits for more (PDF-READER §6.6, §8) */
-export interface ViewRows {
+interface ViewRows {
   /** some unit of the layer shown has no translation held while a run that may bring it is under way */
   waits: boolean
   /** the units of the layer shown translated under the toggles (`total`), those of them with a translation held (`got`) and those

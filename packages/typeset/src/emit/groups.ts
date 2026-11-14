@@ -50,7 +50,7 @@ const displayBlockId = (unit: number, j: number) =>
     ? DISPLAY_ID_FROM + unit * DISPLAYS_UNIT + j
     : null
 /** each display's hover id, by piece, in the piece order (units.mjs displayIdsOf) */
-export function displayIdsOf(unit: number, ks: readonly number[]): Map<number, number> {
+function displayIdsOf(unit: number, ks: readonly number[]): Map<number, number> {
   const out = new Map<number, number>()
   ;[...new Set(ks)]
     .sort((a, b) => a - b)

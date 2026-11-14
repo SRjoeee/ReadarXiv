@@ -82,7 +82,7 @@ export type AdaptInput = {
   /** the line of TeX's it shares whole with the members beside it, set centred, flush right or flush left (rowLinesOf) */
   line?: Omit<RowLine, 'left' | 'right'>
 }
-export type Adapted = { member: FlowMember } | { stop: string }
+type Adapted = { member: FlowMember } | { stop: string }
 
 /** today's rectangle of a line (tex.mjs texRects, TEX:269-286): across its ink, and up and down a band of its size from its
  *  baseline, BELOW under it and ABOVE over it, to a hundredth (the line's top and bottom, its fonts' boxes, are its `exact`

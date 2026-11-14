@@ -52,7 +52,7 @@ export type DecorBlock = Block & {
   shortSkips?: ShortSkip[]
 }
 
-export type DecorBeforeInput = {
+type DecorBeforeInput = {
   kind: string
   byCell: boolean | null | undefined
   luCentred: boolean | undefined
@@ -63,7 +63,7 @@ export type DecorBeforeInput = {
   rects: readonly Rect[]
 }
 /** before the blocks are read: how the unit is centred, whether its label goes with its text, and its rectangles then */
-export type DecorBefore = { centredFlag: boolean | undefined; labelHides: boolean; rects: Rect[] }
+type DecorBefore = { centredFlag: boolean | undefined; labelHides: boolean; rects: Rect[] }
 
 /** U.decor before U.blocks (RUN:2101-2109) */
 export function decorBefore(i: DecorBeforeInput): DecorBefore {
@@ -109,7 +109,7 @@ export function widen(b: DecorBlock, side: Side | undefined): void {
 }
 
 /** each block's displays TeX set with its short skip under one of its own lines (L2:3048 shortSkipsTo) */
-export function shortSkipsTo(
+function shortSkipsTo(
   blocks: DecorBlock[],
   skips: readonly ShortSkip[],
   lineInfo: ReadonlyMap<string, { j?: number }> | null,
@@ -126,7 +126,7 @@ export function shortSkipsTo(
 /** how many of the original's baselines a block stands on (L2:4316 originalLines) */
 export const originalLines = (b: Pick<Block, 'B'>): number => new Set(b.B.map((v) => Math.round(v * 100))).size
 
-export type DecorAfterInput = {
+type DecorAfterInput = {
   kind: string
   title: boolean
   front: boolean
@@ -146,7 +146,7 @@ export type DecorAfterInput = {
   shortSkips: readonly ShortSkip[]
   lineInfo: ReadonlyMap<string, { j?: number }> | null
 }
-export type DecorAfter = { carried: boolean; heading: boolean; numbered: boolean; indented: boolean }
+type DecorAfter = { carried: boolean; heading: boolean; numbered: boolean; indented: boolean }
 
 /** U.decor after U.blocks: each block's decorations set on it, in today's order (RUN:2112-2137) */
 export function decorAfter(blocks: DecorBlock[], i: DecorAfterInput): DecorAfter {
@@ -193,7 +193,7 @@ export function decorAfter(blocks: DecorBlock[], i: DecorAfterInput): DecorAfter
 }
 
 /** a crop token as the breaker sets it before the unit's first line */
-export type LabelCrop = {
+type LabelCrop = {
   crop: { mode: 'crop'; page: number; crop: [number, number, number, number]; baseline: number; text: string }
   cw: number
   glue: false

@@ -46,7 +46,7 @@ export interface ParaLine {
   leaders: ReadonlySet<number>
 }
 
-export interface Para {
+interface Para {
   /** its lines (indices into the lines given), top to bottom */
   lines: number[]
   /** each join's evidence, line k to k + 1: TeX's hyphen dropped, a word's hyphen kept, a justified line */

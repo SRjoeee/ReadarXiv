@@ -23,7 +23,7 @@ export type MarksTrace = {
 }
 
 /** the kind a mark no line may start with is, across scripts (L2:2363 markKind) */
-export function markKind(ch: string): string {
+function markKind(ch: string): string {
   if (/^[.\u3002\uff0e\uff61]$/u.test(ch)) return 'stop'
   if (/^[,\u3001\uff0c\uff64]$/u.test(ch)) return 'comma'
   if (/^[;\uff1b]$/u.test(ch)) return 'semi'

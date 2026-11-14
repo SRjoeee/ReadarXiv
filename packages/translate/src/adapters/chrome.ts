@@ -19,12 +19,12 @@ export interface ChromeApi {
   create(options: { sourceLanguage: string; targetLanguage: string; signal?: Signal }): Promise<ChromeSession>
 }
 
-export const CHROME_LIMITS: Limits = { chars: 4_000, units: 20, inFlight: 1, callMs: 60_000, reask: 0 }
+const CHROME_LIMITS: Limits = { chars: 4_000, units: 20, inFlight: 1, callMs: 60_000, reask: 0 }
 /** availability's bound, ms: every probe has a deadline, as `availability()` may never answer (DESIGN §8.5, the probes'
  *  2 s); a ruling, unmeasured */
-export const CHROME_PROBE_MS = 2_000
+const CHROME_PROBE_MS = 2_000
 /** a session's making's bound, ms: past the 8.6 s measured for a `create()` with the model ready (DESIGN §8.4) */
-export const CHROME_CREATE_MS = 60_000
+const CHROME_CREATE_MS = 60_000
 export const CHROME_DIGEST = '79e54de8712c9e7c7a7972821341b7b0c5b5b2de235e422451633971290ec527'
 
 /** a target as the API names it: its Chinese by script, bare for the simplified */
