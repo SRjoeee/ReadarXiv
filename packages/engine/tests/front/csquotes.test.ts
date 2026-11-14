@@ -59,3 +59,25 @@ describe("csquotes' quotation marks under babel's English names, as TeX sets the
     expect(textOf(babel('ukenglish'))).toBe(BRITISH)
   })
 })
+
+// babel's main language: the one `main=` names, wherever it stands among the options, else the last language option. babel.sty
+// (v26.3, the same image) stores each key=value option as \bbl@opt@<key> (lines 401, 405-410), appends \bbl@opt@main to the
+// languages it loads (lines 4238-4240) and takes it out of the list before it (lines 4260-4273): the main language is loaded
+// last. Each expectation the image's, compiled as above. A main language that is no English name (german: TeX sets „outer ‚inner‘
+// words“) is one the reader does not state the marks of, as for any language not English: the \enquote call one placeholder
+const UNKNOWN = 'AA [ph] BB'
+describe("csquotes' quotation marks under babel's main language, `main=` wherever it stands", () => {
+  for (const [opts, want] of [
+    ['main=british,german', BRITISH],
+    ['german,main=british', BRITISH],
+    ['main=british', BRITISH],
+    ['english,main=ukenglish', BRITISH],
+    ['main=german,british', UNKNOWN],
+    ['british,main=german', UNKNOWN],
+    ['british,provide=*', BRITISH],
+    ['german', UNKNOWN],
+  ] as const)
+    it(`[${opts}]{babel}: ${want === UNKNOWN ? 'a main language not English, the call one placeholder' : 'the British variant'}`, () => {
+      expect(textOf(babel(opts))).toBe(want)
+    })
+})
