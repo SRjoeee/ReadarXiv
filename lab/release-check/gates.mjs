@@ -967,6 +967,22 @@ export const GATES = [
       { cmd: ['node', '--import', 'tsx', 'lab/marks/babel-names.mjs', ...Object.keys(COMPILE_PINS.images).map(year => join(ctx.work, 'babel-names', year))] },
     ],
   },
+  {
+    id: 'csquotes-styles',
+    title: "the source reader's table of csquotes' English style (packages/engine/src/source/latex-front.ts CSQUOTES_ENGLISH, CSQUOTES_NAMES, CSQUOTES_DEFAULT) against csquotes' own file in each pinned compile image's TeX Live (lab/pdf/compile-images.json): each variant's marks csquotes.def's \\DeclareQuoteStyle[…]{english} as tuenc.def reads its commands, every name it gives a variant and no other (lab/source/csquotes-styles.mjs)",
+    tier: 'release',
+    stage: 'pipeline',
+    holds: [],
+    needs: () => [exists('docker', which('docker'))],
+    steps: ctx => [
+      ...Object.entries(COMPILE_PINS.images).map(([year, pin]) => ({
+        cmd: ['docker', 'run', '--rm', '--pull', 'never', '--network', 'none', '-v', `${join(ctx.work, 'csquotes-styles', year)}:/out`, pin.texlive, 'sh', '-c', 'cp "$(kpsewhich csquotes.def)" "$(kpsewhich tuenc.def)" /out/'],
+        slot: 'docker',
+        fresh: join(ctx.work, 'csquotes-styles', year),
+      })),
+      { cmd: ['node', '--import', 'tsx', 'lab/source/csquotes-styles.mjs', ...Object.keys(COMPILE_PINS.images).map(year => join(ctx.work, 'csquotes-styles', year))] },
+    ],
+  },
   // ---------------------------------------------------------------- the private repository's (named, never run here)
   { id: 'private-platform', title: "the private repository's platform tier: the Worker, the paper's object and the Workflows under workerd, the routes' contract suite, the persisted contracts", tier: 'full', stage: 'platform', holds: [], private: true },
   { id: 'private-box', title: "the private repository's box tier: the security suite on native amd64", tier: 'release', stage: 'box', holds: ['I9'], private: true },

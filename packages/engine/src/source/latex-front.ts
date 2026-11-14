@@ -5905,7 +5905,8 @@ export const CSQUOTES_ENGLISH: Readonly<Record<QuoteVariant, readonly (readonly 
 })
 /** the names csquotes.def gives a variant of its English style, the variant each selects: its aliases of the style
  *  (\DeclareQuoteAlias[<variant>]{english}{<name>}) and its babel aliases of those (\DeclareQuoteAlias{<variant>}{<name>}), but
- *  `default`, no language's name (CSQUOTES_DEFAULT). Held to csquotes.def as CSQUOTES_ENGLISH is */
+ *  `default` (CSQUOTES_DEFAULT) and its style paths (`latin/britishquotes`), no language's names. Held to csquotes.def as
+ *  CSQUOTES_ENGLISH is */
 export const CSQUOTES_NAMES: Readonly<Record<string, QuoteVariant>> = Object.freeze({
   american: 'american',
   canadian: 'american',
