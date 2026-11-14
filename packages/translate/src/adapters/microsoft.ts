@@ -30,7 +30,7 @@ import {
 import { SENTINEL } from '../wire/text.ts'
 import { faultOfReply, faultOfThrow, readJson } from './http.ts'
 
-export const MICROSOFT_ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
+const MICROSOFT_ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
 /** the raw reply's shape, part of the identity: `{ text, src?, tr? }`, the item's text and its sentence lengths */
 const RAW = 'raw/1'
 
@@ -60,7 +60,7 @@ const microsoftTarget = (target: Lang): string => REWRITE[target] ?? target
 /** whether the endpoint serves a target, synchronously (a host's settings say it before any call) */
 export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(microsoftTarget(target))
 
-export const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs: 10_000, reask: 0 }
+const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs: 10_000, reask: 0 }
 /** the plain-text words of its 400 for a request over its cap of 50,000 characters in all (measured 2026-09-08, DESIGN §8.3):
  *  the one 400 of it a smaller request mends */
 const OVER_CAP = /exceeds the maximum allowed translation size/i

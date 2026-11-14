@@ -57,7 +57,7 @@ interface TagsPlan {
  *  `</t>`; HTML's own inline element (TagSpelling 'html'), an open `<span id="1" …>` (the next three) and a close `</span>`:
  *  what a span is, an element holding its token or a group holding its words, its id says (the unit's slot), never its
  *  attributes (readTags) */
-export const TAG_RE =
+const TAG_RE =
   /<x\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*(?:\/>|>\s*<\/x\s*>)|<t\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))\s*>|<\/t\s*>|<span\s+id\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))[^<>]*>|<\/span\s*>/g
 const SPAN_CLOSE = /<\/span\s*>/y
 
@@ -92,7 +92,7 @@ const openTag = (as: TagSpelling, n: number): string => (as === 'html' ? `<span 
 const closeTag = (as: TagSpelling): string => (as === 'html' ? '</span>' : '</t>')
 /** a string of the tokens' form standing as a token would: `x` and digits, with no ASCII letter, digit or underscore right
  *  before it (inside a longer word or number it is none: `max1`, `0x1F`) and no digit right after it (`x12` holds no `x1`) */
-export const TOKEN_FORM = /(?<![A-Za-z0-9_])x[0-9]+(?![0-9])/g
+const TOKEN_FORM = /(?<![A-Za-z0-9_])x[0-9]+(?![0-9])/g
 /** a text of the wire as the reading keeps it: its entities read (a character reference is one character), its invisible
  *  code points out */
 const keptOf = (s: string): string => decode(s).replace(INVISIBLE, '')

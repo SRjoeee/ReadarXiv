@@ -19,14 +19,14 @@ import { sha256Hex } from '../sha256.ts'
 import { planTags, readTags } from '../wire/tags.ts'
 import { faultOfReply, faultOfThrow, readJson } from './http.ts'
 
-export const GOOGLE_ENDPOINT = 'https://translate-pa.googleapis.com/v1/translateHtml'
+const GOOGLE_ENDPOINT = 'https://translate-pa.googleapis.com/v1/translateHtml'
 const PUBLIC_KEY = 'AIzaSyATBXajvzQLTDHEQbcpq0Ihe0vWDHmO520'
 const CLIENT = 'wt_lib'
 /** a target as the endpoint is asked it: its Chinese by region, its Serbian and Mongolian by language */
 const REWRITE: Record<string, string> = { 'zh-Hans': 'zh-CN', 'zh-Hant': 'zh-TW', 'sr-Cyrl': 'sr', 'mn-Cyrl': 'mn' }
 const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
-export const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
+const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */
 export const GOOGLE_DIGEST = '71174d968ad1e19995131cab181eb89a4d3063832d5cd35ffcb12fc51d3bbb10'
 
