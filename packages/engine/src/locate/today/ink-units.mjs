@@ -77,7 +77,7 @@
 //      (its region, pageInk's `regions`) is one block whatever its lines' places, its number with it (CHANGED).
 // Pure arithmetic; an original module (no port statement).
 import { unitClass } from './content-classes.mjs'
-import { accentTexts } from './accents.mjs'
+import { accentTexts } from '../accents.ts'
 import { ADDRESS_GROUP, classifyFont, classOf, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
