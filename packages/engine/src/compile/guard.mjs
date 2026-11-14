@@ -14,7 +14,7 @@ import { whyText } from '../instrument/format.ts'
 import { isMemoryError } from '../memory.ts'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.ts'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
-import { END_TEX } from './tex.mjs'
+import { END_TEX } from './tex.ts'
 import { duplicatesIn } from '../marks/marks.mjs'
 
 const isLetter = c => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 64

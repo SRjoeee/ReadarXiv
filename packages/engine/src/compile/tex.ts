@@ -18,16 +18,25 @@ export const END_TEX = String.raw`\ifdefined\AddToHook\ifdefined\axtendhook\else
  *  the text starts at a column's top whatever came before (the typesetting rule's reading; nothing reads it now, and it stays
  *  so that the marked compile's TeX, and every cache keyed by it, stays as it was). And once the last page is out, AXT-END
  *  (END_TEX): the readings are the whole paper's (completeLog) */
-export const LINES_TEX = PARA_END_TEX + String.raw`\makeatletter
+export const LINES_TEX =
+  PARA_END_TEX +
+  String.raw`\makeatletter
 \def\axt@linescap#1{\expandafter\xdef\csname axt@lg@#1\endcsname{\the\prevgraf\space\the\baselineskip\space\f@size\space\the\parskip}}
 \def\axt@linesmsg#1{\message{^^JAXT-LINES #1 \csname axt@lg@#1\endcsname^^J}}
 \protected\def\axtlines#1{\ifhmode\ifinner\else\axt@lines{#1}\fi\else\axt@lines{#1}\fi}
 \def\axt@lines#1{\ifdefined\AddToHookNext\axt@whenover{lines#1}{\axt@linescap{#1}}{}{\axt@linesmsg{#1}}\fi}
 \AtBeginDocument{\let\axt@forcedcol\@makecol\def\@makecol{\ifnum\outputpenalty=-\@M\message{^^JAXT-FORCED^^J}\fi\axt@forcedcol}}
 \makeatother
-` + END_TEX
+` +
+  END_TEX
 /** whether a compile's last pass reached the document's end (END_TEX's AXT-END): a compile that stopped short gives a
  *  PDF of what it set and line readings for part of the paper, which the prepare takes for a failure (live.mjs ranThrough) */
-export const completeLog = log => /^AXT-END$/m.test(lastTexLog(log))
+export const completeLog = (log: string | null | undefined): boolean => /^AXT-END$/m.test(lastTexLog(log))
 /** each unit's lines, leading (pt) and size (pt) at its paragraph's end (LINES_TEX), by unit index */
-export const readLines = log => new Map([...lastTexLog(log).matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map(m => [Number(m[1]), { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) }]))
+export const readLines = (log: string | null | undefined): Map<number, { lines: number; bs: number; size?: number }> =>
+  new Map(
+    [...lastTexLog(log).matchAll(/^AXT-LINES (\d+) (\d+) ([\d.]+)pt(?: ([\d.]+))?/gm)].map((m) => [
+      Number(m[1]),
+      { lines: Number(m[2]), bs: Number(m[3]), ...(m[4] ? { size: Number(m[4]) } : {}) },
+    ]),
+  )

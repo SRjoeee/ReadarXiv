@@ -20,7 +20,7 @@
     "./today/own/stream.ts": "./src/own/stream.ts",
     "./today/own/own.mjs": "./src/own/own.mjs",
     "./today/instrument/mt.ts": "./src/instrument/mt.ts",
-    "./today/compile/tex.mjs": "./src/compile/tex.mjs",
+    "./today/compile/tex.ts": "./src/compile/tex.ts",
     "./today/compile/tex-errors.mjs": "./src/compile/tex-errors.mjs",
     "./today/compile/base.ts": "./src/compile/base.ts",
     "./today/compile/pdf-lite.ts": "./src/compile/pdf-lite.ts",
