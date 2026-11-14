@@ -101,7 +101,8 @@ const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }
   // (colour.ts credited by its row in docs/THIRD_PARTY.md, which the website's licence gate reads, tests/vite-licence-gate.test.ts;
   // names.ts held in its reader's bundle, web/tests/layer-imports.test.ts; both at e0ae76dd, named `.mjs` there until its next pin)
   { path: 'packages/engine/src/marks/colour.ts', names: [] },
-  { path: 'packages/engine/src/marks/marks.mjs', names: [] },
+  // (marks.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  { path: 'packages/engine/src/marks/marks.ts', names: [] },
   { path: 'packages/engine/src/marks/names.ts', names: [] },
   { path: 'packages/engine/src/plan.ts', names: [] },
   { path: 'packages/engine/src/prepare.ts', names: [] },

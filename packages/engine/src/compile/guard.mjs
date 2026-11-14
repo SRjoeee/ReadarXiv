@@ -15,7 +15,7 @@ import { isMemoryError } from '../memory.ts'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.ts'
 import { texErrors, unitsAtErrors } from './tex-errors.ts'
 import { END_TEX } from './tex.ts'
-import { duplicatesIn } from '../marks/marks.mjs'
+import { duplicatesIn } from '../marks/marks.ts'
 
 const isLetter = c => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 64
 /** the environments TeX reads verbatim, whose braces are no group: their text is the paper's either way, skipped alike */

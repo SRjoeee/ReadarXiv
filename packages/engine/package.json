@@ -16,7 +16,7 @@
     "./today/source/text-symbols.ts": "./src/source/text-symbols.ts",
     "./today/source/text-piece.ts": "./src/source/text-piece.ts",
     "./today/marks/names.ts": "./src/marks/names.ts",
-    "./today/marks/marks.mjs": "./src/marks/marks.mjs",
+    "./today/marks/marks.ts": "./src/marks/marks.ts",
     "./today/own/stream.ts": "./src/own/stream.ts",
     "./today/own/own.mjs": "./src/own/own.mjs",
     "./today/instrument/mt.ts": "./src/instrument/mt.ts",

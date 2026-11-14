@@ -28,7 +28,7 @@ import { bundleUnitsOf } from '../instrument/units.ts'
 import { isMemoryError } from '../memory.ts'
 import { auxUnits, contextUnits, copiesOutOfPlace, cutCopyUnits, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, markTextOf } from './base.ts'
-import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from '../marks/marks.mjs'
+import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from '../marks/marks.ts'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2

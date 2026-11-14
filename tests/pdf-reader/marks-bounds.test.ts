@@ -14,13 +14,12 @@
 // every opening mark the marked units hold and of every other name, and each unit's head.
 import { describe, expect, it } from 'vitest'
 import { completeMacros, inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
-// @ts-expect-error: the module is JavaScript until its typing commit (no declaration in the package)
-import * as NOW from '../../packages/engine/src/marks/marks.mjs'
+import * as NOW from '../../packages/engine/src/marks/marks.ts'
 import * as BEFORE from './helpers/marks-before.mjs'
 
-type Module = typeof BEFORE
-type Unit = Parameters<Module['layoutMarking']>[0][number]
-const now = NOW as Module
+type Unit = Parameters<typeof NOW.layoutMarking>[0][number]
+type Options = NonNullable<Parameters<typeof NOW.layoutMarking>[2]>
+const now = NOW
 
 /** a seeded generator (mulberry32) */
 function seeded(seed: number) {
@@ -97,8 +96,8 @@ function unitsOf(main: string, r: Seeded | null, tables: boolean): { units: Unit
   const files = new Map([['main.tex', new TextEncoder().encode(main)]])
   const p = outcome(() => loadProject(inMemory(files), 'main.tex', { tables }))
   if (!('value' in p)) return null
-  const units = p.value.units as unknown as Unit[]
-  if (r) for (const u of units) if (r.next() < 0.4) u.pieces = u.pieces.flatMap((q) => (r.next() < 0.3 ? [q, { t: 'text', s: '' }] : [q]))
+  const units: Unit[] = p.value.units
+  if (r) for (const u of units) if (r.next() < 0.4) u.pieces = u.pieces.flatMap((q): Unit['pieces'] => (r.next() < 0.3 ? [q, { t: 'text', s: '' }] : [q]))
   return { units, text: main }
 }
 
@@ -114,10 +113,11 @@ function switchesOf(r: Seeded, units: readonly Unit[]): Record<string, string> |
 }
 
 /** the marking's options, seeded: answers, macros of no ink, complete macros (pairs, a map or the marks file's object), apart */
-function optionsOf(r: Seeded, units: readonly Unit[], text: string): Record<string, unknown> {
+const OWN: readonly (readonly [string, number])[] = [['model', 0], ['fmt', 2], ['sys', 0], ['snr', 0]]
+function optionsOf(r: Seeded, units: readonly Unit[], text: string): Options {
   const ink = BEFORE.inkSamples(units)
   const pairs = completeMacros([{ file: 'main.tex', text }])
-  const complete = r.pick([null, pairs, new Map(pairs), BEFORE.completeCalled(units, pairs), [['model', 0], ['fmt', 2], ['sys', 0], ['snr', 0]]])
+  const complete = r.pick<Options['complete']>([null, pairs, new Map(pairs), BEFORE.completeCalled(units, pairs), OWN])
   return {
     lines: r.next() < 0.5,
     switches: switchesOf(r, units),
@@ -130,7 +130,7 @@ function optionsOf(r: Seeded, units: readonly Unit[], text: string): Record<stri
 const MARK_NAME = /\\axt(?:pma|pmm|pm|hpk|tg|hmark|brname|colour)\{([^{}]*)\}/g
 
 /** both modules on one project's units under one set of options: the marking, the marks, what is said of each opening mark */
-function same(units: readonly Unit[], classes: readonly string[], o: Record<string, unknown>, r: Seeded, label: string) {
+function same(units: readonly Unit[], classes: Parameters<typeof NOW.layoutMarking>[1], o: Options, r: Seeded, label: string) {
   const a = outcome(() => now.layoutMarking(units, classes, o))
   const b = outcome(() => BEFORE.layoutMarking(units, classes, o))
   if (!('value' in a) || !('value' in b)) {
@@ -142,10 +142,10 @@ function same(units: readonly Unit[], classes: readonly string[], o: Record<stri
   expect(a.value.units.map((u) => a.value.mark(u)), label).toEqual(b.value.units.map((u) => b.value.mark(u)))
   // (the destinations set: the marked units' marks, some dropped as a log's duplicates would have them)
   const names = new Set<string>()
-  for (const u of a.value.units) for (const p of u.pieces as { t?: string; src?: string }[]) if (p.t === 'ph') for (const m of (p.src ?? '').matchAll(MARK_NAME)) if (r.next() < 0.85) names.add(m[1] as string)
+  for (const u of a.value.units) for (const p of u.pieces) if (p.t === 'ph') for (const m of p.src.matchAll(MARK_NAME)) if (m[1] !== undefined && r.next() < 0.85) names.add(m[1])
   const ink = BEFORE.inkSamples(units)
-  const pairs = ink.flatMap((s) => (r.next() < 0.6 ? [s, r.pick(['BERT', '', '1,024', 'x', 'ab cd', '.', 'Transformer'])] : []))
-  const texts = r.pick([null, pairs, new Map(Array.from({ length: pairs.length / 2 }, (_, j) => [pairs[2 * j], pairs[2 * j + 1]]))])
+  const said = ink.flatMap((s): [string, string][] => (r.next() < 0.6 ? [[s, r.pick(['BERT', '', '1,024', 'x', 'ab cd', '.', 'Transformer'])]] : []))
+  const texts = r.pick<readonly string[] | ReadonlyMap<string, string> | null>([null, said.flat(), new Map(said)])
   const inkless = r.next() < 0.5 ? ink.filter(() => r.next() < 0.3) : null
   const fa = now.followsOf(units, names, texts, inkless), fb = BEFORE.followsOf(units, names, texts, inkless)
   const ha = now.headsOf(units, names), hb = BEFORE.headsOf(units, names)

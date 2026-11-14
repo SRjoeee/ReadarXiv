@@ -149,7 +149,7 @@ it serves, where each object goes.
    before the back half begins. Its stored half, `compiledOf` (`packages/engine/src/compiled.ts`), opens the paper with the
    source reader (`packages/engine/src/source/latex-front.ts`), makes the bibliography where TeX must, hands the source's units
    out as `Units` objects, then runs the marked compile with its final pass (`markedOfPaper`,
-   `packages/engine/src/compile/paper.mjs`: the probe, the marks of `packages/engine/src/marks/marks.mjs`, the guard of
+   `packages/engine/src/compile/paper.mjs`: the probe, the marks of `packages/engine/src/marks/marks.ts`, the guard of
    `packages/engine/src/compile/guard.mjs`), or reads a stored instrument back where A's facts are the ones it was made for.
    What is stored of a compile is `plan.ts`'s (`storedInstrumentOf`). `instrumentOf`
    (`packages/engine/src/instrument/instrument.mjs`) then states the instrument over B.
