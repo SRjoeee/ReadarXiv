@@ -92,6 +92,50 @@ describe('a production build fails check-output when', () => {
   })
 })
 
+// The style sheets are made from the product's own files: Tailwind's scan once read a test (`.top-1`, `.m-2`), a document
+// and a model's bytes (`.z-8`) into the popup's and the settings page's sheet (src/styles/ui.css names its sources)
+describe('a build\'s style sheets', () => {
+  const OWN = `${OUT} holds no class that no product file names`
+  it('hold the classes the product\'s files name and no class that only a test, a document or a lab file does', () => {
+    put('src/entrypoints/popup/App.tsx', 'export const App = () => <div className="flex hover:bg-sky-500 w-1/2 py-1.5 [axt:layer]" />\n')
+    put('packages/ui/src/controls.css', '.axt-menu { color: red }\n')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.hover\\:bg-sky-500:hover{color:blue}.w-1\\/2{width:50%}.py-1\\.5{padding:6px}.\\[axt\\:layer\\]{axt:layer}.axt-menu{color:red}\n')
+    expect(verdict(OWN)).toBe('✓')
+    // named only by a test, a document, a lab file: the seeded class arrives in the sheet, and the check names it
+    put('tests/options/form.test.ts', "expect(top).toBe('top-9')\n")
+    put('docs/DESIGN.md', 'the table header says select-all and top-5\n')
+    put('lab/probe.mjs', '// m-7\n')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.top-9{top:2px}.select-all{user-select:all}.top-5{top:1px}.m-7{margin:1px}\n')
+    expect(verdict(OWN)).toBe('✗')
+    for (const only of ['.top-9{top:2px}', '.select-all{user-select:all}', '.top-5{top:1px}', '.m-7{margin:1px}']) {
+      put(`${OUT}/assets/popup.css`, `.flex{display:flex}${only}\n`)
+      expect(verdict(OWN), only).toBe('✗')
+    }
+    // a word a product style sheet holds as a property's value names no class: Tailwind reads no sheet of ours, so the
+    // class came from elsewhere (`.flex-wrap` from a vendored arXiv sheet in a test fixture)
+    put('src/entrypoints/options/ui/settings.css', '.o-row { display: flex; flex-wrap: wrap; }\n')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.flex-wrap{flex-wrap:wrap}.o-row{display:flex}\n')
+    expect(verdict(OWN)).toBe('✗')
+    put(`${OUT}/assets/popup.css`, '.flex{display:flex}.o-row{display:flex}\n')
+    expect(verdict(OWN)).toBe('✓')
+    // a word inside a longer class name is no naming of the class
+    put('src/entrypoints/popup/App.tsx', 'export const App = () => <div className="top-10" />\n')
+    put(`${OUT}/assets/popup.css`, '.top-1{top:1px}\n')
+    expect(verdict(OWN)).toBe('✗')
+  })
+  it('may carry the classes of PDF.js\'s own sheet, which no file of ours names', () => {
+    put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer{position:absolute}\n')
+    put(`${OUT}/assets/pdf-reader.css`, '.annotationLayer{position:absolute}.annotationLayer .popupAnnotation{color:red}\n')
+    expect(verdict(OWN)).toBe('✗')
+    put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer .popupAnnotation{position:absolute}\n')
+    expect(verdict(OWN)).toBe('✓')
+  })
+  it('read no dot of a string, a comment or an address as a class', () => {
+    put(`${OUT}/assets/popup.css`, '/* .none */ a{background:url(data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg"/>) 0.5px; content:".quote"}b{margin:0.5rem;background:url("x.svg")}\n')
+    expect(verdict(OWN)).toBe('✓')
+  })
+})
+
 // The reader is the reading view on the layer (Stage 5 Tasks 9 and 17): its places' code in a chunk; no TeX page, nothing of the
 // LaTeX front end; the host permissions exactly the release's, staging's only in a staging build, and no staging host named
 // anywhere in a production one; the web-accessible resources and the offscreen document as they were
