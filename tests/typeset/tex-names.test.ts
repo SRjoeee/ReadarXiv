@@ -6,12 +6,15 @@
 // Tied, for every language the package holds: HEADS[tag] is tex-names.json's targets[tag].heads; REFS.types, .conjunctions
 // and .singular are its types, conjunctions and singular; REFS.targets[tag] is its targets[tag].refs and .conj. The package
 // adds no field of its own. The file's other fields (note, licence, image, files, gaps, conjunctionGaps) are the engine's:
-// the typesetter takes none of them.
+// the typesetter takes none of them. And the commands whose names U.rename puts in the target (unit/rename.ts
+// GENERATED_COMMANDS) are the ones the source reader reads (packages/engine/src/source/tex-names.ts GENERATED_COMMANDS).
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HEADS } from '../../packages/typeset/src/data/rules/heads.ts'
 import { REFS } from '../../packages/typeset/src/data/rules/refs.ts'
+import { GENERATED_COMMANDS } from '../../packages/typeset/src/unit/rename.ts'
+import { GENERATED_COMMANDS as SOURCE_COMMANDS } from '../../packages/engine/src/source/tex-names.ts'
 
 type Names = {
   types: Record<string, string>
@@ -42,5 +45,11 @@ describe("the typesetter's head and reference names are the engine's tex-names.j
       expect(Object.keys(t).sort()).toEqual(['conj', 'refs'])
       expect(t).toEqual({ refs: n.targets[tag]!.refs, conj: n.targets[tag]!.conj })
     }
+  })
+})
+
+describe("the typesetter's generated reference commands are the source reader's", () => {
+  it("lists cleveref's and hyperref's commands as packages/engine/src/source/tex-names.ts does, in its order", () => {
+    expect([...GENERATED_COMMANDS]).toEqual([...SOURCE_COMMANDS])
   })
 })
