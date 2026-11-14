@@ -14,7 +14,7 @@
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
 import { BACKREF_LIST, calledAt, frontMarks, identifierSource, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
-import { textless } from '../source/arg-roles.mjs'
+import { textless } from '../source/arg-roles.ts'
 import { symbolText } from '../source/text-symbols.ts'
 import { INK_FREE_LEAD, prefixWord } from '../source/tex-kernel.ts'
 import { DISPLAY, plainTranslated } from '../instrument/mt.mjs'
