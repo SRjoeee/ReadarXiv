@@ -1330,7 +1330,7 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   cell's own unit shares the line. Before, two units wrote none: the lay had no line of several members then, and each,
  *   given the class, would have been set on its own middle.
  *   Assignments, \aftergroup and \message: no node
- * - **The cell's end** (docs/PDF-READER.md §18.73, the coordinator's ruling of 2026-11-15). An element's ink is what TeX set
+ * - **The cell's end** (docs/PDF-READER.md §18.74, the coordinator's ruling of 2026-11-15). An element's ink is what TeX set
  *   between its two points; where TeX gives it no closing point, it ends where TeX ends what the element stands in, never later,
  *   and for a piece of a table cell that is the cell's end. A cell's end mark goes after its last text, and a piece after it whose
  *   opening mark stands alone (its source ends in a control word, or its class may read ahead) had no bound but the next mark,

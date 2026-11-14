@@ -3480,7 +3480,7 @@ gives a cell its paragraph's alignment where TeX set it one, else its class's: c
 the typesetter keeps a cell's flush as any unit's (today's never did, no fact telling it then): an r column's translation
 ends where its original ends and, clipped there, widens to its left, and an l column's wrapped lines are ragged.
 Locate's reading of the cell's column stays only where TeX states neither (a template that is not LaTeX's: `\shortstack`'s,
-a plain `\halign`). The template's end also sets the cell's end point, `t<i>x`, where it writes `AXT-CELL` (§18.73, round 3: the
+a plain `\halign`). The template's end also sets the cell's end point, `t<i>x`, where it writes `AXT-CELL` (§18.74, round 3: the
 first node the marks put in a template, at its very end). Nothing else of B moves: assignments, `\aftergroup` and a `\message`
 (`lab/pdf/spikes/layout-cell-cases.mjs`: 8 documents in pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx under both years
 read as TeX set them,
@@ -3683,7 +3683,7 @@ added two newly worse in both modes, every difference a cell laid inside its col
 before) or at another size than today's (`size`), smaller only where today's line stood past the box.
 
 **Not this rule's**: TeX's own statement of the box. The template that ends in `\axt@te{<class>}` sets a point last in it
-since round 3, the cell's end (`t<i>x`, §18.73: outside every `\unskip` of LaTeX's and colortbl's guard, proven inert on the TeX
+since round 3, the cell's end (`t<i>x`, §18.74: outside every `\unskip` of LaTeX's and colortbl's guard, proven inert on the TeX
 gate, `lab/pdf/spikes/layout-cell-cases.mjs`), which bounds a cell's pieces and is not read for the box: its place is the template's
 end, past the column's slack (the gate's cells: at the widest entry's ink, 9.14 pt past a narrower one's). A point first in the template beside it would let TeX state each cell box's
 edges, the content box that less `\tabcolsep` a side: no reading of A then, and a `p` column's box and a widened column's stated

@@ -523,7 +523,7 @@ function headEntries(
  *   start: that text is no unit's of the source, and none of it the piece's. Nothing at all before the
  *   next point is a piece of nothing; nothing before the text after it, with glyphs there, is none (REVTeX sets the
  *   punctuation after a citation before its number).
- * - A piece of a table cell (docs/PDF-READER.md §18.73): an element's ink is what TeX set between its two points, and where TeX
+ * - A piece of a table cell (docs/PDF-READER.md §18.74): an element's ink is what TeX set between its two points, and where TeX
  *   gives it no closing point it ends where TeX ends what it stands in, never later; for a piece of a cell, the cell's end. A
  *   piece after its cell's end mark with its opening point alone (its source ends in a control word, or its class may read
  *   ahead) ends at its cell's end point, `t<i>x`, which LAYOUT_TEX sets at the cell template's end and the marking names among

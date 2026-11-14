@@ -96,7 +96,7 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     // the template's own group level)
     expect(LAYOUT_TEX).toContain('\\def\\axt@cs#1{\\edef\\axt@cc{#1 \\the\\currentgrouplevel}\\ifnum\\currentgrouptype=6 \\else')
     // (and there the cell's end point, `t<i>x`: where TeX ends what a piece of the cell stands in, a destination and its point,
-    // no pending mark flushed; docs/PDF-READER.md §18.73)
+    // no pending mark flushed; docs/PDF-READER.md §18.74)
     expect(LAYOUT_TEX).toContain('\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\axt@cellend{#1}\\fi}')
     expect(LAYOUT_TEX).toContain('\\def\\axt@cellend#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{t#1x}\\fi}')
     // (the class appended with what the preamble holds left as it is: REVTeX's ltxutil appends tokens unexpanded, its macros

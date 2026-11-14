@@ -1,4 +1,4 @@
-// A cell's piece ends where TeX ends its cell (docs/PDF-READER.md §18.73): an element's ink is what TeX set between its two
+// A cell's piece ends where TeX ends its cell (docs/PDF-READER.md §18.74): an element's ink is what TeX set between its two
 // points, and where TeX gives it no closing point, it ends where TeX ends what the element stands in, never later; for a piece of a
 // table cell, that is the cell's end, the point `t<i>x` LAYOUT_TEX's template end sets (marks.ts \axt@te). The marked compile's
 // stream as B ships a table's rows (each glyph 5 pt wide at 10 pt; no paper's text): a cell whose last piece stands after the cell's
