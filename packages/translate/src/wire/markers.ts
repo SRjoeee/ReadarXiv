@@ -62,8 +62,6 @@ import {
   SAYS,
 } from './text.ts'
 
-export { DISPLAY }
-
 type Item =
   /** `fixed`: no text of the source, every character of it at `at` (a group's stop, written at its end) */
   | { t: 'text'; s: string; at: number; fixed?: true }
@@ -129,7 +127,7 @@ export interface MarkersPlan {
 }
 
 /** bijective base-26: 1 → a, 26 → z, 27 → aa */
-export function toAlpha(id: number): string {
+function toAlpha(id: number): string {
   let n = id
   let out = ''
   while (n > 0) {
@@ -139,7 +137,7 @@ export function toAlpha(id: number): string {
   }
   return out
 }
-export function fromAlpha(s: string): number {
+function fromAlpha(s: string): number {
   let n = 0
   for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 96)
   return n

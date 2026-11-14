@@ -283,7 +283,7 @@ const refusedWhole = (f: Fault): boolean =>
  * stage once (`passed`), or every stage still before it when it has its result (`done`); an aborted call lets every held
  * unit go
  */
-export function stagesOf(
+function stagesOf(
   n: number,
   stages: number,
   signal: Signal,
