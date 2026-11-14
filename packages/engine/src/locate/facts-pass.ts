@@ -363,9 +363,10 @@ function readColumns(fx: FactsIndex): void {
       }
       cells.push({ ord: mem.ord, page, col: c.col, span: c.span ?? 1, cls: c.boxed, x0, x1, side: mem.room.side })
       // (a cell of several lines on one page, the lines of a box TeX set in it, its rows: a line each, every two apart by a forced
-      // break, one fewer than its lines (a paragraph cell's lines, a p column's, hold none, or a \\newline among lines TeX
-      // wrapped): how they stand in the box, §18.75)
+      // break, one fewer than its lines, in a column of class l, c or r (a paragraph cell's lines, a p column's, hold none,
+      // or a \\newline among lines TeX wrapped, or are a paragraph's in no column box): how they stand in the box, §18.75)
       if (
+        c.boxed !== undefined &&
         extents.length > 1 &&
         extents.length === mem.lines.length &&
         breaksOf(units[mem.unit]!.content) === extents.length - 1

@@ -7108,8 +7108,8 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   fills the cell's lines, each in the room. A paragraph cell (a p, m, b or X column, a `\parbox`: no column box), a cell with a held
   line or lines on two pages, and one whose side stops short of the box are laid in their own rooms as before.
   `Placed.inner` is read by the facts pass (`locate/columns.ts` innerOf, in `facts-pass.ts` readColumns), for a cell whose lines
-  are the rows of a box it holds alone, a line each and one forced break fewer than its lines (a paragraph cell's lines, a p
-  column's, state none, nor a `\newline` among lines TeX wrapped): TeX sets each line in
+  are the rows of a box it holds alone, a line each and one forced break fewer than its lines, in a column of class l, c or r (a
+  paragraph cell's lines, a p column's, state none, nor a `\newline` among lines TeX wrapped): TeX sets each line in
   the box by the box's own template, which states nothing of the lines, so they are read off arXiv's page as a column is: their
   left edges together within `ALIGNED` (half a point), `l`; their middles, `c`; their right edges, `r`; all three (lines of one
   width), the cell's class; none, no reading (the lines laid by the cell's class), counted and listed at the build. A cell of
