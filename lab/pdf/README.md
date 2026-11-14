@@ -18,7 +18,7 @@ program, the typesetting gates and the checks that need a TeX page) is in `parke
 | `lab/pdf/spikes/` | The gates and their makers. Each file's header says what it measures, how to run it and what it reads. A spike that imports the engine runs with tsx from the repository root (`pnpm exec tsx lab/pdf/spikes/<name>.mjs`), since the engine imports the extension's source by `@/`; the others run with node. |
 | `lab/pdf/layer-lab/` | The layer lab: the maintainer's local bench for the instant layer, which draws a paper and a language on the layer gate's own inputs, any two of Original, the quick view and an already made final side by side (`npm run layer-lab` here, or `node lab/pdf/layer-lab/serve.mjs`; `lab/pdf/layer-lab/README.md` has the start line and the controls). It is a measurement tool like the gates: `lab/pdf/layer-lab/smoke.mjs` checks that every fixture draws. |
 | `lab/pdf/records/` | What the gates recorded, kept for the next change to be held to: the instant layer's fidelity, completeness and cost, the layout marks' quality on the corpus, the layout maker on the researched papers. Counts, ids and measures only; no paper's content. |
-| `lab/pdf/package.json` | PDF.js, which the Node spikes read PDFs with and whose standard fonts and cmaps they find in `lab/pdf/node_modules/`, and the layer lab's start script. |
+| `lab/pdf/package.json` | The layer lab's start script. PDF.js, which the Node spikes read PDFs with and whose standard fonts and cmaps they load by path, is the repository's own, pinned once in the root manifest and read from the root's `node_modules/pdfjs-dist/`. |
 | `lab/pdf/data/`, `lab/pdf/out/` | Made on a machine, git-ignored (`lab/pdf/.gitignore`): the corpus, the runs and the fixtures (`data/`), and what the gates write (`out/`). The gates read `lab/pdf/data` and `lab/pdf/out`. On the maintainer's machine both are assembled by per-entry links into the maintainer's data checkouts (one holds `data/corpus` and `out/corpus-meta.json`, the other the run outputs), never by a link to a whole directory, because some gates write their verdict files into `out/` and a whole-directory link would overwrite the checkout's. Nothing in them is ever committed. |
 | `lab/pdf/poc-reader/papers/` | The demo papers the reader's browser checks open, made by `lab/pdf/spikes/reader-papers.mjs`; git-ignored. The directory keeps the name of the proof of concept it was made for. |
 
@@ -35,11 +35,10 @@ loaded, and the demo papers staged into a temporary copy of the build. The probe
 
 ## Setup
 
-1. At the repository root: `pnpm install`.
-2. In `lab/pdf/`: `npm install` (PDF.js, for the standard fonts and cmaps the Node spikes load by path).
-3. Docker with `texlive/texlive:latest`, for the gates that compile natively (the layout maker, the unit-marks checks);
+1. At the repository root: `pnpm install` (PDF.js too, for the standard fonts and cmaps the Node spikes load by path).
+2. Docker with `texlive/texlive:latest`, for the gates that compile natively (the layout maker, the unit-marks checks);
    Playwright's Chromium for the browser checks (`npx playwright install chromium` once).
-4. The machine's data in `lab/pdf/data/` and `lab/pdf/out/`, as each gate below needs it. A gate whose data is missing
+3. The machine's data in `lab/pdf/data/` and `lab/pdf/out/`, as each gate below needs it. A gate whose data is missing
    fails by naming what it could not read; none makes up a substitute.
 
 The gates import the engine as it stands in `src/pdf-reader/engine/`. The later stages of the reader's rebuild change
