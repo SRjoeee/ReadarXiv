@@ -71,7 +71,7 @@ export function memoryFailure(warning: string): RangeError {
   return Object.assign(new RangeError(ALLOCATION_FAILED), { cause: warning })
 }
 
-export interface WarningWatch {
+interface WarningWatch {
   /** the first warning heard whose reason is a failed allocation, or null */
   readonly memory: string | null
   /** each site heard, its count and its first reason */

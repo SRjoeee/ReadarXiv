@@ -19,7 +19,7 @@ type Tpl =
   | { t: 'el'; id: string }
   | { t: 'span'; id: string; content: Tpl[] }
 
-export interface Runs {
+interface Runs {
   /** the stretches to send, each a unit of one text piece; one with fewer than two letters is kept as it stands */
   parts: { text: string; lead: string; trail: string; send: boolean }[]
   /** the unit rebuilt from each stretch's translation (null: the stretch's own words) */

@@ -68,7 +68,7 @@ export function minMaxOf(v: unknown): Box4 | null {
 }
 
 /** a path's data (PDF.js's DrawOPS: an operation's code, then its points' numbers), read entry by entry */
-export interface PathData {
+interface PathData {
   /** its length, as `typeof data.length === 'number'` held it */
   readonly length: number
   /** its entry at `i`: a number, as PDF.js writes each (the library's contract: constructPath's data a Float32Array,
@@ -148,7 +148,7 @@ export const shownOf = (v: unknown): readonly (number | PdfGlyph)[] | null =>
   listOf(v) as readonly (number | PdfGlyph)[] | null
 
 /** a Type 3 glyph's procedure: its operator list as OperatorList.getIR gives it (pdf.worker.mjs:11749-11754) */
-export interface PdfProc {
+interface PdfProc {
   readonly fnArray: readonly number[]
   readonly argsArray: readonly unknown[]
 }

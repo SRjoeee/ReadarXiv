@@ -24,7 +24,7 @@ export interface AddOn {
   stats: Wrap['stats']
 }
 
-export interface WrapDeps {
+interface WrapDeps {
   PL: PdfLib
   deflate: (b: Uint8Array) => Uint8Array
   inflate: (b: Uint8Array, limit: number) => Uint8Array

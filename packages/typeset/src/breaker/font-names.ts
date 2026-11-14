@@ -6,7 +6,7 @@
 // characters.
 
 /** a glyph's style by its font's name, as today's reader reads it (fonts.mjs classifyFont) */
-export type FontStyle = {
+type FontStyle = {
   fam: 'serif' | 'sans' | 'mono' | 'math'
   bold: boolean
   italic: boolean
@@ -16,7 +16,7 @@ export type FontStyle = {
   name: string
 }
 /** a font's class and design by its PostScript name (classifyRole) */
-export type FontClass = { cls: string; design: string }
+type FontClass = { cls: string; design: string }
 
 /** the PostScript name without its subset tag */
 const bare = (name: string): string => String(name ?? '').replace(/^[A-Z]{6}\+/, '')

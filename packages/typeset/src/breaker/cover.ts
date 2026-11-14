@@ -23,7 +23,7 @@ export function runsOfTokens(tokens: readonly Token[]): { face: Face; font: Face
   return [...by].map(([font, r]) => ({ face: r.face, font, text: [...r.chars].join('') }))
 }
 
-export type Cover = { ok: true } | { ok: false; why: 'served'; missing: string } | { wait: [FaceId, string][] }
+type Cover = { ok: true } | { ok: false; why: 'served'; missing: string } | { wait: [FaceId, string][] }
 
 /** B.cover: every run's face ready; else the faces to wait for, or the characters no served face holds */
 export function cover(tokens: readonly Token[], metrics: Metrics): Cover {

@@ -9,7 +9,7 @@ import { layoutUnit2 } from './walk.ts'
 
 /** a run of a unit between its kept regions: its first block, its blocks and its tokens (and each token's place in the
  *  unit's, `idx`); once laid, its parameters and layout */
-export type Run = {
+type Run = {
   after?: number
   bi0: number
   blocks: FitBlock[]
@@ -28,7 +28,7 @@ type Building = { after: number; tokens: Token[]; idx: number[]; bi0?: number; b
  * unit is one run, where a run with text has no slots of its own or a block no run's text (the walk's own rules then place
  * it), or where the blocks are not in the order of their regions
  */
-export function runsOf(tokens: readonly Token[], blocks: readonly FitBlock[]): Run[] | null {
+function runsOf(tokens: readonly Token[], blocks: readonly FitBlock[]): Run[] | null {
   if (blocks.length < 2) return null
   // (a run opens at a display alone: a forced break that opens another frame (tokensOf2's `brk`) breaks the line, and its
   // frames stay the run's, as the unit's own walk sets them. Each token kept with its place in the unit's (`idx`))
@@ -79,7 +79,7 @@ export function runsOf(tokens: readonly Token[], blocks: readonly FitBlock[]): R
 }
 /** a run's parameters (layoutRuns): its first block's place in the unit (slotsAt's first line), and the gap under the paragraph
  *  (P.halfLead, footFloorAt) and a heading's last lines the unit's last run's alone */
-export const runParams = (P: FitParams, run: Run, last: boolean): FitParams => ({
+const runParams = (P: FitParams, run: Run, last: boolean): FitParams => ({
   ...P,
   blockBase: run.bi0,
   lastLines: false,

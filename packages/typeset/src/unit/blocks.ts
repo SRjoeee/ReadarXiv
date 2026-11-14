@@ -142,7 +142,7 @@ export function measureOn(Y: readonly number[], at: (i: number) => [number, numb
 type Raw = Omit<Block, 'after' | 'B' | 'exact' | 'sizes' | 'pitch0' | 'free' | 'flow'> & { after?: number }
 
 /** the unit's lines as blocks, its kept lines never moved, each block with the kept regions before it (L2:626 blocksOf2) */
-export function blocksOf2(i: BlocksInput): Raw[] {
+function blocksOf2(i: BlocksInput): Raw[] {
   const { rects, keep, regionOf, referenced, breakAt, joinAt, centred, paraAt } = i
   const kept = (r: Rect) => !!keep?.has(rectKey(r))
   const blocks: { page: number; rects: Rect[]; opens?: true }[] = []

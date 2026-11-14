@@ -87,7 +87,7 @@ export type ElementReading = {
   rowText: string | null
 }
 
-export type ElementsInput = {
+type ElementsInput = {
   /** the row's pieces, in the translation's order */
   pieces: readonly V0Piece[]
   /** each piece's class (phClass2), null where it is text */
@@ -105,7 +105,7 @@ export type ElementsInput = {
   shown: number
 }
 
-export type Elements = {
+type Elements = {
   /** the resolutions, by the row's piece index, in the row's order */
   resolutions: Map<number, Res>
   /** the lines the unit keeps as the original's */

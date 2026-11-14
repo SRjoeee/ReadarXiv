@@ -95,7 +95,7 @@ const onItsDisplay = (l: Line, displays: readonly { box: Box }[]) =>
   !!(l[9] & KEPT) && onDisplay(displays, l[2], l[6], l[3], l[5])
 
 /** the boxes on both panes alike (one entry each), none where it has none */
-export const mirrored = (boxes: Box[]): Lit =>
+const mirrored = (boxes: Box[]): Lit =>
   boxes.length ? { left: [boxes], right: [boxes], own: [] } : { left: [], right: [], own: [] }
 
 type Dir = [ux: number, uy: number]
@@ -189,7 +189,7 @@ export function firstWordAt(words: readonly (readonly [number, number, number])[
  * part's words (Placed.words) at or after it that the part places, among its sentence's first three (LATE) and before the
  * next start's; each after the one before and after the unit's own first word. Null where one is not found
  */
-export function startsOnA(words: readonly (readonly [number, number, number])[], src: readonly number[]): At[] | null {
+function startsOnA(words: readonly (readonly [number, number, number])[], src: readonly number[]): At[] | null {
   const at = src.map((o) => firstWordAt(words, o))
   const head = words.find((w) => w[1] >= 0)
   if (!head || !src.length) return null

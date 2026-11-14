@@ -699,8 +699,6 @@ function phClass2(src: string): { cls: string; unknown?: true } {
  *  it is drawn as; a LaTeX text symbol's character as it is (\textasciicircum's caret is no such mark) */
 const symbolDrawn = (src: string): string => symbolText(src) ?? texToText2(src).replace(/^\^\(?|\)$/g, '')
 const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
-/** a text's graphemes, each a string: what a reader sees as one character */
-const graphemesOf = (t: string): string[] => Array.from(GRAPHEMES.segment(t), (g) => g.segment)
 /**
  * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
  * kind the file's crops exempt (tex.mjs cropsOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's

@@ -514,9 +514,9 @@ describe('locate states each cell’s room in its column as Room.column', () => 
   })
 })
 
-// (a table cell of several lines, one unit since §18.74: how its lines stand in the cell's box, read off A as their left edges,
+// (a table cell of several lines, one unit since §18.75: how its lines stand in the cell's box, read off A as their left edges,
 // middles or right edges together within ALIGNED, Placed.inner; all three together, the cell's class; none, no reading)
-describe('locate states how the lines of a cell of several lines stand in its box (Placed.inner, §18.74)', () => {
+describe('locate states how the lines of a cell of several lines stand in its box (Placed.inner, §18.75)', () => {
   /** a cell of two lines owned by one unit, its column's class `boxed`: each line's text and start (glyphs 6 pt wide) */
   const innerOf = (boxed: 'l' | 'c' | 'r', lines: [string, number][]) => {
     const B = docOf([{ lines: lines.map(([text, x], k) => ({ text, x, y: 712 - 12 * k })) }])
@@ -582,7 +582,7 @@ describe('locate states how the lines of a cell of several lines stand in its bo
   })
 })
 
-describe('a cell of several lines is one entry of its column’s box, its hull (§18.74, d)', () => {
+describe('a cell of several lines is one entry of its column’s box, its hull (§18.75, d)', () => {
   it('takes the hull of a centred box’s two lines as an l column’s entry, beside a cell of one line', () => {
     // (cell 0: "Errorx" 109-145 over "ontestset" 100-154, a centred box in an l column; cell 1: "Basexx" 100-136; both l)
     const B = docOf([

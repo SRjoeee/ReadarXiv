@@ -1,7 +1,7 @@
 // The typesetter's entry and its result, as decided (interfaces/page/DECISION.md: the objects and the entry are design A's,
 // design-a.md §1.2; the inside and the ledger are design B's, design-b.md §1.5 to §1.7). Types only: the composition
 // (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
-import type { Box, Id, Ink, Link, Part, Placed, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
+import type { Box, Id, Ink, Link, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 import type { ScriptRules } from './data/rules/types.ts'
 import type { RefNames } from './unit/rename.ts'
 import type { ParasStated } from './unit/breaks.ts'
@@ -51,16 +51,6 @@ export type Choices = {
   pastFoot?: number
 }
 
-/** a language's hyphenation: its patterns as data (never fetched by the typesetter) and babel's minimums */
-export type Hyphenation = {
-  lang: string
-  minWord: number
-  left: number
-  right: number
-  /** the patterns, as rules/hyph.mjs hyphenationOf reads them; null where the language has none */
-  patterns: unknown
-}
-
 /**
  * Everything typographic the typesetter reads, for one target (design-b §1.4's shape): the rule set's fields resolved for it
  * (`set`: today's resolveRules params, by the names every ported rule reads them by; design-a's grouping of them by use is a
@@ -99,15 +89,6 @@ export type RuleParams = Readonly<
     pastFoot?: number
   }
 >
-
-/** the faces the typesetter sets text in: by role, weight, slant and script class; with each face's size correction */
-export type FaceTable = Readonly<{
-  pick(style: { role: 'serif' | 'sans' | 'mono'; bold?: boolean; slant?: boolean; caps?: boolean }, cls: string): FaceId
-  size(face: FaceId): number
-}>
-
-/** a shared decision handed to one member by layPage (design-a §1.2) */
-export type Given = { lead?: number; track?: number; size?: number; leave?: Unlaid }
 
 /**
  * Why a member stays the original's (design-a §1.2's typesetter `Why`, named `Unlaid` here: `packages/format`'s `Why` is a
@@ -252,27 +233,9 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
  * unit laid again is a round of its own; 0 for the slots before any lay)
  */
 export type LedgerSlot = { step: Step; by: RuleId; round: number; value: Json }
-/** what a rule returns into the ledger */
-export type Decided<T> = { by: RuleId; value: T }
 /** a page's ledger: each member's slots, each pass page's fill target, the table groups read */
-export type PageLedger = {
+type PageLedger = {
   units: { ord: number; slots: LedgerSlot[] }[]
   passes: { page: number; target: Json }[]
   tables: Json[]
 }
-/** what the trace asks: the decisions (O(members)) or every state the walks and the fill tried too */
-export type Trace = 'decisions' | 'full'
-
-// ---------------------------------------------------------------- the entry
-
-/** layPage: one page from its part, pure, called in every state (design-a §1.2); `trace` adds the ledger (design-b §1.6) */
-export type LayPage = (part: Part, rows: Rows, rules: Rules, metrics: Metrics, o?: { trace?: Trace }) => Page
-/** layFlow: one flow's members laid, given what layPage decided for them; exported for tests and the gate */
-export type LayFlow = (
-  flow: readonly Placed[],
-  rows: Rows,
-  given: readonly (Given | undefined)[],
-  rules: Rules,
-  metrics: Metrics,
-  o?: { trace?: Trace },
-) => { laid: Laid[]; ledger?: PageLedger['units'] }

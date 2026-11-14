@@ -45,7 +45,7 @@ export interface BlockPage {
   ends?: readonly number[]
 }
 /** a source unit as the block reads it */
-export interface BlockUnit {
+interface BlockUnit {
   kind: string
   title?: true
   front?: true

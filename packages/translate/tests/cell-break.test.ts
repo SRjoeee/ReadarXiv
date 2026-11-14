@@ -1,4 +1,4 @@
-// A table cell set on several lines is one unit, its lines apart by a forced break element (docs/PDF-READER.md §18.74, the owner's
+// A table cell set on several lines is one unit, its lines apart by a forced break element (docs/PDF-READER.md §18.75, the owner's
 // decision of 2026-11-15). Where a translator's reply loses or doubles that element, the reply is refused like any reply that
 // loses an element, and the chain's existing runs floor translates each line alone and joins them round the break: the cell
 // falls back to today's line-by-line translation, still one unit. No chain rule is added: this holds the existing path for a

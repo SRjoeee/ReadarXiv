@@ -1,4 +1,4 @@
-// A table cell set on several lines, now one unit (docs/PDF-READER.md §18.74, the owner's decision of 2026-11-15): each of its
+// A table cell set on several lines, now one unit (docs/PDF-READER.md §18.75, the owner's decision of 2026-11-15): each of its
 // lines is laid in the cell's room in its column (Room.column), whichever line it is, so that no cell is drawn smaller than
 // today for having become one unit; the cell has one size, the largest not over the original's at which every line fits; the
 // lines stand as TeX set them in the cell's box: the box (as wide as its widest line) in the room by the cell's class, each line in
@@ -72,7 +72,7 @@ const unstated = (m: Placed): Placed => {
   return { ...m, room }
 }
 
-describe('a cell of two lines laid in its room in its column (§18.74)', () => {
+describe('a cell of two lines laid in its room in its column (§18.75)', () => {
   // (its own lines 30 and 36 pt wide in a column 60 pt wide; its translation's lines 50 and 55 pt at the original's size)
   const narrow: [[number, number], [number, number]] = [
     [115, 145],

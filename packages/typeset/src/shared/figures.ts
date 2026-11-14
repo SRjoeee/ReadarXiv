@@ -56,7 +56,7 @@ export type FigureUnit = {
   pieces?: readonly (({ t: string; s?: string; tr?: boolean } | TextPiece) & { cls?: FigureClass })[]
 }
 /** a run of a figure's translation in one face (figureRuns), and its fill where its group states one (FigureClass.fill) */
-export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number }
+type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number }
 /** a figure text's outcome: drawn (its text, runs, size, where its anchor keeps it, its width, its turn in degrees
  *  anticlockwise, its fill) or why not */
 export type Figure = {
@@ -75,7 +75,7 @@ export type Figure = {
   fill?: number
 }
 
-export type FiguresInput = {
+type FiguresInput = {
   /** the page's figure units, in their rows' order */
   figures: readonly FigureRow[]
   /** a figure unit's row, undefined where the door has none */
@@ -114,7 +114,7 @@ export function fontClassOf(name: string): { fam: 'serif' | 'sans' | 'mono' | 'm
 
 /** a figure's translation in its runs by script, each in its face (L2:4825 figureRuns); and by style, where its characters
  *  (`at`, by code point) hold their own (a group's run on A), each run in its style's face */
-export function figureRuns(
+function figureRuns(
   text: string,
   faceOf: (cls: 'cjk' | 'latin', st?: TStyle) => Face,
   quotes: boolean,
@@ -155,7 +155,7 @@ function textOfPieces(pieces: NonNullable<FigureUnit['pieces']>): { text: string
   return { text: out.map((x) => x.c).join(''), at: out.map((x) => x.cls) }
 }
 /** figureRuns' width at size 1, each run's in its face (L2:4836 figureRunsWidth, widthOf L2:1322) */
-export const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
+const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
   runs.reduce((a, r) => a + m.w100(r.s, r.face) / 100, 0)
 
 /** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the

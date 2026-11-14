@@ -212,7 +212,7 @@ export function StatusCapsule({
 }
 
 /** how long the narrow window's words are read before they leave, ms: the maintainer's ruling (UI.md S-R-14), unmeasured */
-export const NARROW_MS = 5000
+const NARROW_MS = 5000
 /** how long a run's wait lasts before its capsule enters, ms (PDF-READER §6.6): a wait the reader cannot perceive is not
  *  announced. Of the family of the page's mark, which PDF.js shows after 400 ms (`--loading-icon-delay`), and of the
  *  translating marks' 0.3 s delay (styles.ts `--axt-tr-delay`); a ruling, unmeasured */
@@ -255,7 +255,7 @@ function useWaitShown(wanted: Capsule | null, showing = false): Capsule | null {
  *  2026-11-03): a window that showed the paper side by side (`readWide`: some pages drawn, side by side on screen, the window wide)
  *  and was then narrowed while reading (`narrowed`) says that it shows the translation alone; a page opened in a narrow window
  *  says nothing (its switch shows the translation chosen), and widened again it says nothing either. What it has seen only grows */
-export interface NarrowWatch {
+interface NarrowWatch {
   readWide: boolean
   narrowed: boolean
 }

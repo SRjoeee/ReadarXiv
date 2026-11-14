@@ -49,7 +49,7 @@ const nameOf = (s: string): string => s.replace(/\s+/g, ' ').replace(EDGE, '')
 /** two words or more, each holding a letter */
 const isName = (n: string): boolean => n.split(' ').filter((w) => LETTER.test(w)).length >= 2
 
-export interface Stretches {
+interface Stretches {
   /** each stretch's text (a tie a space) */
   texts: string[]
   cuts: string[]
@@ -96,7 +96,7 @@ export interface BlockMember {
   /** its unit's Unit.of (format's toggleKind reads it) */
   of?: string
 }
-export interface NamesOut {
+interface NamesOut {
   /** each unit's variant, by the unit's id */
   variants: Map<string, Unit>
   /** each unit that names a person elsewhere, by its id: its variant ('' none) and its names, persons by `persons`' index */

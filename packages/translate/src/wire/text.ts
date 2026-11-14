@@ -117,7 +117,7 @@ export const GLUED_LEAD = /(?<=^[ \t\n\f\r\ue000]*)[ \t\n\f\r]+/g
 export const LEAD_PUNCT = /^\s*[.,;:!?。．，、；：！？]/
 /** what a reply may set for an element's own stop right after it: any script's stop, comma, semicolon or colon; taken out
  *  where the element states its own (it draws it), the white space before it kept */
-export const OWN_MARKS = '.,;:。．，、；：।۔،؛'
+const OWN_MARKS = '.,;:。．，、；：।۔،؛'
 export const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 
 /** the stop a display that states none of its own ends its sentence with, where TeX set it at that sentence's end */

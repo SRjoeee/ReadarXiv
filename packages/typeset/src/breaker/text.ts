@@ -26,7 +26,7 @@ export const drawnText = (p: TextPiece) =>
     : p.s
 
 const BLANK = /\s/
-export type PlainTracker = { gap(): void; space(): number; next(): number; text(s: string): Int32Array }
+type PlainTracker = { gap(): void; space(): number; next(): number; text(s: string): Int32Array }
 /** the offsets of a unit's text in its plain text: a blank adds nothing after a blank, a piece that is no text one space
  *  (words.mjs plainTracker) */
 export function plainTracker(): PlainTracker {

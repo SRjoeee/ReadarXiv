@@ -14,7 +14,7 @@ import type { FitBlock } from '../fit/types.ts'
 import type { Share } from './share.ts'
 
 export type Row = { id: number; page: number; baseline: number; x0: number; x1: number; size: number }
-export type RowStartInput = {
+type RowStartInput = {
   row: Row | null
   /** the unit's first block, as U.decor left it (changed in place, as today's) */
   b0: FitBlock | undefined
@@ -28,7 +28,7 @@ export type RowStartInput = {
   /** the unit before's blocks */
   leadBlocks: readonly FitBlock[] | null
 }
-export type RowStart = {
+type RowStart = {
   ledBy?: number
   rowLabel: { lb: readonly number[]; baseline: number } | null
   onLeadOf: { start: number; startY: number | undefined } | null

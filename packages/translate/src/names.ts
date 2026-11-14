@@ -68,7 +68,7 @@ interface Swap {
   now: number
 }
 
-export interface Named {
+interface Named {
   /** the unit as every translator is sent it */
   unit: UnitIn
   /** a row of it with its sentences in the unit's own projection; dropped where they no longer rise */

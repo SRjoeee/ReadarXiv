@@ -65,7 +65,7 @@ function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
 import type { Owned } from './ownership.ts'
 import type { Member } from './work.ts'
 
-export interface FactsInput {
+interface FactsInput {
   ins: Instrument
   inkA: Doc
   m: Mapping
@@ -362,7 +362,7 @@ function readColumns(fx: FactsIndex): void {
         ])
       }
       cells.push({ ord: mem.ord, page, col: c.col, span: c.span ?? 1, cls: c.boxed, x0, x1, side: mem.room.side })
-      // (a cell of several lines on one page, the lines of a box TeX set in it: how they stand in the box, §18.74)
+      // (a cell of several lines on one page, the lines of a box TeX set in it: how they stand in the box, §18.75)
       if (extents.length > 1 && extents.length === mem.lines.length) {
         const inner = innerOf(extents, c.boxed)
         if (inner) mem.inner = inner

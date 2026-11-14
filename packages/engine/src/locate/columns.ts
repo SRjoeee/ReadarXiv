@@ -33,7 +33,7 @@
 // of the blank TeX leaves beside it, never past the cell's own side: roomsOf below.
 
 /** a column's class: TeX's \hfil on the side or sides the slack goes */
-export type ColumnClass = 'l' | 'c' | 'r'
+type ColumnClass = 'l' | 'c' | 'r'
 
 /** a unit cell as its column's box reads it */
 export interface ColumnCell {
@@ -84,7 +84,7 @@ export interface FreeWord {
  */
 const ALIGNED = 0.5
 /**
- * How the lines of a table cell of several lines stand in the cell's box (Placed.inner, docs/PDF-READER.md §18.74): TeX sets the
+ * How the lines of a table cell of several lines stand in the cell's box (Placed.inner, docs/PDF-READER.md §18.75): TeX sets the
  * box (a \\makecell's, a \\shortstack's, a nested one-column tabular's) by the cell's class in its column and each line in the box
  * by the box's own template, which states nothing of the lines; read off A as for a column: their left edges together within
  * ALIGNED, 'l'; their middles, 'c'; their right edges, 'r'; all three (lines of one width), the cell's class (`cls`); none (the

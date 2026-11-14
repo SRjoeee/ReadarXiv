@@ -96,7 +96,7 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams): void {
     }
   }
 }
-/** a table cell's lines as TeX set them in its box (FitBlock.box, lay/adapt.ts; docs/PDF-READER.md §18.74): the box as wide as
+/** a table cell's lines as TeX set them in its box (FitBlock.box, lay/adapt.ts; docs/PDF-READER.md §18.75): the box as wide as
  *  its widest laid line, set in the cell's room (each line's slot) by the cell's class, each line in the box by its own; a line's
  *  items moved together, their spacing as placed */
 function boxLines(lines: LaidLine[], blocks: readonly FitBlock[]): void {

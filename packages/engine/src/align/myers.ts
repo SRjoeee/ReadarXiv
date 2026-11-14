@@ -4,7 +4,7 @@
 // LCS length on 3,000 random cases; here by the same test). Deterministic; no threshold decides a match. `work` bounds the
 // steps a call may take: a resource bound, reported, never a decision about content; past it the call stops and says so.
 
-export interface Lcs {
+interface Lcs {
   /** the matched pairs in order: [a0, b0, a1, b1, …] */
   pairs: Int32Array
   steps: number

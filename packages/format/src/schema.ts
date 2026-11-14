@@ -353,7 +353,7 @@ export const Placed = z.object({
   align: z.enum(['j', 'l', 'c', 'r']),
   // a table cell of several lines set in a box of its cell (a \makecell's, a \shortstack's, a nested one-column tabular's): how
   // its lines stand in that box, read off A (their left edges, middles or right edges together; all three, the cell's class),
-  // where `align` is the box's in its column (docs/PDF-READER.md §18.74). Absent, its lines stand by `align`; a typesetter of
+  // where `align` is the box's in its column (docs/PDF-READER.md §18.75). Absent, its lines stand by `align`; a typesetter of
   // before reads none and lays the cell's lines as it did, so FORMAT stays
   inner: z.enum(['l', 'c', 'r']).optional(),
   lines: z.array(Line),

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// A table cell's unit is the grid's cell (docs/PDF-READER.md §18.74, the owner's decision of 2026-11-15): the source reader ends
+// A table cell's unit is the grid's cell (docs/PDF-READER.md §18.75, the owner's decision of 2026-11-15): the source reader ends
 // a cell's unit where the table's grid ends the cell (tableGrid: `&` and a row's end outside braces, math, comments and nested
 // environments), and a `\\` inside the cell, in a box the cell holds (\makecell, \shortstack, a one-column tabular nested in it,
 // a paper macro's argument), is a forced break of the cell's text, as it is in a paragraph. Read through the source reader's

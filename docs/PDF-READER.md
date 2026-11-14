@@ -3480,7 +3480,8 @@ gives a cell its paragraph's alignment where TeX set it one, else its class's: c
 the typesetter keeps a cell's flush as any unit's (today's never did, no fact telling it then): an r column's translation
 ends where its original ends and, clipped there, widens to its left, and an l column's wrapped lines are ragged.
 Locate's reading of the cell's column stays only where TeX states neither (a template that is not LaTeX's: `\shortstack`'s,
-a plain `\halign`). Nothing of B moves: assignments, `\aftergroup` and a `\message`
+a plain `\halign`). The template's end also sets the cell's end point, `t<i>x`, where it writes `AXT-CELL` (§18.74, round 3: the
+first node the marks put in a template, at its very end). Nothing else of B moves: assignments, `\aftergroup` and a `\message`
 (`lab/pdf/spikes/layout-cell-cases.mjs`: 8 documents in pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx under both years
 read as TeX set them,
 each PDF byte for byte the one before; over the 21 papers of the parity's pairs every marked original and final pass is byte
@@ -3681,11 +3682,12 @@ classes, 13 of no grid place), 278 spanning, 291 of several lines. The display g
 added two newly worse in both modes, every difference a cell laid inside its column's box (`frame`, past the gate's own room of
 before) or at another size than today's (`size`), smaller only where today's line stood past the box.
 
-**Not this rule's**: TeX's own statement of the box. The template that ends in `\axt@te{<class>}` could set a point first and
-last in it, outside every `\unskip` of LaTeX's and colortbl's guard, so that TeX states each cell box's edges and the content box
-is that less `\tabcolsep` a side: no reading of A then, and a `p` column's box and a widened column's stated too. They would be
-the first nodes the marks put in an alignment template, to be proven inert on the TeX gate first (`lab/pdf/spikes/
-layout-cell-cases.mjs`). The box read here and TeX's can differ where an entry no unit is escapes the reading (narrower), where
+**Not this rule's**: TeX's own statement of the box. The template that ends in `\axt@te{<class>}` sets a point last in it
+since round 3, the cell's end (`t<i>x`, §18.74: outside every `\unskip` of LaTeX's and colortbl's guard, proven inert on the TeX
+gate, `lab/pdf/spikes/layout-cell-cases.mjs`), which bounds a cell's pieces and is not read for the box: its place is the template's
+end, past the column's slack (the gate's cells: at the widest entry's ink, 9.14 pt past a narrower one's). A point first in the template beside it would let TeX state each cell box's
+edges, the content box that less `\tabcolsep` a side: no reading of A then, and a `p` column's box and a widened column's stated
+too; that one is not set. The box read here and TeX's can differ where an entry no unit is escapes the reading (narrower), where
 an italic correction TeX counts in an entry's width shows on no advance (within `ALIGNED`), and where `@{}`, `\extracolsep` or a
 rule's width sets a spanning cell's union otherwise than its own template.
 
@@ -6992,7 +6994,69 @@ own; 2608.25210v2's prompt boxes, a tcolorbox, 9 paragraphs for 6; 2111.09276v1'
 statements, a centred list: 2 paragraphs without the call's pair). PIPELINE moves (the units): the integration's; the compile side's
 key moves (the marks are written by unit).
 
-### 18.74 A table cell set on several lines is one text (the owner's decision of 2026-11-15)
+### 18.74 A cell's piece ends where TeX ends its cell (round 3's E1, the coordinator's ruling of 2026-11-15)
+
+The design's row E1, "an element's ink is its own": three table cells of the 88 papers were stated an element's ink box hundreds
+of points wide for one glyph (2610.21176v1 p13's `\checkmark`, 393 pt; 2610.20716v1 p19's `\LCDM`, 340 pt; 2406.06525v1 p6's
+`\textsuperscript{oim.}` and `{ukn.}`, five cells, 318 to 406 pt), which a cell's own room (`lay/adapt.ts` cellExtent) read, and
+production's reader did not. Locate's box is the union of what the ownership lists (`locate/geometry.ts`); the lists were B's:
+the element's piece had its opening point alone (its source ends in a control word, or its class may read ahead,
+`marks/marks.ts` layoutMarking), it stands after its cell's end mark (which goes after the cell's last text), and the point after
+a trailing macro's group (`\axttg`) is never set in a cell, whose group's end is an entry's. So the stream's reading
+(`own/stream.ts` ownedOf, an opening point alone) ran its ink to the next mark, the next unit's start: past the cell's end, the
+row's other entries no unit is (the numbers of 2406.06525v1's rows, which its El.text read as "oim. 4 256 1.44 …"), the rules
+between the columns, the rules under the row (the bottom rule, two `\cmidrule`s), a later row's ground. Over the 89, the holdout
+and the third set, 42 cells of 10 papers (7 of the 3 papers above; 34 of 6 in the third set, 26 of them holding the next cells'
+glyphs alone, which a test of a box against its own glyphs cannot see).
+
+**The rule**: an element's ink is what TeX set between its two points; where TeX gives it no closing point, it ends where TeX ends
+what the element stands in, never later; for a piece of a table cell, that is the cell's end. TeX states it: the template's end,
+`\axt@te`, which every LaTeX column template ends in (§18.12) and which writes `AXT-CELL` where the cell's index is defined at its
+own group level, sets a point there, `t<i>x` (a destination and its point, `\axt@cellend`; no pending mark flushed). It stands
+after the template's v-part and every `\unskip` LaTeX's, array's and colortbl's templates set, before the column rule and the
+inter-column material after the column, the next entry and a `\\`'s rules: a whatsit at the end of the cell's box, which moves no
+glyph or rule. The marking names it among the ends of its cell's pieces (`followsOf`, `ends`), and the reading stops there as at
+any of its unit's next marks. A table no template of LaTeX's sets (tabularray's `tblr`, a plain `\halign`) states no cell end, nor
+a `p` column of LaTeX's own tabular with array.sty not loaded, whose template `latex.ltx`'s `\@classv` builds where the marks wrap
+`\@classz` alone (no `AXT-CELL` there either, §18.13), and their pieces are read as before: no bound is guessed. Nothing downstream changes: no bound in locate's geometry, the facts pass or
+the typesetter. The point is no mark of today's marks file (`MARK_NAME` takes none): today's engine reads it only through the
+same ownership. The three families the sweep found beside it are not this rule's: a display ending a theorem takes the QED square
+TeX set after it (a point after a display is not inert: a whatsit after `$$…$$` makes an empty paragraph's tail a line), a
+breakable box's frame shipped across a page break inside a piece's span, a figure text's elements and the shapes about them.
+
+**Proven at TeX** (`lab/pdf/spikes/layout-cell-cases.mjs`, its fifteen end cases of content of our own, one preamble kind each,
+beside its earlier cases, both pinned years, pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx): 224 of 224 compiles as TeX set
+them; every cell of a LaTeX template holds its end point after its end mark, nothing between the two but its trailing piece's
+glyphs (a `\checkmark` before an `&`, `\textsuperscript` before a column rule, a paper's macro ending a spanning header before two
+`\cmidrule`s, before `\\[2pt]`, before a comment, beside an empty cell, in an inner tabular and its outer cell, in `tabular*`,
+tabularx's X, longtable's seventy rows over a page break, siunitx's S, an array in math, `\multirow`, colortbl's grounds,
+booktabs' rules, REVTeX's three classes, nicematrix), no box between, its destination at or past the cell's ink; none in tblr or a
+plain `\halign`, none in a kernel `p` column (found here, above); each page's glyphs and rules the base head's (pdfLaTeX's to
+0.001 pt; LuaLaTeX's within its writer's 0.011), every base point in its place. Under dvipdfmx (XeLaTeX, latex) the point splits the
+writer's text run where a TJ kern reached the next cell's glyph, which the writer then places absolutely: 0.010 and 0.018 pt from
+the base's place in the longtable case, nearer TeX's own (pdfLaTeX's: the base 0.014 and 0.019 off it, the head 0.004 and 0.001).
+Red at the base: 216 compiles with cells and no end point. **Proven at the
+reading**: `packages/engine/tests/cell-end.test.ts`, three rows as B ships them: "v" before a bottom rule, "x" before a row of
+numbers and column rules, "B" before two `\cmidrule`s, each its own ink alone; with no cell end stated, as before.
+
+**Measured** (the chain at this code against round 3's first wave, c3d8c3906, over the 89 + 1, the holdout and the third set; every
+paper compiled again, the compile side's key moving with LAYOUT_TEX: 739 compiles, 88 minutes in the docker slot at a load of 15
+to 400): 89 + 1, 36 and 119 made, the glyph proofs as before (0; the holdout's 2 and the third set's 1 the base's), the ownership's
+findings as before (102, 134, 50), the units objects the same but one paper's. The bundles of 11 papers move: the 42 cells of
+the sweep (7 in 2406.06525v1, 2610.20716v1, 2610.21176v1; 1 in the holdout's 2608.05876v1; 34 in six papers of the third set), each
+element's ink and text now its own glyphs' (TeX's: "✓", "ΛCDM", "oim.", "†", "a", "ctr_bg"; 2406.06525v1's El.text had read its row's
+numbers, 2610.38269v1's "a 40 5 × 32 …"), its line and its room (`side`, `band`: the rule under a row a wall again); the other cells
+of their tables in their facts (`room`, `Room.column` where a column now lines up, a line's measure); and the add-on's groups of
+those pages (the rules and entries a cell's piece held are the page's again). Beside them, the same class's other outcome, which
+the sweep had not counted: a piece whose next mark was a later cell's start on the same row had its own glyphs read as that cell's
+label (the reading's `toStart`) and owned none, its ink a box alone or nothing (2610.40576v1's two `\hlg{…}`, 2608.27181v1's
+`\textsuperscript{\dag}`); each now owns its glyphs, and in 2610.40576v1 a figure text made on A of the free glyphs ("so X = 5.") is
+no longer made, the later made units renumbered one down. The reader gate on both stores: its dumps byte for byte (the runner holds
+these tables back), I10 and I11 one member-page fewer (that figure text); the display gate: no page newly worse. The entry draws
+2610.21176v1 p13's cell 101 in its column with the table's bottom rule, and 2610.20716v1 p19's header with its two `\cmidrule`s,
+where it had laid the first over its row's first cells and both without their rules.
+
+### 18.75 A table cell set on several lines is one text (the owner's decision of 2026-11-15)
 
 The owner, shown lane hdr-lines' table of 48 cells set on two lines (each line translated alone today, and as one text by
 Google: 11 better, 9 the same, 2 worse; 2 drawn smaller in the lines' own widths): multi-line cells are translated WHOLE; where a

@@ -33,7 +33,7 @@ export type OverFollowerInput = {
   s: number
   P: FitParams
 }
-export type OverFollower = { id: number; blocks: FitBlock[]; layout: Layout; tokens: Tokens } | null
+type OverFollower = { id: number; blocks: FitBlock[]; layout: Layout; tokens: Tokens } | null
 
 /** S.overFollower (RUN:1763 overFollower; shrunk too, the run-in head's row before its size) */
 export function overFollower(i: OverFollowerInput, layoutCut: Cut): OverFollower {

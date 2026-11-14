@@ -8,7 +8,7 @@
 import type { FitBlock, FitParams, Layout, Tokens } from '../fit/types.ts'
 
 type Cut = (tokens: Tokens, blocks: readonly FitBlock[], s: number, P: FitParams) => { layout: Layout; tokens: Tokens }
-export type OnLeadInput = {
+type OnLeadInput = {
   layout: Layout
   /** the unit's tokens as laid at F2, before its cuts */
   tokens: Tokens
@@ -17,7 +17,7 @@ export type OnLeadInput = {
   P: FitParams
   onLeadOf: { start: number; startY: number | undefined } | null
 }
-export type OnLead = {
+type OnLead = {
   /** 'as before': laid again from the row, taken; 'on lead': kept as laid on */
   taken: 'as before' | 'on lead'
   layout: Layout

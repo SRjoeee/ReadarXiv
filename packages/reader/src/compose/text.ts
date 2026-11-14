@@ -40,7 +40,7 @@ import { faceScale } from './paint.ts'
 
 /** PDF.js's text content of a page, and a text item of it */
 export type TextContent = Awaited<ReturnType<PDFPageProxy['getTextContent']>>
-export type TextItem = Extract<TextContent['items'][number], { str: string }>
+type TextItem = Extract<TextContent['items'][number], { str: string }>
 type Marked = { type: string; tag?: string | null }
 type Entry = TextItem | Marked
 const isText = (e: Entry): e is TextItem => typeof (e as TextItem).str === 'string'

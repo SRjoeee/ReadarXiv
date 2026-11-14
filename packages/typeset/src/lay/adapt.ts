@@ -82,7 +82,7 @@ export type AdaptInput = {
   /** the line of TeX's it shares whole with the members beside it, set centred, flush right or flush left (rowLinesOf) */
   line?: Omit<RowLine, 'left' | 'right'>
 }
-export type Adapted = { member: FlowMember } | { stop: string }
+type Adapted = { member: FlowMember } | { stop: string }
 
 /** today's rectangle of a line (tex.mjs texRects, TEX:269-286): across its ink, and up and down a band of its size from its
  *  baseline, BELOW under it and ABOVE over it, to a hundredth (the line's top and bottom, its fonts' boxes, are its `exact`
@@ -124,7 +124,7 @@ function cellExtent(l: Line, m: Placed): [number, number] {
 }
 /**
  * A table cell's room in its column (Room.column: its column's box widened by the column's share of the blank beside it, never
- * past its own side; the owner's decisions, docs/PDF-READER.md §18.13, and for a cell of several lines §18.74): the room each of
+ * past its own side; the owner's decisions, docs/PDF-READER.md §18.13, and for a cell of several lines §18.75): the room each of
  * its lines is laid in, in its column's alignment (its class: Placed.align; a cell of several lines its box so, its lines in the
  * box by Placed.inner: FitBlock.box), at the largest size not over the original's that fits every line, the same room at every
  * size (no step down in its own ink's width first, no room opening only where it is clipped at its floor: X.further's 'widen').
@@ -136,7 +136,7 @@ function cellExtent(l: Line, m: Placed): [number, number] {
 function columnRoomOf(m: Placed): readonly [number, number] | undefined {
   const c = m.room.column
   const l = m.lines[0]
-  // (a cell of several lines too, every line its: the lines of a box TeX set in the cell, one unit (§18.74), each laid in the
+  // (a cell of several lines too, every line its: the lines of a box TeX set in the cell, one unit (§18.75), each laid in the
   // cell's room in its column whichever line it is, so that no cell is drawn smaller for having become one unit; a paragraph
   // cell states no column. Its lines on one page; none held)
   if (m.kind !== 'cell' || !c || !l || m.lines.some((x) => x[0] !== l[0] || x[9] & KEPT)) return undefined
@@ -430,7 +430,7 @@ export function adapt(i: AdaptInput): Adapted {
     blocks[0].hangGap = hangGap
   }
   // (a cell of several lines in its room: its box set there by its class, its lines in the box by their own, as TeX set them:
-  // B.place's boxLines, §18.74)
+  // B.place's boxLines, §18.75)
   if (column && lines.length > 1) {
     const cls = m.align === 'r' ? 'r' : m.align === 'c' ? 'c' : 'l'
     for (const b of blocks) b.box = { cls, inner: m.inner ?? cls }

@@ -51,7 +51,7 @@ const ALIGN_OF = { start: 'l', centre: 'c', end: 'r' } as const
 /** a unit made on A and its ink there: its text glyphs (global, stream order), its label's (an ink unit's leading mark, which its
  *  text does not say), its placeholders' glyphs (the element `ph`), its turned glyphs ([page, index]) and its boxes ([page,
  *  index]) */
-export interface Made {
+interface Made {
   unit: InstrumentUnit
   text: number[]
   label?: number[]

@@ -7,7 +7,7 @@ import type { Prefs, PrefsPatch } from '../prefs.ts'
 import { GOES_ON as GOES_ON_STOPS, LASTING as PAPERS } from '../session/machine.ts'
 import { LAYER_WHY } from './events.ts'
 
-export type EngineDisplay = 'original' | 'translation' | 'bilingual'
+type EngineDisplay = 'original' | 'translation' | 'bilingual'
 /** why there is no bilingual version: for now (`refused`, a limit, its time given; `unreachable`, our server out of reach), or
  *  for this paper (`no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`: our server cannot make one for this version of
  *  the reader), or for this language (`target`) */
@@ -41,7 +41,7 @@ export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(
  *  session's one table (session/machine.ts GOES_ON), as the chrome says them */
 export const GOES_ON: ReadonlySet<Unavailable> = new Set<Unavailable>([...GOES_ON_STOPS].map((why) => LAYER_WHY[why]))
 /** the sync as the chrome names it to a session: together, or off */
-export type SyncMode = 'same' | 'off'
+type SyncMode = 'same' | 'off'
 /** a heading of the contents: its id (its unit's), its title (translated where its row is in), the original's, its level, its page */
 export interface OutlineEntry {
   id: number
@@ -137,7 +137,7 @@ export interface SessionHost {
 export type Display = EngineDisplay
 export type Side = 'left' | 'right'
 /** loading the original; the paper's layer being prepared; the translation under way; reading; or the reader cannot go on */
-export type Phase = 'loading' | 'preparing' | 'translating' | 'ready' | 'failed'
+type Phase = 'loading' | 'preparing' | 'translating' | 'ready' | 'failed'
 
 export interface ReaderState {
   display: Display

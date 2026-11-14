@@ -60,7 +60,7 @@ export type PageRules = FillRules & {
   step: number
 }
 /** what a pass hands the fill: the units filled, the units its target reads, those running on to the page */
-export type FillUnits = { units: FillLaid[]; voters: FillLaid[]; continuing: FillLaid[] }
+type FillUnits = { units: FillLaid[]; voters: FillLaid[]; continuing: FillLaid[] }
 
 /** a unit as S.fill.target reads it */
 const voterOf = (p: FillLaid): Voter => ({
