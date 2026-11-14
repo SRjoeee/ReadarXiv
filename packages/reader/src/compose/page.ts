@@ -33,7 +33,7 @@ export type Item =
    *  `ink` its own ink, its piece's boxes on its line as the part states them (src's page's PDF units), which it is cut by */
   | { s: string; x: number; src: Ink; k: number; piece: string; cut?: 1 | 2 | 3; ink?: Box[] }
 
-export type Why =
+type Why =
   | 'unlocated'
   | 'unwrapped'
   | 'page'

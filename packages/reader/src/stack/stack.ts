@@ -161,13 +161,13 @@ export interface ViewContent {
 }
 /** the left pane's own drawing of the page, copied (no second render), while it waits for its layer; `fallback` drawn where the
  *  left's drawing of it fails */
-export interface LeftContent {
+interface LeftContent {
   kind: 'left'
   key: string
   fallback: ViewContent
 }
 /** a page of text in grey, while there is no original to draw (round 4's skeleton) */
-export interface SkeletonContent {
+interface SkeletonContent {
   kind: 'skeleton'
   key: string
 }
@@ -201,7 +201,7 @@ type Listener<K extends keyof StackEvents> = (e: StackEvents[K]) => void
  * on one pane and not yet on the other would be a few pixels apart (2307.16209v1 p2 at 2.37: 1894 against 1899 px). The rounding
  * is a function of the page's viewport and the screen alone, so the first drawing of page n at a scale tells it for every pane
  */
-export interface Rounding {
+interface Rounding {
   get(n: number, scale: number): readonly [string, string] | null
   set(n: number, scale: number, x: string, y: string): void
   on(f: (n: number) => void): () => void
@@ -228,7 +228,7 @@ export function roundingTable(): Rounding {
 }
 
 /** the left pane's pages, as a slot that shows the left's drawing reads them */
-export interface LeftPages {
+interface LeftPages {
   /** the left's canvas of page n where it is drawn at its page view's scale now, else null */
   canvas(n: number): HTMLCanvasElement | null
   /** the left's page box of page n (its loading mark is mirrored from its classes), or null */
@@ -239,7 +239,7 @@ export interface LeftPages {
   holds(n: number): boolean
 }
 
-export interface StackOptions {
+interface StackOptions {
   scroller: HTMLElement
   kit: Kit
   scheduler: Scheduler

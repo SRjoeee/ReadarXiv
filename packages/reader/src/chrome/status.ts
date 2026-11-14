@@ -38,7 +38,7 @@ export type Capsule =
   | { kind: 'progress'; stage: Stage; words: CapsuleWords; show?: true }
 /** what the reader waits for while a run is under way, as a host's words say it: its turn at our server, the translation (the
  *  paper's first making included: what the reader waits for is its translation, never the making), our server heard again */
-export type Stage = 'queued' | 'translating' | 'reconnecting'
+type Stage = 'queued' | 'translating' | 'reconnecting'
 /** why the bilingual version is not to be had now, the causes told apart (PDF-READER §8): the visitor's new papers spent
  *  (`quota`), our server at capacity (`busy`), the visitor's rate of asks (`rate`), the network itself (`network`), our server
  *  out of reach or at fault (`server`) */
@@ -81,7 +81,7 @@ const KEYS: ReadonlySet<ProviderErrorKind> = new Set(['no-key', 'auth'])
 const running = (state: ReaderState) => state.phase === 'translating' || state.phase === 'preparing'
 
 /** What the reader has done with the notices this visit (StatusCapsule keeps it). `refusalsSeen`: the refused writes closed */
-export interface Seen {
+interface Seen {
   /** the passages that had failed when the reader closed their notice (0: not closed): closed for the visit unless more fail */
   noticeClosed: number
   narrowShown: boolean
@@ -281,7 +281,7 @@ export function spokenOf(state: ReaderState): string {
  * it when the original alone is shown), then, where the paper's layer is being prepared, half the rest by the prepare's
  * stage, then the paragraphs translated to the end, from where the prepare left it (the coordinator's decision 4, 2026-11-11)
  */
-export interface Line {
+interface Line {
   on: boolean
   value: number
 }
@@ -347,7 +347,7 @@ export function heldOf(state: ReaderState, rules: Pick<Parts, 'narrow' | 'refusa
 
 /** the original's pane's card, where the original could not be read and the host draws its loss there (StateWords
  *  `openOriginal`: the website's): its words, and arXiv's PDF of the version as its link; null otherwise */
-export interface OriginalCard {
+interface OriginalCard {
   reason: string
   href: string
   label: string
@@ -373,7 +373,7 @@ export function originalCardOf(
 export type Sign = 'info' | 'check' | 'spinner' | 'clock' | 'alert' | 'file'
 /** what a capsule or a card is drawn with: its sign, and its tone where the host's rule gives one (`alert`: the sign in the
  *  danger's red; `wait`: a card's sign in quiet ink) */
-export interface Look {
+interface Look {
   sign: Sign
   tone?: 'alert' | 'wait'
 }
@@ -398,7 +398,7 @@ export function cardDueAt(state: ReaderState, now: number, words: StateWords = {
   return at !== null && at > now ? at : null
 }
 /** the host's rules a state is drawn by beside its words (parts.tsx), and the time it is drawn at */
-export interface Rules {
+interface Rules {
   retry?: Parts['retry']
   now?: number
   /** the origins the host's links may lead to besides arXiv's and the page's own (parts.tsx `linkOrigins`) */

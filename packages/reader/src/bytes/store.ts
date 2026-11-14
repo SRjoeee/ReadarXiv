@@ -15,7 +15,7 @@ export const STORE_BYTES = 64 * 2 ** 20
 /** the chunks asked of the network at once, at most: 1 MiB in flight fills a 10 Mbit/s line and a 100 Mbit/s one at 80 ms */
 export const CHUNKS_IN_FLIGHT = 16
 
-export type ChunkFetch = (begin: number, end: number) => Promise<Uint8Array>
+type ChunkFetch = (begin: number, end: number) => Promise<Uint8Array>
 
 export interface ChunkStore {
   /**

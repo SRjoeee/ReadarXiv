@@ -255,7 +255,7 @@ function useWaitShown(wanted: Capsule | null, showing = false): Capsule | null {
  *  2026-11-03): a window that showed the paper side by side (`readWide`: some pages drawn, side by side on screen, the window wide)
  *  and was then narrowed while reading (`narrowed`) says that it shows the translation alone; a page opened in a narrow window
  *  says nothing (its switch shows the translation chosen), and widened again it says nothing either. What it has seen only grows */
-export interface NarrowWatch {
+interface NarrowWatch {
   readWide: boolean
   narrowed: boolean
 }

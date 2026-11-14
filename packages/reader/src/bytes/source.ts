@@ -41,7 +41,7 @@ export const RETRY_MAX_MS = 30_000
  *  paper not there; one after is the network's), its answers not the object (`bytes`), a chunk not the one the head names,
  *  or before the head not the one first read (`digest`), the network failing its reads (`network`), or the source let go by
  *  its owner (`gone`: never told) */
-export type RefusalKind = 'missing' | 'bytes' | 'digest' | 'network' | 'gone'
+type RefusalKind = 'missing' | 'bytes' | 'digest' | 'network' | 'gone'
 export class RangeRefusal extends Error {
   readonly kind: RefusalKind
   readonly why: string
@@ -61,7 +61,7 @@ export interface Bound {
 }
 
 /** the browser's word on being online, and a wait for it (the reader's Env; the document's by default) */
-export interface Online {
+interface Online {
   now(): boolean
   /** resolves once the browser says it is online, or `signal` aborts */
   wait(signal: AbortSignal): Promise<void>
@@ -95,7 +95,7 @@ export const browserOnline: Online = {
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>
 
-export interface SourceOptions {
+interface SourceOptions {
   /** the host's fetch: the reader's only network */
   fetch: Fetch
   /** the object's address: a path on our server (`own`) or arXiv's absolute URL */

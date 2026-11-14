@@ -26,7 +26,7 @@ interface RangeTransport {
   abort(): void
 }
 
-export interface RangedTask {
+interface RangedTask {
   /** the document; rejected where the source is refused before it opens, or PDF.js cannot read it */
   readonly promise: Promise<PDFDocumentProxy>
   /** whether the document has opened */
@@ -37,7 +37,7 @@ export interface RangedTask {
   destroy(): Promise<void>
 }
 
-export interface RangedOptions {
+interface RangedOptions {
   /** getDocument's other options: the kit's (cMapUrl, standardFontDataUrl, wasmUrl, enableHWA, …) and the document's worker */
   options: Record<string, unknown>
   /** told once, where a range PDF.js asked for is refused (its first chunk's refusal rejects the promise instead): the page or

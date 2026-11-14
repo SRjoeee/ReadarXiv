@@ -47,7 +47,7 @@ export class Refused extends Error {
   }
 }
 
-export interface Ask {
+interface Ask {
   fetch: Fetch
   signal?: AbortSignal | undefined
   timers?: Timers | undefined

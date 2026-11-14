@@ -403,7 +403,7 @@ export async function cropsFor(
 }
 
 /** a box of device pixels on a crops' grid */
-export interface PxBox {
+interface PxBox {
   x: number
   y: number
   w: number

@@ -5,10 +5,10 @@
 // by the handler's own signal. The live tickets equal `resources(state)`'s keys after every step (checked: I1 of design-b).
 import { type Effect, type Input, resources, type Spec, type State, step, type Ticket, ticketOf } from './machine.ts'
 
-export type Emit = (x: Input) => void
+type Emit = (x: Input) => void
 /** a slot's handler: the resource acquired for `spec` under ticket `t`; results told by `emit`; `signal` aborted at its release.
  *  Its return, where it gives one, runs at the release (after the abort) */
-export type Handler<S extends Spec = Spec> = (
+type Handler<S extends Spec = Spec> = (
   spec: S,
   t: Ticket,
   emit: Emit,

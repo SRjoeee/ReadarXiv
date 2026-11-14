@@ -54,7 +54,7 @@ const RUNNING = 1,
   PAUSED = 2,
   FINISHED = 3
 
-export interface PaneEvents {
+interface PaneEvents {
   page: { side: Side; page: number; pages: number }
   scale: { scale: number; zoom: Zoom | null }
   sync: { on: boolean; available: boolean }
@@ -67,7 +67,7 @@ export interface PaneEvents {
 }
 type Listener<K extends keyof PaneEvents> = (e: PaneEvents[K]) => void
 
-export interface PanesOptions {
+interface PanesOptions {
   /** the reader's root: what the view marks (`data-axt-pdf-mode`, `-narrow`, `-swapped`) is written here, never on <html> */
   root: HTMLElement
   left: HTMLElement
