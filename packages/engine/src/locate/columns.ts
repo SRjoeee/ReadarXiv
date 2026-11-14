@@ -33,7 +33,7 @@
 // of the blank TeX leaves beside it, never past the cell's own side: roomsOf below.
 
 /** a column's class: TeX's \hfil on the side or sides the slack goes */
-export type ColumnClass = 'l' | 'c' | 'r'
+type ColumnClass = 'l' | 'c' | 'r'
 
 /** a unit cell as its column's box reads it */
 export interface ColumnCell {

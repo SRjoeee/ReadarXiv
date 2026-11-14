@@ -16,7 +16,7 @@ import type { Owned } from './ownership.ts'
 const BLOCK_DY = 1.75
 const SPACE_GAP = 0.15
 
-export interface Born {
+interface Born {
   kind: 'inkfigures' | 'inkorphan'
   content: Piece[]
   /** its glyphs on A (global), stream order */

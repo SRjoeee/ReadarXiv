@@ -65,7 +65,7 @@ function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
 import type { Owned } from './ownership.ts'
 import type { Member } from './work.ts'
 
-export interface FactsInput {
+interface FactsInput {
   ins: Instrument
   inkA: Doc
   m: Mapping

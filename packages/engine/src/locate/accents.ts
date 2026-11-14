@@ -8,7 +8,7 @@
 
 /** a glyph as this module reads one (accentOver): its Unicode, font, size, its advance along its line (x0, x1), its baseline
  *  across (y) and its ink's top */
-export interface AccentGlyph {
+interface AccentGlyph {
   u: string
   font: string
   size: number
