@@ -141,7 +141,9 @@ export function figureLinesOf(
       for (const [g, k] of map) if (!held.has(k)) (byUnit.get(k) ?? byUnit.set(k, []).get(k)!).push(g)
       for (const [k, gs] of byUnit) {
         const u = fig.units[k]
-        if (!u || u.why || Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6) continue
+        // (turned: its direction across; a unit holding a level glyph is level or turned within a run's 1e-3 of it, figureUnitsOf,
+        // its direction along then within 5.0000013e-7 of 1)
+        if (!u || u.why || Math.abs(u.uy ?? 0) > 1e-6) continue
         const G = glyphsOn(pi + 1)
         const own = gs.filter((g) => real(G[g])).sort((a, b) => G[a]!.x0 - G[b]!.x0)
         if (setApart({ order: [{ t: 'text', glyphs: own }], els: [] }, G)) {
