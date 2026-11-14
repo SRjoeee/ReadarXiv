@@ -1650,7 +1650,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
    *  is safe (the re-review's m4); with no `switches` at all (the probe not run), undefined: the marks as before */
   const answer = (p, next) => {
     if (!switches) return undefined
-    const codes = switches[commandOf(p)]
+    const codes = switches[commandOf(p) ?? '']
     if (!codes) return ASKED.has(classOf(p)) ? '2' : undefined
     const code = classOf(next) === 'footnote' && classOf(p) === 'footnote' ? (codes[7] === '0' ? codes[6] : codes[7] === 'x' ? 'x' : '1') : gluedTo(p, next) ? codes[7] : codes[next?.t === 'text' && next.s[0] && PUNCT.includes(next.s[0]) ? PUNCT.indexOf(next.s[0]) : 6]
     return code === 'x' ? '2' : code
@@ -1754,7 +1754,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // after it, past its first character (`movedAt`); a paper's macro keeps its opening mark alone, as for 2; a text piece whose
       // source is not its text there (an accent's letter joined to it), none)
       const raw = cls === 'macro' && !answered(p) ? undefined : answer(p, next)
-      const said = (raw === '2' || raw === '3') && cls === 'macro' ? '1' : raw === '3' && !(next?.t === 'text' && PUNCT.includes(next.s[0]) && (next.src === undefined || next.src[0] === next.s[0])) ? '2' : raw
+      const said = (raw === '2' || raw === '3') && cls === 'macro' ? '1' : raw === '3' && !(next?.t === 'text' && next.s[0] !== undefined && PUNCT.includes(next.s[0]) && (next.src === undefined || next.src[0] === next.s[0])) ? '2' : raw
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX. `opens`: the mark that opens the
@@ -1770,7 +1770,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // more), before another piece against that piece's first character
       const closes = !answered(p) || next === undefined || (next.t === 'text' && /^[ \t\r\n.,;:!?]/.test(next.s)) || gluedTo(p, next)
       // (an identifier that ends in a text symbol, `\}`, keeps its closing mark: TeX skips no space after a control symbol)
-      if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || (ENDS_IN_CS.test(p.src) && !identifierPiece(p.src)) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
+      if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || (ENDS_IN_CS.test(p.src ?? '') && !identifierPiece(p.src)) || /\s$/.test(p.src ?? '') || ENDS_ENV.test(p.src ?? '')) return [open, piece]
       return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
     // (a placeholder the marking passes over after a forced break (passedOver) has its opening point before the break, before the
@@ -1963,7 +1963,7 @@ export function followsOf(units, names, texts = null, inkless = null) {
     // set before its own ink — cite.sty's superscripts, natmove, fnpct: `\\cite{a}.` set ".¹" — and where TeX answered so, the
     // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first,
     // where none stands after them (stream.mjs ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
-    const moved = ASKED.has(classOf(u.pieces[k])) && MOVED.includes(after[0]) ? after[0] : null
+    const moved = ASKED.has(classOf(u.pieces[k])) && after[0] !== undefined && MOVED.includes(after[0]) ? after[0] : null
     return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said, ...(trail ?? {}) } } : {}), ...(moved ? { moved } : {}) }
   }
 }
