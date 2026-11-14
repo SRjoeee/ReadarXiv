@@ -7,8 +7,7 @@
 // seeded ones, and on the units of seeded files of Latin-1 and UTF-8 bytes, lines long enough to cross both slices, errors whose
 // context stands on their line, on another, or nowhere.
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error: the module is JavaScript until its typing commit (no declaration in the package)
-import { texErrors, unitsAtErrors } from '../../packages/engine/src/compile/tex-errors.mjs'
+import { texErrors, type UnitLines, unitsAtErrors } from '../../packages/engine/src/compile/tex-errors.ts'
 import { texErrors as texErrorsBefore, unitsAtErrors as unitsAtErrorsBefore } from './helpers/tex-errors-before.mjs'
 
 /** a seeded generator (mulberry32) */
@@ -60,7 +59,7 @@ describe('unitsAtErrors', () => {
     const bytes = new TextEncoder().encode(`first line\n${line}\nlast line`)
     const at = line.indexOf('w8000 ')
     const errors = [{ message: 'm', line: 2, before: line.slice(at - 12, at), after: line.slice(at, at + 12) }]
-    const units = [{ file: 'main.tex', unit: 'para', first: 2, last: 2, from: 11, to: 11 + line.length }, { file: 'main.tex', unit: 'other', first: 1, last: 3 }]
+    const units: UnitLines<string>[] = [{ file: 'main.tex', unit: 'para', first: 2, last: 2, from: 11, to: 11 + line.length }, { file: 'main.tex', unit: 'other', first: 1, last: 3 }]
     const now = unitsAtErrors(errors, new Map([['main.tex', bytes]]), units)
     expect(now).toEqual(['para'])
     expect(now).toEqual(unitsAtErrorsBefore(errors, new Map([['main.tex', bytes]]), units))
@@ -75,7 +74,7 @@ describe('unitsAtErrors', () => {
       const bytes = r.next() < 0.5 ? new TextEncoder().encode(text) : latin1Bytes(text)
       const files = new Map([['main.tex', bytes], ...(r.next() < 0.3 ? [['other.tex', bytes] as [string, Uint8Array]] : [])])
       // (units: a line range each, its byte range where spans give it, some nested in others)
-      const units: { file: string; unit: number; first: number; last: number; from?: number; to?: number; post?: number }[] = []
+      const units: UnitLines<number>[] = []
       for (let u = 0; u < 1 + r.int(6); u++) {
         const first = 1 + r.int(lines.length), last = Math.min(lines.length, first + r.int(3))
         const from = r.int(bytes.length + 1), to = Math.min(bytes.length, from + r.int(200000))

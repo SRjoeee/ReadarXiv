@@ -13,7 +13,7 @@
 import { whyText } from '../instrument/format.ts'
 import { isMemoryError } from '../memory.ts'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.ts'
-import { texErrors, unitsAtErrors } from './tex-errors.mjs'
+import { texErrors, unitsAtErrors } from './tex-errors.ts'
 import { END_TEX } from './tex.ts'
 import { duplicatesIn } from '../marks/marks.mjs'
 

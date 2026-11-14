@@ -21,7 +21,7 @@
     "./today/own/own.mjs": "./src/own/own.mjs",
     "./today/instrument/mt.ts": "./src/instrument/mt.ts",
     "./today/compile/tex.ts": "./src/compile/tex.ts",
-    "./today/compile/tex-errors.mjs": "./src/compile/tex-errors.mjs",
+    "./today/compile/tex-errors.ts": "./src/compile/tex-errors.ts",
     "./today/compile/base.ts": "./src/compile/base.ts",
     "./today/compile/pdf-lite.ts": "./src/compile/pdf-lite.ts",
     "./today/compile/guard.mjs": "./src/compile/guard.mjs",
