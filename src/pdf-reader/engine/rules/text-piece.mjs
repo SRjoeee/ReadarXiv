@@ -1,3 +1,3 @@
-// Moved whole into the engine package (packages/engine/src/source/text-piece.mjs); this path re-exports it through its transition
+// Moved whole into the engine package (packages/engine/src/source/text-piece.ts); this path re-exports it through its transition
 // path for what still imports it here. The cut-over deletes the path and the package's transition exports.
-export { textPieceOf } from '@readarxiv/engine/today/source/text-piece.mjs'
+export { textPieceOf } from '@readarxiv/engine/today/source/text-piece.ts'

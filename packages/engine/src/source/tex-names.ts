@@ -8,10 +8,37 @@
 // Pure: no DOM, no clock. An original module (no port statement).
 import NAMES from './tex-names.json' with { type: 'json' }
 
+/** a target's names as tex-names.json holds them, each by its English: a theorem-like head's, a generated reference's, a
+ *  conjunction's */
+interface Target {
+  heads: Readonly<Record<string, string>>
+  refs: Readonly<Record<string, string>>
+  conj: Readonly<Record<string, string>>
+}
+
 /** the commands whose text TeX's cross-referencing packages generate, a counter type's name before the number: cleveref's
  *  \cref and \Cref and their range, page and name forms, hyperref's \autoref. The layer renames their text (layer2.mjs
  *  GENERATED_REF), and a paper that calls any of them sends the names no package gives some target (source/paper-names.mjs) */
-export const GENERATED_COMMANDS = Object.freeze(['cref', 'Cref', 'crefrange', 'Crefrange', 'cpageref', 'Cpageref', 'cpagerefrange', 'Cpagerefrange', 'namecref', 'nameCref', 'lcnamecref', 'namecrefs', 'nameCrefs', 'lcnamecrefs', 'labelcref', 'labelcpageref', 'autoref', 'Autoref'])
+export const GENERATED_COMMANDS = Object.freeze([
+  'cref',
+  'Cref',
+  'crefrange',
+  'Crefrange',
+  'cpageref',
+  'Cpageref',
+  'cpagerefrange',
+  'Cpagerefrange',
+  'namecref',
+  'nameCref',
+  'lcnamecref',
+  'namecrefs',
+  'nameCrefs',
+  'lcnamecrefs',
+  'labelcref',
+  'labelcpageref',
+  'autoref',
+  'Autoref',
+])
 /** the targets whose names do not inflect (no plural, no case): an English plural or lower-case form reads as its type's one
  *  name there */
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
@@ -20,22 +47,32 @@ const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
 const BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
 /** a number a reference or a head prints: TeX's arabic, an appendix's or a supplement's letter before it, its parts after
  *  stops or dashes, a letter after it, a roman numeral in either case (a front matter's page), a letter alone (an appendix), any of these in brackets (an equation) */
-const NUMBER = /^[([]?(?:(?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+|[.\-–][A-Za-z](?![A-Za-z]))*[a-z]?|[IVXLCDM]{1,7}|[ivxlcdm]{1,7}|[A-Z])[)\]]?$/
+const NUMBER =
+  /^[([]?(?:(?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+|[.\-–][A-Za-z](?![A-Za-z]))*[a-z]?|[IVXLCDM]{1,7}|[ivxlcdm]{1,7}|[A-Z])[)\]]?$/
 /** the conjunctions cleveref's English prints, the longest first (", and " before " and ") */
 const CONJUNCTIONS = [...NAMES.conjunctions].sort((a, b) => b.length - a.length)
 /** each counter type's English name, \Crefname's singular (cleveref's english): a form's one name in a target that does not
  *  inflect, whose name units hold that word */
-const SINGULAR = NAMES.singular
+const SINGULAR: Readonly<Record<string, string>> = NAMES.singular
 /** the words no package names in some target the readers offer (cleveref's types' singulars, and the conjunctions' words): a paper
  *  that generates references sends them to the translator once, as name units of their own (source/paper-names.mjs) */
 export const NAME_GAPS = Object.freeze([...NAMES.gaps])
-export const CONJUNCTION_GAPS = Object.freeze([...new Set(NAMES.conjunctionGaps.map(c => conjunctionWord(c)))])
+export const CONJUNCTION_GAPS = Object.freeze([...new Set(NAMES.conjunctionGaps.map((c) => conjunctionWord(c)))])
 /** a conjunction's word, its spaces and punctuation aside (", and " "and") */
-function conjunctionWord(c) { return c.replace(/[\s,]+/g, ' ').trim() }
+function conjunctionWord(c: string) {
+  return c.replace(/[\s,]+/g, ' ').trim()
+}
 /** a name unit's translation as the paper's names hold it (`names`, English → the target's), trimmed; null for none */
-const ownName = (names, english) => { const w = names?.get?.(english); return typeof w === 'string' && w.trim() ? w.trim() : null }
+const ownName = (names: ReadonlyMap<string, string> | null | undefined, english: string) => {
+  const w = names?.get?.(english)
+  return typeof w === 'string' && w.trim() ? w.trim() : null
+}
 /** a babel name as a reference's word: its letter-spacing between CJK characters dropped (zh-Hant's appendix name, its two characters a space apart, a heading's) */
-const unspaced = s => s.replace(/(?<=[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}])\s+(?=[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}])/gu, '')
+const unspaced = (s: string) =>
+  s.replace(
+    /(?<=[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}])\s+(?=[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}])/gu,
+    '',
+  )
 
 /** whether the target's packages answer every lookup that would read the paper's own name `english` (a name unit's text) there:
  *  headName reads a head's word of the target's before the paper's, refName a head's, then a reference's, and conjunctionOf a
@@ -44,21 +81,23 @@ const unspaced = s => s.replace(/(?<=[\p{Script=Han}\p{Script=Hangul}\p{Script=H
  *  still be a head's (a paper's own `\newtheorem{algorithm}{Algorithm}`, whose head zh's cleveref does not name and ctex has no
  *  word for: PDF-READER §19.14), and is sent. A name answered so is never read in that target, so it is never sent
  *  (layer-proto/rows.mjs toTranslate). A babel name the layout rules give (`labels`) is not counted either */
-export function nameAnswered(english, to) {
-  const t = NAMES.targets[to]
+export function nameAnswered(english: unknown, to: string) {
+  const t = (NAMES.targets as Readonly<Record<string, Target>>)[to]
   if (!t || typeof english !== 'string') return false
-  const word = (table, w) => Object.hasOwn(table, w) && !!table[w]
-  const conj = CONJUNCTIONS.filter(c => conjunctionWord(c) === english)
-  if (conj.some(c => !Object.hasOwn(t.conj, c))) return false
+  const word = (table: Readonly<Record<string, string>>, w: string) => Object.hasOwn(table, w) && !!table[w]
+  const conj = CONJUNCTIONS.filter((c) => conjunctionWord(c) === english)
+  if (conj.some((c) => !Object.hasOwn(t.conj, c))) return false
   if (!conj.length && !word(t.heads, english)) return false
-  if (UNINFLECTED.has(to)) for (const [form, type] of Object.entries(NAMES.types)) if (form !== english && SINGULAR[type] === english && !word(t.heads, form) && !word(t.refs, form)) return false
+  if (UNINFLECTED.has(to))
+    for (const [form, type] of Object.entries(NAMES.types))
+      if (form !== english && SINGULAR[type] === english && !word(t.heads, form) && !word(t.refs, form)) return false
   return true
 }
 
 /** a theorem-like head's name (\newtheorem's printed name, "Definition") in the target: translator's dictionary's, else the
  *  paper's own name unit's translation (`names`), or null */
-export function headName(english, to, names = null) {
-  const t = NAMES.targets[to]
+export function headName(english: string, to: string, names: ReadonlyMap<string, string> | null = null) {
+  const t = (NAMES.targets as Readonly<Record<string, Target>>)[to]
   return (t && Object.hasOwn(t.heads, english) && t.heads[english]) || (t ? ownName(names, english) : null)
 }
 
@@ -71,27 +110,42 @@ export function headName(english, to, names = null) {
  * nominative, a plural or a case none of its); else the paper's own name unit's translation (`names`: the form itself, a
  * name the paper defines, or, in a target whose names do not inflect, its type's singular, cleveref's English)
  */
-export function refName(english, to, labels = null, names = null) {
-  const t = NAMES.targets[to]
+export function refName(
+  english: string,
+  to: string,
+  labels: Readonly<Record<string, string>> | null = null,
+  names: ReadonlyMap<string, string> | null = null,
+) {
+  const t = (NAMES.targets as Readonly<Record<string, Target>>)[to]
   if (!t) return null
   const head = Object.hasOwn(t.heads, english) && t.heads[english]
   if (head) return head
   if (Object.hasOwn(t.refs, english) && t.refs[english]) return t.refs[english]
-  const type = Object.hasOwn(NAMES.types, english) ? NAMES.types[english] : null
-  if (type && BABEL_TYPES.has(type) && labels?.[type] && (UNINFLECTED.has(to) || SINGULAR[type] === english)) return unspaced(labels[type])
-  return ownName(names, english) ?? (UNINFLECTED.has(to) && type && Object.hasOwn(SINGULAR, type) ? ownName(names, SINGULAR[type]) : null)
+  const type = Object.hasOwn(NAMES.types, english) ? (NAMES.types as Readonly<Record<string, string>>)[english] : null
+  if (type && BABEL_TYPES.has(type) && labels?.[type] && (UNINFLECTED.has(to) || SINGULAR[type] === english))
+    return unspaced(labels[type])
+  return (
+    ownName(names, english) ??
+    (UNINFLECTED.has(to) && type && Object.hasOwn(SINGULAR, type) ? ownName(names, SINGULAR[type]!) : null)
+  )
 }
 /** a conjunction in the target: cleveref's; else one of punctuation alone as it is; else its word the paper's name unit's
  *  translation, its spaces and punctuation the English's (" and " a space each side) */
-function conjunctionOf(t, c, names) {
+function conjunctionOf(t: Target, c: string, names: ReadonlyMap<string, string> | null) {
   if (Object.hasOwn(t.conj, c)) return t.conj[c]
   if (!/\p{L}/u.test(c)) return c
-  const word = conjunctionWord(c), w = ownName(names, word)
+  const word = conjunctionWord(c),
+    w = ownName(names, word)
   return w ? c.replace(word, w) : null
 }
 
 /** the words a name may be, the longest first, so that "Main Theorem" is read before "Theorem" */
-const WORDS = [...new Set([...Object.keys(NAMES.types), ...Object.values(NAMES.targets).flatMap(t => [...Object.keys(t.heads), ...Object.keys(t.refs)])])].sort((a, b) => b.length - a.length)
+const WORDS = [
+  ...new Set([
+    ...Object.keys(NAMES.types),
+    ...Object.values(NAMES.targets).flatMap((t) => [...Object.keys(t.heads), ...Object.keys(t.refs)]),
+  ]),
+].sort((a, b) => b.length - a.length)
 
 /**
  * A generated reference's text as TeX set it (`text`: "Theorem A.17", "Sections 5.2.1, 5.2.3 and 5.2.4") in the target's
@@ -100,16 +154,27 @@ const WORDS = [...new Set([...Object.keys(NAMES.types), ...Object.values(NAMES.t
  * conjunction it has one for: the reference is then the original's whole, never half in either language. An empty list
  * where it holds no name (\labelcref's numbers alone)
  */
-export function refInTarget(text, to, labels = null, names = null) {
-  if (typeof text !== 'string' || !text.trim() || !NAMES.targets[to]) return null
-  const t = NAMES.targets[to]
+export function refInTarget(
+  text: unknown,
+  to: string,
+  labels: Readonly<Record<string, string>> | null = null,
+  names: ReadonlyMap<string, string> | null = null,
+) {
+  if (typeof text !== 'string' || !text.trim() || !(NAMES.targets as Readonly<Record<string, Target>>)[to]) return null
+  const t = (NAMES.targets as Readonly<Record<string, Target>>)[to]!
   // (the paper's own names among the words, the longest first: "Main Assumption" before "Assumption")
   const words = names?.size ? [...new Set([...names.keys(), ...WORDS])].sort((a, b) => b.length - a.length) : WORDS
   const out = []
-  let i = 0, rest = '', named = false
-  const flush = () => { const s = rest.trim(); rest = ''; return !s || s.split(/\s+/).every(w => NUMBER.test(w.replace(/[,;]$/, ''))) }
+  let i = 0,
+    rest = '',
+    named = false
+  const flush = () => {
+    const s = rest.trim()
+    rest = ''
+    return !s || s.split(/\s+/).every((w) => NUMBER.test(w.replace(/[,;]$/, '')))
+  }
   while (i < text.length) {
-    const c = CONJUNCTIONS.find(x => text.startsWith(x, i))
+    const c = CONJUNCTIONS.find((x) => text.startsWith(x, i))
     if (c && (named || rest.trim())) {
       if (!flush()) return null
       // (", " between two numbers is its own conjunction where the target's is the same)
@@ -119,8 +184,10 @@ export function refInTarget(text, to, labels = null, names = null) {
       i += c.length
       continue
     }
-    const atWord = i === 0 || /[\s(]/.test(text[i - 1])
-    const name = atWord ? words.find(x => text.startsWith(x, i) && !/[\p{L}\p{N}]/u.test(text[i + x.length] ?? '')) : null
+    const atWord = i === 0 || /[\s(]/.test(text[i - 1]!)
+    const name = atWord
+      ? words.find((x) => text.startsWith(x, i) && !/[\p{L}\p{N}]/u.test(text[i + x.length] ?? ''))
+      : null
     if (name) {
       if (!flush()) return null
       const w = refName(name, to, labels, names)
@@ -142,18 +209,26 @@ export function refInTarget(text, to, labels = null, names = null) {
  * the target: its name in translator's dictionary's word for it, its number and its punctuation as they are. Null where it
  * is no head of a name the target's dictionary holds, nor one the paper's name units translate (`names`)
  */
-export function headInTarget(text, to, names = null) {
+export function headInTarget(text: unknown, to: string, names: ReadonlyMap<string, string> | null = null) {
   // (its name of the characters a paper's own name may hold, source/paper-names.mjs PLAIN's: "Sub-Claim", "Thm.", the
   // shortest that leaves a number and punctuation after it, so that a package's names read as they did)
-  const m = typeof text === 'string' && /^\s*(\p{L}[\p{L}\p{M} .'\u2019-]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7}|[A-Z])?(\s*[.:]?\s*[([]?)\s*$/u.exec(text)
+  const m =
+    typeof text === 'string' &&
+    /^\s*(\p{L}[\p{L}\p{M} .'\u2019-]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7}|[A-Z])?(\s*[.:]?\s*[([]?)\s*$/u.exec(
+      text,
+    )
   if (!m) return null
-  const english = m[1].replace(/\s+/g, ' ')
-  let name = headName(english, to, names), tail = m[3]
+  const english = m[1]!.replace(/\s+/g, ' ')
+  let name = headName(english, to, names),
+    tail = m[3]!
   // (an unnumbered head of a name that ends in its own stop, a style that sets no punctuation after it: "Thm.", the stop the
   // name's where the name without it has no word)
   if (!name && !m[2] && /^\s*\./.test(tail)) {
     const dotted = headName(`${english}.`, to, names)
-    if (dotted) { name = dotted; tail = tail.replace(/^\s*\./, '') }
+    if (dotted) {
+      name = dotted
+      tail = tail.replace(/^\s*\./, '')
+    }
   }
   if (!name) return null
   // (its punctuation as TeX set it, a space before an opening bracket kept: "Definition 5.1 (")

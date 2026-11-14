@@ -23,22 +23,71 @@ export const BOX_TOL = 0.01
 /** the marks' destinations' prefix (marks.mjs MARK_DEF's \pdfdest names) */
 const PREFIX = 'axt-'
 
+/** what the checks read of a PDF.js document (PDFDocumentProxy's members they call): every one of them is called, its
+ *  metadata's too (creationEpochOf, prefixDoc), a document without it then read as having none where a check catches the
+ *  error */
+export interface PdfLike {
+  numPages: number
+  getPage(p: number): Promise<{
+    view?: number[]
+    rotate?: number
+    userUnit?: number
+    getTextContent(): Promise<{ items?: { str?: string }[] }>
+  }>
+  getDestinations(): Promise<Record<string, unknown[] | null> | Map<string, unknown[] | null>>
+  getPageIndex(ref: unknown): Promise<number>
+  getMetadata(): Promise<PdfMetadata>
+}
+/** a document's metadata as getMetadata answers it: its Info dictionary and its XMP packet, each where it has one */
+export type PdfMetadata = {
+  info?: { CreationDate?: string; Custom?: Map<string, unknown> } | null
+  metadata?: { getRaw?(): unknown } | null
+} | null
+/** a page's box as boxesOfPdf reads it: its view's four corners (none where the page states no view), its rotation and its
+ *  unit */
+export type PageBox = [
+  x0: number | undefined,
+  y0: number | undefined,
+  x1: number | undefined,
+  y1: number | undefined,
+  rotate: number,
+  userUnit: number,
+]
+/** a mark of the marked compile as marksOfPdf reads it: its page (1-based) and its x and y, each null where it names none */
+export type MarkPlace = [page: number | null, x: number | null, y: number | null]
+
+/** a reference to an object of the PDF, as PDF.js gives one a destination names its page by */
+interface PdfRef {
+  num?: unknown
+  gen?: unknown
+}
 /** a destination's page number (1-based), looked up once by its reference; null where it names none */
-function pagesOf(doc) {
-  const seen = new Map()
-  return async ref => {
-    if (Number.isInteger(ref)) return ref + 1
-    const key = ref && typeof ref === 'object' ? `${ref.num}R${ref.gen}` : null
+function pagesOf(doc: PdfLike) {
+  const seen = new Map<string, Promise<number | null>>()
+  return async (ref: unknown) => {
+    if (Number.isInteger(ref)) return (ref as number) + 1
+    const key = ref && typeof ref === 'object' ? `${(ref as PdfRef).num}R${(ref as PdfRef).gen}` : null
     if (key === null) return null
-    if (!seen.has(key)) seen.set(key, doc.getPageIndex(ref).then(i => i + 1, e => { if (isMemoryError(e)) throw e; return null }))
-    return seen.get(key)
+    if (!seen.has(key))
+      seen.set(
+        key,
+        doc.getPageIndex(ref).then(
+          (i) => i + 1,
+          (e: unknown) => {
+            if (isMemoryError(e)) throw e
+            return null
+          },
+        ),
+      )
+    return seen.get(key)!
   }
 }
 
 /** a document's `axt-` destinations: name → [page, x, y] (x and y as the destination gives them, null where it names none) */
-export async function marksOfPdf(doc) {
+export async function marksOfPdf(doc: PdfLike) {
   const dests = await doc.getDestinations()
-  const pageOf = pagesOf(doc), out = new Map()
+  const pageOf = pagesOf(doc),
+    out = new Map<string, MarkPlace>()
   for (const [name, d] of dests instanceof Map ? dests : Object.entries(dests ?? {})) {
     if (!name.startsWith(PREFIX) || !Array.isArray(d)) continue
     out.set(name, [await pageOf(d[0]), typeof d[2] === 'number' ? d[2] : null, typeof d[3] === 'number' ? d[3] : null])
@@ -47,8 +96,8 @@ export async function marksOfPdf(doc) {
 }
 
 /** each page's box as PDF.js reads it, [x0, y0, x1, y1, rotate, userUnit] (its view: the CropBox within the MediaBox) */
-export async function boxesOfPdf(doc) {
-  const out = []
+export async function boxesOfPdf(doc: PdfLike) {
+  const out: PageBox[] = []
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p)
     const v = page.view ?? []
@@ -58,12 +107,17 @@ export async function boxesOfPdf(doc) {
 }
 
 /** the first page whose box differs between two lists of boxesOfPdf's, its why; null where they are the same, page for page */
-function boxesDiffer(a, b, what) {
+function boxesDiffer(a: readonly PageBox[], b: readonly PageBox[], what: readonly [string, string]) {
   if (a.length !== b.length) return `${what[0]} has ${a.length} pages, ${what[1]} ${b.length}`
   for (let p = 0; p < a.length; p++) {
-    const x = a[p], y = b[p]
-    const off = [0, 1, 2, 3].some(i => !(Math.abs(x[i] - y[i]) < BOX_TOL)) || x[4] !== y[4] || x[5] !== y[5]
-    if (off) return `page ${p + 1}'s box is [${x.slice(0, 4).join(' ')}] in ${what[0]}, [${y.slice(0, 4).join(' ')}] in ${what[1]}${x[4] !== y[4] ? ` (rotated ${x[4]} and ${y[4]})` : ''}`
+    const x = a[p]!,
+      y = b[p]!
+    const off =
+      [0, 1, 2, 3].some((i) => !(Math.abs((x[i] as number) - (y[i] as number)) < BOX_TOL)) ||
+      x[4] !== y[4] ||
+      x[5] !== y[5]
+    if (off)
+      return `page ${p + 1}'s box is [${x.slice(0, 4).join(' ')}] in ${what[0]}, [${y.slice(0, 4).join(' ')}] in ${what[1]}${x[4] !== y[4] ? ` (rotated ${x[4]} and ${y[4]})` : ''}`
   }
   return null
 }
@@ -73,18 +127,30 @@ function boxesDiffer(a, b, what) {
  * `axt-` destinations, where both have the same pages and boxes and the same destinations, each on the same page within
  * MARK_TOL of the same place; else { ok: false, why }. `draft`, `final`: PDF.js documents of the two
  */
-export async function finalCheck(draft, final) {
+export async function finalCheck(
+  draft: PdfLike,
+  final: PdfLike,
+): Promise<{ ok: true; marks: number } | { ok: false; why: string }> {
   const boxes = boxesDiffer(await boxesOfPdf(draft), await boxesOfPdf(final), ['the draft', 'the final pass'])
   if (boxes) return { ok: false, why: boxes }
-  const a = await marksOfPdf(draft), b = await marksOfPdf(final)
+  const a = await marksOfPdf(draft),
+    b = await marksOfPdf(final)
   if (a.size !== b.size) return { ok: false, why: `the draft has ${a.size} marks, the final pass ${b.size}` }
   for (const [name, p] of a) {
     const q = b.get(name)
     if (!q) return { ok: false, why: `the final pass has no mark ${name.slice(PREFIX.length)}` }
-    if (p[0] !== q[0]) return { ok: false, why: `the mark ${name.slice(PREFIX.length)} is on page ${p[0]} in the draft, ${q[0]} in the final pass` }
-    for (const i of [1, 2]) {
+    if (p[0] !== q[0])
+      return {
+        ok: false,
+        why: `the mark ${name.slice(PREFIX.length)} is on page ${p[0]} in the draft, ${q[0]} in the final pass`,
+      }
+    for (const i of [1, 2] as const) {
       if (p[i] === null && q[i] === null) continue
-      if (p[i] === null || q[i] === null || !(Math.abs(p[i] - q[i]) < MARK_TOL)) return { ok: false, why: `the mark ${name.slice(PREFIX.length)} moved from (${p[1]}, ${p[2]}) to (${q[1]}, ${q[2]}) on page ${p[0]}` }
+      if (p[i] === null || q[i] === null || !(Math.abs(p[i] - q[i]) < MARK_TOL))
+        return {
+          ok: false,
+          why: `the mark ${name.slice(PREFIX.length)} moved from (${p[1]}, ${p[2]}) to (${q[1]}, ${q[2]}) on page ${p[0]}`,
+        }
     }
   }
   return { ok: true, marks: a.size }
@@ -95,10 +161,16 @@ export async function finalCheck(draft, final) {
  * page the same box (BOX_TOL, its rotation and unit too), else { equal: false, pages: [ours, arXiv's], why }. `ours`, `arxiv`:
  * PDF.js documents
  */
-export async function boxesCheck(ours, arxiv) {
-  const a = await boxesOfPdf(ours), b = await boxesOfPdf(arxiv)
-  const why = boxesDiffer(a, b, ['ours', 'arXiv\'s PDF'])
-  return why === null ? { equal: true, pages: [a.length, b.length] } : { equal: false, pages: [a.length, b.length], why }
+export async function boxesCheck(
+  ours: PdfLike,
+  arxiv: PdfLike,
+): Promise<{ equal: true; pages: [number, number] } | { equal: false; pages: [number, number]; why: string }> {
+  const a = await boxesOfPdf(ours),
+    b = await boxesOfPdf(arxiv)
+  const why = boxesDiffer(a, b, ['ours', "arXiv's PDF"])
+  return why === null
+    ? { equal: true, pages: [a.length, b.length] }
+    : { equal: false, pages: [a.length, b.length], why }
 }
 
 /**
@@ -108,12 +180,17 @@ export async function boxesCheck(ours, arxiv) {
  * `replaced` (a Set of pages), only those of our M are ours and every other is arXiv's: the composed document a delta that
  * replaces those pages makes. Its destinations, page indices and metadata are ours (the marks are our compile's)
  */
-export function prefixDoc(ours, arxiv, m, replaced = null) {
+export function prefixDoc(
+  ours: PdfLike,
+  arxiv: PdfLike,
+  m: number,
+  replaced: ReadonlySet<number> | null = null,
+): PdfLike {
   return {
     numPages: arxiv.numPages,
-    getPage: p => (p <= m && (replaced === null || replaced.has(p)) ? ours.getPage(p) : arxiv.getPage(p)),
+    getPage: (p: number) => (p <= m && (replaced === null || replaced.has(p)) ? ours.getPage(p) : arxiv.getPage(p)),
     getDestinations: () => ours.getDestinations(),
-    getPageIndex: ref => ours.getPageIndex(ref),
+    getPageIndex: (ref: unknown) => ours.getPageIndex(ref),
     getMetadata: () => ours.getMetadata(),
   }
 }
@@ -123,7 +200,7 @@ const MARK_TEXT = /(?:\\|\u201c)axt@?[a-z]+\s*(?:\{|\u2013)[^{}\u2013\u02dd\s]{1
 /** the same, each mark's name (its argument) captured */
 const MARKS_TEXT = /(?:\\|\u201c)axt@?[a-z]+\s*(?:\{|\u2013)([^{}\u2013\u02dd\s]{1,64})(?:\}|\u02dd)/g
 /** whether a text holds a mark of ours printed (MARK_TEXT) */
-export const hasMarkText = text => typeof text === 'string' && MARK_TEXT.test(text)
+export const hasMarkText = (text: unknown) => typeof text === 'string' && MARK_TEXT.test(text)
 /** the unit a mark's name is of: a unit's own mark ([th]?<id>[se]) or a piece's (p<id>.<k>[ab], a footnote's n<id>.<k>[ab]); a
  *  babel name's occurrence (n<occ>.<key>.[se]) and a figure frame's (g<n>[abt]) name none */
 const UNIT_NAME = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
@@ -136,13 +213,15 @@ const SAMPLES = 4
  * printed there name (a mark inside the unit's own source: leaving the unit unmarked takes it away), and the first SAMPLES hits
  * ([page, text]); no page where none does
  */
-export function markTextOf(pages) {
+export function markTextOf(pages: readonly unknown[] | null | undefined) {
   return marksIn(pages, () => true)
 }
 
 /** markTextOf over `pages`, each hit kept where `keep(page, hit)` */
-function marksIn(pages, keep) {
-  const hit = [], units = new Set(), samples = []
+function marksIn(pages: readonly unknown[] | null | undefined, keep: (page: number, hit: string) => boolean) {
+  const hit: number[] = [],
+    units = new Set<number>(),
+    samples: [page: number, text: string][] = []
   ;(pages ?? []).forEach((text, i) => {
     if (typeof text !== 'string' || !MARK_TEXT.test(text)) return
     let any = false
@@ -150,7 +229,7 @@ function marksIn(pages, keep) {
       if (!keep(i + 1, m[0])) continue
       any = true
       if (samples.length < SAMPLES) samples.push([i + 1, m[0].slice(0, 80)])
-      const u = UNIT_NAME.exec(m[1])
+      const u = UNIT_NAME.exec(m[1]!)
       if (u) units.add(Number(u[1] ?? u[2]))
     }
     if (any) hit.push(i + 1)
@@ -162,13 +241,24 @@ function marksIn(pages, keep) {
  * The mark text on our pages (`ours`, each page's text) that arXiv's same page (`theirs`) does not hold: a paper that prints
  * what looks like a mark of ours, as its own text, prints it on arXiv's page too, and is no mark of ours. markTextOf's shape
  */
-export function markTextBeyond(ours, theirs) {
-  return marksIn(ours, (page, hit) => !(typeof theirs?.[page - 1] === 'string' && theirs[page - 1].includes(hit)))
+export function markTextBeyond(
+  ours: readonly unknown[] | null | undefined,
+  theirs: readonly unknown[] | null | undefined,
+) {
+  return marksIn(
+    ours,
+    (page, hit) => !(typeof theirs?.[page - 1] === 'string' && (theirs[page - 1] as string).includes(hit)),
+  )
 }
 
 /** a page's text as markTextOf reads it, page p of a PDF.js document; none where it cannot be read */
-export async function pageTextAt(doc, p) {
-  try { return pageTextOf(await (await doc.getPage(p)).getTextContent()) } catch (e) { if (isMemoryError(e)) throw e; return '' }
+export async function pageTextAt(doc: PdfLike, p: number) {
+  try {
+    return pageTextOf(await (await doc.getPage(p)).getTextContent())
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    return ''
+  }
 }
 
 /**
@@ -178,12 +268,13 @@ export async function pageTextAt(doc, p) {
  */
 export const DRIVER_OUTPUT_MARK = 'axt-runner: dvipdfmx output'
 export const DRIVER_OUTPUT_TRUNCATED = 'axt-runner: dvipdfmx output truncated'
-const linesOf = log => (typeof log === 'string' ? log.split(/\r?\n/) : [])
+const linesOf = (log: unknown) => (typeof log === 'string' ? log.split(/\r?\n/) : [])
 /** whether a log holds the driver's output: a line that is DRIVER_OUTPUT_MARK */
-export const driverOutputGiven = log => linesOf(log).includes(DRIVER_OUTPUT_MARK)
+export const driverOutputGiven = (log: unknown) => linesOf(log).includes(DRIVER_OUTPUT_MARK)
 /** whether the driver's output a log holds was cut by the host: a line that is DRIVER_OUTPUT_TRUNCATED after the mark's */
-export function driverOutputTruncated(log) {
-  const lines = linesOf(log), at = lines.indexOf(DRIVER_OUTPUT_MARK)
+export function driverOutputTruncated(log: unknown) {
+  const lines = linesOf(log),
+    at = lines.indexOf(DRIVER_OUTPUT_MARK)
   return at >= 0 && lines.indexOf(DRIVER_OUTPUT_TRUNCATED, at + 1) > at
 }
 
@@ -201,19 +292,28 @@ const DRIVER_NO_INK = /^ps:\s*SDict\s+begin\b/
  * a PSTricks picture's or any PostScript of the page's, and each image it could not take in. { count, samples ([page or null,
  * text], the first SAMPLES) }; none in a log of another driver's (xdvipdfmx's own prefix) or of none
  */
-export function driverLostInk(log) {
-  const lines = typeof log === 'string' ? log.split(/\r?\n/) : [], samples = []
+export function driverLostInk(log: unknown) {
+  const lines = typeof log === 'string' ? log.split(/\r?\n/) : [],
+    samples: [page: number | null, text: string][] = []
   let count = 0
-  const lost = (page, text) => { count++; if (samples.length < SAMPLES) samples.push([page, text.slice(0, 60)]) }
+  const lost = (page: number | null, text: string) => {
+    count++
+    if (samples.length < SAMPLES) samples.push([page, text.slice(0, 60)])
+  }
   for (let i = 0; i < lines.length; i++) {
-    const image = DRIVER_IMAGE.exec(lines[i])
-    if (image) { lost(null, image[1]); continue }
-    if (!DRIVER_FAILED.test(lines[i])) continue
-    let page = null, what = null
+    const image = DRIVER_IMAGE.exec(lines[i]!)
+    if (image) {
+      lost(null, image[1]!)
+      continue
+    }
+    if (!DRIVER_FAILED.test(lines[i]!)) continue
+    let page: number | null = null,
+      what: string | null = null
     for (let j = i + 1; j < Math.min(lines.length, i + 5) && what === null; j++) {
-      const at = DRIVER_AT.exec(lines[j]), xxx = DRIVER_XXX.exec(lines[j])
+      const at = DRIVER_AT.exec(lines[j]!),
+        xxx = DRIVER_XXX.exec(lines[j]!)
       if (at) page = Number(at[1])
-      if (xxx) what = xxx[1]
+      if (xxx) what = xxx[1]!
     }
     if (what !== null && DRIVER_NO_INK.test(what)) continue
     lost(page, what ?? 'a special')
@@ -223,14 +323,20 @@ export function driverLostInk(log) {
 
 /** a page's text as markTextOf reads it: its text items' strings, in their order, each item's own (no space between: a mark's
  *  name set in one face is one item or several, never split by a space PDF.js adds) */
-export const pageTextOf = tc => (Array.isArray(tc?.items) ? tc.items.map(it => (typeof it?.str === 'string' ? it.str : '')).join('') : '')
+export const pageTextOf = (tc: { items?: ({ str?: unknown } | null | undefined)[] } | null | undefined) =>
+  Array.isArray(tc?.items) ? tc.items.map((it) => (typeof it?.str === 'string' ? it.str : '')).join('') : ''
 
 /** the text of every page of a PDF.js document, as markTextOf reads it: a page that cannot be read has none */
-export async function textOfPdf(doc) {
-  const out = []
+export async function textOfPdf(doc: PdfLike) {
+  const out: string[] = []
   for (let p = 1; p <= doc.numPages; p++) {
     let text = ''
-    try { text = pageTextOf(await (await doc.getPage(p)).getTextContent()) } catch (e) { if (isMemoryError(e)) throw e; text = '' }
+    try {
+      text = pageTextOf(await (await doc.getPage(p)).getTextContent())
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      text = ''
+    }
     out.push(text)
   }
   return out
@@ -240,12 +346,14 @@ export async function textOfPdf(doc) {
  * A PDF date (`D:YYYYMMDDHHmmSSOHH'mm'`, every part after the year optional, PDF 32000-1 §7.9.4) as seconds since the epoch,
  * the offset applied (Z or none: UTC); null for what is not one. What SOURCE_DATE_EPOCH takes
  */
-export function pdfDateEpoch(s) {
+export function pdfDateEpoch(s: unknown) {
   if (typeof s !== 'string') return null
-  const m = /^(?:D:)?(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?(?:([Z+-])(?:(\d{2})'?(?:(\d{2})'?)?)?)?$/.exec(s.trim())
+  const m = /^(?:D:)?(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?(?:([Z+-])(?:(\d{2})'?(?:(\d{2})'?)?)?)?$/.exec(
+    s.trim(),
+  )
   if (!m) return null
-  const [y, mo = '01', d = '01', h = '00', mi = '00', se = '00'] = m.slice(1, 7).map(v => v ?? undefined)
-  const n = [y, mo, d, h, mi, se].map(Number)
+  const [y, mo = '01', d = '01', h = '00', mi = '00', se = '00'] = m.slice(1, 7).map((v) => v ?? undefined)
+  const n = [y, mo, d, h, mi, se].map(Number) as [number, number, number, number, number, number]
   if (n[1] < 1 || n[1] > 12 || n[2] < 1 || n[2] > 31 || n[3] > 23 || n[4] > 59 || n[5] > 59) return null
   let t = Date.UTC(n[0], n[1] - 1, n[2], n[3], n[4], n[5])
   if (m[7] === '+' || m[7] === '-') t -= (m[7] === '+' ? 1 : -1) * (Number(m[8] ?? 0) * 60 + Number(m[9] ?? 0)) * 60_000
@@ -257,24 +365,36 @@ export function pdfDateEpoch(s) {
  * An XMP date (ISO 8601 as XMP writes it: YYYY, YYYY-MM, YYYY-MM-DD, then THH:MM, :SS and a fraction, and Z or ±HH:MM) as
  * seconds since the epoch, the offset applied and a fraction of a second dropped; null where it is not one
  */
-export function xmpDateEpoch(s) {
+export function xmpDateEpoch(s: unknown) {
   if (typeof s !== 'string') return null
-  const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$/.exec(s.trim())
+  const m = /^(\d{4})(?:-(\d{2})(?:-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?)?)?$/.exec(
+    s.trim(),
+  )
   if (!m) return null
-  const n = [m[1], m[2] ?? '01', m[3] ?? '01', m[4] ?? '00', m[5] ?? '00', m[6] ?? '00'].map(Number)
+  const n = [m[1], m[2] ?? '01', m[3] ?? '01', m[4] ?? '00', m[5] ?? '00', m[6] ?? '00'].map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ]
   if (n[1] < 1 || n[1] > 12 || n[2] < 1 || n[2] > 31 || n[3] > 23 || n[4] > 59 || n[5] > 59) return null
   let t = Date.UTC(n[0], n[1] - 1, n[2], n[3], n[4], n[5])
-  if (m[7] && m[7] !== 'Z') t -= (m[7][0] === '+' ? 1 : -1) * (Number(m[7].slice(1, 3)) * 60 + Number(m[7].slice(4, 6))) * 60_000
+  if (m[7] && m[7] !== 'Z')
+    t -= (m[7][0] === '+' ? 1 : -1) * (Number(m[7].slice(1, 3)) * 60 + Number(m[7].slice(4, 6))) * 60_000
   const sec = Math.floor(t / 1000)
   return Number.isSafeInteger(sec) && sec >= 0 ? sec : null
 }
 
 /** an XMP packet's xmp:CreateDate and xmp:MetadataDate (xap, the old prefix, too), each as an attribute or an element, as
  *  seconds since the epoch (xmpDateEpoch); null each where the packet has none */
-export function xmpDatesOf(raw) {
-  const of = name => {
+export function xmpDatesOf(raw: unknown) {
+  const of = (name: string) => {
     if (typeof raw !== 'string') return null
-    const m = new RegExp(`\\b(?:xmp|xap):${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')|<(?:xmp|xap):${name}>([^<]*)</(?:xmp|xap):${name}>`).exec(raw)
+    const m = new RegExp(
+      `\\b(?:xmp|xap):${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')|<(?:xmp|xap):${name}>([^<]*)</(?:xmp|xap):${name}>`,
+    ).exec(raw)
     return m ? xmpDateEpoch(m[1] ?? m[2] ?? m[3]) : null
   }
   return { create: of('CreateDate'), metadata: of('MetadataDate') }
@@ -285,13 +405,23 @@ export function xmpDatesOf(raw) {
  * packet's xmp:CreateDate, else its xmp:MetadataDate (arXiv's PDFs of 2026, rewritten by pikepdf, carry neither of the first
  * two: the rewrite's time, the compile's day); null where it has none of them
  */
-export async function creationEpochOf(doc) {
-  let meta = null
-  try { meta = await doc.getMetadata() } catch (e) { if (isMemoryError(e)) throw e; meta = null }
+export async function creationEpochOf(doc: PdfLike) {
+  let meta: PdfMetadata = null
+  try {
+    meta = await doc.getMetadata()
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    meta = null
+  }
   const info = pdfDateEpoch(meta?.info?.CreationDate ?? null)
   if (info !== null) return info
-  let raw = null
-  try { raw = meta?.metadata?.getRaw?.() ?? null } catch (e) { if (isMemoryError(e)) throw e; raw = null }
+  let raw: unknown = null
+  try {
+    raw = meta?.metadata?.getRaw?.() ?? null
+  } catch (e) {
+    if (isMemoryError(e)) throw e
+    raw = null
+  }
   const xmp = xmpDatesOf(raw)
   return xmp.create ?? xmp.metadata
 }

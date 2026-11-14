@@ -5,14 +5,19 @@
 
 /** a label's form (§1.3): a number or an item's mark, maybe a caption's or a section's name before it, in brackets or with a
  *  stop after it — of its characters, NFKC, lower case, no white space */
-export const LABEL_NAME = '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
+export const LABEL_NAME =
+  '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
 const LABEL_NUMBER = '[([]?(?:\\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\\-–](?:\\d{1,4}|[a-z]))*'
 // (after a name, a number may take a letter before it: a supplement's or an appendix's, "Table S3:", "Figure A1", the letter
 // before a digit alone, so that two letters are no number, "Figure AB"; alone, a letter and a number are a model's or a
 // product's name, "A100", no label)
-const formOf = name => new RegExp(`^(?:(?:${name}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
+const formOf = (name: string) =>
+  new RegExp(
+    `^(?:(?:${name}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`,
+    'u',
+  )
 const LABEL_FORM = formOf(LABEL_NAME)
-export const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
+export const labelText = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
 /**
  * The label's form with the paper's own theorem names beside LABEL_NAME (`names`: source/paper-names.mjs theoremNames, the
  * printed names of the theorem-like environments its files define — thmtools' "Recall", "Notation", a \newtheorem's
@@ -20,11 +25,17 @@ export const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, 
  * such a name ("Recall 7 (") is then its unit's label, in its label group, which the layer draws in the paper's name unit's
  * word for it (rules/tex-names.mjs: one word a name, every head of it), where it was left the original's ink (`labelKept`)
  */
-export function labelFormOf(names) {
-  const own = [...new Set((names ?? []).map(n => labelText(String(n))).filter(n => /\p{L}/u.test(n)))].map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+export function labelFormOf(names: readonly unknown[] | null | undefined) {
+  const own = [...new Set((names ?? []).map((n) => labelText(String(n))).filter((n) => /\p{L}/u.test(n)))].map((n) =>
+    n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+  )
   return own.length ? formOf(`(?:${LABEL_NAME}|${own.join('|')})`) : LABEL_FORM
 }
 /** (`note`: the label of a theorem's note, a unit the front end read in a head's brackets (latex-front.mjs `bracketed`): the head
  *  macro sets the bracket that opens the note after its name and number, amsthm's "Definition 5.1 (", which is the head's own,
  *  and so the label's) */
-export const isLabelForm = (s, note = false, form = LABEL_FORM) => { const t = labelText(s); const u = note ? t.replace(/[([]$/u, '') : t; return u === '' || form.test(u) }
+export const isLabelForm = (s: string, note = false, form = LABEL_FORM) => {
+  const t = labelText(s)
+  const u = note ? t.replace(/[([]$/u, '') : t
+  return u === '' || form.test(u)
+}

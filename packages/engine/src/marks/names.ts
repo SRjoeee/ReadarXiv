@@ -5,11 +5,41 @@
 
 /** the keys, babel's own (its ini files' [captions]). `chapter` and `part` are not among them: their CJK names are
  *  templates around the number TeX sets after the name */
-export const NAME_KEYS = Object.freeze(['abstract', 'ref', 'bib', 'contents', 'listfigure', 'listtable', 'appendix', 'index', 'proof', 'preface', 'glossary', 'figure', 'table'])
+export const NAME_KEYS = Object.freeze([
+  'abstract',
+  'ref',
+  'bib',
+  'contents',
+  'listfigure',
+  'listtable',
+  'appendix',
+  'index',
+  'proof',
+  'preface',
+  'glossary',
+  'figure',
+  'table',
+] as const)
+/** a babel name's key */
+export type NameKey = (typeof NAME_KEYS)[number]
 /** each name's English value, babel's en [captions] (the layout rules' pinned locale files): what a style that writes a
  *  name literally writes (marks.mjs literalNames), and a head the layer never draws as a theorem's (layer2.mjs
  *  headLabelInTarget: a babel name is the names' own, nameInTarget) */
-export const NAME_ENGLISH = Object.freeze({ abstract: 'Abstract', ref: 'References', bib: 'Bibliography', contents: 'Contents', listfigure: 'List of Figures', listtable: 'List of Tables', appendix: 'Appendix', index: 'Index', proof: 'Proof', preface: 'Preface', glossary: 'Glossary', figure: 'Figure', table: 'Table' })
+export const NAME_ENGLISH: Readonly<Record<NameKey, string>> = Object.freeze({
+  abstract: 'Abstract',
+  ref: 'References',
+  bib: 'Bibliography',
+  contents: 'Contents',
+  listfigure: 'List of Figures',
+  listtable: 'List of Tables',
+  appendix: 'Appendix',
+  index: 'Index',
+  proof: 'Proof',
+  preface: 'Preface',
+  glossary: 'Glossary',
+  figure: 'Figure',
+  table: 'Table',
+})
 
 /** a counter's form, of its characters (NFKC, lower case, no white space): a letter, a number of up to four digits or a roman
  *  numeral, maybe a letter before a number ("A1"), its parts after stops or dashes ("C.1", "A-A"), a stop or a colon after it */
@@ -18,6 +48,13 @@ const COUNTER_FORM = /^(?:[a-z](?=\d))?(?:\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\-â€
 const COUNTER_GAP = 1.1
 /** a word's space, of the glyphs' size: two glyphs further apart are two words (a fifth of an em, as layer2.mjs spacedText reads) */
 const WORD_SPACE = 0.2
+/** a glyph as the counters read it, on a name's line in reading order: its characters, where it starts and ends, its size */
+export interface LineGlyph {
+  u?: string
+  x0: number
+  x1: number
+  size?: number
+}
 /**
  * The counter TeX set after a babel name on its line where it leads no unit (the class's own heading or contents line,
  * `\appendixname\nobreakspace\thesection`: IEEEtran's "APPENDIX A" over its title, its contents list's "Appendix A: â€¦"): of
@@ -28,11 +65,21 @@ const WORD_SPACE = 0.2
  * word, where it was left at its own place, a gap the width of the original's word less the target's after the word.
  * Returns how many of `next` the counter is: 0 for none
  */
-export function counterAfter(x1, size, next) {
-  if (!next.length || !(size > 0) || next[0].x0 < x1 - 0.1 || next[0].x0 - x1 > COUNTER_GAP * size) return 0
+export function counterAfter(x1: number, size: number, next: readonly LineGlyph[]) {
+  if (!next.length || !(size > 0) || next[0]!.x0 < x1 - 0.1 || next[0]!.x0 - x1 > COUNTER_GAP * size) return 0
   let k = 1
-  while (k < next.length && next[k].x0 - next[k - 1].x1 < WORD_SPACE * Math.max(next[k].size ?? size, next[k - 1].size ?? size)) k++
-  const text = next.slice(0, k).map(g => g.u ?? '').join('').normalize('NFKC').toLowerCase().replace(/\s/gu, '')
+  while (
+    k < next.length &&
+    next[k]!.x0 - next[k - 1]!.x1 < WORD_SPACE * Math.max(next[k]!.size ?? size, next[k - 1]!.size ?? size)
+  )
+    k++
+  const text = next
+    .slice(0, k)
+    .map((g) => g.u ?? '')
+    .join('')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\s/gu, '')
   return text && COUNTER_FORM.test(text) ? k : 0
 }
 /**
@@ -46,12 +93,22 @@ export function counterAfter(x1, size, next) {
  * whole: the name's word after its number, centred as TeX centred the two. Returns how many of `before` the number is: 0 for
  * none
  */
-export function counterBefore(x0, size, before) {
+export function counterBefore(x0: number, size: number, before: readonly LineGlyph[]) {
   const n = before.length
   if (!n || !(size > 0)) return 0
-  const last = before[n - 1]
+  const last = before[n - 1]!
   if (last.x1 > x0 + 0.1 || x0 - last.x1 > COUNTER_GAP * size) return 0
-  for (let k = n - 1; k > 0; k--) if (before[k].x0 - before[k - 1].x1 >= WORD_SPACE * Math.max(before[k].size ?? size, before[k - 1].size ?? size)) return 0
-  const text = before.map(g => g.u ?? '').join('').normalize('NFKC').toLowerCase().replace(/\s/gu, '')
+  for (let k = n - 1; k > 0; k--)
+    if (
+      before[k]!.x0 - before[k - 1]!.x1 >=
+      WORD_SPACE * Math.max(before[k]!.size ?? size, before[k - 1]!.size ?? size)
+    )
+      return 0
+  const text = before
+    .map((g) => g.u ?? '')
+    .join('')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\s/gu, '')
   return text && /\d/u.test(text) && COUNTER_FORM.test(text) ? n : 0
 }

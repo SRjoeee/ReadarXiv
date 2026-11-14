@@ -18,9 +18,9 @@ import { textless } from '../source/arg-roles.ts'
 import { symbolText } from '../source/text-symbols.ts'
 import { INK_FREE_LEAD, prefixWord } from '../source/tex-kernel.ts'
 import { DISPLAY, plainTranslated } from '../instrument/mt.ts'
-import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
-import { fillOfColour } from './colour.mjs'
-import { spellOf, WANT } from '../own/stream.mjs'
+import { NAME_ENGLISH, NAME_KEYS } from './names.ts'
+import { fillOfColour } from './colour.ts'
+import { spellOf, WANT } from '../own/stream.ts'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
