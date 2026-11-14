@@ -204,7 +204,7 @@ export const hasMarkText = (text: unknown) => typeof text === 'string' && MARK_T
 /** the unit a mark's name is of: a unit's own mark ([th]?<id>[se]) or a piece's (p<id>.<k>[ab], a footnote's n<id>.<k>[ab]); a
  *  babel name's occurrence (n<occ>.<key>.[se]) and a figure frame's (g<n>[abt]) name none */
 const UNIT_NAME = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
-/** the hits kept at most, for the why */
+/** the hits kept at most, for the why: a count of hits, each a page and its text; unmeasured */
 const SAMPLES = 4
 
 /**

@@ -16,7 +16,8 @@
 //   stdout one summary line (the ownership's two counts in it). Exit 3: a compile no cache holds (the paper missing). Exit 4: a
 //   paragraph TeX opened where a group the instrument wrote as its content stood (Located.stats.opensLost: the gate of
 //   instrument/instrument.ts passThroughOf), outputs written. A paper the prepare refuses is written with its refusal's
-//   detail (the dump's `refused`), as the box states it.
+//   detail (the dump's `refused`), as the box states it; one whose source is a PDF (arXiv's e-print of a submission made as a
+//   PDF) is answered `no-source` before the engine is called, as the box answers it: the summary line alone, nothing written.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -67,6 +68,7 @@ const t0 = performance.now()
 const m = /^(.+)v(\d+)$/.exec(id), paperRef = { id: m[1], version: Number(m[2]) }
 const sourceBytes = readFileSync(join(DIR, 'source.gz')), arxivBytes = new Uint8Array(readFileSync(join(DIR, 'arxiv.pdf')))
 const { files: source } = await tar.unpackSource(new Uint8Array(sourceBytes))
+if (!source) { console.log(JSON.stringify({ id, refused: 'no-source' })); process.exit(0) }
 // ---- the tree, by the entry's rule, before the prepare (which decides it again and would answer another): the image it is on
 const SERVED = Object.keys(PINS.images)
 const facts = await originalFactsOf(arxivBytes, { pdfjs, documentOptions })

@@ -105,7 +105,7 @@ export type OwnedHow = (typeof OWNED_HOW)[number]
 export const OWNED = 6
 /** the glyph columns ownedOf reads of a page (ink.mjs packGlyphs), and the owned rows after it (marks.mjs): a glyph's
  *  origin, baseline, size and character */
-export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'])
+export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'] as const)
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i])) as Readonly<Record<OwnedHow, number>>
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])(\d+)$/
@@ -235,7 +235,8 @@ function lineEnd(G: StreamGlyphs, glyphs: readonly Place[], anchor: number | nul
 }
 /** the characters of the text after an opening point alone that it is found by */
 export const WANT = 8
-/** the glyph visits a paper's ownership may cost: real ranges never overlap, and cost the glyphs once */
+/** the glyph visits a paper's ownership may cost: real ranges never overlap, and cost the glyphs once. A count of visits;
+ *  unmeasured */
 const WORK = 20_000_000
 
 /** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's (own.mjs's

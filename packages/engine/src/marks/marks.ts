@@ -39,8 +39,8 @@ type Unit = SourceUnit<string | null>
 type Piece = SourcePiece<string | null>
 /** a piece as the classes read it: its kind, its source (a nested unit's call has none) and a call's source before its note */
 export type PieceLike = { t: string; src?: string | undefined; pre?: string | undefined }
-/** a mark's class (classOf) */
-export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro' | 'number'
+/** a mark's class (classOf): one of MARK_CLASSES */
+export type MarkClass = (typeof MARK_CLASSES)[number]
 /** what TeX answered to the mark probe (readMarkProbe): per command, a code a follower (FOLLOWERS); per look-ahead pair
  *  (aheadKey), one code */
 export type Switches = Record<string, string>
@@ -91,8 +91,8 @@ export type MarkingOptions = {
 export type Marking = { units: Unit[]; mark: (u: Unit) => UnitMark }
 
 // ---------------------------------------------------------------- the classes
-/** every class, in this order */
-export const MARK_CLASSES: readonly MarkClass[] = Object.freeze([
+/** every class, in this order: the marks' own vocabulary */
+export const MARK_CLASSES = Object.freeze([
   'math',
   'display',
   'cite',
@@ -103,13 +103,15 @@ export const MARK_CLASSES: readonly MarkClass[] = Object.freeze([
   'footnote',
   'macro',
   'number',
-])
+] as const)
 /** the classes the run marks when asked: the global default, every class (Task 2's corpus check). The paper's own switch
  *  (layoutMarking's `switches`, what TeX answers to the mark probe) takes marks off a command's placeholders where TeX
  *  says they would change what follows them */
 export const LAYOUT_CLASSES: readonly MarkClass[] = Object.freeze([...MARK_CLASSES])
 
-/** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument */
+/** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument: latex.ltx's
+ *  \label, \index, the phantoms, \hspace, \vspace and \nobreakspace, a class's \footnotesize and \normalsize (size10.clo's),
+ *  TeX's \hskip, \vskip and \kern, xspace.sty's \xspace, color.sty's \color */
 const INVISIBLE_WORDS = [
   'label',
   'index',
@@ -195,8 +197,9 @@ export const FOLLOWERS = Object.freeze(['.', ',', ';', ':', '!', '?', 'word', 'c
 const PUNCT = '.,;:!?'
 /** the punctuation marks a package may set before a citation's or a call's own ink, moved from after it (cite.sty's
  *  \\CiteMoveChars, natmove's, fnpct's): those the probe asks about (TeX answers 3 for those it moves, layoutMarking), a piece's
- *  closing mark after one of them holding it first (followsOf `moved`) */
-const MOVED = PUNCT
+ *  closing mark after one of them holding it first (followsOf `moved`); a set of its characters, which the first character of a
+ *  text of none is not */
+const MOVED: ReadonlySet<string | undefined> = new Set(PUNCT)
 /** the classes whose commands the probe asks about: a package may look past their closing brace (a paper's macro has its
  *  opening mark alone (LOOKS_AHEAD), but one that reads nothing past its arguments, which the probe asks about too) */
 const ASKED: ReadonlySet<string | null> = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
@@ -983,7 +986,9 @@ export function readInkApart(log: string | null | undefined, samples: readonly s
 }
 
 // ---- babel's names: what each one's own text is, TeX asked
-/** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well */
+/** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well; the key's macro as
+ *  babel.sty's \bbl@ini@captions@aux names it, the key then `name`, held by the release check's babel-names
+ *  (lab/marks/babel-names.mjs) */
 export const NAME_MACROS: Readonly<Record<NameKey, string>> = Object.freeze({
   abstract: 'abstractname',
   ref: 'refname',
@@ -1651,7 +1656,7 @@ export function classNamesTex(texts: readonly string[]): string {
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
  *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
  *  alternation and the prefilter from it, so the two cannot drift */
-export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb']
+export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb'] as const
 
 /** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`
  *  and `\axtnmb`), inert where they are read (\@starttoc's \axt@off, pdfstringdef, the nameref names' unmark). Only these:
@@ -2669,8 +2674,7 @@ export function followsOf(
     // set before its own ink — cite.sty's superscripts, natmove, fnpct: `\\cite{a}.` set ".¹" — and where TeX answered so, the
     // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first,
     // where none stands after them (stream.mjs ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
-    const moved =
-      ASKED.has(classOf(u.pieces[k])) && after[0] !== undefined && MOVED.includes(after[0]) ? after[0] : null
+    const moved = ASKED.has(classOf(u.pieces[k])) && MOVED.has(after[0]) ? after[0] : null
     return {
       closing: names.has(`${name.slice(0, -1)}b`),
       want,

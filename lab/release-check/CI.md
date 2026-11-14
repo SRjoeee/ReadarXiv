@@ -184,7 +184,10 @@ every heavy slot of the machine (`perf/tools/quiet.sh`): run only in a window th
   default options; today's rows checked production's first; about 2.5 hours of browser slots, an estimate from 954 s for 344
   pages, so overnight, once per candidate; **a cut-over blocker**: a page it leaves uncovered is fixed, shown to be a
   measure's artefact, or brought to the owner); the prepare's pixel proofs on every page of the 88 papers and the added pairs' (poppler's `pdftoppm` and `pdftocairo`); the
-  reader's canvas on spike S1c's papers (Chromium); today's engine's speed check against the last release; the online scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`,
+  reader's canvas on spike S1c's papers (Chromium); today's engine's speed check against the last release; the babel names
+  the layout marks wrap against babel's own files in each pinned compile image's TeX Live (`babel-names`: the docker slot, the
+  images already local, never pulled; seconds), and the source reader's table of csquotes' English style against
+  csquotes.def there the same way (`csquotes-styles`); the online scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`,
   `e2e:local-endpoint`, `e2e:image`) and the live placeholder run (`e2e:placeholders`), each under the project's
   User-Agent and never against our production server (`tests/e2e/lib/online.mjs`); performance ≥ today (`perf-release`,
   above: a cut-over blocker).

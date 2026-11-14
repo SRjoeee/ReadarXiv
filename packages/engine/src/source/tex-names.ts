@@ -17,7 +17,8 @@ interface Target {
 }
 
 /** the commands whose text TeX's cross-referencing packages generate, a counter type's name before the number: cleveref's
- *  \cref and \Cref and their range, page and name forms, hyperref's \autoref. The layer renames their text (layer2.mjs
+ *  \cref and \Cref and their range, page and name forms (cleveref.sty), hyperref's \autoref (hyperref.sty), and thmtools'
+ *  \Autoref (thm-autoref.sty). The layer renames their text (layer2.mjs
  *  GENERATED_REF), and a paper that calls any of them sends the names no package gives some target (source/paper-names.ts) */
 export const GENERATED_COMMANDS = Object.freeze([
   'cref',

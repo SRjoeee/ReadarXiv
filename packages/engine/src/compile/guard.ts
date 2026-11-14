@@ -160,7 +160,16 @@ export function unbalancedUnits(
 
 /** our marks that a file can hold: MARK_DEF's unit marks and LAYOUT_TEX's piece, heading and colour marks, each with its
  *  argument (a babel name's, \axtnma and \axtnmb, written through by design, is not one: NAME_MARK_FILE) */
-const MARK_CS = new Set(['axtmark', 'axtend', 'axtlines', 'axtpma', 'axtpmm', 'axtpm', 'axthmark', 'axtcolour'])
+const MARK_CS: ReadonlySet<string> = new Set([
+  'axtmark',
+  'axtend',
+  'axtlines',
+  'axtpma',
+  'axtpmm',
+  'axtpm',
+  'axthmark',
+  'axtcolour',
+] as const)
 /** where a list's or a label's text stands, which LaTeX writes a unit's text into by design, its marks with it, and sets
  *  as text (the lists with every mark off, \@starttoc's \axt@off): the second argument of \contentsline (the kernel's, every
  *  class's list entry: \contentsline{type}{text}{page}{anchor}), and the third group of \newlabel's second (nameref's

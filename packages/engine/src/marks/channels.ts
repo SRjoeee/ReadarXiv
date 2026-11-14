@@ -12,8 +12,8 @@ const alignCode = (lo: number, ls: number, ro: number, rs: number, po: number, p
   if (L && R) return !F || po < Math.min(lo, ro) ? 'c' : 'j'
   return L ? 'r' : R ? 'l' : 'j'
 }
-/** LaTeX's column classes (\@chnum: c, l, r, m, p, b) as the alignment they set a cell's line by; m, p and b's lines are a
- *  paragraph's */
+/** LaTeX's column classes by their \@chnum (latex.ltx's \@testpach numbers c, l, r 0 to 2, array.sty's c, l, r, m, p, b 0 to
+ *  5), as the alignment they set a cell's line by, read by that number; m, p and b's lines are a paragraph's */
 const CELL_CLASS: readonly ('c' | 'l' | 'r' | undefined)[] = ['c', 'l', 'r']
 /**
  * Each unit's alignment as its end mark states it (AXT-ALIGN, its 79-column wrap joined, in the order TeX set the paragraphs):

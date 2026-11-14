@@ -182,7 +182,7 @@ type Ctx = {
   floats: Set<SourceUnit<WalkFile>>
   bibliography: string[]
   backref: boolean
-  quotes: { known: boolean; levels?: [string, string][] } | null
+  quotes: { known: boolean; levels?: readonly (readonly [string, string])[] } | null
   tblrEnvs: Set<string>
   tblrMath: boolean
   ownAuthors?: Map<string, { role: string; param: number }>
@@ -790,7 +790,9 @@ const envDefinitionsOf = (texts: readonly string[]) => {
   }
   return out
 }
-/** the code environments a package defines, whose body the paper's own may open (codeEnvsOf) */
+/** the code environments a package defines, whose body the paper's own may open (codeEnvsOf): latex.ltx's verbatim,
+ *  fancyvrb.sty's Verbatim, BVerbatim and LVerbatim, listings.sty's lstlisting, minted.sty's minted, alltt.sty's alltt,
+ *  tcolorbox's tcblisting (tcblistingscore.code.tex) */
 const LISTINGS = new Set([
   'verbatim',
   'Verbatim',
@@ -911,7 +913,7 @@ function accentBase(s: string, k: number, to: number): { base: string; end: numb
   return inner && skipSpaces(s, inner.end) === e - 1 ? { base: inner.base, end: e } : null
 }
 /**
- * The letter an accent command at s[i] makes (`end` past its name): \\~n, \\~{n}, \\v c, \\'\\i, \\'{\\i} → ñ, ñ, č, í, í,
+ * The letter an accent command makes, read from `end`, past its name: \\~n, \\~{n}, \\v c, \\'\\i, \\'{\\i} → ñ, ñ, č, í, í,
  * where the letter is one Unicode has, every strategy sets it (SETTABLE) and the paper keeps the accent its own (not
  * one of `own`, the accents it defines anew: \\def\\v{\\varphi}); with where its source ends, or null. A letter in its
  * word, the engine reads the word whole: El Ni{\\~n}o went out as `El Ni @d#@e#@f# o southern oscillations`, and came
@@ -919,7 +921,6 @@ function accentBase(s: string, k: number, to: number): { base: string; end: numb
  */
 function accentLetter(
   s: string,
-  i: number,
   end: number,
   name: string,
   to: number,
@@ -937,7 +938,7 @@ const LETTER_COMMANDS = new Map(
   ['o', 'O', 'ss', 'ae', 'AE', 'oe', 'OE', 'aa', 'AA', 'l', 'L'].map((n) => [n, TEXT_SYMBOLS[`\\${n}`]]),
 )
 /**
- * The letter a letter command at s[i] sets (`end` past its name), as TeX sets it in its word: the spaces after the control
+ * The letter a letter command at s[i] sets (`name`, read from s[i]), as TeX sets it in its word: the spaces after the control
  * word TeX skips, and an empty group ending it, with it — `\\L ukasz`, `\\L{}ukasz`, `Bj\\o rn`, `Stra\\ss e` are Łukasz, Bjørn,
  * Straße —; where the paper does not define the command itself (\\def\\o{\\omega}: ownLetters); with where its source ends, or
  * null.
@@ -947,7 +948,6 @@ const LETTER_COMMANDS = new Map(
 function letterCommand(
   s: string,
   i: number,
-  end: number,
   name: string,
   to: number,
   own: ReadonlySet<string> | null | undefined,
@@ -972,7 +972,7 @@ const TEXT_CHARACTERS = new Map(
   ]),
 )
 /**
- * The character a text symbol at s[i] sets (`end` past its name), as TeX sets it: a control word's skipped spaces and an empty
+ * The character a text symbol at s[i] sets (`name`, read from s[i]), as TeX sets it: a control word's skipped spaces and an empty
  * group ending it with it (`\\textless 5` is "<5"), a control symbol alone (`5\\% of` is "5% of": TeX skips no space after one),
  * an empty group right after it with it; where the paper does not define the command itself (ownLetters); with where its source
  * ends, or null. A placeholder, it went out as a marker, and Microsoft split the term there ("R&D" came back as "D", a verb, then "R&"); as
@@ -983,7 +983,6 @@ const TEXT_CHARACTERS = new Map(
 function textCharacter(
   s: string,
   i: number,
-  end: number,
   name: string,
   to: number,
   own: ReadonlySet<string> | null | undefined,
@@ -994,7 +993,7 @@ function textCharacter(
     const e = s.startsWith('{}', i + 2) ? i + 4 : i + 2
     return e <= to ? { letter: char, end: e } : null
   }
-  return letterCommand(s, i, end, name, to, own, char)
+  return letterCommand(s, i, name, to, own, char)
 }
 /** the letter commands and the text characters (textCharacter) a paper's own files define anew (\\renewcommand{\\o}{\\omega},
  *  \\def\\L{\\mathcal{L}}, \\renewcommand{\\textbar}{…}, a \\let): there the command is the paper's, and no letter is made of it */
@@ -2177,6 +2176,8 @@ function resolveKeeps(macros: Map<string, Macro>) {
     }
     keeps.set(name, k)
   }
+  // (each pass follows a kept argument one call further down, and one that keeps nothing new ends the reading: at most four
+  // passes, a count of passes; unmeasured)
   for (let pass = 0; pass < 4; pass++) {
     let changed = false
     for (const [name, m] of macros) {
@@ -2615,6 +2616,7 @@ function setsWords(macro: Macro) {
             )
             .replace(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\$[^$]*\$/g, ' ')
         : ''
+    // (the innermost groups out, a level a pass: at most 20 levels, a count of passes; unmeasured)
     for (let n = 0; n < 20 && /\{[^{}]*\}/.test(t); n++) t = t.replace(/\{[^{}]*\}/g, ' ')
     // (an optional argument's brackets, a box's [c][14.5pt], and a dimension after a command, \\rowcolor{gray!8}[0pt], are no words)
     t = t
@@ -2681,6 +2683,7 @@ export function displayLetters(src: string, macros: ReadonlyMap<string, string> 
     const t = s.replace(/\\([A-Za-z@]+)/g, (m: string, name: string) =>
       macros.has(name) ? ` ${macros.get(name)} ` : m,
     )
+    // (a pass whose text would pass 20,000 UTF-16 code units is not taken: the text the pass before left; unmeasured)
     if (t === s || t.length > 20000) break
     s = t
   }
@@ -3336,16 +3339,16 @@ function ifmmodeLetter(s: string, end: number, to: number, ctx: Ctx): Letter | n
   if (s[k] === '\\') {
     const cmd = commandAt(s, k)
     one =
-      accentLetter(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownAccents) ||
-      letterCommand(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownLetters)
+      accentLetter(s, cmd.end, cmd.name, c.elseTo, ctx.ownAccents) ||
+      letterCommand(s, k, cmd.name, c.elseTo, ctx.ownLetters)
   } else if (s[k] === '{' && s[k + 1] === '\\') {
     const g = matchGroup(s, k),
       cmd = commandAt(s, k + 1)
     const inner =
       g > 0 &&
       g <= c.elseTo &&
-      (accentLetter(s, k + 1, cmd.end, cmd.name, g - 1, ctx.ownAccents) ||
-        letterCommand(s, k + 1, cmd.end, cmd.name, g - 1, ctx.ownLetters))
+      (accentLetter(s, cmd.end, cmd.name, g - 1, ctx.ownAccents) ||
+        letterCommand(s, k + 1, cmd.name, g - 1, ctx.ownLetters))
     if (inner && inner.end === g - 1) one = { letter: inner.letter, end: g }
   }
   // (the branch the letter alone, up to its \\fi: a space after an accent's group is a word's end, `\\'{e} \\fi`, left to the walk)
@@ -4163,7 +4166,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   // unit's leading and line probe, which go before its first piece, cannot come between them. Only a command whose
   // arguments the walk knows: a heading's or a caption's, another of the paper's macros, one of the role table's; one it
   // does not know (\\xspace, \\fi) leaves what follows the call as it was read before. `thens`, how many in a row: a
-  // macro that ends in itself goes no further than a few
+  // macro that ends in itself goes no further than four (a count of calls in a row; unmeasured)
   let then: { name: string; end: number } | null = null,
     thens = 0
   const goOn = (macro: Macro, call: { end: number }, at: number) => {
@@ -4262,7 +4265,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // pieces (a copy's translations are found again by them: cache.mjs sourceHash)
       const k = skipSpaces(s, i + 1),
         accent = s[k] === '\\' ? commandAt(s, k) : null
-      const letter = accent && accentLetter(s, k, accent.end, accent.name, e - 1, ctx.ownAccents)
+      const letter = accent && accentLetter(s, accent.end, accent.name, e - 1, ctx.ownAccents)
       if (letter && skipSpaces(s, letter.end) === e - 1) {
         endText()
         b.pairId++
@@ -4278,7 +4281,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         accent &&
         k === i + 1 &&
         ctx.letters !== false &&
-        (letterCommand(s, k, accent.end, accent.name, e - 1, ctx.ownLetters) ||
+        (letterCommand(s, k, accent.name, e - 1, ctx.ownLetters) ||
           (accent.name === 'ifmmode' ? ifmmodeLetter(s, accent.end, e - 1, ctx) : null))
       if (kernelLetter && kernelLetter.end === e - 1) {
         endText()
@@ -4294,7 +4297,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         accent &&
         k === i + 1 &&
         ctx.letters !== false &&
-        textCharacter(s, k, accent.end, accent.name, e - 1, ctx.ownLetters)
+        textCharacter(s, k, accent.name, e - 1, ctx.ownLetters)
       if (character && character.end === e - 1) {
         endText()
         b.pairId += pairsOf(s, i, e, b, ctx)
@@ -5144,7 +5147,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // an accent and its letter: the letter itself in its word where it is one every strategy sets (accentLetter), else
     // one opaque piece, \'o, \'{o}, \"\i, \v c. Left as text, the letter would be translated away and the accent put on
     // whatever comes next — pdfTeX stops at a CJK character there
-    const letter = ACCENTS.has(name) && accentLetter(s, i, end, name, to, ctx.ownAccents)
+    const letter = ACCENTS.has(name) && accentLetter(s, end, name, to, ctx.ownAccents)
     if (letter) {
       endText()
       b.letter(letter.letter, s.slice(i, letter.end), i, letter.end)
@@ -5152,7 +5155,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     // a letter command, \\L ukasz, \\L{}ukasz, Bj\\o rn: the letter in its word (letterCommand), TeX's skipped spaces with it
-    const kernelLetter = ctx.letters !== false && letterCommand(s, i, end, name, to, ctx.ownLetters)
+    const kernelLetter = ctx.letters !== false && letterCommand(s, i, name, to, ctx.ownLetters)
     if (kernelLetter) {
       endText()
       b.pairId += pairsOf(s, i, kernelLetter.end, b, ctx)
@@ -5160,7 +5163,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       i = kernelLetter.end
       continue
     }
-    const character = ctx.letters !== false && textCharacter(s, i, end, name, to, ctx.ownLetters)
+    const character = ctx.letters !== false && textCharacter(s, i, name, to, ctx.ownLetters)
     if (character) {
       endText()
       b.pairId += pairsOf(s, i, character.end, b, ctx)
@@ -5884,12 +5887,50 @@ function wrapOf(macro: Macro | BibDef | undefined, arg: number) {
     return null
   return { before: texMarks(m[1]!), after: texMarks(m[3]!) }
 }
+/** a variant of csquotes' English style */
+type QuoteVariant = 'american' | 'british'
+/** csquotes' English style as csquotes.def (v5.2o) declares it, each variant's marks, the outer level's then the inner's:
+ *  \DeclareQuoteStyle[american]{english} \textquotedblleft and \textquotedblright, then \textquoteleft and \textquoteright;
+ *  [british]{english} the two the other way round. Held to csquotes.def in each pinned compile image by the release check's
+ *  csquotes-styles (lab/source/csquotes-styles.mjs) */
+export const CSQUOTES_ENGLISH: Readonly<Record<QuoteVariant, readonly (readonly [string, string])[]>> = Object.freeze({
+  american: [
+    ['\u201c', '\u201d'],
+    ['\u2018', '\u2019'],
+  ],
+  british: [
+    ['\u2018', '\u2019'],
+    ['\u201c', '\u201d'],
+  ],
+})
+/** the names csquotes.def gives a variant of its English style, the variant each selects: its aliases of the style
+ *  (\DeclareQuoteAlias[<variant>]{english}{<name>}) and its babel aliases of those (\DeclareQuoteAlias{<variant>}{<name>}), but
+ *  `default` (CSQUOTES_DEFAULT) and its style paths (`latin/britishquotes`), no language's names. Held to csquotes.def as
+ *  CSQUOTES_ENGLISH is */
+export const CSQUOTES_NAMES: Readonly<Record<string, QuoteVariant>> = Object.freeze({
+  american: 'american',
+  canadian: 'american',
+  english: 'american',
+  british: 'british',
+  australian: 'british',
+  newzealand: 'british',
+  USenglish: 'american',
+  usenglish: 'american',
+  UKenglish: 'british',
+  ukenglish: 'british',
+})
+/** the variant csquotes.def makes its default style (\DeclareQuoteAlias[american]{english}{default}) */
+export const CSQUOTES_DEFAULT: QuoteVariant = 'american'
 /**
- * csquotes' quotation marks where the paper loads it and they can be read off its own files: the outer level's double marks
- * and the inner level's single (`levels`), as its English style sets them, where it is loaded with no style, `style=american`,
- * `english` or `USenglish`, and no `autostyle`, no \\setquotestyle, no babel or polyglossia language but English; `{ known:
- * false }` where the style is another the source alone cannot tell (the compile's glyphs would be the fact: not read here); null
- * where csquotes is not loaded
+ * csquotes' quotation marks where the paper loads it and they can be read off its own files: the outer level's and the inner
+ * level's (`levels`), as a variant of its English style sets them (CSQUOTES_ENGLISH), where it is loaded with no style but
+ * `style=american`, `english` or `USenglish`, no `autostyle` but `autostyle=false`, no \\setquotestyle, and babel's or
+ * polyglossia's main language, where one is named, one of CSQUOTES_NAMES; `{ known: false }` where the style is another the
+ * source alone cannot tell (the compile's glyphs would be the fact: not read here); null where csquotes is not loaded. The
+ * variant: babel's main language's (its last option), which csquotes' default option autostyle=tryonce takes at the end of
+ * the preamble; csquotes' default (CSQUOTES_DEFAULT) where `style=` or `autostyle=false` keeps it, where no language is named,
+ * and under polyglossia, whose main language csquotes reads as \\mainbabelname: by its name alone (the reader reads no
+ * `variant=`) the pinned TeX Live set the default's marks
  */
 function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
   const t = texts.map(uncommented).join('\n')
@@ -5900,8 +5941,8 @@ function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
     .map((x) => x.trim())
     .filter(Boolean)
   const style = opts.find((o) => /^style\s*=/.test(o))?.replace(/^style\s*=\s*/, '')
-  const english = (l: string) =>
-    /^(?:american|english|USenglish|UKenglish|british|canadian|australian|newzealand)$/.test(l)
+  const variantOf = (l: string | undefined) =>
+    l !== undefined && Object.hasOwn(CSQUOTES_NAMES, l) ? CSQUOTES_NAMES[l] : undefined
   const babel = [...t.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/g)].flatMap((b) =>
     b[1]!
       .split(',')
@@ -5909,21 +5950,17 @@ function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
       .filter((x) => x && !x.includes('=')),
   )
   const main = /\\setmainlanguage\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/.exec(t)?.[1]?.trim()
+  // (the styles a `style=` names that the reader reads: csquotes.def's aliases of the American variant, american, english and
+  // USenglish; another, of either variant, is a style it does not tell)
   const known =
     !opts.some((o) => /^autostyle\b/.test(o) && !/=\s*false$/.test(o)) &&
     !/\\setquotestyle\b/.test(t) &&
     (!style || /^(?:american|english|USenglish)$/.test(style)) &&
-    (!babel.length || english(babel.at(-1)!)) &&
-    (!main || english(main))
-  return known
-    ? {
-        known,
-        levels: [
-          ['\u201c', '\u201d'],
-          ['\u2018', '\u2019'],
-        ],
-      }
-    : { known }
+    (!babel.length || variantOf(babel.at(-1)) !== undefined) &&
+    (!main || variantOf(main) !== undefined)
+  if (!known) return { known }
+  const adapts = !style && !opts.some((o) => /^autostyle\b/.test(o))
+  return { known, levels: CSQUOTES_ENGLISH[(adapts && !main && variantOf(babel.at(-1))) || CSQUOTES_DEFAULT] }
 }
 /** csquotes' marks for an \\enquote at the walk's quotation level (`ctx.quoteLevel`, 0 outside one; `\\enquote*` one level in,
  *  `end` past its name and star), alternating by level; null where the paper does not load csquotes or its marks are unknown */
@@ -6213,7 +6250,9 @@ function frontMatter(s: string, from: number, to: number, b: Builder, ctx: Ctx) 
 const THEOREM_DEFINERS =
   /\\(?:newtheorem\*?|spnewtheorem\*?|newmdtheoremenv|newproof|newdefinition|newexample|newremark)\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}|\\declaretheorem\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
 /** the theorem-like environments of a paper, as its files define them (\\newtheorem, thmtools' \\declaretheorem, llncs'
- *  \\spnewtheorem, elsarticle's \\newproof, mdframed's), and those the common classes define themselves */
+ *  \\spnewtheorem, elsarticle's \\newproof, mdframed's), and those the common classes define themselves: eight of llncs.cls's
+ *  own (\\spnewtheorem theorem and proof, \\spn@wtheorem corollary, definition, example, lemma, proposition, remark), proof
+ *  amsthm.sty's too */
 const theoremsOf = (texts: readonly string[]) => {
   const names = new Set(['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example'])
   for (const m of texts.map(uncommented).join('\n').matchAll(THEOREM_DEFINERS))
@@ -6425,7 +6464,7 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
   // encoding the paper declares; it is read as none of the package's own files otherwise)
   const mainRel = [normalizePath(main), normalizePath(`${main}.tex`)].find((f) => fsys.read(f)),
     bbl = mainRel ? normalizePath(`${jobName(mainRel)}.bbl`) : null
-  decoders = decodersOf(bbl && fsys.read(bbl) ? [...own, { file: bbl, text: sourceText(bbl) }] : own, sourceText, main)
+  decoders = decodersOf(bbl && fsys.read(bbl) ? [...own, { file: bbl, text: sourceText(bbl) }] : own, main)
   try {
     return readProject(fsys, main, tables, sourceText, own)
   } finally {
@@ -6435,7 +6474,7 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
 }
 /** each of the package's files that is not UTF-8, by its normalized name, with its decoding (INPUT_ENCODINGS): the one the
  *  main file declares, else latin1 */
-function decodersOf(own: readonly { file: string; text: string }[], sourceText: unknown, main: string) {
+function decodersOf(own: readonly { file: string; text: string }[], main: string) {
   const out = new Map<string, Decoder>(),
     bad = own.filter((x) => !isUtf8Text(x.text))
   if (!bad.length) return out
@@ -6458,7 +6497,7 @@ export function texFilesOf(fsys: Fsys, main: string): string[] {
     .list()
     .filter((f) => /\.(tex|sty|cls)$/i.test(f))
     .map((f) => ({ file: f, text: texText(fsys.read(f)!) }))
-  const dec = decodersOf(own, null, main)
+  const dec = decodersOf(own, main)
   return own.map((x) => {
     const d = dec.get(x.file)
     return d ? d(x.text) : UTF8_LAX.decode(latin1Bytes(x.text))
@@ -7382,19 +7421,18 @@ export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox
  *  read then alone every revtex and aastex paper's last page was one column (the review of 2026-10-01). And as
  *  \\end{document} begins, before the grid closes: a last page with no unit mark on it — the references alone — was
  *  read one column too (2608.20847's page 9, aastex 2608.12606's page 20; the re-review of 2026-10-02) */
-export const MARK_DEF =
-  [
-    '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
-    '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
-    '\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} xyz\\relax}',
-    '\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} xyz\\relax\\fi}',
-    '\\else\\def\\axt@dest#1{}\\fi\\fi\\fi',
-    '\\def\\axt@colsnow{\\ifdefined\\pagegrid@col\\ifnum\\pagegrid@col>\\@ne 2\\else 1\\fi\\else\\ifnum\\ifdefined\\col@number\\col@number\\else\\@ne\\fi>\\@ne 2\\else\\if@twocolumn 2\\else 1\\fi\\fi\\fi}\\gdef\\axt@colmax{1}',
-    '\\def\\axt@colseen{\\ifnum\\axt@colsnow>\\axt@colmax\\relax\\xdef\\axt@colmax{\\axt@colsnow}\\fi}',
-    '\\protected\\def\\axtmark#1{\\axt@colseen\\axt@dest{#1}}',
-    '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
-    ...END_MARK,
-  ].join('\n') + '\n'
+export const MARK_DEF = `${[
+  '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
+  '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
+  '\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} xyz\\relax}',
+  '\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} xyz\\relax\\fi}',
+  '\\else\\def\\axt@dest#1{}\\fi\\fi\\fi',
+  '\\def\\axt@colsnow{\\ifdefined\\pagegrid@col\\ifnum\\pagegrid@col>\\@ne 2\\else 1\\fi\\else\\ifnum\\ifdefined\\col@number\\col@number\\else\\@ne\\fi>\\@ne 2\\else\\if@twocolumn 2\\else 1\\fi\\fi\\fi}\\gdef\\axt@colmax{1}',
+  '\\def\\axt@colseen{\\ifnum\\axt@colsnow>\\axt@colmax\\relax\\xdef\\axt@colmax{\\axt@colsnow}\\fi}',
+  '\\protected\\def\\axtmark#1{\\axt@colseen\\axt@dest{#1}}',
+  '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
+  ...END_MARK,
+].join('\n')}\n`
 /** whether a compiler is arXiv's `latex` (its 00README's, or the one guessed for a package of EPS figures alone: paper-meta.mjs):
  *  pdfTeX in DVI mode, \\pdfoutput 0, whose DVI arXiv makes a PDF by dvips and ps2pdf, and a host by dvipdfmx
  *  (live.d.mts CompileRequest), which reads the marks' specials (DVI_MARK_DEF) */
@@ -7636,29 +7674,27 @@ export function latinFontsFor(probe: FontProbe | null | undefined): string {
   if (face(probe.rm)) out.push(`\\setmainfont{${face(probe.rm)}}${GYRE_FACES}`)
   if (face(probe.sf)) out.push(`\\setsansfont{${face(probe.sf)}}${GYRE_FACES}`)
   if (face(probe.tt)) out.push(`\\setmonofont{${face(probe.tt)}}${GYRE_FACES}`)
-  return out.length ? out.join('\n') + '\n' : ''
+  return out.length ? `${out.join('\n')}\n` : ''
 }
 
 /** pdfTeX-only primitives that arXiv sources use outside any \\ifpdf, made harmless under XeTeX. Goes first in the main file */
-export const XETEX_SHIM =
-  [
-    '\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi',
-    '\\ifdefined\\pdfminorversion\\else\\newcount\\pdfminorversion\\fi',
-    '\\ifdefined\\pdfcompresslevel\\else\\newcount\\pdfcompresslevel\\fi',
-    '\\ifdefined\\pdfobjcompresslevel\\else\\newcount\\pdfobjcompresslevel\\fi',
-    '\\ifdefined\\pdfsuppresswarningpagegroup\\else\\newcount\\pdfsuppresswarningpagegroup\\fi',
-    '\\ifdefined\\pdfinfo\\else\\long\\def\\pdfinfo#1{}\\fi',
-    '\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi',
-    '\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi',
-  ].join('\n') + '\n'
+export const XETEX_SHIM = `${[
+  '\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi',
+  '\\ifdefined\\pdfminorversion\\else\\newcount\\pdfminorversion\\fi',
+  '\\ifdefined\\pdfcompresslevel\\else\\newcount\\pdfcompresslevel\\fi',
+  '\\ifdefined\\pdfobjcompresslevel\\else\\newcount\\pdfobjcompresslevel\\fi',
+  '\\ifdefined\\pdfsuppresswarningpagegroup\\else\\newcount\\pdfsuppresswarningpagegroup\\fi',
+  '\\ifdefined\\pdfinfo\\else\\long\\def\\pdfinfo#1{}\\fi',
+  '\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi',
+  '\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi',
+].join('\n')}\n`
 
 // ---------------------------------------------------------------- engine adaptation: rules for known incompatibilities
 /** R1, before \documentclass under XeTeX: what pdfTeX papers use that XeLaTeX lacks, and the engine guard of some templates */
-export const XETEX_SHIM_R1 =
-  [
-    '\\providecommand\\DeclareUnicodeCharacter[2]{}', // inputenc's, not loaded under XeLaTeX
-    '\\RequirePackage{iftex}\\let\\RequirePDFTeX\\relax', // a template's "pdfTeX only" guard (AAAI 2027)
-  ].join('\n') + '\n'
+export const XETEX_SHIM_R1 = `${[
+  '\\providecommand\\DeclareUnicodeCharacter[2]{}', // inputenc's, not loaded under XeLaTeX
+  '\\RequirePackage{iftex}\\let\\RequirePDFTeX\\relax', // a template's "pdfTeX only" guard (AAAI 2027)
+].join('\n')}\n`
 /** R2, under XeTeX: a pdftex driver option names the wrong backend for hyperref, graphicx, color */
 export function stripPdftexOption(text: string): string {
   return text.replace(
@@ -7670,10 +7706,9 @@ export function stripPdftexOption(text: string): string {
   )
 }
 /** R3, before \begin{document}, any engine: a template's "package X is forbidden" errors become warnings */
-export const FORBIDDEN_TO_WARNING =
-  [
-    '\\makeatletter',
-    '\\let\\axt@PackageError\\PackageError',
-    '\\long\\def\\PackageError#1#2#3{\\in@{forbid}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\in@{must not use}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\axt@PackageError{#1}{#2}{#3}\\fi\\fi}',
-    '\\makeatother',
-  ].join('\n') + '\n'
+export const FORBIDDEN_TO_WARNING = `${[
+  '\\makeatletter',
+  '\\let\\axt@PackageError\\PackageError',
+  '\\long\\def\\PackageError#1#2#3{\\in@{forbid}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\in@{must not use}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\axt@PackageError{#1}{#2}{#3}\\fi\\fi}',
+  '\\makeatother',
+].join('\n')}\n`

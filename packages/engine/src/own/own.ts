@@ -136,7 +136,8 @@ const BOUNDED: ReadonlySet<number | undefined> = new Set([
   OWNED_HOW.indexOf('closed'),
   OWNED_HOW.indexOf('open, to the text after it'),
 ])
-/** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
+/** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once): a count of
+ *  visits, the ownership's bound (PDF-READER §19.9: past it a unit is `marks`); unmeasured */
 export const OWN_WORK = 20_000_000
 /** the unit ids a record lists the spell check's refusals of, and of its leaks, at most: a count of ids; unmeasured */
 const SPELL_LIST_MAX = 64
@@ -1355,7 +1356,8 @@ export function lineRulesOf(
 
 /** the letters a wrapper's own words may take at its slot in the spell check (sourceOf) */
 const OPEN_WORDS = 16
-/** the steps the slotted reading of one unit may take; past them the unit is not read so (it stays `spell`) */
+/** the steps the slotted reading of one unit may take; past them the unit is not read so (it stays `spell`): a count of
+ *  steps; unmeasured */
 const SLOT_WORK = 1_000_000
 /** whether a unit's letters `ink` are its source's parts in order, a wrapper's slot of at most OPEN_WORDS letters between each
  *  two (a run of empty parts one slot): read by the places each part may end at, a part at a time — bounded by the ink's length
