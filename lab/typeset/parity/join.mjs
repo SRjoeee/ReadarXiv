@@ -22,7 +22,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { HOLDER_JOIN } from '../../pdf/prepare-back/stated.mjs'
-import { INK_KIND } from '../../../packages/engine/src/locate/today/ink-units.mjs'
+import { INK_KIND } from '../../../packages/engine/src/locate/ink-units.ts'
 import { unitId } from '../../../packages/format/src/ids.ts'
 import { sourcePieces } from '../../../packages/typeset/src/lay/read.ts'
 import { keptJoin, L1_BUNDLES, todayUnitOf } from '../../../packages/typeset/tests/replay/l1.ts'

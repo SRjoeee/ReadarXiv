@@ -20,7 +20,7 @@ const loads = (module: URL) => {
 
 describe("the engine's modules in Node, whichever is imported first", () => {
   it("loads today's makers before facts.ts, and facts.ts before them", () => {
-    expect(loads(new URL('../src/locate/today/ink-units.mjs', import.meta.url))).toBe('loaded')
+    expect(loads(new URL('../src/locate/ink-units.ts', import.meta.url))).toBe('loaded')
     expect(loads(new URL('../src/locate/today/deps.mjs', import.meta.url))).toBe('loaded')
     expect(loads(new URL('../src/locate/facts.ts', import.meta.url))).toBe('loaded')
   })

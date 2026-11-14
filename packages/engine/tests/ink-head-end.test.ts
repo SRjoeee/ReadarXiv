@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inkUnitsOf } from '../src/locate/today/ink-units.types.ts'
+import { inkUnitsOf } from '../src/locate/ink-units.ts'
 import { ledgerOf } from '../src/locate/ledger.ts'
 
 // A paragraph end carried from B onto A (locate/ink.ts carry) is a unit's own only where it stood right after that unit's last

@@ -19,7 +19,7 @@ import {
   type TodayShape,
   interiorOf,
 } from './figure-text.ts'
-import { scriptsOf } from './today/ink-units.types.ts'
+import { scriptsOf } from './ink-units.ts'
 import type { TodayPage } from './ledger.ts'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'

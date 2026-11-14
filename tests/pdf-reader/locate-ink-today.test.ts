@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import * as P from '../../packages/engine/src/locate/ink.ts'
 import * as TF from '../../packages/engine/src/locate/figure-text.ts'
-import * as TI from '../../packages/engine/src/locate/today/ink-units.types.ts'
+import * as TI from '../../packages/engine/src/locate/ink-units.ts'
 import * as TL from '../../packages/engine/src/locate/ledger.ts'
 import * as TD from '../../packages/engine/src/locate/today/today.types.ts'
 import { figureUnitsOf } from '../../src/pdf-reader/engine/layout/figure-text.mjs'
