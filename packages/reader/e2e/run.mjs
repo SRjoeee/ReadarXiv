@@ -3310,6 +3310,144 @@ await check(
     return { original: original.left.w, translation: translation.right.w, narrow: narrow.right.w }
   },
 )
+/** a host's sheet that takes a pane out of the display at no width, laid out still (as the package takes its left pane out:
+ *  styles.ts, chrome/reader.css), read off the display's marks that the host mirrors onto <html> in a mutation observer's
+ *  callback. The right's slots stay near and in view through it, so no observer tells them anything (lanes/switch-blank) */
+const ZERO_WIDTH_PANES = `:root[data-axt-pdf-mode="original"] .pane[data-side="right"],
+:root[data-axt-pdf-mode="translation"] .pane[data-side="left"],
+:root[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] {
+  display: block; position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 0; visibility: hidden;
+}`
+/** each page of a pane as shown: the right's slots near its view (one pane's height above or below, what the stack draws),
+ *  the left's pages in its view, each with whether its page view is drawn (PDF.js's data-loaded and a canvas in its wrapper);
+ *  and every page view the right put in place undrawn since the page was opened */
+const panesShown = (page) =>
+  page.evaluate(() => {
+    const drawn = (v) => !!v?.hasAttribute('data-loaded') && !!v.querySelector('.canvasWrapper > canvas')
+    const near = (side, el, k) => {
+      const box = document.getElementById(side).getBoundingClientRect()
+      const r = el.getBoundingClientRect()
+      return box.width > 0 && r.bottom > box.top - k * box.height && r.top < box.bottom + k * box.height
+    }
+    return {
+      right: [...document.querySelectorAll('#right .page.axt-slot')]
+        .filter((s) => near('right', s, 1))
+        .map((s) => ({
+          n: Number(s.dataset.pageNumber),
+          drawn: drawn(s.querySelector(':scope > .axt-slot-view > .page')),
+          over: !!s.querySelector('.axt-over'),
+        })),
+      left: [...document.querySelectorAll('#left .pdfViewer > .page')]
+        .filter((p) => near('left', p, 0))
+        .map((p) => ({ n: Number(p.dataset.pageNumber), drawn: drawn(p) })),
+      undrawnPut: window.__undrawnPut,
+    }
+  })
+for (const path of ['original', 'original, swapped', 'translation']) {
+  await check(
+    `chrome: ${path === 'translation' ? 'the translation' : 'the original'} alone, then side by side${path.endsWith('swapped') ? ' swapped' : ''}, nothing else done, under a host's sheet that takes a pane out at no width: every slot near the right's view and every page in the left's drawn within a page's drawing, and no page view put in place undrawn (a scale's reset while a page draws; staging, 2026-11-14)`,
+    async () => {
+      const { page, context, errors } = await newPage({
+        path: 'chrome.html',
+        viewport: { width: 1512, height: 862 },
+        dpr: 2,
+      })
+      await page.evaluate((css) => {
+        const style = document.createElement('style')
+        style.textContent = css
+        document.head.append(style)
+        const marks = ['data-axt-pdf-mode', 'data-axt-narrow', 'data-axt-swapped']
+        const copy = () => {
+          for (const a of marks) {
+            const v = document.body.getAttribute(a)
+            if (v === null) document.documentElement.removeAttribute(a)
+            else if (document.documentElement.getAttribute(a) !== v) document.documentElement.setAttribute(a, v)
+          }
+        }
+        copy()
+        new MutationObserver(copy).observe(document.body, { attributes: true, attributeFilter: marks })
+        // (a page view the stack puts in place is drawn then: read in the swap's own microtask checkpoint)
+        window.__undrawnPut = []
+        new MutationObserver((records) => {
+          for (const r of records)
+            for (const node of r.addedNodes) {
+              const v = node.classList?.contains('axt-slot-view') ? node.querySelector(':scope > .page') : null
+              if (v && !(v.hasAttribute('data-loaded') && v.querySelector('.canvasWrapper > canvas')))
+                window.__undrawnPut.push(Number(r.target.dataset?.pageNumber ?? 0))
+            }
+        }).observe(document.body, { childList: true, subtree: true })
+      }, ZERO_WIDTH_PANES)
+      await page.evaluate(() => window.__c.open('s1-columns', {}))
+      await waitFor(page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
+      // (page 1 laid and drawn on the right: the view the owner switched from)
+      await waitFor(
+        page,
+        () => {
+          const s = document.querySelector('#right .page.axt-slot[data-page-number="1"]')
+          const v = s?.querySelector(':scope > .axt-slot-view > .page')
+          return (
+            !!s?.querySelector('.axt-over') &&
+            !!v?.hasAttribute('data-loaded') &&
+            !!v.querySelector('.canvasWrapper > canvas')
+          )
+        },
+        null,
+        20_000,
+      )
+      if (path.endsWith('swapped')) {
+        await page.evaluate(() => window.__c.controller.setPrefs({ swapped: true }))
+        await waitFor(page, () => document.body.hasAttribute('data-axt-swapped'))
+      }
+      const alone = path === 'translation' ? 'translation' : 'original'
+      const rounds = []
+      // (the switch is a race of the relayout's scale with a page's drawing: three rounds, as the owner repeated it)
+      for (let i = 0; i < 3; i++) {
+        await page.evaluate((d) => window.__c.controller.setDisplay(d), alone)
+        await waitFor(page, (d) => document.body.getAttribute('data-axt-pdf-mode') === d, alone)
+        await page.waitForTimeout(2000)
+        await page.evaluate(() => window.__c.controller.setDisplay('bilingual'))
+        await waitFor(page, () => document.body.getAttribute('data-axt-pdf-mode') === 'bilingual')
+        // (within a page's drawing: the 4.3 s the coordinator read staging at; drawn here in well under one)
+        const ok = await waitFor(
+          page,
+          () => {
+            const drawn = (v) => !!v?.hasAttribute('data-loaded') && !!v.querySelector('.canvasWrapper > canvas')
+            const near = (side, el, k) => {
+              const box = document.getElementById(side).getBoundingClientRect()
+              const r = el.getBoundingClientRect()
+              return box.width > 0 && r.bottom > box.top - k * box.height && r.top < box.bottom + k * box.height
+            }
+            const right = [...document.querySelectorAll('#right .page.axt-slot')].filter((s) => near('right', s, 1))
+            const left = [...document.querySelectorAll('#left .pdfViewer > .page')].filter((p) => near('left', p, 0))
+            return (
+              right.length > 0 &&
+              left.length > 0 &&
+              right.every((s) => drawn(s.querySelector(':scope > .axt-slot-view > .page'))) &&
+              left.every((p) => drawn(p))
+            )
+          },
+          null,
+          4300,
+        ).then(
+          () => true,
+          () => false,
+        )
+        const seen = await panesShown(page)
+        rounds.push({ ok, ...seen })
+        if (!ok) break
+      }
+      await context.close()
+      assert(!errors.length, errors.join('; '))
+      const last = rounds.at(-1)
+      assert(
+        rounds.every((r) => r.ok),
+        `undrawn 4.3 s after side by side, round ${rounds.length}: ${JSON.stringify(last)}`,
+      )
+      assert(!last.undrawnPut.length, `page views put in place undrawn, slots ${JSON.stringify(last.undrawnPut)}`)
+      return { rounds: rounds.length, right: last.right.map((x) => x.n), left: last.left.map((x) => x.n) }
+    },
+  )
+}
 await check(
   "chrome: the narrow window by the host's rule: the extension's keeps side by side chosen and says so; the website's shows the translation chosen, side by side greyed, and says so only once narrowed while reading (L11 difference 7)",
   async () => {
