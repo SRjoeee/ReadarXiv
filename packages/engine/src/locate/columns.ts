@@ -9,9 +9,15 @@
 // - its unit cells (span 1) each by its own class (a \multicolumn{1}{c} in an l column is centred in it), the cells of one class
 //   ALIGNED of one another; a word of free ink on the table's band joins the column where it meets that column's unit cells'
 //   hull and no other's, and its class sets it there (its start on the hull's left, its end on its right, its middle on its
-//   middle), the column's unit cells all of one class; at least two entries. A word that meets the hull and stands otherwise (a
-//   word of a number with a space in it beside the column's edge, siunitx's S column's numbers set on their decimal marker, a
-//   word over two columns, a word in a column of two classes) is an entry not read whole: the column has none;
+//   middle), the column's unit cells all of one class; at least two entries. A word wholly inside that hull (within ALIGNED of
+//   it) meeting no other column's is part of an entry whose own ends the page does not state (a name set with a script, the
+//   words of a number with its ± or unit): it neither moves the box nor speaks against the column, since entries that line up
+//   by their class line up whatever their parts, where the rest of that entry is inside the hull too: no free word on its
+//   baseline stands in the blank between the hull and the nearest hulls beside it (else the rest is set past the hull, or a
+//   column no unit cell is stands there, and the entry's ends are unstated: the column has none; the coordinator's rulings (d)
+//   and (d') of 2026-11-14: "5.3% / 0.27" under a narrower header, its "5.3%" in the blank). A word that meets the hull, passes
+//   its edge and stands otherwise (a number with a space in it beside the column's edge, siunitx's S column's numbers set on
+//   their decimal marker, a word over two columns) is an entry not read whole: the column has none;
 // - a column that holds a cell whose text TeX set as a paragraph of its own (a p, m, b or X column, a \parbox: its box is that
 //   paragraph's \hsize, which no glyph shows) or whose template is not LaTeX's (no class) has none;
 // - a cell spanning columns (\multicolumn) is no entry of a single column's box; its box is the union of those it spans where
@@ -62,6 +68,8 @@ export interface FreeWord {
   page: number
   x0: number
   x1: number
+  /** its baseline, to the hundredth, as the facts pass cuts its words (one baseline each) */
+  y?: number
 }
 
 /**
@@ -133,6 +141,9 @@ export function columnBoxes(
     const cols = new Map<number, ColumnCell[]>()
     for (const c of cells) if (c.page === p && c.span === 1) push(cols, c.col, c)
     const hulls = [...cols].map(([k, cs]) => [k, hullOf(cs.map((c) => [c.x0, c.x1] as const))] as const)
+    // (the page's free words by their baseline: the rest of an entry set in several words stands on its word's)
+    const onLine = new Map<number | undefined, FreeWord[]>()
+    for (const w of words) if (w.page === p) (onLine.get(w.y) ?? onLine.set(w.y, []).get(w.y)!).push(w)
     const on = new Map<number, Entry[] | null>()
     const cls = new Map<number, ColumnClass | null>()
     for (const [k, cs] of cols) {
@@ -146,13 +157,29 @@ export function columnBoxes(
       // (each word of free ink meeting its cells: an entry where it meets them alone and its class sets it there; else an entry
       // not read whole, and the column none)
       const h = hulls.find(([q]) => q === k)![1]
+      // (the nearest hulls beside it, of the page's other columns with unit cells; none, the band's measure, which bounds the
+      // words read)
+      let left = Number.NEGATIVE_INFINITY
+      let right = Number.POSITIVE_INFINITY
+      for (const [q, g] of hulls) {
+        if (q === k) continue
+        if (g[1] <= h[0]) left = Math.max(left, g[1])
+        if (g[0] >= h[1]) right = Math.min(right, g[0])
+      }
       let whole = true
       for (const w of words) {
         if (w.page !== p) continue
         const meets = hulls.filter(([, g]) => Math.min(w.x1, g[1]) - Math.max(w.x0, g[0]) > 0)
         if (!meets.some(([q]) => q === k)) continue
         if (one && meets.length === 1 && setIn(one, [w.x0, w.x1], h)) es.push([w.x0, w.x1, one])
-        else whole = false
+        // (one wholly inside the hull, within ALIGNED, meeting no other column's: part of an entry set in several words, neither an
+        // entry nor a word against the column, where the rest of that entry is inside the hull too: no free word on its baseline
+        // stands in the blank between the hull and the nearest hulls beside it (the band's measure where none). One there is the
+        // rest of the entry set past the hull, or a column no unit cell is: the entry's ends unstated, the column has none)
+        else if (meets.length === 1 && w.x0 >= h[0] - ALIGNED && w.x1 <= h[1] + ALIGNED) {
+          if ((onLine.get(w.y) ?? []).some((v) => (v.x0 >= left && v.x1 <= h[0]) || (v.x0 >= h[1] && v.x1 <= right)))
+            whole = false
+        } else whole = false
       }
       on.set(k, whole ? es : null)
     }

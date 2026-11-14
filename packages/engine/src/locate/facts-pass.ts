@@ -384,10 +384,10 @@ function readColumns(fx: FactsIndex): void {
           cur.size = size
           continue
         }
-        if (cur) words.push({ page, x0: cur.x0, x1: cur.x1 })
+        if (cur) words.push({ page, x0: cur.x0, x1: cur.x1, y: cur.y })
         cur = free ? { page, x0: g.x0, x1: g.x1, y: r2(g.y), size } : null
       }
-      if (cur) words.push({ page, x0: cur.x0, x1: cur.x1 })
+      if (cur) words.push({ page, x0: cur.x0, x1: cur.x1, y: cur.y })
       // (the page's painted boxes on the band no member owns: a horizontal rule across the table's cells tells the table's edge,
       // any other a painted edge beside a column, a vertical rule or a cell's fill)
       let h0 = Number.POSITIVE_INFINITY,

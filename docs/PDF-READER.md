@@ -3544,7 +3544,8 @@ a number or a formula alone, which nothing but its place ties to a column: a wor
 ink units' word rule, `WORD_GAP`) joins the column whose unit cells it meets, and no other's, where the column's class sets it
 there (its start, end or middle within `ALIGNED`, half a point, of the cells' own). The box is stated where the column holds two
 entries at least, each stands where its own class sets it in their hull (a `\multicolumn{1}{c}` header centred in an `l`
-column is one), and every word of free ink meeting its cells is such an entry: one that stands otherwise is an entry not read
+column is one), and every word of free ink meeting its cells is such an entry or part of one inside the hull (below): one that
+passes the hull's edge and stands otherwise is an entry not read
 whole (a number with a space in it beside the column's edge; siunitx's `S` column, whose numbers TeX sets on their decimal
 marker, padded to the column's format, so that of "0.856 ± 0.012" only the ± stands on the column's middle, where it had made a
 box of the header's own width, narrower than TeX's: 2602.23285v2 p7's "Acc"; a word over two columns), and the column has
@@ -3558,6 +3559,29 @@ column it spans, whose entries then no longer tell its width). A table over seve
 where every column stated on two pages stands at its class's edge or middle on each, else each page's from its own. What the
 reading misses (an entry of free ink spanning two columns of which one holds no unit cell; free ink off the table's band) leaves a
 box narrower than TeX's, never wider.
+
+**A word inside the hull is part of an entry** (the coordinator's rulings (d) and (d') of 2026-11-14, after the owner's card on
+2611.03953v2 p7 Table 1, whose "MOPD (TA init)" rows stood in a column that stated no box). A word of free ink wholly inside the
+hull of its column's unit cells (within `ALIGNED`), meeting no other column's hull, says that its entry is set in several words:
+a name with a script ("P²-MOPD": its P on the column's edge an entry, the raised 2 and "-MOPD" inside), a number with its ± or
+its unit ("18,719 s", "87.54 ± 0.02"). Entries that line up by their class line up whatever their parts, so such a word neither
+moves the box nor speaks against the column, where the rest of its entry is inside the hull too: no word of free ink on its own
+baseline (to the hundredth, as the words are cut) stands in the blank between the hull and the nearest hulls of the page's other
+columns beside it (the band's measure where there is none). One that stands there is the rest of the entry set past the hull, or
+a column no unit cell is: the page does not state the entry's ends, and the column has none, as before. The first reading
+without that question gained boxes narrower than TeX's: in an `r` column whose one unit cell is a header narrower than its
+numbers, "5.3% / 0.27" (2608.23393v1 p16), "(n = 184)" (2610.22195v1 p7) and "63.0 ± 1.6" (2610.21085v1 p11) have their first
+word in the blank on the inside word's baseline, and nothing reads that word; they keep no box. Measured over the round's
+papers (the reader gate's entry over the 92 pairs on Google's rows): of the 926 columns with no box (271 of fewer than two
+entries, 248 holding a cell of no class, 216 with a word passing the hull's edge, 166 with a word inside it, 21 whose entries do
+not line up, 4 a spanning cell widened), 106 gain one and 5 spanning cells their union, 245 cells; every one of the 101 gained
+columns with ink beside them drawn and looked at, each TeX's column. Of the 67 single-line cells under the original's size among
+them, 28 reach it, 37 are larger, 2 do not move; p7 Table 1's "MOPD (TA init)" goes from 0.8 to 1.0 (its box 73.17-157.25, the
+widest entry "MOPD (SFT warm-up)", its share 1.99 to the fill of the next column's cells: room 73.17-159.25). One cell is
+smaller, as the column rule makes it where the old path had run a cell past its column: 1512.03385v1 p6's "top-5 err." from 1.0
+to 0.875, its room 37.38 pt (7.97 to "top-1 err." on the left, 4.09 to the table's edge on the right, a `c` cell the smaller on
+both sides) where its own room had been widened half way to the glyphs beside its line, 45.15 pt; no cell goes unfit or under
+the floor.
 
 **The typesetter lays a single-line cell in it** (`lay/adapt.ts` `columnRoomOf`): its room is the box, in its column's
 alignment (its class: flush left, flush right or centred on the box's middle), and it is laid at the largest size not over the

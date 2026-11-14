@@ -110,6 +110,33 @@ describe('columnBoxes: a column’s box from its entries, where they line up as 
     expect(columnBoxes([at(1, 0, 'l', 100, 130), at(2, 0, 'l', 100, 120)], [word(120, 135)]).size).toBe(0)
     expect(columnBoxes([at(1, 0, 'l', 100, 130)], [word(105, 112)]).size).toBe(0)
   })
+  it('passes over a word inside the hull only where nothing on its baseline stands in the blank beside the hull (d′)', () => {
+    // (the coordinator's ruling (d') of 2026-11-14: a word inside the hull says its entry is set in several words; where a free
+    // word on its baseline stands in the blank between the hull and the hulls beside it, the rest of that entry may be set past
+    // the hull, or a column no unit cell is stands there: the entry's ends are unstated and the column has none, as before.
+    // 2608.23393v1 p16's "10 bps" over "5.3% / 0.27": the header the column's one unit cell, narrower than the numbers)
+    const at2 = (y: number, x0: number, x1: number): FreeWord => ({ page: 1, x0, x1, y })
+    const tenBps = [at(1, 0, 'l', 300, 380), at(2, 0, 'l', 300, 360), at(3, 1, 'r', 419.71, 445.87)]
+    const row = (y: number, first: number) => [at2(y, first, 418), at2(y, 425, 428), at2(y, 431, 445.87)]
+    expect(columnBoxes(tenBps, [...row(100, 404), ...row(90, 405)]).has(3)).toBe(false)
+    // (the first word on another baseline than the inside one: the rest of no entry past the hull; the column stands)
+    const apart = [at2(100, 404, 418), at2(101, 425, 428), at2(100, 431, 445.87), at2(90, 431, 445.87)]
+    expect(columnBoxes(tenBps, apart).get(3)).toEqual([419.71, 445.87])
+    // (a column no unit cell is, its number in the blank on the inside word's baseline: the column has none either)
+    const two = [at(1, 0, 'l', 100, 130), at(2, 0, 'l', 100, 120), at(3, 1, 'l', 160, 190), at(4, 1, 'l', 160, 180)]
+    expect(columnBoxes(two, [at2(100, 105, 112), at2(100, 140, 150)]).has(1)).toBe(false)
+    expect(columnBoxes(two, [at2(100, 105, 112), at2(90, 140, 150)]).get(1)).toEqual([100, 130])
+    // (p7 Table 1's "P²-MOPD": P and "-MOPD" on one baseline inside the hull, the raised 2 alone on its own; the number of the
+    // next column on P's baseline meets that column's hull, in no blank: the column stands)
+    const method = [
+      at(1, 0, 'l', 73.17, 157.25),
+      at(2, 0, 'l', 73.17, 101.06),
+      at(3, 1, 'c', 165.23, 194.61),
+      at(4, 1, 'c', 170, 190),
+    ]
+    const p2 = [at2(100, 73.17, 78.65), at2(102.5, 78.65, 81.63), at2(100, 82.13, 112.51), at2(100, 168, 192)]
+    expect(columnBoxes(method, p2).get(2)).toEqual([73.17, 157.25])
+  })
   it('leaves out a word that meets two columns’ cells, and a column of one entry', () => {
     const b = columnBoxes([at(1, 0, 'l', 100, 130), at(2, 1, 'l', 150, 170)], [word(100, 160)])
     expect(b.size).toBe(0)
