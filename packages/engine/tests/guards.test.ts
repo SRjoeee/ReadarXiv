@@ -3,8 +3,8 @@
 // ruling of 2026-11-14 on the rule ledger: a guard no input takes is untested code; lab/rules' recording found none of these
 // taking its other side on the papers or in the tests): a date's minute or second past 59; a \texorpdfstring with no second
 // group; a macro of ten parameters; a stream predicted by PDF's predictor 1 or 2; a cross-reference stream's field wider than
-// eight bytes; forms nested thirteen deep; a CMap whose codespace is wider than four bytes; a split `"` whose word spacing
-// the wrap writes as 0.
+// eight bytes; forms nested thirteen deep; a CMap whose codespace is wider than four bytes; a split `"` whose spacing six
+// decimals do not hold.
 import { deflateSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
@@ -221,15 +221,20 @@ describe('the wrap\'s proof of a split `"` (wrap.ts sameOps)', () => {
       pages: Map<number, { ok: boolean; why?: string; split?: number }>
     }
   }
-  it("proves a split show whose word spacing it writes as given, and refuses one whose spacing it writes as 0 (0.0000005): A DEFECT OF THE PROOF'S WRITER, held here as the code does it, not fixed", async () => {
+  it('proves a split show whose word spacing it writes as given, and one whose spacing six decimals do not hold: the page’s own numbers', async () => {
     expect((await wrapSplit('BT /F1 10 Tf 72 700 Td 12 TL 1 2 (abcd) " ET')).pages.get(1)).toMatchObject({
       ok: true,
       split: 1,
     })
-    // (a valid page: fmt writes Tw 0.0000005 as 0, sameOps finds the split show's Tw not its own, the page is refused)
-    expect((await wrapSplit('BT /F1 10 Tf 72 700 Td 12 TL 0.0000005 0 (abcd) " ET')).pages.get(1)).toMatchObject({
-      ok: false,
-      why: "its proof: operator 4: a split show's Tw not its own",
-    })
+    // (valid pages, refused while the split wrote its spacing to six decimals: 0.0000005 as 0, 0.1234565 as 0.123456 (the
+    // binary value under the half), 1e21 as "1e+21", which no content stream holds; sameOps found the Tw or the Tc not its own)
+    for (const spacing of ['0.0000005 0', '0 0.1234565', '1000000000000000000000 0'])
+      expect(
+        (await wrapSplit(`BT /F1 10 Tf 72 700 Td 12 TL ${spacing} (abcd) " ET`)).pages.get(1),
+        spacing,
+      ).toMatchObject({
+        ok: true,
+        split: 1,
+      })
   })
 })
