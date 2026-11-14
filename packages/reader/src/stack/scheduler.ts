@@ -3,7 +3,9 @@
 // detail view's or a page's crop render, is a job here, and one runs at a time (PDF.js's own viewer draws one page at a time).
 // A job is picked by its rank when it is picked, not when it was asked for: what is in view first, then what is near, each in
 // the order its pane gives (the page in view first, then the pages after it). A job no longer wanted (rank null) is dropped
-// at its turn. While the pages ahead are held, only what is in view is drawn.
+// at its turn. A job asked while it runs runs again after it: its owner asks it because what it draws changed meanwhile (a
+// page view reset by a new scale while it drew, whose drawing PDF.js gives up; staging, 2026-11-14, a page in view left
+// undrawn). While the pages ahead are held, only what is in view is drawn.
 
 export interface Job {
   /** 0 in view, 1 near; null: no longer wanted */
@@ -14,7 +16,7 @@ export interface Job {
 }
 
 export interface Scheduler {
-  /** `job` drawn at its turn (asked once: asking again changes nothing) */
+  /** `job` drawn at its turn (asking again before it runs changes nothing; asked while it runs, it runs again after) */
   want(job: Job): void
   /** `job` not drawn, where it has not begun */
   forget(job: Job): void
@@ -89,7 +91,7 @@ export function createScheduler(o: { warn?: (what: string, e: unknown) => void }
   }
   return {
     want(job) {
-      if (disposed || queue.has(job) || running === job) return
+      if (disposed || queue.has(job)) return
       queue.add(job)
       // (in the task after: the jobs asked together are ranked together)
       queueMicrotask(pump)

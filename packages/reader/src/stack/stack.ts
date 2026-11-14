@@ -11,7 +11,11 @@
 //   with, whether PDF.js's own text and annotation layers are on it, and what is laid over it), the left's own drawing of the
 //   page (`left`: a copy of the left pane's canvas while the page waits for its layer, docs/PDF-READER.md §11.7, no second
 //   render), or the skeleton of a page of text (no original to draw). A page view is drawn beside the shown one and swapped in,
-//   in one task, once it has drawn: the slot's size and the pane's scroll never change, and nothing blank shows.
+//   in one task, once it has drawn: the slot's size and the pane's scroll never change, and nothing blank shows. Drawn is
+//   finished at the scale it stands at: PDF.js's draw resolves as well where it gave its drawing up (a page view reset by a new
+//   scale while it drew), and such a page view is drawn again at its turn (the reset's ask, which the scheduler keeps for a
+//   job asked while it runs), the slot showing what it showed meanwhile (staging, 2026-11-14: the relayout's fit landing while
+//   a page drew left it in place undrawn, in view, until a zoom).
 // - **Near and far.** A slot one pane's height above or below the view is near (an IntersectionObserver, which sees a slot where
 //   it shows, the follower's transform and all: nothing is lent). A far slot lets its drawing go, canvas and all, but a laid
 //   page's (one with an overlay), which is kept off the view within the device's budget, the farthest from the view let go
@@ -577,6 +581,11 @@ export function createStack(o: StackOptions): Stack {
           tell('failed', { n: s.n, key: d.key })
           return
         }
+        // (PDF.js's draw resolves as well where it gave the drawing up, its canvases removed: the page view reset by a new scale
+        // while it drew, or let go; a zoom's step marks a view that is drawing finished, undrawn, at its new scale
+        // (pdf_viewer.mjs PDFPageView#update, #draw). That is no drawing: nothing is put in place or told, and the reset's own
+        // ask draws it at its turn, at the scale it stands at)
+        if (view.renderingState !== FINISHED || view.scale !== at) return
         d.drawMs = performance.now() - td
         if (mine !== gen || disposed) return
         d.drawnAt = at
@@ -611,6 +620,8 @@ export function createStack(o: StackOptions): Stack {
             if (mine !== gen || disposed || s.next !== d) return
           }
         }
+        // (reset again while its overlay was made or the left's page drew: drawn again at its turn, put in place then)
+        if (view.renderingState !== FINISHED || view.scale !== d.drawnAt) return
         drawnNow(s, d)
       },
     }
@@ -1194,14 +1205,14 @@ export function createStack(o: StackOptions): Stack {
             element.removeAttribute('data-axt-scaling')
           }, TEXT_BACK_MS)
         }
-        for (const s of slots) {
-          const d = s.shown
-          if (d?.view) {
+        // (the drawing shown and the one to come alike: a page view PDF.js holds finished at a scale it was not drawn at (a
+        // zoom's steps scaled it by CSS, or cut its drawing short) drawn again at this one)
+        for (const s of slots)
+          for (const d of [s.shown, s.next]) {
+            if (!d?.view) continue
             if (d.view.renderingState === FINISHED && d.drawnAt !== d.view.scale) d.view.update({ scale: d.view.scale })
             if (d.view.renderingState === INITIAL) ask(s, d)
           }
-          if (s.next?.view?.renderingState === INITIAL) ask(s, s.next)
-        }
         tell('scale', { scale })
         areaSoon()
       }

@@ -1258,6 +1258,14 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
   burst), the places' page views with them (a place showing the left's drawing takes it again once the left has drawn it); a pinch is shown by transform and drawn once it is committed (§6.8). A zoom
   and a display's change keep the reading place (the page and
   the point at the reading line); a pinch keeps the point under the gesture on both panes (§6.8).
+  A page view the new scale resets while it draws is drawn again at that scale before anything of it is put in place
+  (`packages/reader` stack.ts, scheduler.ts): PDF.js 6.3.289's `PDFPageView#draw` resolves as well where it gave its drawing
+  up (its canvases removed; a zoom's step marks a view that was drawing finished), so the stack puts a drawing in place only
+  where its page view finished at the scale it stands at, the reset's ask of its job is kept while that job runs (it runs again
+  after), and a zoom's redraw takes the page to come as it takes the page shown. On staging (2026-11-14) the relayout's fit of
+  the original alone, then side by side, landed while the right's page 1 drew: put in place undrawn, its translation over no
+  page, in view until a zoom; a host that takes the right's pane out at no width (laid out still) keeps its slots near and in
+  view, so no observer asked them again (lanes/switch-blank).
 - **The highlight** (`lighting.mjs`) reads a pane through its shapes alone (`Shapes`, the seam the shapes' PR builds); a
   pointer over a page of either pane is a want of that page. The highlight's layer follows a pinch by transform and is kept
   through PDF.js's redraws (§10.1–§10.2).

@@ -270,4 +270,29 @@ describe('the stack: a page view reset by a new scale while it draws (staging, 2
     expect(shown.filter((s) => s.key === 'laid:1')).toEqual([{ n: 1, key: 'laid:1', painted: 1.1, state: FINISHED }])
     expect(viewIn(1)?.painted).toBe(1.1)
   })
+
+  it("the scale changed while a new content's overlay is made, its page view drawn: drawn again at the new scale before it is put in place", async () => {
+    const overlay: { made?: () => void } = {}
+    content = (n) =>
+      n === 1
+        ? {
+            ...laid('laid:1'),
+            over: () =>
+              new Promise<HTMLElement>((done) => {
+                overlay.made = () => done(Object.assign(document.createElement('div'), { className: 'axt-over' }))
+              }),
+          }
+        : laid(`laid:${n}`)
+    stack.refresh()
+    await settle()
+    // (page 1's new page view drawn at 1, its overlay being made)
+    for (const v of PageView.all.filter((x) => x.renderingState === RUNNING)) v.task?.done(true)
+    await settle()
+    expect(overlay.made).toBeTypeOf('function')
+    stack.setScale(0.75)
+    overlay.made?.()
+    await drawAll()
+    expect(shown.filter((s) => s.key === 'laid:1')).toEqual([{ n: 1, key: 'laid:1', painted: 0.75, state: FINISHED }])
+    expect(viewIn(1)?.painted).toBe(0.75)
+  })
 })
