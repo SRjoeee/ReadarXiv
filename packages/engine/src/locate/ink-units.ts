@@ -85,7 +85,7 @@ import { utf8 } from '../instrument/mt.ts'
 import { spellOf } from '../own/stream.ts'
 import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn } from '../source/latex-front.ts'
 import type { LedgerLine, OwnerName, TodayLedger, TodayPiece, TodayPoint, TodayUnit } from './ledger.ts'
-import { lineRulesOf, OWN_WORK, RULE_EM, type RulesPage } from './today/today.types.ts'
+import { lineRulesOf, OWN_WORK, type OwnPage, RULE_EM } from '../own/own.ts'
 
 /** a glyph as the ink units read one (the wrap's: pageInk's with `indices`): its Unicode, advance, ink across, baseline, size, ink's
  *  top and bottom, font, whether its Unicode is blank, its fill, whether it is shown inside a form XObject */
@@ -1843,7 +1843,7 @@ export function claimInk(
     }
     if (left <= 0) continue
     // (the cast: the pages given are the wrap's, each with its glyphs, its boxes and their kinds, as lineRulesOf reads them)
-    const r = lineRulesOf(pages as readonly RulesPage[], u.glyphs.text, near, left)
+    const r = lineRulesOf(pages as readonly OwnPage[], u.glyphs.text, near, left)
     left -= r.work
     if (r.over) continue
     // (a rule inside one of its placeholders' extent is that placeholder's, `u<id>.p`, as a source unit's placeholder takes the

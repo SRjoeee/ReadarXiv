@@ -4329,8 +4329,8 @@ On staging (round 8 B2b) 2608.25210v2's prompt name `llm_equal_human` came back 
 `response_equal_human_example` the same; with the references on, p17's databricks URL was set to its column's full measure,
 1.9-2.7 pt after each "/". The owner's line (§18.21): a translation may be made or not, never garbled.
 
-- **An identifier is one element, the original's ink** (`latex-front.mjs` `identifiersIn`, `keepIdentifiers`; the engine's copy
-  in `locate/today/deps.mjs`, held equal by test). A token with no white space that holds two letters or digits joined by
+- **An identifier is one element, the original's ink** (`latex-front.mjs` `identifiersIn`, `keepIdentifiers`; the engine's ink
+  makers import its typed home, `source/latex-front.ts`). A token with no white space that holds two letters or digits joined by
   underscores (snake_case), the whole token (`CallbackBase.host_label(result)`, `test_parser.py`, `--view_range`), its leading
   and trailing sentence punctuation aside: a stop, a comma, a semicolon, a colon, a question or exclamation mark, a quote, and a
   bracket at an edge that no bracket of its pair inside the token answers (`(see conv5_x)` loses the `)`; `[sentence_1]`,

@@ -1,13 +1,12 @@
-// The engine package's copies of today's ink makers (packages/engine/src/locate/today: the ledger, inkUnitsOf, keptUnitsOf,
-// claimInk, figureUnitsOf, and what they import, deps.mjs) and the ports beside them (locate/ink.ts: contentOf, unicodeOf, spansOf;
-// deps.mjs classOf for the forms an ink unit's placeholder takes) held equal to today's (src/pdf-reader/engine): the same pages,
+// The engine package's copies of today's ink makers (packages/engine/src/locate: the ledger, inkUnitsOf, keptUnitsOf,
+// claimInk, figureUnitsOf) and the ports beside them (locate/ink.ts: contentOf, unicodeOf, spansOf;
+// ink-units.ts statedClassOf for the forms an ink unit's placeholder takes) held equal to today's (src/pdf-reader/engine): the same pages,
 // owners and units in, the same units out.
 import { describe, expect, it } from 'vitest'
 import * as P from '../../packages/engine/src/locate/ink.ts'
 import * as TF from '../../packages/engine/src/locate/figure-text.ts'
 import * as TI from '../../packages/engine/src/locate/ink-units.ts'
 import * as TL from '../../packages/engine/src/locate/ledger.ts'
-import * as TD from '../../packages/engine/src/locate/today/today.types.ts'
 import { figureUnitsOf } from '../../src/pdf-reader/engine/layout/figure-text.mjs'
 import { claimInk, inkUnitsOf, keptUnitsOf } from '../../src/pdf-reader/engine/layout/ink-units.mjs'
 import { ledgerOf } from '../../src/pdf-reader/engine/layout/ledger.mjs'
@@ -16,8 +15,8 @@ import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/e
 import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
 import { identifiersIn } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
-/** the package's copies, as the facades that type them give them (deps.mjs's JavaScript names, and each maker's) */
-const T = { ...TD, ...TF, ...TI, ...TL }
+/** the package's copies, each maker's */
+const T = { ...TF, ...TI, ...TL }
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
 function pageOf(lines: { s: string; x?: number; y: number; size?: number; font?: string; form?: boolean; fid?: number; space?: number }[], marks: { points?: [string, number][]; paras?: [string, number][]; paraEnds?: [string, number, number, number][]; regions?: { kind: string; from: number; to: number }[]; pictures?: [string, number][] } = {}) {

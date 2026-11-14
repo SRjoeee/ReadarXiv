@@ -1313,7 +1313,7 @@ only how it meets the rest of the extension.
   `\\*`, `\\[…]`, `\newline`) a `break` (`pipeline/instrument.mjs` `elementKindOf`): TeX sets a tie as an interword space
   whatever the space factor (the author's word that a stop before it ends no sentence) and a forced break as a line's end; the
   contract's cutter reads each as a space. An element's kind enters no unit id (`unitId` reads its source); today's `classOf`
-  names neither, and the engine's port of it reads both as none (`locate/today/deps.mjs`), its end marks pass over both
+  names neither, and the engine's port of it reads both as none (`locate/ink-units.ts` `statedClassOf`), its end marks pass over both
   (`facts.ts` `INKLESS_KINDS`). Over the 88 papers: 6,102 units of 87 papers state 16,088 ties and 310 breaks so; 1,160 lit
   units' tags wires change; the units asked in today's sentences rise to 17,587 of 17,957 (references 3,538 of 3,780); one
   markers wire changes (2307.16209v1: a display followed by `\\` and a capital now takes its stop, `displayEnds`' rule for an

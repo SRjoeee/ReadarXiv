@@ -30,11 +30,8 @@ The directions point one way, and `scripts/check-boundary.mjs` holds them (its t
 package imports another only through its entry, `@readarxiv/<name>`, never a deep or a relative path into it; no package
 imports the extension's `src/`, its aliases, `wxt` or a virtual module; a directory under `packages/` that `PACKAGES` does not
 list fails; and no package holds a hand-written declaration file, so the JavaScript modules a package still holds, all of
-them the engine's, are typed by a `*.types.ts` facade that re-exports with its type each value read of them: the copies of
-front-half functions today's ink makers (`ledger.ts`, `figure-text.ts`, `ink-units.ts`, TypeScript in
-`packages/engine/src/locate/`) take from `packages/engine/src/locate/today/deps.mjs`, whose homes are still JavaScript, by
-`packages/engine/src/locate/today/today.types.ts` (each copy leaves when its home is typed, and the two files with the last
-of them; `facts.ts` re-exports two values of `accents.ts` under its own types); and the moved front half, the 27 modules of `source/`, `marks/`,
+them the engine's, are typed by a `*.types.ts` facade that re-exports with its type each value read of them: the moved front
+half, the 27 modules of `source/`, `marks/`,
 `own/`, `compile/` and `instrument/`, by one facade at the engine's entry, `packages/engine/src/front.types.ts`. Each package
 is type-checked under its own `tsconfig.json` (`tsc -b packages`) and
 tested under its own `vitest.config.ts`; `packages/README.md` states the rest.

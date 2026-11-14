@@ -9,7 +9,7 @@ import {
   keptUnitsOf as keptUnitsOfBefore,
 } from './helpers/ink-units-before.mjs'
 
-// The ink units' maker (packages/engine/src/locate/today/ink-units.mjs) reads a placeholder's source bytes through the engine's
+// The ink units' maker (packages/engine/src/locate/ink-units.ts) reads a placeholder's source bytes through the engine's
 // one latin1 (bounded-reads.ts: Reflect.apply over slices of 8192 bytes), where its sourceView called String.fromCharCode.apply
 // over slices of 0x8000 (which TypeScript does not take over a typed array: lane t2-locate, the ruled form of lane t1's latin1).
 // Held here to the one before: the old function verbatim but its types against the new expression, at every slice's edge and on
