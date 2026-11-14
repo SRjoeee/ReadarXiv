@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------- files and bytes
 import { isMemoryError } from '../memory.ts'
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, labelRequestsOf, loads, noteAttachOf, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from './arg-roles.mjs'
-import { symbolText, TEXT_SYMBOLS } from './text-symbols.mjs'
+import { symbolText, TEXT_SYMBOLS } from './text-symbols.ts'
 import { DECLARATION_WORDS, selectsArgument } from './tex-kernel.ts'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
