@@ -19,7 +19,7 @@ type Item = string | { at: string } | { rule: [number, number, number, number] }
 function pageOf(items: readonly Item[]): StreamPage {
   const glyphs: Glyph[] = [],
     boxes: number[] = [],
-    points: StreamPage['points'] = [],
+    points: { name: string; glyph: number; box: number }[] = [],
     boxAt: number[] = []
   let x = 72,
     y = 700

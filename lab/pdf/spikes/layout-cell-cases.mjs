@@ -14,14 +14,16 @@
 // change, one file), each document is compiled with it too and the two PDFs are held equal byte for byte but for LuaTeX's
 // trailer /ID: the readings put nothing in the PDF; and where the head sets cells' end points (below), the two pages' glyphs and
 // rules equal (each glyph's character, advance, baseline and size and each box's edges to 0.001 pt; LuaTeX's to 0.011, the shift its
-// PDF writer gives a glyph after a literal, POINTS_TEX's accepted bound) and every point of the base's at its place in the stream,
-// the head's cell end points the only ones added.
+// PDF writer gives a glyph after a literal, POINTS_TEX's accepted bound; under dvipdfmx the text run a point splits placed anew by
+// the writer, sameInk) and every point of the base's at its place in the stream, the head's cell end points the only ones added.
 // The cell's end (the statement that an element's ink ends where TeX ends what it stands in, for a cell its cell's end: LAYOUT_TEX's
 // \axt@te sets `t<i>x` at the end of the cell's template, where it writes AXT-CELL): every cell of a LaTeX template holds its
 // point after its end mark, nothing between the two but the pieces TeX set after the cell's last text (a piece whose opening mark
 // stands alone, as layoutMarking writes one whose source ends in a control word or whose class may read ahead), never a glyph of
 // a later cell nor a rule TeX painted after the cell (the column's rules, a row's rules, a later row's ground); its destination at or
-// past the cell's last ink across. A cell no template of LaTeX's sets (tabularray's tblr, a plain \halign) holds none. The cases
+// past the cell's last ink across. A cell no template of LaTeX's sets (tabularray's tblr, a plain \halign) holds none, nor a p
+// column of LaTeX's own tabular with array.sty not loaded (latex.ltx builds its template by \@classv, which the marks do not
+// wrap: NO_END); those cells are read as before. The cases
 // `end…` are one preamble kind each: a plain tabular with column and row rules, tabular*, tabularx's X, longtable over a page break,
 // siunitx's S, array in math, \multicolumn under booktabs' \cmidrule, \multirow, colortbl's \rowcolor and \cellcolor, booktabs'
 // rules, a cell ending in a control word, before `\\[2pt]`, before a comment, beside an empty cell, a nested tabular.
@@ -260,8 +262,13 @@ const CASES = {
     '\\end{tabular}',
   ].join('\n')), { 441: 'l', 442: 'c', 443: 'c', 444: 'l', 445: 'c' }],
 }
-/** what each cell's end point holds after its end mark, where it is not nothing: the characters of its trailing piece (by case,
- *  by cell); every other cell of a LaTeX template holds nothing there */
+/** what each cell's end point holds after its end mark, where it is not nothing: the characters of its trailing piece, or how many
+ *  glyphs it sets (by case, by cell); every other cell of a LaTeX template holds nothing there */
+/** the cells of a LaTeX template whose end the marks' template end does not reach, which state no end and are read as before
+ *  (stream.ts ownedOf, no bound guessed): a p column of LaTeX's own tabular, array.sty not loaded, whose template latex.ltx's
+ *  \@classv builds (`\@startpbox{<width>}\ignorespaces\@sharp\@endpbox`), where LAYOUT_TEX wraps \@classz alone (every column
+ *  of array.sty's, the kernel's l, c and r): no \axt@te there, so no AXT-CELL either (§18.13: a p column states no box) */
+const NO_END = { kernel: [4, 7] }
 const END_AFTER = {
   endTabular: { 201: 'v', 203: 'x', 205: 'B' },
   endTabularStar: { 211: 'v', 213: 'B' },
@@ -273,7 +280,8 @@ const END_AFTER = {
   endMultirow: { 271: 'v' },
   endColortbl: { 281: 'v', 283: 'B' },
   endBooktabs: { 293: 'v', 294: 'B' },
-  endControlWord: { 401: '✓', 402: 'v' },
+  // (amssymb's \checkmark: one glyph, "✓" where the font's map gives it, LuaTeX's embedding of MSAM10 reading as "X": counted)
+  endControlWord: { 401: 1, 402: 'v' },
   endBreakSkip: { 411: 'v', 412: 'B' },
   endComment: { 421: 'v' },
   endEmpty: { 431: 'v' },
@@ -289,26 +297,40 @@ async function inkOf(file) {
   await task.destroy()
   return { pages, dests }
 }
-/** the base's and the head's pages: equal glyphs and boxes (`tol` pt), every base point at its place in the head's stream, the
- *  head's other points cells' end points alone; null where so, else why not */
-function sameInk(a, b, tol) {
-  if (a.pages.length !== b.pages.length) return `${a.pages.length} pages, ${b.pages.length}`
-  let worst = 0
+/** the base's and the head's pages under engine `e`: equal glyphs and boxes, every base point at its place in the head's stream,
+ *  the head's other points cells' end points alone; null where so, else why not. Equal is to 0.001 pt; under LuaTeX to 0.011, the
+ *  shift its PDF writer gives a glyph after a literal (POINTS_TEX's accepted bound); under dvipdfmx (XeTeX's xdvipdfmx, latex's
+ *  dvipdfmx) a glyph of the text run an added end point splits (on the baseline of the first glyph after the point, up to the next
+ *  point) may stand elsewhere: the writer places it anew, absolutely, where the base reached it by a TJ kern, rounded to a
+ *  thousandth of the font's size (the base 0.019 pt off pdfTeX's place in the longtable case, the head 0.001; TeX moved nothing,
+ *  pdfLaTeX's pages equal). `split` the largest such difference, reported */
+function sameInk(a, b, e) {
+  if (a.pages.length !== b.pages.length) return { why: `${a.pages.length} pages, ${b.pages.length}` }
+  const tol = e === 'lualatex' ? 0.011 : 0.001
+  let worst = 0, split = 0
   for (let p = 0; p < a.pages.length; p++) {
     const A = a.pages[p], B = b.pages[p]
-    if (A.glyphs.length !== B.glyphs.length || A.boxes.length !== B.boxes.length) return `page ${p + 1}: ${A.glyphs.length}/${B.glyphs.length} glyphs, ${A.boxes.length / 4}/${B.boxes.length / 4} boxes`
-    for (let g = 0; g < A.glyphs.length; g++) {
-      const x = A.glyphs[g], y = B.glyphs[g]
-      if (x.u !== y.u) return `page ${p + 1} glyph ${g}: ${JSON.stringify(x.u)} / ${JSON.stringify(y.u)}`
-      worst = Math.max(worst, Math.abs(x.x0 - y.x0), Math.abs(x.x1 - y.x1), Math.abs(x.y - y.y), Math.abs(x.size - y.size))
-    }
-    for (let i = 0; i < A.boxes.length; i++) worst = Math.max(worst, Math.abs(A.boxes[i] - B.boxes[i]))
+    if (A.glyphs.length !== B.glyphs.length || A.boxes.length !== B.boxes.length) return { why: `page ${p + 1}: ${A.glyphs.length}/${B.glyphs.length} glyphs, ${A.boxes.length / 4}/${B.boxes.length / 4} boxes` }
     const added = B.points.filter(q => !A.points.some(o => o.name === q.name && o.glyph === q.glyph && o.box === q.box))
     const lost = A.points.filter(o => !B.points.some(q => o.name === q.name && o.glyph === q.glyph && o.box === q.box))
-    if (lost.length) return `page ${p + 1}: ${lost.length} point(s) of the base moved or gone (${lost[0].name})`
-    if (added.some(q => !/^t\d+x$/.test(q.name))) return `page ${p + 1}: a point added that is no cell's end (${added.find(q => !/^t\d+x$/.test(q.name)).name})`
+    if (lost.length) return { why: `page ${p + 1}: ${lost.length} point(s) of the base moved or gone (${lost[0].name})` }
+    if (added.some(q => !/^t\d+x$/.test(q.name))) return { why: `page ${p + 1}: a point added that is no cell's end (${added.find(q => !/^t\d+x$/.test(q.name)).name})` }
+    // (the run an added end point splits: the last point at or before glyph g is one, and g stands on the baseline of the point's next glyph)
+    const splitBy = g => {
+      let last = null
+      for (const q of B.points) if (q.glyph <= g) last = q
+      return !!last && added.includes(last) && last.glyph < B.glyphs.length && Math.abs(B.glyphs[last.glyph].y - B.glyphs[g].y) < 0.001
+    }
+    for (let g = 0; g < A.glyphs.length; g++) {
+      const x = A.glyphs[g], y = B.glyphs[g]
+      if (x.u !== y.u) return { why: `page ${p + 1} glyph ${g}: ${JSON.stringify(x.u)} / ${JSON.stringify(y.u)}` }
+      const d = Math.max(Math.abs(x.x0 - y.x0), Math.abs(x.x1 - y.x1), Math.abs(x.y - y.y), Math.abs(x.size - y.size))
+      if (d > tol && (e === 'xelatex' || e === 'latex') && splitBy(g)) split = Math.max(split, d)
+      else worst = Math.max(worst, d)
+    }
+    for (let i = 0; i < A.boxes.length; i++) worst = Math.max(worst, Math.abs(A.boxes[i] - B.boxes[i]))
   }
-  return worst > tol ? `a glyph or a box moved ${worst.toFixed(4)} pt` : null
+  return worst > tol ? { why: `a glyph or a box moved ${worst.toFixed(4)} pt` } : { why: null, split }
 }
 /** each cell's end point against its cell (`ink` the head's): where every cell `cells` names holds its point on its end mark's page,
  *  after its end mark, the glyphs between the two its trailing piece's characters (`after`, '' none), no box between, its destination
@@ -318,14 +340,15 @@ function cellEnds(ink, cells, after, none) {
   const at = name => { for (let p = 0; p < ink.pages.length; p++) { const q = ink.pages[p].points.findIndex(o => o.name === name); if (q >= 0) return { p, q, pt: ink.pages[p].points[q] } } return null }
   for (const i of cells) {
     const s = at(`t${i}s`), e = at(`t${i}e`), x = at(`t${i}x`)
-    if (none.includes(i)) { if (x) faults.push(`${i}: a point at a cell no LaTeX template sets`); read.push(`${i} none`); continue }
+    if (none.includes(i)) { if (x) faults.push(`${i}: a point at a cell whose template end the marks do not reach`); read.push(`${i} none`); continue }
     if (!e || !s) { faults.push(`${i}: its own marks not found`); continue }
     if (!x) { faults.push(`${i}: no end point`); continue }
     if (x.p !== e.p || x.q < e.q) { faults.push(`${i}: its end point before its end mark or on another page`); continue }
     const P = ink.pages[x.p]
     const between = P.glyphs.slice(e.pt.glyph, x.pt.glyph).map(g => g.u).join('').replace(/\s/g, '')
     const boxes = x.pt.box - e.pt.box
-    if (between !== (after[i] ?? '')) faults.push(`${i}: after its end mark ${JSON.stringify(between)} (TeX's ${JSON.stringify(after[i] ?? '')})`)
+    const want = after[i] ?? ''
+    if (typeof want === 'number' ? [...between].length !== want : between !== want) faults.push(`${i}: after its end mark ${JSON.stringify(between)} (TeX's ${JSON.stringify(want)})`)
     if (boxes) faults.push(`${i}: ${boxes} box(es) between its end mark and its end point`)
     const own = P.glyphs.slice(s.pt.glyph, x.pt.glyph).filter(g => /\S/.test(g.u))
     const last = own.length ? Math.max(...own.map(g => g.x1)) : null
@@ -371,7 +394,7 @@ for (const year of YEARS) {
       // (each cell's end point, every cell the document marks: `t<i>s` in its source)
       const ink = await inkOf(join(at, 'main.pdf'))
       const cells = [...src.matchAll(/\\axtmark\{t(\d+)s\}/g)].map(m => Number(m[1]))
-      const ends = ink ? cellEnds(ink, cells, END_AFTER[name] ?? {}, classless) : { faults: ['no PDF'], read: [] }
+      const ends = ink ? cellEnds(ink, cells, END_AFTER[name] ?? {}, [...classless, ...(NO_END[name] ?? [])]) : { faults: ['no PDF'], read: [] }
       let same = ''
       if (BASE) {
         const a = join(dir, `base-${e}-${name}`, 'main.pdf'), b = join(at, 'main.pdf')
@@ -381,13 +404,13 @@ for (const year of YEARS) {
         else if (bytes(a) === bytes(b)) same = 'PDF the same'
         else {
           // (where the head sets a cell's end point: the same glyphs and rules, every base point in its place)
-          const why = sameInk(await inkOf(a), ink, e === 'lualatex' ? 0.011 : 0.001)
-          same = why === null ? 'ink the same, end points added' : `INK DIFFERS: ${why}`
+          const r = sameInk(await inkOf(a), ink, e)
+          same = r.why === null ? `ink the same, end points added${r.split ? ` (a run the point splits placed anew by the writer, ${r.split.toFixed(4)} pt)` : ''}` : `INK DIFFERS: ${r.why}`
         }
-        if (same !== 'PDF the same' && same !== 'ink the same, end points added') bad++
+        if (same !== 'PDF the same' && !same.startsWith('ink the same, end points added')) bad++
       }
       if (wrong.length || errors.length || ends.faults.length) bad++
-      const ok = !wrong.length && !errors.length && !ends.faults.length && (!BASE || same === 'PDF the same' || same === 'ink the same, end points added')
+      const ok = !wrong.length && !errors.length && !ends.faults.length && (!BASE || same === 'PDF the same' || same.startsWith('ink the same, end points added'))
       console.log(`${ok ? 'ok  ' : 'FAIL'} ${year} ${e} ${name}${wrong.length ? `: ${wrong.join('; ')}` : ''}${errors.length ? `; TeX: ${errors.join(' | ')}` : ''}${same ? `; ${same}` : ''}${ends.faults.length ? `; ENDS: ${ends.faults.slice(0, 6).join('; ')}${ends.faults.length > 6 ? ` (+${ends.faults.length - 6})` : ''}` : ''}`)
       if (process.argv.includes('--ends')) console.log(`      ends: ${ends.read.join(', ')}`)
     }

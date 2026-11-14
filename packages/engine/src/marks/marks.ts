@@ -1330,6 +1330,20 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   cell's own unit shares the line. Before, two units wrote none: the lay had no line of several members then, and each,
  *   given the class, would have been set on its own middle.
  *   Assignments, \aftergroup and \message: no node
+ * - **The cell's end** (docs/PDF-READER.md §18.73, the coordinator's ruling of 2026-11-15). An element's ink is what TeX set
+ *   between its two points; where TeX gives it no closing point, it ends where TeX ends what the element stands in, never later,
+ *   and for a piece of a table cell that is the cell's end. A cell's end mark goes after its last text, and a piece after it whose
+ *   opening mark stands alone (its source ends in a control word, or its class may read ahead) had no bound but the next mark,
+ *   the next unit's start: past the cell's end, the row's other entries, the rules between the columns and under the row
+ *   (2610.21176v1 p13's `\checkmark` owned the table's bottom rule). So the template's end sets a point, `t<i>x`, where it
+ *   writes AXT-CELL (the cell's index defined at its own group level): a destination and its point, after the template's v-part
+ *   and every \unskip of LaTeX's, array's and colortbl's, before the column rule and the inter-column material after it, the
+ *   next entry, a \\'s rules; a whatsit at the end of the cell's box, which moves no glyph or rule (layout-cell-cases.mjs: every
+ *   preamble kind under both years and four engines, its end cases; under dvipdfmx the text run it splits is placed anew by the
+ *   writer, nearer TeX's place). The marking names it among the ends of its cell's pieces (followsOf), and the stream's reading
+ *   stops there (stream.ts ownedOf). A cell no template of LaTeX's sets (tblr, a plain \halign) states none, nor a p column of
+ *   LaTeX's own tabular with array.sty not loaded, whose template latex.ltx's \@classv builds where \axt@mkw wraps \@classz
+ *   alone (no AXT-CELL there either): those are read as before. No pending mark is flushed there (\axt@dest, not \axt@mark)
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
  *   MARK_DEF's own \axtmark is gated too, so a caption's start mark is set where its float is and not first in the list
@@ -1781,7 +1795,7 @@ export const LAYOUT_TEX = [
   '\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{\\axt@usg{#1}}{\\axt@agtbox{\\axt@usg{#1}}}\\fi\\fi}\\def\\axt@usg#1{\\expandafter\\gdef\\csname axt@cv@#1\\endcsname{\\axt@us{#1}}\\expandafter\\aftergroup\\csname axt@cv@#1\\endcsname}',
   '\\def\\axt@agtbox#1{\\ifnum\\currentgrouptype=2 \\ifnum\\currentgrouplevel>\\axt@clvl\\relax\\else#1\\fi\\fi}\\protected\\def\\axt@cl{\\xdef\\axt@clvl{\\the\\currentgrouplevel}}\\gdef\\axt@clvl{-1}',
   '\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\edef\\axt@uc{\\expandafter\\axt@uls\\axt@uc\\@nil,#1 \\the\\currentgrouplevel}\\else\\edef\\axt@uc{#1 \\the\\currentgrouplevel}\\edef\\axt@ulv{\\the\\currentgrouplevel}\\fi\\fi}\\def\\axt@uls#1 #2\\@nil{#1}\\def\\axt@clv{\\ifdefined\\axt@cc\\expandafter\\axt@lvl\\axt@cc\\@nil\\else-1\\fi}\\def\\axt@lvl#1 #2\\@nil{#2}\\def\\axt@ulv{-1}',
-  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi\\gdef\\axt@clvl{-1}}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}',
+  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi\\gdef\\axt@clvl{-1}}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\axt@cellend{#1}\\fi}\\def\\axt@cellend#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{t#1x}\\fi}',
   '\\def\\axt@tel#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\@for\\axt@x:=#1\\do{\\message{^^JAXT-CELL \\axt@x\\space#3^^J}}\\fi}',
   '\\def\\axt@ate{\\xdef\\@preamble{\\unexpanded\\expandafter{\\@preamble}\\axt@te{\\the\\@chnum}}}',
   '\\def\\axt@czw{\\let\\axt@icol\\insert@column\\def\\insert@column{\\noexpand\\axt@cl\\axt@icol}\\axt@cz\\let\\insert@column\\axt@icol\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}',
@@ -1966,7 +1980,8 @@ export function readColours(log: string | null | undefined): [unit: number, k: n
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
  *  mark by its unit and source piece index, a draft image frame's corner (g), a babel name's start or end by its
- *  occurrence and key (n<occurrence>.<key>.s, NAMES_TEX) */
+ *  occurrence and key (n<occurrence>.<key>.s, NAMES_TEX). Not a cell's end point (`t<i>x`, LAYOUT_TEX's template end): the
+ *  stream's reading alone reads it (stream.ts ownedOf, by the marking's `ends`), and today's marks file takes none of it */
 export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d+[abt]|n\d+\.[a-z]{1,16}\.[se])$/
 
 // ---------------------------------------------------------------- the marking
@@ -2535,11 +2550,15 @@ export const asSet = (s: string): string =>
     .replace(/[~\s]/g, '')
 /** a unit's end marks, any of which may be the next mark after its last piece */
 const endsOf = (i: number): string[] => [`${i}e`, `t${i}e`, `h${i}e`]
+/** a cell's end point (LAYOUT_TEX's template end, \\axt@cellend): where TeX ends what a piece of the cell stands in, its unit's
+ *  last mark; none of a unit that is no cell's */
+const cellEndOf = (u: Unit | undefined, i: number): string[] => (u?.kind === 'cell' ? [`t${i}x`] : [])
 /**
  * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
  * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
  * characters of the text after it in its unit up to the next visible piece (and, `rest`, the whole of it as the spell check
- * reads one: stream.mjs spellOf), its unit's next marks, and whether a visible
+ * reads one: stream.mjs spellOf), its unit's next marks (a cell's end point among them: where TeX ends what a piece of a cell
+ * stands in, LAYOUT_TEX's template end, so that a cell's piece with its opening mark alone ends there), and whether a visible
  * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
  * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
@@ -2662,7 +2681,7 @@ export function followsOf(
         trail = {
           want: asSet(rest).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT),
           rest: spellOf(rest),
-          ends: [...(fnext ? [`${fnext}a`] : []), ...endsOf(i)],
+          ends: [...(fnext ? [`${fnext}a`] : []), ...endsOf(i), ...cellEndOf(u, i)],
         }
     }
     const text = shown && parted && ((through && !others) || trail) ? shown.get(u.pieces[k]!.src) : undefined
@@ -2680,7 +2699,7 @@ export function followsOf(
       want,
       rest: spellOf(after),
       display,
-      ends: [...(next ? [`${next}a`] : []), ...endsOf(i)],
+      ends: [...(next ? [`${next}a`] : []), ...endsOf(i), ...cellEndOf(u, i)],
       blocked,
       through,
       group,
