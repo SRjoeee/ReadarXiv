@@ -6992,6 +6992,28 @@ own; 2608.25210v2's prompt boxes, a tcolorbox, 9 paragraphs for 6; 2111.09276v1'
 statements, a centred list: 2 paragraphs without the call's pair). PIPELINE moves (the units): the integration's; the compile side's
 key moves (the marks are written by unit).
 
+### 18.74 A table cell set on several lines is one text (the owner's decision of 2026-11-15)
+
+The owner, shown lane hdr-lines' table of 48 cells set on two lines (each line translated alone today, and as one text by
+Google: 11 better, 9 the same, 2 worse; 2 drawn smaller in the lines' own widths): multi-line cells are translated WHOLE; where a
+reply loses the break the cell falls back to today's line-by-line translation (the chain's runs floor); and each line of such a
+cell is laid in the cell's room in its column, so that no cell is drawn smaller than today for having become one unit.
+
+- **The source reader: a cell's unit is the grid's cell** (`source/latex-front.ts`). The walk ended a cell's unit at every `\\`
+  in a table (and every row-end macro), where the table's grid (`tableGrid`) ends a cell only at a `\\` outside its groups and
+  nested environments: TeX's `\\` is `\@tabularcr`, the end of a row of the innermost alignment it stands in. The grid is read
+  before the body's walk and the walk ends a unit only where the grid ends the cell (`inGridCell`); a `\\` inside a grid cell, in
+  a box the cell holds (`\makecell`, `\shortstack`, a `\parbox`, a paper macro's argument), is a forced break of the cell's text,
+  the placeholder it is in a paragraph. A tabular of one column and several rows nested in a cell sets lines of that cell's text:
+  its `\begin`/`\end` a pair round them, each row's end a forced break, its rules placeholders; one of one row is its own cell as
+  before (its pieces, id and rows unchanged: 2503.06072v3's 27 one-row nested tabulars); one of several columns a table of its
+  own (a table set in a cell). In a table's cell, §18.73's block yields to the cell: the call of a macro whose body sets its
+  argument in an environment is the pair round its argument (`<\tabincell{c}{>LOC [\\] method<}>`). An author block's tabular is
+  cut at its rows as before (its names and places are two kinds).
+- **The names rules read the whole text**: R1 and R2 (`instrument/language.ts`) read a forced break as a space, so a cell is kept
+  only where no token of any of its lines is a word; R4 reads it as one text cell of one unit, its key its content (the break an
+  element of it, as a cell's `\hline` is).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

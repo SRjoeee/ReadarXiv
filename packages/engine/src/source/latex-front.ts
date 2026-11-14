@@ -2679,6 +2679,21 @@ function macroArgs(s: string, i: number, macro: { params: number; opt: boolean }
 const BLOCK =
   /\n[ \t]*\n|\\(?:par|item|part|chapter|(?:sub)*section|(?:sub)?paragraph|caption)(?![A-Za-z@])|\\begin\s*\{([^}]+)\}/g
 const holdsBlock = (text: string) => [...text.matchAll(BLOCK)].some((m) => !m[1] || !MATH_ENVS.test(m[1].trim()))
+/** whether position `i` of `s` stands inside a cell of the table the walk reads (Builder.cells), not at the end of the grid's
+ *  row: a `\\` there ends a line of a box the cell holds (a \\makecell's, a \\shortstack's, a nested one-column tabular's), a
+ *  forced break of the cell's text, not the cell. A table cell's alone: an author block's tabular is cut at its rows */
+function inGridCell(b: Builder, s: string, i: number): boolean {
+  return b.kind === 'cell' && b.cells?.s === s && b.cells.grid.some((c) => c.start <= i && i < c.end)
+}
+/** where a table environment's own arguments end, as the walk reads them: as its declaration gives them, else by its form
+ *  (tabularx's, tabular*'s and tabulary's {width}[pos]{spec}, else [pos]{spec}) */
+function tableArgsEnd(s: string, afterBegin: number, bodyEnd: number, env: string, ctx: Ctx): number {
+  const tp = ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null),
+    tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
+  return tr?.complete
+    ? tr.end
+    : argsOfForm(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{').end
+}
 /** whether a macro's body sets its prose parameter inside an environment of its own, not math (a minipage's paragraph, a
  *  tabular's cells, a tcolorbox, a centred list): TeX sets that environment's content apart from the text around the call, as
  *  the walk reads the same environment written in place (every environment but math ends the text before it), so the call's
@@ -2834,6 +2849,9 @@ class Builder<F extends WalkFile = WalkFile> {
   declare captype: string | undefined
   declare within: string | undefined
   declare cellMode: boolean | undefined
+  /** the grid of the table whose body the walk reads (tableGrid over its text `s`): a row's end the walk meets ends a cell's unit
+   *  only where it ends the grid's cell, outside every group and nested environment of it (inGridCell) */
+  declare cells: { s: string; grid: readonly GridCell[] } | null | undefined
   constructor(
     file: F,
     units: SourceUnit<F>[],
@@ -3448,6 +3466,7 @@ function probeBranch(s: string, from: number, to: number, b: Builder, ctx: Ctx):
   }
   sb.kind = b.kind
   sb.cellMode = b.cellMode
+  sb.cells = b.cells
   sb.cur = outer
   // (each display it sets, whatever unit it ends in: the builder's own record of them)
   let display = false
@@ -4545,6 +4564,22 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         i = afterEnd
         continue
       }
+      // a tabular of one column and several rows nested in a table's cell sets lines of that cell's text (TeX: a box in the
+      // cell's entry, its rows the box's lines, as \makecell's and \shortstack's are): its begin and end a pair round them, each
+      // row's end a forced break (inGridCell). One of one row is its own cell as before (nothing to join: its pieces, its id and
+      // its rows the same); one of several columns a table of its own, below
+      if (TABLE_ENVS.test(env) && ctx.tables && b.cellMode && inGridCell(b, s, i)) {
+        const argsEnd = tableArgsEnd(s, afterBegin, bodyEnd, env, ctx),
+          rows = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter).filter((c) => /\S/.test(s.slice(c.start, c.end)))
+        if (rows.every((c) => c.col === 0 && c.span === 1) && rows.some((c) => c.row > 0)) {
+          endText()
+          const id = b.open(s.slice(i, argsEnd), i)
+          walk(s, argsEnd, bodyEnd, b, ctx)
+          b.close(id, s.slice(bodyEnd, afterEnd), afterEnd)
+          i = afterEnd
+          continue
+        }
+      }
       endText()
       b.flush()
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
@@ -4579,33 +4614,28 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           i = afterEnd
           continue
         }
-        // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are. In an
-        // author block its cells are the block's units, cut at & and \\ as cells are (blockKind), placed in no grid
-        const tp = ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null),
-          tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
-        // (one the table does not know by its form: tabularx's, tabular*'s and tabulary's {width}[pos]{spec}, else [pos]{spec})
-        const argsEnd = tr?.complete
-          ? tr.end
-          : argsOfForm(
-              s,
-              afterBegin,
-              env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{',
-            ).end
+        // a table: each cell is a unit of its own; & and \\ end it where they end the grid's cell (a `\\` inside a cell is a
+        // forced break of its text: inGridCell). The column specification and width stay as they are. In an author block its
+        // cells are the block's units, cut at & and \\ as cells are (blockKind), placed in no grid
+        const argsEnd = tableArgsEnd(s, afterBegin, bodyEnd, env, ctx)
         // (the paper's tables numbered in the order they begin, a table nested in a cell after the one it is in)
         const saved = b.kind,
           savedCell = b.cellMode,
+          savedCells = b.cells,
           first = b.units.length,
           // biome-ignore lint/suspicious/noAssignInExpressions: as written
           table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1)
+        // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
+        // a table nested in a cell gives its units the outer cell's place, set after its own
+        const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
         b.kind = blockKind(b, 'cell')
         b.cellMode = true
+        b.cells = { s, grid }
         walk(s, argsEnd, bodyEnd, b, ctx)
         b.flush()
         b.kind = saved
         b.cellMode = savedCell
-        // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
-        // a table nested in a cell gives its units the outer cell's place, set after its own
-        const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
+        b.cells = savedCells
         noteBlocks(placeCells(b.units.slice(first), b.file, grid, table), grid, s, table, b, ctx)
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
@@ -4640,16 +4670,19 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         const { end: argsEnd } = envArgs(s, afterBegin, bodyEnd, env, ctx)
         const saved = b.kind,
           savedCell = b.cellMode,
+          savedCells = b.cells,
           first = b.units.length,
           // biome-ignore lint/suspicious/noAssignInExpressions: as written
           table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1)
+        const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
         b.kind = blockKind(b, 'cell')
         b.cellMode = true
+        b.cells = { s, grid }
         walk(s, argsEnd, bodyEnd, b, ctx)
         b.flush()
         b.kind = saved
         b.cellMode = savedCell
-        const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
+        b.cells = savedCells
         noteBlocks(placeCells(b.units.slice(first), b.file, grid, table), grid, s, table, b, ctx)
         i = afterEnd
         continue
@@ -4999,7 +5032,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // a macro of the paper's whose body ends a table's row, in a cell (\\newcommand{\\tightrow}{\\\\[-4pt]}: rowEndsOf): the row's end,
     // as `\\\\` is there, an empty group after it with it. Read as a placeholder, the next row's first cell ran on in the cell it
     // ends (2610.21924v1's 30 cells)
-    if (b.cellMode && ctx.rowEnds?.has(name)) {
+    if (b.cellMode && ctx.rowEnds?.has(name) && !inGridCell(b, s, i)) {
       endText()
       b.flush()
       const k = skipSpaces(s, end)
@@ -5099,8 +5132,13 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       if (arg?.group) {
         // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages), or
         // that the macro's body sets inside an environment of its own (proseInEnvironment: a minipage's, a tabular's
-        // content), is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
-        if (holdsBlock(s.slice(arg.start + 1, arg.end - 1)) || proseInEnvironment(macro)) {
+        // content), is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair.
+        // In a table's cell the grid's cell bounds the unit already: there the call is the pair round its argument, before
+        // which the cell's start mark stands where its text spans the box's lines (\\tabincell{c}{LOC \\\\ method})
+        if (
+          holdsBlock(s.slice(arg.start + 1, arg.end - 1)) ||
+          (proseInEnvironment(macro) && !(b.cellMode && inGridCell(b, s, i)))
+        ) {
           endText()
           b.flush()
           walk(s, arg.start + 1, arg.end - 1, b, ctx)
@@ -5222,7 +5260,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       const { args, end: e } = argsAfter(s, end, 1)
       const stop = args[0]?.kind === 'opt' ? e : end
       endText()
-      if (b.cellMode) {
+      // (in a table, the end of the grid's row: the cell's unit ends; inside a grid cell, in a box the cell holds, a line's end:
+      // a forced break of the cell's text, as in a paragraph)
+      if (b.cellMode && !inGridCell(b, s, i)) {
         b.flush()
         i = stop
         continue
