@@ -17,7 +17,7 @@
 // A register (\tabcolsep) is '=': TeX's assignment may follow it, `\tabcolsep=2pt`; a token register (llncs'
 // \titlerunning) `?s{x`, its value a group. A command LaTeXML reads in code past its prototype (\cmidrule[]'s
 // (trim){a-b}, acronym's \ac*{key}) is not known: its arguments are no reader's text
-import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, NOTE_PACKAGES, NOTE_POOLS, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUEST_PACKAGES, REQUEST_POOLS, REQUIRES } from './latexml-args.mjs'
+import { BINDINGS, COMMANDS, ENVIRONMENTS, FRONT, NOTE_PACKAGES, NOTE_POOLS, PACKAGE_COMMANDS, PACKAGE_ENVIRONMENTS, REQUEST_PACKAGES, REQUEST_POOLS, REQUIRES } from './latexml-args.ts'
 import { BREAK_HINTS, inkFree } from './tex-kernel.mjs'
 
 /** the roles' names, by their letter */

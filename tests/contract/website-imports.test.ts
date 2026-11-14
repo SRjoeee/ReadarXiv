@@ -101,7 +101,7 @@ const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }
   { path: 'packages/engine/src/marks/marks.mjs', names: [] },
   { path: 'packages/engine/src/plan.ts', names: [] },
   { path: 'packages/engine/src/prepare.ts', names: [] },
-  { path: 'packages/engine/src/source/latexml-args.mjs', names: [] },
+  { path: 'packages/engine/src/source/latexml-args.ts', names: [] },
   { path: 'packages/engine/src/source/tex-names.json', names: [] },
   { path: 'packages/engine/src/wrap/wrap.ts', names: [] },
   { path: 'packages/reader/e2e/fixtures/', names: [] },

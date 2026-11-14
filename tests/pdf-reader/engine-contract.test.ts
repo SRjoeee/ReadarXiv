@@ -152,7 +152,7 @@ describe('the licence of what a reader loads', () => {
 
   // What section 19.3 says the web carries with the engine and the shared interface is so, and the registry holds its rows
   it('has the notices the web carries: LaTeXML\'s table is in the closures of pipeline and layer, and the registry names LaTeXML, Lucide and Noto', () => {
-    for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain('packages/engine/src/source/latexml-args.mjs')
+    for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain('packages/engine/src/source/latexml-args.ts')
     const registry = readFileSync('docs/THIRD_PARTY.md', 'utf8')
     for (const word of ['LaTeXML', 'Lucide', 'Noto Sans SC']) expect(registry, word).toContain(word)
     expect(shared).toContain('packages/ui/src/controls/Icon.tsx')
