@@ -330,8 +330,8 @@ export function ownOf(
     }
     const S = [`${id}s`, `t${id}s`, `h${id}s`].flatMap((n) => where.get(n) ?? []),
       E = [`${id}e`, `t${id}e`, `h${id}e`].flatMap((n) => where.get(n) ?? [])
-    let s = S[0] ?? null,
-      e = E[0] ?? null
+    let s: Place | null = S[0] ?? null,
+      e: Place | null = E[0] ?? null
     if (S.length > 1 || E.length > 1) {
       // (marks TeX set more than once: the unit is its first occurrence where that is an end mark alone and every later one a
       // pair, one start before each end — a title TeX set in vertical mode, where no start mark goes (MR 3), its class setting
