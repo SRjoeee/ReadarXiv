@@ -105,12 +105,11 @@ export function lineRulesOf(pages, glyphs, boxes, max = Infinity) {
 }
 
 // ---- source/latex-front.ts EMAIL_ADDRESS and ADDRESS_GROUP, their home's own (an e-mail address as a text writes it,
-// keepAddresses'; several at one domain written once, keepGroups'): a copy is not kept once its home is typed (the
-// coordinator's ruling of 2026-11-14)
+// keepAddresses'; several at one domain written once, keepGroups'): no copy is kept of a home that is typed
 export { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../source/latex-front.ts'
 
-// ---- source/latex-front.ts identifiersIn, its home's own (each identifier of a text; keepIdentifiers'): the copy is not kept
-// once its home is changed or typed (the coordinator's ruling of 2026-11-14)
+// ---- source/latex-front.ts identifiersIn, its home's own (each identifier of a text; keepIdentifiers'): no copy is kept of a
+// home that is changed or typed
 export { identifiersIn } from '../../source/latex-front.ts'
 
 // ---- layout/file.mjs:255 (UNIT_FLAG)
@@ -119,7 +118,7 @@ export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_L
 // ---- layer-proto/figure-rows.mjs:37 (BAND_MAX)
 export const BAND_MAX = 4
 
-// ---- instrument/mt.ts utf8, its home's own (the copy is not kept once its home is typed: the coordinator's ruling of 2026-11-14)
+// ---- instrument/mt.ts utf8, its home's own (no copy is kept of a home that is typed)
 export { utf8 } from '../../instrument/mt.ts'
 
 // ---- layout/marks.mjs:72-94 (classOf), the one change: a piece's class is the instrument's (the front half's adapter ran today's
