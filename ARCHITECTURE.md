@@ -230,6 +230,7 @@ a gate is named by its id there. The rows after them are this repository's own.
 | A translator is sent no field of identity (`src`, `keys`, `open`, `close`, `depth`, `of`) | `packages/translate/tests/bundle.test.ts` | |
 | Every site that decides a reading option reads `toggleKind` | `tests/pdf-reader/toggle-kind.test.ts` | |
 | The layer's units are those its head names, each read once | `packages/reader/tests/session.test.ts`; the harness (`packages/reader/e2e/run.mjs`) | |
+| The page stack puts a page view in place only once it has drawn at the scale it stands at, and draws again one a new scale resets while it draws | `packages/reader/tests/stack.test.ts` (over a stand-in of PDF.js 6.3.289's page view); the harness (`packages/reader/e2e/run.mjs`: a display alone, then side by side, under a host's sheet that takes a pane out at no width) | the stand-in is PDF.js 6.3.289's page view as the stack meets it, read again at a PDF.js update |
 | The HTML page's DOM: a translation only as its block's next sibling, the original gaining `data-axt-*` alone, restore giving back the DOM node by node (DESIGN §7.1) | `tests/renderer/restore.test.ts` and the renderer's tests on every fixture; `pnpm e2e` | |
 | No `:has()` in an injected style sheet | `tests/styles/no-has.test.ts` | |
 | No measure of the complexity census rises past its ledger, among them the thresholds and lists with no reason | `census` (`lab/release-check/census.mjs`, its ledger `lab/release-check/census-ledger.json`; the rule ledger `lab/rules/ledger.json`) | not in hosted CI |
