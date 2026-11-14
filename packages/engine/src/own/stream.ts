@@ -528,7 +528,7 @@ function headEntries(
  *   piece after its cell's end mark with its opening point alone (its source ends in a control word, or its class may read
  *   ahead) ends at its cell's end point, `t<i>x`, which LAYOUT_TEX sets at the cell template's end and the marking names among
  *   its unit's next marks (`ends`): its unit's next mark, as any. Before that point was set it ran to the next unit's start: the
- *   row's other entries no unit is, the rules between the columns, the rules under its row and a later row's ground (round 3's
+ *   row's other entries no unit is, the rules between the columns, the rules under its row and a later row's ground (the design's
  *   E1: 2610.21176v1 p13's `\checkmark` its table's bottom rule). Where TeX states no cell end (a table no template of LaTeX's
  *   sets: tabularray's tblr, a plain \halign; a p column of LaTeX's own tabular without array.sty, whose template latex.ltx's
  *   \@classv builds and the marks do not wrap), the reading is as before, to the next mark: no bound is guessed

@@ -1330,7 +1330,7 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   cell's own unit shares the line. Before, two units wrote none: the lay had no line of several members then, and each,
  *   given the class, would have been set on its own middle.
  *   Assignments, \aftergroup and \message: no node
- * - **The cell's end** (docs/PDF-READER.md §18.74, the coordinator's ruling of 2026-11-15). An element's ink is what TeX set
+ * - **The cell's end** (docs/PDF-READER.md §18.74). An element's ink is what TeX set
  *   between its two points; where TeX gives it no closing point, it ends where TeX ends what the element stands in, never later,
  *   and for a piece of a table cell that is the cell's end. A cell's end mark goes after its last text, and a piece after it whose
  *   opening mark stands alone (its source ends in a control word, or its class may read ahead) had no bound but the next mark,
@@ -1981,7 +1981,8 @@ export function readColours(log: string | null | undefined): [unit: number, k: n
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
  *  mark by its unit and source piece index, a draft image frame's corner (g), a babel name's start or end by its
  *  occurrence and key (n<occurrence>.<key>.s, NAMES_TEX). Not a cell's end point (`t<i>x`, LAYOUT_TEX's template end): the
- *  stream's reading alone reads it (stream.ts ownedOf, by the marking's `ends`), and today's marks file takes none of it */
+ *  stream's reading alone reads it (stream.ts ownedOf, by the marking's `ends`), and the marks file, whose names this
+ *  pattern filters, takes none of it */
 export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d+[abt]|n\d+\.[a-z]{1,16}\.[se])$/
 
 // ---------------------------------------------------------------- the marking

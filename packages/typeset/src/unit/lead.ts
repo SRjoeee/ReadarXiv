@@ -1,6 +1,6 @@
 // A run's style from its characters, as S.names sets a name in it (shared/names.ts). The one part of U.lead's port that is read:
-// the lay leads a unit by the name its part binds to it (lay/lead.ts ledBy), and the ported lead of today's run (RUN:2047-2072,
-// unlead RUN:1841-1847), which nothing called, went with its tests. Ported from engine 065c1d973: styleOfChars L2:2912,
+// the lay leads a unit by the name its part binds to it (lay/lead.ts ledBy), not by a run's lead (RUN:2047-2072 and its unlead,
+// RUN:1841-1847), which this module does not port. Ported from engine 065c1d973: styleOfChars L2:2912,
 // colourOfStyle L2:2909.
 
 /** a character of the page as the lead reads it */
