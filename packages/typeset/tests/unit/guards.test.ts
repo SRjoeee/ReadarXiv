@@ -73,7 +73,7 @@ describe('breaker/font-names: a name no table holds, its class guessed from its 
 
 describe('breaker/tokens: explicit glue by TeX’s own definitions (KERNS, SKIPS)', () => {
   it('sets \\enspace as LaTeX’s kern of half an em and \\qquad as its skip of two, a line breaking at the skip alone', () => {
-    // (latex.ltx: \def\enspace{\kern.5em }, \def\qquad{\hskip2em\relax})
+    // (latex.ltx: \enspace \kern.5em, \qquad \hskip2em)
     expect(glueOf('\\enspace')).toEqual({ em: 0.5, brk: false })
     expect(glueOf('\\qquad')).toEqual({ em: 2, brk: true })
   })
