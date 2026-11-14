@@ -393,6 +393,12 @@ export function todayTies(
   })
 }
 
+/** the adapted members (by part ord) as the runner hands them to pieceCrops, which reads each one's crops' piece indices back
+ *  from the ledger's unit of its key */
+export function cropLays(adapted: ReadonlyMap<number, FlowMember>): Parameters<typeof pieceCrops>[1] {
+  return new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never]))
+}
+
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
 export function settingDiff(mine: FlowMember, today: FlowMember, tokens = true): string {
   if (mine.blocks.length !== today.blocks.length) return 'U.blocks: block count'
@@ -1033,7 +1039,7 @@ export function gateL1Pair(
     // classes above are the member's own)
     if (o.substitute?.length) substitute(mem, td, o.substitute)
   }
-  pieceCrops(pair, new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never])))
+  pieceCrops(pair, cropLays(adapted))
   const dumped = new Map<
     number,
     {
