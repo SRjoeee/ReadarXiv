@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import * as argRoles from '../../src/source/arg-roles.ts'
-import { bindingsOf, commandParams, environmentParams, readArgs, textArgsOf, textless } from '../../src/source/arg-roles.ts'
+import { commandParams, environmentParams, readArgs, textArgsOf, textless } from '../../src/source/arg-roles.ts'
+
+/** the bindings a paper's files load, as paperOf reads them (a Set of BINDINGS' indices, bindingsOfText's) */
+const bindingsOf = (texts: readonly string[]) => argRoles.paperOf(texts).bindings as Set<number>
 
 // The role table: what each argument of a command is (text, a dimension, keys, a name …), from LaTeXML's prototypes and
 // the commands written out by hand where LaTeXML leaves an argument untyped
