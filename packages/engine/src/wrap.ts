@@ -213,12 +213,28 @@ const hex = (b: Uint8Array) => {
   for (let i = 0; i < b.length; i++) s += HEX[b[i]!]
   return `${s}>`
 }
-/** fmt of an operand: a number's text; any other operand, the TypeError reading its toFixed gave */
+/** a split `"`'s operand as the page gave it: a number in full (exact); any other operand, the TypeError reading its toFixed
+ *  gave. Never fmt's six decimals: the proof holds a split show's Tw and Tc to the page's own numbers (sameOps), which six
+ *  decimals do not hold at a seventh decimal's half (0.0000005, 0.1234565) nor past 1e21 (an exponent) */
 const fmtOf = (v: Operand | undefined): string => {
-  if (typeof v === 'number') return fmt(v)
+  if (typeof v === 'number') return exact(v)
   throw new TypeError(
     v === undefined ? "Cannot read properties of undefined (reading 'toFixed')" : 'x.toFixed is not a function',
   )
+}
+/** a number as the shortest decimal JavaScript reads back as it (String's), its exponent written out: a content stream's
+ *  number has none (PDF 32000-1 §7.3.3) */
+const exact = (x: number): string => {
+  const s = String(x)
+  const e = s.indexOf('e')
+  if (e < 0) return s
+  const sign = s[0] === '-' ? '-' : ''
+  const [whole = '', part = ''] = s.slice(sign.length, e).split('.')
+  const digits = whole + part
+  // (the decimal point's place in `digits`, past its whole part by the exponent: String writes one under 1e-6, the point
+  // before every digit, and from 1e21, past them all)
+  const point = whole.length + Number(s.slice(e + 1))
+  return point <= 0 ? `${sign}0.${'0'.repeat(-point)}${digits}` : sign + digits + '0'.repeat(point - digits.length)
 }
 const fmt = (x: number) => {
   if (Math.abs(x) < 5e-7) return '0'
