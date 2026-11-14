@@ -25,7 +25,9 @@
 // folio; stage 2 brackets them by points of their own (the note's §7).
 // Pure arithmetic over the pages; an original module (no port statement).
 import { CLASS_CODE, CLASS_IDS, unitClass } from '../content-classes.ts'
-import { classifyFont, columnsAt, displayTextMask, regionMask, regionsOf } from './deps.mjs'
+import { displayTextMask, regionMask } from '../../ink.ts'
+import { classifyFont } from '../facts.ts'
+import { columnsAt, regionsOf } from './deps.mjs'
 
 /** two glyphs on one line: their baselines within this share of the larger size (a superscript, a subscript) */
 export const LINE_DY = 0.6

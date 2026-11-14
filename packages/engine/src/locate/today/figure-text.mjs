@@ -72,7 +72,9 @@
 // direction's band and room, ROOM_MAX at most.
 //
 // Pure arithmetic over the pages; an original module (no port statement).
-import { BAND_MAX, classifyFont, displayTextMask, familyKeysOf, PICTURE_END, PICTURE_START, regionMask, sameFamily } from './deps.mjs'
+import { displayTextMask, PICTURE_END, PICTURE_START, regionMask } from '../../ink.ts'
+import { classifyFont, familyKeysOf, sameFamily } from '../facts.ts'
+import { BAND_MAX } from './deps.mjs'
 
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05

@@ -3,9 +3,9 @@
 // named (abe884b5e), so that the makers read exactly what today's read; held equal to today's by
 // tests/pdf-reader/locate-ink-today.test.ts. One change, named where it is: classOf reads the kind the instrument states of a
 // piece (today's classOf, which the front half's adapter ran) instead of a source. And regionsOf reads a page's body brackets
-// paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it).
-export { classifyFont, familyKeysOf, sameFamily } from '../facts.ts'
-export { displayTextMask, PICTURE_END, PICTURE_START, regionMask } from '../../ink.ts'
+// paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it). What the
+// makers import of typed homes they import from there (facts.ts's classifyFont, familyKeysOf, sameFamily; ink.ts's
+// displayTextMask, PICTURE_END, PICTURE_START, regionMask); a copy here goes when its home is typed, a re-export of it first.
 
 // ---- layout/stream.mjs:141-149 (spellOf)
 const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n', ς: 'σ' }
