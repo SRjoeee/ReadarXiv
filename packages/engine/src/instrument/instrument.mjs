@@ -26,7 +26,7 @@ import { classOf, followsOf, headEnd, INK_ANY, leadStep, readColours, readSkipPr
 import { ownOf } from '../own/own.mjs'
 import { READ_ALONE, regionsOf, WANT } from '../own/stream.mjs'
 import { BACKREF_LIST, lastTexLog, startOf } from '../source/latex-front.mjs'
-import { bundleUnitsOf } from './units.mjs'
+import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.mjs'
 import { textPieceOf } from '../source/text-piece.ts'
 import { symbolText } from '../source/text-symbols.mjs'

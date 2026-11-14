@@ -18,37 +18,15 @@ import * as guard_js from './compile/guard.mjs'
 import * as live_js from './compile/live.mjs'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as pdfLite_js from './compile/pdf-lite.mjs'
-// @ts-ignore: JavaScript moved as it is, typed by this file alone
-import * as units_js from './instrument/units.mjs'
+import * as units_js from './instrument/units.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as latexFront_js from './source/latex-front.mjs'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as paperMeta_js from './source/paper-meta.mjs'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as paper_js from './compile/paper.mjs'
-export type BundlePiece =
-  | [0, s: string]
-  | [0, s: string, src: string]
-  | [1, src: string]
-  | [2, id: number, src: string]
-  | [2, id: number, src: string, sets: 0]
-  | [3, id: number, src: string]
-  | [4, pre: string, unit: number, post: string]
-export type BundleUnit = [
-  kind: string,
-  flags: number,
-  depth: number | null,
-  cell: CellPlace | null,
-  edges: { lead?: string; trail?: string; inner?: string } | null,
-  pieces: BundlePiece[],
-]
-export const bundleUnitsOf = units_js.bundleUnitsOf as (
-  paper: {
-    units: readonly SourceUnit[]
-    names?: readonly string[]
-  },
-  kept?: ReadonlySet<SourceUnit> | null,
-) => BundleUnit[]
+export type { BundlePiece, BundleUnit } from './instrument/units.ts'
+export const bundleUnitsOf = units_js.bundleUnitsOf
 export interface PdfLike {
   numPages: number
   getPage(p: number): Promise<{
