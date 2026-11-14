@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { analyze, inMemory } from '../../src/front.types.ts'
+import { analyze } from '../../src/source/paper-meta.ts'
+import { inMemory } from '../../src/source/latex-front.ts'
 
 // How many toplevel sources arXiv compiled, and which one is the main file: from 00README where the package has one,
 // else guessed from the files no other file includes (1008.0072v1: a revtex4 paper and its supplement, no 00README; arXiv's

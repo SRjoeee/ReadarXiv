@@ -10,20 +10,13 @@
 // of the key. The orchestration of the two halves is prepare.ts's.
 import { BOUNDS, type PrepareStage as FormatStage, type Unit, unitId, write } from '@readarxiv/format'
 import { compiledOf, type PreparePdfJs } from './compiled.ts'
-import {
-  analyze,
-  bundleUnitsOf,
-  type Compiled,
-  type CompileRequest,
-  contentOf,
-  creationEpochOf,
-  elementKindOf,
-  inMemory,
-  instrumentOf,
-  type Paper,
-  texLiveOfPdf,
-  unitFactsOf,
-} from './front.types.ts'
+import { analyze } from './source/paper-meta.ts'
+import { bundleUnitsOf } from './instrument/units.ts'
+import type { Compiled, CompileRequest, Paper } from './compile/live.ts'
+import { contentOf, elementKindOf, instrumentOf, unitFactsOf } from './instrument/instrument.ts'
+import { creationEpochOf } from './compile/base.ts'
+import { inMemory } from './source/latex-front.ts'
+import { texLiveOfPdf } from './compile/guard.ts'
 import type { Instrument } from './instrument.ts'
 import { bySentence } from './locate/words.ts'
 import type { OriginalFacts, PrepareWhy, StoredInstrument } from './plan.ts'

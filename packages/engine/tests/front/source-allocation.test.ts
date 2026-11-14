@@ -4,7 +4,9 @@
 // unreadable let it through, so that the prepare refuses the paper for its memory rather than reading its files in another
 // encoding, its calls as placeholders, or its tree and compiler as none declared.
 import { describe, expect, it } from 'vitest'
-import { analyze, inMemory, openPaper } from '../../src/front.types.ts'
+import { analyze } from '../../src/source/paper-meta.ts'
+import { inMemory } from '../../src/source/latex-front.ts'
+import { openPaper } from '../../src/compile/live.ts'
 import { isMemoryError } from '../../src/index.ts'
 
 /** V8's own failed allocation, as it throws one */

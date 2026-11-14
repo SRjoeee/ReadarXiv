@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { sourceUnitsOf } from '../../src/front.ts'
-import { openPaper, unitFactsOf } from '../../src/front.types.ts'
+import { openPaper } from '../../src/compile/live.ts'
+import { unitFactsOf } from '../../src/instrument/instrument.ts'
 
 // Which texts of a table and a figure are language (docs/PDF-READER.md §18.72, the owner's direction of 2026-11-13: decide what is
 // content and what is not, from the source's facts and the table's structure; a translator's error is not ours to correct).

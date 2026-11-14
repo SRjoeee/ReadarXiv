@@ -5,16 +5,9 @@
 // the marked compile with its final pass, and what is stored of it (plan.ts storedInstrumentOf). A module of its own, so that a
 // host that keys the stored instrument by the code its compile side runs names it there, with plan.ts, and every value that
 // decides a stored byte is either this code's or one the host gives it (CompiledInput).
-import {
-  bibliographyKept,
-  type Compiled,
-  type CompileRequest,
-  madeBibliography,
-  markedOfPaper,
-  type Paper,
-  type PdfLike,
-  textOfPdf,
-} from './front.types.ts'
+import { bibliographyKept, madeBibliography, markedOfPaper } from './compile/paper.ts'
+import type { Compiled, CompileRequest, Paper } from './compile/live.ts'
+import { type PdfLike, textOfPdf } from './compile/base.ts'
 import { isMemoryError } from './memory.ts'
 import {
   FROM_UTF8,

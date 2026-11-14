@@ -95,39 +95,28 @@ export { type Hole, type Holes, holesOf, PACKED_MAGIC, pack, unpack } from './sp
 export { RECOVER_SITES, reasonOf, siteOf } from './warnings.ts'
 export { type AddOn, textGroupOf, type WrapPageA, wrap, wrapPageOf } from './wrap/wrap.ts'
 
-// ---- the front half moved into this package as it is (JavaScript), typed by its one transition facade: the names the
-// website's prepare imports (the source reader's paper, the marked compile, the instrument, the PDF's facts)
+// ---- the front half moved into this package, typed in place: the names the website's prepare imports (the source
+// reader's paper, the marked compile, the instrument, the PDF's facts), each from its module
+export { analyze } from './source/paper-meta.ts'
+export { bibliographyKept, madeBibliography, markedOfPaper } from './compile/paper.ts'
+export { bundleUnitsOf } from './instrument/units.ts'
 export {
-  analyze,
-  bibliographyKept,
-  bundleUnitsOf,
   type Compiled,
   type CompileRequest,
-  classesOf,
-  compilerOfPdf,
-  contentOf,
+  NO_DRIVER_GROUP,
+  openPaper,
+  type Paper,
+  ranThrough,
+} from './compile/live.ts'
+export { classesOf, contentOf, elementKindOf, instrumentOf, unitFactsOf } from './instrument/instrument.ts'
+export { compilerOfPdf, limitOf, texLiveOfPdf, texRan } from './compile/guard.ts'
+export {
   creationEpochOf,
   DRIVER_OUTPUT_MARK,
   DRIVER_OUTPUT_TRUNCATED,
   driverOutputGiven,
   driverOutputTruncated,
-  elementKindOf,
-  float32Outlines,
-  inMemory,
-  instrumentOf,
-  LINK_TEXT_PIXELS,
-  LITE_PDFJS,
-  limitOf,
-  liteWorkerSource,
-  madeBibliography,
-  markedOfPaper,
-  NO_DRIVER_GROUP,
-  NO_IMAGE_PIXELS,
-  openPaper,
-  type Paper,
-  ranThrough,
-  texLiveOfPdf,
-  texRan,
   textOfPdf,
-  unitFactsOf,
-} from './front.types.ts'
+} from './compile/base.ts'
+export { float32Outlines, LINK_TEXT_PIXELS, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from './compile/pdf-lite.ts'
+export { inMemory } from './source/latex-front.ts'
