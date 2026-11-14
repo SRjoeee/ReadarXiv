@@ -105,7 +105,7 @@ export type OwnedHow = (typeof OWNED_HOW)[number]
 export const OWNED = 6
 /** the glyph columns ownedOf reads of a page (ink.mjs packGlyphs), and the owned rows after it (marks.mjs): a glyph's
  *  origin, baseline, size and character */
-export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'] as const)
+export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'])
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i])) as Readonly<Record<OwnedHow, number>>
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])(\d+)$/

@@ -1,6 +1,5 @@
 // Moved into the engine package from src/pdf-reader/engine/layer-proto/units.mjs: the part of that module the moved front half calls, as it is; the rest
 // stays there and imports this part back through its transition path.
-import type { CellPlace, SourceUnit } from '../front.types.ts'
 
 /** a unit's flags: the paper's title, the front matter, written back in the source's brackets, kept as it is (a name,
  *  live.mjs openPaper's `kept`) */
@@ -22,6 +21,28 @@ const engineText = (s: string) => (/^[\t\n\r -~]*$/.test(s) ? s : String.fromCha
 export const EDGES = Object.freeze(['lead', 'trail', 'inner'] as const)
 /** a structural name's unit (bundleUnitsOf): no page's ink, a word of the target's for the layer */
 export const NAME_KIND = 'name'
+/** a table cell as a unit states it and the bundle copies it: its table, row and column, its span, whether it is a head */
+export interface BundleCell {
+  table: number
+  row: number
+  col: number
+  span: number
+  head: boolean
+}
+/** a unit as bundleUnitsOf reads it (openPaper's, latex-front.mjs's): its kind, its flags, depth, cell and display edges where
+ *  the front end set them, its pieces */
+export interface UnitIn {
+  kind: string
+  title?: boolean
+  front?: boolean
+  bracketed?: boolean
+  depth?: number
+  lead?: string
+  trail?: string
+  inner?: string
+  cell?: BundleCell
+  pieces: readonly unknown[]
+}
 /** a piece as the bundle holds it, its positions dropped: a text (with the source as written where it differs, an accent's
  *  letter), a placeholder, a group's open and close paired by `id` (an open whose pair sets nothing with SETS_NOTHING after
  *  its source), a nested unit by its id */
@@ -38,7 +59,7 @@ export type BundleUnit = [
   kind: string,
   flags: number,
   depth: number | null,
-  cell: CellPlace | null,
+  cell: BundleCell | null,
   edges: { lead?: string; trail?: string; inner?: string } | null,
   pieces: BundlePiece[],
 ]
@@ -49,11 +70,11 @@ export type FrontPiece =
   | { t: 'ph'; src: string }
   | { t: 'open'; id: number; src: string; sets?: number }
   | { t: 'close'; id: number; src: string }
-  | { t: 'nested'; pre: string; unit: SourceUnit; post: string }
+  | { t: 'nested'; pre: string; unit: UnitIn; post: string }
 
 // ---------------------------------------------------------------- the writer's
 /** a piece as openPaper reads it, its positions dropped: a nested piece names its inner unit by id */
-function pieceOf(p: FrontPiece, idOf: ReadonlyMap<SourceUnit, number>): BundlePiece {
+function pieceOf(p: FrontPiece, idOf: ReadonlyMap<UnitIn, number>): BundlePiece {
   switch (p.t) {
     case 'text':
       return p.src === undefined ? [TEXT, p.s] : [TEXT, p.s, p.src]
@@ -86,10 +107,10 @@ function pieceOf(p: FrontPiece, idOf: ReadonlyMap<SourceUnit, number>): BundlePi
  * no page's ink), read by the layer as the target's word for that name (PDF-READER §19.14). The source's units keep their ids
  */
 export function bundleUnitsOf(
-  paper: { units: readonly SourceUnit[]; names?: readonly string[] },
-  kept: ReadonlySet<SourceUnit> | null = null,
+  paper: { units: readonly UnitIn[]; names?: readonly string[] },
+  kept: ReadonlySet<UnitIn> | null = null,
 ): BundleUnit[] {
-  const idOf = new Map<SourceUnit, number>()
+  const idOf = new Map<UnitIn, number>()
   // biome-ignore lint/suspicious/useIterableCallbackReturn: a concise arrow, Map.set's value, which no one reads
   paper.units.forEach((u, i) => idOf.set(u, i))
   // (each name as the engine's text, as a source unit's text piece holds it: a UTF-8 file's accented name as its bytes)
