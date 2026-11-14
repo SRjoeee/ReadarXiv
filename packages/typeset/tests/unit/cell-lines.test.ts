@@ -182,19 +182,24 @@ describe("a cell whose leading is read off the page, not stated by TeX (Placed.r
 })
 
 describe("the box's lines placed by their ink, as a single line is: a closing mark's blank half stands in the margin", () => {
-  // (2608.06701v1-zh p6 "Trigger \\ Rate (%)" and 2608.25210v2-zh p13/p14 "Two-Phase Strategy: \\ …" after S2: a line ending with a
-  // CJK closing mark centred in the box by its advance stood a quarter of its size off the original's middle (1.99 pt at 7.97 pt,
-  // 1.28 at 5.18), where placeItems centres a line by its ink, the mark's blank half let past the slot: hangOf)
+  // (2608.06701v1-zh p6 "Trigger \\ Rate (%)" and 2608.25210v2-zh p13/p14 "Two-Phase Strategy: \\ …" after S2: a line ending with
+  // a CJK closing mark centred in the box by its advance stood a quarter of its size off the original's middle (1.99 pt at 7.97 pt,
+  // 1.28 at 5.18), where placeItems centres a single line by its ink, the mark's blank half let past the slot: hangOf)
   const narrow: [[number, number], [number, number]] = [
     [115, 145],
     [112, 148],
   ]
   const zh = (ms: Placed[], rows: Rows) => layPage(part(ms), rows, rulesFor('zh'), metrics()).members
-  it("centres each line's ink, its closing mark's blank half aside", () => {
-    // (every character 5 pt at the size 10: the first line 10 pt, the second 20 by its advance, its last mark's blank half 5)
-    const [m] = zh([cell(7, narrow, { column: [100, 160] })], rowsOf({ 7: ['甲乙', '丙（丁）'] }))
+  const tail = '\u4e19\u4e01\u620a\uff08\u5df1\uff09'
+  it("centres its widest line, ending with a closing mark, by its ink: the mark's blank half past it, as placeItems sets one line", () => {
+    // (the lines 20 pt apart, so that the fit keeps the original's state: no tracking, no mark compressed; every character 5 pt at
+    // the size 10, the closing mark's blank half half the size, 5 pt: the second line's ink from its start to its end less 5)
+    const c = cell(7, narrow, { column: [100, 160] })
+    const tall = { ...c, lead: 20, lines: [c.lines[0]!, [1, 0, 112, 148, 680, 687, 678, 72, 500, 0, 10]] } as Placed
+    const [m] = zh([tall], rowsOf({ 7: ['\u7532', tail] }))
+    expect(m!.fit!.track).toBe(0)
     const [l1, l2] = extents(m!)
-    expect((l1![0] + l1![1]) / 2).toBeCloseTo(130, 5)
     expect((l2![0] + l2![1] - 5) / 2).toBeCloseTo(130, 5)
+    expect((l1![0] + l1![1]) / 2).toBeCloseTo(130, 5)
   })
 })

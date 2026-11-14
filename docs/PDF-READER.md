@@ -7103,7 +7103,9 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   not only a single line's; the cell has one size, the largest not over the original's at which every line fits (the fit's states
   in the same room, no widening); its lines stand as TeX set them in the cell's box: the box, as wide as its widest laid line, in
   the room by the cell's class (`Placed.align`), each line in the box by its own (`Placed.inner`, read off arXiv's page; absent,
-  the cell's class: `breaker/place.ts` boxLines, one box over all its lines whichever block each is in). Its forced break ends
+  the cell's class: `breaker/place.ts` boxLines, one box over all its lines whichever block each is in, each line's extent its
+  ink's as placeItems centres a single line, a closing mark that ends it standing in the margin by its blank half: by its advance
+  a line that ends with a CJK closing parenthesis stood a quarter of its size off TeX's middle, 2608.06701v1 p6, 2608.25210v2 p13). Its forced break ends
   its line where the reply keeps it between words: U.breaks' maps, keyed by each line's own rectangle as the reading read it, are
   carried onto the room's (a lead read off the page knows no pitch, so the line after the break opens a region of its own,
   `breakAt`; with the rectangles the room's and the maps not carried, 18 of the 34 cells of two or three lines the entry laid over
