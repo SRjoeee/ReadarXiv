@@ -12,7 +12,7 @@
     "./today/source/latex-front.mjs": "./src/source/latex-front.mjs",
     "./today/source/paper-meta.mjs": "./src/source/paper-meta.mjs",
     "./today/source/tex-kernel.mjs": "./src/source/tex-kernel.mjs",
-    "./today/source/tex-names.mjs": "./src/source/tex-names.mjs",
+    "./today/source/tex-names.ts": "./src/source/tex-names.ts",
     "./today/source/text-symbols.mjs": "./src/source/text-symbols.mjs",
     "./today/source/text-piece.ts": "./src/source/text-piece.ts",
     "./today/marks/names.ts": "./src/marks/names.ts",

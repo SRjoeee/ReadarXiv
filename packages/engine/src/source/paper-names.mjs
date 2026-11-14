@@ -14,7 +14,7 @@
 // original's. At most NAMES_MAX a paper.
 //
 // Pure: no DOM, no clock. An original module (no port statement).
-import { CONJUNCTION_GAPS, GENERATED_COMMANDS, NAME_GAPS } from './tex-names.mjs'
+import { CONJUNCTION_GAPS, GENERATED_COMMANDS, NAME_GAPS } from './tex-names.ts'
 
 /** the names a paper's units may hold at most (a paper defines a few dozen at most; the gaps are 21): a count of names, a
  *  part's bound (PDF-READER §19.6); unmeasured */
