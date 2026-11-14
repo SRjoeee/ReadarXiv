@@ -60,6 +60,26 @@ const T = (i, text, piece, k = 3) => `\\leavevmode\\axtmark{t${i}s}${text}\\axte
 /** the end cases' own macros: a paper's macros of one letter each */
 const OWN = '\\newcommand{\\ok}{v}\\newcommand{\\B}{B}'
 
+/** a cell set on several lines (§18.75): its start mark before the box that holds its lines, as the marking sets it, or with
+ *  --inside after the box's open (the marking before), its end mark after its last word; `box` [open, lines, close] */
+const INSIDE = process.argv.includes('--inside')
+const M = (i, [open, lines, close]) =>
+  INSIDE ? `${open}\\leavevmode\\axtmark{t${i}s}${lines}\\axtend{t${i}e}${close}` : `\\leavevmode\\axtmark{t${i}s}${open}${lines}\\axtend{t${i}e}${close}`
+/** the boxes a cell's lines stand in (lane hdr-lines' census: \\makecell, \\shortstack, a nested one-column tabular, a paper's
+ *  macro, a \\parbox), each [open, lines, close, the cell's alignment where it is its own paragraph's] */
+const BOXES = [
+  ['\\makecell{', 'Two \\\\ lines', '}'],
+  ['\\makecell[l]{', 'Two \\\\ lines', '}'],
+  ['\\makecell[r]{', 'Two \\\\ lines', '}'],
+  ['\\shortstack{', 'Two \\\\[1pt] lines', '}'],
+  ['\\shortstack[l]{', 'Two \\\\ lines', '}'],
+  ['\\begin{tabular}[c]{@{}c@{}}', 'Two \\\\ lines', '\\end{tabular}'],
+  ['\\begin{tabular}[c]{@{}c@{}}', 'Two \\\\[2pt] lines', '\\end{tabular}'],
+  ['\\begin{tabular}[c]{@{}c@{}}', 'Two \\\\ \\hline lines', '\\end{tabular}'],
+  ['\\tabincell{c}{', 'Two \\\\ lines', '}'],
+  ['\\parbox[t]{2cm}{', 'Two \\\\ lines', '}', 'j'],
+]
+const TABINCELL = '\\newcommand{\\tabincell}[2]{\\begin{tabular}{@{}#1@{}}#2\\end{tabular}}'
 /** each case: its document, each cell's alignment as TeX set it (a letter where TeX's reading must state it, '-' where nothing
  *  may be stated), and the cells no template of LaTeX's set, for which no class may be written (AXT-CELL) */
 const CASES = {
@@ -261,6 +281,25 @@ const CASES = {
     `${C(444, `x \\begin{tabular}{c}${T(445, 'deep', '\\ok')}\\end{tabular}`)} & y \\\\`,
     '\\end{tabular}',
   ].join('\n')), { 441: 'l', 442: 'c', 443: 'c', 444: 'l', 445: 'c' }],
+  // (the cells set on several lines, one unit since §18.75: each merged cell's start mark before the box that holds its lines, as
+  // the marking sets it (latex-front.ts startOf, a cell), its end mark after its last word inside the box; each box in an l, a c
+  // and an r column, then under \\multirow, under \\multicolumn and after a \\cellcolor. Each writes ONE AXT-CELL, the OUTER
+  // column's class, and sets ONE end point after the whole box (MERGED); a \\parbox is a paragraph, its own (j). With --inside,
+  // the start mark inside the box, after its open, as the marking set it before: the red)
+  mergedAlone: [doc(`\\usepackage{makecell}${TABINCELL}`, [
+    '\\begin{tabular}{lcr}',
+    ...BOXES.map((b, k) => `${[0, 1, 2].map((c) => M(500 + 3 * k + c, b)).join(' & ')} \\\\`),
+    `${LONG} & ${LONG} & ${LONG} \\\\`,
+    '\\end{tabular}',
+  ].join('\n')), Object.fromEntries(BOXES.flatMap((b, k) => [0, 1, 2].map((c) => [500 + 3 * k + c, b[3] ?? 'lcr'[c]])))],
+  mergedUnder: [doc(`\\usepackage{makecell,multirow}\\usepackage[table]{xcolor}${TABINCELL}`, [
+    '\\begin{tabular}{lcr}',
+    `\\multirow{2}{*}{${M(560, BOXES[0])}} & \\multicolumn{1}{c}{${M(561, BOXES[3])}} & \\cellcolor{red!20}${M(562, BOXES[5])} \\\\`,
+    ` & ${LONG} & ${LONG} \\\\`,
+    `\\multicolumn{1}{r}{${M(563, BOXES[8])}} & \\multirow{2}{*}{${M(564, BOXES[7])}} & \\multicolumn{1}{l}{\\multirow{2}{*}{${M(565, BOXES[4])}}} \\\\`,
+    `${LONG} & & \\\\`,
+    '\\end{tabular}',
+  ].join('\n')), { 560: 'l', 561: 'c', 562: 'r', 563: 'r', 564: 'c', 565: 'l' }],
 }
 /** what each cell's end point holds after its end mark, where it is not nothing: the characters of its trailing piece, or how many
  *  glyphs it sets (by case, by cell); every other cell of a LaTeX template holds nothing there */
@@ -269,6 +308,12 @@ const CASES = {
  *  \@classv builds (`\@startpbox{<width>}\ignorespaces\@sharp\@endpbox`), where LAYOUT_TEX wraps \@classz alone (every column
  *  of array.sty's, the kernel's l, c and r): no \axt@te there, so no AXT-CELL either (§18.13: a p column states no box) */
 const NO_END = { kernel: [4, 7] }
+/** the merged cells (§18.75), by case: each writes ONE AXT-CELL (its outer column's class) and sets ONE end point, and its page's
+ *  glyphs and rules are the document's without our marks (sameAsBare) */
+const MERGED = {
+  mergedAlone: Array.from({ length: 30 }, (_, k) => 500 + k),
+  mergedUnder: [560, 561, 562, 563, 564, 565],
+}
 const END_AFTER = {
   endTabular: { 201: 'v', 203: 'x', 205: 'B' },
   endTabularStar: { 211: 'v', 213: 'B' },
@@ -332,6 +377,32 @@ function sameInk(a, b, e) {
   }
   return worst > tol ? { why: `a glyph or a box moved ${worst.toFixed(4)} pt` } : { why: null, split }
 }
+/** the marked document's pages against the same document with none of our marks (`bare`: every \\leavevmode\\axtmark and \\axtend
+ *  taken off): the same glyphs and rules, each to 0.001 pt (LuaTeX's 0.011; under dvipdfmx a glyph of a text run a point splits,
+ *  on its point's next glyph's baseline, up to 0.02: the writer places it anew, sameInk); null where so, else why not */
+function sameAsBare(bare, marked, e) {
+  if (bare.pages.length !== marked.pages.length) return { why: `${bare.pages.length} pages, ${marked.pages.length}` }
+  const tol = e === 'lualatex' ? 0.011 : 0.001
+  let worst = 0, split = 0
+  for (let p = 0; p < bare.pages.length; p++) {
+    const A = bare.pages[p], B = marked.pages[p]
+    if (A.glyphs.length !== B.glyphs.length || A.boxes.length !== B.boxes.length) return { why: `page ${p + 1}: ${A.glyphs.length}/${B.glyphs.length} glyphs, ${A.boxes.length / 4}/${B.boxes.length / 4} boxes` }
+    const splitBy = g => {
+      let last = null
+      for (const q of B.points) if (q.glyph <= g) last = q
+      return !!last && last.glyph < B.glyphs.length && Math.abs(B.glyphs[last.glyph].y - B.glyphs[g].y) < 0.001
+    }
+    for (let g = 0; g < A.glyphs.length; g++) {
+      const x = A.glyphs[g], y = B.glyphs[g]
+      if (x.u !== y.u) return { why: `page ${p + 1} glyph ${g}: ${JSON.stringify(x.u)} / ${JSON.stringify(y.u)}` }
+      const d = Math.max(Math.abs(x.x0 - y.x0), Math.abs(x.x1 - y.x1), Math.abs(x.y - y.y), Math.abs(x.size - y.size))
+      if (d > tol && (e === 'xelatex' || e === 'latex') && d <= 0.02 && splitBy(g)) split = Math.max(split, d)
+      else worst = Math.max(worst, d)
+    }
+    for (let i = 0; i < A.boxes.length; i++) worst = Math.max(worst, Math.abs(A.boxes[i] - B.boxes[i]))
+  }
+  return worst > tol ? { why: `a glyph or a box moved ${worst.toFixed(4)} pt` } : { why: null, split }
+}
 /** each cell's end point against its cell (`ink` the head's): where every cell `cells` names holds its point on its end mark's page,
  *  after its end mark, the glyphs between the two its trailing piece's characters (`after`, '' none), no box between, its destination
  *  at or past the last ink of the cell across; and none for `none`. The faults, and each cell's reading for the table */
@@ -376,6 +447,11 @@ for (const year of YEARS) {
       for (const [name, [src]] of Object.entries(CASES)) {
         mkdirSync(join(dir, `${h}-${e}-${name}`), { recursive: true })
         writeFileSync(join(dir, `${h}-${e}-${name}`, 'main.tex'), `${headOf(head, e)}${src}`)
+        // (a merged case's document with none of our marks, its glyphs and rules the marked one's: sameAsBare)
+        if (h === 'new' && MERGED[name]) {
+          mkdirSync(join(dir, `bare-${e}-${name}`), { recursive: true })
+          writeFileSync(join(dir, `bare-${e}-${name}`, 'main.tex'), `${headOf(head, e)}${src.replace(/\\leavevmode\\axtmark\{[^}]*\}|\\axtend\{[^}]*\}/g, '')}`)
+        }
       }
   // (two passes each, as a paper's marked original gets; the date fixed, so that two heads' PDFs can be compared byte for byte)
   // (each pass at most 120 s: a document TeX never ends (an endless expansion) fails as one with no PDF, not the run)
@@ -408,6 +484,18 @@ for (const year of YEARS) {
           same = r.why === null ? `ink the same, end points added${r.split ? ` (a run the point splits placed anew by the writer, ${r.split.toFixed(4)} pt)` : ''}` : `INK DIFFERS: ${r.why}`
         }
         if (same !== 'PDF the same' && !same.startsWith('ink the same, end points added')) bad++
+      }
+      // (a merged cell: one AXT-CELL, one end point, and the page the bare document's)
+      if (MERGED[name] && ink) {
+        for (const i of MERGED[name]) {
+          const n = (text.match(new RegExp(`^AXT-CELL ${i} `, 'gm')) ?? []).length
+          const x = ink.pages.flatMap((pg) => pg.points.filter((q) => q.name === `t${i}x`)).length
+          if (n !== 1 || x !== 1) wrong.push(`${i}: ${n} AXT-CELL, ${x} end point(s)`)
+        }
+        const bare = await inkOf(join(dir, `bare-${e}-${name}`, 'main.pdf'))
+        const r = bare ? sameAsBare(bare, ink, e) : { why: 'no bare PDF' }
+        if (r.why) wrong.push(`AGAINST THE BARE DOCUMENT: ${r.why}`)
+        else same ||= `the bare document's ink${r.split ? ` (a run a point splits placed anew by the writer, ${r.split.toFixed(4)} pt)` : ''}`
       }
       if (wrong.length || errors.length || ends.faults.length) bad++
       const ok = !wrong.length && !errors.length && !ends.faults.length && (!BASE || same === 'PDF the same' || same.startsWith('ink the same, end points added'))
