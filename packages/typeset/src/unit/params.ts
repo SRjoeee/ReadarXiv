@@ -1,9 +1,9 @@
-// U.params (design-b §1.5, E6, E7, E23, E24): the size a unit is laid at and its base style, and the parameters its fit reads
+// U.params (design-b §1.5, E6, E7, E23, E24): the size a unit is laid at, and the parameters its fit reads
 // beside the target's rules: its leading relative to the original's own pitch (leadOf: the script's of a solid-set
 // original, never closer than the original's), the CJK runs' starting tracking (a face's size correction given back), TeX's
 // \lineskip, its edges (whether its first and last lines stand alone on their baselines, the room under its last), whether a
 // heading stands on its original's last lines, and a CJK cell's bands between the rules near its lines (cellBands) with the
-// size every band holds. Ported from engine 065c1d973: RUN:2088-2089 (s, base), unitSizeOf L2:796-803 (CJK_CAPS_SIZE
+// size every band holds. Ported from engine 065c1d973: unitSizeOf L2:796-803 (CJK_CAPS_SIZE
 // L2:792, the ruling of 2026-10-24), RUN:2244-2251 (P, clear, capScale, fillable), leadOf L2:3073-3079 (SOLID L2:3065),
 // cjkAdvance RUN:1822-1826, edgesOf's use of the label RUN:1670, clearanceOf RUN:1675, cellBands L2:352-380.
 //
@@ -15,7 +15,6 @@
 //   (F.edges); `rules`: each page's rules near the unit's lines (hiding.rules: the manifest's) ← the part's rules
 // - `cjkSize`: the size correction of the target's CJK body face (B.faces); `lineskip`: TeX's \lineskip and its limit
 //   (the run's LINESKIP, TeX's log); `heading`, `numbered`: U.decor's
-import { median, type Rect } from '../util.ts'
 import { baseOf, type TokensInput, type TStyle } from '../breaker/tokens.ts'
 import type { Block } from './blocks.ts'
 
@@ -52,20 +51,6 @@ export function unitSizeOf(prep: Original, P: Pick<ParamsRules, 'cjk'>, unit: To
     ? prep.measured.st.caps
     : !!prep.orig!.st?.caps && (!unit?.pieces || baseOf(unit, prep.orig!.st!).caps)
   return caps ? size! * CJK_CAPS_SIZE : size
-}
-/** the size the unit is laid at, its lines' median height where no glyph was read (RUN:2088) */
-export const sizeOf = (
-  prep: Original,
-  P: Pick<ParamsRules, 'cjk'>,
-  unit: TokensInput['unit'],
-  rects: readonly Rect[],
-) => unitSizeOf(prep, P, unit) ?? median(rects.map((r) => r[4] - r[2])) / 0.894
-/** the unit's base style: the original's, else a serif one, bold for a heading (RUN:2089) */
-export const baseStyleOf = (prep: Original, kind: string, serif: string): TStyle => {
-  const orig = prep.orig
-  return orig && orig.st!.fam !== 'math'
-    ? { ...orig.st }
-    : { fam: 'serif', bold: kind === 'heading', italic: false, caps: false, design: serif }
 }
 
 /** the unit's leading relative to the original's own pitch (L2:3073 leadOf) */
