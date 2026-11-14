@@ -182,7 +182,7 @@ type Ctx = {
   floats: Set<SourceUnit<WalkFile>>
   bibliography: string[]
   backref: boolean
-  quotes: { known: boolean; levels?: [string, string][] } | null
+  quotes: { known: boolean; levels?: readonly (readonly [string, string])[] } | null
   tblrEnvs: Set<string>
   tblrMath: boolean
   ownAuthors?: Map<string, { role: string; param: number }>
@@ -5887,12 +5887,49 @@ function wrapOf(macro: Macro | BibDef | undefined, arg: number) {
     return null
   return { before: texMarks(m[1]!), after: texMarks(m[3]!) }
 }
+/** a variant of csquotes' English style */
+type QuoteVariant = 'american' | 'british'
+/** csquotes' English style as csquotes.def (v5.2o) declares it, each variant's marks, the outer level's then the inner's:
+ *  \DeclareQuoteStyle[american]{english} \textquotedblleft and \textquotedblright, then \textquoteleft and \textquoteright;
+ *  [british]{english} the two the other way round. Held to csquotes.def in each pinned compile image by the release check's
+ *  csquotes-styles (lab/source/csquotes-styles.mjs) */
+export const CSQUOTES_ENGLISH: Readonly<Record<QuoteVariant, readonly (readonly [string, string])[]>> = Object.freeze({
+  american: [
+    ['\u201c', '\u201d'],
+    ['\u2018', '\u2019'],
+  ],
+  british: [
+    ['\u2018', '\u2019'],
+    ['\u201c', '\u201d'],
+  ],
+})
+/** the names csquotes.def gives a variant of its English style, the variant each selects: its aliases of the style
+ *  (\DeclareQuoteAlias[<variant>]{english}{<name>}) and its babel aliases of those (\DeclareQuoteAlias{<variant>}{<name>}), but
+ *  `default`, no language's name (CSQUOTES_DEFAULT). Held to csquotes.def as CSQUOTES_ENGLISH is */
+export const CSQUOTES_NAMES: Readonly<Record<string, QuoteVariant>> = Object.freeze({
+  american: 'american',
+  canadian: 'american',
+  english: 'american',
+  british: 'british',
+  australian: 'british',
+  newzealand: 'british',
+  USenglish: 'american',
+  usenglish: 'american',
+  UKenglish: 'british',
+  ukenglish: 'british',
+})
+/** the variant csquotes.def makes its default style (\DeclareQuoteAlias[american]{english}{default}) */
+export const CSQUOTES_DEFAULT: QuoteVariant = 'american'
 /**
- * csquotes' quotation marks where the paper loads it and they can be read off its own files: the outer level's double marks
- * and the inner level's single (`levels`), as its English style sets them, where it is loaded with no style, `style=american`,
- * `english` or `USenglish`, and no `autostyle`, no \\setquotestyle, no babel or polyglossia language but English; `{ known:
- * false }` where the style is another the source alone cannot tell (the compile's glyphs would be the fact: not read here); null
- * where csquotes is not loaded
+ * csquotes' quotation marks where the paper loads it and they can be read off its own files: the outer level's and the inner
+ * level's (`levels`), as a variant of its English style sets them (CSQUOTES_ENGLISH), where it is loaded with no style but
+ * `style=american`, `english` or `USenglish`, no `autostyle` but `autostyle=false`, no \\setquotestyle, and babel's or
+ * polyglossia's main language, where one is named, one of CSQUOTES_NAMES; `{ known: false }` where the style is another the
+ * source alone cannot tell (the compile's glyphs would be the fact: not read here); null where csquotes is not loaded. The
+ * variant: babel's main language's (its last option), which csquotes' default option autostyle=tryonce takes at the end of
+ * the preamble; csquotes' default (CSQUOTES_DEFAULT) where `style=` or `autostyle=false` keeps it, where no language is named,
+ * and under polyglossia, whose main language csquotes reads as \\mainbabelname: by its name alone (the reader reads no
+ * `variant=`) the pinned TeX Live set the default's marks
  */
 function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
   const t = texts.map(uncommented).join('\n')
@@ -5903,8 +5940,8 @@ function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
     .map((x) => x.trim())
     .filter(Boolean)
   const style = opts.find((o) => /^style\s*=/.test(o))?.replace(/^style\s*=\s*/, '')
-  const english = (l: string) =>
-    /^(?:american|english|USenglish|UKenglish|british|canadian|australian|newzealand)$/.test(l)
+  const variantOf = (l: string | undefined) =>
+    l !== undefined && Object.hasOwn(CSQUOTES_NAMES, l) ? CSQUOTES_NAMES[l] : undefined
   const babel = [...t.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/g)].flatMap((b) =>
     b[1]!
       .split(',')
@@ -5912,21 +5949,17 @@ function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
       .filter((x) => x && !x.includes('=')),
   )
   const main = /\\setmainlanguage\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/.exec(t)?.[1]?.trim()
+  // (the styles a `style=` names that the reader reads: csquotes.def's aliases of the American variant, american, english and
+  // USenglish; another, of either variant, is a style it does not tell)
   const known =
     !opts.some((o) => /^autostyle\b/.test(o) && !/=\s*false$/.test(o)) &&
     !/\\setquotestyle\b/.test(t) &&
     (!style || /^(?:american|english|USenglish)$/.test(style)) &&
-    (!babel.length || english(babel.at(-1)!)) &&
-    (!main || english(main))
-  return known
-    ? {
-        known,
-        levels: [
-          ['\u201c', '\u201d'],
-          ['\u2018', '\u2019'],
-        ],
-      }
-    : { known }
+    (!babel.length || variantOf(babel.at(-1)) !== undefined) &&
+    (!main || variantOf(main) !== undefined)
+  if (!known) return { known }
+  const adapts = !style && !opts.some((o) => /^autostyle\b/.test(o))
+  return { known, levels: CSQUOTES_ENGLISH[(adapts && !main && variantOf(babel.at(-1))) || CSQUOTES_DEFAULT] }
 }
 /** csquotes' marks for an \\enquote at the walk's quotation level (`ctx.quoteLevel`, 0 outside one; `\\enquote*` one level in,
  *  `end` past its name and star), alternating by level; null where the paper does not load csquotes or its marks are unknown */
