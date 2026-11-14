@@ -326,16 +326,19 @@ export function todayJoin(pages, bundle, units, prepared = null, stated = []) {
   return out
 }
 
-/** a text's words, by their pieces: each run of letters and digits (NFKC, case folded) of its text pieces, an element or a
- *  placeholder between two of them a separator, as are its spaces and its punctuation */
+/** a text's words, by its pieces' source: each run of letters and digits (NFKC, case folded) of its text and of its elements'
+ *  and groups' source (a placeholder's `\\code{…}`, a group's `\\textcolor{blue}{`): one front end holds as an element what
+ *  the other holds as text (v2's `[sentence\\_1]` an element, today's its letters), and each piece is a separator, as are its
+ *  spaces and its punctuation */
 const wordsOf = (texts) =>
   texts
     .join(' ')
     .normalize('NFKC')
     .toLowerCase()
     .match(/[\p{L}\p{N}]+/gu) ?? []
-/** a v2 unit's text pieces, a group's content in its place */
-const v2Texts = (content) => (content ?? []).flatMap((p) => (p.t === 'text' ? [p.s] : p.t === 'span' ? [' ', ...v2Texts(p.content), ' '] : [' ']))
+/** a v2 unit's pieces' source: its text, each element's source, each group's open and close round its content */
+const v2Texts = (content) =>
+  (content ?? []).flatMap((p) => (p.t === 'text' ? [p.s] : p.t === 'span' ? [` ${p.open ?? ''}`, ...v2Texts(p.content), `${p.close ?? ''} `] : [` ${p.src ?? ''} `]))
 /** the longest common subsequence of two word lists, its length */
 const lcs = (a, b) => {
   let prev = new Array(b.length + 1).fill(0)
@@ -381,7 +384,7 @@ export function piecesJoin(bundle, prepared, todayOf) {
   const free = [...members.values()].filter((m) => m.words.length).sort((a, b) => a.ord - b.ord)
   const left = [...prepared]
     .filter((u) => !joinedToday.has(u.ord))
-    .map((u) => ({ ord: u.ord, pages: new Set((u.lines ?? []).map((l) => l.page)), words: wordsOf((u.pieces ?? []).flatMap((p) => (p.kind === 'text' ? [p.s] : [' ']))) }))
+    .map((u) => ({ ord: u.ord, pages: new Set((u.lines ?? []).map((l) => l.page)), words: wordsOf((u.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : ` ${p.src ?? ''} `))) }))
     .filter((u) => u.words.length)
     .sort((a, b) => a.ord - b.ord)
   const meets = (a, b) => [...a.pages].some((p) => b.pages.has(p))

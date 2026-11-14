@@ -490,7 +490,7 @@ describe("a unit of today cut into several members of v2, and several of today's
     ord,
     kind: 'para',
     lines: [{ page }],
-    pieces: texts.flatMap((t, k) => (k ? [{ kind: 'ph', src: '\\x' }, { kind: 'text', s: t }] : [{ kind: 'text', s: t }])),
+    pieces: texts.flatMap((t, k) => (k ? [{ kind: 'ph', src: '\\_' }, { kind: 'text', s: t }] : [{ kind: 'text', s: t }])),
   })
   const v2Part = bundle(
     { 3: [member(55, 'para', H), member(56, 'para', P), member(70, 'cell', Q), member(80, 'para', R), member(81, 'para', F)] },
