@@ -41,7 +41,7 @@ export type BundleObject =
   | { kind: 'addon'; bytes: Uint8Array; digest: string }
   | { kind: 'head'; bytes: Uint8Array; digest: string; head: Head }
 
-export interface BundleInput {
+interface BundleInput {
   ins: Instrument
   located: Located
   /** the add-on, or why the wrap was refused (then every page is A's) */

@@ -117,7 +117,7 @@ export function readBoxAlign(log: string): Map<number, 'l' | 'c' | 'r'> {
 }
 /** a page of B as the adapter holds it: its points in stream order, its paragraphs' starts (`q<n>`) and ends (`qe<n><code>`,
  *  each with the count of the page's points before it) */
-export type ParaPage = {
+type ParaPage = {
   points: readonly { name: string; glyph: number }[]
   paras?: readonly { name: string; glyph: number }[]
   paraEnds?: readonly { name: string; glyph: number; point: number }[]
@@ -166,7 +166,7 @@ const BP_PER_SP = BP_PER_PT / 65536
  *  text block shipped whole), the column's and the text block's widths and its box's left edge on its page, in PDF units; and,
  *  where TeX states it, the depth of the text block's bottom under the page's top edge (\textheight's foot as \@outputpage
  *  ships it) */
-export type TexBody = { side: 0 | 1 | 2; column: number; text: number; x: number; foot?: number }
+type TexBody = { side: 0 | 1 | 2; column: number; text: number; x: number; foot?: number }
 /**
  * Each bracketed body's statement (marks.mjs LAYOUT_TEX's `AXT-BODY <n> <side> <\columnwidth> <\textwidth> <x> <depth>`,
  * written at the shipout beside the body's opening point `bs<n>`), by its serial: the first (a box shipped twice states it

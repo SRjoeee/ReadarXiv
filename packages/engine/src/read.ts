@@ -34,7 +34,7 @@ export interface PdfDocument {
   getPage(n: number): Promise<PdfPage>
   getMetadata?(): Promise<{ info?: Record<string, unknown> } | null>
 }
-export interface PdfPage extends OpsPage {
+interface PdfPage extends OpsPage {
   rotate?: number
   view: number[]
   getAnnotations?(): Promise<unknown[]>
@@ -51,7 +51,7 @@ export interface ReadPage<X> {
   annotations: unknown[] | null
 }
 
-export interface ReadOptions<X> {
+interface ReadOptions<X> {
   /** PDF.js's document options (cMaps, standard fonts, its worker) */
   options?: Record<string, unknown>
   /** pageInk's `turned` (the figures' reading) */

@@ -64,7 +64,7 @@ export interface Mapping {
   steps: number
 }
 
-export interface AlignOptions {
+interface AlignOptions {
   /** B's owner of each glyph (global index; -1 none), which delimits the runs of the last block move */
   owners?: Int32Array | undefined
   /** the steps one LCS may take */
