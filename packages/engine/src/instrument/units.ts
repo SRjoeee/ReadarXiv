@@ -90,6 +90,7 @@ export function bundleUnitsOf(
   kept: ReadonlySet<SourceUnit> | null = null,
 ): BundleUnit[] {
   const idOf = new Map<SourceUnit, number>()
+  // biome-ignore lint/suspicious/useIterableCallbackReturn: a concise arrow, Map.set's value, which no one reads
   paper.units.forEach((u, i) => idOf.set(u, i))
   // (each name as the engine's text, as a source unit's text piece holds it: a UTF-8 file's accented name as its bytes)
   const names = (paper.names ?? []).map((s): BundleUnit => [NAME_KIND, 0, null, null, null, [[TEXT, engineText(s)]]])
