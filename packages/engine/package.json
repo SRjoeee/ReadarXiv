@@ -23,7 +23,7 @@
     "./today/compile/tex.mjs": "./src/compile/tex.mjs",
     "./today/compile/tex-errors.mjs": "./src/compile/tex-errors.mjs",
     "./today/compile/base.mjs": "./src/compile/base.mjs",
-    "./today/compile/pdf-lite.mjs": "./src/compile/pdf-lite.mjs",
+    "./today/compile/pdf-lite.ts": "./src/compile/pdf-lite.ts",
     "./today/compile/guard.mjs": "./src/compile/guard.mjs",
     "./today/compile/live.mjs": "./src/compile/live.mjs",
     "./today/compile/paper.mjs": "./src/compile/paper.mjs",

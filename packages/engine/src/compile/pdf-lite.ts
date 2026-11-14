@@ -86,15 +86,27 @@ const EXPORT = 'export { FeatureTest, WorkerMessageHandler };'
  * exported (float32Outlines). `version`, where given, is the PDF.js the text is of (the host's package.json) and must be
  * LITE_PDFJS. Throws unless each anchor stands exactly once.
  */
-export function liteWorkerSource(source, { version } = {}) {
+export function liteWorkerSource(source: string, { version }: { version?: string } = {}) {
   if (typeof source !== 'string') throw new TypeError('source: the text of pdf.worker.mjs')
-  if (version !== undefined && version !== LITE_PDFJS) throw new RangeError(`the image guard was made for PDF.js ${LITE_PDFJS}, not ${version}: check buildPaintImageXObject again (pdf-lite.mjs)`)
+  if (version !== undefined && version !== LITE_PDFJS)
+    throw new RangeError(
+      `the image guard was made for PDF.js ${LITE_PDFJS}, not ${version}: check buildPaintImageXObject again (pdf-lite.mjs)`,
+    )
   const parts = source.split(ANCHOR)
-  if (parts.length !== 2) throw new RangeError(`the worker holds the image decode ${parts.length - 1} times, not once: PDF.js changed, check buildPaintImageXObject again (pdf-lite.mjs)`)
+  if (parts.length !== 2)
+    throw new RangeError(
+      `the worker holds the image decode ${parts.length - 1} times, not once: PDF.js changed, check buildPaintImageXObject again (pdf-lite.mjs)`,
+    )
   const text = `${parts[0]}${GUARD}${ANCHOR}${parts[1]}`.split(TEXT_ANCHOR)
-  if (text.length !== 2) throw new RangeError(`the worker holds the overlaid text's condition ${text.length - 1} times, not once: PDF.js changed, check Page.getAnnotationsData again (pdf-lite.mjs)`)
+  if (text.length !== 2)
+    throw new RangeError(
+      `the worker holds the overlaid text's condition ${text.length - 1} times, not once: PDF.js changed, check Page.getAnnotationsData again (pdf-lite.mjs)`,
+    )
   const out = `${text[0]}${TEXT_GUARD}${text[1]}`.split(EXPORT_ANCHOR)
-  if (out.length !== 2) throw new RangeError(`the worker holds its export statement ${out.length - 1} times, not once: PDF.js changed, check the worker module's end again (pdf-lite.mjs)`)
+  if (out.length !== 2)
+    throw new RangeError(
+      `the worker holds its export statement ${out.length - 1} times, not once: PDF.js changed, check the worker module's end again (pdf-lite.mjs)`,
+    )
   return `${out[0]}${EXPORT}${out[1]}`
 }
 
@@ -105,10 +117,22 @@ export function liteWorkerSource(source, { version } = {}) {
  * answers it once asked (a fixed value of the class). Once, before the first document is opened. Throws a TypeError, and changes
  * neither, unless both export a FeatureTest that asks it
  */
-export function float32Outlines(api, worker) {
-  const sides = [['api', api?.FeatureTest], ['worker', worker?.FeatureTest]]
+export function float32Outlines(api: { FeatureTest?: unknown }, worker: { FeatureTest?: unknown }) {
+  const sides = [
+    ['api', api?.FeatureTest],
+    ['worker', worker?.FeatureTest],
+  ]
   for (const [what, F] of sides) {
-    if (typeof F !== 'function' || !('isFloat16ArraySupported' in F)) throw new TypeError(`${what}: a PDF.js module whose FeatureTest asks isFloat16ArraySupported (${what === 'worker' ? 'the module of liteWorkerSource\'s text' : 'pdfjs-dist/legacy/build/pdf.mjs'})`)
+    if (typeof F !== 'function' || !('isFloat16ArraySupported' in F))
+      throw new TypeError(
+        `${what}: a PDF.js module whose FeatureTest asks isFloat16ArraySupported (${what === 'worker' ? "the module of liteWorkerSource's text" : 'pdfjs-dist/legacy/build/pdf.mjs'})`,
+      )
   }
-  for (const [, F] of sides) Object.defineProperty(F, 'isFloat16ArraySupported', { value: false, enumerable: true, configurable: true, writable: false })
+  for (const [, F] of sides)
+    Object.defineProperty(F, 'isFloat16ArraySupported', {
+      value: false,
+      enumerable: true,
+      configurable: true,
+      writable: false,
+    })
 }
