@@ -790,7 +790,9 @@ const envDefinitionsOf = (texts: readonly string[]) => {
   }
   return out
 }
-/** the code environments a package defines, whose body the paper's own may open (codeEnvsOf) */
+/** the code environments a package defines, whose body the paper's own may open (codeEnvsOf): latex.ltx's verbatim,
+ *  fancyvrb.sty's Verbatim, BVerbatim and LVerbatim, listings.sty's lstlisting, minted.sty's minted, alltt.sty's alltt,
+ *  tcolorbox's tcblisting (tcblistingscore.code.tex) */
 const LISTINGS = new Set([
   'verbatim',
   'Verbatim',
@@ -6214,7 +6216,9 @@ function frontMatter(s: string, from: number, to: number, b: Builder, ctx: Ctx) 
 const THEOREM_DEFINERS =
   /\\(?:newtheorem\*?|spnewtheorem\*?|newmdtheoremenv|newproof|newdefinition|newexample|newremark)\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}|\\declaretheorem\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
 /** the theorem-like environments of a paper, as its files define them (\\newtheorem, thmtools' \\declaretheorem, llncs'
- *  \\spnewtheorem, elsarticle's \\newproof, mdframed's), and those the common classes define themselves */
+ *  \\spnewtheorem, elsarticle's \\newproof, mdframed's), and those the common classes define themselves: eight of llncs.cls's
+ *  own (\\spnewtheorem theorem and proof, \\spn@wtheorem corollary, definition, example, lemma, proposition, remark), proof
+ *  amsthm.sty's too */
 const theoremsOf = (texts: readonly string[]) => {
   const names = new Set(['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example'])
   for (const m of texts.map(uncommented).join('\n').matchAll(THEOREM_DEFINERS))

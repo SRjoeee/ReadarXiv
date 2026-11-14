@@ -109,7 +109,9 @@ export const MARK_CLASSES = Object.freeze([
  *  says they would change what follows them */
 export const LAYOUT_CLASSES: readonly MarkClass[] = Object.freeze([...MARK_CLASSES])
 
-/** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument */
+/** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument: latex.ltx's
+ *  \label, \index, the phantoms, \hspace, \vspace and \nobreakspace, a class's \footnotesize and \normalsize (size10.clo's),
+ *  TeX's \hskip, \vskip and \kern, xspace.sty's \xspace, color.sty's \color */
 const INVISIBLE_WORDS = [
   'label',
   'index',
