@@ -1,4 +1,4 @@
-// The types of the JavaScript names today's ink makers (ledger, figure-text, ink-units beside this file) take from deps.mjs: its
+// The types of the JavaScript names today's ink makers (locate/ledger.ts, figure-text.ts, ink-units.ts) take from deps.mjs: its
 // copies of front-half functions whose homes are still JavaScript (own/stream, own/own, source/latex-front, instrument/mt), each
 // re-exported with its type (a package holds no declaration file). A copy leaves when its home is typed (a re-export of the home
 // first), and this facade with the last of them (lane t2-locate, ruled 2026-11-14).
