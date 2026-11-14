@@ -1,5 +1,5 @@
 // @vitest-environment node
-// A compile's TeX errors and the units they stand in (packages/engine/src/compile/tex-errors.mjs) after the code change of the
+// A compile's TeX errors and the units they stand in (packages/engine/src/compile/tex-errors.ts) after the code change of the
 // typing lane T6, held to the module before it (helpers/tex-errors-before.mjs, 4ad80aac5 verbatim but its import), value for value:
 // the file's bytes read latin-1 by the engine's one latin1 (bounded-reads.ts: slices of 8192 bytes by Reflect.apply) where its own
 // copy read them by String.fromCharCode.apply in slices of 32768, which a type checker refuses (a Uint8Array as apply's list). Held

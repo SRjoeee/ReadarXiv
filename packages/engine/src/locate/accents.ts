@@ -1,4 +1,4 @@
-// COPIED as it is from src/pdf-reader/engine/layout/accents.mjs (abe884b5e) for today's ink makers beside it (deps.mjs), which locate runs over arXiv's page.
+// COPIED as it is from src/pdf-reader/engine/layout/accents.mjs (abe884b5e) for today's ink makers beside it, which locate runs over arXiv's page.
 // A spacing accent TeX set as a glyph of its own, and its letter: one rule for every reading of text off a page's glyphs. TeX's
 // \accent (OT1's, every Computer Modern text font's) sets the accent, moves back over it and sets the letter (or sets the letter
 // and the accent over it), so a font's map reads the two apart: "F´ısica" for Física, "Cande`s" for Candès, "PE´REZ" for PÉREZ

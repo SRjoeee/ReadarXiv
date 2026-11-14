@@ -6451,7 +6451,7 @@ function decodersOf(own: readonly { file: string; text: string }[], sourceText: 
 /**
  * The package's TeX files (.tex, .sty, .cls, in the file system's order), each as its characters: a UTF-8 file decoded as
  * UTF-8, one that is not by the encoding the main file declares, else latin1 (decodersOf, as the units' text is): what a
- * name the paper defines reads as (source/paper-names.mjs)
+ * name the paper defines reads as (source/paper-names.ts)
  */
 export function texFilesOf(fsys: Fsys, main: string): string[] {
   const own = fsys

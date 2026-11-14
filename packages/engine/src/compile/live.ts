@@ -203,7 +203,7 @@ export function openPaper(files: ReadonlyMap<string, Uint8Array>) {
   if (!meta.main) throw new Error('no main file')
   const project = loadProject(fsys, meta.main, { tables: true })
   // (the structural names its TeX prints that no package names in every target: units of their own in the bundle, after its
-  // source's, sent to the translator once: source/paper-names.mjs, bundleUnitsOf)
+  // source's, sent to the translator once: source/paper-names.ts, bundleUnitsOf)
   const texts = texFilesOf(fsys, meta.main),
     names = paperNames(texts)
   // (the printed names of its theorem-like environments among them, the label forms of its heads: the wrap's `names`,

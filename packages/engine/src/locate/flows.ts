@@ -12,9 +12,9 @@ import { assign, BRACKET, field, type Located, type Member, ON_ROW, sameColumn, 
 
 /** a shared line's separation at most, in em of the follower's size, read from the leader's ink end (sepOf, the separation
  *  Placed.join states): a run-in head's \quad, a float split's word space (today's need.mjs SHARED_SEP, rowLeadOf, over the
- *  layout file's ink rows; rules.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set side by side (a
- *  running head's title and folio, two minipages' titles, 2609.36054v2 p1's footer "page 1 of 14" 4.3 em after a footnote's
- *  last line), not one line of a paragraph */
+ *  layout file's ink rows; lab/typeset/registry.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set
+ *  side by side (a running head's title and folio, two minipages' titles, 2609.36054v2 p1's footer "page 1 of 14" 4.3 em after
+ *  a footnote's last line), not one line of a paragraph */
 const SHARED_SEP = 3
 
 export function flowsAndTies(w: Work): void {

@@ -1040,7 +1040,7 @@ only how it meets the rest of the extension.
   `lab/typeset/gate-l1.mjs` over the prepare's parts, both against the frozen baseline).
 - **The prepare's two halves** (`@readarxiv/engine`; our server runs them, the extension neither). The front half is
   today's front end, moved into the package as it was (`packages/engine/src/{source,marks,own,compile,instrument}/`): it
-  reads a paper's source into units (`source/latex-front.mjs`), writes the marks that bracket each unit for TeX and
+  reads a paper's source into units (`source/latex-front.ts`), writes the marks that bracket each unit for TeX and
   compiles the marked source, an instrument no reader sees (`compile/paper.ts`, `marks/marks.ts`); its adapter
   (`instrument/instrument.ts`) states what it gives, the instrument: the owner of each glyph of that compile
   (`own/own.ts`) and what the source says of each element and group. The back half, `prepareBack(instrument, arXiv's

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The layout marks' code change of the typing lane T6 (packages/engine/src/marks/marks.mjs), held to the module before it
+// The layout marks' code change of the typing lane T6 (packages/engine/src/marks/marks.ts), held to the module before it
 // (helpers/marks-before.mjs, 9461947a4 verbatim but its imports), value for value: four reads of a value that may be none made
 // explicit — TeX's answer for a piece of no command (`switches[commandOf(p) ?? '']`: a switch's key is a control word or a
 // look-ahead pair, never '' nor the 'null' the old key read), the first character of a text of none after a piece whose command

@@ -1,5 +1,5 @@
 // @vitest-environment node
-// What arXiv would compile (packages/engine/src/source/paper-meta.mjs) after the code change of the typing lane T6, held to the
+// What arXiv would compile (packages/engine/src/source/paper-meta.ts) after the code change of the typing lane T6, held to the
 // module before it (helpers/paper-meta-before.mjs, be7ee2121 verbatim but its imports), value for value and error for error: the
 // main file's candidates sorted by a preferred name, `preferred(b) - preferred(a)` (two booleans, which JavaScript subtracts as
 // 1 and 0 and a type checker refuses), is `Number(preferred(b)) - Number(preferred(a))`, the same numbers. Held on file systems

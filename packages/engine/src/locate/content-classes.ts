@@ -1,4 +1,4 @@
-// COPIED as it is from src/pdf-reader/engine/rules/content-classes.mjs (abe884b5e) for today's ink makers beside it (deps.mjs), which locate runs over arXiv's page.
+// COPIED as it is from src/pdf-reader/engine/rules/content-classes.mjs (abe884b5e) for today's ink makers beside it, which locate runs over arXiv's page.
 // The content classes (docs/route/orphan-text.md): every text glyph of our final pass belongs to exactly one, and each class
 // has one translation path and one reader toggle. One table, read by the maker child's ledger (layout/ledger.mjs), by the
 // sweep and by the readers' settings: a class is translated once on the server, into the shared cache, and a toggle only shows

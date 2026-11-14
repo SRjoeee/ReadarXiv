@@ -44,7 +44,7 @@ The extension is the root package, over the packages and never under them:
 | `src/pdf-reader/engine/`, `src/pdf-reader/session/` | Today's engine and session: the reader the released extension reads with, and the modules the website imports by path (`tests/contract/website-imports.test.ts` holds each). Its files may import the engine itself, four modules of the core, `node:` modules, `zod` in `rules/` and `@readarxiv/engine` (`scripts/check-boundary.mjs` `ENGINE_ALLOW`, `ENGINE_PACKAGES`) |
 
 One door crosses the rule on purpose. The front half moved into the engine package, and each moved module's old path under
-`src/pdf-reader/engine/` re-exports it through a transition path of its own, `@readarxiv/engine/today/<folder>/<file>.mjs`
+`src/pdf-reader/engine/` re-exports it through a transition path of its own, `@readarxiv/engine/today/<folder>/<file>.ts`
 (each named in `packages/engine/package.json`, whose note says the cut-over deletes them with the old paths); only those old
 paths and the lab may import one (`tests/pdf-reader/engine-contract.test.ts`).
 

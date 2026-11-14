@@ -99,7 +99,7 @@ export function todayPrepared(paper: string): Map<number, TodayPrepared> | null 
  *  engine's ink-units.mjs phSource) */
 const ADDRESS = /^\\url\{((?:[^{}]|\{[^{}]*\})*)\}$/
 /** a formula's run an ink unit holds as an element, `$…$`, its TeX specials written as the commands that set them in a formula
- *  (packages/engine locate/today/ink-units.mjs MATH_SPECIAL), a run of scripts written as TeX writes one, `$^{…}$` or `$_{…}$` */
+ *  (packages/engine locate/ink-units.ts MATH_SPECIAL), a run of scripts written as TeX writes one, `$^{…}$` or `$_{…}$` */
 const FORMULA = /^\$(?:[\^_]\{([\s\S]+)\}|([\s\S]+))\$$/
 /** the characters an element's ink reads as where today's prepare may have read that ink otherwise: an address's (`\url{…}`,
  *  rebuild/wire-tail: today's text) and an ink unit's formula run's (`$…$`, its specials undone: a script TeX set in a text

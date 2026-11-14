@@ -9,7 +9,7 @@ import { toBase64Url } from '@readarxiv/format'
 import { openPaper, type Paper } from './compile/live.ts'
 import { isMemoryError } from './memory.ts'
 
-/** what arXiv's PDF says that the front half reads: its page count, its day (seconds since the epoch: compile/base.mjs
+/** what arXiv's PDF says that the front half reads: its page count, its day (seconds since the epoch: compile/base.ts
  *  creationEpochOf), the TeX Live year its pdfTeX banner names (compile/guard.ts texLiveOfPdf) */
 export interface OriginalFacts {
   pages: number

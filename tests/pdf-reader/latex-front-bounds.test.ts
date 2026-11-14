@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The source reader's code changes of the typing lane T6 (packages/engine/src/source/latex-front.mjs), held to the module before
+// The source reader's code changes of the typing lane T6 (packages/engine/src/source/latex-front.ts), held to the module before
 // them (helpers/latex-front-before.mjs, 074329318 verbatim but its imports), value for value and error for error: its latin1 the
 // engine's one (bounded-reads.ts: slices of 8192 bytes, not 32768, read by Reflect.apply), and six reads of a value that may be
 // none made explicit — unitForm's paper macro of none (`macro && macro.params > 0`), tailOf's token before a body's only one

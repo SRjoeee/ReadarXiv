@@ -2,7 +2,7 @@
 // The names TeX's packages give a theorem-like head and a generated reference in a target (PDF-READER §19.11), read from
 // tex-names.json, which lab/pdf/spikes/tex-names-make.mjs writes from TeX Live's own files: translator's theorem dictionaries
 // (ctex's for Chinese), cleveref's and hyperref's language definitions, ctex's names. No name is written here: a word no
-// package gives in the target is the paper's own name unit's translation (`names`: source/paper-names.mjs, PDF-READER §19.14),
+// package gives in the target is the paper's own name unit's translation (`names`: source/paper-names.ts, PDF-READER §19.14),
 // sent to the translator once like any unit, else the original's.
 //
 // Pure: no DOM, no clock. An original module (no port statement).
@@ -18,7 +18,7 @@ interface Target {
 
 /** the commands whose text TeX's cross-referencing packages generate, a counter type's name before the number: cleveref's
  *  \cref and \Cref and their range, page and name forms, hyperref's \autoref. The layer renames their text (layer2.mjs
- *  GENERATED_REF), and a paper that calls any of them sends the names no package gives some target (source/paper-names.mjs) */
+ *  GENERATED_REF), and a paper that calls any of them sends the names no package gives some target (source/paper-names.ts) */
 export const GENERATED_COMMANDS = Object.freeze([
   'cref',
   'Cref',
@@ -55,7 +55,7 @@ const CONJUNCTIONS = [...NAMES.conjunctions].sort((a, b) => b.length - a.length)
  *  inflect, whose name units hold that word */
 const SINGULAR: Readonly<Record<string, string>> = NAMES.singular
 /** the words no package names in some target the readers offer (cleveref's types' singulars, and the conjunctions' words): a paper
- *  that generates references sends them to the translator once, as name units of their own (source/paper-names.mjs) */
+ *  that generates references sends them to the translator once, as name units of their own (source/paper-names.ts) */
 export const NAME_GAPS = Object.freeze([...NAMES.gaps])
 export const CONJUNCTION_GAPS = Object.freeze([...new Set(NAMES.conjunctionGaps.map((c) => conjunctionWord(c)))])
 /** a conjunction's word, its spaces and punctuation aside (", and " "and") */
@@ -210,7 +210,7 @@ export function refInTarget(
  * is no head of a name the target's dictionary holds, nor one the paper's name units translate (`names`)
  */
 export function headInTarget(text: unknown, to: string, names: ReadonlyMap<string, string> | null = null) {
-  // (its name of the characters a paper's own name may hold, source/paper-names.mjs PLAIN's: "Sub-Claim", "Thm.", the
+  // (its name of the characters a paper's own name may hold, source/paper-names.ts PLAIN's: "Sub-Claim", "Thm.", the
   // shortest that leaves a number and punctuation after it, so that a package's names read as they did)
   const m =
     typeof text === 'string' &&

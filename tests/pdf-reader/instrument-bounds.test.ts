@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The front half's adapter's code change of the typing lane T6 (packages/engine/src/instrument/instrument.mjs), held to the module
+// The front half's adapter's code change of the typing lane T6 (packages/engine/src/instrument/instrument.ts), held to the module
 // before it (helpers/instrument-before.mjs, 18f6103ac verbatim but its imports), value for value: glyphPiecesOf's reading of a
 // footnote's call after a unit's end point (own.mjs MR 4b) read a unit with no end point on the page as `undefined <= j`, false;
 // `(ends.get(u) ?? Infinity) <= j` is false there too. Held on pages written here and seeded ones: points of every kind (a unit's

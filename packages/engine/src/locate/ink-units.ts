@@ -238,7 +238,7 @@ const NONE = new Set(['other', 'space', 'break'])
  *  own placeholder (its kept run's characters, phSource: `$…$` or `\url{…}`) what today's classOf (layout/marks.mjs:72-94) answers
  *  for those two forms: a formula of no character `$$`, DISPLAY (translate/mt.mjs:89), which phSource never writes (a run has a
  *  character, and a `$` of it is written `\$`); any other `$…$`, MATH; `\url{…}`, URL. Named for what it reads: the front half's
- *  classOf (marks/marks.mjs) reads a source, another function (in deps.mjs as `classOf` until 2026-11-14) */
+ *  classOf (marks/marks.ts) reads a source, another function (in deps.mjs as `classOf` until 2026-11-14) */
 export function statedClassOf(piece: TodayPiece | null | undefined): string | null {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null

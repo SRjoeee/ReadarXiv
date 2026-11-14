@@ -19,7 +19,7 @@ const formOf = (name: string) =>
 const LABEL_FORM = formOf(LABEL_NAME)
 export const labelText = (s: string) => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
 /**
- * The label's form with the paper's own theorem names beside LABEL_NAME (`names`: source/paper-names.mjs theoremNames, the
+ * The label's form with the paper's own theorem names beside LABEL_NAME (`names`: source/paper-names.ts theoremNames, the
  * printed names of the theorem-like environments its files define — thmtools' "Recall", "Notation", a \newtheorem's
  * "Conjecture"), each as a label holds it (NFKC, lower case, no white space); LABEL_FORM where it gives none. A head TeX sets of
  * such a name ("Recall 7 (") is then its unit's label, in its label group, which the layer draws in the paper's name unit's
