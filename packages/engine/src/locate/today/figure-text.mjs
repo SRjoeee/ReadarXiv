@@ -74,8 +74,11 @@
 // Pure arithmetic over the pages; an original module (no port statement).
 import { displayTextMask, PICTURE_END, PICTURE_START, regionMask } from '../../ink.ts'
 import { classifyFont, familyKeysOf, sameFamily } from '../facts.ts'
-import { BAND_MAX } from './deps.mjs'
 
+/** a unit's band's ascent and descent at most, in em: past it no glyph stands at the size the unit is drawn at, so a run a glyph of
+ *  which stands further from its baseline is no unit (below). The value is the reader's, which holds a figure row's band to it:
+ *  today's src/pdf-reader/engine/layer-proto/figure-rows.mjs:37 BAND_MAX (checkFigures) (its copy in deps.mjs until 2026-11-14) */
+export const BAND_MAX = 4
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
 /** …and the second at most this many of its sizes past the run's end along it (a word's space is a third; a legend's columns,

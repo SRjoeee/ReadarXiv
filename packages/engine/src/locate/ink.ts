@@ -29,7 +29,7 @@ import {
   unitSize,
 } from './facts.ts'
 import {
-  classOf,
+  statedClassOf as classOf,
   claimInk,
   figureGroup,
   figureUnitsOf,

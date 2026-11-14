@@ -79,7 +79,28 @@
 import { unitClass } from '../content-classes.ts'
 import { accentTexts } from '../accents.ts'
 import { classifyFont } from '../facts.ts'
-import { ADDRESS_GROUP, classOf, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
+import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, utf8 } from './deps.mjs'
+
+/** a unit's flags as the layout file states them, which the bundle's rows carry: its title, its front matter, and its alignment as
+ *  TeX set it, one of CENTRED, FLUSH_LEFT, FLUSH_RIGHT and JUSTIFIED at most (alignOf, below). The values are the layout file's
+ *  definition, today's src/pdf-reader/engine/layout/file.mjs:257 UNIT_FLAG, which today's reader reads the rows by (its copy
+ *  in deps.mjs until 2026-11-14) */
+export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16, JUSTIFIED: 32 })
+/** the kinds the instrument states where today's classOf named none: `other`, and a tie's `space` and a forced break's `break`
+ *  (both INVISIBLE to today's classOf; stated since lane fig-cut, 2026-11-10) */
+const NONE = new Set(['other', 'space', 'break'])
+/** a piece's class by the kind the instrument states of it (an element's kind, `other` where it names none), and of an ink unit's
+ *  own placeholder (its kept run's characters, phSource: `$…$` or `\url{…}`) what today's classOf (layout/marks.mjs:72-94) answers
+ *  for those two forms: a formula of no character `$$`, DISPLAY (translate/mt.mjs:89), which phSource never writes (a run has a
+ *  character, and a `$` of it is written `\$`); any other `$…$`, MATH; `\url{…}`, URL. Named for what it reads: the front half's
+ *  classOf (marks/marks.mjs) reads a source, another function (in deps.mjs as `classOf` until 2026-11-14) */
+export function statedClassOf(piece) {
+  if (piece?.t === 'nested') return 'footnote'
+  if (piece?.t !== 'ph') return null
+  if (typeof piece.kind === 'string') return NONE.has(piece.kind) ? null : piece.kind
+  const src = piece.src ?? ''
+  return src.startsWith('$$') ? 'display' : src.startsWith('$') ? 'math' : /^\\url(?![A-Za-z@])/.test(src) ? 'url' : 'macro'
+}
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
 export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', references: 'inkreferences' })
@@ -456,7 +477,7 @@ function trimmed(G, words, cls, folios = null) {
 function echoKey(u) {
   if (!u?.pieces?.every(p => p.t === 'text' || p.t === 'ph' || p.t === 'open' || p.t === 'close')) return null
   const s = spellOf(utf8(u.pieces.filter(p => p.t === 'text').map(p => p.s ?? '').join(' ')))
-  return s.length < 4 ? null : `${s}#${u.pieces.filter(p => p.t === 'ph' && classOf(p) !== null).length}`
+  return s.length < 4 ? null : `${s}#${u.pieces.filter(p => p.t === 'ph' && statedClassOf(p) !== null).length}`
 }
 const ECHO_ORDER = { heading: 0, caption: 1 }
 
@@ -682,7 +703,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null, unplaced 
     if (e !== undefined || before !== undefined) {
       echo = e ?? out[before].id
       own = (e !== undefined ? units[e].pieces : out[before].pieces).map(p => ({ ...p }))
-      const visible = own.flatMap((p, k) => (p.t === 'ph' && classOf(p) !== null ? [k] : []))
+      const visible = own.flatMap((p, k) => (p.t === 'ph' && statedClassOf(p) !== null ? [k] : []))
       kept = phs.map((p, j) => ({ ...p, k: visible[j] }))
     }
     // (and one that echoes a unit of the author block, an affiliation REVTeX prints from its own lists, is of the names toggle as

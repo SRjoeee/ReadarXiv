@@ -665,7 +665,7 @@ describe('today’s ink makers in the engine package', () => {
     // (and every reader of the source reads each an inline formula: the copy's classOf, the element's kind on the translators'
     // wire; the adapter's classesOf, today's reader's class, the part's El.kind the typesetter draws by; today's wire's display)
     for (const src of copy) {
-      expect(T.classOf({ t: 'ph', src })).toBe('math')
+      expect(T.statedClassOf({ t: 'ph', src })).toBe('math')
       expect(classesOf([{ t: 'ph', src }])[0]![1].cls).not.toBe('display')
       expect(DISPLAY.test(src)).toBe(false)
     }
@@ -702,12 +702,12 @@ describe('today’s ink makers in the engine package', () => {
     ])
   })
   it('read a placeholder an ink unit makes as today’s classOf does', () => {
-    for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.classOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))
-    expect(T.classOf({ t: 'ph', src: '$x$', kind: 'other' })).toBe(null)
-    expect(T.classOf({ t: 'nested' })).toBe(classOf({ t: 'nested' }))
+    for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.statedClassOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))
+    expect(T.statedClassOf({ t: 'ph', src: '$x$', kind: 'other' })).toBe(null)
+    expect(T.statedClassOf({ t: 'nested' })).toBe(classOf({ t: 'nested' }))
     // (a tie and a forced break, which the adapter states `space` and `break` since lane fig-cut, are none of today's classes)
-    expect(T.classOf({ t: 'ph', src: '~', kind: 'space' })).toBe(classOf({ t: 'ph', src: '~' }))
-    expect(T.classOf({ t: 'ph', src: '\\\\', kind: 'break' })).toBe(classOf({ t: 'ph', src: '\\\\' }))
+    expect(T.statedClassOf({ t: 'ph', src: '~', kind: 'space' })).toBe(classOf({ t: 'ph', src: '~' }))
+    expect(T.statedClassOf({ t: 'ph', src: '\\\\', kind: 'break' })).toBe(classOf({ t: 'ph', src: '\\\\' }))
   })
   it('turn an ink unit’s pieces into the format’s content and spans as the instrument adapter did', () => {
     const today = run(TODAY)

@@ -194,10 +194,10 @@ export const claimInk = inkUnits.claimInk as (
   ink: readonly TodayInkUnit[],
   pages: readonly TodayPage[],
 ) => number
-export const UNIT_FLAG = deps.UNIT_FLAG as Readonly<
+export const UNIT_FLAG = inkUnits.UNIT_FLAG as Readonly<
   Record<'CENTRED' | 'FLUSH_LEFT' | 'FLUSH_RIGHT' | 'JUSTIFIED', number>
 >
-export const classOf = deps.classOf as (piece: TodayPiece) => string | null
+export const statedClassOf = inkUnits.statedClassOf as (piece: TodayPiece) => string | null
 /** an e-mail address as a text writes it (the front end's, latex-front.mjs EMAIL_ADDRESS) */
 export const EMAIL_ADDRESS = deps.EMAIL_ADDRESS as RegExp
 /** several addresses at one domain written once, a group of their local parts before it (the front end's, latex-front.mjs

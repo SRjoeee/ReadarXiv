@@ -1,9 +1,7 @@
 // What today's ink makers (ledger.mjs, ink-units.mjs, figure-text.mjs beside this file: copies of src/pdf-reader/engine/layout's at
 // abe884b5e, run by locate over arXiv's page) import from today's other modules: each copied as it is from the file and line
 // named (abe884b5e), so that the makers read exactly what today's read; held equal to today's by
-// tests/pdf-reader/locate-ink-today.test.ts. One change, named where it is: classOf reads the kind the instrument states of a
-// piece (today's classOf, which the front half's adapter ran) instead of a source. And regionsOf reads a page's body brackets
-// paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it). What the
+// tests/pdf-reader/locate-ink-today.test.ts. One change, named where it is: regionsOf reads a page's body brackets paired by number, nesting where a page's columns are balanced, as today's stream.mjs now reads them (CHANGED with it). What the
 // makers import of typed homes they import from there (facts.ts's classifyFont, familyKeysOf, sameFamily; ink.ts's
 // displayTextMask, PICTURE_END, PICTURE_START, regionMask); a copy here goes when its home is typed, a re-export of it first.
 
@@ -163,30 +161,8 @@ export function identifiersIn(s) {
   return out
 }
 
-// ---- layout/file.mjs:255 (UNIT_FLAG)
-export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16, JUSTIFIED: 32 })
-
-// ---- layer-proto/figure-rows.mjs:37 (BAND_MAX)
-export const BAND_MAX = 4
-
 // ---- translate/mt.mjs:28, 31-34 (utf8)
 const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
 const DECODER = new TextDecoder()
 const ASCII = /^[\t\n\r -~]*$/
 export const utf8 = s => (ASCII.test(s) ? s : DECODER.decode(latin1Bytes(s)))
-
-// ---- layout/marks.mjs:72-94 (classOf), the one change: a piece's class is the instrument's (the front half's adapter ran today's
-// classOf over its source: an element's kind, `other` where classOf said none), and of an ink unit's own placeholder (its kept
-// run's characters, ink-units.mjs phSource: `$…$` or `\url{…}`) today's classOf's answer for those two forms: a formula of no
-// character `$$`, DISPLAY (translate/mt.mjs:89), which the copy's phSource never writes (a run has a character, and a `$` of it
-// is written `\$`); any other `$…$`, MATH; `\url{…}`, URL. Nothing else reads it
-/** the kinds the adapter states where today's classOf names none: `other`, and a tie's `space` and a forced break's `break` (both
- *  INVISIBLE to today's classOf; stated since lane fig-cut, 2026-11-10) */
-const NONE = new Set(['other', 'space', 'break'])
-export function classOf(piece) {
-  if (piece?.t === 'nested') return 'footnote'
-  if (piece?.t !== 'ph') return null
-  if (typeof piece.kind === 'string') return NONE.has(piece.kind) ? null : piece.kind
-  const src = piece.src ?? ''
-  return src.startsWith('$$') ? 'display' : src.startsWith('$') ? 'math' : /^\\url(?![A-Za-z@])/.test(src) ? 'url' : 'macro'
-}
