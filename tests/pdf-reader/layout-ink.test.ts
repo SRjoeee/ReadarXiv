@@ -689,6 +689,9 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     it('four corners in turn and a fifth point inside their box are a pentagon: kept as its box, a fill under it covers nothing, as under a triangle\'s clip', () => {
       expect(opaque(...at([OPS.save, []], ...clipTo([10, 10, 60, 10, 60, 50, 10, 50, 35, 30], [10, 10, 60, 50]), rect(10, 10, 60, 50), [OPS.restore, []]))).toBe(false)
     })
+    it('four corners in turn and a fifth point on the first point\'s own line past them, a spike of no area: the box is more than the clip shows, a fill under it covers nothing', () => {
+      expect(opaque(...at([OPS.save, []], ...clipTo([10, 10, 60, 10, 60, 50, 10, 50, 10, 70], [10, 10, 60, 70]), rect(10, 10, 60, 70), [OPS.restore, []]))).toBe(false)
+    })
     it('four corners in turn and a fifth point that is the first again, a line closing the path by hand: the rectangle, a fill under it covers', () => {
       expect(opaque(...at([OPS.save, []], ...clipTo([10, 10, 60, 10, 60, 50, 10, 50, 10, 10], [10, 10, 60, 50]), rect(10, 10, 60, 50), [OPS.restore, []]))).toBe(true)
     })
