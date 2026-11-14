@@ -452,8 +452,6 @@ export const FIGURE_UNITS_PAGE = 400,
 export const FIGURE_TEXT_MAX = 400
 /** the group of figure unit `k` (wrap.ts ocgName names it `axt:f<k>`) */
 export const figureGroup = (k: number): string => `f${k}`
-/** why a figure's text is not a unit drawn (wrapFinal's counts, and each unit's `why`) */
-export const FIGURE_WHYS = Object.freeze(['crowded', 'unicode', 'shared', 'page', 'bounds'])
 
 const WORD = /\p{L}{2}/u
 /** a glyph's Unicode no reader can trust: none, a private use's, a replacement character, a control */
