@@ -8,12 +8,16 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
-import type { Doc } from '../src/doc.ts'
+import type { Doc, DocTurned } from '../src/doc.ts'
 import { type PageInk, pageInk } from '../src/ink.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
+import { piecesOf } from '../src/instrument/instrument.ts'
 import { figureLinesOf } from '../src/locate/figure-lines.ts'
 import { type TodayFigures, figureUnitsOf } from '../src/locate/figure-text.ts'
-import type { TodayPage } from '../src/locate/ledger.ts'
+import { groupStyleOf } from '../src/locate/ink.ts'
+import { inkUnitsOf } from '../src/locate/ink-units.ts'
+import { ledgerOf, type TodayPage } from '../src/locate/ledger.ts'
+import { pack } from '../src/sparse.ts'
 import { docOf } from './helpers/doc.ts'
 import { locate } from './helpers/locate.ts'
 
@@ -194,8 +198,9 @@ const unitOf = (kind: string, s: string): InstrumentUnit => {
   const content = [{ t: 'text' as const, s }]
   return { id: unitId(kind, content), kind, content }
 }
-/** an instrument over B whose units own B's glyphs line by line (`own[p][line]`, -1 none) */
-function instrumentOf(B: Doc, units: InstrumentUnit[], own: number[][]): Instrument {
+/** an instrument over B whose units own B's glyphs line by line (`own[p][line]`, -1 none), each line's glyphs of its role
+ *  (`roles[p][line]`, text by default) */
+function instrumentOf(B: Doc, units: InstrumentUnit[], own: number[][], roles: number[][] = []): Instrument {
   return {
     ink: B,
     units,
@@ -203,7 +208,7 @@ function instrumentOf(B: Doc, units: InstrumentUnit[], own: number[][]): Instrum
       const O = ownersOf(pg.glyphs.length)
       pg.glyphs.forEach((g, j) => {
         O.unit[j] = own[p]?.[g.n] ?? -1
-        O.role[j] = ROLE.text
+        O.role[j] = roles[p]?.[g.n] ?? ROLE.text
       })
       return O
     }),
@@ -336,5 +341,285 @@ describe('a figure run’s glyphs and the run before it (figure-text.ts figureUn
       const fig = figureUnitsOf([picture(level('Word', 100, 100, 1e-7, ink))], null)
       expect([fig.units.map((u) => u.text), fig.stats?.outsized], String(ink)).toEqual([['Word'], 0])
     }
+  })
+})
+
+describe('a babel name that leads a unit, in its flow (locate/flows.ts flowsAndTies)', () => {
+  /** "Proof" leading its theorem on B's line 700 ("Proof", the label ".", its text); A as B, or with the label and the text
+   *  `aDy` lower; "Appendix", another name, before it on its line where `appendix` */
+  const caseOf = (aDy: number, appendix: boolean, labelAt = 102) => {
+    const lines = (dy: number) => [
+      ...(appendix ? [{ text: 'Appendix', y: 700 }] : []),
+      { text: 'Proof', x: appendix ? 126 : 72, y: 700 },
+      { text: '.', x: labelAt, y: 700 - dy },
+      { text: 'The claim holds', x: labelAt + 10, y: 700 - dy },
+      { text: 'on the next line', y: 688 - dy },
+    ]
+    const B = docOf([{ lines: lines(0) }])
+    const A = docOf([{ lines: lines(aDy) }])
+    const units = [
+      ...(appendix ? [{ ...unitOf('name', 'Appendix'), name: 'appendix' }] : []),
+      { ...unitOf('name', 'Proof'), name: 'proof' },
+      unitOf('theorem', '. The claim holds on the next line'),
+    ]
+    const a = appendix ? 1 : 0
+    const own = [[...(appendix ? [0] : []), a, a + 1, a + 1, a + 1]]
+    const roles = [[...(appendix ? [ROLE.name] : []), ROLE.name, ROLE.label, ROLE.text, ROLE.text]]
+    const L = locate(instrumentOf(B, units, own, roles), A, align(B, A))
+    const of = (pred: (m: (typeof L.members)[number]) => boolean) => L.members.find(pred)!
+    return {
+      L,
+      name: of((m) => m.kind === 'name' && m.name === 'proof'),
+      para: of((m) => m.kind === 'theorem'),
+      other: appendix ? of((m) => m.name === 'appendix') : null,
+    }
+  }
+  it('keeps the name in its own flow where A sets its unit’s first line off the name’s baseline, after the name', () => {
+    // (flows.ts:301's `Math.abs(f[4] - l[4]) > 0.5`: B binds "Proof" to its theorem, leadAt's 0.5 pt; A, arXiv's compile, sets
+    // the label and the text 6 pt lower, after the name (past the half size a flow shares a line by): not the name's line there)
+    const same = caseOf(0, false)
+    expect(same.L.flows.find((f) => f.includes(same.para.ord))).toEqual([same.name.ord, same.para.ord])
+    const off = caseOf(6, false)
+    expect(off.L.flows.find((f) => f.includes(off.name.ord))).toEqual([off.name.ord])
+  })
+  it('drops the size tie of the flow a bound name leaves where one member is left in it', () => {
+    // (flows.ts:313's `tie.ords.length < 2`: "Appendix" and "Proof" share their line's flow, the theorem's label stands more
+    // than SHARED_SEP of the size after "Proof" (its own flow); "Proof" leads it and leaves the flow, "Appendix" alone in it)
+    const { L, name, para, other } = caseOf(0, true, 190)
+    expect(L.flows.find((f) => f.includes(para.ord))).toEqual([name.ord, para.ord])
+    expect(L.flows.find((f) => f.includes(other!.ord))).toEqual([other!.ord])
+    expect(L.ties.filter((t) => t.rule === 'size' && t.ords.length < 2)).toEqual([])
+  })
+})
+
+describe('a unit of turned glyphs, placed (locate/place.ts place)', () => {
+  /** a caption and a y-axis title "Loss" set turned (pageInk's `turned`) from (60 + dx, 400 + dy) */
+  const withTurned = (dx: number, dy: number) => {
+    const d = docOf([{ lines: ['a caption under it'] }])
+    d.pages[0]!.turned = [...'Loss'].map(
+      (u, j): DocTurned => ({
+        u,
+        code: u.codePointAt(0) as number,
+        base: 'CMR10',
+        n: 1,
+        k: j,
+        at: 18,
+        box: -1,
+        ox: 60 + dx,
+        oy: 400 + 6 * j + dy,
+        ex: 60 + dx,
+        ey: 406 + 6 * j + dy,
+        ux: 0,
+        uy: 1,
+        size: 10,
+        ascent: 0.7,
+        descent: -0.2,
+        form: false,
+      }),
+    )
+    return d
+  }
+  const placeOf = (dx: number, dy: number) => {
+    const B = withTurned(0, 0)
+    const A = withTurned(dx, dy)
+    const units = [
+      unitOf('caption', 'a caption under it'),
+      { ...unitOf('inkfigures', 'Loss'), figure: { set: 0, dir: [0, 1] } } as InstrumentUnit,
+    ]
+    const ins: Instrument = {
+      ...instrumentOf(B, units, [[0]]),
+      turned: [
+        { unit: Int32Array.from([1, 1, 1, 1]), role: Uint8Array.from([1, 1, 1, 1]), piece: new Int32Array(4).fill(-1) },
+      ],
+    }
+    const m = locate(ins, A, align(B, A)).members[1]!
+    return [m.located, m.place]
+  }
+  it('says it shifted where A sets its glyphs a point across or up from B’s', () => {
+    // (place.ts:195's `Math.abs(ta.ox - tb.ox) > 0.01` and `Math.abs(ta.oy - tb.oy) > 0.01`: arXiv's compile places the title
+    // a point off ours, across, or up alone)
+    expect(placeOf(0, 0)).toEqual([true, 'same'])
+    expect(placeOf(1, 0)).toEqual([true, 'shifted'])
+    expect(placeOf(0, 1)).toEqual([true, 'shifted'])
+  })
+})
+
+/** a page as the ledger reads one: lines of words, each [text, font], 5 pt a character at size 10 (`size`, scaled), from x 72
+ *  on its baseline; the marks' points */
+function ledgerPage(
+  lines: { words: [string, string][]; y: number; size?: number; x?: number }[],
+  points: { name: string; glyph: number }[] = [],
+) {
+  const glyphs: Record<string, unknown>[] = []
+  for (const l of lines) {
+    const size = l.size ?? 10
+    let x = l.x ?? 72
+    for (const [w, font] of l.words) {
+      for (const ch of w) {
+        if (ch !== ' ')
+          glyphs.push({
+            u: ch,
+            x0: x,
+            x1: x + size / 2,
+            ix0: x,
+            ix1: x + size / 2,
+            y: l.y,
+            top: l.y + 0.7 * size,
+            bottom: l.y - 0.2 * size,
+            size,
+            font,
+            fill: 0,
+          })
+        x += size / 2
+      }
+      x += size / 2
+    }
+  }
+  const page = {
+    glyphs,
+    boxes: [],
+    paths: [],
+    points: points.map((p) => ({ ...p, box: 0 })),
+    paras: [],
+    paraEnds: [],
+    view: [0, 0, 612, 792],
+  }
+  return { page, own: glyphs.map(() => null) }
+}
+const RM = 'ABCDEF+CMR10',
+  TT = 'ABCDEF+CMTT10'
+type LedgerOut = { lines: { cls: string; gs: number[] }[] }
+const ledgerOfPage = (p: ReturnType<typeof ledgerPage>, units: { kind: string; pieces: [] }[] = []) =>
+  ledgerOf([p.page] as never, { glyphs: [p.own] } as never, { units }) as unknown as LedgerOut
+
+describe('the ledger’s lines (locate/ledger.ts ledgerOf)', () => {
+  it('reads a bibliography set under 5 pt at 5 pt where its last entry runs on past its end mark', () => {
+    // (ledger.ts:511's `Math.max(ending.size, x.size, 5)`: the last entry at 4 pt, its DOI a line 7 pt under its end mark,
+    // within ENTRY_DY of 5 pt (8), past ENTRY_DY of 4 (6.4): the entry's line, the references' zone)
+    const p = ledgerPage(
+      [
+        { words: [['Ann Lee. A title of it.', RM]], y: 700, size: 4 },
+        { words: [['doi: 10.1000/xyz', RM]], y: 693, size: 4 },
+        { words: [['A paragraph after it', RM]], y: 640 },
+      ],
+      [
+        { name: '0s', glyph: 0 },
+        { name: '0e', glyph: 18 },
+      ],
+    )
+    expect(ledgerOfPage(p, [{ kind: 'reference', pieces: [] }]).lines.map((l) => l.cls)).toEqual([
+      'references',
+      'references',
+      'orphan',
+    ])
+  })
+  it('reads a glyph under a millionth of a point at the floor’s size: two words of one line 1e-6 apart', () => {
+    // (ledger.ts:587's `Math.max(x.size || 0, 1e-6)`: a line set at 1e-7 pt, its words 1e-6 apart, within LINE_GAP of 1e-6
+    // (4e-6), past LINE_GAP of their own size (4e-7): one line)
+    const s = 1e-7
+    const p = ledgerPage([{ words: [['ab', RM]], y: 700, size: s }])
+    const g = p.page.glyphs
+    g.push({ ...g[1]!, u: 'c', x0: Number(g[1]!.x1) + 1e-6, x1: Number(g[1]!.x1) + 1e-6 + s / 2 })
+    g.push({ ...g[2]!, u: 'd', x0: Number(g[2]!.x1), x1: Number(g[2]!.x1) + s / 2 })
+    p.own.push(null, null)
+    expect(ledgerOfPage(p).lines.map((l) => l.gs)).toEqual([[0, 1, 2, 3]])
+  })
+})
+
+describe('an ink unit’s rows (locate/ink-units.ts inkUnitsOf, rowsOf)', () => {
+  const rowsOf = (p: ReturnType<typeof ledgerPage>) =>
+    (
+      inkUnitsOf([p.page] as never, ledgerOfPage(p) as never, { units: [], from: 0 }) as unknown as {
+        kind: string
+        rows: { lines: (number | string)[]; ph: unknown[][] }
+      }[]
+    ).map((u) => [u.kind, u.rows])
+  /** a bibliography entry (its point `bi1`) whose address in a face of one pitch runs over `n` lines */
+  const addressOver = (n: number) =>
+    ledgerPage(
+      [
+        {
+          words: [
+            ['See the page', RM],
+            ['https://example.org/a', TT],
+          ],
+          y: 700,
+        },
+        ...Array.from({ length: n - 2 }, (_, i) => ({
+          words: [[`b${i}/a/long/path/of/it`, TT]] as [string, string][],
+          y: 688 - 12 * i,
+        })),
+        {
+          words: [
+            ['tail/end.html', TT],
+            ['for more words', RM],
+          ],
+          y: 700 - 12 * (n - 1),
+        },
+      ],
+      [{ name: 'bi1', glyph: 0 }],
+    )
+  it('states no placeholder of an address over five lines, one over four: an inline placeholder’s segments at most', () => {
+    // (ink-units.ts SEGS_INLINE, 4: an address broken over five lines of a bibliography entry, an inline element of more segments
+    // than the layout file draws one in, is no placeholder; over four it is one, its four segments)
+    const [[kind5, rows5]] = rowsOf(addressOver(5)) as [[string, { ph: unknown[][] }]]
+    expect([kind5, rows5.ph]).toEqual(['inkreferences', []])
+    const [[, rows4]] = rowsOf(addressOver(4)) as [[string, { ph: unknown[][] }]]
+    expect(rows4.ph.map((r) => [r[1], (r.length - 3) / 6])).toEqual([['url', 4]])
+  })
+  it('states a line set at 250 pt at 200, the row’s size at most', () => {
+    // (ink-units.ts rowsOf's `Math.min(200, size)`: a line of an orphan block set at 250 pt, a poster's)
+    const [[, rows]] = rowsOf(ledgerPage([{ words: [['Huge words here', RM]], y: 400, size: 250, x: 10 }])) as [
+      [string, { lines: (number | string)[] }],
+    ]
+    expect(rows.lines[6]).toBe(200)
+  })
+})
+
+describe('a group’s style read off its command (locate/ink.ts groupStyleOf), the instrument’s', () => {
+  it('reads each command of the instrument’s table as the instrument does, a link’s among them', () => {
+    // (locate/ink.ts SPAN_STYLES#4, the link's commands, \href, \url, \hyperlink, \hyperref (hyperref's): each entry the
+    // instrument's table holds (instrument/instrument.ts SPAN_STYLES, the same seven), read alike; a command of neither, other)
+    const commands = [
+      ...[
+        'textbf',
+        'bfseries',
+        'bf',
+        'mathbf',
+        'boldsymbol',
+        'textit',
+        'itshape',
+        'it',
+        'emph',
+        'em',
+        'textsl',
+        'slshape',
+      ],
+      ...['sl', 'texttt', 'ttfamily', 'tt', 'verb', 'lstinline', 'textsc', 'scshape', 'href', 'url', 'hyperlink'],
+      ...['hyperref', 'textcolor', 'color', 'colorbox', 'underline', 'uline', 'textup', 'mbox'],
+    ]
+    for (const c of commands) {
+      const src = `\\${c}{`
+      const [span] = piecesOf([
+        { t: 'open', id: 1, src },
+        { t: 'text', s: 'words' },
+        { t: 'close', id: 1, src: '}' },
+      ]) as { style?: string }[]
+      expect(groupStyleOf(src), c).toBe(span!.style)
+    }
+    expect(['href', 'url', 'hyperlink', 'hyperref'].map((c) => groupStyleOf(`\\${c}{x}`))).toEqual([
+      'link',
+      'link',
+      'link',
+      'link',
+    ])
+  })
+})
+
+describe('B packed without its images’ pixels (sparse.ts pack)', () => {
+  it('refuses a document past 4 GiB before it reads a byte: the header holds its size in 32 bits', () => {
+    // (sparse.ts U32: a document of 2^32 bytes, its one hole all of it; a stand-in of that length, which pack reads first)
+    const bytes = { length: 2 ** 32 } as unknown as Uint8Array
+    expect(() => pack(bytes, [[0, 2 ** 32]])).toThrow(/a document of 4294967296 bytes: a pack holds at most 4294967295/)
   })
 })
