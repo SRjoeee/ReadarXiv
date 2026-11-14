@@ -48,7 +48,7 @@
 //
 // Pure arithmetic over what pageInk read (layout/ink.mjs, `indices`); imports the stream's regions and a unit's source text.
 // An original module (no port statement).
-import { utf8 } from '../instrument/mt.mjs'
+import { utf8 } from '../instrument/mt.ts'
 import { symbolText } from '../source/text-symbols.ts'
 import { UNHIDDEN } from '../delta-wire.ts'
 import { classOf, headsOf, INK_ANY, leadStep } from '../marks/marks.mjs'

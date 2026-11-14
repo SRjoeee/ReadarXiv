@@ -30,7 +30,7 @@ import { bundleUnitsOf } from './units.mjs'
 import { phClass, texToText } from './layer1.mjs'
 import { textPieceOf } from '../source/text-piece.mjs'
 import { symbolText } from '../source/text-symbols.ts'
-import { displayStop, isInkless } from './mt.mjs'
+import { displayStop, isInkless } from './mt.ts'
 import { keptAsWritten, namesOfBlocks, paperNamesOf, RUNNING } from './language.ts'
 
 const UTF8 = new TextDecoder('utf-8')
