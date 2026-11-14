@@ -5,7 +5,8 @@
 // member)`), so that a tool sees the member's layout (its display lines with each run's face, fill and place, each crop's
 // piece) and can name it by its part's ord. Nothing else of any module is touched.
 const LAID = "      if (pm.state !== 'laid' || !pm.lay) continue\n"
-const MEM = '    const mem = got.member\n'
+// (the member as todayMember names it, the runner's renaming of a member by today's ord: gate-ord, 2026-11-15)
+const MEM = '    const mem = todayMember(got.member, u.ord, unitOf)\n'
 // (the entry's page, design-a's Page as the reader receives it: laid.mjs --entry)
 const PAGE = '      out.entry.ms.push(performance.now() - t1)\n'
 
