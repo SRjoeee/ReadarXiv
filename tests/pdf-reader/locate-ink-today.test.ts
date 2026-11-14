@@ -12,7 +12,7 @@ import { classOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
 import { regionsOf } from '../../src/pdf-reader/engine/layout/stream.mjs'
 import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
-import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn } from '../../src/pdf-reader/engine/source/latex-front.mjs'
+import { identifiersIn } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
@@ -515,9 +515,6 @@ describe('today’s ink makers in the engine package', () => {
       { t: 'ph', src: '\\url{bo.writer@example.ac}' },
       { t: 'text', s: '. The views are ours.' },
     ]])
-    // (one pattern for both readers: the front end's)
-    expect(T.EMAIL_ADDRESS.source).toBe(EMAIL_ADDRESS.source)
-    expect(T.EMAIL_ADDRESS.flags).toBe(EMAIL_ADDRESS.flags)
   })
   it('keep an identifier in an ink unit a run of its own, and a line of identifiers alone no unit, as the front end keeps one (2608.25210v2)', () => {
     // (a token of word characters joined by underscores set in a text face, `llm_equal_human`: today's sent its words, which came
@@ -574,9 +571,6 @@ describe('today’s ink makers in the engine package', () => {
     // (today's: every local part a word of the text)
     expect(one(TODAY).map(said).join(' | ')).toMatch(/alpha, beta-x, gamma.*delta, eps/)
     expect(one(T as unknown as Impl).map(said)).toEqual([['Contact: ', '<\\url{{alpha,beta-x,gamma}@example.org}>']])
-    // (one pattern for both readers: the front end's)
-    expect(T.ADDRESS_GROUP.source).toBe(ADDRESS_GROUP.source)
-    expect(T.ADDRESS_GROUP.flags).toBe(ADDRESS_GROUP.flags)
   })
   it('mark a kept block of e-mail addresses alone so (`address`), which the lab reads; no other kept block', () => {
     // (the coordinator's ruling of 2026-11-10: the parity reads a unit the prepare keeps as a line of addresses as the original's

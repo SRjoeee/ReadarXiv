@@ -13,8 +13,7 @@
 // marks, start and call, the patched files, the file readers.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error: the module is JavaScript until its typing commit (no declaration in the package)
-import * as NOW from '../../packages/engine/src/source/latex-front.mjs'
+import * as NOW from '../../packages/engine/src/source/latex-front.ts'
 import * as BEFORE from './helpers/latex-front-before.mjs'
 
 type Module = typeof BEFORE

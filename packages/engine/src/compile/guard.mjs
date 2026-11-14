@@ -12,7 +12,7 @@
 // specifier: the TeX page's host runs it in a browser.
 import { whyText } from '../instrument/format.ts'
 import { isMemoryError } from '../memory.ts'
-import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.mjs'
+import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.ts'
 import { texErrors, unitsAtErrors } from './tex-errors.mjs'
 import { END_TEX } from './tex.mjs'
 import { duplicatesIn } from '../marks/marks.mjs'

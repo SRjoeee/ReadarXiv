@@ -9,6 +9,7 @@ import type { Piece } from '@readarxiv/format'
 import type { PdfLike } from './compile/base.ts'
 import type { Instrument, PieceClass } from './instrument.ts'
 import type { NameKey } from './marks/names.ts'
+import type { CellPlace, SourceUnit } from './source/latex-front.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as instrument_js from './instrument/instrument.mjs'
 import * as base_js from './compile/base.ts'
@@ -18,8 +19,7 @@ import * as guard_js from './compile/guard.mjs'
 import * as live_js from './compile/live.mjs'
 import * as pdfLite_js from './compile/pdf-lite.ts'
 import * as units_js from './instrument/units.ts'
-// @ts-ignore: JavaScript moved as it is, typed by this file alone
-import * as latexFront_js from './source/latex-front.mjs'
+import * as latexFront_js from './source/latex-front.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as paperMeta_js from './source/paper-meta.mjs'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
@@ -253,33 +253,8 @@ export interface CompileRequest {
   files?: boolean
   sourceDate?: number
 }
-export interface CellPlace {
-  table: number
-  row: number
-  col: number
-  span: number
-  head: boolean
-}
-export interface SourceUnit {
-  kind: string
-  title?: boolean
-  depth?: number
-  lead?: string
-  trail?: string
-  inner?: string
-  front?: boolean
-  held?: boolean
-  stored?: boolean
-  /** the block its source ties a note to (latex-front.mjs tieNotes): `author` */
-  of?: 'author'
-  bracketed?: boolean
-  pieces: unknown[]
-  cell?: CellPlace
-}
-export const inMemory = latexFront_js.inMemory as (map: Map<string, Uint8Array>) => {
-  list(): string[]
-  read(path: string): Uint8Array | null
-}
+export type { CellPlace, SourceUnit }
+export const inMemory = latexFront_js.inMemory
 export const analyze = paperMeta_js.analyze as (fsys: ReturnType<typeof inMemory>) => {
   main: string | null
   mainGuessed?: boolean

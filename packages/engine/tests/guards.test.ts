@@ -14,8 +14,7 @@ import { pageInk } from '../src/ink.ts'
 // @ts-expect-error: the moved JavaScript (packages/engine/src/marks/marks.mjs) has no declaration in the package
 import { completeCalled } from '../src/marks/marks.mjs'
 import { alignOf, openRemover } from '../src/remove.ts'
-// @ts-expect-error: the moved JavaScript (packages/engine/src/source/latex-front.mjs) has no declaration in the package
-import { inMemory, loadProject } from '../src/source/latex-front.mjs'
+import { inMemory, loadProject } from '../src/source/latex-front.ts'
 import { planOf, wrapOf } from '../src/wrap.ts'
 import { openObjects } from '../src/xref.ts'
 

@@ -9,7 +9,7 @@
   "//": "The ./today/… exports are the transition paths of the front half moved from src/pdf-reader/engine, one a moved module: only the old paths there and the lab import them (tests/pdf-reader/engine-contract.test.ts holds it). The cut-over deletes them with the old paths.",
   "exports": {
     ".": "./src/index.ts",
-    "./today/source/latex-front.mjs": "./src/source/latex-front.mjs",
+    "./today/source/latex-front.ts": "./src/source/latex-front.ts",
     "./today/source/paper-meta.mjs": "./src/source/paper-meta.mjs",
     "./today/source/tex-kernel.ts": "./src/source/tex-kernel.ts",
     "./today/source/tex-names.ts": "./src/source/tex-names.ts",

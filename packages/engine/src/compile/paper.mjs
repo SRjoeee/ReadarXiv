@@ -21,7 +21,7 @@
 //      anchored by (their words read from the same pages)
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
-import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.mjs'
+import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.ts'
 import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from './live.mjs'
 import { completeLog } from './tex.mjs'
 import { bundleUnitsOf } from '../instrument/units.ts'
