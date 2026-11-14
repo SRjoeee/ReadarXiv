@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { differencesOf, heldOf, REFERENCE } from '../../lab/typeset/face-files.mjs'
+import { GATES } from '../../lab/release-check/gates.mjs'
 import { FACES, HOLDS, SMCP } from '../../packages/typeset/src/data/faces.ts'
 
 /** a reference of two faces and two alphabets, as face-files.json holds them */
@@ -77,5 +78,18 @@ describe("the check's reference, against the catalogue it serves", () => {
     // (each block says what it copies and from where)
     for (const block of [r.files, r.letters, r.sha256]) expect([typeof block.copies, typeof block.from]).toEqual(['string', 'string'])
     expect(SMCP.every((id) => Object.hasOwn(r.files.faces, id))).toBe(true)
+  })
+})
+
+describe('the release check’s gate', () => {
+  it('reads the files with face-tables.py, then judges with face-files.mjs, from the fonts folder and the Python the lab names', () => {
+    const g = GATES.find((x) => x.id === 'face-files')!
+    const ctx = { root: '/repo', labData: '/lab', refactor: '/lab/refactor-2026-11', work: '/work', online: false, minFree: 12 }
+    expect([g.tier, g.stage]).toEqual(['release', 'reader'])
+    expect(g.needs!(ctx)[0]!.path).toBe(process.env.AXT_FACE_FILES ?? '/lab/refactor-2026-11/face-files')
+    expect(g.steps!(ctx).map((s) => s.cmd.find((a) => /^lab\/typeset\//.test(a)))).toEqual([
+      'lab/typeset/face-tables.py',
+      'lab/typeset/face-files.mjs',
+    ])
   })
 })
