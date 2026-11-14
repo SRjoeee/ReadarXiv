@@ -3,7 +3,6 @@ export const TYPESET_PURPOSE =
   'layFlow, rules, language data and painters: a translated unit laid into its room' as const
 
 export { type MeasureTable, MissingMeasure, tableMetrics } from './metrics/table.ts'
-export { RULE_LIST, RULES, type RuleSpec, type RuleState } from './rules.ts'
 export { NoRules, resolveRules, rulesFor } from './rules-for.ts'
 export { HYPHENATION, LANGUAGES, type LanguageRules, SCRIPTS, type ScriptRules } from './data/rules/index.ts'
 export type {
