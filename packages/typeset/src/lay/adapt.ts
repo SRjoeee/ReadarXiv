@@ -72,8 +72,7 @@ export type AdaptInput = {
   /** the call's measure and patterns, as the fit reads them (FitParams) */
   measure: FitParams['measure']
   patterns: FitParams['patterns']
-  /** the page's box (pageViews), the page's rules (A's, the add-on manifest's: Room.band's source) */
-  view: (page: number) => readonly number[] | undefined
+  /** the page's rules (A's, the add-on manifest's: Room.band's source) */
   rulesOf: (page: number) => readonly number[] | null | undefined
   lineskip: readonly [number, number] | null
   reading: Reading
@@ -412,7 +411,6 @@ export function adapt(i: AdaptInput): Adapted {
   const pages = [...new Set(lines.map((l) => l[0]))]
   const blocks = blocksOf({
     rects: before.rects,
-    pageViews: Array.from({ length: Math.max(...pages) }, (_, k) => i.view(k + 1)),
     keep: keepKeys.length ? new Set(keepKeys) : null,
     lineInfo,
     regionOf: br ? br.regionOf : keepKeys.length ? regionOf : null,

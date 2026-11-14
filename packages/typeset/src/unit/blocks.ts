@@ -11,8 +11,7 @@
 // - `keep`: the lines the unit keeps as the original's (held lines, a display's rows) ← Line flag KEPT
 // - `regionOf`, `referenced`: the kept lines in runs, and the runs the text passes (U.breaks)
 // - `breakAt`, `joinAt`, `paraAt`: where TeX's forced breaks and a group's paragraph end the lines (U.breaks)
-// - `centred`: TeX's alignment of the unit ← Placed.align; `pageViews`: each page's box, read only where `centred` is not
-//   told (a unit no file holds), which the part never leaves untold: void then
+// - `centred`: TeX's alignment of the unit ← Placed.align, which the part always tells (lay/adapt.ts): untold, not centred
 // - `lineskip`: TeX's \lineskip and \lineskiplimit ← Part.paper.lineskip
 // - `pitch`: TeX's \baselineskip, the pitch it set the unit's lines at ← Placed.lead where the part states it (no 'lead' read)
 import { median, type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
@@ -34,7 +33,6 @@ export type LineInfo = {
 
 export type BlocksInput = {
   rects: readonly Rect[]
-  pageViews: readonly (readonly number[] | undefined)[]
   keep: ReadonlySet<string> | null
   lineInfo: ReadonlyMap<string, LineInfo>
   regionOf?: ReadonlyMap<string, number> | null
@@ -145,7 +143,7 @@ type Raw = Omit<Block, 'after' | 'B' | 'exact' | 'sizes' | 'pitch0' | 'free' | '
 
 /** the unit's lines as blocks, its kept lines never moved, each block with the kept regions before it (L2:626 blocksOf2) */
 export function blocksOf2(i: BlocksInput): Raw[] {
-  const { rects, pageViews, keep, regionOf, referenced, breakAt, joinAt, centred, paraAt } = i
+  const { rects, keep, regionOf, referenced, breakAt, joinAt, centred, paraAt } = i
   const kept = (r: Rect) => !!keep?.has(rectKey(r))
   const blocks: { page: number; rects: Rect[]; opens?: true }[] = []
   let cur: { page: number; rects: Rect[]; opens?: true } | null = null
@@ -185,16 +183,7 @@ export function blocksOf2(i: BlocksInput): Raw[] {
     const h = median(rs.map((r) => r[4] - r[2]))
     const pitch = rs.length > 1 ? median(rs.slice(1).map((r, k) => rs[k]![4] - r[4])) : h * 1.38
     const indent = Math.max(0, rs[0]![1] - x0)
-    const centres = rs.map((r) => (r[1] + r[3]) / 2)
-    const view = pageViews[b.page - 1]
-    const pageCentre = view ? (view[0]! + view[2]!) / 2 : 306
-    const widthsVary = Math.max(...rs.map((r) => r[3] - r[1])) - Math.min(...rs.map((r) => r[3] - r[1])) > 6
-    const c =
-      typeof centred === 'boolean'
-        ? centred
-        : rs.length > 1
-          ? Math.max(...centres) - Math.min(...centres) < 3 && widthsVary
-          : Math.abs(centres[0]! - pageCentre) < 3 && x1 - x0 < 0.8 * (view ? view[2]! - view[0]! : 612)
+    const c = centred === true
     return { ...b, x0, x1, top, bottom, h, pitch, indent, centred: c, measures: c ? null : measuresOf(rs, keep) }
   })
   if (!keep?.size && !breakAt?.size) return whole.map((b) => ({ ...b, after: 0 }))

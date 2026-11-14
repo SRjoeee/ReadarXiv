@@ -38,7 +38,6 @@ const input = (m: Placed, o: Partial<AdaptInput> = {}): AdaptInput => ({
   R: rulesFor('fr').set,
   measure: { w100: () => 50, ink100: () => ({ a: 70, d: 20 }), inkRight100: () => null },
   patterns: {},
-  view: () => [0, 0, 612, 792],
   rulesOf: () => undefined,
   lineskip: [1, 0],
   reading: {

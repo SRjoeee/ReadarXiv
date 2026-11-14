@@ -10,7 +10,6 @@ const line = (base: number, x0: number, x1: number, j: number): [Rect, LineInfo]
 ]
 const input = (ls: [Rect, LineInfo][], more: object = {}) => ({
   rects: ls.map((l) => l[0]),
-  pageViews: [],
   keep: null,
   lineInfo: new Map(ls.map(([r, i]) => [rectKey(r), i])),
   centred: false,

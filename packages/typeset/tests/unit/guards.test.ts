@@ -216,7 +216,6 @@ describe('lay/adapt: a label drawn anew, hung beside its text only where TeX hun
     R: rulesFor('de').set,
     measure: { w100: () => 50, ink100: () => ({ a: 70, d: 20 }), inkRight100: () => null },
     patterns: {},
-    view: () => undefined,
     rulesOf: () => undefined,
     lineskip: [1, 0],
     reading: { tokens: [], labelDrawn: 'Abbildung 1.', lead: false, cjkSize: undefined, referenced: new Set() },
