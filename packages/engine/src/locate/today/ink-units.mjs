@@ -76,7 +76,7 @@
 //      drawn over it), no pieces (nothing is sent), its glyphs in no group (the wrap and its ledger as before). A display TeX set
 //      (its region, pageInk's `regions`) is one block whatever its lines' places, its number with it (CHANGED).
 // Pure arithmetic; an original module (no port statement).
-import { unitClass } from './content-classes.mjs'
+import { unitClass } from '../content-classes.ts'
 import { accentTexts } from '../accents.ts'
 import { ADDRESS_GROUP, classifyFont, classOf, EMAIL_ADDRESS, identifiersIn, lineRulesOf, OWN_WORK, RULE_EM, spellOf, UNIT_FLAG, utf8 } from './deps.mjs'
 
