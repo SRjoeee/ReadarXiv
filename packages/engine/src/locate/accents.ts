@@ -42,7 +42,7 @@ export const COMBINING: ReadonlyMap<string | undefined, string> = new Map([
   ['˛', '̨'],
 ])
 /** the marks set under a letter, which keep a dotless i dotless */
-export const BELOW: ReadonlySet<string> = new Set(['̧', '̨'])
+const BELOW: ReadonlySet<string> = new Set(['̧', '̨'])
 
 /** `letter` under the combining `mark` as one code point (NFC): a dotless ı or ȷ under a mark above it the dotted letter's
  *  (Loïc, Física); null where the two compose to none */

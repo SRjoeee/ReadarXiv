@@ -9,7 +9,7 @@
 // An original module (no port statement). Imports nothing.
 
 /** the reader's toggles, in the order the settings list them: `always` and `never` are no toggle */
-export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'references', 'names', 'never'] as const)
+const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'references', 'names', 'never'] as const)
 
 /**
  * Each class: `toggle` (TOGGLES); `state`, what exists today — `built` (translated and drawn: the source's units, and the ink
@@ -19,7 +19,7 @@ export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'r
  * class (OCR reads an image, which holds no glyph); `truth`, what its text and its place are read from. In the ledger's code
  * order (CLASS_IDS): a code is an index here, kept in a Uint8Array a page
  */
-export const CLASSES = Object.freeze({
+const CLASSES = Object.freeze({
   body: Object.freeze({
     toggle: 'always',
     state: 'built',
@@ -127,9 +127,9 @@ export const CLASS_CODE = Object.freeze(
 )
 
 /** the kind of a figure's ink unit (layout/figure-text.mjs): its text our glyphs', its place its run's (the parts' figure rows) */
-export const FIGURE_KIND = 'inkfigures'
+const FIGURE_KIND = 'inkfigures'
 /** a unit's class by its kind (latex-front.mjs's kinds, and the ink units'); a kind not here is `body` */
-export const UNIT_CLASS: Readonly<Record<string, ClassId>> = Object.freeze({
+const UNIT_CLASS: Readonly<Record<string, ClassId>> = Object.freeze({
   para: 'body',
   heading: 'body',
   abstract: 'body',
@@ -172,7 +172,7 @@ export function unitClass(u: string | unknown[] | { readonly kind?: unknown } | 
 /** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads, tables and figures on; names (the
  *  whole author block since 2026-10-30) and references off. A direct open of the run given none (layer-proto/run.mjs openProto: the lab's gates, the tests') takes them
  *  too, and the lab's fixture maker sends no unit they hide (the gates hold no translation of it) */
-export const TOGGLE_DEFAULTS = Object.freeze({
+const TOGGLE_DEFAULTS = Object.freeze({
   heads: true,
   tables: true,
   figures: true,
