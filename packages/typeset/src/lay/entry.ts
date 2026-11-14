@@ -502,7 +502,6 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       R,
       measure,
       patterns: rules.hyph as never,
-      view: () => undefined,
       rulesOf: bandRulesOf(m),
       lineskip,
       reading: {

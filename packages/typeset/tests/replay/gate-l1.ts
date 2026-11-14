@@ -952,7 +952,6 @@ export function gateL1Pair(
       R,
       measure: (measure ?? (c.P as Raw).measure) as never,
       patterns: (c.P as Raw).patterns as never,
-      view: (pg) => views.get(pg),
       rulesOf: (pg) => today?.rules(pg),
       lineskip: (bundle.parts.values().next().value?.paper.lineskip as [number, number] | undefined) ?? null,
       reading,

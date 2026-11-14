@@ -270,7 +270,6 @@ function measuresOfLines(fileLines: { rects: readonly Rect[]; j: readonly number
       const jOf = new Map(fileLines.rects.map((r, k) => [rectKey(r), fileLines.j[k]!]))
       const bs = blocksOf2({
         rects: fileLines.rects,
-        pageViews: [],
         keep: new Set(held),
         lineInfo: new Map(),
         centred: false,

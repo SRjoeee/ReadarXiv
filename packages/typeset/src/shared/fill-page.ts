@@ -409,13 +409,14 @@ function headOf(q: FillLaid, onPage: readonly { u: FillLaid; l: Layout; st: FitS
 }
 
 /** the tries, in the fit's own order (fit/walk.ts statesOf), each knob kept for the next as the walk keeps them; the room past
- *  TeX's bottom last, on the tracking and TeX's room alone, then with the size step */
+ *  TeX's bottom last, on the tracking and TeX's room alone, then with the size step. Each a list of our own vocabulary
+ *  (EvenKnob) */
 const EVEN_TRIES: readonly (readonly EvenKnob[])[] = [
-  ['track'],
-  ['track', 'room'],
-  ['track', 'room', 'size'],
-  ['track', 'room', 'foot'],
-  ['track', 'room', 'size', 'foot'],
+  ['track'] as const,
+  ['track', 'room'] as const,
+  ['track', 'room', 'size'] as const,
+  ['track', 'room', 'foot'] as const,
+  ['track', 'room', 'size', 'foot'] as const,
 ]
 
 /** each frame of a unit (framesOf: a page's or a column's, a paragraph TeX states inside it), its lines in `laid` (else the

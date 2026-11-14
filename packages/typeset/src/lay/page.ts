@@ -210,8 +210,8 @@ function originOf(
   return { by: q, fill: before(q) && (filledOf.get(q) ?? fit) - fit > SAME }
 }
 
-/** EVEN_TRIES' order of the knobs, which a stated `evened.by` keeps */
-const KNOBS: readonly EvenKnob[] = ['track', 'room', 'size', 'foot']
+/** EVEN_TRIES' order of the knobs, which a stated `evened.by` keeps: our own vocabulary, every EvenKnob once */
+const KNOBS = ['track', 'room', 'size', 'foot'] as const satisfies readonly EvenKnob[]
 /**
  * The final round of a page's size ties, stated (docs/PDF-READER.md §18.64): each member laid at its tie's cap states `tie`,
  * the cap and the member whose own need set it, in the round that set it (TieOrigin, followed back through the caps); that

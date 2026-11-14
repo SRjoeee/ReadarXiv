@@ -424,8 +424,9 @@ function closerLead<L>(K: number, sets: (k: number) => L | null, guess: number |
 /**
  * Where on a closer search's grid (closerLead's L(k)) a unit of one frame first ends no lower than its floor (`floorAt(L)`,
  * footFloorAt's at that leading, null where none is asked): its n lines from the frame's first baseline B0, L p0 apart (no
- * first line moves), its last at B0 - (n - 1) L p0, which a slot holds 0.05 under its floor; arithmetic, no layout. Null for a
- * unit of more frames or of one line, where its lines' places are not that simple: the halving decides
+ * first line moves), its last at B0 - (n - 1) L p0, which a slot holds 0.05 under its floor; arithmetic, no layout (a unit of
+ * one line: B0 at every leading). Null for a unit of more frames, where its lines' places are not that simple: the halving
+ * decides
  */
 function guessCloser(
   p: FillUnit,
@@ -433,7 +434,7 @@ function guessCloser(
   L: (k: number) => number,
   floorAt: (lead: number) => number | null,
 ): number | null {
-  if (p.blocks?.length !== 1 || !(p.layout?.lines.length >= 2)) return null
+  if (p.blocks?.length !== 1) return null
   const b = p.blocks[0]!,
     n = p.layout.lines.length,
     p0 = b.pitch0 ?? 1.2 * p.s

@@ -29,8 +29,8 @@ const refsFor = (target: Lang): RefNames =>
   )
 
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
-/** the script fields in the set's order (rules/layout.mjs SCRIPT_FIELDS) */
-const SCRIPT_KEYS: readonly (keyof ScriptRules)[] = [
+/** the script fields in the set's order (rules/layout.mjs SCRIPT_FIELDS): our own vocabulary, ScriptRules' keys */
+const SCRIPT_KEYS = [
   'order',
   'leadBase',
   'leadFloor',
@@ -59,7 +59,7 @@ const SCRIPT_KEYS: readonly (keyof ScriptRules)[] = [
   'cellClear',
   'cellCapMin',
   'cjkFaces',
-]
+] as const satisfies readonly (keyof ScriptRules)[]
 
 /** the script a BCP 47 tag is written in: its likely script (zh-TW Hant, sr Cyrl), rules/script.mjs scriptOf */
 export const scriptOf = (lang: Lang): string => new Intl.Locale(lang).maximize().script ?? ''

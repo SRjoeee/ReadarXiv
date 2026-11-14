@@ -49,7 +49,10 @@ export type Rename = [start: number, end: number, word: string]
 /** a resolution as the rule reads it */
 export type Renamable = { mode: string; sup?: boolean; src?: string; text?: string }
 
-/** the commands whose text TeX's cross-referencing packages generate (tex-names.mjs:14 GENERATED_COMMANDS) */
+/** the commands whose text TeX's cross-referencing packages generate, a counter type's name before the number: cleveref.sty's
+ *  \cref and \Cref with their range, page and name forms, hyperref.sty's \autoref and \Autoref (TeX Live 2025). The engine's
+ *  packages/engine/src/source/tex-names.ts GENERATED_COMMANDS, which its source reader reads, held equal to it by
+ *  tests/typeset/tex-names.test.ts */
 export const GENERATED_COMMANDS: readonly string[] = Object.freeze([
   'cref',
   'Cref',
