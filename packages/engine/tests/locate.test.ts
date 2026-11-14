@@ -3,11 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import { bundle, stateOf } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
-import { pageGlyphsOf } from '../src/glyph.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
 import { eachBetweenPaired, locate } from './helpers/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
-import { docOf, type PageSpec } from './helpers/doc.ts'
+import { docOf, type PageSpec, pageGlyphsOf } from './helpers/doc.ts'
 
 const text = (s: string) => ({ t: 'text' as const, s })
 const r2 = (v: number) => Math.round(v * 100) / 100
@@ -1943,6 +1942,28 @@ describe('review of #605', () => {
     expect(placed).toMatchObject({ dir: [0, 1], run: [60, 400, 24, 5, 30], room: fig.room, align: 'l' })
     // (one today's reading tells no room of states no run: S.figures leaves such a turned text the original's)
     expect(plain.run).toBeUndefined()
+  })
+  it('reads a path’s label top to bottom whatever order its rows stand in the stream, its room across the path’s (§18.36)', () => {
+    // (a node's two centred rows the page shows lower first, "module" then "CTJA" (2610.19274v1 p17's white label on black): the
+    // member's first line is its top row's, from which its translation is laid; its room beside its lines is the path's inside
+    // the prepare states with its unit (ink.ts: x, length, before, after), never its column's)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'module', y: 680, x: 100 },
+          { text: 'CTJA', y: 692, x: 103 },
+        ],
+      },
+    ])
+    const unit = unitOf('inkfigures', 'module CTJA', {
+      figure: { set: -1, para: 'container', x: 100, length: 36, before: 9.8, after: 9.8 },
+      align: 'c',
+    })
+    const L = locate(instrumentOf(B, [unit], [[0, 0]]), B, align(B, B))
+    const mem = L.members[0]!
+    expect(mem.located).toBe(true)
+    expect(mem.lines.map((l) => l[4])).toEqual([692, 680])
+    expect(mem.room.side).toEqual([90.2, 145.8])
   })
   it('says a figure text whose ink stays is unwrapped: no group of it, so no translation is laid over it (#631 review)', () => {
     // (today's figure reading leaves a crowded label's ink where it stands (ink.ts: `fixed`, no group made of it); the part states

@@ -15,7 +15,7 @@ export const NAME_ENGLISH = Object.freeze({ abstract: 'Abstract', ref: 'Referenc
  *  numeral, maybe a letter before a number ("A1"), its parts after stops or dashes ("C.1", "A-A"), a stop or a colon after it */
 const COUNTER_FORM = /^(?:[a-z](?=\d))?(?:\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\-–](?:\d{1,4}|[a-z]))*[.:]?$/u
 /** how far after a name its counter may begin, of the name's size: TeX's \nobreakspace is a third of an em, a \quad one */
-export const COUNTER_GAP = 1.1
+const COUNTER_GAP = 1.1
 /** a word's space, of the glyphs' size: two glyphs further apart are two words (a fifth of an em, as layer2.mjs spacedText reads) */
 const WORD_SPACE = 0.2
 /**

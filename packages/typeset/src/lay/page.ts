@@ -1,8 +1,7 @@
 // layPage's composition over prepared flows (design-b §1.6 L8-L11, E1): every flow of the part laid (L8, layFlow), each laid
 // member's fill leadings with it (L9); then each pass page the page reads, ascending (its own and the first page of every
 // member with a line on it: design-a §1.3), filled over the members with a line there in stream order (L10, S.fill.page's
-// pass); the table groups settled (L11, S.table.settle: a cell unfit withheld alone, its group whole where it spans; a group on
-// two pages withheld whole); the
+// pass); the table groups settled (L11, S.table.settle: a cell unfit withheld alone, its group whole where it spans); the
 // page's members as drawn (E1, D.display). Pure: the flows are laid anew on each call, nothing is kept between calls.
 import { type DisplayLine, displayLines } from '../emit/display.ts'
 import type { PageRules } from '../shared/fill-page.ts'
@@ -61,7 +60,7 @@ export type PreparedPage = {
 }
 
 /** two scales of a tie alike: within the fit's thousandths (its caps are floored to them: U.params, a cell's cap) */
-export const SAME = 0.0005
+const SAME = 0.0005
 /** the pages a member has lines on (its pages) begin with its first */
 const firstPage = (m: FlowMember) => m.pages[0] ?? 0
 /** how far under TeX's text block bottom a layout's lines stand where the state that laid them let them past it (FitState.over:
@@ -74,10 +73,9 @@ const pastBottom = (L: Layout, blocks: readonly FitBlock[]) =>
   )
 
 /** a part's tie as the page lays it: a table group's members' ords (`cells`), or members laid at one size (`size`: one paragraph
- *  of TeX's the front end cut at a float, a figure's set). A figure's set states the scale its members S.figures sets are drawn
- *  at (`least`: one size a group, the figure texts the paragraph path lays capped at it too) and its floor (`floor`: the set's,
- *  S.figures' floorMin, which a set shrinks to as one) */
-export type PageTie = CellTie | { rule: 'size'; ords: readonly number[]; least?: number; floor?: number }
+ *  of TeX's the front end cut at a float, a run-in head and its paragraph; a figure's set is no tie the page lays, each of its
+ *  texts at its own size: lay/entry.ts) */
+export type PageTie = CellTie | { rule: 'size'; ords: readonly number[] }
 /** a table group as the page settles it: its members' ords, and those of them whose box is the others' too (`spanning`: one
  *  the part's tie states spanning, or whose grid place spans columns), which hold the group where they cannot be drawn */
 export type CellTie = { rule: 'cells'; cells: readonly number[]; spanning?: readonly number[] }
@@ -144,7 +142,7 @@ export function layPagePrepared(
 
 /**
  * One round of a page's size ties (layPagePrepared): each tied member laid larger than the least of its tie capped there, in
- * `cap`, never under its floor (the tie's, else the member's own) and never above a cap set before; `fitOf` the scale each
+ * `cap`, never under its floor and never above a cap set before; `fitOf` the scale each
  * member is laid at, its page's fill passes run, `ownOf` the scale its own lay set it at before any page's fill and any tie's
  * cap, `firstOf` the page each begins on. Whether a cap was lowered. A tie caps a member from the scales the passes up to its own first page leave its
  * tie-mates at (docs/PDF-READER.md §18.64): a tie-mate begun on that page or before as
@@ -170,17 +168,18 @@ export function tieCaps(
   const wasOf = new Map(origin?.of ?? [])
   for (const t of sizes) {
     const on = t.ords.filter((o) => fitOf.has(o))
-    if (on.length < (t.least === undefined ? 2 : 1)) continue
+    // (a member is capped only by a mate the call lays: a tie with one member laid caps nothing)
+    if (on.length < 2) continue
     for (const o of on) {
       const from = firstOf.get(o) ?? 0
       const before = (q: number) => (firstOf.get(q) ?? 0) <= from
       const at = (q: number) => (before(q) ? fitOf.get(q) : (ownOf.get(q) ?? fitOf.get(q))) as number
-      const least = Math.min(...on.map(at), t.least ?? Number.POSITIVE_INFINITY)
-      const c = Math.max(least, t.floor ?? floorOf(o))
+      const least = Math.min(...on.map(at))
+      const c = Math.max(least, floorOf(o))
       if ((fitOf.get(o) as number) > c + SAME && c < (cap.get(o) ?? Number.POSITIVE_INFINITY) - SAME) {
         cap.set(o, c)
         lowered = true
-        if (origin) origin.of.set(o, originOf(t, on, at, before, least, fitOf, was, wasOf, origin.filledOf))
+        if (origin) origin.of.set(o, originOf(on, at, before, least, fitOf, was, wasOf, origin.filledOf))
       }
     }
   }
@@ -188,12 +187,11 @@ export function tieCaps(
 }
 
 /** the origin of a cap a tie sets: the member laid at the tie's least (`least`), one laid at its own need first where two
- *  stand there: one laid at a cap of its own in the round hands on that cap's origin; a figure's set laid at its labels' factor
- *  (`least` the set's own, PageTie's) is the set's, its first member's. `fill` where its page's fill set it there in the round,
- *  under its scale before the fill (`filledOf`: the evening's size step, §18.57), never one read at its own lay (`before` false) */
+ *  stand there: one laid at a cap of its own in the round hands on that cap's origin. `fill` where its page's fill set it there
+ *  in the round, under its scale before the fill (`filledOf`: the evening's size step, §18.57), never one read at its own lay
+ *  (`before` false) */
 export type TieOrigin = { by: number; fill: boolean }
 function originOf(
-  t: Extract<PageTie, { rule: 'size' }>,
   on: readonly number[],
   at: (q: number) => number,
   before: (q: number) => boolean,
@@ -205,8 +203,8 @@ function originOf(
 ): TieOrigin {
   const capped = (q: number) => before(q) && was.has(q) && Math.abs((fitOf.get(q) as number) - was.get(q)!) <= SAME
   const there = on.filter((q) => at(q) <= least + SAME)
-  const q = there.find((x) => !capped(x)) ?? there[0]
-  if (q === undefined) return { by: t.ords[0]!, fill: false }
+  // (the least is one of `on`'s own scales: some member stands there)
+  const q = (there.find((x) => !capped(x)) ?? there[0])!
   if (capped(q) && wasOf.has(q)) return wasOf.get(q)!
   const fit = fitOf.get(q) as number
   return { by: q, fill: before(q) && (filledOf.get(q) ?? fit) - fit > SAME }
@@ -315,25 +313,23 @@ function layPageTied(
 
 type Lay = { m: FlowMember; unit?: PassUnit; state: 'laid' | Unlaid; slots: LedgerSlot[]; error?: string }
 /** L11, S.table.settle: each table group's verdict over its members (RUN:2401-2425, tableSettle). A cell its own lay could not
- *  draw whole (its flow threw: 'error'; refused; clipped, then 'unfit') is the original's by itself, the group's other cells laid,
- *  as a paragraph's would be (the coordinator's ruling (c) of 2026-11-13); the group is withheld whole, every cell with it,
- *  where the geometry needs it: such a cell spans (its box the others' too), or the group lies on two pages (its first page
- *  would be painted before its last is laid). A group the call holds no member of is not this page's. Its members' states set
- *  in `lays` */
+ *  draw whole (its flow threw: 'error'; refused; clipped, then 'unfit') is the original's by itself, the group's other cells
+ *  laid, as a paragraph's would be (the coordinator's ruling (c)); the group is withheld whole, every cell with it, where the
+ *  geometry needs it alone: such a cell spans (its box the others' too). A group on two pages is laid like any other, each cell
+ *  by itself (PDF-READER §18.72: the part holds every member of a tie it touches, so every page lays the group whole). A group
+ *  the call holds no member of is not this page's. Its members' states set in `lays` */
 export function settleTies(ties: readonly CellTie[], lays: ReadonlyMap<number, Lay>): PreparedPage['tables'] {
   const tables: PreparedPage['tables'] = []
   for (const t of ties) {
     const cells = t.cells.map((o) => lays.get(o)).filter((x) => x !== undefined)
     // (a group whose members the caller did not hand in, but for those its flows' lays hold: not decided here)
     if (cells.length < t.cells.length) continue
-    const why = tableSettle(
-      cells.map((x) => ({ pages: x.m.pages, refused: x.state !== 'laid', clipped: !!x.unit?.layout.clipped })),
-    )
+    const why = tableSettle(cells.map((x) => ({ refused: x.state !== 'laid', clipped: !!x.unit?.layout.clipped })))
     tables.push({ cells: [...t.cells], why })
     if (!why) continue
     const unfit = (x: Lay) => x.state !== 'laid' || !!x.unit?.layout.clipped
     const spans = new Set(t.spanning ?? [])
-    const whole = why === 'on two pages' || cells.some((x) => unfit(x) && spans.has(x.m.ord))
+    const whole = cells.some((x) => unfit(x) && spans.has(x.m.ord))
     for (const x of cells) {
       if (!whole && !unfit(x)) continue
       if (x.state === 'laid') x.state = whole ? 'cells' : 'unfit'

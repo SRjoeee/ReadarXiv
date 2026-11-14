@@ -591,10 +591,12 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T5', 'E27'],
     ports: ['RUN:1796-1814 fitFurther', 'RUN:1738-1753 widenOverPaper', 'RUN:1699-1729 paperTo (its room: Room.side)'],
     how: 'ported',
+    ruling: "2026-11-13 a table cell's room is its column's box",
     reads: ['fit.further', 'fit.floorMin'],
     file: 'fit/further.ts',
     state: {
-      is: 'ported',
+      is: 'changed',
+      why: "a single-line table cell whose column's box the part states (Room.column) is laid in that box at every size, its 'widen' step none (lay/adapt.ts columnRoomOf: `wide` null), so that its 'shrink' sets it below the floor in the same box: the largest size not over the original's that fits its column (the owner's decision of 2026-11-13, docs/PDF-READER.md §18.13). Today's widened a cell clipped at its floor in its own ink's width half way to the glyph beside it, so that a cell missing its room by much was drawn larger than one missing it by little, and past its column. A cell whose column's box the part does not state is widened as today: the replay's samples state none, and are unchanged",
       replay:
         'chained from F2 on every laid round of the sampled units and of the corpus (tests/replay/round.ts, lab/typeset/replay-fit.mjs): its slot (584 ran; the widened blocks, Room.side, from the slot)',
       cases: 584,
@@ -621,15 +623,15 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['groups.mjs:37-43 groupOf', 'rows.mjs:265-292 layerRows'],
     how: 'ported',
     ruling:
-      "2026-11-08 a table's cells drawn by group, the way the production site draws them; 2026-11-13 a table's cell is text like any other, the translator decides a name; 2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it",
+      "2026-11-08 a table's cells drawn by group, the way the production site draws them; 2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it; 2026-11-13 the owner's direction (21:44, approved): what of a table is language is decided from the source's facts and the table's structure, the engine's Unit.kept (R1, R2, R4), no table rule in the typesetter",
     reads: [],
     file: 'shared/table-groups.ts',
     state: {
       is: 'changed',
-      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle alone: each cell laid by its own row, no group decided by what its cells say (today's decideGroups keeps a column whole as names where NAMES_SHARE of its cells came back as they went; not ported, the owner's word of 2026-11-13); and a cell not set before its lay holds its group only where it spans or the group lies on two pages, its pages read off every cell of it to be translated, set or not (lay/entry.ts holdsTable), where today's held it for any reason but the wrap's (the coordinator's ruling (c) of 2026-11-13)",
+      why: "the groups over TeX's grid places (Placed.cell), for the hold and the settle, and no decision of what a cell is: today's decideGroups kept a whole column where NAMES_SHARE (0.4) of its cells came back from the translator as they went or were kept; here which cells are language is the engine's Unit.kept (R1, R2 and the paper's names blocks, R4: PDF-READER §18.72), laid as any kept unit is; and a cell not set before its lay holds its group only where it spans (lay/entry.ts holdsTable), where today's held it for any reason but the wrap's (the coordinator's ruling (c) of 2026-11-13)",
       replay:
         'tests/unit/table-groups.test.ts over hand-made parts (the corpus rows the parity reads are decided already)',
-      cases: 18,
+      cases: 19,
     },
   },
   {
@@ -660,7 +662,7 @@ const SPECS: readonly RuleSpec[] = [
     owns: ['T10', 'G16', 'A26'],
     ports: [
       'RUN:1441-1496 paintFigures',
-      'figure-fit.mjs:42 fitFigureSet',
+      'figure-fit.mjs:42-69 fitFigure (fitFigureSet over one item)',
       'figure-fit.mjs:1-76 lineOf, sameAsSource',
       'L2:4824-4836 figureRuns',
     ],
@@ -669,9 +671,9 @@ const SPECS: readonly RuleSpec[] = [
     file: 'shared/figures.ts',
     state: {
       is: 'changed',
-      why: "a translation fitted and anchored by its ink, as every line the breaker sets: the blank half of a full-width mark at its line's edge (B.break leadOf and hangOf at its target's first state: an opening mark's leading half, a closing mark's trailing half) is no part of the line it needs and stands past its anchor's edge, where today's set it by its advance (the parity's ink reading, 9744efab3: 32 figure texts of its pages a quarter em off their original's middle or half an em short of its end, 1810.04805v2 p16's masked-LM label 3.49 pt at 6.97). A mark's blank half is its run's face's measure (script.ts markOf, §18.48), no longer the target's `centredPunct`; the replay's today's marks are runs whose faces state no measure",
+      why: "a translation fitted and anchored by its ink, as every line the breaker sets: the blank half of a full-width mark at its line's edge (B.break leadOf and hangOf at its target's first state: an opening mark's leading half, a closing mark's trailing half) is no part of the line it needs and stands past its anchor's edge, where today's set it by its advance (the parity's ink reading, 9744efab3: 32 figure texts of its pages a quarter em off their original's middle or half an em short of its end, 1810.04805v2 p16's masked-LM label 3.49 pt at 6.97). A mark's blank half is its run's face's measure (script.ts markOf, §18.48), no longer the target's `centredPunct`; the replay's today's marks are runs whose faces state no measure. And each figure text is fitted by its own width alone (the owner's ruling of 2026-11-13 on a figure's sets, (B): each at its own size), where today's fitted a set (one column or one baseline of a figure) by one factor, the least any member's width needed: a label no wider than its original keeps the original's size beside a mate its width steps, and a text drawn that was not moves none of its mates",
       replay:
-        "every figure text of the 123 reader dumps (tests/replay/figures.ts, lab/typeset/replay-figures.mjs --marks=today): with today's marks (no mark's em holding a blank half, as a target whose faces centre them) drawn, why and line (x0, baseline, rot, text) all today's; by ink 609 move, 452 level ones' x0, 154 turned ones' place along their run, 3 left unfit by their advance drawn; the figure rows, views and units read off today's bundle; kept, untranslated, unhidden, served, waiting: synthetic",
+        "every figure text of the 123 reader dumps (tests/replay/figures.ts, lab/typeset/replay-figures.mjs --marks=today): with today's marks (no mark's em holding a blank half, as a target whose faces centre them) drawn, why and line (x0, baseline, rot, text) all today's but the rulings' departures, named: 7 today left crowded over a stroke drawn (`cleared`, F41) and 388 drawn larger than their today's set's least that start elsewhere for it (`untied`: a centred or right-aligned one, a turned one along its run); by ink 571 more move, 415 level ones' x0, 153 turned ones' place along their run, 3 left unfit by their advance drawn (364 untied, 7 cleared); the figure rows, views, sets and units read off today's bundle; kept, untranslated, unhidden, served, waiting: synthetic",
       cases: 14351,
     },
   },
@@ -854,14 +856,14 @@ const SPECS: readonly RuleSpec[] = [
     ports: ['RUN:2401-2409 withhold', 'RUN:2411-2425 settleGroup'],
     how: 'ported',
     ruling:
-      "2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it",
+      "2026-11-13 (c) a cell that cannot be drawn is the original's by itself, its group held only where the geometry needs it; 2026-11-13 a group on two pages is laid like any other, each cell by itself",
     reads: [],
     file: 'shared/table-settle.ts',
     state: {
       is: 'changed',
-      why: "the verdict today's (tableSettle: on two pages, a cell unfit, or painted), what it withholds not: a cell its lay could not draw whole is the original's by itself, the group's other cells laid, as a paragraph's would be; the group withheld whole only where that cell spans or the group lies on two pages (lay/page.ts settleTies; the coordinator's ruling (c) of 2026-11-13, under the owner's a table's cell is text like any other). Today's withheld the group whole for any cell unfit: with cells judged like body text, one unfit reply took back the whole of its header or column (the display gate at 2026-11-13: 26 groups, 144 cells on 19 pages)",
+      why: "the verdict today's but its pages (tableSettle: a cell unfit, or painted), what it withholds not: a cell its lay could not draw whole is the original's by itself, the group's other cells laid, as a paragraph's would be; the group withheld whole only where that cell spans (lay/page.ts settleTies; the coordinator's ruling (c), under the owner's a table's cell is text like any other). Today's withheld the group whole for any cell unfit: with cells judged like body text, one unfit reply took back the whole of its header or column (the display gate at 2026-11-13: 26 groups, 144 cells on 19 pages). Today's withheld a group whose cells lie on two pages whole, its first page painted before its last was laid; each page's part holds every member of a tie it touches, so every page lays the group whole, and the group is laid like any other (the coordinator's ruling of 2026-11-13, PDF-READER §18.72: the tap's 15 such groups, every one painted)",
       replay:
-        'the verdict on every call of the corpus (ledgers/*.ledger.json.gz settles, tests/replay/table-settle.test.ts); what it withholds, tests/unit/page-wait.test.ts and table-groups.test.ts',
+        'the verdict on every call of the corpus (ledgers/*.ledger.json.gz settles, tests/replay/table-settle.test.ts: as today but its 15 groups on two pages, counted apart); what it withholds, tests/unit/page-wait.test.ts and table-groups.test.ts',
       cases: 1479,
     },
   },
@@ -983,7 +985,9 @@ const SPECS: readonly RuleSpec[] = [
     // block bottom, and the paragraph's \baselineskip and \parskip (Room.runs, Room.sep, the marked compile's AXT-BODY and
     // AXT-LINES); the adapter reads the room so (lay/adapt.ts), never today's pixel map and its share of a pitch (borrowGap). And
     // the ink that stays beside its lines, no member's, which today never read (Room.stays: a rule or a glyph no unit owns, a QED
-    // box), on the block of the line it stood beside)
+    // box), on the block of the line it stood beside. And a table cell's column's box, which today never read (Room.column,
+    // locate/columns.ts: what TeX set in its column, every entry's, where the entries line up as the column's class sets them;
+    // the owner's decision, docs/PDF-READER.md §18.13), the room a single-line cell is laid in)
     ports: ['RUN:1557-1573 columnOf', 'RUN:1677-1687 freeFor', 'RUN:1699-1729 paperTo'],
     how: 'moved',
     reads: [],

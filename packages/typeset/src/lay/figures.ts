@@ -1,12 +1,13 @@
 // S.figures over the part (design-b §1.6 L4; shared/figures.ts, today's paintFigures): a page's figure texts, each drawn in its
-// translation where it says something its source does not, in the faces of its style, each set (a size tie) at one size, on its
-// original's baseline from its anchor's edge into the free line beside its box, by its ink as the breaker sets every line (a
+// translation where it says something its source does not, in the faces of its style, each at the size its own width needs, on
+// its original's baseline from its anchor's edge into the free line beside its box, by its ink as the breaker sets every line (a
 // full-width mark's blank half at its edge past the anchor's edge, as its face draws it, and its target's compressMax), the original's
-// where its width does not fit (width the fit's only test: no fact over or under its text is read, the owner's rule of
-// 2026-11-13, figure-fit.ts). Its facts are the part's, as the prepare states them from today's figure reading
+// where its width does not fit (width the fit's only test, figure-fit.ts: no fact over or under its text is read; nor its set's
+// size tie, which the part states and no size reads: each text at its own size, docs/PDF-READER.md §19.12, the owner's
+// rules of 2026-11-13). Its facts are the part's, as the prepare states them from today's figure reading
 // (layout/figure-text.mjs): its line (its box along its run and its baseline), its anchor (Placed.align: l start, c centre, r
 // end), its room before and after its box (Room.side), its style (size, fill, family, weight, slant) and its groups' (a run of its glyphs in another face: SpanAt.style, its translation inside the group drawn in
-// it), its own text (Placed.plain), its set (Tie size). One set turned (Placed.dir) is set along its run as a level one along
+// it), its own text (Placed.plain). One turned (Placed.dir) is set along its run as a level one along
 // x, from its run's origin, length and room before and after along it (Placed.run: its line is its box on the page), and drawn
 // at its angle (its items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs, its text
 // group off. What is not drawn stays the original's: one whose ink stays (the part's why, `unwrapped`: a label today's figure
@@ -61,30 +62,22 @@ function unitOf(row: Row | undefined, m: Placed, designs: PaperReading['designs'
 }
 
 /**
- * The figure texts of the part's page (or `o.page`, another page whose figure texts the part holds) among `members` (kind
- * `figure`): each one's outcome, a laid line where drawn, a state where not, and the faces to wait for; and the factor of their
- * sizes each size tie's drawn ones are set at (`scales`, by the tie's first member), which the tie's figure texts another path
- * lays are capped at (one size a group). `caps`: by a tie's first member, the most of their sizes its units are drawn at, where
- * another path laid a figure text of it smaller
+ * The figure texts of the part's page among `members` (kind `figure`): each one's outcome, a laid line where drawn, a state
+ * where not, and the faces to wait for
  */
 export function figuresOf(
   part: Part,
   members: readonly Placed[],
   rows: Rows,
-  o: { paper: PaperReading; R: RuleParams; metrics: Metrics; caps?: ReadonlyMap<number, number>; page?: number },
+  o: { paper: PaperReading; R: RuleParams; metrics: Metrics },
 ): {
   laid: Map<number, Laid['lines']>
   why: Map<number, Unlaid>
   wait: [FaceId, string][]
-  scales: Map<number, number>
 } {
-  const page = o.page ?? part.page
+  const page = part.page
   const laid = new Map<number, Laid['lines']>()
   const why = new Map<number, Unlaid>()
-  const scales = new Map<number, number>()
-  // (its set: the size tie that holds it, by the tie's first member; else its own)
-  const setOf = new Map<number, string>()
-  for (const t of part.ties ?? []) if (t.rule === 'size') for (const ord of t.ords) setOf.set(ord, `s${t.ords[0]}`)
   const rowsOf: FigureRow[] = []
   const byOrd = new Map<number, Placed>()
   for (const m of members) {
@@ -131,17 +124,13 @@ export function figuresOf(
         fill: m.style.fill ?? -1,
         font: m.style.design ?? '',
         cls: (({ fill, ...c }) => c)(classOf(m.style, o.paper.designs)),
-        set: setOf.get(m.ord) ?? `f${m.ord}`,
         before: run ? run[3] : side ? l[2] - side[0] : 0,
         after: run ? run[4] : side ? side[1] - l[3] : 0,
       })
     }
   }
-  if (!rowsOf.length) return { laid, why, wait: [], scales }
+  if (!rowsOf.length) return { laid, why, wait: [] }
   const got = figures({
-    ...(o.caps?.size
-      ? { caps: (set: string) => (set[0] === 's' ? o.caps!.get(Number(set.slice(1))) : undefined) }
-      : {}),
     figures: rowsOf,
     unit: (id) => {
       const t = byOrd.get(id)!.text
@@ -178,8 +167,6 @@ export function figuresOf(
     }
     // (its runs one after another along its line from its origin, a turned one's places along its run from x0)
     const m = byOrd.get(f.id)!
-    // (its tie's factor: one for every one of its set drawn, fitFigureSet's)
-    if (f.set?.[0] === 's') scales.set(Number(f.set.slice(1)), f.size! / m.style.size)
     const turn = m.dir ? { dir: m.dir } : {}
     const items: TextItem[] = []
     let x = f.x!
@@ -201,5 +188,5 @@ export function figuresOf(
     }
     laid.set(f.id, [[f.y!, f.x!, x, items]])
   }
-  return { laid, why, wait: got.wait, scales }
+  return { laid, why, wait: got.wait }
 }

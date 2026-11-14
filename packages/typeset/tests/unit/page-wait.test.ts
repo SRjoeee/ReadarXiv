@@ -91,13 +91,23 @@ describe('a table group settled (settleTies, L11): a cell that cannot be drawn a
     expect((lays.get(5) as unknown as { unit?: unknown }).unit).toBeUndefined()
     expect(stateOf(lays, 4)).toBe('error')
   })
-  it('withholds a group on two pages whole, every cell of it laid (its first page painted before its last is laid)', () => {
+  it('lays a group on two pages like any other: every cell laid, the group painted (PDF-READER §18.72)', () => {
     const lays = new Map([
       [4, lay(4, 'laid', [1])],
       [5, lay(5, 'laid', [2])],
     ])
-    expect(settleTies([{ rule: 'cells', cells: [4, 5] }], lays)[0]!.why).toBe('on two pages')
-    expect([stateOf(lays, 4), stateOf(lays, 5)]).toEqual(['cells', 'cells'])
+    expect(settleTies([{ rule: 'cells', cells: [4, 5] }], lays)[0]!.why).toBeNull()
+    expect([stateOf(lays, 4), stateOf(lays, 5)]).toEqual(['laid', 'laid'])
+  })
+  it('leaves a cell of a group on two pages that cannot be drawn the original’s alone, its other cells laid', () => {
+    const lays = new Map([
+      [4, lay(4, 'laid', [1])],
+      [5, lay(5, 'error', [2])],
+      [6, lay(6, 'laid', [2])],
+    ])
+    expect(settleTies([{ rule: 'cells', cells: [4, 5, 6] }], lays)[0]!.why).toBe('a cell unfit')
+    expect([stateOf(lays, 4), stateOf(lays, 5), stateOf(lays, 6)]).toEqual(['laid', 'error', 'laid'])
+    expect((lays.get(4) as unknown as { unit?: unknown }).unit).toBeDefined()
   })
   it('lays a group whose every cell is laid on one page', () => {
     const lays = new Map([

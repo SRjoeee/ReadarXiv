@@ -14,7 +14,7 @@ interface NodeFs {
 }
 
 /** the files the reader serves of pdfjs-dist, by their place under `pdfjs/<version>/`, and where each is in pdfjs-dist */
-export function assetFiles(fs: NodeFs, root: string, legacy: boolean): [string, string][] {
+function assetFiles(fs: NodeFs, root: string, legacy: boolean): [string, string][] {
   const out: [string, string][] = []
   for (const dir of ['cmaps', 'standard_fonts', 'wasm']) {
     for (const f of fs.readdirSync(`${root}${dir}`, { recursive: true }).sort()) {

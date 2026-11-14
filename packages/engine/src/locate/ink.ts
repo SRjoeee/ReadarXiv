@@ -15,6 +15,7 @@ import type { Doc, DocGlyph, DocPoint } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { displayTextMask, type PageInk, regionMask } from '../ink.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
+import { keptAsWritten, paperNamesOf } from '../instrument/language.ts'
 import { runIns } from '../marks/run-ins.ts'
 import { type AuthorBlock, authorBlockOf } from './author-block.ts'
 import { copyRunsOf, type FigureText, figureLinesOf, type LinesWork, textOf as lineTextOf } from './figure-lines.ts'
@@ -204,6 +205,13 @@ export function inkOf(o: InkInput): {
       if ((ow.unit[x] as number) >= 0 && ap > 0) own.boxes[ap - 1]![m.boxIndex[p]![x] as number] = 'u'
     }
   })
+  // (a figure's text kept as written, as a table's cell is (R1: no ordinary word; R2: the paper's own names, read off its running
+  // text, the source's units: PDF-READER §18.72); its mark for the lab's dump)
+  const names = paperNamesOf(ins.units)
+  const keptMarks = (content: readonly Piece[]): { kept?: true; words?: true; paperNames?: true } => {
+    const k = keptAsWritten(content, names)
+    return k === 'words' ? { kept: true, words: true } : k === 'paperNames' ? { kept: true, paperNames: true } : {}
+  }
   const units: TodayUnit[] = ins.units.map((u) =>
     u.kind === 'name' ? null : { kind: u.kind, pieces: flatOf(u.content) },
   )
@@ -438,6 +446,8 @@ export function inkOf(o: InkInput): {
         fixed: true,
         // (why it is kept, for the lab's dump: a block of e-mail addresses alone, else a block of rule 10's)
         ...(u.address ? { address: true as const } : { block: true as const }),
+        // (a block of a display TeX set: its lines on A its rows by the display rule, geometry.ts)
+        ...(u.display ? { display: true as const } : {}),
       },
       text: [],
       ph: [],
@@ -488,7 +498,17 @@ export function inkOf(o: InkInput): {
     const t = textAt.get(k)
     if (t && (t.ks.length > 1 || t.els.length || t.label.length)) {
       made.push(
-        figureTextOf(t, laidAsParagraph(t) ? setOf(t.ks[0]!) : -1 - t.ks[0]!, fig, pages, inkA, m, o.pageA, global),
+        figureTextOf(
+          t,
+          laidAsParagraph(t) ? setOf(t.ks[0]!) : -1 - t.ks[0]!,
+          fig,
+          pages,
+          inkA,
+          m,
+          o.pageA,
+          global,
+          keptMarks,
+        ),
       )
       continue
     }
@@ -546,7 +566,8 @@ export function inkOf(o: InkInput): {
               ? { why: 'figure: code', fixed: true as const, pitch: true as const }
               : identifiersIn((f.text ?? '').normalize('NFKC')).length
                 ? { why: 'figure: identifier', fixed: true as const }
-                : {}),
+                : // (a text kept as written, as a table's cell is: R1, R2, PDF-READER §18.72)
+                  keptMarks(content)),
       },
       text,
       ph: [],
@@ -618,7 +639,8 @@ function roomOfText(t: FigureText): { under?: number; over?: number } {
 /**
  * A figure text its printed line makes (figure-lines.ts): its content in its line's order, its text pieces as figureRuns states a
  * figure text's (each run of another face a group), each element a piece of its own (`code`: a run of one pitch; `cite`, `ref`:
- * a stretch a decoration holds), a space between two where their glyphs stand SPACE_GAP of their size apart; each element drawn
+ * a stretch a decoration holds; `symbol`: a sign no run holds on a path's line), a space between two where their glyphs stand
+ * SPACE_GAP of their size apart; each element drawn
  * from its ink (its class `other`, a code one `literal`, its glyphs' text its copy), its glyphs and its boxes (a ground's, a
  * decoration's) its own. Laid by the paragraph path (it states no own text, locate): its room the line's, from its first run's
  * room before to its last run's after; in `set`, the set of the labels its lines stand among, whose size tie holds it with the
@@ -633,6 +655,7 @@ function figureTextOf(
   m: Mapping,
   pageA: Int32Array,
   global: (p: number, g: number) => number,
+  keptMarks: (content: readonly Piece[]) => { kept?: true; words?: true; paperNames?: true },
 ): Made {
   const p = t.page
   const G = inkA.pages[p - 1]!.glyphs
@@ -714,9 +737,16 @@ function figureTextOf(
   const x1 = Math.max(...all.map((g) => G[g]!.x1))
   const x0 = G[all[0]!]!.x0
   // (a paragraph, F3: laid in its lines as a body paragraph is, its room the facts pass's (its lines' sides, below it): none of
-  // a line's free line along its run; a line alone, as before)
+  // a line's free line along its run; a line alone, as before. One the container step made of a path's rows has the path's
+  // inside across as its room beside its lines (§18.36), stated as a line's free line is, from its rows' extent: the facts pass
+  // takes it as Room.side, never the column's)
+  const across = t.para && t.container?.side
+  const left = Math.min(...all.map((g) => G[g]!.x0))
   const room = t.para
-    ? { ...roomOfText(t) }
+    ? {
+        ...roomOfText(t),
+        ...(across ? { x: left, length: x1 - left, before: left - across[0], after: across[1] - x1 } : {}),
+      }
     : {
         x: x0,
         ...(Number.isFinite(f0.y) ? { y: f0.y } : {}),
@@ -735,14 +765,13 @@ function figureTextOf(
       ...(classes.length ? { classes } : {}),
       ...(classes.length
         ? {
-            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration'] => [
-              id,
-              (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'code'
-                ? 'pitch'
-                : (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind === 'math'
-                  ? 'formula'
-                  : 'decoration',
-            ]),
+            keptEls: classes.map(([id]): [string, 'pitch' | 'formula' | 'decoration' | 'symbol'] => {
+              const kind = (content.find((q) => q.t === 'el' && q.id === id) as { kind?: string })?.kind
+              return [
+                id,
+                kind === 'code' ? 'pitch' : kind === 'math' ? 'formula' : kind === 'symbol' ? 'symbol' : 'decoration',
+              ]
+            }),
           }
         : {}),
       figure: { set, ...(t.para ? { para: t.para.by } : {}), ...room },
@@ -762,7 +791,8 @@ function figureTextOf(
             ...(t.why === 'script' ? { script: true as const } : {}),
             ...(t.why === 'decoration' ? { decorated: t.withLabel ? ('label' as const) : ('token' as const) } : {}),
           }
-        : {}),
+        : // (a text kept as written, as a table's cell is: R1, R2, PDF-READER §18.72)
+          keptMarks(content)),
     },
     text: [...textGs, ...t.copies].map(glob).sort((a, b) => a - b),
     ...(t.label.length ? { label: t.label.map(glob).sort((a, b) => a - b) } : {}),
@@ -1191,7 +1221,7 @@ export function unicodeOf(s: unknown): string {
   return UTF8.decode(b)
 }
 /** a unit's content as today's flat pieces (the makers read a source unit so): an element with the kind the instrument states */
-export function flatOf(content: readonly Piece[], out: TodayPiece[] = []): TodayPiece[] {
+function flatOf(content: readonly Piece[], out: TodayPiece[] = []): TodayPiece[] {
   for (const p of content) {
     if (p.t === 'text') out.push({ t: 'text', s: latin1View(p.s) })
     else if (p.t === 'el') out.push({ t: 'ph', src: latin1View(p.src ?? ''), kind: p.kind })

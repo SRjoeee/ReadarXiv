@@ -3,7 +3,6 @@
 import { type Piece, read, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
-import { pageGlyphsOf } from '../src/glyph.ts'
 import { bundle } from '../src/bundle/bundle.ts'
 import type { Doc, DocTurned } from '../src/doc.ts'
 import type { PageInk } from '../src/ink.ts'
@@ -11,7 +10,7 @@ import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/ins
 import { carry, spansOf } from '../src/locate/ink.ts'
 import { locate } from './helpers/locate.ts'
 import type { AddOn } from '../src/wrap/wrap.ts'
-import { docOf, type PageSpec } from './helpers/doc.ts'
+import { docOf, type PageSpec, pageGlyphsOf } from './helpers/doc.ts'
 
 const text = (s: string) => ({ t: 'text' as const, s })
 const unitOf = (kind: string, s: string): InstrumentUnit => {
@@ -271,6 +270,52 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
       ['1', 'alan.chan@example.org', grey, 1],
       ['3', 'bo.writer@example.ac', grey, 1],
     ])
+  })
+
+  it('states a kept display’s lines by the display rule, a unit’s display’s: its number never cut between two lines', () => {
+    // (2111.09276v1 p5, display (4): no unit's ink (its paragraph opens with it), two rows and its number set at the right between
+    // them, after the second row in TeX's stream. The text line rule kept the number's "(", its ink 13.7 pt over the second row's
+    // baseline, on that row's line as a script, its "4)" a line of its own; the highlight then lit the first row and a strip to
+    // the number (PDF-READER §17.9). TeX states the display (its region) and the number after its end: the block's rows are its
+    // ink's bands joined where its glyphs interleave in the stream (rows.ts), as a unit's display's are. Letters of our own)
+    const row1 = { text: 'abcd efg', x: 100, y: 540 }
+    const lims = { text: 'xy', x: 140, y: 528, size: 7 }
+    const row2 = { text: 'hijklmn opqrstu vwxyz abcdef', x: 100, y: 514 }
+    const num = { text: '(4)', x: 274, y: 529.5 }
+    const lines = ['Body text here', row1, lims, row2, num, 'More body text after it']
+    const n = [14, 8, 2, 28, 3]
+    const start = n[0]!,
+      end = n.reduce((a, b) => a + b, 0) - 3
+    const B = docOf([
+      {
+        lines,
+        points: [
+          ['bs1', 0],
+          ['be1', end + 3 + 23],
+        ],
+      } as PageSpec,
+    ])
+    const A = docOf([{ lines } as PageSpec])
+    // (the number's ink as its font sets it: its brackets descend under its baseline, its digit stands on it; so "(" is 13.74 pt
+    // over the second row's baseline, under the text line rule's 1.5 sizes, and "4" 15.45, over them)
+    const at = n.slice(0, 4).reduce((a, b) => a + b, 0)
+    for (const [k, bottom] of [
+      [at, 527.74],
+      [at + 1, 529.45],
+      [at + 2, 527.74],
+    ] as const)
+      A.pages[0]!.glyphs[k]!.bottom = bottom
+    B.pages[0]!.marks = { paras: [], paraEnds: [], regions: [{ kind: 'display', from: start, to: end }], pictures: [] }
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here More body text after it')], [[0, -1, -1, -1, -1, 0]])
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+    const kept = L.members.filter((m) => m.unit >= 0 && L.units[m.unit]!.kept)
+    expect(kept).toHaveLength(1)
+    const lns = kept[0]!.lines.filter((l) => l[0] === 1)
+    // (the number's glyphs, x 274 to 292 on our letters' advance: on one line, never two. The text line rule gave the second
+    // row's line to x 280, its "(", and "4)" a line from 280)
+    const holding = lns.filter((l) => l[2] < 292 && l[3] > 274)
+    expect(holding).toHaveLength(1)
+    expect(holding[0]![2] <= 274 && holding[0]![3] >= 292).toBe(true)
   })
 
   it('states why each kept block is kept: one of e-mail addresses alone `address`, any other `block` (rule 10; the lab’s dump reads it)', () => {

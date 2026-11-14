@@ -1269,9 +1269,10 @@ describe('S.figures over the part: a figure text drawn in its translation where 
       [' site.io', 0x315f9c],
     ])
   })
-  it('shrinks a set to one size where one of it needs it, and leaves the original’s what says nothing else', () => {
+  it('steps the one of a set whose width needs it, its mate at its size, and leaves the original’s what says nothing else', () => {
     // (two labels of one set: the second's translation, 16 characters at 8 (64 wide), centred in a free line of 50 (its box of 30
-    // and 10 either side), needs 0.78 of its size, over the last floor)
+    // and 10 either side), needs 0.78 of its size, over the last floor; the first's fits at its size, and keeps it: each figure
+    // text at its own size, the owner's ruling of 2026-11-13 on a figure's sets)
     const a = label()
     const b = label({
       ord: 1,
@@ -1283,8 +1284,8 @@ describe('S.figures over the part: a figure text drawn in its translation where 
     const pt: Part = { ...part(a), flows: [[a], [b]], ties: [{ rule: 'size', ords: [0, 1] }] }
     const p = layPage(pt, rowsOf([rowF('Verlust'), rowF('Genauigkeitswert', idG)]), rules, metrics())
     const sizes = p.members.map((m) => (m.lines[0]?.[3][0] as { size?: number } | undefined)?.size)
-    expect(sizes[0]).toBeCloseTo(sizes[1]!, 9)
-    expect(sizes[0]!).toBeLessThan(8)
+    expect(sizes[0]).toBe(8)
+    expect(sizes[1]!).toBeCloseTo((50 / 64) * 8, 9)
     // (its translation the same as its source: the original's)
     expect(layPage(part(label()), rowsOf([rowF('LOSS')]), rules, metrics()).members[0]!.state).toBe('none')
     // (a unit the paper keeps as it is, a row of it given: the original's, stated `kept` as the entry's members (Unit.kept))

@@ -127,7 +127,10 @@ export function lineGeometry(w: Work, owned: Owned): void {
     const inline: number[] = [...mem.text]
     for (const [id, l] of mem.els) if (!rowsKept(id) && !outside.has(id)) inline.push(...l)
     inline.sort((x, y) => x - y)
-    const cut = cutLines(inline, atA)
+    // (a kept block of a display TeX set: its rows by the display rule, as a unit's display's (rows.ts), its rules with them: the
+    // text line rule cut display (4) of 2111.09276v1 p5 after its number's "(", 13.7 pt over its second row's baseline, which
+    // stayed on that row's line as a script, its "4)" a line of its own: §17.9)
+    const cut = unit?.display ? rowsOf(inline, atA, boxesOf_(mem.textBoxes)) : cutLines(inline, atA)
     // (the lines whose ink stays, KEPT, in their place in the stream: a display's rows; and a held line, the glyphs inside its
     // span on A that B printed and no unit owns: the lines its source does not write (B17; today's heldOf MAKE:1855 read them
     // by the source's words, under a 0.2 share: ownership says it))
@@ -183,8 +186,14 @@ export function lineGeometry(w: Work, owned: Owned): void {
       }
       kept.push(...cutLines(held, atA))
     }
-    const all = [...cut.map((l) => ({ l, kept: false })), ...kept.map((l) => ({ l, kept: true }))].sort(
-      (x, y) => (x.l.gs[0] as number) - (y.l.gs[0] as number),
+    // (its lines in the order the stream sets them; a figure's text the container step made of a path's rows, top to bottom, as
+    // its rows were joined and as it is read (§18.36: its first line its top row's, from which it is laid), whatever order its
+    // runs stand in the stream: 2610.19274v1 p17's white "CTJA / module", its lower row shown first)
+    const rows = unit?.figure?.para === 'container'
+    const all = [...cut.map((l) => ({ l, kept: false })), ...kept.map((l) => ({ l, kept: true }))].sort((x, y) =>
+      rows
+        ? x.l.page - y.l.page || y.l.base - x.l.base || (x.l.gs[0] as number) - (y.l.gs[0] as number)
+        : (x.l.gs[0] as number) - (y.l.gs[0] as number),
     )
     mem.lines = all.map(
       ({ l, kept: k }) =>

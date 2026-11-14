@@ -4,8 +4,9 @@
 // both panes, lit only where the pointer is over it, never with its member: today's units.mjs displayBlockId, the owner's report
 // of 2026-11-09). What is painted is what is hit: a point lights the sentence whose box holds it, on the pane it is over, read
 // from the same boxes the bands are drawn from, the smaller unit winning where two overlap; a miss keeps what is lit 120 ms (the
-// HTML page's grace). A shape's rows are one outline where they meet across, never across another block standing between two of
-// them (a display, another member's line: today's runs, cut there, highlight.mjs interrupted), which the outline would fill. A
+// HTML page's grace). A shape paints the union of its boxes and never part of one (paintRows: boxes on one band are never met);
+// its rows are one outline where they meet across, never across another block standing between two of them (a display, another
+// member's line: today's runs, cut there, highlight.mjs interrupted), which the outline would fill. A
 // page that is not laid lights from A on both panes (the right mirrors the left). The pointer lights, nothing else does: a click
 // holds nothing.
 //
@@ -118,6 +119,114 @@ export function columnOf(
     }
   return x0 < x1 ? [x0, x1] : null
 }
+/** what cuts a shape's rows into outlines: the page's boxes lit on the pane and the column its member spans there */
+export type Cut = { others: readonly Box[]; column: readonly [number, number] }
+/** a row a shape paints (PDF units, y up): `box` its extent across and its band, padded by half the leading above and below and
+ *  met with the row next to it at the middle of their pads' overlap; `own` the extent of the shape's boxes it paints; `apart`
+ *  where it begins an outline of its own */
+export type PaintRow = { box: Box; own: Box; apart: boolean }
+
+/** whether two of a shape's boxes stand on one band: their own extents overlap up and down */
+export const sharesBand = (boxes: readonly Box[]): boolean =>
+  boxes.some((a, i) => boxes.some((b, j) => j > i && Math.min(a[3], b[3]) > Math.max(a[1], b[1])))
+
+/**
+ * The rows a shape paints (PDF units, y up): the union of its boxes, never part of one. Two rows one over the other meet at the
+ * middle of their pads' overlap, so that they touch, and one outline joins them where they meet across, the room between them
+ * painted, unless another block stands between them (apartRows, with `cut`). Boxes on one band (their own extents overlapping up
+ * and down) are never met: the union is cut into bands at every box's head and foot, each band's boxes one row where they meet
+ * across (a row and the number TeX set beside it; two lines whose fonts' boxes overlap) and a row each where they stand apart
+ * (a sentence's runs either side of another sentence's element, a line in the next column); a row joins the outline whose last
+ * row stands on the band right above it and meets it across, else it begins its own. Before, every two rows next to each other
+ * in their order from the top were met where their pads overlapped, as if one stood over the other: two boxes of one band were
+ * cut at the middle of their overlap, the lower one's top and the upper one's foot lost (the owner's report of 2026-11-13 on
+ * 2111.09276v1 p5: display (4), its second row's line holding its number's "(", lit as a band over its first row and a strip to
+ * the number, its second row on neither pane; over the corpus's laid pages 27 kept displays a pane, 7 and 2 sentences, 11 and 4
+ * members lit whole cut so). A shape of no two boxes on one band paints as before, row for row
+ */
+export function paintRows(boxes: readonly Box[], lead: number, cut?: Cut): PaintRow[] {
+  if (!sharesBand(boxes)) {
+    const sorted = [...boxes].sort((p, q) => q[3] - p[3])
+    const apart = cut ? apartRows(sorted, cut.others, cut.column) : sorted.map(() => false)
+    const rows = sorted.map(
+      (b, i): PaintRow => ({ box: [b[0], b[1] - lead, b[2], b[3] + lead], own: b, apart: !!apart[i] }),
+    )
+    for (let i = 1; i < rows.length; i++) {
+      const p = (rows[i - 1] as PaintRow).box,
+        q = (rows[i] as PaintRow).box
+      if (q[3] > p[1]) {
+        const mid = (q[3] + p[1]) / 2
+        p[1] = mid
+        q[3] = mid
+      }
+    }
+    return rows
+  }
+  // (the bands: the union cut at every box's head and foot, each band's boxes joined across where they meet or touch)
+  const ys = [...new Set(boxes.flatMap((b) => [b[1], b[3]]))].sort((a, b) => b - a)
+  const pieces: { own: Box; band: number }[] = []
+  let band = 0
+  for (let k = 1; k < ys.length; k++) {
+    const hi = ys[k - 1] as number,
+      lo = ys[k] as number
+    const across = boxes
+      .filter((b) => b[1] <= lo && b[3] >= hi)
+      .map((b) => [b[0], b[2]] as [number, number])
+      .sort((a, b) => a[0] - b[0])
+    if (!across.length) continue
+    const runs: [number, number][] = []
+    for (const [a, b] of across) {
+      const last = runs.at(-1)
+      if (last && a <= last[1]) last[1] = Math.max(last[1], b)
+      else runs.push([a, b])
+    }
+    for (const [a, b] of runs) pieces.push({ own: [a, lo, b, hi], band })
+    band++
+  }
+  // (each padded by half the leading; two of two bands met at the middle of their own gap where their pads overlap, never into
+  // either: next to each other from the top, and next to each other in an outline)
+  const head = pieces.map((p) => p.own[3] + lead),
+    foot = pieces.map((p) => p.own[1] - lead)
+  const meet = (u: number, l: number) => {
+    const a = pieces[u] as (typeof pieces)[number],
+      b = pieces[l] as (typeof pieces)[number]
+    if (a.band === b.band || b.own[3] + lead <= a.own[1] - lead) return
+    const mid = (b.own[3] + a.own[1]) / 2
+    foot[u] = Math.max(foot[u] as number, mid)
+    head[l] = Math.min(head[l] as number, mid)
+  }
+  for (let i = 1; i < pieces.length; i++) meet(i - 1, i)
+  for (const [u, a] of pieces.entries())
+    for (const [l, b] of pieces.entries())
+      if (b.band === a.band + 1 && Math.min(a.own[2], b.own[2]) > Math.max(a.own[0], b.own[0])) meet(u, l)
+  const chains: number[][] = []
+  pieces.forEach((p, i) => {
+    const c = chains.findLast((ch) => {
+      const l = pieces[ch.at(-1) as number] as (typeof pieces)[number]
+      return l.band === p.band - 1 && Math.min(l.own[2], p.own[2]) > Math.max(l.own[0], p.own[0])
+    })
+    if (c) c.push(i)
+    else chains.push([i])
+  })
+  const mine = new Set(boxes)
+  const others = cut?.others.filter((o) => !mine.has(o)) ?? []
+  const out: PaintRow[] = []
+  chains.forEach((ch, k) => {
+    const apart = cut
+      ? apartRows(
+          ch.map((i) => (pieces[i] as (typeof pieces)[number]).own),
+          others,
+          cut.column,
+        )
+      : []
+    ch.forEach((i, j) => {
+      const own = (pieces[i] as (typeof pieces)[number]).own
+      out.push({ box: [own[0], foot[i] as number, own[2], head[i] as number], own, apart: (!j && k > 0) || !!apart[j] })
+    })
+  })
+  return out
+}
+
 const areaOf = (bs: readonly Box[][]) =>
   bs.flat().reduce((a, b) => a + Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]), 0)
 /** the direction a member's boxes are set along (a turned figure text's: Laid.lit's `dir`, its boxes in its run's frame) */
@@ -172,17 +281,31 @@ export function shapePath(
   rects: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[],
   radius: number,
 ): string {
-  let d = ''
+  return shapeOutlines(rects, radius)
+    .map((corners) => rounded(corners, radius))
+    .join('')
+}
+/** the outlines shapePath draws of a shape's rows, each its corners in order, before they are rounded: what it paints (the lab's
+ *  reader gate holds every lit box inside them, its I11; lab/typeset/painted.mjs) */
+export function shapeOutlines(
+  rects: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[],
+  radius: number,
+): [number, number][][] {
+  const out: [number, number][][] = []
   for (let a = 0, b = 1; b <= rects.length; b++) {
     const p = rects[b - 1],
       q = rects[b]
     if (p && q && !q.apart && Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0) > 2 * radius) continue
-    d += outline(rects, a, b, radius)
+    out.push(cornersOf(rects, a, b))
     a = b
   }
-  return d
+  return out
 }
-function outline(rects: { x0: number; x1: number; y0: number; y1: number }[], a: number, b: number, radius: number) {
+function cornersOf(
+  rects: { x0: number; x1: number; y0: number; y1: number }[],
+  a: number,
+  b: number,
+): [number, number][] {
   const cx: number[] = [],
     cy: number[] = []
   const push = (x: number, y: number) => {
@@ -211,29 +334,31 @@ function outline(rects: { x0: number; x1: number; y0: number; y1: number }[], a:
   )
     n--
   // (the corners that turn: a point on the line through its neighbours is none)
-  const keep: number[] = []
+  const keep: [number, number][] = []
   for (let i = 0; i < n; i++) {
     const p = (i - 1 + n) % n,
       q = (i + 1) % n
     const X = (k: number) => cx[k] as number,
       Y = (k: number) => cy[k] as number
-    if (Math.abs((X(i) - X(p)) * (Y(q) - Y(i)) - (Y(i) - Y(p)) * (X(q) - X(i))) > 0.001) keep.push(i)
+    if (Math.abs((X(i) - X(p)) * (Y(q) - Y(i)) - (Y(i) - Y(p)) * (X(q) - X(i))) > 0.001) keep.push([X(i), Y(i)])
   }
+  return keep
+}
+/** an outline's corners as an SVG path, every corner rounded to `radius` (or half its shorter side) */
+function rounded(keep: readonly [number, number][], radius: number): string {
   const f = (v: number) => Math.round(v * 100) / 100
   let d = ''
-  keep.forEach((i, k) => {
-    const A = keep[(k - 1 + keep.length) % keep.length] as number,
-      B = keep[(k + 1) % keep.length] as number
-    const X = (j: number) => cx[j] as number,
-      Y = (j: number) => cy[j] as number
-    const ax = X(A) - X(i),
-      ay = Y(A) - Y(i),
-      bx = X(B) - X(i),
-      by = Y(B) - Y(i)
+  keep.forEach(([x, y], k) => {
+    const [Ax, Ay] = keep[(k - 1 + keep.length) % keep.length] as [number, number],
+      [Bx, By] = keep[(k + 1) % keep.length] as [number, number]
+    const ax = Ax - x,
+      ay = Ay - y,
+      bx = Bx - x,
+      by = By - y
     const la = Math.hypot(ax, ay),
       lb = Math.hypot(bx, by),
       rr = Math.min(radius, la / 2, lb / 2)
-    d += `${k ? 'L' : 'M'}${f(X(i) + (ax * rr) / la)} ${f(Y(i) + (ay * rr) / la)}Q${f(X(i))} ${f(Y(i))} ${f(X(i) + (bx * rr) / lb)} ${f(Y(i) + (by * rr) / lb)}`
+    d += `${k ? 'L' : 'M'}${f(x + (ax * rr) / la)} ${f(y + (ay * rr) / la)}Q${f(x)} ${f(y)} ${f(x + (bx * rr) / lb)} ${f(y + (by * rr) / lb)}`
   })
   return `${d}Z`
 }
@@ -281,40 +406,48 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     for (let n = 1; n <= panes.right.pages; n++) if (composer.page(n)?.members.some((m) => m.ord === ord)) out.push(n)
     return out
   }
-  /** the rows of a shape in the page's CSS px at its scale now, in its own frame (a turned page's layer is turned with it):
-   *  padded beside and by half the leading above and below; with `cut` (the page's boxes on the pane and the column of the
-   *  shape's member), each row apart from the one above it where another block stands between them in that column (apartRows:
-   *  an outline of its own) */
-  function rowsOf(
-    side: Side,
-    n: number,
-    boxes: Box[],
-    lead: number,
-    cut?: { others: readonly Box[]; column: readonly [number, number] },
-    pad = PAD,
-  ) {
+  /** the rows of a shape (paintRows: the union of its boxes, never part of one) in the page's CSS px at its scale now, in its own
+   *  frame (a turned page's layer is turned with it), padded beside; with `cut` (the page's boxes on the pane and the column of
+   *  the shape's member), each row apart from the one above it where another block stands between them in that column
+   *  (apartRows: an outline of its own) */
+  function rowsOf(side: Side, n: number, boxes: Box[], lead: number, cut?: Cut, pad = PAD) {
     const out: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[] = []
-    const sorted = [...boxes].sort((p, q) => q[3] - p[3])
-    const kept: Box[] = []
-    for (const b of sorted) {
-      const r = panes.boxOf(side, n, [b[0], b[1] - lead, b[2], b[3] + lead], { upright: true })
-      if (!r) continue
-      kept.push(b)
-      out.push({ x0: r.left - pad, x1: r.left + r.width + pad, y0: r.top, y1: r.top + r.height })
-    }
-    if (cut)
-      apartRows(kept, cut.others, cut.column).forEach((a, i) => {
-        if (a) (out[i] as (typeof out)[number]).apart = true
-      })
-    // (rows that overlap made to meet: one outline)
-    for (let i = 1; i < out.length; i++) {
-      const p = out[i - 1] as (typeof out)[number],
-        q = out[i] as (typeof out)[number]
-      if (q.y0 < p.y1) {
-        const mid = (q.y0 + p.y1) / 2
-        p.y1 = mid
-        q.y0 = mid
+    if (!sharesBand(boxes)) {
+      // (no two boxes on one band: the rows met in the page's CSS px, as they always were, paintRows' rule for them stated in PDF
+      // units for the lab's readers of the paint)
+      const sorted = [...boxes].sort((p, q) => q[3] - p[3])
+      const kept: Box[] = []
+      for (const b of sorted) {
+        const r = panes.boxOf(side, n, [b[0], b[1] - lead, b[2], b[3] + lead], { upright: true })
+        if (!r) continue
+        kept.push(b)
+        out.push({ x0: r.left - pad, x1: r.left + r.width + pad, y0: r.top, y1: r.top + r.height })
       }
+      if (cut)
+        apartRows(kept, cut.others, cut.column).forEach((a, i) => {
+          if (a) (out[i] as (typeof out)[number]).apart = true
+        })
+      for (let i = 1; i < out.length; i++) {
+        const p = out[i - 1] as (typeof out)[number],
+          q = out[i] as (typeof out)[number]
+        if (q.y0 < p.y1) {
+          const mid = (q.y0 + p.y1) / 2
+          p.y1 = mid
+          q.y0 = mid
+        }
+      }
+      return out
+    }
+    for (const row of paintRows(boxes, lead, cut)) {
+      const r = panes.boxOf(side, n, row.box, { upright: true })
+      if (!r) continue
+      out.push({
+        x0: r.left - pad,
+        x1: r.left + r.width + pad,
+        y0: r.top,
+        y1: r.top + r.height,
+        ...(row.apart ? { apart: true } : {}),
+      })
     }
     return out
   }

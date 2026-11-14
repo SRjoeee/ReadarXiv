@@ -9,7 +9,7 @@ is taken as about twice as slow on the CPU-bound steps.
 | Tier | When | Runner | Command | Minutes a run | Secret |
 |---|---|---|---|---|---|
 | fast | every pull request and every push to `next`, `main`, `rebuild/v2` | GitHub-hosted `ubuntu-latest` | three jobs (below) | 14 wall clock, about 28 of runner time | the fixtures' read token (exists) |
-| full | every merge into `rebuild/v2` (later `next`), newest first | self-hosted, the maintainer's machine, with the lab data | `pnpm release-check --tier full --work=<external disk>` | 26 (measured), 16 for `display` and about 9 for `perf-batch`, one runner | none |
+| full | every merge into `rebuild/v2` (later `next`), newest first | self-hosted, the maintainer's machine, with the lab data | `pnpm release-check --tier full --work=<external disk>` | 26 (measured), 16 for `display` and about 9 for `perf-batch`, one runner; 110 at `6b91f86ff` (2026-11-13, a shared machine, `perf-batch` skipped), `display` 51 of them in both modes | none |
 | release | before a release, by hand (`workflow_dispatch`) | self-hosted, the same machine | `pnpm release-check --tier release --online --work=<external disk>` | about 80, and 100 to 130 for `perf-release` | none here; the private repository's own |
 
 ## fast: every pull request (hosted)
@@ -47,7 +47,7 @@ is the maintainer's machine's alone; where it is absent the gates run directly. 
 | `e2e:framing` (22) | 65 s | about 2 min |
 | `e2e:a11y` (15) | 44 s | about 1.5 min |
 | `e2e:viewer` (20) | 6 s | under 1 min |
-| `e2e:registration` (84 at `13216ac44`, today's reader's; on the default build `tests/e2e/registration-v2.mjs`, the rebuilt reader's; today's in the full tier, `e2e:registration-today`) | 55 s | about 2 min |
+| `e2e:registration` (84 at `13216ac44`, today's reader's; on the default build `tests/e2e/registration-v2.mjs`, the rebuilt reader's, 74 at `6b91f86ff`; today's in the full tier, `e2e:registration-today`) | 55 s | about 2 min |
 | the three jobs | 11 min in all, serial | `check` 5–8 min (measured), `reader` about 7 min, `extension` about 14 min with install and browsers: 14 min a pull request's wall clock, about 28 min of runner time |
 
 **Not green at `13216ac44`: `e2e:small-caps`.** Its page loads today's layer modules from the tree as they are, in the
@@ -92,7 +92,9 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
   reader is built in (`PERF_WEB`, a website worktree: its HEAD with this commit as `vendor/readarxiv`) and the round's box
   image (`PERF_NEW_IMAGE`). Docker for `perf-batch` alone (a compile no cache holds is a failed paper: exit 3).
 - **Minutes**: 26 of the gates' own on this machine at `13216ac44` (below; the heavy slot's waits for other lanes' jobs left
-  out), and 16 for `display` (measured at `a7a6e4097`); no hosted minute.
+  out), and 16 for `display` (measured at `a7a6e4097`); no hosted minute. At `6b91f86ff` (2026-11-13, the machine shared with a
+  round's gates, loads 4 to 146): 110 in all, of them `display` 51 (both modes, the added pairs apart), `reader-parts` 11,
+  `prepare-same` 10, `harness-lab` 9, `prepare` 8, `sentence-cover` 6, `pnpm test` 2.5, `e2e:reader-today` 3.
 - **Secret**: none. The job reads no network.
 
 | Gate | Here |
@@ -108,10 +110,10 @@ The translation equivalence counts a difference of a class the package's owners 
 class they name (the `#` of its own, 3 replies) and the gate passes.
 | `typeset-today` (today's members, the reader's differential) | 39 s: pass, 32,035 laid as the baseline, changed 12; I3 160, I4 0, I5 0 |
 | `sentence-cover` (this run's parts laid by the entry over the stored rows, the reading from the part: invariant I10; and I6 across the pages' lays, each unit begun on a pass page laid alike by every page's lay that holds it, the head pass's known cause counted apart) | 229 s: pass at `2d33bf467` over round 8 B5's parts, I10 0 in 4,767,634 pieces of 63,614 member-pages (123 pairs); `gate-l1.mjs --entry` under today's reading lays no entry and is refused |
-| `typeset-data` (generated data, today's readings derived again, the lab's tests) | 7 s: pass |
-| `reader-parts` (this run's parts laid by the entry over each rows store, the door's and Google's, the 90 pairs of the stored rows and the added pairs apart, as the round's reader gate: I3 read by ink, I4, I5; the page's layout, design §7) | about 12 min (two runs of about 5.5 min and the rows in 10 s, round RB1's fix round): see the lane note for the run at the head |
-| `harness-lab` (the harness with five corpus papers, laid from this run's bundles with this run's rows of them, `reader-parts`' Google rows; after `prepare` and `reader-parts`) | 559 s: pass over `46dd8fcdf` on round RB2b's bundles and Google rows, 130 of 130; given another run's rows (RB2a's), it stops in 3 s, "rows do not belong to these bundles: 54 of 358 units without a row" and the others'; given rows that lack a paper's file, it stops in 1 s, "no rows of this run for 2609.26457v1: expected …" (no paper laid from lane L1's data in their place, 2026-11-14) |
-| `build-today`, `e2e:reader-today`, `e2e:registration-today` (today's reader, the way back until the cut-over: a build of its own from this commit, `AXT_READER=today`, apart from the checkout; its own checks on it, refused where the build carries the rebuilt reader) | about 1 min of build and 4 min of browser checks: 159 of 159 at round RB1's head |
+| `typeset-data` (today's readings derived again, the lab's tests; the run here also checked the package's data against the generators the package's data files have since replaced) | 7 s: pass |
+| `reader-parts` (this run's parts laid by the entry over each rows store, the door's and Google's, the 90 pairs of the stored rows and the added pairs apart, as the round's reader gate: I3 read by ink, I4, I5; the page's layout, design §7) | 641 s: pass at `6b91f86ff`, the 90 pairs' lines identical to round RB1's on both stores (door: 24,056 laid alike, 244 not; I3 3, I4 0, I5 2; I10 0 in 3,145,597 pieces; Google: I3 3, I4 0, I5 2), at its record (`reader-parts.json`); the rows 32,833 units, Google 32,247, Microsoft 569, none unavailable |
+| `harness-lab` (the harness with five corpus papers, laid from this run's bundles with this run's rows of them, `reader-parts`' Google rows; after `prepare` and `reader-parts`) | 340 s: fail at `13216ac44`, 75 of 79 (on lane L1's bundles then); 118 of 118 at `cb10a1f7d`; 523 s: fail at `6b91f86ff`, 121 of 122, the overlay's weight check on 2609.26457v1 (its page-1 overlay measured one text, the title in its own colour, at no ink), the same on lane L1's bundles: not the bundles'; 559 s: pass over `46dd8fcdf` on round RB2b's bundles and Google rows, 130 of 130; given another run's rows (RB2a's), it stops in 3 s, "rows do not belong to these bundles: 54 of 358 units without a row" and the others'; given rows that lack a paper's file, it stops in 1 s, "no rows of this run for 2609.26457v1: expected …" (no paper laid from lane L1's data in their place, 2026-11-14) |
+| `build-today`, `e2e:reader-today`, `e2e:registration-today` (today's reader, the way back until the cut-over: a build of its own from this commit, `AXT_READER=today`, apart from the checkout; its own checks on it, refused where the build carries the rebuilt reader) | 6 s, 169 s, 54 s: pass at `6b91f86ff`, 159 of 159 and 84 of 84 |
 | `display` (display ≥ today: no page worse than today's, a difference only where nearer the original; under the default options and with every switch on, as the round judges it; today's rows checked production's first, `lab/typeset/parity/production-rows.mjs`; **a cut-over blocker**) | 16 min (v2's lay 15 s, the drawing 954 s for 344 pages with the machine shared, the verdict 10 s): fail at `a7a6e4097`, 326 of 344 pages worse than today's: the links (246 pages) and the highlight's sentence boxes (324) the entry does not state yet, and on 115 pages another measure (turned figure texts drawn upright 18 pages, lines across a rule or over a neighbour 16, sizes 36, anchoring 15, run-in gaps 11, translations missing 7 and figure texts 20) |
 
 **Retired (2026-11-13, design 3i).** `typeset-parts`: its runner, under today's reading, lays only units whose id is

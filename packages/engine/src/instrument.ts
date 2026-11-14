@@ -33,9 +33,9 @@ export interface InstrumentUnit {
    *  the lab's dump and parity tell the units this rule keeps by it; the bundle does not carry it */
   pitch?: true
   /** a figure text's elements kept as the original's ink (figure-lines.ts, PDF-READER §18.26): a run of one pitch (`pitch`, F0),
-   *  a formula (`formula`, F1) or a stretch its decoration holds (`decoration`), by piece id: the lab's dump and parity tell them
-   *  by it; the bundle does not carry it */
-  keptEls?: [string, 'pitch' | 'formula' | 'decoration'][]
+   *  a formula (`formula`, F1), a stretch its decoration holds (`decoration`) or a sign no run holds on a path's line (`symbol`,
+   *  §18.36), by piece id: the lab's dump and parity tell them by it; the bundle does not carry it */
+  keptEls?: [string, 'pitch' | 'formula' | 'decoration' | 'symbol'][]
   /** a figure's line no word of which stands outside its formulas, kept whole (F1, figure-lines.ts): the lab's dump and parity tell
    *  it by it; the bundle does not carry it */
   formula?: true
@@ -58,9 +58,22 @@ export interface InstrumentUnit {
   /** a kept block of any other text no unit owns (today/ink-units.mjs keptUnitsOf, rule 10: a code listing, a URL alone, a page
    *  number, a bibliography not cut into entries): the lab's dump tells it by it; the bundle does not carry it */
   block?: true
+  /** a kept block of a display TeX set (today/ink-units.mjs keptUnitsOf: its lines a display's region holds, its number with them,
+   *  PDF-READER §18.58): its lines on A are its rows by the display rule (locate/rows.ts), as a unit's display's are, never the
+   *  text line rule's, which cut display (4) of 2111.09276v1 p5 after its number's "(" (§17.9); the bundle does not carry it */
+  display?: true
   /** a line of an algorithm float's body, kept as the original as code is (the front end's `pseudocode`, pipeline/instrument.mjs
    *  unitFactsOf; the owner's ruling of 2026-11-08): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
   pseudocode?: true
+  /** a table's cell or a figure's text that holds no ordinary word, kept as written (R1, PDF-READER §18.72: language.ts): the lab's
+   *  dump tells it by it; the bundle does not carry it (`kept` alone) */
+  words?: true
+  /** a table's cell or a figure's text whose words are the paper's own names, kept as written (R2, PDF-READER §18.72:
+   *  language.ts paperNamesOf): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
+  paperNames?: true
+  /** a table's cell whose text a names block of the paper's tables keeps (R4, PDF-READER §18.72: language.ts namesOfBlocks),
+   *  wherever the paper's tables print it: the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
+  namesBlock?: true
   /** a figure text the figure reading keeps whole as crowded (a formula it would tear, a translation with no room beside other
    *  ink: figure-lines.ts, today/figure-text.mjs) and for no reason of its own besides (`double`, `script`): the lab's dump tells
    *  it by it; the bundle does not carry it (`unwrapped`, as a wrap failure is) */
@@ -71,8 +84,11 @@ export interface InstrumentUnit {
   passed?: number[]
   /** an ink unit drawn with another unit's row: that unit's index */
   echo?: number
-  /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's */
-  cell?: { table: number; row: number; col: number; span?: number; rows?: number; head?: true }
+  /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's; `boxed` the class
+   *  its column's template set its text by in the template's own box (marks/channels.ts readCellBoxes: c, l or r), none where
+   *  its text is a paragraph of its own (a p, m, b or X column, a \parbox) or no template of LaTeX's set it: what its column's
+   *  box is read by (locate/columns.ts, Room.column); the bundle does not carry it */
+  cell?: { table: number; row: number; col: number; span?: number; rows?: number; head?: true; boxed?: 'c' | 'l' | 'r' }
   /** a caption's float type, LaTeX's \@captype where its \caption runs (its float environment's, \captionof's): the part's
    *  Label.float */
   float?: string

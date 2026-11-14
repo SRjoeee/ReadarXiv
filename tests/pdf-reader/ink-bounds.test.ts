@@ -454,6 +454,14 @@ describe("pageInk's walk reads every list as it did before it read PDF.js's valu
     unbounded.argsArray.push([O.fill, [F32([0, 1, 1, 1, 5, 5])], F32([1, 1, 5, 5])])
     expect(inkDifference(unbounded, objs, [1000])).toBeNull()
   })
+
+  it('a clip of five points whose fifth is not its first, the four before it a rectangle\'s corners in turn, then a fill under it', () => {
+    const fifth: List = {
+      fnArray: [O.paintFormXObjectBegin!, O.save!, O.clip!, O.constructPath!, O.constructPath!, O.restore!, O.paintFormXObjectEnd!],
+      argsArray: [[F32([1, 0, 0, 1, 0, 0]), F32([0, 0, 100, 100])], [], [], [O.endPath, [F32([0, 10, 10, 1, 60, 10, 1, 60, 50, 1, 10, 50, 1, 35, 30, 4])], F32([10, 10, 60, 50])], [O.fill, [F32([0, 10, 10, 1, 60, 10, 1, 60, 50, 1, 10, 50, 4])], F32([10, 10, 60, 50])], [], []],
+    }
+    expect(inkDifference(fifth, objectsOf(1, true))).toBeNull()
+  })
 })
 
 describe("the module's other functions give what they gave before", () => {

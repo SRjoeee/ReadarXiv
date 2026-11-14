@@ -66,16 +66,16 @@ const SHORT = 0.5
 
 // ---- break-room.mjs: TeX's room after a forced break
 /** a frame's pitch: the median of its own lines' gaps, the mean of the two middles (break-room.mjs:8 pitchOf) */
-export function pitchOf(gaps: readonly number[]): number | null {
+function pitchOf(gaps: readonly number[]): number | null {
   const g = gaps.filter((v) => v > 0).sort((a, b) => a - b)
   return g.length ? (g[(g.length - 1) >> 1]! + g[g.length >> 1]!) / 2 : null
 }
 /** two lines' distance with no break: the pitch, or TeX's \lineskip rule's for a tall next line (break-room.mjs:16) */
-export function naturalOf(pitch: number, depth: number, height: number, lineskip: readonly number[] | null): number {
+function naturalOf(pitch: number, depth: number, height: number, lineskip: readonly number[] | null): number {
   return lineskip && pitch - depth - height < lineskip[1]! ? Math.max(pitch, depth + height + lineskip[0]!) : pitch
 }
 /** the room a break left, in pitches, to a thousandth, never below 0 (break-room.mjs:23 roomOf) */
-export function roomOf(gap: number, pitch: number, natural: number): number {
+function roomOf(gap: number, pitch: number, natural: number): number {
   return Math.max(0, Math.round(((gap - natural) / pitch) * 1000) / 1000)
 }
 
@@ -90,7 +90,7 @@ function displaysOf(lu: LayoutUnit): [number, number, number, number][] {
 }
 
 /** where each forced break of the row ends a line of the file (TEX:120 forcedBreaks) */
-export function forcedBreaks(
+function forcedBreaks(
   lu: LayoutUnit | null,
   pieces: readonly V0Piece[],
   cls2: readonly (string | null)[],
@@ -204,7 +204,7 @@ export function forcedBreaks(
 }
 
 /** where TeX set a group of the source as a paragraph of its own, the row holding its open piece between texts (TEX:222) */
-export function paragraphBreaks(
+function paragraphBreaks(
   lu: LayoutUnit | null,
   pieces: readonly V0Piece[],
   source: readonly V0Piece[] | null,
@@ -262,7 +262,7 @@ export function paragraphBreaks(
 
 /** each of the file's lines' measure as the door lays it, by its row: measureOf over blocksOf2's blocks on the unit's lines
  *  (TEX:518-526 measureOfLine) */
-export function measuresOfLines(fileLines: { rects: readonly Rect[]; j: readonly number[] }, held: readonly string[]) {
+function measuresOfLines(fileLines: { rects: readonly Rect[]; j: readonly number[] }, held: readonly string[]) {
   let measures: Map<number, [number, number]> | null = null
   return (j: number): [number, number] | null => {
     if (!measures) {

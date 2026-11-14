@@ -263,7 +263,7 @@ export const elementKindOf = instrument_js.elementKindOf as (piece: { t: string;
 export const unitFactsOf = instrument_js.unitFactsOf as (paper: Paper) => {
   float: Map<number, string>
   kept: Set<number>
-  why: Map<number, 'pseudocode'>
+  why: Map<number, 'pseudocode' | 'words' | 'paperNames' | 'namesBlock'>
 }
 export const instrumentOf = instrument_js.instrumentOf as (
   o: Record<string, unknown>,
@@ -276,6 +276,8 @@ export interface Paper {
   inFloat: number[]
   floatTypes?: [number, string][]
   pseudocode?: number[]
+  /** R4's blocks (PDF-READER §18.72): each block's text cells, a cell's units by index or a cell of none that prints text */
+  tableBlocks?: ({ units: number[] } | { name: true })[][]
   texOrder?: number[] | null
   names: string[]
   theoremNames?: string[]

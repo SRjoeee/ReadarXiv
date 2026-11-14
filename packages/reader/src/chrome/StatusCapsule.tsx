@@ -227,7 +227,7 @@ export const WAIT_SHOWN_MS = 400
  * 2026-11-12; the coordinator's R4: the grace never makes a gap after a capsule that was showing). Every other capsule (a refusal,
  * a notice, a toast, an error) at once
  */
-export function useWaitShown(wanted: Capsule | null, showing = false): Capsule | null {
+function useWaitShown(wanted: Capsule | null, showing = false): Capsule | null {
   const since = useRef<number | null>(null)
   const shown = useRef(false)
   const [, redraw] = useState(0)
@@ -259,7 +259,7 @@ export interface NarrowWatch {
   readWide: boolean
   narrowed: boolean
 }
-export function narrowWatch(was: NarrowWatch, now: { narrow: boolean; display: string; pages: number }): NarrowWatch {
+function narrowWatch(was: NarrowWatch, now: { narrow: boolean; display: string; pages: number }): NarrowWatch {
   if (!now.narrow) {
     const readWide = was.readWide || (now.display === 'bilingual' && now.pages > 0)
     return readWide === was.readWide ? was : { readWide, narrowed: was.narrowed }
@@ -274,7 +274,7 @@ export function narrowWatch(was: NarrowWatch, now: { narrow: boolean; display: s
  * the focus as if elsewhere — a capsule just drawn has had neither — and `leave` is called once the time is out. The
  * handlers go on the capsule; the website's capsule leaves the same way
  */
-export function useTimedLeave(on: boolean, ms: number, leave: () => void): HTMLAttributes<HTMLElement> {
+function useTimedLeave(on: boolean, ms: number, leave: () => void): HTMLAttributes<HTMLElement> {
   const at = useRef({ on: false, left: ms, since: 0, timer: 0, pointer: false, focus: false })
   const go = () => {
     const s = at.current

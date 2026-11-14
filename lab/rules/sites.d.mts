@@ -26,12 +26,15 @@ export interface Rule {
   entries?: string[]
   unsited?: string
   unwrapped?: number
+  /** a list's reads the recorder cannot see (an index, a copy the platform makes), each `<form> <file>:<line>` */
+  unseen?: string[]
+  holder?: { name: string; lines: number; read: 'states its value' | 'names the definition' | null }
   wholeReads?: number
 }
-export interface Bound { rule: string; at?: 'left' | 'right' | number; shape: string; value?: number }
+export interface Bound { rule: string; at?: 'left' | 'right' | number; shape: string; value?: number; key?: string; budget?: { quantity: string; stops: 'a loop' | 'an exit' | 'adding to it' } }
 export interface Site {
   id: number
-  kind: 'cmp' | 'eq' | 'mm' | 'val' | 'list' | 'set' | 're'
+  kind: 'cmp' | 'eq' | 'mm' | 'val' | 'list' | 'set' | 're' | 'key'
   file: string
   line: number | null
   fn: string
@@ -41,6 +44,8 @@ export interface Site {
   call?: string
   args?: number
   entries?: string[]
+  /** a pattern's entries by its structure and its shadow (pattern.mjs) */
+  alts?: { words: { w: string; look?: 'pos' | 'neg'; rep?: boolean }[]; shadow: string | null; marks: [number, number][]; why?: string }
   flags?: string
 }
 export interface Edit { at?: number; end?: number; pre?: string; post?: string; replace?: [number, number]; text?: string; listNode?: boolean }

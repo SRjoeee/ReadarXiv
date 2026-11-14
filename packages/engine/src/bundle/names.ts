@@ -28,10 +28,10 @@ import type { PieceClass } from '../instrument.ts'
 export const NAMED_KIND = 'named'
 export const PERSON_KIND = 'person'
 /** the member kinds of the author block under the title: the names toggle's (reader classes.ts, author-block.ts) */
-export const BLOCK_KINDS: ReadonlySet<string> = new Set(['author', 'affiliation', 'inknames'])
+const BLOCK_KINDS: ReadonlySet<string> = new Set(['author', 'affiliation', 'inknames'])
 
 /** what an element is to a stretch: a cut, a space (a tie: TeX's interword space, no line break at it), or nothing */
-export function roleOf(p: Piece, c: PieceClass | undefined): 'cut' | 'space' | 'none' {
+function roleOf(p: Piece, c: PieceClass | undefined): 'cut' | 'space' | 'none' {
   if (p.t === 'unit') return 'cut'
   if (p.t !== 'el') return 'none'
   if (p.silent) return 'none'
@@ -45,7 +45,7 @@ export function roleOf(p: Piece, c: PieceClass | undefined): 'cut' | 'space' | '
 const EDGE = /^[\p{P}\p{Z}\p{S}\p{C}]+|[\p{P}\p{Z}\p{S}\p{C}]+$/gu
 const LETTER = /\p{L}/u
 /** a stretch's text as names are compared: white space collapsed, trimmed of punctuation, white space, symbols, controls */
-export const nameOf = (s: string): string => s.replace(/\s+/g, ' ').replace(EDGE, '')
+const nameOf = (s: string): string => s.replace(/\s+/g, ' ').replace(EDGE, '')
 /** two words or more, each holding a letter */
 const isName = (n: string): boolean => n.split(' ').filter((w) => LETTER.test(w)).length >= 2
 

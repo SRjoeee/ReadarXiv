@@ -1,23 +1,9 @@
-// The glossary's text form and its structured form, both ways (DESIGN §8.2).
-// The shape follows KISS's parseAITerms (reference/kiss-translator/src/libs/utils.js@c95bd46): one entry per line,
-// comma-separated; added here: tabs (for pasting from a table), comment lines and per-line issue reports — a
-// paper's terms are usually pasted in as a whole, and silently dropping a miswritten line would leave the reader believing the term took effect.
+// The glossary's entries, the separator a pasted line is split by, and the matcher that sends a passage the terms it uses
+// (DESIGN §8.2). A pasted line's shape follows KISS's parseAITerms (reference/kiss-translator/src/libs/utils.js@c95bd46):
+// one entry per line, comma-separated; added here: tabs (for pasting from a table).
 export interface GlossaryEntry {
   term: string
   translation: string
-}
-
-export interface GlossaryIssue {
-  /** From 1, the line number the reader sees in the text box */
-  line: number
-  text: string
-  /** Which kind of issue; the sentences live in the locale pack, and this layer knows no interface language (Codex on #161 for the same class of problem) */
-  reason: 'noSeparator' | 'emptySource' | 'emptyTarget'
-}
-
-export interface ParsedGlossary {
-  entries: GlossaryEntry[]
-  issues: GlossaryIssue[]
 }
 
 /**
@@ -25,54 +11,6 @@ export interface ParsedGlossary {
  * cut only. The settings page's table splits a pasted line by it too
  */
 export const GLOSSARY_SEPARATOR = /[,，\t]/
-
-/**
- * Parse glossary text. Blank lines and lines starting with `#` are skipped; a later entry of the same term overrides
- * the earlier while keeping the order of **first appearance**, so changing one translation does not move it to the end
- */
-export function parseGlossary(text: string): ParsedGlossary {
-  const entries: GlossaryEntry[] = []
-  const issues: GlossaryIssue[] = []
-  const index = new Map<string, number>()
-
-  // One entry per line. **The semicolon is no separator**: a semicolon inside a translation is normal (`kernel, 核;
-  // 统计学中称核函数`), and as a record separator it would quietly split it into two unrelated mappings (Codex on #52). DESIGN §8.2 says per line too
-  const lines = text.split('\n')
-  let lineNumber = 0
-  for (const rawLine of lines) {
-    lineNumber++
-    const line = rawLine.trim()
-    if (line === '' || line.startsWith('#')) continue
-    const match = GLOSSARY_SEPARATOR.exec(line)
-    if (!match) {
-      issues.push({ line: lineNumber, text: line, reason: 'noSeparator' })
-      continue
-    }
-    const term = line.slice(0, match.index).trim()
-    const translation = line.slice(match.index + 1).trim()
-    if (term === '') {
-      issues.push({ line: lineNumber, text: line, reason: 'emptySource' })
-      continue
-    }
-    if (translation === '') {
-      issues.push({ line: lineNumber, text: line, reason: 'emptyTarget' })
-      continue
-    }
-    const existing = index.get(term)
-    if (existing === undefined) {
-      index.set(term, entries.length)
-      entries.push({ term, translation })
-    } else {
-      entries[existing] = { term, translation }
-    }
-  }
-  return { entries, issues }
-}
-
-/** Written back into the text box's form, one entry per line */
-export function formatGlossaryText(entries: readonly GlossaryEntry[]): string {
-  return entries.map(entry => `${entry.term}, ${entry.translation}`).join('\n')
-}
 
 /**
  * Only the terms **this passage really uses** are sent (DESIGN §8.2, 2026-09-11).

@@ -17,6 +17,9 @@
 // With --entry, the reads gate (docs/PDF-READER.md §19.15, round B16): each page laid again under the reader's default reading
 // options and with every option on (the kinds their toggles leave, the reader's compose/classes.ts), every row id its lay reads
 // held against the page's wait set; an id outside it fails the run (exit 1), no exemption.
+// With --entry, I11 (painted.mjs, the coordinator's ruling of 2026-11-13): every box of every shape the reader paints of each laid
+// page, on both panes, held inside what the reader's own rows and outlines paint; one not painted whole fails the run (exit 1),
+// 0 the only passing value (I10 judges Laid.lit, never the paint: a display's second row on neither pane passed it).
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
@@ -30,6 +33,7 @@ import { accept as acceptReading } from '../../packages/translate/src/accept.ts'
 import { CLASS_DEFAULTS, leftKinds } from '../../packages/reader/src/compose/classes.ts'
 import { unitInOf } from '../../packages/translate/src/bundle.ts'
 import { ADDED_HEADING, apartOf, runApart } from './added.mjs'
+import { paintedOf } from './painted.mjs'
 
 const args = process.argv.slice(2)
 const OUT = args.find(a => a.startsWith('--out='))?.slice(6) ?? join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'gate', 'l1')
@@ -151,12 +155,26 @@ const nearDifference = (a, b, path) => {
   return a === b || (a == null && b == null) ? null : `${path}: ${JSON.stringify(a)?.slice(0, 60)} against ${JSON.stringify(b)?.slice(0, 60)}`
 }
 const add = (m, k, n = 1) => m.set(k, (m.get(k) ?? 0) + n)
+// (I11, every lit box painted whole on both panes, painted.mjs: over each page the entry lays, as the reader paints it; its cost
+// timed apart from the entry's lay)
+const painted = { pages: 0, shapes: 0, boxes: 0, turned: 0, cut: 0, ex: [], ms: 0 }
+const paintOf = (pair) => (pg, page) => {
+  const t0 = performance.now()
+  const r = paintedOf(page)
+  painted.ms += performance.now() - t0
+  painted.pages++
+  painted.shapes += r.shapes
+  painted.boxes += r.boxes
+  painted.turned += r.turned
+  painted.cut += r.cut.length
+  for (const [side, ord, s, b] of r.cut) if (painted.ex.length < 8) painted.ex.push(`${pair} p${pg} ord ${ord} ${side} s ${s} [${b.map((v) => Math.round(v * 100) / 100).join(', ')}]`)
+}
 for (const pair of pairs) {
   count.pairs++
   if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
   judging = pair
-  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept, ...(ENTRY ? { leave: LEAVE } : {}) }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept, ...(ENTRY ? { leave: LEAVE, laid: paintOf(pair) } : {}) }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages
@@ -289,6 +307,8 @@ if (ENTRY) {
   console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
+  console.log(`I11, every lit box painted whole on both panes (painted.mjs): ${painted.pages} pages, ${painted.shapes} shapes, ${painted.boxes} boxes; ${painted.cut} not painted whole${painted.cut ? `: ${painted.ex.join(' | ')}` : ''}; ${painted.turned} boxes of turned members painted box by box (not read); ${Math.round(painted.ms)} ms`)
+  if (painted.cut || !painted.boxes) process.exitCode = 1
   // (the paragraph points, paras-gate.ts: each the part states (a group's open, an element, its first word) whose row carries
   // its anchor (the group or the element between its texts, else a sentence start paired with its first word) laid with its
   // first word starting a line of the member; one run on fails the run. Those on TeX's baseline counted beside; those with no

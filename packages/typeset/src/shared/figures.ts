@@ -1,10 +1,11 @@
 // S.figures (design-b §1.6 L4, T10, G16, A26): a page's figure texts (the content class `figures`, docs/route/orphan-text.md
 // stage 5), each drawn in its translation where it says something its source does not, in the faces of its font's family and
-// weight (its CJK characters in the target's CJK face, the rest in the Latin one), each set fitted at one size (figure-fit.ts),
+// weight (its CJK characters in the target's CJK face, the rest in the Latin one), each fitted by its own width (figure-fit.ts),
 // each translation's line by its ink as the breaker sets every line (the blank halves of the marks at its edges, blanksOf);
 // else left the original's, why told: `no row`, `kept`, `untranslated`, `same` as its source, `unhidden` where the document
 // holds no group of it, a face's refusal (`served`), `unfit` (its width needs more than the floor). Width is the fit's only test
-// (figure-fit.ts, the owner's rule of 2026-11-13): a translation's height is not measured. Ported from engine 065c1d973 run.mjs
+// (figure-fit.ts, the owner's rule of 2026-11-13): a translation's height is not measured, nor what another text of its figure
+// needs (each at its own size, docs/PDF-READER.md §19.12). Ported from engine 065c1d973 run.mjs
 // paintFigures RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs
 // figureRuns, figureRunsWidth L2:4824-4836 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face not
 // loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
@@ -16,10 +17,10 @@ import { shown, type TextPiece } from '../breaker/text.ts'
 import type { Face, Token, TStyle } from '../breaker/tokens.ts'
 import { firstCompress } from '../fit/walk.ts'
 import type { FaceId, Metrics } from '../types.ts'
-import { type FitFigure, fitFigureSet, sameAsSource } from './figure-fit.ts'
+import { type FitFigure, fitFigure, sameAsSource } from './figure-fit.ts'
 
 /** a figure unit on its page (figure-rows.mjs checkFigures): its run's first glyph's origin, its direction, its box's length
- *  along it, its size and band, its anchor, its fill (-1 none), its font's name, its set, its room */
+ *  along it, its size and band, its anchor, its fill (-1 none), its font's name, its room */
 export type FigureRow = FitFigure & {
   id: number
   group: string
@@ -45,7 +46,6 @@ export type FigureRow = FitFigure & {
      *  label and the address after it in the link's colour); none: the figure text's own */
     fill?: number
   }
-  set: string
 }
 /** a figure text's family, weight and slant (FigureRow.cls) */
 export type FigureClass = NonNullable<FigureRow['cls']>
@@ -73,7 +73,6 @@ export type Figure = {
   width?: number
   angle?: number
   fill?: number
-  set?: string
 }
 
 export type FiguresInput = {
@@ -92,9 +91,6 @@ export type FiguresInput = {
   /** the rules' cjkQuotes, the last floor (P.floorMin), and how far the marks are compressed (compressMax: blanksOf) */
   rules: { cjkQuotes?: boolean; floorMin: number; compressMax: number }
   metrics: Metrics
-  /** the most of their sizes a set's units are drawn at (fitFigureSet's `cap`): a figure text of its size tie another path laid
-   *  smaller; none, their own fit's */
-  caps?: (set: string) => number | undefined
 }
 
 // ---- fonts.mjs classifyFont: the family, weight and slant a font's name tells (what figures read of it)
@@ -260,22 +256,10 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       blank1: blanksOf(runs, i.rules),
     })
   }
-  // (each set fitted at one size, its units in their rows' order)
-  const bySet = new Map<string, typeof ready>()
-  for (const c of ready) {
-    const key = c.f.set ?? c.f.group
-    const list = bySet.get(key) ?? []
-    bySet.set(key, list)
-    list.push(c)
-  }
-  const fits = new Map<(typeof ready)[number], ReturnType<typeof fitFigureSet>[number]>()
-  for (const [key, list] of bySet)
-    fitFigureSet(list, i.rules.floorMin, i.caps?.(key) ?? 1).forEach((fit, k) => {
-      fits.set(list[k]!, fit)
-    })
+  // (each fitted by its own width alone, in its rows' order)
   for (const c of ready) {
     const { f, rec, text, runs } = c,
-      fit = fits.get(c)
+      fit = fitFigure(c, i.rules.floorMin)
     if (!fit) {
       Object.assign(rec, { why: 'unfit', text })
       continue
@@ -293,7 +277,6 @@ export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, st
       width: fit.width,
       angle,
       ...(f.fill > 0 ? { fill: f.fill } : {}),
-      set: f.set ?? f.group,
     })
   }
   return { figures: out, wait }

@@ -3,7 +3,8 @@
 // drawn at the original's size a translation stands in the band the original's line stands in, so a stroke under the text, a line
 // over it and a container's edge (the part's Room.under, Room.over) bound nothing. Width is the only test: one no wider than its
 // original keeps its size; a wider one takes the free room beside it the part states, and where there is none it steps by what
-// its width needs and no more. A set's tie carries the step of the member whose width needs most.
+// its width needs and no more. The width is the text's own: a set's tie carries no step to its other members (the owner's ruling
+// of 2026-11-13 on a figure's sets, figure-untie.test.ts).
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { rolesFor } from '../../src/breaker/faces.ts'
@@ -78,11 +79,11 @@ describe('a wider translation takes the free room beside it, and steps by its wi
   })
 })
 
-describe('a set’s tie carries the step of the member whose width needs most', () => {
-  it('draws the set at 0.9 where one member’s width needs 0.9, a stroke under its mate', () => {
+describe('a set’s tie carries no member’s step to the others', () => {
+  it('draws the member whose width needs 0.9 at 0.9 and its mate at the original’s size, a stroke under the mate', () => {
     // (one translation 90 wide in an original 81 long, no room: 0.9; its mate 30 wide in 60, a stroke under it)
     const ms = [member(1, 181, { side: [100, 181] }), member(2, 160, { side: [100, 160], under: 0.5 }, 180)]
-    expect(sizes(ms, { 1: '九个汉字九个汉字九', 2: '概览图' }, true)).toEqual([9, 9])
+    expect(sizes(ms, { 1: '九个汉字九个汉字九', 2: '概览图' }, true)).toEqual([9, 10])
   })
   it('draws the set at its size where no member’s width needs a step, whatever stands under or over them', () => {
     const ms = [member(1, 160, { side: [100, 160], under: 0.5 }), member(2, 160, { side: [100, 160], over: 6 }, 180)]

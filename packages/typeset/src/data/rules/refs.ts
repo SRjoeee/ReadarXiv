@@ -1,7 +1,9 @@
 // The rule set's reference names: the names TeX's cross-referencing packages generate in a reference (cleveref's \cref,
 // hyperref's \autoref: "Figure 3") and in a citation's note, each form's counter type, cleveref's English conjunctions and
-// singulars, and each target's words for them. Today's rules/tex-names.json (engine 065c1d973; LPPL 1.3c data of TeX Live
-// 2025, docs/THIRD_PARTY.md), written by lab/typeset/rules-data.mjs; not edited by hand.
+// singulars, and each target's words for them: LPPL 1.3c data of TeX Live 2025 (docs/THIRD_PARTY.md). The source, edited
+// here; taken at engine 065c1d973 from tex-names.json (today's rules/tex-names.json, which is the engine's
+// packages/engine/src/source/tex-names.json byte for byte): its types, conjunctions, singulars and targets' refs and conj,
+// held equal to that file by tests/typeset/tex-names.test.ts.
 
 /** the forms' types, the conjunctions and singulars, and each target's reference and conjunction words (U.rename) */
 export const REFS: {

@@ -1,8 +1,8 @@
-// One size a group (the owner's rule of 2026-10-29): a figure's labels that stand in one set are drawn at one size, the least
-// any of them needs, whatever path lays each. A label S.figures sets (its own text, Placed.plain) and a figure text the
-// paragraph path lays (an element, lines joined, a label: no own text) in one size tie are drawn at one scale of their sizes:
-// the set's factor caps the paragraph, a paragraph laid smaller caps the set. 2111.09276v1 p8, Figure 5: the plain items of a
-// list's column at 0.73 of their size, the items holding a kept token at full size, within one item.
+// A figure's set at no one size (the owner's ruling of 2026-11-13 on a figure's sets, (B): each at its own size; it retired the
+// one size a group of 2026-10-29 and §18.54's tie of a paragraph-path text to its labels). A label S.figures sets (its own text,
+// Placed.plain) and a figure text the paragraph path lays (an element, lines joined, a label: no own text), in one set the part
+// states as a size tie, are each laid at what its own width needs, as with no tie: the label's step caps no paragraph, a
+// paragraph laid smaller steps no label. And every page's lay that lays the paragraph lays it alike (I6).
 import type { Part, Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -54,9 +54,9 @@ const sizes = (part: Part, rows: Rows) =>
     ]),
   )
 
-describe('one size a group: a label and a figure text laid as a paragraph in one set', () => {
-  it('draws the paragraph at the factor its set shrinks the labels to', () => {
-    // (the label's translation, 100 at 10, takes 70 of its line: its set at 0.7; the paragraph's fits at its size)
+describe('a label and a figure text laid as a paragraph in one set, each at its own size', () => {
+  it('draws the paragraph at its own size where the label’s width steps the label', () => {
+    // (the label's translation, 100 at 10, takes 70 of its line: 0.7; the paragraph's fits at its size)
     const label = member(0, 400, 160, 170, 'Sand the top')
     const para = member(1, 388, 180, 300)
     const rows = rowsOf([
@@ -64,9 +64,9 @@ describe('one size a group: a label and a figure text laid as a paragraph in one
       [2, '用干净的布擦拭'],
     ])
     expect(sizes(partOf([label, para], false), rows)).toEqual({ 0: ['laid', [7]], 1: ['laid', [10]] })
-    expect(sizes(partOf([label, para], true), rows)).toEqual({ 0: ['laid', [7]], 1: ['laid', [7]] })
+    expect(sizes(partOf([label, para], true), rows)).toEqual({ 0: ['laid', [7]], 1: ['laid', [10]] })
   })
-  it('shrinks the set’s labels to the scale its paragraph is laid at', () => {
+  it('keeps the label at its size where the paragraph is laid smaller', () => {
     // (the paragraph's translation, 90 at 10, on its line of 60 and no room under it: the fit's steps on below the floor, to
     // 0.675; the label fits at its size)
     const label = member(0, 400, 160, 300, 'Sand the top')
@@ -76,13 +76,13 @@ describe('one size a group: a label and a figure text laid as a paragraph in one
       [2, '用干净的布擦拭桌面'],
     ])
     expect(sizes(partOf([label, para], false), rows)).toEqual({ 0: ['laid', [10]], 1: ['laid', [6.75]] })
-    expect(sizes(partOf([label, para], true), rows)).toEqual({ 0: ['laid', [6.75]], 1: ['laid', [6.75]] })
+    expect(sizes(partOf([label, para], true), rows)).toEqual({ 0: ['laid', [10]], 1: ['laid', [6.75]] })
   })
-  it('lays the paragraph at its set’s factor from every page’s lay that holds it (I6)', () => {
+  it('lays the paragraph alike, at its own size, from every page’s lay that holds it (I6)', () => {
     // (2610.19159v1-ja p57: a figure's set on a page whose paragraph runs on to the next page. The next page's part holds every
     // flow with a line on that paragraph's first page (design-a §1.3 (b)), the set's too, and its lay runs that page's pass;
-    // it laid the tied figure text at its own size, 1.0, where the figure's page lays it at the set's 0.66: the set's factor
-    // was S.figures' over the figure texts of the page laid alone)
+    // when the set was one size, it laid the tied figure text at its own size, 1.0, where the figure's page laid it at the set's
+    // 0.66. Each at its own size, both lay it at what it needs)
     const label = member(0, 400, 160, 170, 'Sand the top')
     const para = member(1, 388, 180, 300)
     const line = (page: number, y: number): Placed['lines'][number] => [
@@ -108,7 +108,7 @@ describe('one size a group: a label and a figure text laid as a paragraph in one
       lines: [line(1, 120), line(1, 108), line(2, 700), line(2, 688)],
       room: { below: 20, next: 24 },
     }
-    // (ideographs, escaped: the label's ten at 10 take 100 of its 70, its set at 0.7; the paragraph's seven fit at its size)
+    // (ideographs, escaped: the label's ten at 10 take 100 of its 70, 0.7; the paragraph's seven fit at its size)
     const rows = rowsOf([
       [1, '\u6587'.repeat(10)],
       [2, '\u6587'.repeat(7)],
@@ -126,7 +126,7 @@ describe('one size a group: a label and a figure text laid as a paragraph in one
     }
     const [one, two] = [laysOf(1), laysOf(2)]
     expect(one.map((x) => [x.ord, x.state, x.scale])).toEqual([
-      [1, 'laid', 0.7],
+      [1, 'laid', 1],
       [2, 'laid', 1],
     ])
     expect(two).toEqual(one)
