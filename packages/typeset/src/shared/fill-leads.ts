@@ -11,7 +11,7 @@ import type { FitBlock, FitParams, FitState, Layout } from '../fit/types.ts'
 
 /** a unit (or a run of one) as its fill leadings are read: its tokens, blocks, size, parameters and layout; its fill leadings
  *  set on it */
-export type FillUnit = {
+type FillUnit = {
   tokens: readonly Token[]
   blocks: readonly FitBlock[]
   s: number

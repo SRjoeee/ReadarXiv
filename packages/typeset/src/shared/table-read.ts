@@ -19,7 +19,7 @@ export type GroupMember = {
   skip: { code: string | null; why: string | null } | null
   spans: boolean | null
 }
-export type TableRead = { cells: number[] | null; split: boolean; kept: (boolean | null)[] }
+type TableRead = { cells: number[] | null; split: boolean; kept: (boolean | null)[] }
 
 /** a translated cell the wrap cannot hide, its box its own: the original's alone, its group drawn (RUN:1241 kept) */
 export const keptCell = (m: GroupMember): boolean =>

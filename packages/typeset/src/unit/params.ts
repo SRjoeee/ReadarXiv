@@ -122,8 +122,8 @@ export function cellBands(
 }
 
 /** the unit's edges as the fit reads them (P.halfLead) */
-export type HalfLead = { head: boolean; foot: boolean; below: number }
-export type ParamsInput = {
+type HalfLead = { head: boolean; foot: boolean; below: number }
+type ParamsInput = {
   kind: string
   blocks: readonly Block[]
   s: number
@@ -137,7 +137,7 @@ export type ParamsInput = {
   heading: boolean
   numbered: boolean
 }
-export type Params = {
+type Params = {
   P: ParamsRules & {
     leadBase: number
     trackStart: number

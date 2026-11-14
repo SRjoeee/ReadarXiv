@@ -21,7 +21,7 @@ export type FitFigure = {
   after: number
 }
 /** where a translation is drawn: its size, how far along its run's direction from its origin it begins, its width */
-export type FigureFit = { size: number; offset: number; width: number }
+type FigureFit = { size: number; offset: number; width: number }
 
 /** a unit's line a translation may take along its direction: its box, and its room on the side (or sides) its anchor grows to */
 const lineOf = (f: FitFigure) => {

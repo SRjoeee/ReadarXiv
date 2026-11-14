@@ -128,9 +128,9 @@ export function nameInTarget(
 }
 
 /** a run of a name's word as drawn: its text, its share of the size, its face */
-export type NameRun = { s: string; k: number; face: Face }
+type NameRun = { s: string; k: number; face: Face }
 /** a name's word as the layer draws it: its first run's face, its runs, what is drawn */
-export type NameDrawn = { face: Face; runs: NameRun[]; text: string }
+type NameDrawn = { face: Face; runs: NameRun[]; text: string }
 
 /** a name's word in `face` (L2:4755 nameRuns): its runs of one case where the layer draws the face's small capitals itself */
 export function nameRuns(
@@ -216,7 +216,7 @@ export type NameRecord = {
   column: [number, number]
 }
 /** a name that leads a unit: the unit's lead (U.lead reads it): its word and style, its characters */
-export type NameLeads = { nm: NameRow; text: string; st: TStyle; chars: readonly PageChar[] }
+type NameLeads = { nm: NameRow; text: string; st: TStyle; chars: readonly PageChar[] }
 export type SetName = {
   rec: NameRecord
   /** a name leading a unit: handed to that unit's lay */
@@ -230,7 +230,7 @@ export type SetName = {
 /** what S.names reads of a name's own characters (today's, over the page's; the part states them: Placed.plain, Style): its
  *  text without the counter TeX set after it, the counter's, its size and whether it is set in faked small capitals, its
  *  style; `chars` its characters, a lead's joint (none from the part) */
-export type NameRead = {
+type NameRead = {
   text: string
   counter: string
   size: number

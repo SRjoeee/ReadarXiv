@@ -7,9 +7,9 @@
 // Never taken on the corpus (the tap: no relay round): held by synthetic tests.
 
 /** the head before the follower on their shared line, as its lay left it */
-export type RelayLead = { id: number; over: boolean; refused: boolean }
+type RelayLead = { id: number; over: boolean; refused: boolean }
 /** the follower, as its lay left it */
-export type RelayFollower = {
+type RelayFollower = {
   refused: boolean
   ledBy: number | null | undefined
   knob: string | null | undefined

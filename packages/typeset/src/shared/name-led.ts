@@ -7,7 +7,7 @@
 import type { NameRecord } from './names.ts'
 
 /** the first block as S.nameLed reads it */
-export type LedBlock = {
+type LedBlock = {
   page: number
   B: readonly number[]
   x0: number

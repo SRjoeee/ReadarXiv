@@ -56,7 +56,7 @@ export type FigureUnit = {
   pieces?: readonly (({ t: string; s?: string; tr?: boolean } | TextPiece) & { cls?: FigureClass })[]
 }
 /** a run of a figure's translation in one face (figureRuns), and its fill where its group states one (FigureClass.fill) */
-export type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number }
+type FigureRun = { s: string; face: Face; cls: 'cjk' | 'latin'; fill?: number }
 /** a figure text's outcome: drawn (its text, runs, size, where its anchor keeps it, its width, its turn in degrees
  *  anticlockwise, its fill) or why not */
 export type Figure = {
@@ -75,7 +75,7 @@ export type Figure = {
   fill?: number
 }
 
-export type FiguresInput = {
+type FiguresInput = {
   /** the page's figure units, in their rows' order */
   figures: readonly FigureRow[]
   /** a figure unit's row, undefined where the door has none */

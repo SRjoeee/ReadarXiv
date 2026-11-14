@@ -47,7 +47,7 @@ export type RefNames = {
 /** a replacement: [start, end, word] over the text the page shows */
 export type Rename = [start: number, end: number, word: string]
 /** a resolution as the rule reads it */
-export type Renamable = { mode: string; sup?: boolean; src?: string; text?: string }
+type Renamable = { mode: string; sup?: boolean; src?: string; text?: string }
 
 /** the commands whose text TeX's cross-referencing packages generate, a counter type's name before the number: cleveref.sty's
  *  \cref and \Cref with their range, page and name forms, hyperref.sty's \autoref and \Autoref (TeX Live 2025). The engine's

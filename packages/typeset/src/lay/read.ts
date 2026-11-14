@@ -458,7 +458,7 @@ function leadOf(lb: UnitLabel | undefined): { parts: { text: string; st: TStyle 
   }
 }
 
-export type ReadInput = {
+type ReadInput = {
   m: Placed
   unit: RowUnit
   /** the member's lines' rectangles, as the setting keys them (the adapter's) */
@@ -480,7 +480,7 @@ export type ReadInput = {
   /** the last page shown */
   shown: number
 }
-export type ReadOut = {
+type ReadOut = {
   tokens: Tokens
   labelDrawn: string | null
   /** a label that stands on none of its member's lines (Label with no `line` and its own line's `align`: IEEEtran's "TABLE I"

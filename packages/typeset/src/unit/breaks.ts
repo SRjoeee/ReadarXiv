@@ -12,7 +12,7 @@ import { type Rect, rectKey } from '../util.ts'
 
 /** a placeholder row of the layout file (file.d.mts LayoutPh): its kind, flags (PH_FLAG) and segments (stride 6: page, x0,
  *  baseline, x1, top, bottom) */
-export type LayoutPh = { kind: string; flags: number; segs: readonly number[] }
+type LayoutPh = { kind: string; flags: number; segs: readonly number[] }
 /** the layout file's unit as the breaks read it (file.d.mts LayoutUnit) */
 export type LayoutUnit = {
   lines: readonly number[]
@@ -24,7 +24,7 @@ export type LayoutUnit = {
 }
 /** the face TeX set a group's text in where its command names no style the rules know (the part's SpanAt.style: role, weight,
  *  slant) */
-export type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined }
+type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined }
 /** a piece of a row as today's unit holds it (rows.mjs unitOf: the translation's pieces in its order, `k` the source's; a
  *  group's open with the face TeX set it in, where its part states one); `par` a piece of the typesetter's own, never in a Row
  *  nor on a wire: a paragraph TeX opened at its first word (Placed.paras), cut into the row where a sentence start pairs with
@@ -164,7 +164,7 @@ export function breakMaps(out: ReadonlyMap<number, Break>, i: MapsInput): Breaks
 
 /** what U.breaks reads of a member the part states (Placed): its lines, and its elements' and groups' facts by id; whether
  *  its breaks' lines are read off the page by their short ends, not stated by TeX's points (Placed.read 'breaks') */
-export type StatedFacts = {
+type StatedFacts = {
   lines: Placed['lines']
   els: ReadonlyMap<string, El>
   spans: ReadonlyMap<string, SpanAt>
@@ -320,7 +320,7 @@ export const clsOf = (pieces: readonly V0Piece[], els: ReadonlyMap<string, El>):
  *  unit's source projection (what Row.sentences.src counts in) and the index in Placed.lines of the line TeX opened it on. One at
  *  a line a stronger fact also states (a group's open, an element) is read only where the row does not hold that fact between
  *  its texts (a group the reply dropped) */
-export type ParaPoint = readonly [offset: number, line: number]
+type ParaPoint = readonly [offset: number, line: number]
 /** the member's paragraph points (the part's `paras`, which packages/format's Placed carries once the engine states it),
  *  ascending; none where its part states none (a part made before) */
 export const parasOf = (m: Placed): readonly ParaPoint[] => (m as Placed & { paras?: readonly ParaPoint[] }).paras ?? []

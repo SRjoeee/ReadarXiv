@@ -24,10 +24,10 @@ export type Glyph = {
   st?: { fam?: string; bold?: boolean; italic?: boolean; fill?: number } | null
 }
 /** a part of a label drawn anew: its text in its own style */
-export type LabelPart = { text: string; st: { bold?: boolean; italic?: boolean; color?: string | undefined } }
+type LabelPart = { text: string; st: { bold?: boolean; italic?: boolean; color?: string | undefined } }
 /** a caption's label as its part states it with its float's type (Label.float, LaTeX's \@captype): its type, its name, and
  *  its glyphs after the name (its number and punctuation as TeX printed them), and whether its parts hold its every glyph */
-export type FloatLabel = { type: string; name: string; rest: readonly Glyph[]; num: boolean; whole: boolean }
+type FloatLabel = { type: string; name: string; rest: readonly Glyph[]; num: boolean; whole: boolean }
 /** the unit's label, as the unit is laid with it: its glyphs, and where it is drawn anew its words (`drawn`, `parts`) and
  *  whether it ends in an opening bracket (`open`); a caption's, its float's type where its part states one (`float`) */
 export type UnitLabel = {
@@ -39,7 +39,7 @@ export type UnitLabel = {
   open?: boolean
   float?: FloatLabel
 }
-export type HeadLabel = { text: string; parts: LabelPart[]; open: boolean; chars: readonly Glyph[] }
+type HeadLabel = { text: string; parts: LabelPart[]; open: boolean; chars: readonly Glyph[] }
 /** a theorem-like head's parts as its part states them (Label.name, num, punct: amsthm's \thmname, \thmnumber and the
  *  punctuation after them), each one glyph of its ink; `whole`, whether they hold the label's every glyph, from its ink's
  *  start (the name first) to its end, its own 1/100 grid: a swapped head (amsthm's \swapnumbers, "3.2 Theorem") or one
@@ -59,7 +59,7 @@ export type LabelInput = {
   heads: Readonly<Record<string, string>> | null
   names: OwnNames | null
 }
-export type Labelled = { relabel: string | null; head: HeadLabel | null; label: UnitLabel | undefined }
+type Labelled = { relabel: string | null; head: HeadLabel | null; label: UnitLabel | undefined }
 
 /** a float's label in the target's name, its number and punctuation the original's; null where it keeps the original's
  *  (L2:1184 labelInTarget). Where its part states its float's type (`float`, the owner's ruling of 2026-11-08: one form a

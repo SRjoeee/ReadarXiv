@@ -234,7 +234,7 @@ export type Json = null | boolean | number | string | Json[] | { [key: string]: 
  */
 export type LedgerSlot = { step: Step; by: RuleId; round: number; value: Json }
 /** a page's ledger: each member's slots, each pass page's fill target, the table groups read */
-export type PageLedger = {
+type PageLedger = {
   units: { ord: number; slots: LedgerSlot[] }[]
   passes: { page: number; target: Json }[]
   tables: Json[]
