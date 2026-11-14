@@ -7007,7 +7007,22 @@ Red at the base: 216 compiles with cells and no end point. **Proven at the
 reading**: `packages/engine/tests/cell-end.test.ts`, three rows as B ships them: "v" before a bottom rule, "x" before a row of
 numbers and column rules, "B" before two `\cmidrule`s, each its own ink alone; with no cell end stated, as before.
 
-**Measured**: CHAIN.
+**Measured** (the chain at this code against round 3's first wave, c3d8c3906, over the 89 + 1, the holdout and the third set; every
+paper compiled again, the compile side's key moving with LAYOUT_TEX: 739 compiles, 88 minutes in the docker slot at a load of 15
+to 400): 89 + 1, 36 and 119 made, the glyph proofs as before (0; the holdout's 2 and the third set's 1 the base's), the ownership's
+findings as before (102, 134, 50), the units objects the same but one paper's. The bundles of 11 papers move: the 42 cells of
+the sweep (7 in 2406.06525v1, 2610.20716v1, 2610.21176v1; 1 in the holdout's 2608.05876v1; 34 in six papers of the third set), each
+element's ink and text now its own glyphs' (TeX's: "✓", "ΛCDM", "oim.", "†", "a", "ctr_bg"; 2406.06525v1's El.text had read its row's
+numbers, 2610.38269v1's "a 40 5 × 32 …"), its line and its room (`side`, `band`: the rule under a row a wall again); the other cells
+of their tables in their facts (`room`, `Room.column` where a column now lines up, a line's measure); and the add-on's groups of
+those pages (the rules and entries a cell's piece held are the page's again). Beside them, the same class's other outcome, which
+the sweep had not counted: a piece whose next mark was a later cell's start on the same row had its own glyphs read as that cell's
+label (the reading's `toStart`) and owned none, its ink a box alone or nothing (2610.40576v1's two `\hlg{…}`, 2608.27181v1's
+`\textsuperscript{\dag}`); each now owns its glyphs, and in 2610.40576v1 a figure text made on A of the free glyphs ("so X = 5.") is
+no longer made, the later made units renumbered one down. The reader gate on both stores: its dumps byte for byte (the runner holds
+these tables back), I10 and I11 one member-page fewer (that figure text); the display gate: no page newly worse. The entry draws
+2610.21176v1 p13's cell 101 in its column with the table's bottom rule, and 2610.20716v1 p19's header with its two `\cmidrule`s,
+where it had laid the first over its row's first cells and both without their rules.
 
 ## 19. The engine's contract
 
