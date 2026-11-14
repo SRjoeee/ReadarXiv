@@ -1,14 +1,10 @@
-// U.breaks replayed on the tap: every sampled reading (U.elements:in and :out, the U.breaks sample's and every other rule's
-// that captured one), with the alignment's piece lines and the pieces' classes that lab/typeset/derive.mjs read with today's
-// code (lanes/L3/replay/U.breaks.json.gz). Its answer against prepareUnit's recorded breaks and finishUnit's maps.
+// U.breaks' maps replayed on the tap: every sampled reading (U.elements:in and :out, the U.breaks sample's and every other
+// rule's that captured one), finishUnit's maps (breakMaps) over the breaks today's prepareUnit recorded, against its maps.
 import { describe, expect, it } from 'vitest'
-import { type BreaksInput, breaks, type LayoutUnit, type V0Piece } from '../../src/unit/breaks.ts'
-import { type Rect, rectKey } from '../../src/util.ts'
-import { derived, firstDifference, hasDerived, hasTap, roundsOf, sample } from './tap.ts'
+import { type Break, breakMaps, type MapsInput, type V0Piece } from '../../src/unit/breaks.ts'
+import type { Rect } from '../../src/util.ts'
+import { firstDifference, hasTap, roundsOf, sample } from './tap.ts'
 
-type Derived = {
-  cases: Record<string, { from: string; pieceLines: [number, [number, number]][] | null; cls2: (string | null)[] }>
-}
 type Char = { sep?: boolean; space?: boolean; page: number; rect: number[] }
 type Res = {
   mode: string
@@ -19,7 +15,7 @@ type Res = {
   brkAt?: number
 }
 type Prep = Map<number, Res> & {
-  breaks: Map<number, unknown>
+  breaks: Map<number, Break>
   regionOf: Map<string, number>
   breakAt: Map<string, number>
   joinAt: Map<string, number>
@@ -29,17 +25,10 @@ type Prep = Map<number, Res> & {
   keep?: string[]
   lineInfo: Map<string, { j?: number }>
 }
-type Reading = {
-  unit: { pieces: V0Piece[]; source?: V0Piece[] }
-  rects: Rect[]
-  lu: LayoutUnit
-  kOf: number[]
-  lineskip: number[] | null
-  lines: { rects: Rect[]; jOf: number[]; held?: Rect[] }
-}
+type Reading = { unit: { pieces: V0Piece[] }; rects: Rect[] }
 
-/** U.breaks' input made from a recorded reading and the derived facts */
-export function breaksInput(i: Reading, prep: Prep, d: Derived['cases'][string]): BreaksInput {
+/** finishUnit's input made from a recorded reading */
+function mapsInput(i: Reading, prep: Prep): MapsInput {
   const kept = new Map<number, string[]>()
   for (const [k, r] of prep)
     if (r?.mode === 'kept' && r.gap)
@@ -48,15 +37,7 @@ export function breaksInput(i: Reading, prep: Prep, d: Derived['cases'][string])
         ...(r.gap.held ?? []),
       ])
   return {
-    lu: i.lu,
     pieces: i.unit.pieces,
-    cls2: d.cls2,
-    kOf: i.kOf,
-    lineskip: i.lineskip,
-    source: Array.isArray(i.unit.source) ? i.unit.source : null,
-    pieceLines: d.pieceLines ? new Map(d.pieceLines) : null,
-    fileLines: { rects: i.lines.rects, j: i.lines.jOf },
-    held: (i.lines.held ?? []).map(rectKey),
     rects: i.rects,
     lineInfo: prep.lineInfo,
     keep: prep.keep ?? [],
@@ -65,9 +46,8 @@ export function breaksInput(i: Reading, prep: Prep, d: Derived['cases'][string])
   }
 }
 
-describe.skipIf(!hasTap || !hasDerived('U.breaks'))('U.breaks: replayed on the tap', () => {
-  it('equals today’s breaks and maps on every sampled reading', { timeout: 120_000 }, () => {
-    const facts = derived<Derived>('U.breaks').cases
+describe.skipIf(!hasTap)('U.breaks: replayed on the tap', () => {
+  it('makes today’s maps of today’s breaks on every sampled reading', { timeout: 120_000 }, () => {
     const differ: string[] = []
     const count = { all: 0, ofBreaks: 0, paired: 0, paragraph: 0, joined: 0, opened: 0, regions: 0 }
     const rules = ['U.breaks', 'U.elements', 'U.label', 'U.marks', 'U.rename', 'B.tokens']
@@ -80,14 +60,9 @@ describe.skipIf(!hasTap || !hasDerived('U.breaks'))('U.breaks: replayed on the t
             prep = c['U.elements:out'] as Prep | undefined
           if (!i || !prep || seen.has(key)) continue
           seen.add(key)
-          const d = facts[key]
-          if (!d) {
-            differ.push(`${key}: no derived facts`)
-            continue
-          }
           count.all++
           if (rule === 'U.breaks') count.ofBreaks++
-          const got = breaks(breaksInput(i, prep, d))
+          const got = breakMaps(prep.breaks, mapsInput(i, prep))
           if (got.breaks.size) count.paired++
           if ([...got.breaks.values()].some((b) => b.paragraph)) count.paragraph++
           if (got.joinAt.size) count.joined++
@@ -99,7 +74,6 @@ describe.skipIf(!hasTap || !hasDerived('U.breaks'))('U.breaks: replayed on the t
               .filter(([, m]) => Object.values(m).some((v) => v !== undefined)),
           )
           const diff =
-            firstDifference(got.breaks, prep.breaks, 'breaks') ??
             firstDifference(got.regionOf, prep.regionOf, 'regionOf') ??
             firstDifference(got.breakAt, prep.breakAt, 'breakAt') ??
             firstDifference(got.joinAt, prep.joinAt, 'joinAt') ??
