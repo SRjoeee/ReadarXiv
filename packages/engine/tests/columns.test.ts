@@ -519,7 +519,12 @@ describe('locate states each cell’s room in its column as Room.column', () => 
 describe('locate states how the lines of a cell of several lines stand in its box (Placed.inner, §18.75)', () => {
   /** a cell of two lines owned by one unit, its column's class `boxed`: each line's text and start (glyphs 6 pt wide); its lines
    *  the rows of a box it holds, a forced break between each two (a merged cell), or with `paragraph` a paragraph's (none) */
-  const innerOf = (boxed: 'l' | 'c' | 'r', lines: [string, number][], paragraph = false, breaks?: number[]) => {
+  const innerOf = (
+    boxed: 'l' | 'c' | 'r' | undefined,
+    lines: [string, number][],
+    paragraph = false,
+    breaks?: number[],
+  ) => {
     const B = docOf([{ lines: lines.map(([text, x], k) => ({ text, x, y: 712 - 12 * k })) }])
     // (`breaks`: the lines a forced break follows, where they are not every one: a paragraph's \\newline among its wrapped lines)
     const after = new Set(breaks ?? lines.slice(1).map((_, k) => k + 1))
@@ -540,7 +545,12 @@ describe('locate states how the lines of a cell of several lines stand in its bo
           { t: 'text' as const, s: t },
         ])
     const units: InstrumentUnit[] = [
-      { id: unitId('cell', content), kind: 'cell', content, cell: { table: 0, row: 0, col: 0, boxed } },
+      {
+        id: unitId('cell', content),
+        kind: 'cell',
+        content,
+        cell: { table: 0, row: 0, col: 0, ...(boxed ? { boxed } : {}) },
+      },
     ]
     const ins: Instrument = {
       ink: B,
@@ -613,6 +623,15 @@ describe('locate states how the lines of a cell of several lines stand in its bo
         [2],
       ),
     ).toEqual({ lines: 4, inner: undefined })
+  })
+  it('states none for a cell of a paragraph column (p, m, b: no class of a column box), its lines one apart by \\newline', () => {
+    // (2608.27043v1's "Best: 98.91% AUC \newline Worst: 96.71% AUC", a p column's cell on two lines)
+    expect(
+      innerOf(undefined, [
+        ['Bestxx', 100],
+        ['Worstxyz', 100],
+      ]),
+    ).toEqual({ lines: 2, inner: undefined })
   })
   it('states none for a cell whose lines are a paragraph of its own (a p column, no forced break): no box of rows', () => {
     expect(
