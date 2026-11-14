@@ -24,7 +24,7 @@ const PUBLIC_KEY = 'AIzaSyATBXajvzQLTDHEQbcpq0Ihe0vWDHmO520'
 const CLIENT = 'wt_lib'
 /** a target as the endpoint is asked it: its Chinese by region, its Serbian and Mongolian by language */
 const REWRITE: Record<string, string> = { 'zh-Hans': 'zh-CN', 'zh-Hant': 'zh-TW', 'sr-Cyrl': 'sr', 'mn-Cyrl': 'mn' }
-export const googleTarget = (target: Lang): string => REWRITE[target] ?? target
+const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
 export const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */

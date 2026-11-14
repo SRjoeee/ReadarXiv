@@ -51,7 +51,7 @@ export const LAST_WAITS = 2
  *  failed one is and the unit told the time named, which a host offers its retry by (#638: a Retry-After of an hour, slept
  *  twice, held a call two hours, in an extension's background that is a service worker). The cooldown itself stays the
  *  endpoint's: the translator is asked nothing until it ends */
-export const patienceOf = (t: Translator): number => ATTEMPTS * t.limits.callMs
+const patienceOf = (t: Translator): number => ATTEMPTS * t.limits.callMs
 /** the breaker (global-gate.ts GATE_DEFAULTS): opens when OPEN_AT of at least MIN_OUTCOMES of the last WINDOW outcomes
  *  failed; skips its translator for BREAKER_MS, then lets one probe through; never skips the chain's last */
 export const BREAKER = { window: 50, minOutcomes: 20, openAt: 0.5, coolMs: 5 * 60_000 } as const

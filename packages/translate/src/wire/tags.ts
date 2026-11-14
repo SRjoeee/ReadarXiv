@@ -85,7 +85,7 @@ const SPAN_CLOSE = /<\/span\s*>/y
  */
 type TagSpelling = 'void' | 'html'
 /** the token an element written as a word holds: its slot's number after an `x` */
-export const tokenOf = (n: number): string => `x${n}`
+const tokenOf = (n: number): string => `x${n}`
 const elementTag = (as: TagSpelling, n: number): string =>
   as === 'html' ? `<span id="${n}" translate="no">${tokenOf(n)}</span>` : `<x id="${n}"/>`
 const openTag = (as: TagSpelling, n: number): string => (as === 'html' ? `<span id="${n}">` : `<t id="${n}">`)

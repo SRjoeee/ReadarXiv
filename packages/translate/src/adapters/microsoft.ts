@@ -56,7 +56,7 @@ const REWRITE: Record<string, string> = {
   ny: 'nya',
   lg: 'lug',
 }
-export const microsoftTarget = (target: Lang): string => REWRITE[target] ?? target
+const microsoftTarget = (target: Lang): string => REWRITE[target] ?? target
 /** whether the endpoint serves a target, synchronously (a host's settings say it before any call) */
 export const microsoftServesTarget = (target: Lang): boolean => SUPPORTED.has(microsoftTarget(target))
 
