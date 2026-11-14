@@ -19,7 +19,7 @@ import { symbolText } from '../source/text-symbols.mjs'
 import { INK_FREE_LEAD, prefixWord } from '../source/tex-kernel.mjs'
 import { DISPLAY, plainTranslated } from '../instrument/mt.mjs'
 import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
-import { fillOfColour } from './colour.mjs'
+import { fillOfColour } from './colour.ts'
 import { spellOf, WANT } from '../own/stream.mjs'
 
 // ---------------------------------------------------------------- the classes
