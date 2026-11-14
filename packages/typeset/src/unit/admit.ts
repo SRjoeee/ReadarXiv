@@ -50,7 +50,7 @@ const MACROS = new Set(['macro', 'umacro'])
 const JUDGED: Record<string, string> = { unlocated: 'unlocated', pieces: 'pieces', 'no row': 'noRow', lost: 'lost' }
 
 /** whether a row is translated, whole or in part (RUN:844) */
-export const translated = (u: V0Row | undefined): u is V0Row =>
+const translated = (u: V0Row | undefined): u is V0Row =>
   !!u?.pieces && (u.state === 'whole' || u.state === 'partial')
 
 /** whether a row holds what v0 reads of a unit, of the types it reads them as (RUN:1173 shapely) */

@@ -155,7 +155,7 @@ function textOfPieces(pieces: NonNullable<FigureUnit['pieces']>): { text: string
   return { text: out.map((x) => x.c).join(''), at: out.map((x) => x.cls) }
 }
 /** figureRuns' width at size 1, each run's in its face (L2:4836 figureRunsWidth, widthOf L2:1322) */
-export const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
+const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
   runs.reduce((a, r) => a + m.w100(r.s, r.face) / 100, 0)
 
 /** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the

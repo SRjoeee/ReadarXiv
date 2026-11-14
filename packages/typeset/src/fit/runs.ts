@@ -79,7 +79,7 @@ function runsOf(tokens: readonly Token[], blocks: readonly FitBlock[]): Run[] | 
 }
 /** a run's parameters (layoutRuns): its first block's place in the unit (slotsAt's first line), and the gap under the paragraph
  *  (P.halfLead, footFloorAt) and a heading's last lines the unit's last run's alone */
-export const runParams = (P: FitParams, run: Run, last: boolean): FitParams => ({
+const runParams = (P: FitParams, run: Run, last: boolean): FitParams => ({
   ...P,
   blockBase: run.bi0,
   lastLines: false,

@@ -95,7 +95,7 @@ const onItsDisplay = (l: Line, displays: readonly { box: Box }[]) =>
   !!(l[9] & KEPT) && onDisplay(displays, l[2], l[6], l[3], l[5])
 
 /** the boxes on both panes alike (one entry each), none where it has none */
-export const mirrored = (boxes: Box[]): Lit =>
+const mirrored = (boxes: Box[]): Lit =>
   boxes.length ? { left: [boxes], right: [boxes], own: [] } : { left: [], right: [], own: [] }
 
 type Dir = [ux: number, uy: number]

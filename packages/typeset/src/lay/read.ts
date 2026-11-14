@@ -80,7 +80,7 @@ export function srcOfEl(id: string, el: El | undefined): string {
   return el.cmd !== undefined ? `\\${el.cmd}${el.note !== undefined ? `[${el.note}]` : ''}${key}` : key
 }
 /** a group's open as the rules read it: the command it begins with (SpanAt.cmd) */
-export const srcOfSpan = (sp: SpanAt | undefined): string => (sp?.cmd !== undefined ? `\\${sp.cmd}{` : '{')
+const srcOfSpan = (sp: SpanAt | undefined): string => (sp?.cmd !== undefined ? `\\${sp.cmd}{` : '{')
 
 /** a row's content (the translation package's Result: its text, the source's elements and groups by id) as the flat pieces
  *  today's rules read (rows.mjs unitOf: a translated text, `ph` an element, `open` / `close` a group, `nested` a unit), each
