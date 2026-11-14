@@ -10,8 +10,7 @@ import type { PdfLike } from './compile/base.ts'
 import type { Instrument, PieceClass } from './instrument.ts'
 import type { NameKey } from './marks/names.ts'
 import type { CellPlace, SourceUnit } from './source/latex-front.ts'
-// @ts-ignore: JavaScript moved as it is, typed by this file alone
-import * as instrument_js from './instrument/instrument.mjs'
+import * as instrument_js from './instrument/instrument.ts'
 import * as base_js from './compile/base.ts'
 // @ts-ignore: JavaScript moved as it is, typed by this file alone
 import * as guard_js from './compile/guard.mjs'
@@ -191,28 +190,11 @@ export const NO_IMAGE_PIXELS = pdfLite_js.NO_IMAGE_PIXELS
 export const LINK_TEXT_PIXELS = pdfLite_js.LINK_TEXT_PIXELS
 export const liteWorkerSource = pdfLite_js.liteWorkerSource
 export const float32Outlines = pdfLite_js.float32Outlines
-export const contentOf = instrument_js.contentOf as (
-  pieces: readonly unknown[],
-  o?: {
-    kindOf?: (p: { t: string; src?: string }) => string
-    idOfNested?: (u: SourceUnit) => string | null
-    nameOf?: (p: unknown) => { name?: string; lang?: string } | undefined
-  },
-) => Piece[]
-export const classesOf = instrument_js.classesOf as (
-  pieces: readonly { t: string; src?: string }[],
-  colours?: ReadonlyMap<number, number> | null,
-  texts?: ReadonlyMap<string, string> | null,
-) => [string, PieceClass][]
-export const elementKindOf = instrument_js.elementKindOf as (piece: { t: string; src?: string }) => string
-export const unitFactsOf = instrument_js.unitFactsOf as (paper: Paper) => {
-  float: Map<number, string>
-  kept: Set<number>
-  why: Map<number, 'pseudocode' | 'words' | 'paperNames' | 'namesBlock'>
-}
-export const instrumentOf = instrument_js.instrumentOf as (
-  o: Record<string, unknown>,
-) => Promise<{ instrument: Instrument; today: unknown }>
+export const contentOf = instrument_js.contentOf
+export const classesOf = instrument_js.classesOf
+export const elementKindOf = instrument_js.elementKindOf
+export const unitFactsOf = instrument_js.unitFactsOf
+export const instrumentOf = instrument_js.instrumentOf
 export interface Paper {
   fsys: ReturnType<typeof inMemory>
   meta: ReturnType<typeof analyze>

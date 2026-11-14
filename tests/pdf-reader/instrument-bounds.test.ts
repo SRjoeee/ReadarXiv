@@ -7,12 +7,11 @@
 // its placeholders', its label, none), units whose tail is one footnote's call or more pieces, texts and names: each glyph's
 // piece, and the points open at each page's end, page after page.
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error: the module is JavaScript until its typing commit (no declaration in the package)
-import * as NOW from '../../packages/engine/src/instrument/instrument.mjs'
+import * as NOW from '../../packages/engine/src/instrument/instrument.ts'
+import type { SourcePiece } from '../../packages/engine/src/source/latex-front.ts'
 import * as BEFORE from './helpers/instrument-before.mjs'
 
-type Module = typeof BEFORE
-const now = NOW as Module
+const now = NOW
 
 /** a seeded generator (mulberry32) */
 function seeded(seed: number) {
@@ -29,7 +28,7 @@ function seeded(seed: number) {
   return { next, int, pick }
 }
 
-const PIECES = [
+const PIECES: readonly SourcePiece[] = [
   { t: 'text', s: 'Words of it' },
   { t: 'text', s: ' ' },
   { t: 'ph', src: '\\footnotemark' },
@@ -47,7 +46,7 @@ describe('glyphPiecesOf', () => {
       const count = 1 + r.int(5)
       // (each unit's pieces: some end with one footnote's call after their last text, some with more, some with none)
       const units = Array.from({ length: count }, () => {
-        const pieces = Array.from({ length: 1 + r.int(6) }, () => r.pick(PIECES))
+        const pieces: SourcePiece[] = Array.from({ length: 1 + r.int(6) }, () => r.pick(PIECES))
         if (r.next() < 0.5) pieces.push({ t: 'text', s: 'last words' }, { t: 'ph', src: '\\footnotemark' })
         return { pieces }
       })

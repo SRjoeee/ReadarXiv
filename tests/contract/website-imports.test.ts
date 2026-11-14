@@ -95,7 +95,8 @@ const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }
   { path: 'packages/engine/src/compile/paper.mjs', names: [] },
   { path: 'packages/engine/src/compiled.ts', names: [] },
   { path: 'packages/engine/src/front.ts', names: [] },
-  { path: 'packages/engine/src/instrument/instrument.mjs', names: [] },
+  // (instrument.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  { path: 'packages/engine/src/instrument/instrument.ts', names: [] },
   { path: 'packages/engine/src/locate/locate.ts', names: [] },
   { path: 'packages/engine/src/locate/words.ts', names: [] },
   // (colour.ts credited by its row in docs/THIRD_PARTY.md, which the website's licence gate reads, tests/vite-licence-gate.test.ts;

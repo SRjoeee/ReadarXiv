@@ -74,7 +74,7 @@ units share an id and one translation, and a change of a cut moves only the ids 
 `sentences` says the reader lights it sentence by sentence, `kept` that the paper keeps it as it is (never translated: which
 of a table's cells and a figure's texts are kept is decided in the engine alone, by `packages/engine/src/instrument/language.ts`,
 a text that holds no ordinary word, a name the paper's own running text writes, a text a block of names in the paper's tables
-keeps; read by `unitFactsOf`, `packages/engine/src/instrument/instrument.mjs`, for the source's units, over the blocks the
+keeps; read by `unitFactsOf`, `packages/engine/src/instrument/instrument.ts`, for the source's units, over the blocks the
 source reader states, and by `packages/engine/src/locate/ink.ts` for the texts read off A; the typesetter decides none), and
 `of` the block its source ties it to where that is not its kind's (a `\thanks` written in `\author{…}`, acmart's
 `\authornote`: `of: 'author'`); `of` is in no id and reaches no translator. The kind a reading option decides by is
@@ -152,7 +152,7 @@ it serves, where each object goes.
    `packages/engine/src/compile/paper.mjs`: the probe, the marks of `packages/engine/src/marks/marks.ts`, the guard of
    `packages/engine/src/compile/guard.mjs`), or reads a stored instrument back where A's facts are the ones it was made for.
    What is stored of a compile is `plan.ts`'s (`storedInstrumentOf`). `instrumentOf`
-   (`packages/engine/src/instrument/instrument.mjs`) then states the instrument over B.
+   (`packages/engine/src/instrument/instrument.ts`) then states the instrument over B.
 3. The back half, `prepareBack`: A read once (`packages/engine/src/read.ts`), aligned with B, located, wrapped
    (`packages/engine/src/wrap/wrap.ts`) and cut into the bundle's objects, each handed to the host as it is made; then a tally.
    The prepare tells the host its stages as `PREPARE_STAGES` names them (`packages/format/src/doc.ts`).
@@ -245,8 +245,8 @@ a gate is named by its id there. The rows after them are this repository's own.
 |---|---|---|
 | how the source is read: a command's arguments, a piece's kind, what a unit holds | the source reader, `packages/engine/src/source/latex-front.ts`, and its tables in `packages/engine/src/source/` (`tex-names.json` is made by `lab/pdf/spikes/tex-names-make.mjs`, `latexml-args.ts` by `scripts/latexml-args.mjs`) | the units whose content changes take new ids and are translated again; it is the compile side (below); today's reader reads the same front half, so `PIPELINE_VERSION` moves with it (`src/pdf-reader/engine/pipeline/versions.mjs`) |
 | what the marked compile is asked and what TeX states back: the marks, the probe, the frames, skips and alignments of the log | `packages/engine/src/marks/` (`marks.mjs` writes and reads the probe; `channels.ts` reads TeX's statements), the compile's driver `packages/engine/src/compile/` | the compile side: a host that keys the stored instrument by the code of `compiled.ts`, `plan.ts` and what they reach compiles every paper once more |
-| what the instrument says of B: an element's class, a piece TeX set no ink for | `packages/engine/src/instrument/instrument.mjs`, its typed seam `packages/engine/src/instrument.ts` | after TeX: a stored instrument stays good, nothing compiles again; the bundle's objects move |
-| which of a table's cells and a figure's texts are kept as written | `packages/engine/src/instrument/language.ts` (the rules), read by `unitFactsOf` in `packages/engine/src/instrument/instrument.mjs` over the table blocks the source reader states (`packages/engine/src/source/latex-front.ts`) and by `packages/engine/src/locate/ink.ts`; the typesetter holds no table rule but a group's lay (`packages/typeset/src/lay/entry.ts`) | the units' `kept` moves, with `PIPELINE_VERSION`: a unit kept is asked no more, one no longer kept is asked |
+| what the instrument says of B: an element's class, a piece TeX set no ink for | `packages/engine/src/instrument/instrument.ts`, its typed seam `packages/engine/src/instrument.ts` | after TeX: a stored instrument stays good, nothing compiles again; the bundle's objects move |
+| which of a table's cells and a figure's texts are kept as written | `packages/engine/src/instrument/language.ts` (the rules), read by `unitFactsOf` in `packages/engine/src/instrument/instrument.ts` over the table blocks the source reader states (`packages/engine/src/source/latex-front.ts`) and by `packages/engine/src/locate/ink.ts`; the typesetter holds no table rule but a group's lay (`packages/typeset/src/lay/entry.ts`) | the units' `kept` moves, with `PIPELINE_VERSION`: a unit kept is asked no more, one no longer kept is asked |
 | which glyph of A a unit owns, whether it is located, what a member states | `packages/engine/src/align/`, `packages/engine/src/locate/` (the phases' order in `locate.ts`; ownership written only by `ownership.ts`; the facts read off A in `facts.ts` and `facts-pass.ts`); written into the part by `packages/engine/src/bundle/bundle.ts` | the parts move. Proof: the lab's corpus run object for object against the last (`lab/pdf/prepare-back/same.mjs`), the differential (`prepare-diff`) |
 | which ink a reader can hide | the groups, `groupsOf` in `packages/engine/src/locate/ownership.ts`; the add-on, `packages/engine/src/wrap/wrap.ts` over `packages/engine/src/wrap.ts` | the add-on moves. Proof: `lab/pdf/prepare-back/prove.mjs`, `pixels` |
 | a field of a bundle object | `packages/format/src/schema.ts` | an optional field is free: a reader strips what it does not know. One an old reader would misread raises `FORMAT`, and a reader names the formats it reads in its open (`FORMATS`) |

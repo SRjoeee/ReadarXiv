@@ -30,7 +30,7 @@
     "./today/instrument/format.ts": "./src/instrument/format.ts",
     "./today/instrument/units.ts": "./src/instrument/units.ts",
     "./today/instrument/layer1.ts": "./src/instrument/layer1.ts",
-    "./today/instrument/instrument.mjs": "./src/instrument/instrument.mjs"
+    "./today/instrument/instrument.ts": "./src/instrument/instrument.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
