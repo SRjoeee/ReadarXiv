@@ -825,7 +825,7 @@ export const RULINGS = [
     example:
       '2611.03953v2-zh p13 t206: "MOPD (TA init)" at 0.9 of the size inside its Method column, where today sets it at 0.8 in its own width (frame: past its own room); 1512.03385v1-zh p12 t309: "val" at 0.9 inside its column, where today runs it on past the column at 1.0 (size)',
     condition:
-      "size or frame, a table cell v2 lays (its Page member `laid`) in its room in its column: the part states Room.column for it (its column's box widened by the column's share of the blank beside it, never past its own side; docs/PDF-READER.md §18.13), its one line is no held line, and its Room.side stands at or past both edges of that room (the typesetter's columnRoomOf); v2's every drawn line of it inside that room BY ITS INK (the line's drawn characters, a CJK opening mark's blank first half and a closing mark's blank second half aside, as the measures read ink: verdict.mjs inkedLine), within the position floor; `frame` (a line past the cell's own room of before, the frame measure's): that alone; `size`: v2 larger than today, or smaller only where today's drawn line of it stands past that room by its ink, beyond the position floor (today ran it on past its column). Not covered: a cell whose ink v2 draws past its column's box; a cell v2 draws smaller than today where today's line stands inside that room (under the size its column allows); a cell whose column the part does not state; every other measure of the cell (its I3- and I5-like overlaps, over, shown, groups …) judged as before",
+      "size or frame, a table cell v2 lays (its Page member `laid`) in its room in its column: the part states Room.column for it (its column's box widened by the column's share of the blank beside it, never past its own side; docs/PDF-READER.md §18.13), its one line is no held line, and its Room.side stands at or past both edges of that room (the typesetter's columnRoomOf); v2's every drawn line of it inside that room BY ITS INK (the line's drawn characters, a CJK opening mark's blank first half and a closing mark's blank second half aside, as the measures read ink: verdict.mjs inkedLine), within the position floor; `frame` (a line past the cell's own room of before, the frame measure's): that alone; `size`: v2 larger than today, or smaller only where today's drawn line of it stands past that room by its ink, beyond the position floor (today ran it on past its column). Not covered: a cell whose ink v2 draws past that room; a cell v2 draws smaller than today where today's line stands inside that room (under the size its column allows); a cell whose column the part does not state; every other measure of the cell (its I3- and I5-like overlaps, over, shown, groups …) judged as before",
     holds(d, x) {
       if ((d.flag !== 'size' && d.flag !== 'frame') || !d.unit) return false
       const u = x.unit(d)
@@ -848,7 +848,7 @@ export const RULINGS = [
     },
     says(d, x) {
       const f = x.member(x.unit(d).part)
-      return `laid in its column's box ${f.column[0]}-${f.column[1]}${d.flag === 'size' && d.v2.value < d.today.value ? ", where today's line runs past it" : ''}`
+      return `laid in its room in its column ${f.column[0]}-${f.column[1]}${d.flag === 'size' && d.v2.value < d.today.value ? ", where today's line runs past it" : ''}`
     },
   },
 ]
