@@ -169,11 +169,8 @@ export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_L
 // ---- layer-proto/figure-rows.mjs:37 (BAND_MAX)
 export const BAND_MAX = 4
 
-// ---- translate/mt.mjs:28, 31-34 (utf8)
-const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }
-const DECODER = new TextDecoder()
-const ASCII = /^[\t\n\r -~]*$/
-export const utf8 = s => (ASCII.test(s) ? s : DECODER.decode(latin1Bytes(s)))
+// ---- instrument/mt.ts utf8, its home's own (the copy is not kept once its home is typed: the coordinator's ruling of 2026-11-14)
+export { utf8 } from '../../instrument/mt.ts'
 
 // ---- layout/marks.mjs:72-94 (classOf), the one change: a piece's class is the instrument's (the front half's adapter ran today's
 // classOf over its source: an element's kind, `other` where classOf said none), and of an ink unit's own placeholder (its kept
