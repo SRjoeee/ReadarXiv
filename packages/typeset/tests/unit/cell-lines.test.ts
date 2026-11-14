@@ -140,3 +140,36 @@ describe('the other side: laid in their own rooms as before', () => {
     expect(layOf([short], rows)[0]).toEqual(layOf([unstated(short)], rows)[0])
   })
 })
+
+describe("a cell whose leading is read off the page, not stated by TeX (Placed.read 'lead'): its break a block of its own", () => {
+  // (2608.06701v1-zh p6 after S2: "\shortstack{\textbf{Trigger}\\\textbf{Rate (%)}}", its lead read off the page: the break pairs
+  // with TeX's line but no pitch is known, so the line after it opens a region of its own (U.breaks breakAt), keyed by the line's
+  // own rectangle; the lay set every line's rectangle to the column's room and found no region, and the reply's "触发" and
+  // "率（%）" were drawn as one line, "触发率" then "（%）")
+  const narrow: [[number, number], [number, number]] = [
+    [115, 145],
+    [112, 148],
+  ]
+  const read = (m: Placed): Placed => ({ ...m, read: ['style', 'lead'] }) as Placed
+  it('ends its first line at the break, though both halves would fit the room on one', () => {
+    const [m] = layOf([read(cell(5, narrow, { column: [100, 160] }))], rowsOf({ 5: ['xxxx', 'yyyy'] }))
+    expect(m!.state).toBe('laid')
+    expect(m!.lines.map((l) => l[3].map((it) => (it as { s?: string }).s ?? '').join(''))).toEqual(['xxxx', 'yyyy'])
+    for (const [a, z] of extents(m!)) {
+      expect(a).toBeCloseTo(120, 5)
+      expect(z).toBeCloseTo(140, 5)
+    }
+  })
+  it('sets one box over its lines in their two blocks: a centred box flush left, each line centred in it', () => {
+    // (the box as wide as its widest line, 50 pt, from the room's left edge; the second line, 30 pt, centred in it)
+    const [m] = layOf(
+      [read(cell(6, narrow, { align: 'l', inner: 'c', column: [100, 160] }))],
+      rowsOf({ 6: ['x'.repeat(10), 'y'.repeat(6)] }),
+    )
+    const [l1, l2] = extents(m!)
+    expect(l1![0]).toBeCloseTo(100, 5)
+    expect(l1![1]).toBeCloseTo(150, 5)
+    expect(l2![0]).toBeCloseTo(110, 5)
+    expect(l2![1]).toBeCloseTo(140, 5)
+  })
+})
