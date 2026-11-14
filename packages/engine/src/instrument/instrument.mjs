@@ -630,7 +630,7 @@ export function glyphPiecesOf(pg, row, { units = [], texts = null, names = new S
   for (let j = 0; j < pg.glyphs.length; j++) {
     const m = /^u(\d+)\.p$/.exec(row[j] ?? '')
     const u = m ? Number(m[1]) : -1
-    if (u < 0 || !(ends.get(u) <= j)) continue
+    if (u < 0 || !((ends.get(u) ?? Infinity) <= j)) continue
     const pieces = units[u]?.pieces ?? []
     const last = pieces.findLastIndex(q => q.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : ''))
     const tails = pieces.map((q, k) => [q, k]).filter(([q, k]) => k > last && classOf(q) !== null)
