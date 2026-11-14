@@ -29,7 +29,7 @@ const turnOf = (vp: { rotation?: number }): number => (((vp.rotation ?? 0) % 360
 export type Side = 'left' | 'right'
 export type Display = 'original' | 'bilingual' | 'translation'
 export type Zoom = 'page-width' | 'page-fit' | 'page-actual' | number
-export const DISPLAYS: readonly Display[] = ['original', 'bilingual', 'translation']
+const DISPLAYS: readonly Display[] = ['original', 'bilingual', 'translation']
 /** CSS px: the widest a page is fitted in a single display (the reader's design, §3) */
 const READING_WIDTH = 1060
 /** a zoom's or a pinch's step: scaled by CSS at once, drawn this long after the last step (one redraw a burst) */
@@ -45,7 +45,7 @@ const LAID_MS = 100
 const HEADING_ROOM = 28
 /** the most the pages ahead of the view wait to be drawn (ms), from the panes' laying out: a layer's first page lets them go
  *  sooner (places.mjs AHEAD_HOLD_MS, the web's holdAhead alike; PDF-READER §11.7); a ruling, unmeasured */
-export const AHEAD_HOLD_MS = 15_000
+const AHEAD_HOLD_MS = 15_000
 /** the paper's language, on the text layers of the original's words (docs/PDF-READER.md §13, text-layer.mjs SOURCE_LANG): the
  *  reader asks every translation from English */
 export const SOURCE_LANG = 'en'
