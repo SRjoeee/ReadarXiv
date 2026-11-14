@@ -46,7 +46,7 @@ export const BELOW: ReadonlySet<string> = new Set(['̧', '̨'])
 
 /** `letter` under the combining `mark` as one code point (NFC): a dotless ı or ȷ under a mark above it the dotted letter's
  *  (Loïc, Física); null where the two compose to none */
-export function composed(letter: string, mark: string): string | null {
+function composed(letter: string, mark: string): string | null {
   const base = BELOW.has(mark) ? letter : letter === 'ı' ? 'i' : letter === 'ȷ' ? 'j' : letter
   const ch = (base + mark).normalize('NFC')
   return [...ch].length !== 1 || ch === base + mark ? null : ch
