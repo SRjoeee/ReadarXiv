@@ -363,13 +363,14 @@ function readColumns(fx: FactsIndex): void {
       }
       cells.push({ ord: mem.ord, page, col: c.col, span: c.span ?? 1, cls: c.boxed, x0, x1, side: mem.room.side })
       // (a cell of several lines on one page, the lines of a box TeX set in it, its rows: a line each, every two apart by a forced
-      // break, one fewer than its lines, in a column of class l, c or r (a paragraph cell's lines, a p column's, hold none,
+      // break (rowsOf: an empty row none), in a column of class l, c or r (a paragraph cell's lines, a p column's, hold none,
       // or a \\newline among lines TeX wrapped, or are a paragraph's in no column box): how they stand in the box, §18.75)
       if (
         c.boxed !== undefined &&
         extents.length > 1 &&
         extents.length === mem.lines.length &&
-        breaksOf(units[mem.unit]!.content) === extents.length - 1
+        holdsBreak(units[mem.unit]!.content) &&
+        rowsOf(units[mem.unit]!.content) === extents.length
       ) {
         const inner = innerOf(extents, c.boxed)
         if (inner) mem.inner = inner
@@ -828,13 +829,32 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
   }
 }
 
-/** how many forced breaks a unit's content holds (elements whose source is one, FORCED_BREAK), in its groups or not */
-function breaksOf(content: readonly Piece[]): number {
-  let n = 0
-  for (const p of content)
-    if (p.t === 'el') n += FORCED_BREAK.test((p as { src?: string }).src?.trim() ?? '') ? 1 : 0
-    else if (p.t === 'span') n += breaksOf(p.content)
-  return n
+/** a unit's rows as a box holds them: the stretches of its content between its forced breaks (elements whose source is one,
+ *  FORCED_BREAK, in its groups or not) that hold something, text or another element: a break that closes an empty row (at the
+ *  content's end, or two in a row) makes none */
+function rowsOf(content: readonly Piece[]): number {
+  let rows = 0,
+    open = false
+  const walk = (ps: readonly Piece[]) => {
+    for (const p of ps) {
+      if (p.t === 'span') walk(p.content)
+      else if (p.t === 'el' && FORCED_BREAK.test((p as { src?: string }).src?.trim() ?? '')) open = false
+      else if (p.t === 'el' || (p.t === 'text' && /\S/.test(p.s))) {
+        if (!open) rows++
+        open = true
+      }
+    }
+  }
+  walk(content)
+  return rows
+}
+/** whether a unit's content holds a forced break, in its groups or not */
+function holdsBreak(content: readonly Piece[]): boolean {
+  return content.some((p) =>
+    p.t === 'el'
+      ? FORCED_BREAK.test((p as { src?: string }).src?.trim() ?? '')
+      : p.t === 'span' && holdsBreak(p.content),
+  )
 }
 
 /** its label's parts and style */
