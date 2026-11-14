@@ -184,28 +184,28 @@ describe('a table cell laid in its column’s box (Room.column; the owner’s de
 // room, its box widened, in the one field; the typesetter reads it as it read the box. His four marked shapes, each its box and
 // the room the engine gives it, the translation 5 pt a character at the original's size)
 describe('a table cell laid in its room in its column: its box widened by the column’s share of the blank (§18.13)', () => {
-  /** p7 Table 2's 「最终的」: a c header 20 pt wide, 10 pt to each neighbour's box; its translation 30 pt */
+  /** p7 Table 2's "Final": a c header 20 pt wide, 10 pt to each neighbour's box; its translation 30 pt */
   const final = () => cell(10, [102, 118], { align: 'c', column: [95, 125], side: [80, 140], y: 580 })
-  /** p13 Table 7's 「MOPD（TA 初始化）」: an l column 60 pt wide, the next column's box 10 pt past it; its translation 70 pt */
+  /** p13 Table 7's "MOPD (TA init)": an l column 60 pt wide, the next column's box 10 pt past it; its translation 70 pt */
   const mopd = () => cell(11, [100, 150], { column: [100, 165], side: [80, 175], y: 560 })
-  /** p16 Table 12's 「比例尺」: an l column 20 pt wide, 8 pt to the next one; its translation 30 pt */
+  /** p16 Table 12's "Scale": an l column 20 pt wide, 8 pt to the next one; its translation 30 pt */
   const scale = () => cell(12, [100, 118], { column: [100, 124], side: [80, 135], y: 540 })
-  /** 2610.17024v1 p18's 「全部的」: an r header 18 pt wide, 12 pt to the column before it; its translation 30 pt */
+  /** 2610.17024v1 p18's "Total": an r header 18 pt wide, 12 pt to the column before it; its translation 30 pt */
   const total = () => cell(13, [100, 118], { align: 'r', column: [94, 118], side: [80, 125], y: 520 })
   const rows = rowsOf({ 10: 'x'.repeat(6), 11: 'x'.repeat(14), 12: 'x'.repeat(6), 13: 'x'.repeat(6) })
   it('lays each at the largest size not over the original’s that its room holds, aligned in it by its class', () => {
     const ms = layOf([final(), mopd(), scale(), total()], rows)
-    // (「最终的」 30 pt in 30: the original's size, centred on the box's middle; in its box alone, 0.65)
+    // ("Final" 30 pt in 30: the original's size, centred on the box's middle; in its box alone, 0.65)
     expect(byOrd(ms, 10).fit!.size).toBeCloseTo(10, 5)
     const [a, z] = extentOf(byOrd(ms, 10))
     expect((a + z) / 2).toBeCloseTo(110, 5)
-    // (「MOPD（TA 初始化）」 70 pt in 65: 0.925 sets 64.75, from the box's left edge; in its box alone, 0.85)
+    // ("MOPD (TA init)" 70 pt in 65: 0.925 sets 64.75, from the box's left edge; in its box alone, 0.85)
     expect(byOrd(ms, 11).fit!.size).toBeCloseTo(9.25, 5)
     expect(extentOf(byOrd(ms, 11))[0]).toBeCloseTo(100, 5)
     expect(extentOf(byOrd(ms, 11))[1]).toBeLessThanOrEqual(165 + 1e-9)
-    // (「比例尺」 30 pt in 24: 0.8; in its box alone, 0.65)
+    // ("Scale" 30 pt in 24: 0.8; in its box alone, 0.65)
     expect(byOrd(ms, 12).fit!.size).toBeCloseTo(8, 5)
-    // (「全部的」 30 pt in 24, ending at the box's right edge: 0.8)
+    // ("Total" 30 pt in 24, ending at the box's right edge: 0.8)
     expect(byOrd(ms, 13).fit!.size).toBeCloseTo(8, 5)
     expect(extentOf(byOrd(ms, 13))[1]).toBeCloseTo(118, 5)
   })

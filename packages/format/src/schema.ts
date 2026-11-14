@@ -303,13 +303,16 @@ export const Room = z.object({
   // left, 2 the right. A cell widened past its own ink keeps a quarter of its size off a wall and goes half way to a glyph,
   // today's paperTo; a part made before states none, every side a glyph's)
   wall: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
-  // (a table cell's column's box: the left and right edge of what TeX set in its column of its tabular, every entry's, its unit
-  // cells' and the entries no unit is (a number, a formula alone), stated where they line up as the column's class sets them
-  // (an l column's on its left edge, an r column's on its right, a c column's on its middle, two entries at least); a spanning
-  // cell's the union of the columns it spans, each stated. Absent where that is not established: a p, m, b or X column, a cell
-  // of a \parbox or of no LaTeX template, a column a \multicolumn widened, one whose entries do not line up, one of one entry. A
-  // single-line cell is laid in it, in its column's alignment, at the largest size not over the original's that fits it (the
-  // owner's decision, docs/PDF-READER.md §18.13); a typesetter of before reads none and lays it in its own room)
+  // (a table cell's room in its column: its column's box (the left and right edge of what TeX set in its column of its tabular,
+  // every entry's, its unit cells' and the entries no unit is (a number, a formula alone), stated where they line up as the
+  // column's class sets them (an l column's on its left edge, an r column's on its right, a c column's on its middle, two
+  // entries at least); a spanning cell's the union of the columns it spans, each stated) widened, on each side the cell's class
+  // grows (l right, r left, c both by the smaller), by half the blank between the box and what stands next on the table's band
+  // (the column's own share of TeX's blank between columns), never past the cell's own `side`. Absent where the box is not
+  // established: a p, m, b or X column, a cell of a \parbox or of no LaTeX template, a column a \multicolumn widened, one whose
+  // entries do not line up, one of one entry. A single-line cell is laid in it, in its column's alignment, at the largest size
+  // not over the original's that fits it (the owner's decisions of 2026-11-13 and 2026-11-14, docs/PDF-READER.md §18.13); a
+  // typesetter of before reads none and lays it in its own room. A part made before 2026-11-14 states the box itself)
   column: z.tuple([num, num]).optional(),
   under: num.optional(),
   // (a figure text's container's edge over its baseline, PDF units up from it: a closed shape round all of its glyphs, inside

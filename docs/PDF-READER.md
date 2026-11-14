@@ -3568,8 +3568,50 @@ fits there at no size is a cell that cannot be drawn, the original's by itself (
 under it (a CJK cell's `cellBands` cap) and the breaker's sliver rule (a slot under 1.5 em dropped) read the box as they read any
 room.
 
+**The room is the box and the column's share of the blank beside it** (the owner's approval of 2026-11-14). On round RB3's check
+list the owner saw short translated headers (2611.03953v2 p7 Table 2's "Final", p16 Table 12's "Scale", 2610.17024v1 p18's
+"Total") drawn smaller in a column that visibly had room, and "MOPD (TA init)" on p13 still under its neighbours' size; the box
+is the hull of the column's widest entry, with none of the blank TeX leaves beside a column. He approved the column's own blank:
+「同意你说的让格子可以用上它自己这一列两侧的空白（TeX 排表时每一列两边都留有固定的空白），这样这些短表头能回到原字号，又不会伸进隔壁列的内容。就这么干」. So `Room.column`
+states the cell's room in its column (`locate/columns.ts` roomsOf, read with the box): its column's box widened, on each side its
+own class lets its text grow, by the column's share of the blank on that side. An `l` cell grows to the right (its start stays on
+the box's left edge), an `r` cell to the left, a `c` cell both ways by the smaller of its two shares (its middle stays the box's
+middle); a cell spanning columns, the union of its boxes by its first column's left share and its last column's right share.
+- **The share is half the blank** between the box's edge and what stands next to the column on the table's band on that side.
+  TeX makes the blank between two columns of each column's own `\tabcolsep` (its template's u-part and v-part), so half of it is
+  this column's; the other half stays between the cell and its neighbour's text or the rule. Over the round's 1,472 stated
+  columns the blanks' median is 7.96 pt (two `\tabcolsep` of 4 pt at a paper's scale).
+- **What stands next** is the nearest of: another column's box; the unit cells of a column with no box; a word of free ink on
+  the band; a glyph of any member that is no cell of the table (a paragraph's, a caption's, an ink unit's: the rule says "what
+  stands on the band", and reading free ink alone was the box reader's blind spot carried over; over the round's papers 38 cells
+  of 6 tables in 4 papers would otherwise have reached ink of the band no column holds, a paragraph or caption in the band's slack or an
+  ink unit's lines across the columns, 2602.23285v2 p7 and p19); and a painted edge, a vertical rule or a neighbour's fill. A
+  fill's edge is painted like a rule, so the share beside it is half the blank to that edge (a quarter of the gap between the
+  columns): the other half stays between the text and what the page paints there, as beside a rule (163 left and 176 right
+  sides of the round's columns stop at a fill). Where nothing stands on a side, the table's own edge, where the horizontal rules
+  TeX drew across its cells end; where the page shows no rule there, no share. A cell spanning columns stands next to none (its
+  ink crosses them), a painted box across the whole box is its ground (a `\rowcolor`, the column's own fill), what stands past the
+  table's edge is not the table's, and one that meets the box's edge leaves no blank. Everything is read at the part's
+  hundredth (a `\rowcolor` TeX painted from a column's edge at 62.3621 beside a box at 62.36 is that column's ground), in one
+  pass a table: its band's ink is read once, as the box reads its free words, and each column's sides are found by a search in
+  that list sorted once by start and once by end.
+- **Never past the cell's own side**: the widening stops at `Room.side` on each side (TeX's measure, a rule's end beside its
+  line), never inside the box. A share is blank the column owns, not blank past a wall of the cell's own line: where the
+  table's rules end past the measure (98 cells) or a `\cmidrule` under a spanning header ends beside the line (3), a room past
+  the side sent the cell to its own room, and 3 were drawn smaller than in the box (1706.03762v7-es p8 1.0 to 0.825, 2610.19159v1-ja
+  p4 1.0 to 0.875). A `c` cell's cut is the same on both sides, so that its middle stays the box's. Where its side stops short of
+  the box (ink not its own on its line inside it), the box stands on that side and the typesetter lays it in its own room, as
+  before.
+- **Measured before it was built** (phase 1, the reader gate's entry over the 92 pairs on Google's rows against RB3's lay): of the
+  3,094 single-line cells laid in their box, 438 stood under the original's size: 197 reach it, 134 are larger and still under,
+  107 do not move (a share too small for a step of the fit), none smaller; 17 cells RB3 left the original's (wider than their box
+  at 0.6) are laid. The owner's cells: p7 Table 2's "Final" 0.75 to 1.0 (box 20.17 pt, room 30.13, its translation 26.90 at the
+  original's size), p13 Table 7's "MOPD (TA init)" 0.9 to 0.95 (66.51 to 70.00; 84.12 at the original's size), p16 Table 12's
+  "Scale" 0.725 to 0.875 (19.42 to 23.41), 2610.17024v1 p18's "Total" 0.675 to 0.9 (18.12 to 24.10); p16's "Final" stood at the
+  original's size already. 322 single-line cells under the original's size have no stated column.
+
 **Laid in its own room as before**: a cell whose column the part does not state (above, and every part made before the field), a
-cell of several lines, a held line, and a cell whose own line holds ink not its own inside the box (its `Room.side` short of an
+cell of several lines, a held line, and a cell whose own line holds ink not its own inside its room (its `Room.side` short of an
 edge of the box: a mark TeX set in its entry past a space, which stays where TeX set it). That room is what TeX set on its line:
 its glyphs' advances and its elements' ink on its baseline, a centred cell's centred on its advances' middle (2610.17024v1 p14's
 "p=5 n=20 …", whose italic p's ink starts 0.63 pt before its advances); it steps down there to the fit's floor and, only where

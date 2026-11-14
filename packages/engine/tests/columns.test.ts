@@ -11,7 +11,14 @@ import { readCellBoxes } from '../src/marks/channels.ts'
 import { docOf } from './helpers/doc.ts'
 import { locate } from './helpers/locate.ts'
 
-const at = (ord: number, col: number, cls: ColumnCell['cls'], x0: number, x1: number, o: Partial<ColumnCell> = {}): ColumnCell => ({
+const at = (
+  ord: number,
+  col: number,
+  cls: ColumnCell['cls'],
+  x0: number,
+  x1: number,
+  o: Partial<ColumnCell> = {},
+): ColumnCell => ({
   ord,
   page: 1,
   col,
@@ -188,8 +195,10 @@ describe('columnBoxes with the band’s ink: each cell’s room in its column, i
     const f = columnBoxes(three(), [], band({ walls: [[184, 226]] }))
     expect(near(f.get(3))).toEqual([143, 177])
     expect(near(f.get(4))).toEqual([180, 220])
-    // (a ground across every column, a row's colour, is no edge beside any)
+    // (a ground across every column, a row's colour, is no edge beside any; read at the part's hundredth, so that a \rowcolor
+    // TeX painted from the first column's edge is its ground whatever its last digits: 2610.40394v1 p3's at 62.3621)
     expect(near(columnBoxes(three(), [], band({ walls: [[94, 226]] })).get(3))).toEqual([140, 180])
+    expect(near(columnBoxes(three(), [], band({ walls: [[100.002, 226]] })).get(1))).toEqual([100, 140])
   })
   it('takes the table’s own edge where nothing stands on a side, where its rules end; no share where the page shows none', () => {
     const cells = [at(1, 0, 'r', 100, 130), at(2, 0, 'r', 110, 130), at(3, 1, 'l', 150, 170), at(4, 1, 'l', 150, 160)]
