@@ -9,7 +9,7 @@ import type { Placed } from '@readarxiv/format'
 import { coverageOf, linksPass, measurePage, recount as recountOf, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { labelsPass } from '../../lab/typeset/parity/fidelity.mjs'
-import { rowLinesOf } from '../../packages/typeset/src/index.ts'
+import { rowLinesOf } from '../../packages/typeset/src/lay/adapt.ts'
 
 type Line = { y: number; x0: number; x1: number; size: number; n: number; bold: number; italic: number; word: number; letter: number; text: string }
 const line = (y: number, n = 12): Line => ({ y, x0: 72, x1: 300, size: 10, n, bold: 0, italic: 0, word: 0.3, letter: 0, text: 'x'.repeat(n) })
