@@ -1,11 +1,12 @@
-// The registry is complete and consistent (design-b §1.1: a test fails when a decision has no home, when two rules claim
-// one, or when a ported rule has no file).
+// @vitest-environment node
+// The registry (lab/typeset/registry.ts) is complete and consistent (design-b §1.1: a test fails when a decision has no
+// home, when two rules claim one, or when a ported rule has no file under packages/typeset/src).
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { RULE_LIST, RULES } from '../src/rules.ts'
+import { RULE_LIST, RULES } from '../../lab/typeset/registry.ts'
 
-const SRC = join(import.meta.dirname, '..', 'src')
+const SRC = join(import.meta.dirname, '../../packages/typeset/src')
 
 describe('the registry', () => {
   it('names every rule once, each id under its home’s letter', () => {

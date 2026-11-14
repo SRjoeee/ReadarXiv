@@ -1,4 +1,4 @@
-// U.blocks (design-b §1.5; the registry's rules.ts): a unit's lines grouped into blocks, each with the original's
+// U.blocks (design-b §1.5; lab/typeset/registry.ts): a unit's lines grouped into blocks, each with the original's
 // baselines, its grid, its pitch and its measures; the blocks of one flow of TeX's lines told apart (T21, E10, E11).
 // Ported from layer2.mjs at 065c1d973: blocks2 L2:2966-3032, blocksOf2 L2:626-695, measuresOf L2:549-576, evenGridOf
 // L2:3172-3176, tightOf L2:3037-3040. Pure: no input is mutated, every block is a new object.

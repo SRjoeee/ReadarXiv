@@ -8,6 +8,7 @@
   "sideEffects": [
     "*.css"
   ],
+  "//": "PDF.js (pdfjs-dist) is the host's, as the engine package's is: the repository pins it once, in its root manifest, and a host that builds the reader gives it (design-reduction R8).",
   "exports": {
     ".": "./src/index.ts",
     "./vite": "./src/vite.ts",
@@ -22,7 +23,6 @@
     "@readarxiv/text": "workspace:*",
     "@readarxiv/typeset": "workspace:*",
     "@readarxiv/ui": "workspace:*",
-    "pdfjs-dist": "6.3.289",
     "lucide": "1.47.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

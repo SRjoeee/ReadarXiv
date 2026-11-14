@@ -1,6 +1,6 @@
 // lab/typeset/move-fit.mjs [--check]: moves today's breaker and fit (engine 065c1d973 layer-proto/layer2.mjs L2:3112-4424,
 // read-only at AXT_TODAY) into packages/typeset as JavaScript, each top-level declaration whole, with its comment, into the
-// file of the rule that owns it (the registry, src/rules.ts), and the changes listed below made, each asserted to occur as
+// file of the rule that owns it (the registry, lab/typeset/registry.ts), and the changes listed below made, each asserted to occur as
 // often as it is named. Nothing else of today's text changes: the moved files are today's code, typed by their
 // `.types.ts` beside them (lane L1's pattern for a module moved before its port). With --check it writes nothing and exits 1
 // where a moved file differs from what it would write.

@@ -12,7 +12,8 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { rowLinesOf, rulesFor } from '../../../packages/typeset/src/index.ts'
+import { rowLinesOf } from '../../../packages/typeset/src/lay/adapt.ts'
+import { rulesFor } from '../../../packages/typeset/src/rules-for.ts'
 // (the fit's own bound past TeX's text block bottom, where the typesetter states one: fit/walk.ts PAST_FOOT, the borrow the owner
 // made the default on 2026-11-12; none in a tree before it, so no line past the bottom is the borrow's)
 import * as walk from '../../../packages/typeset/src/fit/walk.ts'

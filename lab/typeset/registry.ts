@@ -3,8 +3,9 @@
 // ports (engine 065c1d973, `src/pdf-reader/engine/`: L2 layer-proto/layer2.mjs, RUN layer-proto/run.mjs, TEX layer-proto/tex.mjs,
 // other files by name), and its state. Data only. Rule ids and step names are a persisted vocabulary: the gate's ledgers and
 // the tap (baseline/tap/) are kept in lab-data and read across versions, so an id is never renamed; a rule split in two
-// keeps its parent's id in `parent`.
-import type { Home, RuleId, Step } from './types.ts'
+// keeps its parent's id in `parent`. The port's ledger, read by no product code: it lives in the lab (design-reduction R8),
+// its ids typed by the package's own `RuleId`, which the lay's trace writes (packages/typeset/src/lay/trace.ts).
+import type { Home, RuleId, Step } from '../../packages/typeset/src/types.ts'
 
 /**
  * Where a rule stands in the port. `open`: not ported yet. `ported`: the same function, typed, inputs made explicit, its
