@@ -168,6 +168,21 @@ group (1810.04805v2's `{\tt [CLS]}`) or with its characters (1810.04805v2's `\%`
 id by their order. The lay is given today's row of it where the two units' contents are one (gate-l1's `held`), so that with
 every toggle on it is drawn translated as today's was, not the original's for want of a row under its new id (the
 coordinator's ruling of 2026-11-10); v2.mjs's file counts them (`held`: joined, given today's row).
+Today's reader and v2's cut some texts into other units (lane hdr-lines, the coordinator's of 2026-11-15): one unit of today's
+is several members of v2's part (S1, §18.73: a lead sentence and the prompt box set in it, which v2's prepare sets apart and keeps
+for its one pitch, §18.22), and several units of today's one member (S2, §18.75: a table cell set on two lines, today a unit a
+line). No id joins them, nor any one member to one unit: their pieces do (`join.mjs` piecesJoin, measure.mjs over what the
+one-to-one join left, written beside the sheet as `joins.json`). A unit of today joins the run of members, two or more,
+consecutive in the part's order, whose words together are its words in order (each run of letters and digits of its text
+pieces, case folded; equal, or in common for nine tenths of each, as when one front end reads `\_` as a placeholder and the
+other as text); a member joins the run of today's units, two or more, consecutive in today's order, whose words together are
+its own; on a page both stand on, each in one group at most. Each group is one unit to every measure (keyed by its first unit
+of today's): each side's lines of it together, the original's facts its members' together; a member of it v2 leaves the
+original's by a rule a ruling covers shows the original's ink, its lines counted on v2's side as rows apart, as a unit's
+element kept as a crop is. `shown` reads a group's parts: the unit of today is shown where each part of it is translated in a
+member v2 draws or kept by a rule a ruling covers (the pitch of §18.22, an address, an identifier, a formula, a doubled or a
+script's text, the names toggle off), that ruling's then; a part neither is a translation missing, named with its member's
+state.
 
 ## The measures: each a distance from the original, and when v2 is nearer
 

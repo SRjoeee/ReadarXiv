@@ -23,6 +23,7 @@ import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
 import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
+import { piecesJoin } from './join.mjs'
 import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
 import { coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linesPass, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
@@ -108,6 +109,8 @@ const notes = []
 // (lane parity-fresh: each pair's units v2 is laid with a fresh row of (v2.mjs `fresh`), by page and kind, and those it sends
 // that today never had; each page's fresh units tinted on v2's pane: their drawn lines' boxes as shares of the page)
 const freshes = []
+// (lane hdr-lines: each pair's groups of the join by pieces, written beside the sheet: joins.json)
+const joins = []
 /** the drawn lines of v2's units `ords` on a page record, each [left, top, width, height] as shares of the page's view */
 const tintOf = (rec, ords) => {
   const [x0, y0, x1, y1] = rec.view ?? [0, 0, 612, 792]
@@ -217,8 +220,12 @@ for (const [pair, raw] of drawn) {
         references: { today: kept.references.today.size, part: kept.references.part.size },
       }
     : null
+  // (the join by pieces, lane hdr-lines: a unit of today's cut into several members of v2's, several of today's one member,
+  // join.mjs piecesJoin over what the one-to-one join left; each measure reads each group as one unit)
+  const pieceGroups = bundle ? piecesJoin(bundle, prep.units, todayOf) : []
+  if (pieceGroups.length) joins.push({ pair, groups: pieceGroups })
   const mine = []
-  const ctxOf = (rec) => ({ prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows, cellRooms, floor, pastFoot: walk.PAST_FOOT ?? 0 })
+  const ctxOf = (rec) => ({ prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios: folios.get(rec.page) ?? [], kept, rows, cellRooms, floor, pastFoot: walk.PAST_FOOT ?? 0, pieceGroups })
   for (const rec of raw.pages) mine.push(measurePage(pair, v2, rec, ctxOf(rec)))
   // (a unit's size and line count today bought with a line past TeX's room on one of its pages: today's fault on each)
   pastRoomPass(
@@ -467,6 +474,7 @@ const result = {
   pages: order,
 }
 writeFileSync(join(OUT, 'parity.json'), `${JSON.stringify(result)}\n`)
+writeFileSync(join(OUT, 'joins.json'), `${JSON.stringify(joins)}\n`)
 writeFileSync(join(OUT, 'index.html'), sheet(result))
 console.log(`parity: ${pages.length} pages of ${pairs.length} pairs; ${result.pagesWorse} worse than today; missing ${missing.map((m) => m.pair).join(', ') || 'none'}`)
 console.log(`the owner's rulings of ${result.rulings.date}: ${result.pagesCovered} more pages worse by a measure and covered by them whole; by ruling:`)

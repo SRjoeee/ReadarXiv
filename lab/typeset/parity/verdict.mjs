@@ -332,7 +332,7 @@ export function linksOf(boxes) {
  * turned on A, `led` the part's run-ins (follower ord → its leader's ord: Placed.join, a bound name's lead), `top` its title and
  * front matter (Placed.title, Placed.front: anchored at their first line). A page either side did not draw is an error: no comparison made, and the gate incomplete (coverageOf)
  */
-export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept, rows, cellRooms, floor, pastFoot }) {
+export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, top, frame, groups, keptByGroup, folios, kept, rows, cellRooms, floor, pastFoot, pieceGroups = [] }) {
   const n = rec.page
   const out = { pair, page: n, worse: 0, diffs: [], both: [], faults: {}, measures: {}, units: [] }
   const error =
@@ -350,8 +350,20 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // on the page with what it would be judged by, never worse, the coordinator's ruling of 2026-11-10; the summary counts them)
   const noRow = new Set(v2.noRow ?? [])
   const unmeasured = (o) => o !== null && o !== undefined && noRow.has(o) && stateOf.get(o) === 'none'
-  // (each side's drawn lines by its unit, keyed by today's ord where the unit has one, else the part's ord)
-  const keyOfPart = (o) => (todayOf.has(o) ? `t${todayOf.get(o)}` : `p${o}`)
+  // (each side's drawn lines by its unit, keyed by today's ord where the unit has one, else the part's ord. The join by pieces
+  // (join.mjs piecesJoin, lane hdr-lines): a unit of today's cut into several members of v2's, or several of today's one member,
+  // is one group, keyed by its first unit of today's: each side's lines of it read as one unit's, and the original's facts its
+  // members' together)
+  const groupOfMember = new Map(),
+    groupOfToday = new Map(),
+    groupOfKey = new Map()
+  for (const g of pieceGroups) {
+    const key = `t${g.today[0]}`
+    groupOfKey.set(key, g)
+    for (const o of g.members) groupOfMember.set(o, key)
+    for (const o of g.today) groupOfToday.set(o, key)
+  }
+  const keyOfPart = (o) => (todayOf.has(o) ? `t${todayOf.get(o)}` : (groupOfMember.get(o) ?? `p${o}`))
   // (a line's extent is its drawn characters' and its crops': a crop standing on the line (a formula's ink, drawn by the
   // canvas, not the SVG) extends it, at its start as at its end. A crop stands on one line, the one of its unit whose band
   // holds most of its height (its ink's middle nearest the baseline where two hold as much): a formula's ink that dips into the
@@ -395,17 +407,21 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     }
     return rows
   }
-  const drawn = (units, crops, keyOf, side) =>
-    new Map(
-      units
-        .filter((u) => u.lines.some((l) => l.n > 0))
-        .map((u) => {
-          const ls = withCrops(u, crops)
-          cropRows[side].set(keyOf(u.id), rowsApart(u, crops, ls))
-          return [keyOf(u.id), ls]
-        }),
-    )
-  const T = drawn(rec.today.units, rec.today.crops ?? [], (o) => `t${o}`, 'today')
+  // (the members v2 drew, by ord: a group's parts each judged by it, below)
+  const drawnMembers = new Set()
+  const drawn = (units, crops, keyOf, side) => {
+    const out = new Map()
+    for (const u of units) {
+      if (!u.lines.some((l) => l.n > 0)) continue
+      const ls = withCrops(u, crops)
+      const key = keyOf(u.id)
+      if (side === 'v2') drawnMembers.add(u.id)
+      cropRows[side].set(key, (cropRows[side].get(key) ?? 0) + rowsApart(u, crops, ls))
+      out.set(key, out.has(key) ? [...out.get(key), ...ls] : ls)
+    }
+    return out
+  }
+  const T = drawn(rec.today.units, rec.today.crops ?? [], (o) => groupOfToday.get(o) ?? `t${o}`, 'today')
   // (v2's drawing whole, its relabel rows with it: the labels measure's)
   const Vall = drawn(rec.v2.units, rec.v2.crops ?? [], keyOfPart, 'v2')
   const V = new Map(Vall)
@@ -421,7 +437,16 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     // original's ink or draws anew with the translation: the first line may start at the text's start or at the label's)
     const lb = m.label?.ink
     if (lines.length && m.lines[0]?.[0] === n && lb?.[0] === n && Math.abs(lb[5] - lines[0].y) <= 0.5) lines[0] = { ...lines[0], label: lb[1] }
-    orig.set(keyOfPart(m.ord), { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, size: m.style.size, label: m.label ?? null, pitch: m.pitch ?? null })
+    const key = keyOfPart(m.ord),
+      had = groupOfMember.has(m.ord) ? orig.get(key) : undefined
+    if (had) {
+      had.lines = [...had.lines, ...lines]
+      had.first ||= m.lines[0]?.[0] === n
+      had.last ||= m.lines.at(-1)?.[0] === n
+      had.parts.push(m.ord)
+      continue
+    }
+    orig.set(key, { kind: m.kind, align: m.align, style: m.style, lines, first: m.lines[0]?.[0] === n, last: m.lines.at(-1)?.[0] === n, top: !!top?.has(m.ord), part: m.ord, parts: [m.ord], size: m.style.size, label: m.label ?? null, pitch: m.pitch ?? null })
   }
   // (a caption's label on a line of its own (Label with no `line`, PDF-READER §18.34): v2 draws its relabel as a row of its own on
   // the label's baseline, today keeps the original's ink there. The row is no line of the unit's text: the anchor, the line
@@ -529,6 +554,22 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const k = l.ix0 === undefined ? inkedLine(l) : l
     return { ...l, x0: k.ix0, x1: k.ix1 }
   }
+
+  // (the rule a ruling covers that leaves a member of a group the original's: its unit kept for its one pitch, an address, an
+  // identifier, a formula, a doubled or a script's text (v2.mjs's lists by member ord, RULING_OF), or the names toggle off over
+  // the author block (NAMES_RULING); null none. A group's member so kept shows the original's ink, its lines, which v2's side
+  // counts as rows apart, as it counts a unit's element kept as a crop)
+  const ruledMarkOf = (o) =>
+    v2.toggles !== 'on' && unitClass(facts.get(o)?.kind) === 'names'
+      ? 'names'
+      : (['pitch', 'address', 'identifier', 'formula', 'double', 'script'].find((k) => (v2[k] ?? []).includes(o)) ?? null)
+  for (const [key, g] of groupOfKey)
+    for (const o of g.members) {
+      const m = facts.get(o)
+      if (drawnMembers.has(o) || !m || !ruledMarkOf(o)) continue
+      const rows = m.lines.filter((l) => l[0] === n).length
+      if (rows) cropRows.v2.set(key, (cropRows.v2.get(key) ?? 0) + rows)
+    }
 
   // ------------------------------------------------ per unit, each side's distances from the original
   const units = []
@@ -915,6 +956,22 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // with no ruling is no set-aside)
   const keptToday = new Map((v2.keptToday ?? []).filter(([, mark]) => Object.hasOwn(RULING_OF, mark)))
   for (const key of T.keys()) {
+    // (a unit of today's cut into several members of v2's: shown where each part of it is translated in a member (drawn) or kept
+    // by a rule a ruling covers, §18.22's among them; a part neither is a translation missing, named with its member's state)
+    const g = groupOfKey.get(key)
+    if (g && g.members.length > 1) {
+      const parts = g.members.map((o) => ({ o, drawn: drawnMembers.has(o), mark: drawnMembers.has(o) ? null : ruledMarkOf(o) }))
+      const missing = parts.filter((x) => !x.drawn && !x.mark),
+        ruled = parts.filter((x) => x.mark)
+      const name = `${key} ${orig.get(key)?.kind ?? ''}`.trim()
+      if (missing.length)
+        diff('shown', name, "translated by today, left the original's by v2", null, { value: 'translated', off: null }, { value: missing.map((x) => `part ${x.o}: ${stateOf.get(x.o) ?? 'no member on the page'}`).join('; '), off: null }, true, 'today')
+      else if (ruled.length) {
+        diff('shown', name, "translated by today, left the original's by v2 in part", null, { value: 'translated', off: null }, { value: ruled.map((x) => `part ${x.o}: ${x.mark}`).join('; '), off: null }, false, 'ruling')
+        out.diffs.at(-1).ruling = ruled[0].mark === 'names' ? NAMES_RULING : RULING_OF[ruled[0].mark]
+      }
+      continue
+    }
     if (V.has(key)) continue
     const o = orig.get(key)
     const src = prepByOrd.get(Number(key.slice(1)))?.text
