@@ -3635,6 +3635,14 @@ middle); a cell spanning columns, the union of its boxes by its first column's l
   p4 1.0 to 0.875). A `c` cell's cut is the same on both sides, so that its middle stays the box's. Where its side stops short of
   the box (ink not its own on its line inside it), the box stands on that side and the typesetter lays it in its own room, as
   before.
+- **A cell that has a box always has a room, and its room is never inside its box.** A page states the shares of the columns
+  of which a single unit cell with a box stands on it. Where it states none for a cell's first (last) column, because no single
+  unit cell of that column stands on that page (a table pooled over pages, that column's box the other pages'; a spanning
+  cell on a longtable's later page), the share on that side is none and the box stands there; the other side takes its share
+  as the class gives it (a `c` cell the smaller, so none). Before this such a cell had its union for a box and no room at all
+  (pull request #644's review, a two-page table; the corpora never reached it: over the 89 papers and 2611.03953v2 the chain
+  is the same byte for byte). What is not read: a pooled column's blank on a page that holds no unit cell of it, which would
+  move its neighbours' shares on that page.
 - **Measured before it was built** (phase 1, the reader gate's entry over the 92 pairs on Google's rows against RB3's lay): of the
   3,094 single-line cells laid in their box, 438 stood under the original's size: 197 reach it, 134 are larger and still under,
   107 do not move (a share too small for a step of the fit), none smaller; 17 cells RB3 left the original's (wider than their box

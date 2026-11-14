@@ -302,8 +302,8 @@ describe('columnBoxes with the band’s ink: each cell’s room in its column, i
   ]
   const both = (): BandInk[] => [...band(), ...band().map((b) => ({ ...b, page: 2 }))]
   it('gives a spanning cell its room where its page holds no unit cell of its last column: no share there, the box stands', () => {
-    // (Codex's shape, pull request #644: the union [150, 220] of the second and third columns, a c cell set on its middle on the
-    // second page, which holds no unit cell of the third; the box is the cell's, so its room is too)
+    // (the union [150, 220] of the second and third columns, a c cell set on its middle on the second page, which holds no unit
+    // cell of the third: the box is the cell's, so its room is too)
     const cells = [...pages({ last: true }), at(31, 1, 'c', 165, 205, { page: 2, span: 2 })]
     expect(columnBoxes(cells, []).get(31)).toEqual([150, 220])
     expect(near(columnBoxes(cells, [], both()).get(31))).toEqual([150, 220])
@@ -328,7 +328,7 @@ describe('columnBoxes with the band’s ink: each cell’s room in its column, i
       [150, 220],
       [140, 220],
     ])
-    // (the first column's share unstated, the third's right share half its 6 pt to the table's edge: an l cell grows right by it)
+    // (the first column's share unstated, the second's right share half its 20 pt to the third's box: an l cell grows right by it)
     const first = [
       ...pages({ last: false }),
       at(32, 0, 'c', 115, 155, { page: 2, span: 2 }),
@@ -338,7 +338,7 @@ describe('columnBoxes with the band’s ink: each cell’s room in its column, i
     const f = columnBoxes(first, [], both())
     expect([32, 35, 36].map((o) => near(f.get(o)))).toEqual([
       [100, 170],
-      [100, 173],
+      [100, 180],
       [100, 170],
     ])
   })

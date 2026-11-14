@@ -274,7 +274,12 @@ export function columnBoxes(
  * edge is not the table's; one that meets the box's edge leaves no blank. An l cell grows right, an r cell left, a c cell both
  * ways by the smaller share (its middle the box's); a spanning cell's union by its first column's left share and its last one's
  * right. The widening never passes the cell's own side (ColumnCell.side: what bounds it on its own line, TeX's measure or a
- * rule's end beside it), a c cell's cut alike on both sides; where its side stops short of the box, the box stands on that side
+ * rule's end beside it), a c cell's cut alike on both sides; where its side stops short of the box, the box stands on that side.
+ * A page states the shares of the columns of which a single unit cell with a box stands on it: where it states none for a cell's
+ * first (last) column, no single unit cell of that column standing there (a table pooled over pages, that column's box the other
+ * pages'), the share on that side is none and the box stands there, the other side taking its share as the class gives it (a c
+ * cell the smaller, so none). So a cell that has a box always has a room, and its room is never inside its box (§18.13).
+ * What is not read: a pooled column's blank on a page that holds no unit cell of it (it would move its neighbours' shares there)
  */
 /** in a list sorted by its entries' `key`th field, the index of the first past `v` (at or past it with `at`) */
 function firstAfter(list: readonly (readonly number[])[], key: number, v: number, at = false): number {
@@ -352,15 +357,18 @@ function roomsOf(
   }
   const out = new Map<number, Box>()
   for (const c of cells) {
+    // (every cell with a box has a class: a column holding a cell of none has no box on its page nor in the pool, and a spanning
+    // cell's union needs its class (columnBoxes); so the box alone says whether the cell has a room)
     const b = boxes.get(c.ord) && at(boxes.get(c.ord)!)
+    if (!b) continue
+    // (the blank beside its first column on the left and its last on the right, where its page states it; else none)
     const on = blanks.get(c.page)
-    const first = on?.get(c.col)
-    const last = on?.get(c.col + c.span - 1)
-    if (!b || !first || !last || !c.cls) continue
+    const left = on?.get(c.col)?.[0] ?? 0
+    const right = on?.get(c.col + c.span - 1)?.[1] ?? 0
     // (each side's share where its class grows that way, cut at its own side; none where the side stops short of the box)
     const [s0, s1] = c.side ?? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
-    let L = c.cls === 'l' || s0 > b[0] ? 0 : Math.min(first[0] / 2, b[0] - s0)
-    let R = c.cls === 'r' || s1 < b[1] ? 0 : Math.min(last[1] / 2, s1 - b[1])
+    let L = c.cls === 'l' || s0 > b[0] ? 0 : Math.min(left / 2, b[0] - s0)
+    let R = c.cls === 'r' || s1 < b[1] ? 0 : Math.min(right / 2, s1 - b[1])
     if (c.cls === 'c') L = R = Math.min(L, R)
     out.set(c.ord, [b[0] - L, b[1] + R])
   }
