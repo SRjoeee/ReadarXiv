@@ -124,12 +124,14 @@ function cellExtent(l: Line, m: Placed): [number, number] {
   return [mid - half, mid + half]
 }
 /**
- * A single-line table cell's column's box (Room.column; the owner's decision, docs/PDF-READER.md §18.13): the room
+ * A single-line table cell's room in its column (Room.column: its column's box widened by the column's share of the blank
+ * beside it, never past its own side; the owner's decisions, docs/PDF-READER.md §18.13): the room
  * it is laid in, in its column's alignment (its class: Placed.align), at the largest size not over the original's that fits
  * it, the same room at every size (no step down in its own ink's width first, no room opening only where it is clipped at its
  * floor: X.further's 'widen'). Undefined where the part states none (a part made before, a column whose box is not
- * established), for a cell of several lines or a held one, and where ink not its own stands inside the box on its line (its
- * Room.side short of an edge of the box: a mark TeX set in its entry past a space): each laid in its own room as before
+ * established), for a cell of several lines or a held one, and where ink not its own stands inside the room on its line (its
+ * Room.side short of an edge of it: a mark TeX set in its entry past a space; the engine never states a room past a side that
+ * reaches the box, so this is a side short of the box): each laid in its own room as before
  */
 function columnRoomOf(m: Placed): readonly [number, number] | undefined {
   const c = m.room.column
@@ -327,7 +329,7 @@ export function adapt(i: AdaptInput): Adapted {
     return { stop: 'breaks (U.breaks not adapted)' }
   const lines = m.lines
   const rects = lines.map((l) => rectOf(l, m))
-  // (a single-line cell whose column's box the part states: that box its room)
+  // (a single-line cell whose room in its column the part states: that its room)
   const column = columnRoomOf(m)
   if (column) {
     const r = rects[0]!
