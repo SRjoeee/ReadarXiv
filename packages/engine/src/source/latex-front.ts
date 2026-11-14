@@ -4204,6 +4204,42 @@ function frontCommand(
  *  dry runs among them): its cost, which a test holds to the source's length */
 let walkSteps = 0
 export const walkStepCount = () => walkSteps
+/** a tabular nested in a table's cell, read as the lines of that cell's text where it is one column of several rows (§18.75):
+ *  its begin and end a pair round them, walked, and true; else false, the walk reads it as before. `endText` the walk's own */
+function nestedCellLines(
+  s: string,
+  i: number,
+  afterBegin: number,
+  bodyEnd: number,
+  afterEnd: number,
+  env: string,
+  b: Builder,
+  ctx: Ctx,
+  endText: () => void,
+): boolean {
+  if (TABLE_ENVS.test(env) && ctx.tables && b.cellMode && inGridCell(b, s, i)) {
+    const argsEnd = tableArgsEnd(s, afterBegin, bodyEnd, env, ctx),
+      rows = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter).filter((c) =>
+        /\S/.test(s.slice(c.start, c.end)),
+      )
+    if (rows.every((c) => c.col === 0 && c.span === 1) && rows.some((c) => c.row > 0)) {
+      endText()
+      const id = b.open(s.slice(i, argsEnd), i)
+      walk(s, argsEnd, bodyEnd, b, ctx)
+      b.close(id, s.slice(bodyEnd, afterEnd), afterEnd)
+      return true
+    }
+  }
+  return false
+}
+/** a table's body walked with its grid known to inGridCell (Builder.cells, §18.75: a `\\` inside a grid cell a forced break of
+ *  its text), the grid of the table around it back after */
+function walkInGrid(s: string, from: number, to: number, grid: readonly GridCell[], b: Builder, ctx: Ctx): void {
+  const savedCells = b.cells
+  b.cells = { s, grid }
+  walk(s, from, to, b, ctx)
+  b.cells = savedCells
+}
 function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   let i = from,
     textStart = -1
@@ -4568,20 +4604,10 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // a tabular of one column and several rows nested in a table's cell sets lines of that cell's text (TeX: a box in the
       // cell's entry, its rows the box's lines, as \makecell's and \shortstack's are): its begin and end a pair round them, each
       // row's end a forced break (inGridCell). One of one row is its own cell as before (nothing to join: its pieces, its id and
-      // its rows the same); one of several columns a table of its own, below
-      if (TABLE_ENVS.test(env) && ctx.tables && b.cellMode && inGridCell(b, s, i)) {
-        const argsEnd = tableArgsEnd(s, afterBegin, bodyEnd, env, ctx),
-          rows = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter).filter((c) =>
-            /\S/.test(s.slice(c.start, c.end)),
-          )
-        if (rows.every((c) => c.col === 0 && c.span === 1) && rows.some((c) => c.row > 0)) {
-          endText()
-          const id = b.open(s.slice(i, argsEnd), i)
-          walk(s, argsEnd, bodyEnd, b, ctx)
-          b.close(id, s.slice(bodyEnd, afterEnd), afterEnd)
-          i = afterEnd
-          continue
-        }
+      // its rows the same); one of several columns a table of its own, below (nestedCellLines)
+      if (nestedCellLines(s, i, afterBegin, bodyEnd, afterEnd, env, b, ctx, endText)) {
+        i = afterEnd
+        continue
       }
       endText()
       b.flush()
@@ -4624,7 +4650,6 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         // (the paper's tables numbered in the order they begin, a table nested in a cell after the one it is in)
         const saved = b.kind,
           savedCell = b.cellMode,
-          savedCells = b.cells,
           first = b.units.length,
           // biome-ignore lint/suspicious/noAssignInExpressions: as written
           table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1)
@@ -4633,12 +4658,10 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
         b.kind = blockKind(b, 'cell')
         b.cellMode = true
-        b.cells = { s, grid }
-        walk(s, argsEnd, bodyEnd, b, ctx)
+        walkInGrid(s, argsEnd, bodyEnd, grid, b, ctx)
         b.flush()
         b.kind = saved
         b.cellMode = savedCell
-        b.cells = savedCells
         noteBlocks(placeCells(b.units.slice(first), b.file, grid, table), grid, s, table, b, ctx)
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
@@ -4673,19 +4696,16 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         const { end: argsEnd } = envArgs(s, afterBegin, bodyEnd, env, ctx)
         const saved = b.kind,
           savedCell = b.cellMode,
-          savedCells = b.cells,
           first = b.units.length,
           // biome-ignore lint/suspicious/noAssignInExpressions: as written
           table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1)
         const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
         b.kind = blockKind(b, 'cell')
         b.cellMode = true
-        b.cells = { s, grid }
-        walk(s, argsEnd, bodyEnd, b, ctx)
+        walkInGrid(s, argsEnd, bodyEnd, grid, b, ctx)
         b.flush()
         b.kind = saved
         b.cellMode = savedCell
-        b.cells = savedCells
         noteBlocks(placeCells(b.units.slice(first), b.file, grid, table), grid, s, table, b, ctx)
         i = afterEnd
         continue
