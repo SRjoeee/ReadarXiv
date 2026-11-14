@@ -16,7 +16,7 @@
 import { BACKREF_LIST, calledAt, frontMarks, identifierSource, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../source/arg-roles.mjs'
 import { symbolText } from '../source/text-symbols.mjs'
-import { INK_FREE_LEAD, prefixWord } from '../source/tex-kernel.mjs'
+import { INK_FREE_LEAD, prefixWord } from '../source/tex-kernel.ts'
 import { DISPLAY, plainTranslated } from '../instrument/mt.mjs'
 import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
 import { fillOfColour } from './colour.mjs'

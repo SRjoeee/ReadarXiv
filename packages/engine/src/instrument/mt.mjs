@@ -1,6 +1,6 @@
 // Moved into the engine package from src/pdf-reader/engine/translate/mt.mjs: the part of that module the moved front half calls, as it is; the rest
 // stays there and imports this part back through its transition path.
-import { AUX_WORDS, BREAK_HINTS, DECLARATION_WORDS, INK_FREE_SYMBOLS, INK_FREE_WORDS, PENALTY_WORDS, PREFIX_WORDS, ROW_RULES, SPACE_SYMBOLS, spaceSource } from '../source/tex-kernel.mjs'
+import { AUX_WORDS, BREAK_HINTS, DECLARATION_WORDS, INK_FREE_SYMBOLS, INK_FREE_WORDS, PENALTY_WORDS, PREFIX_WORDS, ROW_RULES, SPACE_SYMBOLS, spaceSource } from '../source/tex-kernel.ts'
 
 // (the same function as the front end's latin1Bytes: loading a paper's front end, and the argument tables it reads, for this
 // one line would put them in every reader that translates; a test holds the two equal)

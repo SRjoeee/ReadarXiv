@@ -11,7 +11,7 @@
     ".": "./src/index.ts",
     "./today/source/latex-front.mjs": "./src/source/latex-front.mjs",
     "./today/source/paper-meta.mjs": "./src/source/paper-meta.mjs",
-    "./today/source/tex-kernel.mjs": "./src/source/tex-kernel.mjs",
+    "./today/source/tex-kernel.ts": "./src/source/tex-kernel.ts",
     "./today/source/tex-names.mjs": "./src/source/tex-names.mjs",
     "./today/source/text-symbols.mjs": "./src/source/text-symbols.mjs",
     "./today/source/text-piece.mjs": "./src/source/text-piece.mjs",
