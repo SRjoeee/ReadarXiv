@@ -6,8 +6,5 @@
   "type": "module",
   "scripts": {
     "layer-lab": "node layer-lab/serve.mjs"
-  },
-  "dependencies": {
-    "pdfjs-dist": "^6.3.289"
   }
 }

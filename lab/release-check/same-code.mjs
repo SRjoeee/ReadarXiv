@@ -55,13 +55,18 @@ export function erasedOf(text, path) {
 }
 
 const stem = p => p.replace(/\.(?:d\.)?(?:m|c)?[jt]sx?$/, '')
+/** the specifiers' aliases: the repository's (the census profile's), and the engine package's transition paths, each
+ *  `@readarxiv/engine/today/<path>` the module at packages/engine/src/<path> (its manifest's exports, which
+ *  tests/pdf-reader/engine-contract.test.ts holds to name each module at its own place): a module made TypeScript there is named
+ *  by its new path through it, as by a relative path */
+const ALIASES = [...ENGINE_PROFILE.aliases, { from: '@readarxiv/engine/today/', to: 'packages/engine/src/' }]
 
 /**
  * The erased code of a file at `from` with each import specifier written as the file at `to` would write it after the renames:
  * a relative or aliased specifier is resolved from `from`, the path mapped through `renames` (an old path to its new one; a
  * specifier without an extension maps by the path less its extension), and written again from `to` in the form it had.
  */
-export function mappedOf(code, from, to, renames = new Map(), aliases = ENGINE_PROFILE.aliases) {
+export function mappedOf(code, from, to, renames = new Map(), aliases = ALIASES) {
   if (!code) return code
   let ast
   try {

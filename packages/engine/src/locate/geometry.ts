@@ -31,7 +31,7 @@ import { groupStyleOf as commandStyleOf } from './ink.ts'
 import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import type { Owned } from './ownership.ts'
 import { type RowBox, rowsOf } from './rows.ts'
-import { regionsOf } from './today/today.types.ts'
+import { regionsOf } from '../own/stream.ts'
 import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */

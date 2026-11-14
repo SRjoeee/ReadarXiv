@@ -125,9 +125,9 @@ describe('what the translation, the rules and the browser load', () => {
   // the marks, the content walk the wrap reads (remove.mjs), the ownership and the wrap, and the pixel checker. The anchors and
   // the versions are the pipeline's too, and leaves that every reader takes
   const server = (f: string) => f.startsWith(`${ENGINE}/source/`)
-    || /^packages\/engine\/src\/source\/(?:latex-front|paper-meta|paper-names)\.mjs$/.test(f)
-    || /^packages\/engine\/src\/(?:marks\/marks|own\/own|own\/stream)\.mjs$/.test(f)
-    || /^packages\/engine\/src\/(?:compile\/(?:live|tex-errors|tex|paper)|instrument\/instrument)\.mjs$/.test(f)
+    || /^packages\/engine\/src\/source\/(?:latex-front|paper-meta|paper-names)\.(?:mjs|ts)$/.test(f)
+    || /^packages\/engine\/src\/(?:marks\/marks|own\/own|own\/stream)\.(?:mjs|ts)$/.test(f)
+    || /^packages\/engine\/src\/(?:compile\/(?:live|tex-errors|tex|paper)|instrument\/instrument)\.(?:mjs|ts)$/.test(f)
     || (f.startsWith(`${ENGINE}/pipeline/`) && !/\/pipeline\/(?:anchors|versions|memory)\.mjs$/.test(f))
     || /\/layout\/(?:make|marks|paper|remove|wrap|own|carry|match|stream)\.mjs$/.test(f)
     || f.endsWith('/layer/check.mjs')
@@ -152,7 +152,7 @@ describe('the licence of what a reader loads', () => {
 
   // What section 19.3 says the web carries with the engine and the shared interface is so, and the registry holds its rows
   it('has the notices the web carries: LaTeXML\'s table is in the closures of pipeline and layer, and the registry names LaTeXML, Lucide and Noto', () => {
-    for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain('packages/engine/src/source/latexml-args.mjs')
+    for (const name of ['pipeline', 'layer'] as const) expect([...closureOf([entryFile(name)])], name).toContain('packages/engine/src/source/latexml-args.ts')
     const registry = readFileSync('docs/THIRD_PARTY.md', 'utf8')
     for (const word of ['LaTeXML', 'Lucide', 'Noto Sans SC']) expect(registry, word).toContain(word)
     expect(shared).toContain('packages/ui/src/controls/Icon.tsx')

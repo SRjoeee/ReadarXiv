@@ -1,7 +1,7 @@
-// Generates src/pdf-reader/engine/rules/latexml-args.mjs: each control sequence's and environment's arguments as LaTeXML's
+// Generates packages/engine/src/source/latexml-args.ts: each control sequence's and environment's arguments as LaTeXML's
 // bindings declare them, by type (its prototypes: \rule[Dimension]{Dimension}{Dimension}, \setlength{Variable}{Dimension},
 // \IfFileExists{}{}{}), and the front matter's commands, by the hook their expansion hands their text to
-// (\lx@add@affiliation, \lx@add@contact[role=dedicatory]{#1} …). The engine reads it through arg-roles.mjs.
+// (\lx@add@affiliation, \lx@add@contact[role=dedicatory]{#1} …), each table typed. The engine reads it through arg-roles.
 //
 //   node scripts/latexml-args.mjs <LaTeXML checkout> [out]
 //
@@ -15,7 +15,7 @@ import { join, resolve as resolvePath } from 'node:path'
 
 const root = process.argv[2]
 if (!root) { console.error('usage: node scripts/latexml-args.mjs <LaTeXML checkout> [out]'); process.exit(2) }
-const out = process.argv[3] ?? new URL('../packages/engine/src/source/latexml-args.mjs', import.meta.url).pathname
+const out = process.argv[3] ?? new URL('../packages/engine/src/source/latexml-args.ts', import.meta.url).pathname
 const lib = join(root, 'lib/LaTeXML')
 let commit = 'unknown'
 try { commit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD']).toString().trim() } catch {}
@@ -484,19 +484,23 @@ const lines = [
   "// loading those REQUIRES names); FRONT the front matter's commands by the hook their text goes to and the parameter it",
   "// is; NOTE_POOLS and NOTE_PACKAGES where a note command's text attaches, the engine pools' and each binding's (`creator`,",
   "// `label:<prefix>`, `document`, `none`), and REQUEST_POOLS and REQUEST_PACKAGES the label each request command asks a",
-  '// creator for, by its prefix. Read through arg-roles.mjs',
+  '// creator for, by its prefix. Read through arg-roles',
+  "// biome-ignore-all format: the tables as this script writes them (Biome formats packages/**, and would unquote the keys: other code to the bundle the compile's key hashes)",
+  "/** a name's values by the bindings that give them, each [value, binding…] by BINDINGS' index (a form, a note's attachment, a",
+  ' *  label\'s prefix) */',
+  'export type ByBindings = Readonly<Record<string, readonly (readonly [value: string, ...bindings: number[]])[]>>',
   `export const LATEXML_COMMIT = '${commit}'`,
-  `export const BINDINGS = ${JSON.stringify(bindingNames)}`,
-  `export const REQUIRES = ${JSON.stringify(requires)}`,
-  `export const COMMANDS = ${JSON.stringify(cs.pools)}`,
-  `export const PACKAGE_COMMANDS = ${JSON.stringify(cs.packages)}`,
-  `export const ENVIRONMENTS = ${JSON.stringify(env.pools)}`,
-  `export const PACKAGE_ENVIRONMENTS = ${JSON.stringify(env.packages)}`,
-  `export const FRONT = ${JSON.stringify(frontOut)}`,
-  `export const NOTE_POOLS = ${JSON.stringify(noteTable.pools)}`,
-  `export const NOTE_PACKAGES = ${JSON.stringify(noteTable.packages)}`,
-  `export const REQUEST_POOLS = ${JSON.stringify(requestTable.pools)}`,
-  `export const REQUEST_PACKAGES = ${JSON.stringify(requestTable.packages)}`,
+  `export const BINDINGS: readonly string[] = ${JSON.stringify(bindingNames)}`,
+  `export const REQUIRES: readonly (readonly number[])[] = ${JSON.stringify(requires)}`,
+  `export const COMMANDS: Readonly<Record<string, string>> = ${JSON.stringify(cs.pools)}`,
+  `export const PACKAGE_COMMANDS: ByBindings = ${JSON.stringify(cs.packages)}`,
+  `export const ENVIRONMENTS: Readonly<Record<string, string>> = ${JSON.stringify(env.pools)}`,
+  `export const PACKAGE_ENVIRONMENTS: ByBindings = ${JSON.stringify(env.packages)}`,
+  `export const FRONT: Readonly<Record<string, readonly [hook: string, param: number]>> = ${JSON.stringify(frontOut)}`,
+  `export const NOTE_POOLS: Readonly<Record<string, string>> = ${JSON.stringify(noteTable.pools)}`,
+  `export const NOTE_PACKAGES: ByBindings = ${JSON.stringify(noteTable.packages)}`,
+  `export const REQUEST_POOLS: Readonly<Record<string, string>> = ${JSON.stringify(requestTable.pools)}`,
+  `export const REQUEST_PACKAGES: ByBindings = ${JSON.stringify(requestTable.packages)}`,
   '',
 ]
 writeFileSync(resolvePath(out), lines.join('\n'))

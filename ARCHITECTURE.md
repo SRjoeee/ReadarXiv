@@ -29,13 +29,8 @@ again in the translation.
 The directions point one way, and `scripts/check-boundary.mjs` holds them (its table `PACKAGES`; it runs in `pnpm lint`): a
 package imports another only through its entry, `@readarxiv/<name>`, never a deep or a relative path into it; no package
 imports the extension's `src/`, its aliases, `wxt` or a virtual module; a directory under `packages/` that `PACKAGES` does not
-list fails; and no package holds a hand-written declaration file, so the JavaScript modules a package still holds, all of
-them the engine's, are typed by a `*.types.ts` facade that re-exports with its type each value read of them: today's ink
-makers copied into `packages/engine/src/locate/today/` (`deps.mjs`,
-`figure-text.mjs`, `ink-units.mjs`, `ledger.mjs`, and the `accents.mjs` and `content-classes.mjs` they import) by
-`packages/engine/src/locate/today/today.types.ts`, but for the two values of `accents.mjs` that
-`packages/engine/src/locate/facts.ts` reads and types itself; and the moved front half, the 27 modules of `source/`, `marks/`,
-`own/`, `compile/` and `instrument/`, by one facade at the engine's entry, `packages/engine/src/front.types.ts`. Each package
+list fails; and no package holds a hand-written declaration file. The moved front half, the modules of `source/`, `marks/`,
+`own/`, `compile/` and `instrument/`, is TypeScript (typed in place, its importers naming each module). Each package
 is type-checked under its own `tsconfig.json` (`tsc -b packages`) and
 tested under its own `vitest.config.ts`; `packages/README.md` states the rest.
 
@@ -49,7 +44,7 @@ The extension is the root package, over the packages and never under them:
 | `src/pdf-reader/engine/`, `src/pdf-reader/session/` | Today's engine and session: the reader the released extension reads with, and the modules the website imports by path (`tests/contract/website-imports.test.ts` holds each). Its files may import the engine itself, four modules of the core, `node:` modules, `zod` in `rules/` and `@readarxiv/engine` (`scripts/check-boundary.mjs` `ENGINE_ALLOW`, `ENGINE_PACKAGES`) |
 
 One door crosses the rule on purpose. The front half moved into the engine package, and each moved module's old path under
-`src/pdf-reader/engine/` re-exports it through a transition path of its own, `@readarxiv/engine/today/<folder>/<file>.mjs`
+`src/pdf-reader/engine/` re-exports it through a transition path of its own, `@readarxiv/engine/today/<folder>/<file>.ts`
 (each named in `packages/engine/package.json`, whose note says the cut-over deletes them with the old paths); only those old
 paths and the lab may import one (`tests/pdf-reader/engine-contract.test.ts`).
 
@@ -74,7 +69,7 @@ units share an id and one translation, and a change of a cut moves only the ids 
 `sentences` says the reader lights it sentence by sentence, `kept` that the paper keeps it as it is (never translated: which
 of a table's cells and a figure's texts are kept is decided in the engine alone, by `packages/engine/src/instrument/language.ts`,
 a text that holds no ordinary word, a name the paper's own running text writes, a text a block of names in the paper's tables
-keeps; read by `unitFactsOf`, `packages/engine/src/instrument/instrument.mjs`, for the source's units, over the blocks the
+keeps; read by `unitFactsOf`, `packages/engine/src/instrument/instrument.ts`, for the source's units, over the blocks the
 source reader states, and by `packages/engine/src/locate/ink.ts` for the texts read off A; the typesetter decides none), and
 `of` the block its source ties it to where that is not its kind's (a `\thanks` written in `\author{…}`, acmart's
 `\authornote`: `of: 'author'`); `of` is in no id and reaches no translator. The kind a reading option decides by is
@@ -84,9 +79,10 @@ source reader states, and by `packages/engine/src/locate/ink.ts` for the texts r
 piece) and carries it onto A by aligning the two documents' glyph sequences (`packages/engine/src/align/align.ts`). A unit is
 **located** where every glyph it owns on B has a partner on A: no partial credit, no threshold; one that is not stays the
 original's, with its cause. Each located unit is placed on A as one or more **members** (`Member`; format's `Placed`): its
-lines, elements, label, style and room read from A's own glyphs, and TeX's statements where B's log has them (a table cell's
-room is its column's box where the column's entries establish it, `Room.column`: `packages/engine/src/locate/columns.ts`, read
-in `packages/engine/src/locate/facts-pass.ts`). `locate` runs
+lines, elements, label, style and room read from A's own glyphs, and TeX's statements where B's log has them (a single-line
+table cell's room in its column, `Room.column`, is its column's box, where the column's entries establish it, widened by the
+column's share of the blank beside it, never past the cell's own side: `packages/engine/src/locate/columns.ts`, read in
+`packages/engine/src/locate/facts-pass.ts`, §18.13). `locate` runs
 its phases in one order (`packages/engine/src/locate/locate.ts`), and one module, `packages/engine/src/locate/ownership.ts`, is
 the only writer of who owns each glyph of A and of the lists each member states its ink in. Locate also makes the units no
 source unit is, of A's glyphs no source unit owns (a running head, text inside a figure: `packages/engine/src/locate/ink.ts`;
@@ -147,12 +143,12 @@ it serves, where each object goes.
    anything is compiled.
 2. The front half, `prepareFront` (`packages/engine/src/front.ts`), in a frame of its own so that the source's files are let go
    before the back half begins. Its stored half, `compiledOf` (`packages/engine/src/compiled.ts`), opens the paper with the
-   source reader (`packages/engine/src/source/latex-front.mjs`), makes the bibliography where TeX must, hands the source's units
+   source reader (`packages/engine/src/source/latex-front.ts`), makes the bibliography where TeX must, hands the source's units
    out as `Units` objects, then runs the marked compile with its final pass (`markedOfPaper`,
-   `packages/engine/src/compile/paper.mjs`: the probe, the marks of `packages/engine/src/marks/marks.mjs`, the guard of
-   `packages/engine/src/compile/guard.mjs`), or reads a stored instrument back where A's facts are the ones it was made for.
+   `packages/engine/src/compile/paper.ts`: the probe, the marks of `packages/engine/src/marks/marks.ts`, the guard of
+   `packages/engine/src/compile/guard.ts`), or reads a stored instrument back where A's facts are the ones it was made for.
    What is stored of a compile is `plan.ts`'s (`storedInstrumentOf`). `instrumentOf`
-   (`packages/engine/src/instrument/instrument.mjs`) then states the instrument over B.
+   (`packages/engine/src/instrument/instrument.ts`) then states the instrument over B.
 3. The back half, `prepareBack`: A read once (`packages/engine/src/read.ts`), aligned with B, located, wrapped
    (`packages/engine/src/wrap/wrap.ts`) and cut into the bundle's objects, each handed to the host as it is made; then a tally.
    The prepare tells the host its stages as `PREPARE_STAGES` names them (`packages/format/src/doc.ts`).
@@ -235,6 +231,7 @@ a gate is named by its id there. The rows after them are this repository's own.
 | A translator is sent no field of identity (`src`, `keys`, `open`, `close`, `depth`, `of`) | `packages/translate/tests/bundle.test.ts` | |
 | Every site that decides a reading option reads `toggleKind` | `tests/pdf-reader/toggle-kind.test.ts` | |
 | The layer's units are those its head names, each read once | `packages/reader/tests/session.test.ts`; the harness (`packages/reader/e2e/run.mjs`) | |
+| The page stack puts a page view in place only once it has drawn at the scale it stands at, and draws again one a new scale resets while it draws | `packages/reader/tests/stack.test.ts` (over a stand-in of PDF.js 6.3.289's page view); the harness (`packages/reader/e2e/run.mjs`: a display alone, then side by side, under a host's sheet that takes a pane out at no width) | the stand-in is PDF.js 6.3.289's page view as the stack meets it, read again at a PDF.js update |
 | The HTML page's DOM: a translation only as its block's next sibling, the original gaining `data-axt-*` alone, restore giving back the DOM node by node (DESIGN §7.1) | `tests/renderer/restore.test.ts` and the renderer's tests on every fixture; `pnpm e2e` | |
 | No `:has()` in an injected style sheet | `tests/styles/no-has.test.ts` | |
 | No measure of the complexity census rises past its ledger, among them the thresholds and lists with no reason | `census` (`lab/release-check/census.mjs`, its ledger `lab/release-check/census-ledger.json`; the rule ledger `lab/rules/ledger.json`) | not in hosted CI |
@@ -243,15 +240,15 @@ a gate is named by its id there. The rows after them are this repository's own.
 
 | A change of | Belongs in | What moving it costs |
 |---|---|---|
-| how the source is read: a command's arguments, a piece's kind, what a unit holds | the source reader, `packages/engine/src/source/latex-front.mjs`, and its tables in `packages/engine/src/source/` (`tex-names.json` is made by `lab/pdf/spikes/tex-names-make.mjs`, `latexml-args.mjs` by `scripts/latexml-args.mjs`) | the units whose content changes take new ids and are translated again; it is the compile side (below); today's reader reads the same front half, so `PIPELINE_VERSION` moves with it (`src/pdf-reader/engine/pipeline/versions.mjs`) |
-| what the marked compile is asked and what TeX states back: the marks, the probe, the frames, skips and alignments of the log | `packages/engine/src/marks/` (`marks.mjs` writes and reads the probe; `channels.ts` reads TeX's statements), the compile's driver `packages/engine/src/compile/` | the compile side: a host that keys the stored instrument by the code of `compiled.ts`, `plan.ts` and what they reach compiles every paper once more |
-| what the instrument says of B: an element's class, a piece TeX set no ink for | `packages/engine/src/instrument/instrument.mjs`, its typed seam `packages/engine/src/instrument.ts` | after TeX: a stored instrument stays good, nothing compiles again; the bundle's objects move |
-| which of a table's cells and a figure's texts are kept as written | `packages/engine/src/instrument/language.ts` (the rules), read by `unitFactsOf` in `packages/engine/src/instrument/instrument.mjs` over the table blocks the source reader states (`packages/engine/src/source/latex-front.mjs`) and by `packages/engine/src/locate/ink.ts`; the typesetter holds no table rule but a group's lay (`packages/typeset/src/lay/entry.ts`) | the units' `kept` moves, with `PIPELINE_VERSION`: a unit kept is asked no more, one no longer kept is asked |
+| how the source is read: a command's arguments, a piece's kind, what a unit holds | the source reader, `packages/engine/src/source/latex-front.ts`, and its tables in `packages/engine/src/source/` (`tex-names.json` is made by `lab/pdf/spikes/tex-names-make.mjs`, `latexml-args.ts` by `scripts/latexml-args.mjs`) | the units whose content changes take new ids and are translated again; it is the compile side (below); today's reader reads the same front half, so `PIPELINE_VERSION` moves with it (`src/pdf-reader/engine/pipeline/versions.mjs`) |
+| what the marked compile is asked and what TeX states back: the marks, the probe, the frames, skips and alignments of the log | `packages/engine/src/marks/` (`marks.ts` writes and reads the probe; `channels.ts` reads TeX's statements), the compile's driver `packages/engine/src/compile/` | the compile side: a host that keys the stored instrument by the code of `compiled.ts`, `plan.ts` and what they reach compiles every paper once more |
+| what the instrument says of B: an element's class, a piece TeX set no ink for | `packages/engine/src/instrument/instrument.ts`, its typed seam `packages/engine/src/instrument.ts` | after TeX: a stored instrument stays good, nothing compiles again; the bundle's objects move |
+| which of a table's cells and a figure's texts are kept as written | `packages/engine/src/instrument/language.ts` (the rules), read by `unitFactsOf` in `packages/engine/src/instrument/instrument.ts` over the table blocks the source reader states (`packages/engine/src/source/latex-front.ts`) and by `packages/engine/src/locate/ink.ts`; the typesetter holds no table rule but a group's lay (`packages/typeset/src/lay/entry.ts`) | the units' `kept` moves, with `PIPELINE_VERSION`: a unit kept is asked no more, one no longer kept is asked |
 | which glyph of A a unit owns, whether it is located, what a member states | `packages/engine/src/align/`, `packages/engine/src/locate/` (the phases' order in `locate.ts`; ownership written only by `ownership.ts`; the facts read off A in `facts.ts` and `facts-pass.ts`); written into the part by `packages/engine/src/bundle/bundle.ts` | the parts move. Proof: the lab's corpus run object for object against the last (`lab/pdf/prepare-back/same.mjs`), the differential (`prepare-diff`) |
 | which ink a reader can hide | the groups, `groupsOf` in `packages/engine/src/locate/ownership.ts`; the add-on, `packages/engine/src/wrap/wrap.ts` over `packages/engine/src/wrap.ts` | the add-on moves. Proof: `lab/pdf/prepare-back/prove.mjs`, `pixels` |
 | a field of a bundle object | `packages/format/src/schema.ts` | an optional field is free: a reader strips what it does not know. One an old reader would misread raises `FORMAT`, and a reader names the formats it reads in its open (`FORMATS`) |
 | a word of the paper's document | `packages/format/src/doc.ts` | a closed word (what a reader does) needs a new `v`; an open word (what it is told) is free |
-| a rule of the lay: breaking, the fit, the page fill, a figure's text, a table's group, a cell in its column's box | `packages/typeset/src/` (`breaker/`, `fit/`, `shared/`, `unit/`, `lay/`; a cell's room `packages/typeset/src/lay/adapt.ts`), entered by `packages/typeset/src/lay/entry.ts` | nothing stored moves and no number rises: a page is laid when it is read. Proof: the typesetter's tests, `display`, `sentence-cover` |
+| a rule of the lay: breaking, the fit, the page fill, a figure's text, a table's group, a cell in its room in its column | `packages/typeset/src/` (`breaker/`, `fit/`, `shared/`, `unit/`, `lay/`; a cell's room `packages/typeset/src/lay/adapt.ts`), entered by `packages/typeset/src/lay/entry.ts` | nothing stored moves and no number rises: a page is laid when it is read. Proof: the typesetter's tests, `display`, `sentence-cover` |
 | a language's data: labels, hyphenation, punctuation, faces, the names of headings and references | `packages/typeset/src/data/`, the source, edited by hand: `rules/` (a file a language over its script's; what each field mirrors, babel's captions and minimums, hyph-utf8's patterns, TeX Live's names, in `rules/types.ts`), `faces.ts` (the face catalogue; each face's coverage and small capitals as its file's cmap and GSUB state them), `marks.ts` (the CJK marks' ink, measured in the face files by `lab/typeset/marks-data.py`). Today's reader keeps its own copies under `src/pdf-reader/engine/rules/` until the cut-over | nothing stored moves: a page is laid when it is read, so a value edited moves the lay's dumps (the reader gate, `display`); `packages/typeset/tests/unit/data.test.ts` holds every export's shape, and `tests/typeset/tex-names.test.ts` the head and reference names equal to the engine's `packages/engine/src/source/tex-names.json`, which they mirror |
 | what a reading option shows | `packages/reader/src/compose/classes.ts`, by format's `toggleKind` | nothing stored |
 | how a translation is drawn | `packages/reader/src/compose/paint.ts` | nothing stored |
@@ -280,9 +277,9 @@ derived from bytes or from behaviour; a number raised by hand is the schema numb
 
 | The design | As built | Why that is safe |
 |---|---|---|
-| A rebuilt front half: a typed source reader under TeX's definitions, marks freed of the rule that they move nothing, a drafts-only compile plan | Today's front half, moved whole into `packages/engine/src/source/`, `marks/`, `own/`, `compile/` and `instrument/`: JavaScript, typed at the package's entry by `packages/engine/src/front.types.ts`, behind `prepareFront` | The rebuilt one, run beside it over the 87 corpus papers, lost 314 units against the frozen baseline where today's loses 3, and stated none of the element classes, spans, cells and kept units the back half and the typesetter read (DESIGN §16, "One front half, today's") |
+| A rebuilt front half: a typed source reader under TeX's definitions, marks freed of the rule that they move nothing, a drafts-only compile plan | Today's front half, moved whole into `packages/engine/src/source/`, `marks/`, `own/`, `compile/` and `instrument/`: TypeScript, typed in place, behind `prepareFront` | The rebuilt one, run beside it over the 87 corpus papers, lost 314 units against the frozen baseline where today's loses 3, and stated none of the element classes, spans, cells and kept units the back half and the typesetter read (DESIGN §16, "One front half, today's") |
 | Each fact decided once, typed, at the source: no later module reads a piece's TeX with a pattern | Modules downstream of the source reader still read a piece's `src` with a pattern: in the typesetter `packages/typeset/src/breaker/tokens.ts`, `packages/typeset/src/emit/links.ts`, `packages/typeset/src/unit/breaks.ts`, `packages/typeset/src/unit/rename.ts`; in locate `packages/engine/src/locate/place.ts`, `packages/engine/src/locate/ink.ts`, `packages/engine/src/locate/facts.ts`, `packages/engine/src/locate/facts-pass.ts` | Each reads what the source reader wrote, and each is held by the gates of section 4; a fact moved to the source is one change per fact, with its own proof |
-| No final pass; B from the marked drafts; no probe and no guard unless their counts call for them | The marked compile keeps its probe, its final pass (B is the final pass's PDF, figures included) and its guard (`packages/engine/src/compile/paper.mjs`, `packages/engine/src/compile/guard.mjs`) | Locate's rules for text inside figures read a B that holds the figures: the drafts-only compile made 6,614 figure ticks and labels into units, for a saving that was this very pass (DESIGN §16) |
+| No final pass; B from the marked drafts; no probe and no guard unless their counts call for them | The marked compile keeps its probe, its final pass (B is the final pass's PDF, figures included) and its guard (`packages/engine/src/compile/paper.ts`, `packages/engine/src/compile/guard.ts`) | Locate's rules for text inside figures read a B that holds the figures: the drafts-only compile made 6,614 figure ticks and labels into units, for a saving that was this very pass (DESIGN §16) |
 | One page stack of our own under both panes | The left pane is PDF.js's viewer (`packages/reader/src/panes/left.ts`), which still reads one private member of PDF.js; the right is the reader's stack | The design moves the left only where the stack matches the viewer's first paint. Measured on three papers, the stack matched the scroll trace and held 8 to 12 % less renderer memory, but painted the first page 8.5 ms (9 %) and 20.5 ms (17 %) later on two of them |
 | A `Host` that states facts: the original, an object by digest, the follow, the rows, the preferences, the words, opening a link | A `Host` that gives a network: `fetch`, `original(ref)`, `prefs` and, where the host makes rows, `translate` (`packages/reader/src/reader.ts`); the follow, the objects and the words are the reader's own over that `fetch` | They are the same code on both hosts once a host gives a `fetch`, so they live inside the reader; the host's `fetch` refuses any origin it does not serve (the extension's: our server and arXiv alone, `src/pdf-reader/host/v2.ts` `hostFetch`), and every object read is held to its digest. A host that states facts reopens that interface, and is left until after the cut-over |
 | A canvas painter, with the page's own weight and no layout cost | The SVG painter (`packages/reader/src/compose/paint.ts`) behind the same interface | The canvas changes how text looks, and the design ships it only after the maintainer has compared both on crops at three zooms; until then the SVG stays, as the design says |

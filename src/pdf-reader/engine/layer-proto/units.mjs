@@ -3,8 +3,8 @@
 // unit by id (bundleUnitsOf, the writer's); a reader checks one unit at a time (unitStands) and drops one that does not stand.
 // Imports the layout's parsers alone, never the run, the remover nor the front end: a reader loads it.
 import { isInteger, isObject, LayoutRefusal, STRING_MAX } from '../layout/json.mjs'
-import { UNIT_FLAG_BITS, TEXT, PH, OPEN, CLOSE, NESTED, SETS_NOTHING, EDGES, pieceOf, bundleUnitsOf as unitsOfPaper } from '@readarxiv/engine/today/instrument/units.mjs'
-export { UNIT_FLAG_BITS, SETS_NOTHING, EDGES, NAME_KIND } from '@readarxiv/engine/today/instrument/units.mjs'
+import { UNIT_FLAG_BITS, TEXT, PH, OPEN, CLOSE, NESTED, SETS_NOTHING, EDGES, pieceOf, bundleUnitsOf as unitsOfPaper } from '@readarxiv/engine/today/instrument/units.ts'
+export { UNIT_FLAG_BITS, SETS_NOTHING, EDGES, NAME_KIND } from '@readarxiv/engine/today/instrument/units.ts'
 
 /** the bundle's units of today's paper (pipeline/live.mjs openPaper): the engine package's, KEPT where the paper's `kept` holds the
  *  unit (today's name rule, translate/mt.mjs nameCells; the rebuilt engine keeps no unit by its words) */

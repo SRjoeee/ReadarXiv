@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { LAYOUT_CLASSES, layoutMarking } from '@/pdf-reader/engine/layout/marks.mjs'
 import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-// @ts-expect-error: the moved JavaScript (packages/engine/src/source/arg-roles.mjs) has no declaration in the package; its old path, which nothing
-// else imported, is gone
-import { fallbackDefinition } from '../../packages/engine/src/source/arg-roles.mjs'
+import { fallbackDefinition } from '../../packages/engine/src/source/arg-roles.ts'
 import { latin1Bytes, type SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 
 // The whole-paper fallbacks of the layer route's release sweep (2026-10-22), each by its general rule: a Latin-1 source's

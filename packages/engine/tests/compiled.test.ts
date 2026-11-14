@@ -13,8 +13,8 @@ const OPTIONS = vi.hoisted(() => ({
   inkless: new Set(['\\noink']),
   decorated: [['\\hlg', 'All good.']],
 }))
-vi.mock('../src/front.types.ts', async (real) => {
-  const m = await real<typeof import('../src/front.types.ts')>()
+vi.mock('../src/compile/paper.ts', async (real) => {
+  const m = await real<typeof import('../src/compile/paper.ts')>()
   return {
     ...m,
     // (a paper whose bibliography needs no compile)

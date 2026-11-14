@@ -6,7 +6,7 @@
 // for it, every page of each drawn and measured. `verdictOf`: the gate passes only on complete coverage with no page worse.
 import { bare, judgeJoined, joinedOf, mathDrawn, measureFidelity, mutualBest as bestPairs, originalOf, SIZE_STEP } from './fidelity.mjs'
 import { measureBlind, raisedOver } from './blind.mjs'
-import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
+import { unitClass } from '../../../packages/engine/src/locate/content-classes.ts'
 import { litColumn, paintedEntries } from './paint.mjs'
 import { halfLeadingOf } from '../../../packages/reader/src/compose/highlight.ts'
 import { sentencesPaired } from './sentences.mjs'

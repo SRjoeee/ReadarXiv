@@ -9,9 +9,15 @@
 // - its unit cells (span 1) each by its own class (a \multicolumn{1}{c} in an l column is centred in it), the cells of one class
 //   ALIGNED of one another; a word of free ink on the table's band joins the column where it meets that column's unit cells'
 //   hull and no other's, and its class sets it there (its start on the hull's left, its end on its right, its middle on its
-//   middle), the column's unit cells all of one class; at least two entries. A word that meets the hull and stands otherwise (a
-//   word of a number with a space in it beside the column's edge, siunitx's S column's numbers set on their decimal marker, a
-//   word over two columns, a word in a column of two classes) is an entry not read whole: the column has none;
+//   middle), the column's unit cells all of one class; at least two entries. A word wholly inside that hull (within ALIGNED of
+//   it) meeting no other column's is part of an entry whose own ends the page does not state (a name set with a script, the
+//   words of a number with its ± or unit): it neither moves the box nor speaks against the column, since entries that line up
+//   by their class line up whatever their parts, where the rest of that entry is inside the hull too: no free word on its
+//   baseline stands in the blank between the hull and the nearest hulls beside it (else the rest is set past the hull, or a
+//   column no unit cell is stands there, and the entry's ends are unstated: the column has none; the coordinator's rulings (d)
+//   and (d') of 2026-11-14: "5.3% / 0.27" under a narrower header, its "5.3%" in the blank). A word that meets the hull, passes
+//   its edge and stands otherwise (a number with a space in it beside the column's edge, siunitx's S column's numbers set on
+//   their decimal marker, a word over two columns) is an entry not read whole: the column has none;
 // - a column that holds a cell whose text TeX set as a paragraph of its own (a p, m, b or X column, a \parbox: its box is that
 //   paragraph's \hsize, which no glyph shows) or whose template is not LaTeX's (no class) has none;
 // - a cell spanning columns (\multicolumn) is no entry of a single column's box; its box is the union of those it spans where
@@ -20,8 +26,11 @@
 // - a table set over several pages (a longtable's) takes its columns from all of them where every column with a box on two of
 //   them stands at its class's edge or middle on each, else each page's from its own.
 // What is not read: a column of no unit cell, an entry of free ink spanning columns of which one has no unit cell (a dash over
-// two), free ink not on the table's band. Each leaves a box narrower than TeX's, never wider; TeX's own statement of the box (the
-// template's edges as points) is the TeX gate's.
+// two), free ink not on the table's band, and the ink of a member that is no cell of the table (it never extends a hull nor
+// speaks against a column). Each leaves a box narrower than TeX's, never wider; TeX's own statement of the box (the template's
+// edges as points) is the TeX gate's.
+// A cell's room in its column (Room.column, the owner's approval of 2026-11-14) is its column's box widened by the column's share
+// of the blank TeX leaves beside it, never past the cell's own side: roomsOf below.
 
 /** a column's class: TeX's \hfil on the side or sides the slack goes */
 export type ColumnClass = 'l' | 'c' | 'r'
@@ -40,12 +49,27 @@ export interface ColumnCell {
   /** what TeX set of it on its page: its lines' advances and its elements' ink on their baselines */
   x0: number
   x1: number
+  /** what bounds it on its own lines (its Room.side: TeX's measure, the nearest ink not its own on its baseline, a painted box
+   *  beside its line), which its room never passes; none where the facts pass states none */
+  side?: readonly [number, number]
+}
+/** what stands on a table's band on one page besides its cells and its words of free ink, as the facts pass reads the page */
+export interface BandInk {
+  page: number
+  /** each glyph of ink on the band whose member is no cell of the table (a paragraph's, a caption's, an ink unit's) */
+  ink: readonly (readonly [number, number])[]
+  /** the painted boxes on the band no member owns that are no horizontal rule: a vertical rule, a cell's fill */
+  walls: readonly (readonly [number, number])[]
+  /** where the horizontal rules on the band across the table's cells end: the table's own edges; none where no rule shows them */
+  edge?: readonly [number, number]
 }
 /** a word of ink no member owns on its table's band, on its page */
 export interface FreeWord {
   page: number
   x0: number
   x1: number
+  /** its baseline, to the hundredth, as the facts pass cuts its words (one baseline each) */
+  y?: number
 }
 
 /**
@@ -99,9 +123,15 @@ const push = <K, V>(m: Map<K, V[]>, k: K, v: V) => {
 
 /**
  * Each cell's column box, by its member's ord, of the cells of one table (every page of it) and the free words on its band
- * (those of each page it stands on): absent for a cell whose column's box is not established
+ * (those of each page it stands on): absent for a cell whose column's box is not established. With what else stands on the
+ * band of each page (`bands`), each cell's room in its column instead (roomsOf): the box widened by the column's share of the
+ * blank beside it, never past the cell's own side
  */
-export function columnBoxes(cells: readonly ColumnCell[], words: readonly FreeWord[]): Map<number, Box> {
+export function columnBoxes(
+  cells: readonly ColumnCell[],
+  words: readonly FreeWord[],
+  bands?: readonly BandInk[],
+): Map<number, Box> {
   const pages = [...new Set(cells.map((c) => c.page))].sort((a, b) => a - b)
   // (each page's columns, by first column: their entries, null where a cell of it has no class)
   const entries = new Map<number, Map<number, Entry[] | null>>()
@@ -111,6 +141,9 @@ export function columnBoxes(cells: readonly ColumnCell[], words: readonly FreeWo
     const cols = new Map<number, ColumnCell[]>()
     for (const c of cells) if (c.page === p && c.span === 1) push(cols, c.col, c)
     const hulls = [...cols].map(([k, cs]) => [k, hullOf(cs.map((c) => [c.x0, c.x1] as const))] as const)
+    // (the page's free words by their baseline: the rest of an entry set in several words stands on its word's)
+    const onLine = new Map<number | undefined, FreeWord[]>()
+    for (const w of words) if (w.page === p) (onLine.get(w.y) ?? onLine.set(w.y, []).get(w.y)!).push(w)
     const on = new Map<number, Entry[] | null>()
     const cls = new Map<number, ColumnClass | null>()
     for (const [k, cs] of cols) {
@@ -124,13 +157,29 @@ export function columnBoxes(cells: readonly ColumnCell[], words: readonly FreeWo
       // (each word of free ink meeting its cells: an entry where it meets them alone and its class sets it there; else an entry
       // not read whole, and the column none)
       const h = hulls.find(([q]) => q === k)![1]
+      // (the nearest hulls beside it, of the page's other columns with unit cells; none, the band's measure, which bounds the
+      // words read)
+      let left = Number.NEGATIVE_INFINITY
+      let right = Number.POSITIVE_INFINITY
+      for (const [q, g] of hulls) {
+        if (q === k) continue
+        if (g[1] <= h[0]) left = Math.max(left, g[1])
+        if (g[0] >= h[1]) right = Math.min(right, g[0])
+      }
       let whole = true
       for (const w of words) {
         if (w.page !== p) continue
         const meets = hulls.filter(([, g]) => Math.min(w.x1, g[1]) - Math.max(w.x0, g[0]) > 0)
         if (!meets.some(([q]) => q === k)) continue
         if (one && meets.length === 1 && setIn(one, [w.x0, w.x1], h)) es.push([w.x0, w.x1, one])
-        else whole = false
+        // (one wholly inside the hull, within ALIGNED, meeting no other column's: part of an entry set in several words, neither an
+        // entry nor a word against the column, where the rest of that entry is inside the hull too: no free word on its baseline
+        // stands in the blank between the hull and the nearest hulls beside it (the band's measure where none). One there is the
+        // rest of the entry set past the hull, or a column no unit cell is: the entry's ends unstated, the column has none)
+        else if (meets.length === 1 && w.x0 >= h[0] - ALIGNED && w.x1 <= h[1] + ALIGNED) {
+          if ((onLine.get(w.y) ?? []).some((v) => (v.x0 >= left && v.x1 <= h[0]) || (v.x0 >= h[1] && v.x1 <= right)))
+            whole = false
+        } else whole = false
       }
       on.set(k, whole ? es : null)
     }
@@ -209,6 +258,119 @@ export function columnBoxes(cells: readonly ColumnCell[], words: readonly FreeWo
       const b = c.span === 1 ? boxes.get(c.col) : spanned.get(c.ord)
       if (b) out.set(c.ord, b)
     }
+  }
+  return bands ? roomsOf(cells, words, out, bands) : out
+}
+
+/**
+ * Each cell's room in its column (Room.column; the owner's approval of 2026-11-14, docs/PDF-READER.md §18.13): its column's box
+ * widened, on each side its own class lets its text grow, by the column's share of the blank on that side. The share is half the
+ * blank between the box's edge and what stands next to the column on the table's band on that side: TeX makes the blank between
+ * two columns of each one's own \tabcolsep, so half of it is this column's, and the other half stays between the cell and what
+ * stands there. What stands next is the nearest of another column's box, the unit cells of a column with no box, a word of free
+ * ink, a glyph of a member that is no cell of the table, and a painted edge (a vertical rule, a neighbour's fill); where nothing
+ * stands, the table's own edge, where its horizontal rules end; where the page shows none, no share. A cell spanning columns
+ * stands next to none (its ink crosses them); a painted box across the whole box is its ground; what stands past the table's
+ * edge is not the table's; one that meets the box's edge leaves no blank. An l cell grows right, an r cell left, a c cell both
+ * ways by the smaller share (its middle the box's); a spanning cell's union by its first column's left share and its last one's
+ * right. The widening never passes the cell's own side (ColumnCell.side: what bounds it on its own line, TeX's measure or a
+ * rule's end beside it), a c cell's cut alike on both sides; where its side stops short of the box, the box stands on that side.
+ * A page states the shares of the columns of which a single unit cell with a box stands on it: where it states none for a cell's
+ * first (last) column, no single unit cell of that column standing there (a table pooled over pages, that column's box the other
+ * pages'), the share on that side is none and the box stands there, the other side taking its share as the class gives it (a c
+ * cell the smaller, so none). So a cell that has a box always has a room, and its room is never inside its box (§18.13).
+ * What is not read: a pooled column's blank on a page that holds no unit cell of it (it would move its neighbours' shares there)
+ */
+/** in a list sorted by its entries' `key`th field, the index of the first past `v` (at or past it with `at`) */
+function firstAfter(list: readonly (readonly number[])[], key: number, v: number, at = false): number {
+  let a = 0
+  let b = list.length
+  while (a < b) {
+    const mid = (a + b) >> 1
+    const x = list[mid]![key]!
+    if (x < v || (!at && x === v)) a = mid + 1
+    else b = mid
+  }
+  return a
+}
+function roomsOf(
+  cells: readonly ColumnCell[],
+  words: readonly FreeWord[],
+  boxes: ReadonlyMap<number, Box>,
+  bands: readonly BandInk[],
+): Map<number, Box> {
+  // (everything read at the part's hundredth, as the part states a line and the room: a row's fill TeX painted from a column's
+  // edge is that column's ground, whatever its last digits; 2610.40394v1 p3's \rowcolor at 62.3621 beside a box at 62.36)
+  const h = (v: number) => Math.round(v * 100) / 100
+  const at = (b: Box): Box => [h(b[0]), h(b[1])]
+  // (each page's columns' blanks, by first column: [left, right], 0 where no share)
+  const blanks = new Map<number, Map<number, [number, number]>>()
+  for (const p of new Set(cells.map((c) => c.page))) {
+    const single = cells.filter((c) => c.page === p && c.span === 1)
+    const colBox = new Map<number, Box>()
+    for (const c of single) {
+      const b = boxes.get(c.ord)
+      if (b) colBox.set(c.col, at(b))
+    }
+    // (what may stand next on the page's band, each [x0, x1, the column it is an entry of or -1], once sorted by its start and
+    // once by its end: each column's sides are found in them by a search, never by reading the band again)
+    const things: (readonly [number, number, number])[] = []
+    for (const k of new Set(single.map((c) => c.col))) {
+      const b = colBox.get(k)
+      if (b) things.push([b[0], b[1], k])
+      else for (const c of single) if (c.col === k) things.push([h(c.x0), h(c.x1), k])
+    }
+    for (const w of words) if (w.page === p) things.push([h(w.x0), h(w.x1), -1])
+    const band = bands.find((b) => b.page === p)
+    for (const [x0, x1] of band?.ink ?? []) things.push([h(x0), h(x1), -1])
+    for (const [x0, x1] of band?.walls ?? []) things.push([h(x0), h(x1), -1])
+    const byStart = [...things].sort((a, b) => a[0] - b[0])
+    const byEnd = [...things].sort((a, b) => a[1] - b[1])
+    const edge = band?.edge && at(band.edge as Box)
+    const on = new Map<number, [number, number]>()
+    for (const [k, [b0, b1]] of colBox) {
+      // (to the right, what starts past the box's start in order: inside the box, none; across its right edge, no blank; else
+      // the first past its edge is the nearest, unless it stands past the table's edge. What crosses the whole box, a ground
+      // under it or ink across it, starts at or before it and is never read)
+      let right = Number.POSITIVE_INFINITY
+      for (let i = firstAfter(byStart, 0, b0); i < byStart.length; i++) {
+        const [x0, x1, j] = byStart[i]!
+        if (j === k || x1 <= b1) continue
+        if (x0 < b1) right = 0
+        else if (!(edge && edge[1] >= b1 && x0 >= edge[1])) right = x0 - b1
+        break
+      }
+      // (to the left, the same over what ends before the box's end, from the nearest)
+      let left = Number.POSITIVE_INFINITY
+      for (let i = firstAfter(byEnd, 1, b1, true) - 1; i >= 0; i--) {
+        const [x0, x1, j] = byEnd[i]!
+        if (j === k || x0 >= b0) continue
+        if (x1 > b0) left = 0
+        else if (!(edge && edge[0] <= b0 && x1 <= edge[0])) left = b0 - x1
+        break
+      }
+      if (left === Number.POSITIVE_INFINITY) left = edge && edge[0] <= b0 ? b0 - edge[0] : 0
+      if (right === Number.POSITIVE_INFINITY) right = edge && edge[1] >= b1 ? edge[1] - b1 : 0
+      on.set(k, [left, right])
+    }
+    blanks.set(p, on)
+  }
+  const out = new Map<number, Box>()
+  for (const c of cells) {
+    // (every cell with a box has a class: a column holding a cell of none has no box on its page nor in the pool, and a spanning
+    // cell's union needs its class (columnBoxes); so the box alone says whether the cell has a room)
+    const b = boxes.get(c.ord) && at(boxes.get(c.ord)!)
+    if (!b) continue
+    // (the blank beside its first column on the left and its last on the right, where its page states it; else none)
+    const on = blanks.get(c.page)
+    const left = on?.get(c.col)?.[0] ?? 0
+    const right = on?.get(c.col + c.span - 1)?.[1] ?? 0
+    // (each side's share where its class grows that way, cut at its own side; none where the side stops short of the box)
+    const [s0, s1] = c.side ?? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+    let L = c.cls === 'l' || s0 > b[0] ? 0 : Math.min(left / 2, b[0] - s0)
+    let R = c.cls === 'r' || s1 < b[1] ? 0 : Math.min(right / 2, s1 - b[1])
+    if (c.cls === 'c') L = R = Math.min(L, R)
+    out.set(c.ord, [b[0] - L, b[1] + R])
   }
   return out
 }

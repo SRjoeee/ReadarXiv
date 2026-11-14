@@ -40,7 +40,7 @@ export const DELTA_WHYS = Object.freeze([
 ] as const)
 export type DeltaWhy = (typeof DELTA_WHYS)[number]
 
-/** why a unit's ink stays the original's on our wrapped pages (own/own.mjs, wrap.ts; design ocg-erasure §1.4, §2.4,
+/** why a unit's ink stays the original's on our wrapped pages (own/own.ts, wrap.ts; design ocg-erasure §1.4, §2.4,
  *  §3.2): its marks absent, twice or out of order; a range over more pages than a continued footnote's; its glyphs that do not
  *  spell it; a page not wrapped; a page past its group bounds */
 export const UNHIDDEN = Object.freeze(['marks', 'across', 'spell', 'page', 'bounds'] as const)

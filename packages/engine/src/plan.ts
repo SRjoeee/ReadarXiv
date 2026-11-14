@@ -6,11 +6,11 @@
 // stored (front.ts prepareFront: instrumentOf, the units first).
 import type { FailureReason } from '@readarxiv/format'
 import { toBase64Url } from '@readarxiv/format'
-import { openPaper, type Paper } from './front.types.ts'
+import { openPaper, type Paper } from './compile/live.ts'
 import { isMemoryError } from './memory.ts'
 
-/** what arXiv's PDF says that the front half reads: its page count, its day (seconds since the epoch: compile/base.mjs
- *  creationEpochOf), the TeX Live year its pdfTeX banner names (compile/guard.mjs texLiveOfPdf) */
+/** what arXiv's PDF says that the front half reads: its page count, its day (seconds since the epoch: compile/base.ts
+ *  creationEpochOf), the TeX Live year its pdfTeX banner names (compile/guard.ts texLiveOfPdf) */
 export interface OriginalFacts {
   pages: number
   day: number | null
@@ -206,7 +206,7 @@ const planOf = (stored: StoredInstrument): ReadPlan | null => {
   }
 }
 
-/** the paper opened (compile/live.mjs openPaper), its failures the front end's */
+/** the paper opened (compile/live.ts openPaper), its failures the front end's */
 function opened(files: Map<string, Uint8Array>): Paper {
   try {
     return openPaper(files)
@@ -217,7 +217,7 @@ function opened(files: Map<string, Uint8Array>): Paper {
     throw new FrontRefusal('cannot-typeset', `the front end could not read the paper: ${short(e).slice(0, 200)}`)
   }
 }
-/** the paper opened again with the job's .bbl (compile/paper.mjs madeBibliography's own reopening, its compiler kept) */
+/** the paper opened again with the job's .bbl (compile/paper.ts madeBibliography's own reopening, its compiler kept) */
 function withBbl(paper: Paper, bbl: { path: string; bytes: Uint8Array }): Paper {
   const files = new Map<string, Uint8Array>()
   for (const p of paper.fsys.list()) {

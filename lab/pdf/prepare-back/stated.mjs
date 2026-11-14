@@ -14,7 +14,7 @@
 // joins the two by it (lab/typeset/parity/join.mjs heldJoin)
 import { readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../../packages/typeset/tests/replay/l1.ts'
 import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
-import { unitClass } from '../../../packages/engine/src/locate/today/content-classes.mjs'
+import { unitClass } from '../../../packages/engine/src/locate/content-classes.ts'
 import { symbolText } from '../../../src/pdf-reader/engine/rules/text-symbols.mjs'
 import { identifiersIn, inMemory, loadProject } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
 import { isInkless } from '../../../src/pdf-reader/engine/translate/mt.mjs'

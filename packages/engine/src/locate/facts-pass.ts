@@ -34,7 +34,7 @@ import {
 import { type ColumnCell, columnBoxes, type FreeWord } from './columns.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
-import { spellOf } from './today/today.types.ts'
+import { spellOf } from '../own/stream.ts'
 
 /** a line that ends short of its column's right edge by this share of its size ends at a forced break (today's SHORT TEX:87),
  *  read only where the marked compile set no point for the break */
@@ -304,24 +304,31 @@ export function factsOf(input: FactsInput): void {
 }
 
 /**
- * Each table cell's column's box (Room.column; the owner's decision, docs/PDF-READER.md §18.13), once every
- * member's facts are read (its band): locate/columns.ts over each table's located cells, each its first column and span, its
- * class (InstrumentUnit.cell.boxed) and what TeX set of it on its page (its lines' advances and its elements' ink on their
- * baselines, as the typesetter's own room of a cell reads it), and the words of ink no member owns on the table's band on each
- * page (the cells' bands, Room.band, else their lines' bodies, within their lines' measure): one baseline each, as TeX sets one
- * box's glyphs, cut where a glyph a member owns stands or a word's gap (WORD_GAP, the ink units' word rule) opens
+ * Each table cell's room in its column (Room.column; the owner's decision, docs/PDF-READER.md §18.13), once every member's facts
+ * are read (its band and its side): locate/columns.ts over each table's located cells, each its first column and span, its
+ * class (InstrumentUnit.cell.boxed), what TeX set of it on its page (its lines' advances and its elements' ink on their
+ * baselines, as the typesetter's own room of a cell reads it) and its Room.side, and what stands on the table's band on each
+ * page (the cells' bands, Room.band, else their lines' bodies, within their lines' measure), read in one pass over its ink: the
+ * words of ink no member owns (one baseline each, as TeX sets one box's glyphs, cut where a glyph a member owns stands or a
+ * word's gap, WORD_GAP, the ink units' word rule, opens), the glyphs of members that are no cell of the table, the painted boxes
+ * no member owns that are no horizontal rule (a vertical rule, a fill), and where the horizontal rules across its cells end
  */
 function readColumns(fx: FactsIndex): void {
   const { members, units, owned, gA, bandOn } = fx
   const tables = new Map<number, Member[]>()
+  // (every member of each table, located or not: a glyph of none of them is ink that stands beside the table's columns)
+  const ofTable = new Map<number, Set<number>>()
   for (const mem of members) {
     const c = mem.unit >= 0 ? units[mem.unit]?.cell : undefined
-    if (!c || !mem.located || !mem.lines.length) continue
+    if (!c) continue
+    ;(ofTable.get(c.table) ?? ofTable.set(c.table, new Set()).get(c.table)!).add(mem.ord)
+    if (!mem.located || !mem.lines.length) continue
     const l = tables.get(c.table)
     if (l) l.push(mem)
     else tables.set(c.table, [mem])
   }
-  for (const mems of tables.values()) {
+  for (const [table, mems] of tables) {
+    const mine = ofTable.get(table)!
     const cells: ColumnCell[] = []
     // (the table's band and measure on each page: [lo, hi, m0, m1])
     const band = new Map<number, [number, number, number, number]>()
@@ -349,18 +356,23 @@ function readColumns(fx: FactsIndex): void {
           Math.max(b[3], l[8]),
         ])
       }
-      cells.push({ ord: mem.ord, page, col: c.col, span: c.span ?? 1, cls: c.boxed, x0, x1 })
+      cells.push({ ord: mem.ord, page, col: c.col, span: c.span ?? 1, cls: c.boxed, x0, x1, side: mem.room.side })
     }
     const words: FreeWord[] = []
+    const bands: { page: number; ink: [number, number][]; walls: [number, number][]; edge?: [number, number] }[] = []
     for (const [page, [lo, hi, m0, m1]] of band) {
-      // (the page's ink on the band, by baseline to the hundredth and then across; a word of free ink at a time)
+      // (the page's ink on the band, by baseline to the hundredth and then across; a word of free ink at a time, and each glyph
+      // of a member that is no cell of the table)
       const ink = bandOn(page, lo, hi)
         .filter((g) => g.x1 > m0 && g.x0 < m1 && !gA(g.a).unseen)
         .sort((a, b) => r2(a.y) - r2(b.y) || a.x0 - b.x0)
+      const foreign: [number, number][] = []
       let cur: (FreeWord & { y: number; size: number }) | null = null
       for (const g of ink) {
         const size = gA(g.a).size
-        const free = owned.member(g.a) < 0
+        const who = owned.member(g.a)
+        const free = who < 0
+        if (!free && !mine.has(who)) foreign.push([g.x0, g.x1])
         if (
           cur &&
           free &&
@@ -372,14 +384,35 @@ function readColumns(fx: FactsIndex): void {
           cur.size = size
           continue
         }
-        if (cur) words.push({ page, x0: cur.x0, x1: cur.x1 })
+        if (cur) words.push({ page, x0: cur.x0, x1: cur.x1, y: cur.y })
         cur = free ? { page, x0: g.x0, x1: g.x1, y: r2(g.y), size } : null
       }
-      if (cur) words.push({ page, x0: cur.x0, x1: cur.x1 })
+      if (cur) words.push({ page, x0: cur.x0, x1: cur.x1, y: cur.y })
+      // (the page's painted boxes on the band no member owns: a horizontal rule across the table's cells tells the table's edge,
+      // any other a painted edge beside a column, a vertical rule or a cell's fill)
+      let h0 = Number.POSITIVE_INFINITY,
+        h1 = Number.NEGATIVE_INFINITY
+      for (const c of cells)
+        if (c.page === page) {
+          h0 = Math.min(h0, c.x0)
+          h1 = Math.max(h1, c.x1)
+        }
+      const walls: [number, number][] = []
+      let e0 = Number.POSITIVE_INFINITY,
+        e1 = Number.NEGATIVE_INFINITY
+      for (const b of fx.boxes(page)) {
+        if (fx.ownedBox.has(`${page}|${b.j}`) || r2(b.y1) < lo || r2(b.y0) > hi) continue
+        if (!b.rule) walls.push([b.x0, b.x1])
+        else if (Math.min(b.x1, h1) > Math.max(b.x0, h0)) {
+          e0 = Math.min(e0, b.x0)
+          e1 = Math.max(e1, b.x1)
+        }
+      }
+      bands.push({ page, ink: foreign, walls, ...(e0 < e1 ? { edge: [e0, e1] as [number, number] } : {}) })
     }
-    const boxes = columnBoxes(cells, words)
+    const rooms = columnBoxes(cells, words, bands)
     for (const mem of mems) {
-      const b = boxes.get(mem.ord)
+      const b = rooms.get(mem.ord)
       if (b) mem.room.column = [r2(b[0]), r2(b[1])]
     }
   }

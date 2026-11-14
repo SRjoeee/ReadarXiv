@@ -1,8 +1,7 @@
 // The figure texts' reading of a page's paths (today/figure-text.mjs figureUnitsOf): a page's `shapes` are read while its own
 // figure texts are, and never after, so that a reader may let them go page by page (`done`, locate's ink step: lane mem-back).
 import { describe, expect, it } from 'vitest'
-// @ts-ignore: today's JavaScript, typed where the package takes it (ink.ts)
-import { containersOf, figureUnitsOf } from '../src/locate/today/figure-text.mjs'
+import { containersOf, type FigureGlyph, figureUnitsOf, type TodayShape } from '../src/locate/figure-text.ts'
 import { figureLinesOf } from '../src/locate/figure-lines.ts'
 
 /** a page of one word at (100, 100), 10 pt, in a figure, a stroke `at` across from it (its room on the line reads it) */
@@ -75,7 +74,7 @@ describe("figureUnitsOf reads a page's shapes with its own figure texts alone", 
     expect(done).toEqual([0, 1])
     expect(taken).toEqual(kept)
     // (the shapes are read: a stroke nearer the word's end leaves less room after it)
-    expect(kept.units[0].after).not.toBe(kept.units[1].after)
+    expect(kept.units[0]!.after).not.toBe(kept.units[1]!.after)
   })
 })
 
@@ -101,12 +100,12 @@ describe('figureUnitsOf records a tone under part of a text for the relation rea
   it('keeps a highlight under a word of it a ground that crowds nothing, and records it (2608.06701v1 p1’s blue bars)', () => {
     // ("static" from 100 to 130, its fill 99 to 131.5: an edge of it inside the text's extent)
     const { units, met } = figureUnitsOf([toned(99, 131.5)], null)
-    expect(units[0].why).toBeNull()
+    expect(units[0]!.why).toBeNull()
     expect(met.get(0)?.items).toEqual([expect.objectContaining({ b: 0, ground: true })])
   })
   it('records no fill the text stands on whole', () => {
     const { units, met } = figureUnitsOf([toned(95, 175)], null)
-    expect(units[0].why).toBeNull()
+    expect(units[0]!.why).toBeNull()
     expect(met.get(0)).toBeUndefined()
   })
 })
@@ -135,7 +134,7 @@ describe('figure-text: the closed paths that hold units alone (F3’s container 
     boxes: [40, 658, 160, 718, ...extra.flatMap((e) => e.box)],
     shapes: new Map([
       [0, { segs: diamond, stroke: true, fill: false, hw: 0.5 }],
-      ...extra.map((e) => [e.b, { segs: e.segs, stroke: true, fill: false, hw: 0.5 }] as [number, unknown]),
+      ...extra.map((e) => [e.b, { segs: e.segs, stroke: true, fill: false, hw: 0.5 }] as [number, TodayShape]),
     ]),
   })
   it('holds the lines whose glyphs stand inside the path, by its interior, alone: "yes" in its box is outside it', () => {
@@ -325,7 +324,7 @@ describe('figure-text: a glyph no run holds inside a closed path is the line rea
   // p1's plan box, its item 4's "behavior." whose stop is set on a chip of its own)
   const MONO = 'Consolas'
   const rowsOf = (rows: string[], stop: boolean) => {
-    const glyphs: Record<string, unknown>[] = []
+    const glyphs: FigureGlyph[] = []
     rows.forEach((text, li) => {
       let x = 80
       const y = 700 - 14 * li
@@ -354,10 +353,10 @@ describe('figure-text: a glyph no run holds inside a closed path is the line rea
       for (const u of text) set(u, 'ArialMT')
       if (stop && li === rows.length - 1) set('.', MONO)
     })
-    return glyphs as { u: string; x1: number }[]
+    return glyphs
   }
   const ROWS = ['Run the checks to make', 'sure the outputs are', 'kept as they were']
-  const framed = (glyphs: { x1: number }[]) => {
+  const framed = (glyphs: FigureGlyph[]) => {
     const x1 = Math.max(...glyphs.map((g) => g.x1)) + 5
     const segs = [75, 662, x1, 662, x1, 662, x1, 712, x1, 712, 75, 712, 75, 712, 75, 662]
     return {

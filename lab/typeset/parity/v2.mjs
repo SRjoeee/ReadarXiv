@@ -28,7 +28,7 @@ const { paperOf } = await import('../../../packages/typeset/tests/replay/today.t
 const { tableMetrics } = await import('../../../packages/typeset/src/metrics/table.ts')
 const { layered, servedMetrics } = await import('../served-metrics.mjs')
 const { typesetLay } = await import('../../../packages/reader/src/compose/typeset.ts')
-const { hyphenationOf } = await import('../../../packages/typeset/src/index.ts')
+const { hyphenationOf } = await import('../../../packages/typeset/src/breaker/hyph.ts')
 const { bundleOf, hyphFileOf } = await import('./inputs.mjs')
 const { candidateKept, candidateKeptElements, candidateKeptToday, candidateStated, heldJoin, joinedJoin, todayJoin } = await import('./join.mjs')
 const { readAsChain } = await import('./rows.mjs')
@@ -415,8 +415,8 @@ for (const pair of pairs) {
           // measure reads)
           ...(!(m.read ?? []).includes('lead') ? { pitch: m.lead } : {}),
           ...(m.label ? { label: m.label } : {}),
-          // (a table cell's column's box and the ink beside its line, where the part states the box: Room.column, Room.side; the
-          // ruling CB reads them, as the typesetter's columnRoomOf does)
+          // (a table cell's room in its column and the ink beside its line, where the part states the room: Room.column,
+          // Room.side; the ruling CB reads them, as the typesetter's columnRoomOf does)
           ...(m.kind === 'cell' && m.room?.column ? { column: m.room.column, ...(m.room.side ? { side: m.room.side } : {}) } : {}),
           // (TeX's room under each run of its lines and its paragraph separation, where the part states them: the block measure's)
           ...(m.room?.runs || m.room?.sep !== undefined

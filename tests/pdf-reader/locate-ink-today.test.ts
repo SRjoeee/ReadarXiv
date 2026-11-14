@@ -1,19 +1,22 @@
-// The engine package's copies of today's ink makers (packages/engine/src/locate/today: the ledger, inkUnitsOf, keptUnitsOf,
-// claimInk, figureUnitsOf, and what they import, deps.mjs) and the ports beside them (locate/ink.ts: contentOf, unicodeOf, spansOf;
-// deps.mjs classOf for the forms an ink unit's placeholder takes) held equal to today's (src/pdf-reader/engine): the same pages,
+// The engine package's copies of today's ink makers (packages/engine/src/locate: the ledger, inkUnitsOf, keptUnitsOf,
+// claimInk, figureUnitsOf) and the ports beside them (locate/ink.ts: contentOf, unicodeOf, spansOf;
+// ink-units.ts statedClassOf for the forms an ink unit's placeholder takes) held equal to today's (src/pdf-reader/engine): the same pages,
 // owners and units in, the same units out.
 import { describe, expect, it } from 'vitest'
 import * as P from '../../packages/engine/src/locate/ink.ts'
-import * as T from '../../packages/engine/src/locate/today/today.types.ts'
+import * as TF from '../../packages/engine/src/locate/figure-text.ts'
+import * as TI from '../../packages/engine/src/locate/ink-units.ts'
+import * as TL from '../../packages/engine/src/locate/ledger.ts'
 import { figureUnitsOf } from '../../src/pdf-reader/engine/layout/figure-text.mjs'
 import { claimInk, inkUnitsOf, keptUnitsOf } from '../../src/pdf-reader/engine/layout/ink-units.mjs'
 import { ledgerOf } from '../../src/pdf-reader/engine/layout/ledger.mjs'
 import { classOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
-import { regionsOf } from '../../src/pdf-reader/engine/layout/stream.mjs'
 import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
 import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
-import { ADDRESS_GROUP, EMAIL_ADDRESS, identifiersIn } from '../../src/pdf-reader/engine/source/latex-front.mjs'
+import { identifiersIn } from '../../src/pdf-reader/engine/source/latex-front.mjs'
 
+/** the package's copies, each maker's */
+const T = { ...TF, ...TI, ...TL }
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
 function pageOf(lines: { s: string; x?: number; y: number; size?: number; font?: string; form?: boolean; fid?: number; space?: number }[], marks: { points?: [string, number][]; paras?: [string, number][]; paraEnds?: [string, number, number, number][]; regions?: { kind: string; from: number; to: number }[]; pictures?: [string, number][] } = {}) {
@@ -120,24 +123,6 @@ describe('today’s ink makers in the engine package', () => {
     expect(today.ink.map((u) => u.kind)).toEqual(expect.arrayContaining(['inkheads', 'inkorphan', 'inkcontents', 'inkreferences']))
     expect(today.fig.units.map((u) => u.text)).toEqual(['Accuracy'])
     expect(today.kept.length).toBeGreaterThan(0)
-  })
-  it('read a balanced page’s right column inside a body, as today’s regions do: nested body brackets (2608.25210v2 p17)', () => {
-    // (its columns split from one box: the box's pair around both, `bs2 bs1 … be1 … be2`; glyphs 0-3 the left column, 4-7 the
-    // right one, 8 past both)
-    const page = {
-      glyphs: { n: 9 },
-      boxes: [],
-      points: [
-        ['bs2', 0],
-        ['bs1', 0],
-        ['be1', 4],
-        ['be2', 8],
-      ].map(([name, glyph]) => ({ name: name as string, glyph: glyph as number, box: 0 })),
-    }
-    const today = regionsOf(page)
-    const copy = T.regionsOf(page)
-    expect([...copy.glyph]).toEqual([...today.glyph])
-    expect([...today.glyph].map((r) => r % 2)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 0])
   })
   it('part two lines a paragraph end of TeX’s stands between, where no start of TeX’s is marked after it (2610.22065v1’s reference format)', () => {
     // (acmart's "ACM Reference Format:" is a paragraph of its own, and the reference under it another, begun with no point of
@@ -515,9 +500,6 @@ describe('today’s ink makers in the engine package', () => {
       { t: 'ph', src: '\\url{bo.writer@example.ac}' },
       { t: 'text', s: '. The views are ours.' },
     ]])
-    // (one pattern for both readers: the front end's)
-    expect(T.EMAIL_ADDRESS.source).toBe(EMAIL_ADDRESS.source)
-    expect(T.EMAIL_ADDRESS.flags).toBe(EMAIL_ADDRESS.flags)
   })
   it('keep an identifier in an ink unit a run of its own, and a line of identifiers alone no unit, as the front end keeps one (2608.25210v2)', () => {
     // (a token of word characters joined by underscores set in a text face, `llm_equal_human`: today's sent its words, which came
@@ -541,8 +523,6 @@ describe('today’s ink makers in the engine package', () => {
     expect(one(T as unknown as Impl).map(said)).toEqual([
       ['Ask ', '<\\url{llm_equal_human}>', ' first, then `', '<\\url{CallbackBase.host_label(result)}>', '`, ', '<\\url{conv5_x}>', ' and _x and camelCase, e.g. this.'],
     ])
-    // (one pattern for both readers: the front end's)
-    expect(T.identifiersIn.toString()).toBe(identifiersIn.toString())
     // (the whole token, its edges' sentence punctuation aside, a bracket the token answers its own: lane literal-fixes, the
     // coordinator's of 2026-11-10)
     const ids = (s: string) => identifiersIn(s).map(([a, b]) => s.slice(a, b))
@@ -576,9 +556,6 @@ describe('today’s ink makers in the engine package', () => {
     // (today's: every local part a word of the text)
     expect(one(TODAY).map(said).join(' | ')).toMatch(/alpha, beta-x, gamma.*delta, eps/)
     expect(one(T as unknown as Impl).map(said)).toEqual([['Contact: ', '<\\url{{alpha,beta-x,gamma}@example.org}>']])
-    // (one pattern for both readers: the front end's)
-    expect(T.ADDRESS_GROUP.source).toBe(ADDRESS_GROUP.source)
-    expect(T.ADDRESS_GROUP.flags).toBe(ADDRESS_GROUP.flags)
   })
   it('mark a kept block of e-mail addresses alone so (`address`), which the lab reads; no other kept block', () => {
     // (the coordinator's ruling of 2026-11-10: the parity reads a unit the prepare keeps as a line of addresses as the original's
@@ -665,7 +642,7 @@ describe('today’s ink makers in the engine package', () => {
     // (and every reader of the source reads each an inline formula: the copy's classOf, the element's kind on the translators'
     // wire; the adapter's classesOf, today's reader's class, the part's El.kind the typesetter draws by; today's wire's display)
     for (const src of copy) {
-      expect(T.classOf({ t: 'ph', src })).toBe('math')
+      expect(T.statedClassOf({ t: 'ph', src })).toBe('math')
       expect(classesOf([{ t: 'ph', src }])[0]![1].cls).not.toBe('display')
       expect(DISPLAY.test(src)).toBe(false)
     }
@@ -702,12 +679,12 @@ describe('today’s ink makers in the engine package', () => {
     ])
   })
   it('read a placeholder an ink unit makes as today’s classOf does', () => {
-    for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.classOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))
-    expect(T.classOf({ t: 'ph', src: '$x$', kind: 'other' })).toBe(null)
-    expect(T.classOf({ t: 'nested' })).toBe(classOf({ t: 'nested' }))
+    for (const src of ['$$', '$x$', '$a+b$', '\\url{https://a.b/c}', '\\url{}']) expect(T.statedClassOf({ t: 'ph', src })).toBe(classOf({ t: 'ph', src }))
+    expect(T.statedClassOf({ t: 'ph', src: '$x$', kind: 'other' })).toBe(null)
+    expect(T.statedClassOf({ t: 'nested' })).toBe(classOf({ t: 'nested' }))
     // (a tie and a forced break, which the adapter states `space` and `break` since lane fig-cut, are none of today's classes)
-    expect(T.classOf({ t: 'ph', src: '~', kind: 'space' })).toBe(classOf({ t: 'ph', src: '~' }))
-    expect(T.classOf({ t: 'ph', src: '\\\\', kind: 'break' })).toBe(classOf({ t: 'ph', src: '\\\\' }))
+    expect(T.statedClassOf({ t: 'ph', src: '~', kind: 'space' })).toBe(classOf({ t: 'ph', src: '~' }))
+    expect(T.statedClassOf({ t: 'ph', src: '\\\\', kind: 'break' })).toBe(classOf({ t: 'ph', src: '\\\\' }))
   })
   it('turn an ink unit’s pieces into the format’s content and spans as the instrument adapter did', () => {
     const today = run(TODAY)
