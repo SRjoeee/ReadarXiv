@@ -85,7 +85,7 @@ const FORMAT = 4
 /** the code that reads a compile (its text items, readings, marks and marks file), hashed into every compile's key: a
  *  change to it reads every compile again, not a stale result (the review, M4) */
 const READERS = createHash('sha256')
-for (const f of ['pipeline/live.mjs', '../../../packages/engine/src/compile/live.mjs', 'pipeline/typeset/places.mjs', '../../../packages/engine/src/compile/tex.mjs', 'layout/marks.mjs', '../../../packages/engine/src/marks/marks.mjs', 'layout/json.mjs', '../../../packages/engine/src/ink.ts', '../../../packages/engine/src/own/stream.mjs', 'pipeline/anchors.mjs', '../../../packages/engine/src/source/latex-front.mjs']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
+for (const f of ['pipeline/live.mjs', '../../../packages/engine/src/compile/live.ts', 'pipeline/typeset/places.mjs', '../../../packages/engine/src/compile/tex.ts', 'layout/marks.mjs', '../../../packages/engine/src/marks/marks.mjs', 'layout/json.mjs', '../../../packages/engine/src/ink.ts', '../../../packages/engine/src/own/stream.ts', 'pipeline/anchors.mjs', '../../../packages/engine/src/source/latex-front.ts']) READERS.update(readFileSync(new URL(`../../../src/pdf-reader/engine/${f}`, import.meta.url)))
 const READ_HASH = READERS.digest('hex').slice(0, 16)
 /** every compile's date, pinned (pdfTeX's SOURCE_DATE_EPOCH with FORCE_SOURCE_DATE): a paper's \today is the same in v0
  *  and v1 whenever each was compiled (2608.20159's title page moved a day across midnight UTC) */

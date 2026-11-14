@@ -8,9 +8,9 @@ import type { Ink, Line, Piece, Style } from '@readarxiv/format'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { isInk, r2 } from './lines.ts'
-// @ts-ignore: JavaScript copied as it is, typed below (never through today.types.ts: today's makers it loads import this file
-// back, deps.mjs's classifyFont, and a cycle leaves one of them uninitialised where they load first, the parity's join)
-import * as accents from './today/accents.mjs'
+// (never through a module of today's makers: they import this file back, its classifyFont, and a cycle leaves one
+// of them uninitialised where they load first, the parity's join)
+import * as accents from './accents.ts'
 
 // ---------------------------------------------------------------- a face of one pitch (Rule 1, PDF-READER §18.22)
 /**

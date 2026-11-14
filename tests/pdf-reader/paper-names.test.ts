@@ -3,9 +3,7 @@ import { sourceUnitsOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { bundleUnitsOf, NAME_KIND } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { CONJUNCTION_GAPS, GENERATED_COMMANDS, NAME_GAPS } from '@/pdf-reader/engine/rules/tex-names.mjs'
-// @ts-expect-error: the moved JavaScript (packages/engine/src/source/paper-names.mjs) has no declaration in the package; its old path, which nothing
-// else imported, is gone
-import { NAMES_MAX, paperNames, theoremNames } from '../../packages/engine/src/source/paper-names.mjs'
+import { NAMES_MAX, paperNames, theoremNames } from '../../packages/engine/src/source/paper-names.ts'
 import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The structural names a paper's TeX prints that no package names in every target (PDF-READER §19.14): read from the paper's

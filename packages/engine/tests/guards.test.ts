@@ -9,14 +9,11 @@ import { deflateSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error: the moved JavaScript (packages/engine/src/compile/base.mjs) has no declaration in the package
-import { pdfDateEpoch, xmpDateEpoch } from '../src/compile/base.mjs'
+import { pdfDateEpoch, xmpDateEpoch } from '../src/compile/base.ts'
 import { pageInk } from '../src/ink.ts'
-// @ts-expect-error: the moved JavaScript (packages/engine/src/marks/marks.mjs) has no declaration in the package
-import { completeCalled } from '../src/marks/marks.mjs'
+import { completeCalled } from '../src/marks/marks.ts'
 import { alignOf, openRemover } from '../src/remove.ts'
-// @ts-expect-error: the moved JavaScript (packages/engine/src/source/latex-front.mjs) has no declaration in the package
-import { inMemory, loadProject } from '../src/source/latex-front.mjs'
+import { inMemory, loadProject } from '../src/source/latex-front.ts'
 import { planOf, wrapOf } from '../src/wrap.ts'
 import { openObjects } from '../src/xref.ts'
 
@@ -110,7 +107,7 @@ describe("\\texorpdfstring with no second group (source/latex-front.mjs's walk)"
   })
 })
 
-describe('a macro of ten parameters (marks/marks.mjs completeCalled)', () => {
+describe('a macro of ten parameters (marks/marks.ts completeCalled)', () => {
   it("is left out of the complete macros the marking records: TeX's parameters are #1 to #9, the layout file's check takes one digit", () => {
     const units = [
       {

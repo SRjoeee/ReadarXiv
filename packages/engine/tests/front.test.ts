@@ -202,8 +202,8 @@ describe('a stored instrument is taken only for the original it was made with, a
       documentOptions: {},
     }
     const r = await prepareFront(input)
-    const given = vi.mocked(instrumentOf).mock.calls.at(-1)?.[0] as {
-      options: Record<string, unknown>
+    const given = vi.mocked(instrumentOf).mock.calls.at(-1)?.[0] as Parameters<typeof instrumentOf>[0] & {
+      options: NonNullable<Parameters<typeof instrumentOf>[0]['options']>
       paper: ReturnType<typeof openPaper>
     }
     return { r, compiles, marked: vi.mocked(markedOfPaper).mock.calls.length - marked, notes, given }

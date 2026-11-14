@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { inkUnitsOf, ledgerOf } from '../src/locate/today/today.types.ts'
+import { inkUnitsOf } from '../src/locate/ink-units.ts'
+import { ledgerOf } from '../src/locate/ledger.ts'
 
 // A paragraph end carried from B onto A (locate/ink.ts carry) is a unit's own only where it stood right after that unit's last
 // glyph in the list TeX set: on B. On A, an end is put before the partner of B's next glyph; where A's page breaks elsewhere than

@@ -1,7 +1,7 @@
 // The prepare's front half (DESIGN §16, "The prepare's two halves"), which the package's one entry (prepare.ts `prepare`) runs
 // before the back half: the paper opened, its bibliography made where TeX must make it, the source's units handed out before
 // any compile of the marks, the marked compile with its final pass (B), and the instrument stated over B
-// (instrument/instrument.mjs instrumentOf); or, given the instrument's four stored objects of a compile of the same original,
+// (instrument/instrument.ts instrumentOf); or, given the instrument's four stored objects of a compile of the same original,
 // the instrument made again from them with no TeX. With what it is given: arXiv's PDF's facts (originalFactsOf) and the TeX
 // tree (treeOf). What decides the four objects a prepare stores is compiled.ts's compiledOf (the paper opened, a stored
 // instrument taken or not, the bibliography, the marked compile with every argument it is given) and plan.ts's (the plan

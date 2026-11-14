@@ -15,7 +15,7 @@
 //   kind, each with its page, glyph, member, unit and role, and the table's owner (`rows`);
 //   stdout one summary line (the ownership's two counts in it). Exit 3: a compile no cache holds (the paper missing). Exit 4: a
 //   paragraph TeX opened where a group the instrument wrote as its content stood (Located.stats.opensLost: the gate of
-//   instrument/instrument.mjs passThroughOf), outputs written. A paper the prepare refuses is written with its refusal's
+//   instrument/instrument.ts passThroughOf), outputs written. A paper the prepare refuses is written with its refusal's
 //   detail (the dump's `refused`), as the box states it.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'

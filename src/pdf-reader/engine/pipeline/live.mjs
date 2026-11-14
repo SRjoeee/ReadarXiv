@@ -1,13 +1,13 @@
 // The part of this module that stays in the old engine: what the moved front half never calls. The rest moved into the engine
-// package (packages/engine/src/compile/live.mjs); this path imports it back and re-exports its names through its transition path. The cut-over
+// package (packages/engine/src/compile/live.ts); this path imports it back and re-exports its names through its transition path. The cut-over
 // deletes this file.
 import { inAuthorBlock, lastTexLog } from '../source/latex-front.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { nameCells } from '../translate/mt.mjs'
-import { auxLines, closed, openPaper as openSource } from '@readarxiv/engine/today/compile/live.mjs'
-export { stoppedShort, ranThrough, DRAFT_OPTION, NO_DRIVER_GROUP, listsMissing, notFound, bblProvides, probeFiles, markedPreamble, originalFiles } from '@readarxiv/engine/today/compile/live.mjs'
+import { auxLines, closed, openPaper as openSource } from '@readarxiv/engine/today/compile/live.ts'
+export { stoppedShort, ranThrough, DRAFT_OPTION, NO_DRIVER_GROUP, listsMissing, notFound, bblProvides, probeFiles, markedPreamble, originalFiles } from '@readarxiv/engine/today/compile/live.ts'
 
-/** a paper as today's reader keeps it: the engine package's (compile/live.mjs openPaper), and `kept`, the units today's name rule
+/** a paper as today's reader keeps it: the engine package's (compile/live.ts openPaper), and `kept`, the units today's name rule
  *  keeps as the original (translate/mt.mjs nameCells: a table's cell or a figure text of names or markup tokens alone). The rebuilt
  *  engine keeps no unit by its words (the owner, 2026-11-13: a table's cell is text like any other; the translator decides a
  *  name); this path keeps its rule until the cut-over deletes it */

@@ -34,7 +34,7 @@ import {
 import { type ColumnCell, columnBoxes, type FreeWord } from './columns.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
-import { spellOf } from './today/today.types.ts'
+import { spellOf } from '../own/stream.ts'
 
 /** a line that ends short of its column's right edge by this share of its size ends at a forced break (today's SHORT TEX:87),
  *  read only where the marked compile set no point for the break */

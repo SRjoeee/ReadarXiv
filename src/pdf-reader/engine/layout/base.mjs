@@ -1,3 +1,3 @@
-// Moved whole into the engine package (packages/engine/src/compile/base.mjs); this path re-exports it through its transition
+// Moved whole into the engine package (packages/engine/src/compile/base.ts); this path re-exports it through its transition
 // path for what still imports it here. The cut-over deletes the path and the package's transition exports.
-export { MARK_TOL, BOX_TOL, marksOfPdf, boxesOfPdf, finalCheck, boxesCheck, prefixDoc, hasMarkText, markTextOf, markTextBeyond, pageTextAt, DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, driverOutputGiven, driverOutputTruncated, driverLostInk, pageTextOf, textOfPdf, pdfDateEpoch, xmpDateEpoch, xmpDatesOf, creationEpochOf } from '@readarxiv/engine/today/compile/base.mjs'
+export { MARK_TOL, BOX_TOL, marksOfPdf, boxesOfPdf, finalCheck, boxesCheck, prefixDoc, hasMarkText, markTextOf, markTextBeyond, pageTextAt, DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, driverOutputGiven, driverOutputTruncated, driverLostInk, pageTextOf, textOfPdf, pdfDateEpoch, xmpDateEpoch, xmpDatesOf, creationEpochOf } from '@readarxiv/engine/today/compile/base.ts'

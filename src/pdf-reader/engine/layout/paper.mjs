@@ -1,15 +1,15 @@
 // The part of this module that stays in the old engine: what the moved front half never calls. The rest moved into the engine
-// package (packages/engine/src/compile/paper.mjs); this path imports it back and re-exports its names through its transition path. The cut-over
+// package (packages/engine/src/compile/paper.ts); this path imports it back and re-exports its names through its transition path. The cut-over
 // deletes this file.
 import { isMemoryError } from '@readarxiv/engine'
 import { whyText } from './guard.mjs'
 import { finalCheck } from './base.mjs'
 import { readMarked } from './marks.mjs'
-import { madeBibliography as bibliographyMade, markedOfPaper } from '@readarxiv/engine/today/compile/paper.mjs'
+import { madeBibliography as bibliographyMade, markedOfPaper } from '@readarxiv/engine/today/compile/paper.ts'
 import { withNames } from '../pipeline/live.mjs'
-export { bibliographyKept, markedOfPaper, handoverOf } from '@readarxiv/engine/today/compile/paper.mjs'
+export { bibliographyKept, markedOfPaper, handoverOf } from '@readarxiv/engine/today/compile/paper.ts'
 
-/** the engine package's madeBibliography (compile/paper.mjs), the paper it opens again with the made .bbl today's as openPaper
+/** the engine package's madeBibliography (compile/paper.ts), the paper it opens again with the made .bbl today's as openPaper
  *  makes it (pipeline/live.mjs withNames: today's name rule's `kept`) */
 export const madeBibliography = async (paper, o) => {
   const r = await bibliographyMade(paper, o)

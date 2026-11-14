@@ -9,8 +9,8 @@ import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../.
 import { balancedRuns, delimiterResidue, RUN_SEPARATOR } from '../../../core/protector/math-runs.ts'
 import { ABBR, sentenceCuts } from '../../../core/sentences/index.ts'
 import { spaceLead, spaceSource } from '../rules/tex-kernel.mjs'
-import { utf8, DISPLAY, breaks, isInkless, displayStop, shown, plain, plainTranslated } from '@readarxiv/engine/today/instrument/mt.mjs'
-export { utf8, DISPLAY, isInkless, displayStop, shown, plainTranslated } from '@readarxiv/engine/today/instrument/mt.mjs'
+import { utf8, DISPLAY, breaks, isInkless, displayStop, shown, plain, plainTranslated } from '@readarxiv/engine/today/instrument/mt.ts'
+export { utf8, DISPLAY, isInkless, displayStop, shown, plainTranslated } from '@readarxiv/engine/today/instrument/mt.ts'
 
 // ---------------------------------------------------------------- names
 // The old reader's cell and figure rule (nameCells), moved back here from the engine package (packages/engine/src/instrument/

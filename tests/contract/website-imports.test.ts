@@ -91,17 +91,25 @@ const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }
   { path: 'packages/reader/src/session/paper.ts', names: ['abstractTitleOf', 'htmlVersionOf'] },
   // (the files and folders read, bundled or credited by their path)
   { path: 'packages/engine/src/bundle/bundle.ts', names: [] },
-  { path: 'packages/engine/src/compile/live.mjs', names: [] },
-  { path: 'packages/engine/src/compile/paper.mjs', names: [] },
+  // (live.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  { path: 'packages/engine/src/compile/live.ts', names: [] },
+  // (paper.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  { path: 'packages/engine/src/compile/paper.ts', names: [] },
   { path: 'packages/engine/src/compiled.ts', names: [] },
   { path: 'packages/engine/src/front.ts', names: [] },
-  { path: 'packages/engine/src/instrument/instrument.mjs', names: [] },
+  // (instrument.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  { path: 'packages/engine/src/instrument/instrument.ts', names: [] },
   { path: 'packages/engine/src/locate/locate.ts', names: [] },
   { path: 'packages/engine/src/locate/words.ts', names: [] },
-  { path: 'packages/engine/src/marks/marks.mjs', names: [] },
+  // (colour.ts credited by its row in docs/THIRD_PARTY.md, which the website's licence gate reads, tests/vite-licence-gate.test.ts;
+  // names.ts held in its reader's bundle, web/tests/layer-imports.test.ts; both at e0ae76dd, named `.mjs` there until its next pin)
+  { path: 'packages/engine/src/marks/colour.ts', names: [] },
+  // (marks.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  { path: 'packages/engine/src/marks/marks.ts', names: [] },
+  { path: 'packages/engine/src/marks/names.ts', names: [] },
   { path: 'packages/engine/src/plan.ts', names: [] },
   { path: 'packages/engine/src/prepare.ts', names: [] },
-  { path: 'packages/engine/src/source/latexml-args.mjs', names: [] },
+  { path: 'packages/engine/src/source/latexml-args.ts', names: [] },
   { path: 'packages/engine/src/source/tex-names.json', names: [] },
   { path: 'packages/engine/src/wrap/wrap.ts', names: [] },
   { path: 'packages/reader/e2e/fixtures/', names: [] },
