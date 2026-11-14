@@ -6,7 +6,7 @@
 // stored (front.ts prepareFront: instrumentOf, the units first).
 import type { FailureReason } from '@readarxiv/format'
 import { toBase64Url } from '@readarxiv/format'
-import { openPaper, type Paper } from './front.types.ts'
+import { openPaper, type Paper } from './compile/live.ts'
 import { isMemoryError } from './memory.ts'
 
 /** what arXiv's PDF says that the front half reads: its page count, its day (seconds since the epoch: compile/base.mjs

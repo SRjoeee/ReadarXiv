@@ -29,10 +29,8 @@ again in the translation.
 The directions point one way, and `scripts/check-boundary.mjs` holds them (its table `PACKAGES`; it runs in `pnpm lint`): a
 package imports another only through its entry, `@readarxiv/<name>`, never a deep or a relative path into it; no package
 imports the extension's `src/`, its aliases, `wxt` or a virtual module; a directory under `packages/` that `PACKAGES` does not
-list fails; and no package holds a hand-written declaration file, so the JavaScript modules a package still holds, all of
-them the engine's, are typed by a `*.types.ts` facade that re-exports with its type each value read of them: the moved front
-half, the 27 modules of `source/`, `marks/`,
-`own/`, `compile/` and `instrument/`, by one facade at the engine's entry, `packages/engine/src/front.types.ts`. Each package
+list fails; and no package holds a hand-written declaration file. The moved front half, the modules of `source/`, `marks/`,
+`own/`, `compile/` and `instrument/`, is TypeScript (typed in place, its importers naming each module). Each package
 is type-checked under its own `tsconfig.json` (`tsc -b packages`) and
 tested under its own `vitest.config.ts`; `packages/README.md` states the rest.
 
@@ -277,7 +275,7 @@ derived from bytes or from behaviour; a number raised by hand is the schema numb
 
 | The design | As built | Why that is safe |
 |---|---|---|
-| A rebuilt front half: a typed source reader under TeX's definitions, marks freed of the rule that they move nothing, a drafts-only compile plan | Today's front half, moved whole into `packages/engine/src/source/`, `marks/`, `own/`, `compile/` and `instrument/`: JavaScript, typed at the package's entry by `packages/engine/src/front.types.ts`, behind `prepareFront` | The rebuilt one, run beside it over the 87 corpus papers, lost 314 units against the frozen baseline where today's loses 3, and stated none of the element classes, spans, cells and kept units the back half and the typesetter read (DESIGN §16, "One front half, today's") |
+| A rebuilt front half: a typed source reader under TeX's definitions, marks freed of the rule that they move nothing, a drafts-only compile plan | Today's front half, moved whole into `packages/engine/src/source/`, `marks/`, `own/`, `compile/` and `instrument/`: TypeScript, typed in place, behind `prepareFront` | The rebuilt one, run beside it over the 87 corpus papers, lost 314 units against the frozen baseline where today's loses 3, and stated none of the element classes, spans, cells and kept units the back half and the typesetter read (DESIGN §16, "One front half, today's") |
 | Each fact decided once, typed, at the source: no later module reads a piece's TeX with a pattern | Modules downstream of the source reader still read a piece's `src` with a pattern: in the typesetter `packages/typeset/src/breaker/tokens.ts`, `packages/typeset/src/emit/links.ts`, `packages/typeset/src/unit/breaks.ts`, `packages/typeset/src/unit/rename.ts`; in locate `packages/engine/src/locate/place.ts`, `packages/engine/src/locate/ink.ts`, `packages/engine/src/locate/facts.ts`, `packages/engine/src/locate/facts-pass.ts` | Each reads what the source reader wrote, and each is held by the gates of section 4; a fact moved to the source is one change per fact, with its own proof |
 | No final pass; B from the marked drafts; no probe and no guard unless their counts call for them | The marked compile keeps its probe, its final pass (B is the final pass's PDF, figures included) and its guard (`packages/engine/src/compile/paper.ts`, `packages/engine/src/compile/guard.ts`) | Locate's rules for text inside figures read a B that holds the figures: the drafts-only compile made 6,614 figure ticks and labels into units, for a saving that was this very pass (DESIGN §16) |
 | One page stack of our own under both panes | The left pane is PDF.js's viewer (`packages/reader/src/panes/left.ts`), which still reads one private member of PDF.js; the right is the reader's stack | The design moves the left only where the stack matches the viewer's first paint. Measured on three papers, the stack matched the scroll trace and held 8 to 12 % less renderer memory, but painted the first page 8.5 ms (9 %) and 20.5 ms (17 %) later on two of them |

@@ -21,7 +21,9 @@ import {
   treeOf,
   unitsObjects,
 } from '../src/front.ts'
-import { classesOf, instrumentOf, markedOfPaper, openPaper } from '../src/front.types.ts'
+import { classesOf, instrumentOf } from '../src/instrument/instrument.ts'
+import { markedOfPaper } from '../src/compile/paper.ts'
+import { openPaper } from '../src/compile/live.ts'
 import { type Instrument, ownersOf, ROLE } from '../src/instrument.ts'
 import type { OriginalFacts, StoredInstrument } from '../src/plan.ts'
 import { type PrepareHost, prepare } from '../src/prepare.ts'
@@ -37,8 +39,8 @@ const OPTIONS = vi.hoisted(() => ({
 }))
 /** the .bbl the bibliography's spy makes: every byte value, a length that leaves base64 a pad */
 const BBL = vi.hoisted(() => ({ path: 'main.bbl', bytes: Uint8Array.from({ length: 257 }, (_, i) => i % 256) }))
-vi.mock('../src/front.types.ts', async (real) => {
-  const m = await real<typeof import('../src/front.types.ts')>()
+vi.mock('../src/compile/paper.ts', async (real) => {
+  const m = await real<typeof import('../src/compile/paper.ts')>()
   return {
     ...m,
     // (a paper whose .bbl TeX must make: the job's, made by the spy)
@@ -51,8 +53,11 @@ vi.mock('../src/front.types.ts', async (real) => {
       ms: { probe: 0, compile: 0 },
       base: { pdf: new Uint8Array([37, 80, 68, 70]), log: '' },
     })),
-    instrumentOf: vi.fn(async () => ({ instrument: {}, today: null })),
   }
+})
+vi.mock('../src/instrument/instrument.ts', async (real) => {
+  const m = await real<typeof import('../src/instrument/instrument.ts')>()
+  return { ...m, instrumentOf: vi.fn(async () => ({ instrument: {}, today: null })) }
 })
 
 /** what locate is given by the back half (its options), each call's, read as it passes */

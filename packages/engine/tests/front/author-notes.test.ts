@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { sourceUnitsOf } from '../../src/front.ts'
-import { openPaper } from '../../src/front.types.ts'
+import { openPaper } from '../../src/compile/live.ts'
 
 // The author block decided by the source (the owner's ruling of 2026-11-13: text the paper's code ties to the author block
 // follows the names option both ways; a region of its own is body text). A note's unit is the block's (`of: 'author'`) where it

@@ -62,10 +62,10 @@ import type { OpenPiece, PhPiece, SourcePiece, SourceUnit } from '../source/late
 import type { DocGlyph } from '../doc.ts'
 
 // ---------------------------------------------------------------- the types of what the adapter reads and states
-/** today's units and pieces (the front end's, latex-front.ts: loadProject's, each of a file) */
+/** the front end's units and pieces (latex-front.ts: loadProject's, each of a file) */
 type Unit = SourceUnit
 type SrcPiece = SourcePiece
-/** a piece of today's as the adapter's readings read one: its kind and its fields (a group's open `sets`, a text's `s`) */
+/** a front end's piece as the adapter's readings read one: its kind and its fields (a group's open `sets`, a text's `s`) */
 type PieceIn = { t: string; s?: string; src?: string; sets?: 0; pre?: string; post?: string; unit?: Unit }
 /** a glyph of B as the readings read it: its character, whether it is blank, its extent */
 type InkGlyph = { u?: string; blank?: boolean; x0: number; x1: number; top: number; bottom: number }

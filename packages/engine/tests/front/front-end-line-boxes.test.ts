@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { openPaper } from '../../src/front.types.ts'
+import { openPaper } from '../../src/compile/live.ts'
 import { commandParams } from '../../src/source/arg-roles.ts'
 
 // Plain TeX's line boxes, LaTeX's own (ltplain.dtx): \line is \hb@xt@\hsize, \centerline#1 \line{\hss#1\hss}, \leftline#1
