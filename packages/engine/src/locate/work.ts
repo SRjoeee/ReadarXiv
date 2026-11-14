@@ -64,6 +64,8 @@ export interface Member {
   labelMeasure?: [number, number]
   style: Style
   align: 'j' | 'l' | 'c' | 'r'
+  /** a table cell of several lines: how its lines stand in its box, read off A (columns.ts innerOf; Placed.inner, §18.74) */
+  inner?: 'l' | 'c' | 'r'
   lead: number
   room: Room
   pages: number[]

@@ -7021,7 +7021,13 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   the cell's class: `breaker/place.ts` boxLines). It replaces, for these cells, each line in its own width widened half way to
   its neighbour where clipped at the floor. A reply that sets the break at its start or end takes none (U.breaks), and the breaker
   fills the cell's lines, each in the room. A paragraph cell (a p, m, b or X column, a `\parbox`: no column box), a cell with a held
-  line or lines on two pages, and one whose side stops short of the box are laid in their own rooms as before. Over the 89
+  line or lines on two pages, and one whose side stops short of the box are laid in their own rooms as before.
+  `Placed.inner` is read by the facts pass (`locate/columns.ts` innerOf, in `facts-pass.ts` readColumns): TeX sets each line in
+  the box by the box's own template, which states nothing of the lines, so they are read off arXiv's page as a column is: their
+  left edges together within `ALIGNED` (half a point), `l`; their middles, `c`; their right edges, `r`; all three (lines of one
+  width), the cell's class; none, no reading (the lines laid by the cell's class), counted and listed at the build. A cell of
+  several lines is one entry of its column's box, the hull of its lines (readColumns read a member of several lines so already),
+  its class the outer column's. Over the 89
   papers' chain no member of several lines stated a column before this (290 cells of several lines, none with `Room.column`), so
   the rule reaches the merged cells alone. `Placed.inner` is an optional field: the schema's rule (`packages/format/src/schema.ts`:
   "a new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread") keeps FORMAT 1, a typesetter

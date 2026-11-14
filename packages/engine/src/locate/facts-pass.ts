@@ -31,7 +31,7 @@ import {
   TRAIL,
   tailOf,
 } from './facts.ts'
-import { type ColumnCell, columnBoxes, type FreeWord } from './columns.ts'
+import { type ColumnCell, columnBoxes, type FreeWord, innerOf } from './columns.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
 import { spellOf } from '../own/stream.ts'
@@ -337,17 +337,22 @@ function readColumns(fx: FactsIndex): void {
       const page = mem.lines[0]![0]
       let x0 = Number.POSITIVE_INFINITY,
         x1 = Number.NEGATIVE_INFINITY
+      // (each line's extent too: how the lines of a cell of several lines stand in its box, Placed.inner)
+      const extents: [number, number][] = []
       for (const l of mem.lines) {
         if (l[0] !== page) continue
-        x0 = Math.min(x0, l[2])
-        x1 = Math.max(x1, l[3])
+        let a = l[2],
+          z = l[3]
         const size = l[10] ?? mem.style.size
         for (const [, e] of mem.elements)
           for (const k of e.ink)
             if (k[0] === l[0] && Math.abs(k[5] - l[4]) < 0.4 * size && k[1] < l[3] && k[3] > l[2]) {
-              x0 = Math.min(x0, k[1])
-              x1 = Math.max(x1, k[3])
+              a = Math.min(a, k[1])
+              z = Math.max(z, k[3])
             }
+        extents.push([a, z])
+        x0 = Math.min(x0, a)
+        x1 = Math.max(x1, z)
         const b = band.get(page) ?? [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, l[7], l[8]]
         band.set(page, [
           Math.min(b[0], mem.room.band?.[0] ?? l[6]),
@@ -357,6 +362,11 @@ function readColumns(fx: FactsIndex): void {
         ])
       }
       cells.push({ ord: mem.ord, page, col: c.col, span: c.span ?? 1, cls: c.boxed, x0, x1, side: mem.room.side })
+      // (a cell of several lines on one page, the lines of a box TeX set in it: how they stand in the box, §18.74)
+      if (extents.length > 1 && extents.length === mem.lines.length) {
+        const inner = innerOf(extents, c.boxed)
+        if (inner) mem.inner = inner
+      }
     }
     const words: FreeWord[] = []
     const bands: { page: number; ink: [number, number][]; walls: [number, number][]; edge?: [number, number] }[] = []

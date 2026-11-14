@@ -130,6 +130,7 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
     room: mem.room,
   }
   if (st.why) p.why = st.why
+  if (mem.inner) p.inner = mem.inner
   if (mem.join) p.join = mem.join
   if (mem.leads !== undefined) p.bound = 1
   // (the paper's title and its front matter: no section heading's rules for them, X.lastLines)
