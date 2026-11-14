@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { DocGlyph } from '../src/doc.ts'
 import { copyRunsOf, figureLinesOf, setApart } from '../src/locate/figure-lines.ts'
 import type { TodayFigures, TodayMet, TodayShape } from '../src/locate/today/figure-text.types.ts'
-import type { TodayPage } from '../src/locate/today/ledger.types.ts'
+import type { TodayPage } from '../src/locate/ledger.ts'
 import { pageGlyphsOf } from './helpers/doc.ts'
 
 type Glyph = {

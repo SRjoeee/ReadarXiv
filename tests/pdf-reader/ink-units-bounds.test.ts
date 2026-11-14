@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { latin1 } from '../../packages/engine/src/bounded-reads.ts'
 import { claimInk, inkUnitsOf, keptUnitsOf } from '../../packages/engine/src/locate/today/ink-units.types.ts'
-import { ledgerOf } from '../../packages/engine/src/locate/today/ledger.types.ts'
+import { ledgerOf } from '../../packages/engine/src/locate/ledger.ts'
 import {
   claimInk as claimInkBefore,
   inkUnitsOf as inkUnitsOfBefore,
@@ -65,7 +65,7 @@ type Part = { s: string; font?: string }
 /** a page of lines of glyphs, each set left to right (a glyph half its size wide, a space a quarter), no marks: its lines the
  *  page's own text, no unit's */
 function pageOf(lines: { parts: Part[]; y: number; size?: number }[]) {
-  const glyphs: Record<string, unknown>[] = []
+  const glyphs: { u: string; x0: number; x1: number; ix0: number; ix1: number; y: number; size: number; top: number; bottom: number; font: string; fill: number; n: number; k: number; form: boolean; blank?: boolean }[] = []
   lines.forEach((l, n) => {
     const size = l.size ?? 10
     let x = 72

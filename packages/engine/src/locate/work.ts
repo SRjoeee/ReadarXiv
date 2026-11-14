@@ -10,7 +10,7 @@ import type { Instrument, InstrumentUnit, TexFrame } from '../instrument.ts'
 import { fixedFacesOf } from './facts.ts'
 import type { DisplayLine, InkInput, InkStats } from './ink.ts'
 import { r2 } from './lines.ts'
-import type { FloatLine } from './today/ledger.types.ts'
+import type { FloatLine } from './ledger.ts'
 import type { Word } from './words.ts'
 
 /** where a located unit stands on A against B */

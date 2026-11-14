@@ -2,7 +2,7 @@
 // value re-exported with its type (a package holds no declaration file). Folded into the module when it is typed.
 // @ts-ignore: JavaScript copied as it is, typed by this file alone
 import * as fig from './figure-text.mjs'
-import type { TodayPage } from './ledger.types.ts'
+import type { TodayPage } from '../ledger.ts'
 
 /** a figure's text (figureUnitsOf) */
 export interface TodayFigureUnit {

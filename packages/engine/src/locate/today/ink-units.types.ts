@@ -2,7 +2,7 @@
 // re-exported with its type (a package holds no declaration file). Folded into the module when it is typed.
 // @ts-ignore: JavaScript copied as it is, typed by this file alone
 import * as inkUnits from './ink-units.mjs'
-import type { TodayLedger, TodayOwn, TodayPage, TodayPiece, TodayUnit } from './ledger.types.ts'
+import type { TodayLedger, TodayOwn, TodayPage, TodayPiece, TodayUnit } from '../ledger.ts'
 
 /** an ink unit or a kept block (inkUnitsOf, keptUnitsOf) */
 export interface TodayInkUnit {

@@ -20,7 +20,7 @@ import {
   interiorOf,
 } from './today/figure-text.types.ts'
 import { scriptsOf } from './today/ink-units.types.ts'
-import type { TodayPage } from './today/ledger.types.ts'
+import type { TodayPage } from './ledger.ts'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { accentOver, COMBINING, classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'
