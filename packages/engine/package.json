@@ -27,7 +27,7 @@
     "./today/compile/guard.mjs": "./src/compile/guard.mjs",
     "./today/compile/live.mjs": "./src/compile/live.mjs",
     "./today/compile/paper.mjs": "./src/compile/paper.mjs",
-    "./today/instrument/format.mjs": "./src/instrument/format.mjs",
+    "./today/instrument/format.ts": "./src/instrument/format.ts",
     "./today/instrument/units.mjs": "./src/instrument/units.mjs",
     "./today/instrument/layer1.mjs": "./src/instrument/layer1.mjs",
     "./today/instrument/instrument.mjs": "./src/instrument/instrument.mjs"
