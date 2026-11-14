@@ -3,6 +3,7 @@
 // Task 2). The same for native nonstop latexmk, which logs every error, and for the TeX page's BusyTeX, which halts on
 // the first: TeX writes each as `! <message>`, the levels of input it was reading, and at the base level `l.<n>`, the
 // line of the file it was reading and the text of that line before and after its place
+import { latin1 as latin1Of } from '../bounded-reads.ts'
 import { lastTexLog } from '../source/latex-front.ts'
 
 /**
@@ -52,7 +53,6 @@ const holds = (text, e) => {
  *  footnote's text as its command's argument before it sets it, and logs an error in it where the argument ends — the
  *  footnote's closing brace before the place, the outer unit's words after it */
 const endsAtPlace = (text, e) => { const b = skeleton(e.before).slice(-CONTEXT); return !!b && skeleton(text).endsWith(b) }
-const latin1Of = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return s }
 /** line `n` of a file's bytes (1-based), and where it begins */
 const lineAt = (bytes, n) => {
   let at = 0
