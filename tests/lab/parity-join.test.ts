@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { HOLDER_JOIN } from '../../lab/pdf/prepare-back/stated.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { candidateAddress, candidateKept, candidateKeptElements, candidateKeptToday, candidatePitch, heldJoin, joinedJoin, joinedPlan, todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { candidateAddress, candidateKept, candidateKeptElements, candidateKeptToday, candidatePitch, heldJoin, joinedJoin, joinedPlan, piecesJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
 type Content = { t: 'text'; s: string }[]
@@ -478,5 +478,44 @@ describe("the ink of the elements the candidate's prepare keeps as the original'
     } finally {
       rmSync(run, { recursive: true, force: true })
     }
+  })
+})
+
+describe("a unit of today cut into several members of v2, and several of today's units one member: joined by their pieces' words", () => {
+  // (2608.25210v2-zh p3 after S1: today's t55 a lead sentence with its prompt box; v2's part sets them apart, member 55 the lead
+  // and 56 the box. A table cell set on two lines after S2: today's two line units, v2's one member. No id joins them: the
+  // words their pieces hold do, in order, every one of each side's; a member or a unit of today the one-to-one join took is no
+  // part of a group)
+  const today = (ord: number, page: number, ...texts: string[]) => ({
+    ord,
+    kind: 'para',
+    lines: [{ page }],
+    pieces: texts.flatMap((t, k) => (k ? [{ kind: 'ph', src: '\\x' }, { kind: 'text', s: t }] : [{ kind: 'text', s: t }])),
+  })
+  const v2Part = bundle(
+    { 3: [member(55, 'para', H), member(56, 'para', P), member(70, 'cell', Q), member(80, 'para', R), member(81, 'para', F)] },
+    [
+      { id: H, kind: 'para', content: text(': [sentence_1] and [sentence_2] are placeholders for two test sentences.') },
+      { id: P, kind: 'para', content: text('llm_equal_human: Are the following two sentences semantically equivalent?') },
+      { id: Q, kind: 'cell', content: [{ t: 'text', s: 'Error rate' }, { t: 'el', id: 'b' } as never, { t: 'text', s: 'on test set' }] },
+      { id: R, kind: 'para', content: text('A paragraph joined one to one.') },
+      { id: F, kind: 'para', content: text('Unrelated words of another member.') },
+    ],
+  )
+  const units = [
+    today(55, 3, ': [sentence', '1] and [sentence', '2] are placeholders for two test sentences.', 'llm', 'equal', 'human: Are the following two sentences semantically equivalent?'),
+    today(70, 3, 'Error rate'),
+    today(71, 3, 'on test set'),
+    today(80, 3, 'A paragraph joined one to one.'),
+    today(90, 3, 'Some other text of today.'),
+  ]
+  it('joins one unit of today to the members that hold its words in order, and the units of today one member holds', () => {
+    expect(piecesJoin(v2Part, units, new Map([[80, 80]]))).toEqual([
+      { today: [55], members: [55, 56] },
+      { today: [70, 71], members: [70] },
+    ])
+  })
+  it('never one already joined one to one, nor units whose words no member holds whole', () => {
+    expect(piecesJoin(v2Part, units, new Map([[55, 55], [70, 70], [80, 80]]))).toEqual([])
   })
 })
