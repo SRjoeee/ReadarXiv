@@ -19,15 +19,18 @@
 // carries an address; a run-in label; every pair of the HTML page, which holds a `<sub>` or a `<sup>` as a pair of no style),
 // and any group of a unit with no letter (nothing is sent: hasLetter).
 //
-// Letters glued to an element that make one word with the text TeX set for it (its `text`: on its line's baseline at its text's
-// size, the prepare's statement, contract.ts) are that word's, never a word of their own (the display design's F10): the
-// translator is offered the element alone, and the row has those letters back beside it, literally, as the source sets them.
-// 2111.09276v1's Table 1 on staging, Google: `\hlyellow{guitar}s.` went out as an element and "s.", and "s" came back as 秒,
-// seconds. The same definition: UAX #29's word boundaries (`Intl.Segmenter` of SOURCE) over the projection with each element
-// that states a text in its place; every letter of a word-like segment that holds such a text and stands outside it, in the
-// unit's own text, is held back. An element that states none (a raised mark, `\textsuperscript{1}Carnegie`; one that sets
-// nothing) holds nothing back, nor is the kind asked: the text alone decides. Each held run comes back after the element it
-// follows, else before the one it precedes, outside the groups that hold the element but not the run.
+// Letters glued to an element in the strict sense are the element's word, never a word of their own (the display design's F10):
+// where the text TeX set for an element (its `text`: on its line's baseline at its text's size, the prepare's statement,
+// contract.ts) begins or ends with a letter, a combining mark or a digit (Unicode's general categories L, M, N), the run of such
+// characters of the unit's text that touches it on that side, as far as it goes, is offered to no translator; the row has it
+// back beside the element, literally, as the source sets it. 2111.09276v1's Table 1 on staging, Google: `\hlyellow{guitar}s.`
+// went out as an element and "s.", and "s" came back as 秒, seconds; a name written with an accent command (`M\k{a}dry`) keeps
+// its letters with it. Nothing is held across any other character: a possessive after a system's name ("TensorCast's") is a
+// word of the sentence, which the translator translates beside the element (held back, it would stand as written in the
+// translation), and the rest of an amount after a comma (",000") a part of the text. An element that states no text (a raised
+// mark, `\textsuperscript{1}Carnegie`; one that sets nothing) holds nothing back, nor is the kind asked: the text decides, by
+// its characters' categories, no list. A run between two elements is the first's: it comes back after the element it follows,
+// else before the one it precedes, outside the groups that hold the element but not the run.
 //
 // The chain applies both rules once, to the unit before anything else reads it (chain.ts settle, rowContextOf): every wire
 // writes the unit so unwrapped, every reading reads the reply against it (the tags and markers wires, the runs floor, the
@@ -50,7 +53,7 @@ type Span = Extract<Piece, { t: 'span' }>
 const holdsFree = (ps: readonly Piece[]): boolean => ps.some((p) => p.t === 'span' && (!p.must || holdsFree(p.content)))
 
 /** The unit as a translator is sent it (the module's two rules: a group that is not `must` and cuts a word unwrapped; letters
- *  that make one word with an element's text held back), with the way back for a row; null where neither changes it, and the
+ *  glued to an element's text held back), with the way back for a row; null where neither changes it, and the
  *  unit goes as it is */
 export function wholeWordsOf(unit: UnitIn): Whole | null {
   const groups = cutGroupsOf(unit)
@@ -155,11 +158,13 @@ interface Held {
  *  white space before it, a backref's list of pages; the chain gives it no translator, tailOf), its text no neighbour of the
  *  unit's letters */
 const shownOf = (p: El): string => (p.text && p.after === undefined ? p.text : OBJ)
+/** a character glued in the strict sense: a letter, a combining mark or a digit (Unicode's general categories L, M, N) */
+const GLUED = /^[\p{L}\p{M}\p{N}]$/u
 /** the projection position of each piece of the unit: a text's characters (with the groups around them) or an element */
 type At = { t: 'text'; piece: Piece; k: number; groups: string[] } | { t: 'el'; el: El; groups: string[] }
 
-/** The unit with the letters that make one word with an element's text held back (the module's second rule, F10), and the way
- *  back for a row; null where no element states a text that a letter beside it shares a word with */
+/** The unit with the letters, marks and digits glued to an element's text held back (the module's second rule, F10), and the
+ *  way back for a row; null where no element states a text that such a character touches */
 function heldLettersOf(unit: UnitIn): Whole | null {
   // (the projection with each element's text in its place, each position's piece; an element stating none, U+FFFC)
   let projection = ''
@@ -180,54 +185,58 @@ function heldLettersOf(unit: UnitIn): Whole | null {
   }
   walk(unit.content, [])
   if (!texts.length) return null
-  segmenter ??= new Intl.Segmenter(SOURCE, { granularity: 'word' })
-  const held = new Set<number>()
-  /** the word (its index) each position of a word that holds an element's text stands in */
-  const wordAt = new Map<number, number>()
-  let w = 0
-  for (const s of segmenter.segment(projection)) {
-    if (!s.isWordLike) continue
-    const from = s.index
-    const to = s.index + s.segment.length
-    if (!texts.some((x) => x.a < to && x.b > from)) continue
-    w++
-    for (let x = from; x < to; x++) {
-      wordAt.set(x, w)
-      if (at[x]?.t === 'text') held.add(x)
+  // (each element's run on each side its text begins or ends with a letter, a mark or a digit: the unit's text characters of
+  // those categories that touch it, as far as they go; elements in source order, so that a run between two is the first's,
+  // after it)
+  const held = new Map<number, { el: Extract<At, { t: 'el' }>; side: 'before' | 'after' }>()
+  const cp = (x: number, back: boolean): { ch: string; n: number } | null => {
+    // (the code point ending at x, back; else the one starting at x)
+    if (x < 0 || x >= projection.length) return null
+    const lo = projection.charCodeAt(x)
+    if (back && lo >= 0xdc00 && lo <= 0xdfff && x > 0) return { ch: projection.slice(x - 1, x + 1), n: 2 }
+    const c = projection.codePointAt(x) as number
+    return { ch: String.fromCodePoint(c), n: c > 0xffff ? 2 : 1 }
+  }
+  const textAt = (x: number) => at[x]?.t === 'text'
+  for (const { a, b } of texts) {
+    const self = at[a] as Extract<At, { t: 'el' }>
+    const s = projection.slice(a, b)
+    if (GLUED.test(s.slice(0, [...s][0]?.length ?? 0))) {
+      let x = a - 1
+      for (let c = cp(x, true); c && textAt(x) && !held.has(x) && GLUED.test(c.ch); c = cp(x, true)) {
+        for (let k = 0; k < c.n; k++) held.set(x - k, { el: self, side: 'before' })
+        x -= c.n
+      }
+    }
+    if (GLUED.test([...s].at(-1) ?? '')) {
+      let x = b
+      for (let c = cp(x, false); c && textAt(x) && !held.has(x) && GLUED.test(c.ch); c = cp(x, false)) {
+        for (let k = 0; k < c.n; k++) held.set(x + k, { el: self, side: 'after' })
+        x += c.n
+      }
     }
   }
   if (!held.size) return null
-  // (each held run, within one text piece: after the element of its word it follows, past the other held runs, else before the
-  // one it precedes)
+  // (each held run, within one text piece and of one element's side)
   const runs: Held[] = []
-  const seen = new Set<number>()
-  const elAt = (x: number, word: number | undefined) =>
-    at[x]?.t === 'el' && wordAt.get(x) === word ? (at[x] as Extract<At, { t: 'el' }>) : null
   for (let x = 0; x < at.length; x++) {
-    if (!held.has(x) || seen.has(x)) continue
+    const h = held.get(x)
+    if (!h) continue
     const here = at[x] as Extract<At, { t: 'text' }>
     let y = x
-    while (held.has(y + 1) && at[y + 1]?.t === 'text' && (at[y + 1] as Extract<At, { t: 'text' }>).piece === here.piece)
+    while (
+      held.get(y + 1)?.el === h.el &&
+      held.get(y + 1)?.side === h.side &&
+      (at[y + 1] as Extract<At, { t: 'text' }>).piece === here.piece
+    )
       y++
-    for (let k = x; k <= y; k++) seen.add(k)
-    let left = x - 1
-    while (held.has(left)) left--
-    let right = y + 1
-    while (held.has(right)) right++
-    const after = elAt(left, wordAt.get(x))
-    const before = after ? null : elAt(right, wordAt.get(x))
-    const to = after ?? before
-    if (!to) {
-      // (no element of its word beside it: it stays in the unit; by the segments' definition one always is)
-      for (let k = x; k <= y; k++) held.delete(k)
-      continue
-    }
     runs.push({
-      id: to.el.id,
-      side: after ? 'after' : 'before',
+      id: h.el.el.id,
+      side: h.side,
       s: here.piece.t === 'text' ? here.piece.s.slice(here.k, here.k + (y - x) + 1) : '',
-      exits: to.groups.filter((g) => !here.groups.includes(g)).reverse(),
+      exits: h.el.groups.filter((g) => !here.groups.includes(g)).reverse(),
     })
+    x = y
   }
   // the unit without them
   let n = 0
