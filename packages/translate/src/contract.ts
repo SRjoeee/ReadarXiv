@@ -69,9 +69,9 @@ export type Piece =
        *  declared. The name
        *  is sent only where this is SOURCE's language, or none is declared */
       nameLang?: string | undefined
-      /** the text TeX set for it where it stands, on its line's baseline at its text's size (the PDF's engine, read on arXiv's
-       *  page: `\hl{guitar}`'s "guitar", `\k{a}`'s "ą"); absent for a raised or lowered one, one set at another size, one
-       *  that sets nothing. Letters glued to it that make one word with this text (UAX #29) are that word's: the chain sends
+      /** a command's element (kind `macro`): the text TeX set for it where it stands, on its line's baseline at its text's
+       *  size (the PDF's engine, read on arXiv's page: `\hl{guitar}`'s "guitar", `\k{a}`'s "ą"); absent for a raised or
+       *  lowered one, one set at another size, one that sets nothing, and for an element of any other kind. Letters glued to it that make one word with this text (UAX #29) are that word's: the chain sends
        *  none of them as a word of its own (words.ts) */
       text?: string | undefined
     }

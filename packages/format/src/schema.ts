@@ -114,9 +114,10 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // the name only where this is the language it translates
       // from, or none is declared
       nameLang: z.string().optional(),
-      // the text TeX set for it where it stands, on its line's baseline at its text's size, as arXiv's page shows it at every
-      // placement of its unit (`\hl{guitar}`'s "guitar", `\k{a}`'s "ą"); absent where TeX raised or lowered it, set it at
-      // another size, or set nothing (a footnote's mark, `\textsuperscript{1}`, an empty macro). Not in the id: read on
+      // a command's element (kind `macro`): the text TeX set for it where it stands, on its line's baseline at its text's size,
+      // as arXiv's page shows it at every placement of its unit (`\hl{guitar}`'s "guitar", `\k{a}`'s "ą"); absent where TeX
+      // raised or lowered it, set it at another size, or set nothing (a footnote's mark, `\textsuperscript{1}`, an empty
+      // macro), and for an element of any other kind (a formula, a number, a reference). Not in the id: read on
       // arXiv's page. Letters glued to it that make one word with this text (UAX #29) are that word's, never a word of
       // their own (packages/translate words.ts)
       text: z.string().optional(),
