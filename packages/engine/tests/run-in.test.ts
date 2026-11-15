@@ -1,9 +1,9 @@
 // A title its author sets in the line at a paragraph's opening, with no mark after it (the display design's F40, the owner's ruling
 // A of 2026-11-13, the coordinator's variant C): `\noindent\textbf{Global Matching} We leverage …` (2111.09276v1 pp5-6). The engine
 // states it on the group (the part's SpanAt.runin), the lay sets the script's separation after it; no translator is told. The
-// group (a) opens a paragraph of its unit (its start, or SpanAt.opens), (b) sets a face, (c) is followed in the source by plain
-// white space alone, (d) by what begins a sentence (@readarxiv/text opensAfter), its text ending with no closing mark. Words of
-// our own.
+// group (a) opens a paragraph of its unit (its start, or SpanAt.opens), (b) sets a face, (c) is followed in the source by white
+// space, alone or beside horizontal spacing of the paper's own, (d) by what begins a sentence (@readarxiv/text opensAfter), its
+// text ending with no closing mark. Words of our own.
 import type { Piece } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { runInsOf } from '../src/bundle/run-in.ts'
@@ -53,18 +53,34 @@ describe('a title set in the line at a paragraph’s opening, with no mark after
     }
     expect([...runInsOf([stopped, t(' We use the model.')], none)]).toEqual([])
   })
-  it('a title the source follows with a spacing element of its own (`\\quad`, `\\hspace`): not, the element is the separation', () => {
-    expect([
-      ...runInsOf(
-        [bold('0', 'Acknowledgments'), t('\n'), el('2', 'other', '\\quad'), t(' Authors thank the reviewers.')],
-        none,
-      ),
-    ]).toEqual([])
+  it('a title the source follows with horizontal spacing of its own (`\\hspace`, `\\quad`, its glue): stated, the space counts toward the em', () => {
+    // (the coordinator's amendment of 2026-11-16: 2111.09276v1's "Object Replacement" + \hspace{0.2em}, 2610.21106v1's titles +
+    // \quad; `glued` the elements the instrument states glue of, PieceClass.glue)
+    const glued = new Set(['2'])
     expect([
       ...runInsOf(
         [bold('0', 'Object Replacement'), t(' '), el('2', 'other', '\\hspace{0.2em}'), t('\nEach task has an object.')],
         none,
+        glued,
       ),
+    ]).toEqual(['0'])
+    expect([
+      ...runInsOf(
+        [bold('0', 'Acknowledgments'), el('2', 'other', '\\quad'), t(' Authors thank the reviewers.')],
+        none,
+        glued,
+      ),
+    ]).toEqual(['0'])
+  })
+  it('a title the source follows with a vertical skip or a forced break: not, the title is not set in the line of its text', () => {
+    expect([
+      ...runInsOf(
+        [bold('0', 'Protocol'), t(' '), el('2', 'other', '\\vspace{0.2cm}'), t(' Procedure begins here.')],
+        none,
+      ),
+    ]).toEqual([])
+    expect([
+      ...runInsOf([bold('0', 'Model II'), t(' '), el('2', 'break', '\\\\'), t(' Common terms throughout.')], none),
     ]).toEqual([])
   })
   it('a title, a tie and a citation, then a sentence: stated (the citation is no text and hides no start)', () => {

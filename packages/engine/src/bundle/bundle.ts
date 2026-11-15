@@ -279,8 +279,9 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   const { ins, located, addOn, original, paper } = input
   const members = located.members
   const states = members.map((m) => stateOf(m, addOn))
-  // (each unit's titles set in the line, read once over its source and the paragraphs TeX opened at its groups wherever a member
-  // of it states one (SpanAt.opens): a unit a translator cuts into sentences (Unit.sentences), not an entry's)
+  // (each unit's titles set in the line, read once over its source, the paragraphs TeX opened at its groups wherever a member
+  // of it states one (SpanAt.opens) and the elements it states glue of (PieceClass.glue): a unit a translator cuts into
+  // sentences (Unit.sentences), not an entry's)
   const sourceUnits = located.units ?? ins.units
   const opened = new Map<number, Set<string>>()
   for (const m of members)
@@ -289,7 +290,8 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   for (const m of members) {
     const u = sourceUnits[m.unit]
     if (!u || runins.has(m.unit) || u.kept || u.entry || !bySentence(u.kind, !!u.figure)) continue
-    runins.set(m.unit, runInsOf(u.content, opened.get(m.unit) ?? new Set()))
+    const glued = new Set((u.classes ?? []).flatMap(([id, c]) => (c.glue ? [id] : [])))
+    runins.set(m.unit, runInsOf(u.content, opened.get(m.unit) ?? new Set(), glued))
   }
   const placed = members.map((m, i) => placedOf(m, sourceUnits, states[i]!, runins.get(m.unit)))
   // ---- each page's part, as the flows it holds (a, b, c below), or none: what the units' statements read of the parts

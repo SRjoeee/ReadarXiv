@@ -11,9 +11,12 @@
 // (b) it sets a face: its style is a face's (bold, italic, small capitals, a code face, a face read off its glyphs), not a
 //     colour, a link, an underline or a group of no style the rules know (`other`): a title set in the line is set in a face,
 //     as \paragraph sets its own;
-// (c) the source follows it with plain white space: a text that begins with it, or a tie (an element of kind `space`, TeX's
-//     interword glue), past any element that sets nothing (`silent`); a spacing element of the paper's own (`\quad`, `\hspace`,
-//     an element of kind `other`), a forced break or any other element there is the paper's own separation, drawn: none added;
+// (c) the source follows it with white space, alone or beside horizontal spacing of the paper's own: a text that begins with
+//     it, a tie (an element of kind `space`, TeX's interword glue), or an element the instrument states glue of (`\hspace`,
+//     `\quad`, a kern: PieceClass.glue, the part's El.glue), past any element that sets nothing (`silent`); the paper's own space
+//     counts toward the lay's separation (the coordinator's amendment of 2026-11-16: 2111.09276v1's "Object Replacement" +
+//     \hspace{0.2em} stood closer to its text than its siblings). A vertical skip (`\vspace`, no glue of a line's), a forced
+//     break or any other element there leaves it: the title is not set in the line of its text;
 // (d) what follows begins a sentence by the cutter's reading (@readarxiv/text opensAfter: a stop set at the group's close, what
 //     follows no continuation), only white space, ties, citations and notes' marks between (no text; any other element first,
 //     a formula opening the sentence, is a miss of the rule: "Textual Similarity $G$ is …", 2111.09276v1), and begins with a
@@ -42,7 +45,7 @@ type Span = Extract<Piece, { t: 'span' }>
  *  U+FFFC) */
 type Flat =
   | { t: 'text'; s: string }
-  | { t: 'el'; kind: string; silent: boolean }
+  | { t: 'el'; kind: string; silent: boolean; glue: boolean }
   | { t: 'open'; g: Span }
   | { t: 'close'; at: number }
 
@@ -50,8 +53,12 @@ const textOf = (ps: readonly Piece[]): string =>
   ps.map((p) => (p.t === 'text' ? p.s : p.t === 'span' ? textOf(p.content) : OBJECT)).join('')
 
 /** the ids of a unit's groups stated as titles set in the line, by the clauses above; `opened` the ids of its groups any
- *  placement states TeX opened a paragraph at */
-export function runInsOf(content: readonly Piece[], opened: ReadonlySet<string>): Set<string> {
+ *  placement states TeX opened a paragraph at, `glued` the ids of its elements the instrument states glue of */
+export function runInsOf(
+  content: readonly Piece[],
+  opened: ReadonlySet<string>,
+  glued: ReadonlySet<string> = new Set(),
+): Set<string> {
   const flat: Flat[] = []
   const kinds = new Map<number, string>()
   let projection = ''
@@ -66,7 +73,12 @@ export function runInsOf(content: readonly Piece[], opened: ReadonlySet<string>)
         flat.push({ t: 'close', at: projection.length })
       } else {
         const kind = p.t === 'el' ? p.kind : 'footnote'
-        flat.push({ t: 'el', kind, silent: p.t === 'el' && p.silent !== undefined })
+        flat.push({
+          t: 'el',
+          kind,
+          silent: p.t === 'el' && p.silent !== undefined,
+          glue: p.t === 'el' && glued.has(p.id),
+        })
         kinds.set(projection.length, kind)
         projection += OBJECT
       }
@@ -103,19 +115,19 @@ export function runInsOf(content: readonly Piece[], opened: ReadonlySet<string>)
   return out
 }
 
-/** (c) and (d)'s pieces: from `n`, past elements that set nothing, plain white space (a white text, or a text beginning with
- *  it, or a tie); then only white space, ties, citations, notes' marks and groups' edges before the first text, which begins
- *  with a letter */
+/** (c) and (d)'s pieces: from `n`, past elements that set nothing, white space (a white text, or a text beginning with it, a
+ *  tie, or the paper's own horizontal glue); then only white space, ties, glue, citations, notes' marks and groups' edges before
+ *  the first text, which begins with a letter */
 function followed(flat: readonly Flat[], n: number): boolean {
   let white = false
   for (; n < flat.length; n++) {
     const x = flat[n]!
     if (x.t === 'el' && x.silent) continue
-    if (!white && !(x.t === 'text' ? /^\s/.test(x.s) : x.t === 'el' && x.kind === 'space')) return false
+    if (!white && !(x.t === 'text' ? /^\s/.test(x.s) : x.t === 'el' && (x.kind === 'space' || x.glue))) return false
     white = true
     if (x.t === 'text') {
       if (/\S/.test(x.s)) return /^\s*\p{L}/u.test(x.s)
-    } else if (x.t === 'el' && !BETWEEN.has(x.kind)) return false
+    } else if (x.t === 'el' && !x.glue && !BETWEEN.has(x.kind)) return false
   }
   return false
 }

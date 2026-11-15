@@ -22,7 +22,7 @@ const id = 'e'.repeat(64)
 type Content = Extract<Row, { ok: true }>['content']
 /** a paragraph of two lines on a measure of 300 pt from x 72, at 10 pt on a 12 pt pitch, its group `1` stated or not; its
  *  element `2` of the kind given (a citation, a formula), drawn as its ink on page 1 */
-const para = (runin: boolean, kind?: string): Placed => ({
+const para = (runin: boolean, kind?: string | Record<string, unknown>): Placed => ({
   ord: 0,
   kind: 'para',
   text: id,
@@ -32,7 +32,9 @@ const para = (runin: boolean, kind?: string): Placed => ({
   lines: [0, 1].map((k) => [1, 0, 72, 372, 700 - 12 * k, 707 - 12 * k, 698 - 12 * k, 72, 372, 0, 10]),
   room: { below: 40, next: 44 },
   spans: [['1', runin ? { cmd: 'textbf', runin: 1 } : { cmd: 'textbf' }]],
-  ...(kind ? { els: [['2', { kind, ink: [[1, 150, 698, 170, 707, 700]] }]] as Placed['els'] } : {}),
+  ...(kind
+    ? { els: [['2', typeof kind === 'string' ? { kind, ink: [[1, 150, 698, 170, 707, 700]] } : kind]] as Placed['els'] }
+    : {}),
 })
 const part = (m: Placed): Part => ({
   format: 1,
@@ -46,7 +48,7 @@ const rowsOf = (content: Content): Rows => {
 }
 type Drawn = readonly (readonly [string, number, number])[]
 /** the first line's characters, each at the x it is drawn at, and the size it is drawn at; an element's crop as `#` */
-const lineOf = (content: Content, runin: boolean, tag = 'zh', kind?: string): Drawn =>
+const lineOf = (content: Content, runin: boolean, tag = 'zh', kind?: string | Record<string, unknown>): Drawn =>
   layPage(part(para(runin, kind)), rowsOf(content), rulesFor(tag), metrics).members[0]!.lines[0]![3].flatMap((it) =>
     'src' in it
       ? [['#', Math.round(it.x * 100) / 100, 0] as const]
@@ -120,6 +122,28 @@ describe('a title set in the line (SpanAt.runin): the script’s separation afte
   it('the row’s own mark after the title with a space before it: laid as today, its spaces too', () => {
     for (const s of [' ：我们利用模型。', ' : we use it.'])
       expect(lineOf(title(s), true)).toEqual(lineOf(title(s), false))
+  })
+  it('the paper’s own horizontal space after the title counts toward the em: one em in all (`\\hspace{0.2em}`)', () => {
+    // (the coordinator's amendment: 2111.09276v1 p4's "Object Replacement", its El.glue the part's)
+    const hspace = { kind: 'zero', cmd: 'hspace', glue: [0.2, 'em', 1], ink: [] }
+    const content = title(' ').concat([
+      { t: 'el', id: '2' },
+      { t: 'text', s: ' 我们利用模型。' },
+    ])
+    const on = lineOf(content, true, 'zh', hspace)
+    expect(gapOf(on, '配', '我')).toBe(on[0]![2])
+    // (not stated: the paper's own 0.2 em, as today)
+    expect(gapOf(lineOf(content, false, 'zh', hspace), '配', '我')).toBe(Math.round(0.2 * on[0]![2] * 100) / 100)
+  })
+  it('the paper’s own `\\quad` after the title is the em: nothing added, laid as today', () => {
+    const quad = { kind: 'space', cmd: 'quad', bare: 1, glue: [1, 'em', 1], ink: [] }
+    const content = title('').concat([
+      { t: 'el', id: '2' },
+      { t: 'text', s: ' 作者感谢审稿人。' },
+    ])
+    const on = lineOf(content, true, 'zh', quad)
+    expect(on).toEqual(lineOf(content, false, 'zh', quad))
+    expect(gapOf(on, '配', '作')).toBe(on[0]![2])
   })
   it('a script that writes spaces: the row’s own space, nothing added', () => {
     const de: Content = [

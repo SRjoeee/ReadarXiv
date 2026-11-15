@@ -516,6 +516,8 @@ export function tokens(i: TokensInput): Tokens {
     afterRunin = false
   /** a title set in the line (SpanAt.runin) whose group is open where it opens a sentence of the row */
   let runinId: unknown = null
+  /** the paper's own horizontal space laid after such a title, in kernW's units (100 an em of the line's size) */
+  let runinOwn = 0
   const push = (t: Token) => {
     const prev = tokens.at(-1)
     if (noBreakNext && !t.space) t.glue = true
@@ -710,6 +712,7 @@ export function tokens(i: TokensInput): Tokens {
     t.kernW = (t.kernW ?? 0) + 100 * em
     t.kernEnd = true
     if (!g.brk) noBreakNext = true
+    if (afterRunin) runinOwn += 100 * em
   }
   // (a script that writes no spaces between its words: Chinese and Japanese, never Korean (keepAll), nor a source that writes
   // its CJK with spaces between (spacedSource))
@@ -722,6 +725,8 @@ export function tokens(i: TokensInput): Tokens {
   // an element the row begins its sentence with (a formula); the white space the row set there is its place, taken off. None
   // where the title's drawn text ends with a closing mark or the text after it begins with one (a colon, a full stop, a dash:
   // the reply's own separation), nor where a break stands. A script that writes spaces has the reply's own, nothing added.
+  // The paper's own horizontal space laid there (its El.glue, kernOn: `\hspace{0.2em}`, `\quad`) counts toward the em: the gap
+  // is what it leaves missing up to one em, never negative (after `\quad` nothing; the coordinator's amendment of 2026-11-16).
   // Only where the title still opens a sentence in the row: nothing drawn before it, a break, or a sentence's end (a full stop,
   // past closing brackets and quotes: the paragraph before a group TeX opened one at); a translation that took the title into
   // its sentence (2111.09276v1's "\textbf{wikiHow} We treat wikiHow as …", one sentence in Chinese, the group its object) is laid
@@ -744,11 +749,12 @@ export function tokens(i: TokensInput): Tokens {
   /** the separation before `s` (the text drawn next, '' for an element): `s` past its white space where it is set */
   const runinGap = (s: string): string => {
     const lead = s.replace(/^\s+/, '')
+    const missing = 100 - runinOwn
     const q = lastDrawn()
     const t = tokens[q]
-    if (!t || t.newline !== undefined || t.blockTo !== undefined || CLOSING_START.test(lead)) return s
+    if (missing <= 0 || !t || t.newline !== undefined || t.blockTo !== undefined || CLOSING_START.test(lead)) return s
     tokens.length = q + 1
-    t.kernW = (t.kernW ?? 0) + 100
+    t.kernW = (t.kernW ?? 0) + missing
     t.kernEnd = true
     return lead
   }
@@ -843,6 +849,7 @@ export function tokens(i: TokensInput): Tokens {
       if (headId !== null && p.id === headId) afterHead = true
       if (runinId !== null && p.id === runinId) {
         afterRunin = !endsWith(CLOSING_END)
+        runinOwn = 0
         runinId = null
       }
       return

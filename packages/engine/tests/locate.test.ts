@@ -2558,6 +2558,24 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
       ['5', { cmd: 'textbf' }],
     ])
   })
+  it('states a title the source follows with its own horizontal space (the instrument’s glue class): SpanAt.runin', () => {
+    // (the coordinator's amendment: `\\textbf{Setup} \\hspace{0.2em} We …`, the glue counting toward the lay's em; a vertical
+    // skip there states nothing)
+    const B = docOf([{ lines: ['Setup We train the', 'model on two sets.'] }])
+    const unitOf = (src: string, cls: InstrumentUnit['classes']): InstrumentUnit[] => {
+      const content = [
+        { t: 'span' as const, id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [text('Setup')] },
+        text(' '),
+        { t: 'el' as const, id: '3', kind: 'other', src },
+        text(' We train the model on two sets.'),
+      ]
+      return [{ id: unitId('para', content), kind: 'para', content, classes: cls, spans: [['0', { cmd: 'textbf' }]] }]
+    }
+    const glued = unitOf('\\hspace{0.2em}', [['3', { cls: 'zero', cmd: 'hspace', glue: [0.2, 'em', 1] }]])
+    expect(partOf(owned(B, glued, [], []), B).spans).toEqual([['0', { cmd: 'textbf', runin: 1 }]])
+    const skipped = unitOf('\\vspace{0.2cm}', [['3', { cls: 'zero', cmd: 'vspace' }]])
+    expect(partOf(owned(B, skipped, [], []), B).spans).toEqual([['0', { cmd: 'textbf' }]])
+  })
   it('states no group that closes before the text TeX’s paragraph begins with (today’s: the group holds that text)', () => {
     // (2610.20716v1's centred title, `…Bound Dark\texorpdfstring{\\}{} theory and …`: TeX's \\ in a centred block ends the
     // paragraph inside the group, and the text after the end stands after the group's close)
