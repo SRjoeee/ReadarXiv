@@ -725,6 +725,13 @@ const SPACE_NODE = /^\.\\(?:glue|kern|penalty)/
 /** LuaTeX's node at a paragraph's start and the values it lists below it (none of them a box: `\\localleftbox=null`), in a
  *  paragraph's line: read in an ask's vertical box alone (the probe's boxes are horizontal, and their reading as it was) */
 const LOCAL_PAR_NODE = /^\.+\\(?:localpar|local(?:interline|broken)penalty=-?\d+|local(?:left|right)box=null)$/
+/** the marks' own nodes, as TeX lists them in an ask's box in the loop's first pass (the marked files: a paragraph's point the
+ *  POINTS' para/begin hook puts in its indent box, a forced break's, a unit's destination): a point, pdfTeX's and LuaTeX's
+ *  literal and XeTeX's special (marks.ts \\axt@point), and a destination, XeTeX's and dvipdfmx's special (latex-front.ts
+ *  \\axt@dest; pdfTeX's \\pdfdest is NO_INK_NODE's). Read as no ink in an ask's box alone (useAnswersOf): the probe's document
+ *  holds no mark */
+const OWN_NODE =
+  /^\.+\\(?:pdfliteral direct\{\/axt-[^\s{}]+ ri\}|special\{pdf:(?:code \/axt-[^\s{}]+ ri|dest \(axt-[^\s()]+\) \[@thispage \/XYZ @xpos @ypos null\])\})$/
 /**
  * The sources TeX set no ink for, from the probe's log (inkSection, ASK_TEX): each sample whose box TeX listed in full, of nodes
  * that set nothing — no character, no rule both wide and high (TeX ships no rule of no width or height: a strut), no
@@ -733,9 +740,15 @@ const LOCAL_PAR_NODE = /^\.+\\(?:localpar|local(?:interline|broken)penalty=-?\d+
  * there it set no ink only where that box holds at most one line, and beside it nothing but glue, kerns and penalties. A sample
  * that ends the paragraph or the line where it is used (`\\par`, `\\\\`, `\\newline`, cas-sc's `\\sep`, which its keywords
  * environment makes `\\par`) leaves two lines there, or a line and a box: it parts what stands before it from what stands
- * after, and is never inkless. A sample with no listing, an error, a line cut short or a node not known is no answer: what it sets is not known
+ * after, and is never inkless. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
+ * destinations in the box are no ink (OWN_NODE). A sample with no listing, an error, a line cut short or a node not known is
+ * no answer: what it sets is not known
  */
-export function readInkProbe(log: string | null | undefined, samples: readonly string[]): string[] {
+export function readInkProbe(
+  log: string | null | undefined,
+  samples: readonly string[],
+  { ask = false }: { ask?: boolean } = {},
+): string[] {
   const out: string[] = []
   let at: number | null = null,
     nodes: string[] | null = null,
@@ -786,7 +799,7 @@ export function readInkProbe(log: string | null | undefined, samples: readonly s
     // (in a vertical box, what stands in it: one line, and beside it no material but space)
     if (vertical && /^\.(?!\.)/.test(line) && !SPACE_NODE.test(line))
       if (!/^\.\\hbox\(/.test(line) || ++lines > 1) parted = true
-    if (NO_INK_NODE.test(line) || (vertical && LOCAL_PAR_NODE.test(line))) {
+    if (NO_INK_NODE.test(line) || (vertical && LOCAL_PAR_NODE.test(line)) || (ask && OWN_NODE.test(line))) {
       nodes.push(line)
       continue
     }
@@ -1256,7 +1269,7 @@ export function probeFactsOf(
 export type UseAnswers = { inkless: string[]; inked: string[] }
 /** the asks' answers from the loop's first pass's log, the asked samples by their ask's index */
 export function useAnswersOf(log: string | null | undefined, asked: readonly string[]): UseAnswers {
-  const inkless = readInkProbe(log, asked),
+  const inkless = readInkProbe(log, asked, { ask: true }),
     none = new Set(inkless)
   return { inkless, inked: readInkAnswered(log, asked).filter((s) => !none.has(s)) }
 }

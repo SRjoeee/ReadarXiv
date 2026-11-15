@@ -14,7 +14,8 @@
 // and hyperref's nameref copy as written: the paper loads hyperref, the title and the caption are labelled); a macro first used
 // in a table's cell asked there; a macro that leaves math open (`$a`) asked, its math closed after it; a skip of no ink
 // answered; a command that ends the paragraph or the line where it is used (`\par`, `\\`, `\newline`, a keywords
-// environment's `\unskip\par`, as cas-sc's `\sep`) is never inkless. Each sample asked at most once; a row's rule at a row's
+// environment's `\unskip\par`, as cas-sc's `\sep`) is never inkless; a macro that begins a paragraph between paragraphs
+// (`\leavevmode`) is inkless, the paragraph's point of ours in its indent box read as no ink. Each sample asked at most once; a row's rule at a row's
 // start not asked (no \noalign misplaced); a paragraph's own \begingroup and \endgroup never asked; two macros of 35 errors
 // each in one paragraph asked and the pass run through (the count starts again after each ask). Exit 1 on a failure.
 //   pnpm exec tsx lab/pdf/spikes/ask-cases.mjs [--years=2023,2025] [--engines=pdflatex,xelatex,lualatex,latex] [--out=<dir>]
@@ -53,6 +54,7 @@ const MAIN = String.raw`\documentclass{article}
 \newcommand\mycr{\\}
 \newcommand\mynl{\newline}
 \newenvironment{kws}{\par\def\ksep{\unskip\par}}{\par}
+\newcommand\lead{\leavevmode}
 \newcommand\noisyA{\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA}
 \newcommand\noisyB{\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB}
 \begin{document}
@@ -73,6 +75,8 @@ Words \stepme{} after.\label{after} A gap \wide{} there.
 Words that \mypar{} end here, a line \mycr{} cut, another \mynl{} too.
 
 \begin{kws}alpha \ksep beta \ksep gamma\end{kws}
+
+\lead{} A paragraph a macro begins.
 
 \begin{figure}\caption{A caption \capt}\label{f1}\end{figure}
 \renewcommand\later{Late}Then \later{} again.
@@ -107,6 +111,8 @@ const WANT = {
   '\\mycr{}': 'kept',
   '\\mynl{}': 'kept',
   '\\ksep': 'kept',
+  // (a paragraph's start where it is used, between paragraphs: a line of no ink, our own point in its indent box)
+  '\\lead{}': 'inkless',
 }
 
 const files = new Map([

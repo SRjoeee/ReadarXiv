@@ -14,6 +14,7 @@ import {
   LAYOUT_CLASSES,
   mergeUses,
   readInkAnswered,
+  readInkProbe,
   useAnswersOf,
 } from '../src/marks/marks.ts'
 
@@ -100,6 +101,30 @@ describe('the asks’ answers, read from the pass’s log', () => {
     // (in a horizontal box, the probe's, LuaTeX's paragraph node read as before: not known)
     const probe = listing(0, NONE, ['.\\vbox(0.0+0.0)x10.0', '..\\hbox(0.0+0.0)x10.0', '...\\localpar'])
     expect(useAnswersOf(probe, ['\\pb{}']).inkless).toEqual([])
+  })
+  it("reads the marks' own nodes in an ask's box as no ink (a point, a destination), as they stand in the loop's first pass; the probe's reading as before", () => {
+    const LINE = '.\\hbox(0.0+0.0)x345.0, glue set 335.0fil'
+    const ENDS = ['..\\penalty 10000', '..\\glue(\\parfillskip) 0.0 plus 1.0fil', '..\\glue(\\rightskip) 0.0']
+    // (a macro that begins a paragraph between paragraphs: its indent box holds the paragraph's point, pdfTeX's and LuaTeX's
+    // literal, XeTeX's special; a destination of ours beside it, XeTeX's and dvipdfmx's special)
+    const begun = (i: number, point: string) =>
+      listing(i, '\\vbox(0.0+0.0)x345.0', [
+        LINE,
+        '..\\hbox(0.0+0.0)x10.0',
+        `...${point}`,
+        '...\\hbox(0.0+0.0)x10.0',
+        ...ENDS,
+      ])
+    const log = [
+      begun(0, '\\pdfliteral direct{/axt-q269 ri}'),
+      begun(1, '\\special{pdf:code /axt-q3 ri}'),
+      begun(2, '\\special{pdf:dest (axt-1s) [@thispage /XYZ @xpos @ypos null]}'),
+      // (a literal of the paper's own: not known)
+      begun(3, '\\pdfliteral direct{0 0 1 rg}'),
+    ].join('\n')
+    const asked = ['\\a{}', '\\b{}', '\\c{}', '\\d{}']
+    expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\a{}', '\\b{}', '\\c{}'], inked: ['\\d{}'] })
+    expect(readInkProbe(log, asked)).toEqual([])
   })
   it('takes each answered source’s answer over the probe’s, the probe’s where the use gave none', () => {
     const probe = ['\\kw', '\\tnote{b}', '\\undef']

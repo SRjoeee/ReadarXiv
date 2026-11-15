@@ -7333,7 +7333,9 @@ today's request.
   the line where it is used (`\par`, `\\`, `\newline`, a class's `\sep` defined `\unskip\par`, as cas-sc's keywords
   environment defines it: `cas-common.sty` 1612 to 1617) leaves two lines there, or a line and a box: it parts what stands
   before it from what stands after, and readInkProbe never reads it inkless (an element, as `\authorcr` is). Set in a
-  horizontal box alone, the same `\par` sets nothing (TeX ignores it in restricted horizontal mode).
+  horizontal box alone, the same `\par` sets nothing (TeX ignores it in restricted horizontal mode). Pass 1 is the marked
+  files, so an ask's box can hold the marks' own nodes (a paragraph's point in its indent box, a forced break's, a unit's
+  destination): read as no ink there alone (`marks.ts` OWN_NODE), never in the probe's reading, whose document holds no mark.
 - **Writes nothing** (ASK_TEX): it expands to nothing where `\protect` is not `\@typeset@protect` and between an alignment's
   rows (an align group in vertical mode: a token of ours there would begin a cell before `\hline`, colortbl's `\rowcolor` or
   longtable's `\endhead`); every counter is given back after it (`\cl@@ckpt`, as `\include` does); its group writes no file
