@@ -1,12 +1,12 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but ten changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// marked COPY, nothing else but eleven changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
 // placeholder stated, `glyphs.runs`; an e-mail address or an identifier a kept run of its own, addressed, and a group of local parts before their
 // domain one over its words and lines, groupedAddresses; a formula's TeX specials written as TeX sets
 // them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
 // leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
 // a paragraph TeX ended between two lines parts them; a display TeX set one kept block, its number with it, keptUnitsOf; rule 8 by
-// the source's ties, no share): run
+// the source's ties, no share; a leader dot set against a contents line's text on the leaders' grid the leaders', leaderOf): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -773,11 +773,58 @@ function trimmed(
   // word before it, a word of its own by its face alone, is the sentence's: "… strength $C_n^2$." in 2610.19274v1's list of
   // figures, which was left the original's ink beside the drawn entry)
   while (b > a && LEADER.test(words[b - 1]!.text) && (b - 1 === a || gapBefore(G, words[b - 2]!, words[b - 1]!))) b--
+  // (CHANGED: and a leader dot set against the word before it: TeX's \leaders set the run's boxes on one grid, a box's width apart,
+  // whatever stands before the first, so a dot that stands one of the run's own steps before its first dot is the run's however
+  // near its text ends (2610.40394v1 p13's six entries, F33: the entry claimed it, and its whole link missed that glyph). The steps
+  // read off the run itself, at least three dots, within their own spread (the page's rounding of TeX's places); a stop of the
+  // text's own stands where its text ends, off that grid (2307.16209v1's lists: 23 such stops, the nearest 0.03 pt off it)
+  const last = leaderOf(G, words, a, b)
+  if (last === null) b--
   // (its numbering, set apart from the text after it: a section number, an entry's in its box; a head's even page's folio)
   while (a < b - 1 && NUMBERING.test(words[a]!.text) && words[a]!.fam === 'text' && apart(G, words[a]!, words[a + 1]!))
     a++
   if (cls === 'heads' && a === 0 && a < b - 1 && PAGE_NUMBER.test(words[a]!.text) && folio('a')) a++
-  return [words.slice(a, b), ended]
+  const out = words.slice(a, b)
+  if (last) out[out.length - 1] = last
+  return [out, ended]
+}
+
+/**
+ * The word before a line's leader run (`words[b - 1]`, the run from `b` on, the page number past it aside) without its last dots
+ * that stand on the run's grid (TeX's \leaders: one of the run's own steps before the run's first dot, then before that one; the
+ * steps read off the run's dots, at least three, within their own spread): the word left, `null` where it was such dots alone,
+ * `undefined` where it keeps every glyph (no run, a run of fewer than three dots, a last glyph that is no dot or is off the grid)
+ */
+function leaderOf(G: readonly InkGlyph[], words: readonly Word[], a: number, b: number): Word | null | undefined {
+  if (b <= a || b >= words.length || !LEADER.test(words[b]!.text)) return undefined
+  const dots = words
+    .slice(b)
+    .filter((w) => LEADER.test(w.text))
+    .flatMap((w) => w.gs.map((g) => G[g]!.x0))
+  const steps = dots.slice(1).map((x, k) => x - dots[k]!)
+  if (steps.length < 2) return undefined
+  const lo = Math.min(...steps)
+  const hi = Math.max(...steps)
+  const spread = hi - lo
+  let w = words[b - 1]!
+  let first = dots[0]!
+  for (;;) {
+    const g = w.gs.at(-1)
+    if (g === undefined || !LEADER.test(G[g]!.u)) break
+    const step = first - G[g]!.x0
+    if (step < lo - spread || step > hi + spread) break
+    first = G[g]!.x0
+    const n = w.gs.length - 1
+    w = {
+      ...w,
+      gs: w.gs.slice(0, n),
+      ts: w.ts.slice(0, n),
+      text: w.ts.slice(0, n).join(''),
+      ...(w.sc ? { sc: w.sc.slice(0, n) } : {}),
+    }
+  }
+  if (w === words[b - 1]) return undefined
+  return w.gs.length ? w : null
 }
 
 /** a source unit's echo key: the letters of its text pieces (stream.mjs spellOf; its text the source's bytes in a Latin-1 view,

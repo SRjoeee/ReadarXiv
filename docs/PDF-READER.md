@@ -9267,7 +9267,12 @@ most of whose letters are an author unit's words, of the names toggle as that un
 author block, an affiliation REVTeX or ACM prints from its own lists, PIPELINE 74), its numbering, leaders
 and page number left the original's ink (a leader dot a word a word's gap from the word before it, `WORD_GAP`, as
 `\@dottedtocline`'s `\mkern\@dotsep` sets it: a stop that abuts a formula, a word of its own by its face alone, is the entry's,
-PIPELINE 34, 2610.19274v1's list of figures, "… strength $C_n^2$." had its stop left beside the drawn entry; two words of its line
+PIPELINE 34, 2610.19274v1's list of figures, "… strength $C_n^2$." had its stop left beside the drawn entry; and a dot set against
+the text that stands on the leaders' grid is the leaders' however near the text ends, as `\leaders` sets a run's boxes on one grid
+a box's width apart whatever stands before the first: one of the run's own steps before its first dot, the steps read off at least
+three of its dots within their own spread, the page's rounding of TeX's places (the compile move's F33: 2610.40394v1 p13's six
+entries, whose whole link missed the dot the entry had claimed; 2307.16209v1's 23 stops of their own stand at least 0.03 pt off
+that grid); two words of its line
 are joined by a space only where a gap stands between them), its numbering and page number where a number stands apart from the line's text (`APART`, half its size: a folio, a
 section number's `\quad`, a page number after leaders) or is a running head's folio (the head's other words recur on another
 page with another number there: amsart's `\llap{\thepage}` after a title as wide as the line sets two digits nearer its last
