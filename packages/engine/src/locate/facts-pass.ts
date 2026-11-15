@@ -16,7 +16,6 @@ import {
   cellCentred,
   centredByBlock,
   END,
-  FORCED_BREAK,
   fillOfGlyphs,
   INSET,
   type InkBox,
@@ -532,8 +531,8 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
         }
       }
     }
-    const p = pieces.get(id)
-    if (p && FORCED_BREAK.test(p.src.trim())) {
+    // (a forced break: its element's kind, the instrument's reading of the source reader's statement, §18.75)
+    if (pieces.get(id)?.kind === 'break') {
       // (the line TeX ended at it: the last glyph of the unit's before its point on B, carried to A)
       const j = lineBefore(placeAt.get(`${mem.unit}|${id}`) ?? 0)
       if (j !== undefined) breaks.push([el, j])
@@ -560,7 +559,7 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     const seq = flatOf(unit.content)
     const classes = new Map(unit.classes ?? [])
     const unplacedEl = new Map(unplaced)
-    const isBreak = (x: Flat) => x.t === 'el' && FORCED_BREAK.test(pieces.get(x.id)?.src.trim() ?? '')
+    const isBreak = (x: Flat) => x.t === 'el' && pieces.get(x.id)?.kind === 'break'
     // (a piece that sets ink: a text's characters, a visible element, a nested unit; a forced break none)
     const sets = (x: Flat) =>
       x.t === 'text'
@@ -829,16 +828,16 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
   }
 }
 
-/** a unit's rows as a box holds them: the stretches of its content between its forced breaks (elements whose source is one,
- *  FORCED_BREAK, in its groups or not) that hold something, text or another element: a break that closes an empty row (at the
- *  content's end, or two in a row) makes none */
+/** a unit's rows as a box holds them: the stretches of its content between its forced breaks (its elements of kind `break`,
+ *  the source reader's statement, in its groups or not) that hold something, text or another element: a break that closes an
+ *  empty row (at the content's end, or two in a row) makes none */
 function rowsOf(content: readonly Piece[]): number {
   let rows = 0,
     open = false
   const walk = (ps: readonly Piece[]) => {
     for (const p of ps) {
       if (p.t === 'span') walk(p.content)
-      else if (p.t === 'el' && FORCED_BREAK.test((p as { src?: string }).src?.trim() ?? '')) open = false
+      else if (p.t === 'el' && p.kind === 'break') open = false
       else if (p.t === 'el' || (p.t === 'text' && /\S/.test(p.s))) {
         if (!open) rows++
         open = true
@@ -850,11 +849,7 @@ function rowsOf(content: readonly Piece[]): number {
 }
 /** whether a unit's content holds a forced break, in its groups or not */
 function holdsBreak(content: readonly Piece[]): boolean {
-  return content.some((p) =>
-    p.t === 'el'
-      ? FORCED_BREAK.test((p as { src?: string }).src?.trim() ?? '')
-      : p.t === 'span' && holdsBreak(p.content),
-  )
+  return content.some((p) => (p.t === 'el' ? p.kind === 'break' : p.t === 'span' && holdsBreak(p.content)))
 }
 
 /** its label's parts and style */

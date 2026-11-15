@@ -21,8 +21,11 @@ import {
   tailInkOf,
   textsOf,
 } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { phPiece } from '../../packages/engine/src/source/latex-front.ts'
 
-const ph = (src: string) => ({ t: 'ph', src })
+/** a placeholder as the source reader makes it: whether it is a forced break stated on it (phPiece, §18.75), which the adapter
+ *  reads (its kind, `brk`) where it once read the source */
+const ph = (src: string) => phPiece(src)
 /** a piece's class alone, the source's other facts aside */
 const classOnly = ([k, c]: [string, Record<string, unknown>]) => {
   const { glue, cmd, bare, brk, note, same, colour, nested, ...rest } = c

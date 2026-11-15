@@ -40,8 +40,8 @@ const STYLE_OPEN =
   /^(?:\{|\\(?:textbf|textit|emph|textsl|textsc|underline|textup|textrm|textsf|textmd|textnormal|uline|mbox)\s*\{|\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{)$/
 /** a link's open (mt.mjs LINK): `must` already, a kept group's edges */
 const LINK = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
-/** a forced line break, a list's item (mt.mjs FORCED_BREAK) */
-const FORCED_BREAK = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?)\s*$/
+/** what breaks the text besides a forced break (mt.mjs FORCED_BREAK's other forms): \\linebreak, a list's item */
+const LINE_BREAK = /^\\(?:linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?\s*$/
 /** a text that ends where a sentence ends (mt.mjs SENTENCE_END), never after an abbreviation (ABBR) */
 const SENTENCE_END = /[.!?\u3002\uff01\uff1f]["'\u201d\u2019)\]]*$/
 const SENTENCE_LEAD = /^[.!?\u3002\uff01\uff1f]/
@@ -66,7 +66,9 @@ const endsSentence = (s: string): boolean => {
   const t = s.trimEnd()
   return SENTENCE_END.test(t) && !ABBR.test(t.replace(/["'\u201d\u2019)\]]+$/, ''))
 }
-const breaks = (p: El): boolean => p.kind === 'display' || FORCED_BREAK.test(p.src)
+/** an element that breaks the text: a display, a forced break (its kind, the source reader's statement read by the instrument,
+ *  §18.75), a \\linebreak or an item */
+const breaks = (p: El): boolean => p.kind === 'display' || p.kind === 'break' || LINE_BREAK.test(p.src)
 const inkless = (p: El): boolean => INVISIBLE.test(p.src) || STRUCTURE.test(p.src)
 /** whether a group opens with a switch (an element that sets no ink before its first text: mt.mjs headOf), `{\bf Remark:}` */
 const switched = (ps: readonly Piece[]): boolean => {
