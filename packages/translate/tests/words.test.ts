@@ -204,3 +204,77 @@ describe('what the rule leaves as it is', () => {
     })
   })
 })
+
+// (F10 of the display design: letters glued to an element that make one word with the text TeX set for it, on its line's
+// baseline at its text's size (the element's `text`, the prepare's), are that word's, never a word of their own. 2111.09276v1's
+// Table 1 on staging, Google: `\hlyellow{guitar}s.` went out as an element and "s.", and "s" came back as 秒, seconds. The rule
+// is by the text alone, UAX #29's word boundaries over the element's text and the letters beside it; the kind is not asked)
+describe('letters glued to an element that make one word with its text are that word’s', () => {
+  const mac = (id: string, text?: string): Piece =>
+    text === undefined ? { t: 'el', id, kind: 'macro' } : { t: 'el', id, kind: 'macro', text }
+  const guitar = unit('g', [t('Polish the '), mac('h', 'guitar'), t('s. Then tune them.')], true)
+  it('"guitar" + "s": Google is sent the element alone, and the row puts the letter back beside it', async () => {
+    const { sent, result } = await viaGoogle(guitar, () => '擦亮<b translate=no>x1</b>。<x id="2"/>然后给它们调音。')
+    expect(sent).toEqual(['Polish the <b translate=no>x1</b>. <x id="2"/>Then tune them.'])
+    const r = ok(result)
+    expect(r.content).toEqual([tx('擦亮'), { t: 'el', id: 'h' }, tx('s。然后给它们调音。')])
+    // (the sentences in the unit's own projection, and in the row as it is drawn)
+    expect(r.sentences).toEqual({ src: [15], tr: [5] })
+  })
+  it('Microsoft is sent the element alone too', async () => {
+    const { sent, result } = await viaMicrosoft(guitar, () => '擦亮@a#。然后给它们调音。')
+    expect(sent).toEqual(['Polish the @a#. Then tune them.'])
+    expect(ok(result).content).toEqual([tx('擦亮'), { t: 'el', id: 'h' }, tx('s。然后给它们调音。')])
+  })
+  it('an accent set inside a name (`M\\k{a}dry`): the name stays as written, the element and its letters together', async () => {
+    const u = unit('k', [t('Work by M'), mac('k', 'ą'), t('dry and others.')])
+    const { sent, result } = await viaGoogle(u, () => '作者<b translate=no>x1</b>等人。')
+    expect(sent).toEqual(['Work by <b translate=no>x1</b> and others.'])
+    expect(ok(result).content).toEqual([tx('作者M'), { t: 'el', id: 'k' }, tx('dry等人。')])
+  })
+  it('several elements in one word (`Y\\i ld\\i r\\i m`): each one’s letters come back beside it', async () => {
+    const u = unit('y', [t('Y'), mac('a', 'ı'), t('ld'), mac('b', 'ı'), t('r'), mac('c', 'ı'), t('m is a name.')])
+    const { sent, result } = await viaGoogle(
+      u,
+      () => '<b translate=no>x1</b><b translate=no>x2</b><b translate=no>x3</b>是一个名字。',
+    )
+    expect(sent).toEqual(['<b translate=no>x1</b><b translate=no>x2</b><b translate=no>x3</b> is a name.'])
+    expect(ok(result).content).toEqual([
+      tx('Y'),
+      { t: 'el', id: 'a' },
+      tx('ld'),
+      { t: 'el', id: 'b' },
+      tx('r'),
+      { t: 'el', id: 'c' },
+      tx('m是一个名字。'),
+    ])
+  })
+  it('an element inside a group, its letter outside the group: the letter comes back after the group', async () => {
+    const u = unit('c', [t('Polish the '), span('1', 'colour', [mac('h', 'guitar')]), t('s now.')])
+    const { sent, result } = await viaGoogle(u, () => '现在擦亮<b translate=no>x1</b>。')
+    expect(sent).toEqual(['Polish the <b translate=no>x1</b> now.'])
+    expect(ok(result).content).toEqual([tx('现在擦亮'), sp('1', [{ t: 'el', id: 'h' }]), tx('s。')])
+  })
+  it('letters after an element of no text (a tie) and before one of their word: back before that one, not after the tie', async () => {
+    const u = unit('t', [t('Work by'), el('s', 'space'), t('M'), mac('k', 'ą'), t('dry.')])
+    const { sent, result } = await viaGoogle(u, () => '由<b translate=no>x1</b>作者<b translate=no>x2</b>。')
+    expect(sent).toEqual(['Work by<b translate=no>x1</b><b translate=no>x2</b>.'])
+    expect(ok(result).content).toEqual([tx('由'), { t: 'el', id: 's' }, tx('作者M'), { t: 'el', id: 'k' }, tx('dry。')])
+  })
+  it('an element TeX sets after the unit’s text (`after`, a backref’s pages) is no word of it: its text holds none of the unit’s letters', async () => {
+    const back: Piece = { t: 'el', id: 'b', kind: 'macro', text: '8', after: ' ' }
+    const u = unit('r', [t('A. Author. A title. arXiv:2309.08471.'), back])
+    const { sent } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual(['A. Author. A title. arXiv:2309.08471.'])
+  })
+  it('an element that states no text (a raised mark, `\\textsuperscript{1}Carnegie`) is offered with its letters, as before', async () => {
+    const u = unit('a', [mac('s'), t('Carnegie Mellon University')])
+    const { sent } = await viaGoogle(u, () => '<b translate=no>x1</b>卡内基梅隆大学')
+    expect(sent).toEqual(['<b translate=no>x1</b>Carnegie Mellon University'])
+  })
+  it('an element whose text makes no word with what is beside it: the unit goes as it is', async () => {
+    const spaced = unit('s', [t('The '), mac('h', 'guitar'), t(' sounds. A '), mac('d', '–'), t('dash.')])
+    const { sent } = await viaGoogle(spaced, (w) => w)
+    expect(sent).toEqual(['The <b translate=no>x1</b> sounds. A <b translate=no>x2</b>dash.'])
+  })
+})

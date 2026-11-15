@@ -85,7 +85,9 @@ export const KEY_VERSION = 't1'
  *  where it states the group's reference translation, asked of it in the unit's batch: groups.ts placeReferences; a request a
  *  translator refuses handed on whole, halved only where its endpoint said it is too large (#636: a 400 read as every unit's
  *  refusal kept the next translator's answers as rows); a group that is not `must` with an edge inside a word offered to no
- *  translator, its words whole and plain: words.ts. A change to them that changes an outcome moves it, and every row with it
+ *  translator, its words whole and plain: words.ts; letters that make one word with the text TeX set for an element (its
+ *  `text`) offered to no translator, put back beside it in the row: words.ts. A change to them that changes an outcome moves
+ *  it, and every row with it
  *  (identityOf); a change that changes none leaves it */
 export const CHAIN_DIGEST = '543eba3d1576a1eb00d3aa3e96386a19cca39aba0fcf274ad45c68911be26fa6'
 
@@ -846,7 +848,8 @@ export function chainOf(ports: Ports = {}): Chain {
   async function settle(u: UnitIn, i: number, c: Call): Promise<void> {
     let r: Result
     try {
-      // (a group that cuts a word offered to none, words.ts: the one place it is decided, before any wire or reading)
+      // (a group that cuts a word, and the letters that make one word with an element's text, offered to none, words.ts: the
+      // one place it is decided, before any wire or reading)
       const whole = wholeWordsOf(u)
       const w = whole?.unit ?? u
       const named = namedOf(w)

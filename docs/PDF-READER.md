@@ -5522,6 +5522,18 @@ words; the translator translated what it was given.
   changes (not `PIPELINE_VERSION`), and the engine's own wire is not touched (not `TRANSLATE_VERSION`).
 - **Not this rule's.** Production's wire (`translate/mt.mjs` classOf) keeps every pair with text on its tags wire, so Google
   behind production would cut the same words; Microsoft, production's first, sends such a pair on no wire (`flat`).
+- **Letters glued to an element that make one word with its text** (the display design's F10, lane wire-c, 2026-11-15): the
+  prepare states on a command's element the text TeX set for it on its line's baseline at its text's size (`text`,
+  contract.ts); the letters beside it that make one word with that text (UAX #29, `Intl.Segmenter` of SOURCE, over the
+  projection with each element's text in its place) are offered to no translator, and the row has them back beside the
+  element, literally: after the element of their word they follow, else before the one they precede, outside the groups
+  that hold the element but not them; the row's sentences in the unit's projection and past the letters put back. The text
+  alone decides, never the kind; an element stating none (a raised mark, `\textsuperscript{1}Carnegie`) holds nothing
+  back, nor one TeX sets after the unit's text (`after`, a backref's pages). 2111.09276v1's Table 1 on staging, Google:
+  `\hlyellow{guitar}s.` went out as the element and "s.", and "s" came back as the word for seconds; a name written with
+  an accent command (`M\k{a}dry`, `Y\i ld\i r\i m`) stays as written, and a possessive glued to a system's name
+  ("TensorCast's") is one word too and comes back as written. Over the lab's four sets as lane wire-e's restricted writer states them (its chain e3 at e26e27053: 245 papers, 76,831 units the chain sends, 8,031 elements stating a text), 158 sides are held back in 115 units of 32 papers: amounts and quantities written with a command (`\textyen` 31, `\pp` 15, a size's unit after `\OlCrossTok`), letters of names around an accent command (`\i` 15, `\k` 14, `\^` 12, `\=` 4), possessives after a system's name (`\sys` 13, `\system` 11, `\textquoteright` 4), panel letters after `\figref` 8 and plurals after `\oursfull` 6. `CHAIN_DIGEST` moves (the chain's
+  case table gains `glued`, a case only this rule decides).
 
 ### 18.48 A full-width mark's blank half is its face's, and the drawing is what the layout measured (2026-11-12)
 
