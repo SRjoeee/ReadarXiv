@@ -7197,6 +7197,14 @@ the next entry's text (2402.10294v1 p14, references [1] to [6]: [1] drawn over i
   field's group (`\bibinfo{year}{\leavevmode\axtmark{207s}2023}`). The label, which `\bibitem` set when the paragraph began, stands
   before the start point; TeX's own paragraph end (the paragraph-end point after the entry's last piece, B15's `qe`) confirms the
   bound before the next label. A number after the entry's first word, and every other head, as before.
+- **The marking reads the same head** (`marks/marks.ts` headEnd). The marking passes over the pieces before a unit's start mark
+  (no layout mark: in vertical mode one would wait for the start mark), and read the head's first word by a copy of its own
+  (`INLINE`, an identifier), which F29's number was not in: the year was passed over, got no mark, and its glyphs were no ink of
+  its element (drawn from its copy text). headEnd now reads the source reader's own `firstWordPiece`, the copy gone: the year has
+  its marks (a number's two) and its ink. The two readings stay two functions for their reasons: headEnd reads from any piece
+  (after each forced break and alignment tab), states the pieces passed over where no first word comes, and passes a letter group
+  or a cell's box over where the start mark stands before it. Over the three sets this moves the 9 heads above and no other
+  (from a unit's start or after a break or a tab).
 - **The reach, read by the source reader alone over the 89 papers and 2611.03953v2, the holdout's 36 and the third set's 119**
   (with the bibliographies BibTeX made, read from the lab's stored compiles): 9 entries in 3 papers, and no other unit of any kind
   has a placeholder TeX sets as written before its first text: 2402.10294v1's six (ACM, no start mark), 2608.14557v1's two (ACM,

@@ -7238,8 +7238,10 @@ function cellBox(pieces: readonly SourcePiece<WalkFile>[], at: number): number {
 }
 
 /** a placeholder that is a unit's first word where it comes first (headStartOf): an inline formula or citation, an identifier, a
- *  number an entry keeps — text TeX sets as written, or set on the line */
-const firstWordPiece = (src: string): boolean => INLINE.test(src) || identifierSource(src) || KEPT_NUMBER.test(src)
+ *  number an entry keeps — text TeX sets as written, or set on the line. The marking reads a head by it too (marks.ts headEnd),
+ *  so that what the start mark stands before is never passed over there */
+export const firstWordPiece = (src: string): boolean =>
+  INLINE.test(src) || identifierSource(src) || KEPT_NUMBER.test(src)
 /** startOf's reading of a unit's head, a cell's box aside */
 function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number] {
   let startAt = -1,

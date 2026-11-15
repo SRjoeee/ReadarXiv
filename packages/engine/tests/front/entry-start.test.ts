@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper } from '../../src/compile/live.ts'
+import { headEnd } from '../../src/marks/marks.ts'
 import { markUnits, patch, startOf } from '../../src/source/latex-front.ts'
 
 // A bibliography entry whose first ink is a number the entry keeps as the original's (keepNumbers: a year, a volume): an entry
@@ -53,6 +54,13 @@ describe("an entry whose first ink is a number it keeps: its start mark before t
       '\\bibitem[Doe(2020)]{doe}\n\\bibfield{author}{\\bibinfo{person}{Jane Doe}.} \\bibinfo{year}{2020}\\natexlab{}.\n\\newblock \\bibinfo{title}{A Study}.\n',
     )
     expect(startPiece(u!)).toBe('Jane Doe')
+  })
+  it("the marking reads the same head (marks.ts headEnd): the year is its first word, never passed over, so it has marks of its own", () => {
+    for (const u of [
+      ...entriesOf(`${ACM('tool', '2023', 'Some Editing Tool')}`),
+      ...entriesOf('\\bibitem{who}\n\\BIBentryALTinterwordspacing\n(2024) {WHO} Fact sheets.\n'),
+    ])
+      expect(headEnd(u.pieces as never, 0)).toBe(startOf(u.pieces as never)[0])
   })
   it('a number after the first word is no head: the start mark before the word', () => {
     const [u] = entriesOf('\\bibitem{x}\nSmith. 2020. A study of things.\n')
