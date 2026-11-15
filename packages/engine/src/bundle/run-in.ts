@@ -16,7 +16,9 @@
 //     an element of kind `other`), a forced break or any other element there is the paper's own separation, drawn: none added;
 // (d) what follows begins a sentence by the cutter's reading (@readarxiv/text opensAfter: a stop set at the group's close, what
 //     follows no continuation), only white space, ties, citations and notes' marks between (no text; any other element first,
-//     a formula opening the sentence, is a miss of the rule: "Textual Similarity $G$ is …", 2111.09276v1);
+//     a formula opening the sentence, is a miss of the rule: "Textual Similarity $G$ is …", 2111.09276v1), and begins with a
+//     word, its first character a letter (2608.27181v1's table row `\textbf{SSMB (Ours)} + HardNet~\cite{…} + MNN`, which the
+//     cutter reads as two sentences, is no title and its sentence);
 // and the group's text ends with no closing mark of its own (Unicode's Terminal_Punctuation or a dash, past closing brackets and
 // quotes) and states no `stop` (a macro's own `{\bf #1.}`): a title so ended, or followed by its colon, is separated already.
 import type { Piece } from '@readarxiv/format'
@@ -102,7 +104,8 @@ export function runInsOf(content: readonly Piece[], opened: ReadonlySet<string>)
 }
 
 /** (c) and (d)'s pieces: from `n`, past elements that set nothing, plain white space (a white text, or a text beginning with
- *  it, or a tie); then only white space, ties, citations, notes' marks and groups' edges before the first text */
+ *  it, or a tie); then only white space, ties, citations, notes' marks and groups' edges before the first text, which begins
+ *  with a letter */
 function followed(flat: readonly Flat[], n: number): boolean {
   let white = false
   for (; n < flat.length; n++) {
@@ -111,7 +114,7 @@ function followed(flat: readonly Flat[], n: number): boolean {
     if (!white && !(x.t === 'text' ? /^\s/.test(x.s) : x.t === 'el' && x.kind === 'space')) return false
     white = true
     if (x.t === 'text') {
-      if (/\S/.test(x.s)) return true
+      if (/\S/.test(x.s)) return /^\s*\p{L}/u.test(x.s)
     } else if (x.t === 'el' && !BETWEEN.has(x.kind)) return false
   }
   return false

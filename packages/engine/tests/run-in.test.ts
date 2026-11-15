@@ -84,6 +84,13 @@ describe('a title set in the line at a paragraph’s opening, with no mark after
       ...runInsOf([bold('0', 'Textual Similarity'), t(' '), el('2', 'math', '$G$'), t(' is the similarity.')], none),
     ]).toEqual([])
   })
+  it('a name before what begins with no word (`\\textbf{SSMB (Ours)} + HardNet~\\cite{…} + MNN`, a table row): not', () => {
+    // (2608.27181v1 u352, u353: the cutter reads "+" as no continuation; a sentence begins with a word, its first character a
+    // letter)
+    expect([
+      ...runInsOf([bold('0', 'SSMB (Ours)'), t(' + HardNet'), el('2', 'cite', '\\cite{x}'), t(' + MNN')], none),
+    ]).toEqual([])
+  })
   it('a group TeX opened a paragraph at inside its unit: stated where its part says so, not otherwise', () => {
     const content = [
       t('It ends here.\n'),

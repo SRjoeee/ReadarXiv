@@ -7225,7 +7225,8 @@ drawn with the original's gap) and a title that ends with a stop or a colon are 
   face (bold, italic, small capitals, a code face, a face read off its glyphs: not a colour, a link, an underline or a group of
   no style), (c) is followed in the source by plain white space (a text that begins with it, or a tie, past what sets nothing),
   and (d) then by what begins a sentence by the cutter's own reading (`@readarxiv/text` `opensAfter`: a stop set at the group's
-  close, what follows no continuation), with only white space, ties, citations and notes' marks between; its text ends with no
+  close, what follows no continuation), with only white space, ties, citations and notes' marks between, its first character a
+  letter (a table row's "**SSMB (Ours)** + HardNet [cite] + MNN" is one name, 2608.27181v1); its text ends with no
   closing mark (Terminal_Punctuation or a dash, past closing brackets and quotes) and it states no `stop`. A spacing element of
   the paper's own after it (`\quad`, `\hspace`, `\vspace`), a forced break or any other element first is the paper's own
   separation, drawn as it is: nothing is added. A formula that opens the sentence is a miss of the rule.
