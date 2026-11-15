@@ -7306,7 +7306,25 @@ Read off the paper's own commands: 2610.37818v1's `\authorspace` (`\hspace{2.5em
 `\authorcr` (its `\\`: `\penalty 10000`, `\glue 0.0 plus 1.0fil`, `\penalty -10000`, no width) are kept as elements, where the
 wire move's census read them silent off their own sources; a `\natexlab{}`, ACM's `\showISBNx{…}`, revtex's `\email{…}`,
 hyperref's `\phantomsection` set nothing. The paper-names reading (`instrument/language.ts`) runs before the parts exist and
-reads no `silent` (§18.72; the wire move's ruling 4).
+reads no `silent` (§18.72; the wire move's ruling 4): read with the widened `silent` left out, it would move no name and no
+judged unit against the kernel's list's reading.
+
+Measured over the three sets' stored compiles (245 papers, each with its probe's log), the chain at the slice's head against
+the same head without it: 880 elements of the source's units become `silent` (885 occurrences) in 835 units (830 sent to a
+translator) of 69 papers, and 31 in the names' variants; 673 of them are `\natexlab{…}` (37 papers); every one is of kind
+`macro`. Nothing else moves but two papers' parts, whose names' `splits` (`bundle/names.ts`) lose a reference's `\natexlab` and
+`\showISBNx` cuts (2402.10294v1, 2610.21026v1); no unit's id, no ownership, no dump moves, and no element stated `silent`
+is one a part states ink or text for (the silent gate). The changed wires of the 92 pairs take 36 Google requests (243
+wires), counted dry. The wire move's census, by the instrument's measure of each unit rather than the probe's of each
+command, read 1,340 elements in 990 units of 91 papers: it took `\url`, `\urldef`'s pieces and a group's brace, which the
+probe never asks or cannot answer, and the two wide commands and the forced break above.
+
+**What the parts confirm.** A sample TeX says sets no ink is given no point by the marking, and the instrument states its
+piece empty (`inklessPieces`): its placements then state no ink and the text '' by the probe's own answer, so the parts confirm
+that no ink of A was given to it, not what TeX set at its use. Where the probe's place reads a command otherwise than its use
+(F15), the rule follows the probe: elsarticle's `\sep` (`\unskip, ` inside `keyword`, empty outside it) is stated silent 17
+times in 4 papers, threeparttable's `\tnote{b}` (a superscript inside its table) once (2610.21313v1). The probe asked where
+the document uses a macro (the compile move's B4) answers both.
 
 ## 19. The engine's contract
 
