@@ -23,6 +23,7 @@ import {
   write,
 } from '@readarxiv/format'
 import type { Instrument, InstrumentUnit, PieceClass } from '../instrument.ts'
+import { RUNNING } from '../instrument/language.ts'
 import type { Located, Member } from '../locate/locate.ts'
 import { bySentence } from '../locate/words.ts'
 import { namesOf, partNames } from './names.ts'
@@ -280,8 +281,10 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   const members = located.members
   const states = members.map((m) => stateOf(m, addOn))
   // (each unit's titles set in the line, read once over its source, the paragraphs TeX opened at its groups wherever a member
-  // of it states one (SpanAt.opens) and the elements it states glue of (PieceClass.glue): a unit a translator cuts into
-  // sentences (Unit.sentences), not an entry's)
+  // of it states one (SpanAt.opens) and the elements it states glue of (PieceClass.glue): a unit of the paper's running text
+  // (language.ts RUNNING: a paragraph, the abstract, a theorem's body, a caption, a footnote) a translator cuts into sentences
+  // (Unit.sentences), not an entry's; never an author block, whose names one after another set off by the paper's \quad are no
+  // title and its sentence (2503.06072v3, 2608.11605v1))
   const sourceUnits = located.units ?? ins.units
   const opened = new Map<number, Set<string>>()
   for (const m of members)
@@ -289,7 +292,8 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   const runins = new Map<number, Set<string>>()
   for (const m of members) {
     const u = sourceUnits[m.unit]
-    if (!u || runins.has(m.unit) || u.kept || u.entry || !bySentence(u.kind, !!u.figure)) continue
+    if (!u || runins.has(m.unit) || u.kept || u.entry || !RUNNING.has(u.kind) || !bySentence(u.kind, !!u.figure))
+      continue
     const glued = new Set((u.classes ?? []).flatMap(([id, c]) => (c.glue ? [id] : [])))
     runins.set(m.unit, runInsOf(u.content, opened.get(m.unit) ?? new Set(), glued))
   }

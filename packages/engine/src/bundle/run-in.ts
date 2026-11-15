@@ -5,7 +5,8 @@
 // group (the part's SpanAt.runin, bundle.ts placedOf) and the typesetter sets the script's separation after it (packages/typeset
 // breaker/tokens.ts); no translator is told it: the wire is the same, and a reply is read as before.
 //
-// A group is so stated where
+// A group of a unit of the paper's running text (bundle.ts reads it over language.ts RUNNING's kinds alone: never an author
+// block, whose names one after another set off by `\quad` are no title and its sentence) is so stated where
 // (a) it opens a paragraph of its unit: no text of the unit before it (elements only), or a placement states TeX opened a
 //     paragraph at it (SpanAt.opens); the outermost group there is read, a group inside it never on its own;
 // (b) it sets a face: its style is a face's (bold, italic, small capitals, a code face, a face read off its glyphs), not a

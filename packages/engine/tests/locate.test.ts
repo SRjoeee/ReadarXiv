@@ -2573,6 +2573,25 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     }
     const glued = unitOf('\\hspace{0.2em}', [['3', { cls: 'zero', cmd: 'hspace', glue: [0.2, 'em', 1] }]])
     expect(partOf(owned(B, glued, [], []), B).spans).toEqual([['0', { cmd: 'textbf', runin: 1 }]])
+    // (an author block's names one after another, each set off by the paper's \\quad: no running text, no title; 2503.06072v3,
+    // 2608.11605v1)
+    const names = glued.map((u) => {
+      const content = [
+        { t: 'span' as const, id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [text('Ann Lee')] },
+        text(' '),
+        { t: 'el' as const, id: '3', kind: 'other', src: '\\quad' },
+        text(' Bo Chen and Cy Dee'),
+      ]
+      return {
+        ...u,
+        id: unitId('author', content),
+        kind: 'author',
+        content,
+        classes: [['3', { cls: 'space', cmd: 'quad', glue: [1, 'em', 1] }]],
+      } as InstrumentUnit
+    })
+    const C = docOf([{ lines: ['Ann Lee Bo Chen and Cy Dee'] }])
+    expect(partOf(owned(C, names, [], []), C).spans).toEqual([['0', { cmd: 'textbf' }]])
     const skipped = unitOf('\\vspace{0.2cm}', [['3', { cls: 'zero', cmd: 'vspace' }]])
     expect(partOf(owned(B, skipped, [], []), B).spans).toEqual([['0', { cmd: 'textbf' }]])
   })

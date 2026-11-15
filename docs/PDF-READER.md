@@ -7220,7 +7220,9 @@ drawn with the original's gap) and a title that ends with a stop or a colon are 
   of ours that makes the translator's answer worse is not the method that is right in the long run: withdrawn.
 - **The engine states the fact** (`packages/engine` bundle/run-in.ts `runInsOf`, once per unit over the paragraphs every member
   of it states TeX opened at its groups, written by bundle.ts on each member's spans: the part's `SpanAt.runin`; optional, not in
-  the unit's id, FORMAT stays 1). A group of a unit a translator cuts into sentences (Unit.sentences, no entry) is stated where
+  the unit's id, FORMAT stays 1). A group of a unit of the paper's running text (a paragraph, the abstract, a theorem's body, a
+  caption, a footnote: never an author block, whose names one after another set off by `\quad` are no title and its sentence)
+  that a translator cuts into sentences (Unit.sentences, no entry) is stated where
   it (a) opens a paragraph of its unit (no text of the unit before it, or SpanAt.opens; the outermost group there), (b) sets a
   face (bold, italic, small capitals, a code face, a face read off its glyphs: not a colour, a link, an underline or a group of
   no style), (c) is followed in the source by white space, alone or beside horizontal spacing of the paper's own (a text that
