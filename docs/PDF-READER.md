@@ -3353,7 +3353,10 @@ borrow. The separation: each unit's line probe (`AXT-LINES`) gains `\parskip` be
 the paragraph ends (the context's own: a list's `\parsep`); their natural sum. A unit TeX sets no paragraph for (a heading,
 the front matter's, a caption measured in a box alone) states none, and borrows nothing. The engine states, under each run of
 a member's lines (to its last line on a page or in a column, over a kept row of its own, over another's ink between two of
-its lines), the depth of the next ink's baseline across the run (a glyph's; a box's top) and of the text block's bottom
+its lines: its own that goes with its lines, its text's, label's and elements' glyphs and boxes but an element's whose ink stays,
+is none, `travellingInk`, so that a rule TeX set under its line no longer parts it, the compile move's C6: 2608.18502v1 p9's
+`\underline`; such own ink alone had ended 161 runs of 106 members in 32 of the 89 papers, 28 of 21 in 8 of the holdout's, 235
+of 146 in 25 of the third set's, and one paragraph's opening point with them), the depth of the next ink's baseline across the run (a glyph's; a box's top) and of the text block's bottom
 (`Room.runs`), and the member's separation (`Room.sep`); a block may borrow down to the smaller of the bottom and the next
 ink's baseline less the separation; a run of several lines is read across its own lines, as they are laid (a paragraph set
 beside a figure meets no figure under it), a single line to its column's end. Nothing of B moves: over the corpus's 87
@@ -6713,7 +6716,7 @@ states it from the compile move (its C1, 2026-11-15); a part made before holds n
   design-display 2a's order: a group's open (`SpanAt.opens`), an element (`El.opens`), a forced break TeX
   ended the line before at (`El.ends`; in centred and ragged text LaTeX's `\\` is `\par`), a region (the paragraph before
   ends with a display, the line before or its own is held, or the two are not consecutive lines of one run as `Room.runs`
-  reads one: another page, another column, ink TeX set between them: an end there may be another paragraph's, a float's,
+  reads one: another page, another column, another's ink TeX set between them, the member's own there its lines': an end there may be another paragraph's, a float's,
   and is a block's edge already), else its first word alone. The first
   word is the first of the member's placed words (`Placed.words`; a word by its first glyph on A, the opening marks set against
   it included, an element's word by any glyph of its) that TeX set from the end on, past the unit's glyphs of no letter or digit

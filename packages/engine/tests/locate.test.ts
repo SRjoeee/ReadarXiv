@@ -1657,6 +1657,38 @@ describe('locate: the room under a unit', () => {
     expect(plain.room.runs).toBeUndefined()
     expect(plain.room.sep).toBeUndefined()
   })
+  it('ends no run at the member’s own ink between two of its lines: an underline under its line (2608.18502v1 p9 ord 39)', () => {
+    // (Room.runs ends a run where ink TeX set between two lines stands there, another's: a float, a figure. The member's own ink
+    // there, a rule under its first line (`\underline`), is its text's, no other's: one run. The same rule no unit's ends it)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'an underlined title', y: 700 },
+          { text: 'goes on here', y: 688 },
+          { text: 'the next unit', y: 600 },
+        ],
+        boxes: [[19, 1, 72, 696.5, 186, 697]],
+      },
+    ])
+    const units = [unitOf('para', 'an underlined title goes on here'), unitOf('para', 'the next unit')]
+    const runsOf = (own: boolean) => {
+      const ins = instrumentOf(B, units, [[0, 0, 1]])
+      if (own) {
+        ins.boxes[0]!.unit[0] = 0
+        ins.boxes[0]!.role[0] = ROLE.text
+      }
+      const framed: Instrument = {
+        ...ins,
+        tex: {
+          frames: [{ block: [72, 540], columns: [[72, 540]], foot: 500 }],
+          skips: [{ unit: 0, baselineskip: 12, parskip: 0 }],
+        },
+      }
+      return locate(framed, B, align(B, B)).members[0]!.room.runs
+    }
+    expect(runsOf(true)?.map((r) => r[0])).toEqual([1])
+    expect(runsOf(false)?.map((r) => r[0])).toEqual([0, 1])
+  })
   it('reads the room under a run of lines across their own extent, a single line’s to its column’s end', () => {
     // (2602.23285v2 p5 t32: a paragraph set beside a figure, its lines' ink ending at 315.84 of a column to 504, the figure's
     // strokes beside every line: a translation's lines are laid across its block's own lines (the typesetter's measure, their
@@ -2780,6 +2812,27 @@ describe('a paragraph TeX opened inside a unit, stated by its first word (design
     const B2 = docOf([{ lines: ['A first paragraph is cut', 'by a float set here'] }])
     const two = partOf(owned(B2, [u], [[0, 0]], [], [24]), B2)
     expect(two.flows[0]!.paras).toEqual([[25, 1]])
+  })
+  it('states the first word where the ink between the two lines is the member’s own: an underline (2608.18502v1 p9 ord 39)', () => {
+    // (a rule TeX set under the line before, the unit's own text's (`\underline`): no other's ink between the two lines, so
+    // they are one run and the paragraph's first word is stated; the same rule no unit's stands between them, a region)
+    const B = docOf([
+      { lines: ['A first paragraph ends.', 'The second one', 'runs on'], boxes: [[23, 1, 72, 696.5, 210, 697]] },
+    ])
+    const ofIt = (own: boolean) => {
+      const ins = owned(B, [plain], [[0, 0, 0]], [], [23])
+      if (own) {
+        ins.boxes[0]!.unit[0] = 0
+        ins.boxes[0]!.role[0] = ROLE.text
+      }
+      return partOf(ins, B)
+    }
+    const mine = ofIt(true)
+    expect(mine.flows[0]!.paras).toEqual([[28, 1]])
+    expect(mine.L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 0, text: 1, words: 1 })
+    const other = ofIt(false)
+    expect(other.flows[0]!.paras).toBeUndefined()
+    expect(other.L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 1, text: 0, words: 0 })
   })
   it('counts plain, and lists, a paragraph whose first word is not placed on A (letters TeX did not set in order)', () => {
     const B = docOf([{ lines: ['A first paragraph ends.', 'Teh second one', 'runs on'] }])

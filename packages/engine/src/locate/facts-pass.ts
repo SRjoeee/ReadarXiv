@@ -62,7 +62,7 @@ function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
   return out
 }
 import type { Owned } from './ownership.ts'
-import type { Member } from './work.ts'
+import { type Member, travellingInk } from './work.ts'
 
 interface FactsInput {
   ins: Instrument
@@ -801,7 +801,9 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
     const held = (k: number) => k >= 0 && k < mem.lines.length && !!((mem.lines[k] as Line)[9] & 1)
     // (lines k and k + 1 consecutive lines of one run, as geometry.ts's Room.runs reads a run: on one page, the lower under the
     // upper and across its column, the first ink under the upper the lower's own (no ink TeX set between them across their hull,
-    // a float's or another's, a glyph's top or a box's, its hundredth aside))
+    // a float's or another's, a glyph's top or a box's, its hundredth aside; the member's own travelling ink, travellingInk, is
+    // its lines': an underline under the upper, 2608.18502v1 p9))
+    let own: ReturnType<typeof travellingInk> | undefined
     const oneRun = (k: number) => {
       const u = mem.lines[k] as Line
       const l = mem.lines[k + 1] as Line
@@ -811,8 +813,10 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
       const h1 = Math.max(u[3], l[3])
       const between = (top: number, x0: number, x1: number) =>
         top > l[5] + 0.005 && top < u[6] - 0.5 && x1 > h0 && x0 < h1
-      for (const g of fx.bandOn(u[0], l[6], u[6])) if (!gA(g.a).unseen && between(gA(g.a).top, g.x0, g.x1)) return false
-      for (const b of fx.boxes(u[0])) if (between(b.y1, b.x0, b.x1)) return false
+      own ??= travellingInk(mem)
+      for (const g of fx.bandOn(u[0], l[6], u[6]))
+        if (!gA(g.a).unseen && !own.glyphs.has(g.a) && between(gA(g.a).top, g.x0, g.x1)) return false
+      for (const b of fx.boxes(u[0])) if (!own.boxes.has(`${u[0]}|${b.j}`) && between(b.y1, b.x0, b.x1)) return false
       return true
     }
     // (the paragraph's first word (design-display 2a, F1): the first of the member's placed words (Placed.words, sentences.ts

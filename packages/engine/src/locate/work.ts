@@ -528,6 +528,20 @@ export const BRACKET = /^[bf][se]\d+$/
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 export const ON_ROW = 0.4
 
+/** a member's own ink that goes with its lines, set anew where its translation is laid: the glyphs (A's, global) of its text,
+ *  its label and its elements but those whose ink stays where TeX set it (El.keep), and the boxes (`page|index`, the page's
+ *  numbered from 1) of its text and those elements. Ink between two of its lines that is its own (an underline under its line,
+ *  a script reaching down) is no other's: no run of its lines ends at it (Room.runs, geometry.ts roomOf; a paragraph TeX opened
+ *  there, facts-pass.ts readOpens). Read after lineGeometry, which states its elements */
+export function travellingInk(mem: Member): { glyphs: Set<number>; boxes: Set<string> } {
+  const kept = new Set(mem.elements.filter(([, el]) => el.keep).map(([id]) => id))
+  const glyphs = new Set<number>([...mem.text, ...mem.label])
+  const boxes = new Set(mem.textBoxes.map(([p, j]) => `${p}|${j}`))
+  for (const [id, l] of mem.els) if (!kept.has(id)) for (const a of l) glyphs.add(a)
+  for (const [id, l] of mem.elBoxes) if (!kept.has(id)) for (const [p, j] of l) boxes.add(`${p}|${j}`)
+  return { glyphs, boxes }
+}
+
 /** the unit's own text line an ink stands on (the line TeX set it on: a radical's glyph origin is at its bar, a subscript's below
  *  the line, a footnote's mark raised over it): of its text lines on the ink's page whose band (its fonts' boxes, half a point
  *  out) the ink, `lo` to `hi`, meets, the one nearest its own baseline; -1 for none */
