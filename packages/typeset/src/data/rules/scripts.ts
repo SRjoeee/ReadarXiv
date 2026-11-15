@@ -10,6 +10,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     order: ['track', 'borrow', 'lead', 'shrink'],
     leadBase: 1.3,
     leadFloor: 1,
+    leadEm: null,
     trackMin: -0.03,
     compressMax: 2,
     centredPunct: false,
@@ -47,6 +48,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     order: ['track', 'borrow', 'lead', 'shrink'],
     leadBase: 1.3,
     leadFloor: 1,
+    leadEm: null,
     trackMin: -0.03,
     compressMax: 0,
     centredPunct: true,
@@ -84,6 +86,9 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     order: ['track', 'borrow', 'lead', 'shrink'],
     leadBase: 1,
     leadFloor: 1,
+    // (jlreq's line pitch, 1.7 zw at the body's size: jlreq.cls:411 `baselineskip={17zw/10}`, TeX Live 2025; one rule at every
+    // size, the block's own: the owner's choice of 2026-11-15, docs/PDF-READER.md §18.82)
+    leadEm: 1.7,
     trackMin: -0.03,
     compressMax: 2,
     centredPunct: false,
@@ -119,8 +124,11 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
   },
   Kore: {
     order: ['track', 'borrow', 'lead', 'shrink'],
-    leadBase: 1,
+    // (xetexko's \linespread{1.38889} under its `hangul` option on the class's own pitch: xetexko.sty:2596-2601, luatexko.sty:
+    // 992-997, TeX Live 2025; the owner's choice of 2026-11-15, docs/PDF-READER.md §18.82)
+    leadBase: 1.38889,
     leadFloor: 1,
+    leadEm: null,
     trackMin: -0.03,
     compressMax: 2,
     centredPunct: false,
@@ -158,6 +166,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     order: ['track', 'borrow', 'shrink', 'lead'],
     leadBase: 1,
     leadFloor: 0.95,
+    leadEm: null,
     trackMin: 0,
     compressMax: 0,
     centredPunct: false,
@@ -193,6 +202,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     order: ['track', 'borrow', 'shrink', 'lead'],
     leadBase: 1,
     leadFloor: 0.95,
+    leadEm: null,
     trackMin: 0,
     compressMax: 0,
     centredPunct: false,

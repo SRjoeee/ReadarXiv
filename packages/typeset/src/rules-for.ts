@@ -34,6 +34,7 @@ const SCRIPT_KEYS = [
   'order',
   'leadBase',
   'leadFloor',
+  'leadEm',
   'trackMin',
   'compressMax',
   'centredPunct',

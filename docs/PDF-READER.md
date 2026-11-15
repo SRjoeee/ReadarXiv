@@ -2943,6 +2943,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `order` | script | fit | an ordering of track, borrow, lead, shrink | The order in which the fit turns its knobs when a translation does not fit: tracking, borrowing free space below, the leading, the size. |
 | `leadBase` | script | fit | 0.8 to 2, step 0.05 | The translation's line pitch, × the original's line pitch. |
 | `leadFloor` | script | fit | 0.8 to 2, step 0.05 | The tightest line pitch the fit falls back to, × the original's. |
+| `leadEm` | script | fit | none, or a pitch in em | A class's line pitch in ems of a block's own size (jlreq's 1.7 for Japanese, §18.82): where set, the fit starts from it over the original's pitch, never under it, in place of `leadBase`. |
 | `trackMin` | script | fit | -0.3 to 0, step 0.005 | The tightest letter spacing the fit uses, in em (zero or less). |
 | `compressMax` | script | fit | `0`, `1`, `2` | How far full-width punctuation is compressed: 0 not at all, 1 at a line's start and between two marks, 2 every mark. |
 | `centredPunct` | script | fit | yes or no | Whether punctuation is centred in its em box (Traditional Chinese): no mark is then compressed or hung. |
@@ -7418,6 +7419,37 @@ The lays and the state the walk stops at are the breaker's own. Held so, at toda
 each passed state and each taken one laid all the same and compared (`lanes/cm-d/count`: 2,595 pages; 45,293 states passed by the bound and 3,078 by the floor, none of which a lay sets whole; 5,832 taken from the floor, each byte for byte the breaker's); every page's
 whole lay equal; and the reader gate's dumps on both stores byte for byte as before, every summary line equal. The count (the
 breaker's lays a page, every page of the 92 pairs, Google's rows w1): 253.5 to 235.3 (-7.2 %; 249.7 with the floor of the leading alone, its first form): German -35.4 %, Spanish -37.8 %, Polish -17.3 %, Japanese -7.4 %, Chinese -6.7 %; one pair pays 0.1 % more (2610.21827v1-zh, 135.0 to 135.2: a floor laid that the next state did not need). The states a fit, 2.41, are the walk's as before.
+
+### 18.82 Japanese at jlreq's pitch, Korean at xetexko's (the owner's choice of 2026-11-15)
+
+The line pitch a translation starts from (the fit's leading base over the original's own pitch, U.params `leadOf`) was each
+script's: Chinese ctex's spread of 1.3 on a solid-set original's pitch, never wider than 1.3 times the original's own; Japanese
+and Korean the original's own (1). Shown whole pages laid at each class's pitch (jarticle, jsarticle and jlreq; xetexko and
+oblivoir), the owner chose jlreq for Japanese and xetexko for Korean, under one condition, that the reader's work does not grow.
+His words (the export of 2026-11-15T17:10:35Z): 「改用 jlreq」, 「改用 xetexko」; 「改了之后，确实看起来挺均匀的。只要理论上不影响性能，我们就改吧」.
+
+- **Japanese**, one rule at every size: a block's pitch is jlreq's body pitch, 1.7 times its own size (`jlreq.cls:411`,
+  `baselineskip={17zw/10}`, TeX Live 2025), so its base is 1.7 × its size over its original pitch (a block with no pitch of its
+  own: over the 1.2 × size the lay takes for it), never under 1: a loose original keeps its own pitch. The rule set's `leadEm`,
+  1.7. jlreq states each smaller and larger size a pitch of its own, as a multiple of that size: footnotesize 1.4375 (`:1319`),
+  small 1.444 (`:1328`), scriptsize 1.143 (`:1342`), tiny 1.2 (`:1343`), large 1.417 (`:1344`), Large 1.5 (`:1345`), LARGE 1.471
+  (`:1346`), huge 1.4 (`:1347`), Huge 1.32 (`:1348`): the one rule stands 18 % wider than jlreq at footnotesize and small. The
+  rule by size needs the document's body size, which no part states (a fact the compile would state); it is not built.
+- **Korean**: xetexko's `\linespread{1.38889}` under its `hangul` option, on the class's own pitch (`xetexko.sty:2596-2601`;
+  luatexko states the same, `luatexko.sty:992-997`): `leadBase` 1.38889, by Chinese's path (the spread of a solid-set original's
+  pitch, never wider than 1.38889 times the original's own, never under it).
+- Chinese, traditional Chinese and the alphabets as before.
+
+The versions: none moves by its own rule. The rule set's VERSION was deleted as read by nothing (e5bc90a1e); the reader lays a
+page when it is read, and nothing stored is keyed by the leading; the units (PIPELINE), what a translator is sent (TRANSLATE)
+and the cache keys are untouched.
+
+The condition, measured (the breaker's lays a page, every page, Google's rows w1, against the walk before §18.81): 2602.23285v2-ja
+180.1 to 128.4 (-28.7 %), 2609.20976v1-ja 148.1 to 116.8 (-21.1 %), 2610.19159v1-ja 231.0 to 130.6 (-43.5 %), 2610.40645v1-ja
+160.8 to 132.1 (-17.9 %), 2610.40645v1-ko's pages 4, 11 and 32 118.0 to 107.3 (-9.0 %). The looser start sends more units through
+the tracking and room knobs before the leading (2610.40645v1-ja, tracking states tried a page 9.3 to 43.9), and the walk lays
+almost none of them: they surely fail (§18.81's bound), or take the floor's lines (tracking laid 9.3 to 6.3, the leading 0 to
+14.8 of 50.6 tried, the lays outside the walk 127.2 to 93.4). Tests: `packages/typeset/tests/unit/script-pitch.test.ts`.
 
 ## 19. The engine's contract
 
