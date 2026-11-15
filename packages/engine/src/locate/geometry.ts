@@ -539,22 +539,22 @@ export function lineGeometry(w: Work, owned: Owned): void {
       // glyphs alone, stated the text "3" and drawn flat at the line's size; on staging and in today's reader both)
       const cls0 = classOf.get(id)?.cls
       const textClass = cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)
-      // (its glyphs on one baseline a line, no rule or image among its ink, each glyph of a character on its line's baseline)
-      const oneBase =
-        !bx.length &&
-        groups.every(
-          (gs) =>
-            new Set(
-              asRead(gs, gA)
-                .filter((g) => /\S/.test(g.u))
-                .map((g) => r2(g.y)),
-            ).size <= 1,
-        )
+      // (its glyphs on one baseline a line, each glyph of a character on its line's baseline)
+      const oneBase = groups.every(
+        (gs) =>
+          new Set(
+            asRead(gs, gA)
+              .filter((g) => /\S/.test(g.u))
+              .map((g) => r2(g.y)),
+          ).size <= 1,
+      )
       const stands = standsAsDrawn(groups, ink, false, gA)
-      const level = !textClass || (oneBase && (!!classOf.get(id)?.mark || stands))
+      // (and, drawn as the page's text, no rule or image among its ink)
+      const level = !textClass || (!bx.length && oneBase && (!!classOf.get(id)?.mark || stands))
+      // (the same reading of its glyphs for every class, its boxes aside (soul's highlight behind `\hl{guitar}` sets none of its
+      // text): the bundle states by it the text TeX set for the element on its line, format's el `text`, where every placement of
+      // its unit agrees; no part carries it)
       const onBase = gl.length > 0 && oneBase && stands
-      // (the same reading for every class, `level`'s for a class of text alone: the bundle states by it the text TeX set for the
-      // element on its line, format's el `text`, where every placement of its unit agrees; no part carries it)
       if (onBase) {
         mem.onBase ??= new Set()
         mem.onBase.add(id)

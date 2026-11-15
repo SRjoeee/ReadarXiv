@@ -67,7 +67,16 @@ function instrument(
       })
       return O
     }),
-    boxes: B.pages.map((pg) => ownersOf(pg.kinds.length)),
+    // (every box the element's: a highlight behind its glyphs, where a page states one)
+    boxes: B.pages.map((pg) => {
+      const O = ownersOf(pg.kinds.length)
+      for (let j = 0; j < pg.kinds.length; j++) {
+        O.unit[j] = 0
+        O.role[j] = ROLE.element
+        O.piece[j] = 1
+      }
+      return O
+    }),
     tex: {},
     made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
   }
@@ -144,6 +153,19 @@ describe('an element’s text, where TeX set it on its line at its text’s size
   it('states it where the element’s glyphs stand on their line’s baseline at the text’s size: `\\hl{guitar}`’s "guitar"', () => {
     const { el, members } = stated(ON, [unitOf()])
     expect(members[0]!.onBase?.has('1')).toBe(true)
+    expect(el.text).toBe('guitar')
+  })
+  it('reads the text’s size on the grid both sizes are written to: a member’s size as read, its element’s to a hundredth', () => {
+    // (2111.09276v1's Table 1: its cells set at 8.189157574, the member's Style.size as read off its glyphs, El.style.size 8.19)
+    const odd = docOf([{ lines: [{ text: 'dirty guitars.', size: 8.189157574 }] }])
+    const { el, members } = stated(odd, [unitOf()])
+    expect(members[0]!.style.size).toBe(8.189157574)
+    expect(el.text).toBe('guitar')
+  })
+  it('states it where a box of its own stands behind its glyphs, soul’s highlight of `\\hl{guitar}` (2111.09276v1’s Table 1)', () => {
+    const lit = docOf([{ lines: ['dirty guitars.'], boxes: [[6, 0, 108, 697, 144, 708]] }])
+    const { el, members } = stated(lit, [unitOf()])
+    expect(new Map(members[0]!.elements).get('1')!.ink.length).toBe(1)
     expect(el.text).toBe('guitar')
   })
   it('states none where TeX raised it, whatever its class says (the part states its text as before: no part moves)', () => {

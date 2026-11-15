@@ -115,12 +115,25 @@ type Placement = { el: El; size: number; onBase: boolean }
 /** the text TeX set for an element where it stands, on its line's baseline at its text's size, where every placement of its unit
  *  in a part states it: the El's text, the same at each, no footnote's mark (drawn raised whatever it is set as), its glyphs on
  *  their line's baseline (locate's reading, Member.onBase, made for every class: an El of class `other` states its text with no
- *  baseline read), at its member's text size; none where it stands in no part */
+ *  baseline read), at its member's text size, the two sizes read on the format's grid (a hundredth: El.style.size is written on
+ *  it, a member's Style.size as read off its glyphs, 2111.09276v1's cells 8.189157574 against 8.19); none where it stands in no
+ *  part */
 function textAt(ps: readonly Placement[] | undefined): string | undefined {
   const t = ps?.[0]?.el.text
   if (typeof t !== 'string' || !t) return undefined
-  return ps!.every((x) => x.el.text === t && !x.el.mark && x.onBase && x.el.style?.size === x.size) ? t : undefined
+  return ps!.every(
+    (x) =>
+      x.el.text === t &&
+      !x.el.mark &&
+      x.onBase &&
+      x.el.style !== undefined &&
+      onGrid(x.el.style.size) === onGrid(x.size),
+  )
+    ? t
+    : undefined
 }
+/** a size on the format's grid, a hundredth of a PDF unit (schema.ts: the prepare writes its numbers on a 1/100 grid) */
+const onGrid = (v: number): number => Math.round(v * 100) / 100
 /** a unit's content as the bundle states it: each element with the text TeX set for it where it stands (format's el `text`,
  *  textAt), by `uid` and its piece id. The instrument's content stays as it is: a copy where anything is stated */
 function statedOf(
