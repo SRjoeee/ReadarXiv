@@ -961,10 +961,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const keptToday = new Map((v2.keptToday ?? []).filter(([, mark]) => Object.hasOwn(RULING_OF, mark)))
   for (const key of T.keys()) {
     // (a unit of today's cut into several members of v2's: shown where each part of it is translated in a member (drawn) or kept
-    // by a rule a ruling covers, §18.22's among them; a part neither is a translation missing, named with its member's state)
+    // by a rule a ruling covers, §18.22's among them; a part neither is a translation missing, named with its member's state. Its
+    // parts on this page are the members that stand on it, the group's `pages` (piecesJoin: the pages the part states a line of
+    // each on, the bundle's, never what v2 drew), and one the bundle states no line of, which no page excuses; where none does,
+    // every member, none of them on the page: today's text here has no member of v2's to hold it)
     const g = groupOfKey.get(key)
     if (g && g.members.length > 1) {
-      const parts = g.members.map((o) => ({ o, drawn: drawnMembers.has(o), mark: drawnMembers.has(o) ? null : ruledMarkOf(o) }))
+      const here = g.members.filter((o) => !g.pages?.[o]?.length || g.pages[o].includes(n))
+      const parts = (here.length ? here : g.members).map((o) => ({ o, drawn: drawnMembers.has(o), mark: drawnMembers.has(o) ? null : ruledMarkOf(o) }))
       const missing = parts.filter((x) => !x.drawn && !x.mark),
         ruled = parts.filter((x) => x.mark)
       const name = `${key} ${orig.get(key)?.kind ?? ''}`.trim()

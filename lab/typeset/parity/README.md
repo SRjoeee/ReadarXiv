@@ -185,7 +185,10 @@ original's by a rule a ruling covers shows the original's ink, its lines counted
 element kept as a crop is. `shown` reads a group's parts: the unit of today is shown where each part of it is translated in a
 member v2 draws or kept by a rule a ruling covers (the pitch of §18.22, an address, an identifier, a formula, a doubled or a
 script's text, the names toggle off), that ruling's then; a part neither is a translation missing, named with its member's
-state.
+state. A page's parts are the members that stand on it: those the part states a line of on that page (the group's `pages`, the
+bundle's, never what v2 drew; a part holds whole flows, so the parts that carry a member are more pages than it stands on), and
+one it states no line of anywhere, which no page excuses; where none stands on the page, every member, none of them there. A
+unit of today's set over a page break and cut there into a member on each page is so shown on each page by its own member.
 
 ## The measures: each a distance from the original, and when v2 is nearer
 
