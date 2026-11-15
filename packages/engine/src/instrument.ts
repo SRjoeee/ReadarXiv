@@ -4,7 +4,7 @@
 // instrument.mjs); the back half reads nothing else of the source, the marks or the compile.
 import type { Piece, Style } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
-import type { GlueName } from './marks/channels.ts'
+import type { GlueName, ParaMeasure } from './marks/channels.ts'
 import type { Recovered } from './read.ts'
 
 /** what a unit's ink is, of the unit's: its text (what a translation replaces), an element's (a piece that travels with the
@@ -241,6 +241,10 @@ export interface Instrument {
      *  float where one changed (`at` the float's serial, B's `fs<n>`: a caption's skips as its box holds them, the separations
      *  once it is closed): the last of a name at or before a float's serial is in force there */
     glues?: { at: number; name: GlueName; natural: number; shrink: number }[]
+    /** each paragraph's measure as TeX breaks it into lines, where it is not the full \hsize (a \parshape, a \hangindent, a
+     *  \leftskip or \rightskip of some natural size), by its end's serial (B's `qe<n><code>`; marks/channels.ts readMeasures,
+     *  STATEMENTS_TEX's AXT-MEASURE), in PDF units */
+    measures?: ({ para: number } & ParaMeasure)[]
   }
   /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
   recovered?: Recovered

@@ -73,12 +73,13 @@ describe("no byte of the marked TeX moves (held at 7d8fad7c4, before the points'
 })
 
 describe("the points' classes", () => {
-  it('declare the paragraph-end points optional and no other class: the cell-end points, which ownership reads, not', () => {
+  it('declare the paragraph-end points and the forced breaks’ optional and no other class: the cell-end points, which ownership reads, not', () => {
+    // (the forced breaks' `kb<n>`: STATEMENTS_TEX's BREAKS_TEX, the compile move's F35, kept apart from the marks' points)
     expect(
       Object.entries(POINT_CLASSES)
         .filter(([, c]) => c.optional)
         .map(([k]) => k),
-    ).toEqual(['para-end'])
+    ).toEqual(['para-end', 'forced-break'])
     expect(POINT_CLASSES['cell-end'].optional).toBe(false)
     expect(Object.keys(POINT_CLASSES)).toEqual([
       'body',
@@ -91,6 +92,7 @@ describe("the points' classes", () => {
       'para-end',
       'display',
       'cell-end',
+      'forced-break',
       'mark',
     ])
   })

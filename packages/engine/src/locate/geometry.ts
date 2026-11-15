@@ -33,6 +33,7 @@ import type { Owned } from './ownership.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from '../own/stream.ts'
 import { gapsOf } from './gaps.ts'
+import { paragraphMeasures } from './measures.ts'
 import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
@@ -65,7 +66,7 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
 }
 
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
-const ON_BASE = 0.05
+export const ON_BASE = 0.05
 
 export function lineGeometry(w: Work, owned: Owned): void {
   const { ins, B, inkA, m, pageA, pageB, placeSpan, unitB, roleB, emptyPiece, outsidePiece, gA, atA } = w.ix
@@ -737,6 +738,8 @@ export function frameMeasures(w: Work): void {
   const { inkA, gA, framesA } = w.ix
   const { members, units } = w
   columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined), framesA)
+  // (TeX's own measure of a line where its paragraph states one that is not its frame: measures.ts)
+  paragraphMeasures(w)
 }
 
 export function rooms(w: Work): void {
@@ -768,8 +771,8 @@ export function rooms(w: Work): void {
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure TeX's frame of it where TeX shipped the page's frame
- *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below; TeX's \parshape
- *  and \hangindent measures: stage 1b) */
+ *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below). TeX's own measure of
+ *  a paragraph that states one (its \parshape, \hangindent, \leftskip, \rightskip) is read after it (measures.ts) */
 function columnsAndMeasures(
   members: Member[],
   inkA: Doc,

@@ -891,6 +891,53 @@ describe('forced breaks with no point on B, set one after the other', () => {
   })
 })
 
+describe('a forced break TeX states the end of (the compile move’s F35: the point after \\@gnewline’s \\unskip, `kb<n>`)', () => {
+  // (2608.25210v2 t196's shape: every line of the unit full to its measure, so that no line end tells the break's; the window
+  // between the break's neighbours holds every line end of the unit)
+  const lines = [
+    'a long first line of it here',
+    'a long second line of it end',
+    'a long third line of it here',
+    'a long last line',
+  ]
+  const content: Piece[] = [
+    text('a long first line of it here a long second line of it end'),
+    { t: 'el', id: '1', kind: 'break', src: '\\\\' },
+    text('a long third line of it here a long last line'),
+  ]
+  const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+  const endsOf = (breaks: [string, number][]) => {
+    // (kept apart from the marks' points, as pageInk keeps them: DocMarks.breaks)
+    const B = docOf([{ lines }])
+    B.pages[0]!.marks = {
+      paras: [],
+      paraEnds: [],
+      regions: [],
+      pictures: [],
+      breaks: breaks.map(([name, glyph]) => ({ name, glyph, box: 0 })),
+    }
+    const M = locate(
+      instrument(B, [u], () => [0, ROLE.text, -1]),
+      B,
+      align(B, B),
+    ).members[0]!
+    return M.elements.find(([id]) => id === '1')?.[1].ends
+  }
+  it('states the line TeX ended at it: the line of the unit’s last glyph before the point', () => {
+    // (the point after the second line's last glyph: 28 + 28 glyphs before it)
+    expect(endsOf([['kb1', 56]])).toEqual([1, 0])
+  })
+  it('states none from points that are not as many as the window’s breaks (a macro of the paper’s that sets one more)', () => {
+    expect(endsOf([])).toBeUndefined()
+    expect(
+      endsOf([
+        ['kb1', 28],
+        ['kb2', 56],
+      ]),
+    ).toBeUndefined()
+  })
+})
+
 describe('forced breaks with no point on B, placed by TeX’s points around them', () => {
   it('places a break by the next piece’s point, nothing that sets ink between, whatever a break at the unit’s end reads', () => {
     // (2608.16117v1 p3 t11: "… concludes our paper.\\\\ \n$\textbf{Notation}$: …from 1 to 2.\\\\": the author's empty line

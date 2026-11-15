@@ -277,6 +277,48 @@ export function readHeads(log: string): Map<number, HeadSkips> {
   }
   return out
 }
+/** a paragraph's measure as TeX breaks it into lines (readMeasures), in PDF units: its \hsize, \hangindent and \hangafter,
+ *  \leftskip's and \rightskip's natural sizes, and its \parshape's lines ([indent, length], where it has a shape) */
+export type ParaMeasure = {
+  hsize: number
+  hangindent: number
+  hangafter: number
+  leftskip: number
+  rightskip: number
+  shape?: [number, number][]
+}
+const DIMEN = /^(-?\d+(?:\.\d+)?)pt$/
+/**
+ * Each paragraph's measure where TeX ends it (STATEMENTS_TEX's MEASURE_TEX: `AXT-MEASURE <n> <\hsize> <\hangindent>
+ * <\hangafter> <\leftskip> <\rightskip> <\parshape> [<indent> <length>]…`, written at LaTeX's para/end, its 79-column wraps
+ * joined), by the serial of its end (`qe<n><code>`): the first of a serial, where every dimension is of TeX's form and the shape
+ * holds as many lines as its count; none in a compile made before the statement
+ */
+export function readMeasures(log: string): Map<number, ParaMeasure> {
+  const out = new Map<number, ParaMeasure>()
+  for (const line of taggedLines(log, 'AXT-MEASURE ')) {
+    const w = line.trim().split(/ +/)
+    if (w.length < 8) continue
+    const n = Number(w[1])
+    const count = Number(w[7])
+    if (!Number.isInteger(n) || out.has(n) || !Number.isInteger(count) || count < 0 || w.length !== 8 + 2 * count)
+      continue
+    const dims = [w[2], w[3], w[5], w[6], ...w.slice(8)].map((x) => DIMEN.exec(x ?? '')?.[1])
+    const hangafter = Number(w[4])
+    if (dims.some((x) => x === undefined) || !Number.isInteger(hangafter)) continue
+    const [hsize, hangindent, leftskip, rightskip, ...rest] = dims.map((x) => Number(x) * BP_PER_PT) as number[]
+    const shape = Array.from({ length: count }, (_, k): [number, number] => [rest[2 * k]!, rest[2 * k + 1]!])
+    out.set(n, {
+      hsize: hsize!,
+      hangindent: hangindent!,
+      hangafter,
+      leftskip: leftskip!,
+      rightskip: rightskip!,
+      ...(shape.length ? { shape } : {}),
+    })
+  }
+  return out
+}
 /** the separations GAPS_TEX states the paper's values of, by the names it writes them under (TeX's own: \textfloatsep … ,
  *  \@fpsep as `fpsep`, \skip\footins as `footins`) */
 export const GLUE_NAMES = Object.freeze([

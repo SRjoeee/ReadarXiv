@@ -7212,6 +7212,47 @@ the glue TeX sets at each kind of gap, and the part names, under each member, th
 - **Not built** (the owner's review of 2d, 2026-11-13): `spread` in the paragraph-end hook, `Style.box`, the equal-clear-space
   floor.
 
+### 18.77 A paragraph's measure and a forced break's line, as TeX states them (the compile move's B2, 2026-11-15)
+
+The display design's F13 (a paragraph beside a wrapped figure laid over a caption, 2610.40576v1 p7 ord 71; a list's narrower
+measure, 2610.40394v1; three list items of one line read centred against the column, traces-b's item 5) and F35 (a forced
+break followed by an indent, `\\ \indent`, run into one paragraph: 2608.25210v2 t196) need two facts TeX holds where a
+paragraph ends and where a line ends at a forced break. Both are STATEMENTS_TEX's (§18.76): today's reader's marked TeX is the
+bytes it was.
+
+- **The measure** (`marks.ts` MEASURE_TEX; `marks/channels.ts` readMeasures; `Instrument.tex.measures`; `locate/measures.ts`).
+  At LaTeX's para/end, after the paragraph-end point's hook (the same paragraphs, its serial `n`), `AXT-MEASURE <n> <\hsize>
+  <\hangindent> <\hangafter> <\leftskip> <\rightskip> <\parshape> [<indent> <length>]…`: the values TeX breaks the paragraph by,
+  the shape's lines through e-TeX's `\parshapeindent` and `\parshapelength`, its count through the primitive `\parshape` as the
+  head finds it (wrapfig makes `\parshape` a macro of its own: read through it, every wrapped paragraph was a TeX error). The
+  instrument keeps the paragraphs whose measure is not the full `\hsize`. Phase 8 reads each into its lines' `m0..m1`: a line
+  is its paragraph's by its first text glyph's partner on B (the paragraph whose end follows it in B's stream), its rank TeX's
+  line number (B's order, a row two members share one line), its box at the left edge of its frame's column whose width is the
+  paragraph's `\hsize` (else the text block of that width; a minipage's, a `\parbox`'s or a p column's paragraph states none:
+  where its box stands TeX's statement does not say), shifted by the line's `\parshape` indent (its last entry past it) or its
+  `\hangindent` (after `\hangafter` lines, or the first `|\hangafter|`; a negative one hangs on the right), from `\leftskip`'s
+  natural size to its length less `\rightskip`'s. A display inside the paragraph counts three lines to TeX's shape: where the
+  shape varies by line, the lines after a held row state none. A table cell, a figure text and a name keep their measure.
+  - What moves: every line of a list item, a quotation, a bibliography entry (lists: `\parshape 1 \@totalleftmargin
+    \linewidth`), a wrapped paragraph, a hung or skipped one, gains TeX's measure where it had its column's; with it a single
+    line's room to widen into (the typesetter's `sideOf`, a name's), the alignment read of a one-line item (facts.ts alignOf reads
+    the line's measure: an item no longer inset from it reads justified, traces-b's item 5), and a member's room below its last
+    block. The paragraph's lay (`packages/typeset/src/unit/blocks.ts` measuresOf, which guesses a change of measure from the lines'
+    edges) is not changed here: the lay lane deletes that guessing and reads `Line[7..8]` (rebuild/google-lay stays unmerged).
+- **The forced break's line** (`marks.ts` BREAKS_TEX; the point class `forced-break`, optional; `ink.ts` FORCED_BREAK, kept apart
+  as `breaks` with `fm<n>`'s and `qe<n>`'s, so that no reader of the marks' points meets it; `facts-pass.ts` readElements).
+  LaTeX's `\@gnewline` (every `\\` and `\newline` in a paragraph) sets a point `kb<n>` after its own `\unskip`, before
+  `\nobreak\hfil\break`: past the line's last glyph, the kernel's own `\unskip` then finding the point and taking nothing. A
+  break the marking gives no mark (an invisible piece) is placed by its neighbours' points as before; inside their window, where
+  B holds as many of these points as breaks, each break's line is the one of the unit's last glyph before its point, in order
+  (2608.25210v2 t196: the window's line ends are two, its break one, its line full: no count of line ends told it). A `\\` of a
+  centred or ragged block (`\@centercr`, which ends a paragraph) and a table's row set none. Reach on the stored run (r3-int, 89
+  papers): 271 forced-break pieces, 354 placed copies, 220 stating their line, 134 not, in 15 papers.
+- **Held** (`lab/pdf/spikes/measure-cases.mjs`, both pinned years, four engines): no glyph, box or point of the compile without the
+  statements moves; every statement read is TeX's own placement (each full line of every placed paragraph from its measure's
+  left edge to its right, to 0.02 pt); each forced break's point stands right after the word before its `\\`, none in a centred
+  block or a table's row.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

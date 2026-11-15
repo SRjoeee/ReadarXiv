@@ -5,7 +5,15 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '../../src/compile/live.ts'
 import { LINES_TEX } from '../../src/compile/tex.ts'
-import { DVI_LAYOUT_TEX, GAPS_TEX, LAYOUT_CLASSES, LAYOUT_TEX, STATEMENTS_TEX } from '../../src/marks/marks.ts'
+import {
+  BREAKS_TEX,
+  DVI_LAYOUT_TEX,
+  GAPS_TEX,
+  LAYOUT_CLASSES,
+  LAYOUT_TEX,
+  MEASURE_TEX,
+  STATEMENTS_TEX,
+} from '../../src/marks/marks.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const PAPER = [
@@ -20,11 +28,23 @@ const PAPER = [
   '',
 ].join('\n')
 /** what the statements write and define: their log lines' tags and their macros */
-const OWN = ['AXT-SECT', 'AXT-GLUE', '\\axt@sgset', '\\axt@sgtell', '\\axt@glflt', '\\axt@glcap', '\\axt@glv']
+const OWN = [
+  'AXT-SECT',
+  'AXT-GLUE',
+  'AXT-MEASURE',
+  '\\axt@sgset',
+  '\\axt@sgtell',
+  '\\axt@glflt',
+  '\\axt@glcap',
+  '\\axt@glv',
+  '\\axt@msr',
+  '\\axt@kbpt',
+  '\\axt@gnl',
+]
 
 describe('the statements the rebuilt prepare’s compile makes (STATEMENTS_TEX)', () => {
-  it('are the separations’ TeX, a text of their own', () => {
-    expect(STATEMENTS_TEX).toBe(GAPS_TEX)
+  it('are the separations’, the paragraphs’ measures’ and the forced breaks’ TeX, a text of their own', () => {
+    expect(STATEMENTS_TEX).toBe(GAPS_TEX + MEASURE_TEX + BREAKS_TEX)
     for (const s of OWN) expect(STATEMENTS_TEX).toContain(s)
   })
   it('stand in none of the heads today’s reader writes, nor in the marked files it makes', () => {

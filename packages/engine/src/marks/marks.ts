@@ -1450,8 +1450,9 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  * A marked compile that dies only with more of our points in its node lists (2610.30769v1 under pdfTeX 1.40.28) is asked
  * again without the optional classes' TeX; every other class stays, so what is owned and what is read as text is read as
  * ever. The paragraph ends are optional: what they state, the alignment TeX broke a paragraph by and where it ended, the
- * page's lines state too. A cell's end (§18.74's `t<i>x`) is not: ownership reads where a cell's piece ends from it. A class
- * added later says which it is
+ * page's lines state too; so are the forced breaks' points (the compile move's F35, STATEMENTS_TEX's): where TeX ended a line,
+ * which the page's lines state less exactly. A cell's end (§18.74's `t<i>x`) is not: ownership reads where a cell's piece ends
+ * from it. A class added later says which it is
  */
 export const POINT_CLASSES = {
   /** each column's body and a text block shipped whole, `bs<n>` and `be<n>` with its AXT-BODY statement: a glyph's body */
@@ -1474,6 +1475,9 @@ export const POINT_CLASSES = {
   display: { names: /^d(?:ps|pe|ts|te|ms|me)\d+$/, optional: false },
   /** a table cell's end, `t<i>x` (LAYOUT_TEX's \\axt@cellend, through \\axt@dest): where a cell's piece ends */
   'cell-end': { names: /^t\d+x$/, optional: false },
+  /** where TeX ends a line at a forced break, `kb<n>` (STATEMENTS_TEX's BREAKS_TEX, after \\@gnewline's \\unskip): the line
+   *  TeX ended there, which the page's lines state too, less exactly; kept apart from the marks' points (ink.ts `breaks`) */
+  'forced-break': { names: /^kb\d+$/, optional: true },
   /** the point beside each destination of the marks' own (a unit's start and end, a placeholder's, a name's, a call's, a
    *  figure's frame): every name no other class gives */
   mark: { names: /^/, optional: false },
@@ -2026,9 +2030,42 @@ export const GAPS_TEX = [
   String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@startsection\let\axt@sst\@startsection\def\@startsection#1#2#3#4#5#6{\axt@sst{#1}{#2}{#3}{#4}{#5}{\axt@sgset{#4}{#5}#6}}\fi\let\axt@sghm\axt@hm\protected\def\axt@hm#1{\ifaxt@off\else\ifhmode\axt@sgtell{#1}\fi\fi\axt@sghm{#1}}\axt@glflt{0}\axt@glcap{0}\ifdefined\@endfloatbox\let\axt@glfb\@endfloatbox\def\@endfloatbox{\axt@glcap{\the\numexpr\axt@bn+1\relax}\axt@glfb\ifvoid\@currbox\else\axt@glflt{\axt@bn}\fi}\fi}\fi`,
   String.raw`\makeatother`,
 ].join('')
+/**
+ * Each paragraph's measure as TeX breaks it into lines (the compile move's B2: the display design's F13), at its end:
+ * `AXT-MEASURE <n> <\hsize> <\hangindent> <\hangafter> <\leftskip> <\rightskip> <\parshape> [<indent> <length>]…`, n the end's
+ * serial (POINTS' para/end, `qe<n><code>`, whose hook runs first: the same paragraphs, the gate on, a list of nodes), each
+ * dimension as TeX prints it, the two skips' natural sizes, the shape's lines through e-TeX's \parshapeindent and
+ * \parshapelength, its count through the primitive \parshape as the head finds it, before any package (wrapfig makes \parshape a
+ * macro of its own and keeps the primitive as \@@parshape: read through the macro, `\the` stopped at it, a TeX error each
+ * wrapped paragraph). LaTeX's para/end runs before TeX breaks the paragraph, with the values it breaks it by; a message alone, set
+ * nothing (the TeX gate's measure cases, lab/pdf/spikes/measure-cases.mjs). Read by marks/channels.ts readMeasures
+ */
+export const MEASURE_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\let\axt@parshape\parshape`,
+  String.raw`\def\axt@msr{\begingroup\count@\z@\let\axt@msx\@empty\loop\ifnum\count@<\axt@parshape\advance\count@\@ne\edef\axt@msx{\axt@msx\space\the\parshapeindent\count@\space\the\parshapelength\count@}\repeat\message{^^JAXT-MEASURE \axt@pe\space\the\hsize\space\the\hangindent\space\the\hangafter\space\the\dimexpr\leftskip\relax\space\the\dimexpr\rightskip\relax\space\the\axt@parshape\axt@msx^^J}\endgroup}`,
+  String.raw`\ifdefined\AddToHook\ifdefined\IndentBox\AddToHook{para/end}{\ifaxt@off\else\ifnum\lastnodetype=-1 \else\axt@msr\fi\fi}\fi\fi`,
+  String.raw`\makeatother`,
+].join('')
+/**
+ * Where TeX ends a line at a forced break (the compile move's B2: the display design's F35): LaTeX's \@gnewline, every `\\`'s
+ * and \newline's way in a paragraph (`\unskip`, then `\nobreak\hfil\break`), once the document begins, sets a point `kb<n>`
+ * after the \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue
+ * taken, as before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to
+ * break made or lost. A point of the optional class `forced-break` (POINT_CLASSES), kept apart from the marks' points by
+ * pageInk (ink.ts FORCED_BREAK); the line TeX ended at a break the marking gives no mark (facts-pass.ts readElements). A `\\` of
+ * a centred or ragged block (\@centercr, which ends a paragraph) or a table's row sets none
+ */
+export const BREAKS_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\gdef\axt@kb{0}\def\axt@kbpt{\xdef\axt@kb{\the\numexpr\axt@kb+1\relax}\axt@point{kb\axt@kb}}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\axt@gnl{#1}}\fi}\fi`,
+  String.raw`\makeatother`,
+].join('')
 /** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (its option, after
- *  LAYOUT_TEX: the compile move's lane B), each slice's in turn: the separations (GAPS_TEX) */
-export const STATEMENTS_TEX = GAPS_TEX
+ *  LAYOUT_TEX: the compile move's lane B), each slice's in turn: the separations (GAPS_TEX), each paragraph's measure
+ *  (MEASURE_TEX) and the forced breaks' points (BREAKS_TEX) */
+export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX
 
 // ---------------------------------------------------------------- a reference's item and its name
 /** a reference to a page, not to an item (\pageref): no item's name for it */

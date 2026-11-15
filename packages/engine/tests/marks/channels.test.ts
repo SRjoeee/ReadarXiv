@@ -11,6 +11,7 @@ import {
   readBoxAlign,
   readGlues,
   readHeads,
+  readMeasures,
   readRefNames,
   readSkips,
 } from '../../src/marks/channels.ts'
@@ -411,5 +412,37 @@ describe('readRefNames: each reference’s item type and the full name the paper
   })
   it('states nothing where TeX wrote nothing (a log of before, a paper with no reference)', () => {
     expect(readRefNames('AXT-ALIGN 3 p 1 0.0pt 1 0.0pt 0 0.0pt').size).toBe(0)
+  })
+})
+
+describe('readMeasures: each paragraph’s measure as TeX breaks it (STATEMENTS_TEX’s AXT-MEASURE, at its end)', () => {
+  it('reads \\hsize, \\hangindent, \\hangafter, \\leftskip’s and \\rightskip’s natural sizes and \\parshape, by the end’s serial', () => {
+    const long = `AXT-MEASURE 12 345.0pt 0.0pt 1 0.0pt 0.0pt 4 ${Array.from({ length: 4 }, (_, i) => `${i * 10}.5pt 300.0pt`).join(' ')}`
+    const m = readMeasures(
+      [
+        'AXT-MEASURE 3 469.75499pt 0.0pt 1 0.0pt 0.0pt 1 25.0pt 444.75499pt',
+        'AXT-MEASURE 4 469.75499pt 20.0pt -2 10.0pt 0.0pt 0',
+        long.slice(0, 79),
+        long.slice(79),
+        '',
+        'AXT-MEASURE 5 469.75499pt 0.0pt 1 0.0pt 0.0pt 2 1.0pt',
+      ].join('\n'),
+    )
+    const near = (a: number[], b: number[]) => a.length === b.length && a.every((x, k) => Math.abs(x - b[k]!) < 1e-9)
+    expect([...m.keys()]).toEqual([3, 4, 12])
+    expect(m.get(3)!.hsize).toBeCloseTo(pt(469.75499), 6)
+    expect(near(m.get(3)!.shape!.flat(), [pt(25), pt(444.75499)])).toBe(true)
+    const four = m.get(4)!
+    expect(four.shape).toBeUndefined()
+    expect(four.hangafter).toBe(-2)
+    expect(near([four.hsize, four.hangindent, four.leftskip, four.rightskip], [pt(469.75499), pt(20), pt(10), 0])).toBe(
+      true,
+    )
+    expect(
+      near(
+        m.get(12)!.shape!.map(([i]) => i),
+        [0.5, 10.5, 20.5, 30.5].map(pt),
+      ),
+    ).toBe(true)
   })
 })

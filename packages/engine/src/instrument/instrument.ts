@@ -22,6 +22,7 @@ import {
   readCellBoxes,
   readGlues,
   readHeads,
+  readMeasures,
   readRefNames,
   readSkips,
 } from '../marks/channels.ts'
@@ -2289,6 +2290,10 @@ export async function instrumentOf({
   // them: STATEMENTS_TEX's AXT-SECT and AXT-GLUE)
   const heads = [...readHeads(lastTexLog(log))].map(([unit, h]) => ({ unit, ...h }))
   const glues = readGlues(lastTexLog(log))
+  // (each paragraph's measure as TeX breaks it, STATEMENTS_TEX's AXT-MEASURE: those that are not the full \hsize)
+  const measures = [...readMeasures(lastTexLog(log))]
+    .filter(([, x]) => x.shape || x.hangindent !== 0 || x.leftskip !== 0 || x.rightskip !== 0)
+    .map(([para, x]) => ({ para, ...x }))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
@@ -2317,6 +2322,7 @@ export async function instrumentOf({
         ...(skips.length ? { skips } : {}),
         ...(heads.length ? { heads } : {}),
         ...(glues.length ? { glues } : {}),
+        ...(measures.length ? { measures } : {}),
       },
       made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' },
     },
