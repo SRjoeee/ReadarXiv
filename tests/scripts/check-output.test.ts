@@ -123,12 +123,27 @@ describe('a build\'s style sheets', () => {
     put(`${OUT}/assets/popup.css`, '.top-1{top:1px}\n')
     expect(verdict(OWN)).toBe('✗')
   })
-  it('may carry the classes of PDF.js\'s own sheet, which no file of ours names', () => {
-    put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer{position:absolute}\n')
+  it('may carry the classes PDF.js\'s own sheet defines, which no file of ours names, read from the package whichever way a build carries the sheet', () => {
+    // the package's sheet, where the repository resolves `pdfjs-dist/web/pdf_viewer.css`
+    const SHEET = 'node_modules/pdfjs-dist/web/pdf_viewer.css'
+    put('node_modules/pdfjs-dist/package.json', '{"name":"pdfjs-dist","version":"6.3.289"}\n')
+    put(SHEET, '.annotationLayer .popupAnnotation{position:absolute}\n')
+    // today's reader (AXT_READER=today): the sheet bundled into the page's sheet, and no copy of it beside
     put(`${OUT}/assets/pdf-reader.css`, '.annotationLayer{position:absolute}.annotationLayer .popupAnnotation{color:red}\n')
-    expect(verdict(OWN)).toBe('✗')
+    expect(verdict(OWN, { AXT_READER: 'today' })).toBe('✓')
+    expect(verdict(OWN)).toBe('✓')
+    // the reader package's: a copy at `pdfjs/<version>/` besides
     put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer .popupAnnotation{position:absolute}\n')
     expect(verdict(OWN)).toBe('✓')
+    // a class the package's sheet does not define is refused in either form, whatever a sheet in the build defines
+    put(SHEET, '.annotationLayer{position:absolute}\n')
+    expect(verdict(OWN)).toBe('✗')
+    rmSync(join(root, OUT, 'pdfjs'), { recursive: true })
+    expect(verdict(OWN, { AXT_READER: 'today' })).toBe('✗')
+    // and with no package's sheet to read, no class is PDF.js's
+    rmSync(join(root, 'node_modules'), { recursive: true })
+    put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer .popupAnnotation{position:absolute}\n')
+    expect(verdict(OWN)).toBe('✗')
   })
   it('read no dot of a string, a comment or an address as a class', () => {
     put(`${OUT}/assets/popup.css`, '/* .none */ a{background:url(data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg"/>) 0.5px; content:".quote"}b{margin:0.5rem;background:url("x.svg")}\n')
