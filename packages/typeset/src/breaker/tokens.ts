@@ -718,7 +718,7 @@ export function tokens(i: TokensInput): Tokens {
   // its CJK with spaces between (spacedSource))
   const spaceless = !keepAll && !i.spacedSource
   // (a title its source sets in the line at a paragraph's opening with no mark after it, the part's SpanAt.runin (the display
-  // design's F40, docs/PDF-READER.md §18.76): in a script that writes no spaces between its words, the separation between two
+  // design's F40, docs/PDF-READER.md §18.85): in a script that writes no spaces between its words, the separation between two
   // sentences after it, one character's width (an em of the line's size: a CJK character's advance), a kern on what the title
   // ends with, as the paper's own `\quad` is set (kernOn): no stretch of a justified line's, dropped where a line ends after it.
   // Set before the first thing drawn after the title past the elements between (a tie, a citation, a note's mark): its text, or

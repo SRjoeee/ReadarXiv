@@ -273,7 +273,7 @@ export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z
  *  paper's own, and then by what begins a sentence, its text ending with no closing mark), the engine's reading of its unit's
  *  source (bundle/run-in.ts), the same on every member of the unit: the typesetter sets the target script's separation between
  *  two sentences after it where the translation holds no mark there, the paper's own space there counting toward it
- *  (docs/PDF-READER.md §18.76). Absent on any other group; a part made before states none, and its titles are
+ *  (docs/PDF-READER.md §18.85). Absent on any other group; a part made before states none, and its titles are
  *  laid as before */
 export const SpanAt = z.object({
   style: Style.optional(),
