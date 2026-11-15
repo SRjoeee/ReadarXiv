@@ -297,17 +297,17 @@ export const CASES: readonly ChainCase[] = [
     units: [unit('w', [span('1', 'bold', [t('I')]), t('nduce the model to answer.')])],
     translators: () => [upper()],
   },
-  // ---- glued: the letters, marks and digits that touch the text TeX set for an element are held back, put back beside it;
+  // ---- glued: the letters and marks that touch the text TeX set for an element are held back, put back beside it;
   // a possessive after it, across its apostrophe, is offered as a word of the sentence
   {
     rule: 'glued',
-    name: 'a letter glued to an element’s text: not offered, back after the element; a possessive offered',
+    name: 'a letter glued to an element’s text: not offered, back after the element; the digit after it and a possessive offered',
     target: 'de',
     units: [
       unit('g', [
         t('Polish the '),
         { t: 'el', id: 'h', kind: 'macro', text: 'guitar' },
-        t('s now, as '),
+        t('s2b now, as '),
         { t: 'el', id: 'n', kind: 'macro', text: 'Tool' },
         t("'s model does."),
       ]),

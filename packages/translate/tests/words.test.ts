@@ -205,12 +205,13 @@ describe('what the rule leaves as it is', () => {
   })
 })
 
-// (F10 of the display design: the letters, marks and digits glued to the text TeX set for an element, on its line's baseline
+// (F10 of the display design: the letters and marks glued to the text TeX set for an element, on its line's baseline
 // at its text's size (the element's `text`, the prepare's), are its word's, never a word of their own. 2111.09276v1's
 // Table 1 on staging, Google: `\hlyellow{guitar}s.` went out as an element and "s.", and "s" came back as 秒, seconds. The rule
-// is by the text alone: the letters, marks and digits that touch it, on a side it begins or ends with one; the kind is not
+// is by the text alone: the letters and marks that touch it, on a side it begins or ends with a letter, a mark or a digit; the
+// kind is not
 // asked)
-describe('the letters, marks and digits that touch an element’s text are its word’s', () => {
+describe('the letters and marks that touch an element’s text are its word’s', () => {
   const mac = (id: string, text?: string): Piece =>
     text === undefined ? { t: 'el', id, kind: 'macro' } : { t: 'el', id, kind: 'macro', text }
   const guitar = unit('g', [t('Polish the '), mac('h', 'guitar'), t('s. Then tune them.')], true)
@@ -278,12 +279,30 @@ describe('the letters, marks and digits that touch an element’s text are its w
     const { sent } = await viaGoogle(spaced, (w) => w)
     expect(sent).toEqual(['The <b translate=no>x1</b> sounds. A <b translate=no>x2</b>dash.'])
   })
-  // (the coordinator's ruling of 2026-11-15: what is held back is glued in the strict sense, letters, marks and digits touching
+  // (the coordinator's ruling of 2026-11-15: what is held back is glued in the strict sense, letters and marks touching
   // the text, never across an apostrophe, a hyphen, a comma or a full stop: a possessive is a word of the sentence)
   it('a name and its possessive: the possessive stays on the wire, a word the translator translates', async () => {
     const u = unit('p', [t('We use '), mac('n', 'TensorCast'), t("'s model here.")])
     const { sent } = await viaGoogle(u, (w) => w)
     expect(sent).toEqual(["We use <b translate=no>x1</b>'s model here."])
+  })
+  // (the coordinator's second ruling: a digit is never held back; a number goes through a translator as written, and held back
+  // it would be cut at its decimal point or its comma)
+  it('a quantity before an element whose text is letters (`0.2\\pp`): nothing held, the number whole on the wire', async () => {
+    const u = unit('q', [t('The rate falls by 0.2'), mac('p', 'pp'), t(' here.')])
+    const { sent } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual(['The rate falls by 0.2<b translate=no>x1</b> here.'])
+  })
+  it('an identifier’s digits against an element’s text (an id before a prefix): nothing held', async () => {
+    const u = unit('d', [t('See arXiv:1701.01467'), mac('d', 'doi:10.48550/x'), t(' now.')])
+    const { sent } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual(['See arXiv:1701.01467<b translate=no>x1</b> now.'])
+  })
+  it('letters then digits after an element (`s2`): the letters held, the digits on the wire', async () => {
+    const u = unit('s', [t('Two '), mac('g', 'guitar'), t('s2 sound.')])
+    const { sent, result } = await viaGoogle(u, () => '两把<b translate=no>x1</b>2 响。')
+    expect(sent).toEqual(['Two <b translate=no>x1</b>2 sound.'])
+    expect(ok(result).content).toEqual([tx('两把'), { t: 'el', id: 'g' }, tx('s2 响。')])
   })
   it('an amount and the rest of its number after a comma: the rest stays on the wire', async () => {
     const u = unit('y', [t('A stake of '), mac('m', '¥100'), t(',000 was paid.')])

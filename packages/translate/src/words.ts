@@ -21,13 +21,16 @@
 //
 // Letters glued to an element in the strict sense are the element's word, never a word of their own (the display design's F10):
 // where the text TeX set for an element (its `text`: on its line's baseline at its text's size, the prepare's statement,
-// contract.ts) begins or ends with a letter, a combining mark or a digit (Unicode's general categories L, M, N), the run of such
-// characters of the unit's text that touches it on that side, as far as it goes, is offered to no translator; the row has it
-// back beside the element, literally, as the source sets it. 2111.09276v1's Table 1 on staging, Google: `\hlyellow{guitar}s.`
+// contract.ts) begins or ends with a letter, a combining mark or a digit (Unicode's general categories L, M, N), the run of
+// letters and combining marks (L, M) of the unit's text that touches it on that side, as far as it goes, is offered to no
+// translator; the row has it back beside the element, literally, as the source sets it. What F10 exists for is a word's
+// letters sent alone, read as a word of their own: 2111.09276v1's Table 1 on staging, Google: `\hlyellow{guitar}s.`
 // went out as an element and "s.", and "s" came back as 秒, seconds; a name written with an accent command (`M\k{a}dry`) keeps
-// its letters with it. Nothing is held across any other character: a possessive after a system's name ("TensorCast's") is a
-// word of the sentence, which the translator translates beside the element (held back, it would stand as written in the
-// translation), and the rest of an amount after a comma (",000") a part of the text. An element that states no text (a raised
+// its letters with it, and a panel's letter after "Figure 2" is held. A digit is never held: a number goes through a
+// translator as written, and held back it would be cut at its decimal point or its comma (`0.2\pp` leaving "0." on the
+// wire); "s2" after an element holds back the "s" and leaves the "2". Nothing is held across any other character: a
+// possessive after a system's name ("TensorCast's") is a word of the sentence, which the translator translates beside the
+// element (held back, it would stand as written in the translation). An element that states no text (a raised
 // mark, `\textsuperscript{1}Carnegie`; one that sets nothing) holds nothing back, nor is the kind asked: the text decides, by
 // its characters' categories, no list. A run between two elements is the first's: it comes back after the element it follows,
 // else before the one it precedes, outside the groups that hold the element but not the run.
@@ -158,13 +161,17 @@ interface Held {
  *  white space before it, a backref's list of pages; the chain gives it no translator, tailOf), its text no neighbour of the
  *  unit's letters */
 const shownOf = (p: El): string => (p.text && p.after === undefined ? p.text : OBJ)
-/** a character glued in the strict sense: a letter, a combining mark or a digit (Unicode's general categories L, M, N) */
-const GLUED = /^[\p{L}\p{M}\p{N}]$/u
+/** a character an element's text ends a word with, on its side: a letter, a combining mark or a digit (Unicode's general
+ *  categories L, M, N) */
+const WORD_END = /^[\p{L}\p{M}\p{N}]$/u
+/** a character held back where it touches such a side: a letter or a combining mark (L, M), never a digit: a number goes
+ *  through a translator as written, and held back it would be cut at its decimal point or its comma (`0.2\pp`) */
+const HELD = /^[\p{L}\p{M}]$/u
 /** the projection position of each piece of the unit: a text's characters (with the groups around them) or an element */
 type At = { t: 'text'; piece: Piece; k: number; groups: string[] } | { t: 'el'; el: El; groups: string[] }
 
-/** The unit with the letters, marks and digits glued to an element's text held back (the module's second rule, F10), and the
- *  way back for a row; null where no element states a text that such a character touches */
+/** The unit with the letters and marks glued to an element's text held back (the module's second rule, F10), and the way
+ *  back for a row; null where no element states a text that such a character touches */
 function heldLettersOf(unit: UnitIn): Whole | null {
   // (the projection with each element's text in its place, each position's piece; an element stating none, U+FFFC)
   let projection = ''
@@ -201,16 +208,16 @@ function heldLettersOf(unit: UnitIn): Whole | null {
   for (const { a, b } of texts) {
     const self = at[a] as Extract<At, { t: 'el' }>
     const s = projection.slice(a, b)
-    if (GLUED.test(s.slice(0, [...s][0]?.length ?? 0))) {
+    if (WORD_END.test(s.slice(0, [...s][0]?.length ?? 0))) {
       let x = a - 1
-      for (let c = cp(x, true); c && textAt(x) && !held.has(x) && GLUED.test(c.ch); c = cp(x, true)) {
+      for (let c = cp(x, true); c && textAt(x) && !held.has(x) && HELD.test(c.ch); c = cp(x, true)) {
         for (let k = 0; k < c.n; k++) held.set(x - k, { el: self, side: 'before' })
         x -= c.n
       }
     }
-    if (GLUED.test([...s].at(-1) ?? '')) {
+    if (WORD_END.test([...s].at(-1) ?? '')) {
       let x = b
-      for (let c = cp(x, false); c && textAt(x) && !held.has(x) && GLUED.test(c.ch); c = cp(x, false)) {
+      for (let c = cp(x, false); c && textAt(x) && !held.has(x) && HELD.test(c.ch); c = cp(x, false)) {
         for (let k = 0; k < c.n; k++) held.set(x + k, { el: self, side: 'after' })
         x += c.n
       }
