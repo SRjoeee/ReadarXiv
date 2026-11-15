@@ -615,11 +615,16 @@ export function inkSection(samples: readonly string[], from = 0): string {
   return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
 /**
- * The ink probe's asks where the document uses a macro (the compile move's B4, the display design's F15): the TeX the
- * bibliography's pass (compile/paper.ts madeBibliography with `asks`) writes on its main file's first line, and `\axtask{<i>}{<the
- * piece's source>}` right before a sample's first use (compile/live.ts askedFiles). An ask is the ink section's own test of one
- * sample (inkSection: its rows, its box, \showbox, the group levels it unwinds), its source tokenized where the document uses it,
- * read by readInkProbe and readInkAnswered over the asked samples, every group the sample left open closed after it (ASK_UNWIND).
+ * The ink probe's asks where the document uses a macro (the compile move's F15, PDF-READER §18.80): the TeX the loop's first
+ * pass (compile/paper.ts markedOfPaper with `asks`) writes in its main file's head, and `\axtask{<i>}{<the piece's source>}` right
+ * before a sample's first use (compile/live.ts askPlan, originalFiles `asks`). An ask is the ink section's own test of one sample
+ * (inkSection: its rows, its box, \showbox, the group levels it unwinds), its source tokenized where the document uses it and set
+ * in the mode it is used in, read by readInkProbe and readInkAnswered over the asked samples, every group the sample left open
+ * closed after it (ASK_UNWIND). The mode: in a paragraph, the sample is set as a paragraph, in a vertical box at the measure in
+ * force (\hsize, \parshape, the skips as they stand), between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`), so that a
+ * sample that ends the paragraph or the line there leaves two lines, or a line and a box, which readInkProbe never reads as
+ * inkless; between paragraphs, in a vertical box as it stands; in a horizontal box (a table's cell, an \mbox) and in a formula,
+ * in a horizontal box, in math for the formula. The mode is read and its conditional closed before the sample runs.
  * It changes nothing the pass writes or sets: where \protect is
  * not \@typeset@protect (a moving argument written to the .aux, a .toc, a mark) it expands to nothing; in an alignment between
  * its rows (an align group, \currentgrouptype 6, in vertical mode: where TeX looks for \noalign or \omit, and a token of ours
@@ -641,8 +646,14 @@ export const ASK_TEX = [
   ASK_UNWIND,
   '\\def\\axtask{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@askable\\else\\expandafter\\@gobbletwo\\fi}',
   '\\def\\axt@askable{\\ifnum\\currentgrouptype=6 \\ifvmode\\expandafter\\expandafter\\expandafter\\@gobbletwo\\else\\expandafter\\expandafter\\expandafter\\axt@ask\\fi\\else\\expandafter\\axt@ask\\fi}',
+  // (the box each mode sets its sample in, and which one: read where the ask stands, its conditional closed before the sample)
+  '\\long\\def\\axt@aset@p#1{\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\hbox{}#1\\hbox{}\\@@par}}',
+  '\\long\\def\\axt@aset@v#1{\\setbox\\axt@abox\\vbox{\\everypar{}#1}}',
+  '\\long\\def\\axt@aset@h#1{\\setbox\\axt@abox\\hbox{#1}}',
+  '\\long\\def\\axt@aset@m#1{\\setbox\\axt@abox\\hbox{$#1$}}',
+  '\\def\\axt@amode{\\ifmmode\\let\\axt@aset\\axt@aset@m\\else\\ifvmode\\let\\axt@aset\\axt@aset@v\\else\\ifinner\\let\\axt@aset\\axt@aset@h\\else\\let\\axt@aset\\axt@aset@p\\fi\\fi\\fi}',
   '\\protected\\long\\def\\axt@ask#1#2{\\ifcsname axt@asked@#1\\endcsname\\expandafter\\@gobbletwo\\else\\expandafter\\axt@asknow\\fi{#1}{#2}}',
-  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\setbox\\axt@abox\\hbox{#2}\\axt@aunwind\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}}`,
+  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\axt@amode\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\axt@aset{#2}\\axt@aunwind\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}}`,
   '\\makeatother',
 ].join('')
 /** one ask (ASK_TEX): sample `i` of the asked, its source as the piece writes it */
@@ -709,18 +720,31 @@ const NO_INK_NODE =
   /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\(|mark|pdfcolorstack|write|openout|closeout|pdfdest|pdfsave|pdfrestore|pdfsetmatrix|vadjust|discretionary|leaders|cleaders|xleaders)/
 /** a rule TeX lists: its height, depth and width (`*` running) */
 const RULE_NODE = /^\.+\\rule\(([-\d.*]+)\+([-\d.*]+)\)x([-\d.*]+)$/
+/** a node of a vertical list that is neither a line nor material of its own: glue, a kern, a penalty */
+const SPACE_NODE = /^\.\\(?:glue|kern|penalty)/
+/** LuaTeX's node at a paragraph's start and the values it lists below it (none of them a box: `\\localleftbox=null`), in a
+ *  paragraph's line: read in an ask's vertical box alone (the probe's boxes are horizontal, and their reading as it was) */
+const LOCAL_PAR_NODE = /^\.+\\(?:localpar|local(?:interline|broken)penalty=-?\d+|local(?:left|right)box=null)$/
 /**
- * The sources TeX set no ink for, from the probe's log (inkSection): each sample whose box TeX listed in full, of nodes
+ * The sources TeX set no ink for, from the probe's log (inkSection, ASK_TEX): each sample whose box TeX listed in full, of nodes
  * that set nothing — no character, no rule both wide and high (TeX ships no rule of no width or height: a strut), no
  * literal, special, insertion or node it lists otherwise — with no error between its rows but the listing's own `! OK.`.
- * A sample with no listing, an error, a line cut short or a node not known is no answer: what it sets is not known
+ * An ask's sample set where the document uses it in a paragraph, or between paragraphs, is listed in a vertical box (ASK_TEX):
+ * there it set no ink only where that box holds at most one line, and beside it nothing but glue, kerns and penalties. A sample
+ * that ends the paragraph or the line where it is used (`\\par`, `\\\\`, `\\newline`, cas-sc's `\\sep`, which its keywords
+ * environment makes `\\par`) leaves two lines there, or a line and a box: it parts what stands before it from what stands
+ * after, and is never inkless. A sample with no listing, an error, a line cut short or a node not known is no answer: what it sets is not known
  */
 export function readInkProbe(log: string | null | undefined, samples: readonly string[]): string[] {
   const out: string[] = []
   let at: number | null = null,
     nodes: string[] | null = null,
     bad = false,
-    done = false
+    done = false,
+    /** the listing's box is a vertical one (an ask's in a paragraph or between them), and the lines and material in it */
+    vertical = false,
+    parted = false,
+    lines = 0
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
@@ -730,9 +754,11 @@ export function readInkProbe(log: string | null | undefined, samples: readonly s
         nodes = null
         bad = false
         done = false
+        vertical = parted = false
+        lines = 0
         continue
       }
-      if (at === i && nodes && !bad && samples[i] !== undefined) out.push(samples[i])
+      if (at === i && nodes && !bad && !parted && samples[i] !== undefined) out.push(samples[i])
       at = null
       continue
     }
@@ -752,11 +778,15 @@ export function readInkProbe(log: string | null | undefined, samples: readonly s
       continue
     }
     if (nodes === null) continue
-    if (/^\\hbox\(/.test(line) && !nodes.length) {
+    if (/^\\[hv]box\(/.test(line) && !nodes.length) {
+      vertical = line.startsWith('\\v')
       nodes.push(line)
       continue
     }
-    if (NO_INK_NODE.test(line)) {
+    // (in a vertical box, what stands in it: one line, and beside it no material but space)
+    if (vertical && /^\.(?!\.)/.test(line) && !SPACE_NODE.test(line))
+      if (!/^\.\\hbox\(/.test(line) || ++lines > 1) parted = true
+    if (NO_INK_NODE.test(line) || (vertical && LOCAL_PAR_NODE.test(line))) {
       nodes.push(line)
       continue
     }
@@ -776,7 +806,8 @@ export function readInkProbe(log: string | null | undefined, samples: readonly s
 }
 
 /** the samples TeX answered in the ink section's form (inkSection, ASK_TEX): its box listed (`> \box…=`), the listing's own end
- *  (`! OK.`), and no error between its rows but that end; inkless or not. A sample with no listing or an error is no answer */
+ *  (`! OK.`), and no error between its rows but that end; inkless or not (a vertical box's of two lines answered: readInkProbe).
+ *  A sample with no listing or an error is no answer */
 export function readInkAnswered(log: string | null | undefined, samples: readonly string[]): string[] {
   const out: string[] = []
   let at: number | null = null,
@@ -1220,16 +1251,16 @@ export function probeFactsOf(
     ends: readInkEnds(log, ink),
   }
 }
-/** what TeX answered where the document uses a macro (the bibliography's pass's asks, ASK_TEX), by source: those it said set no
+/** what TeX answered where the document uses a macro (the loop's first pass's asks, ASK_TEX), by source: those it said set no
  *  ink (readInkProbe) and those it answered otherwise (readInkAnswered) */
 export type UseAnswers = { inkless: string[]; inked: string[] }
-/** the asks' answers from the bibliography's pass's log, the asked samples by their ask's index */
+/** the asks' answers from the loop's first pass's log, the asked samples by their ask's index */
 export function useAnswersOf(log: string | null | undefined, asked: readonly string[]): UseAnswers {
   const inkless = readInkProbe(log, asked),
     none = new Set(inkless)
   return { inkless, inked: readInkAnswered(log, asked).filter((s) => !none.has(s)) }
 }
-/** the marking's inkless with the use's answers (B4): a source TeX answered where the document uses it takes that answer, set no
+/** the marking's inkless with the use's answers (F15): a source TeX answered where the document uses it takes that answer, set no
  *  ink or set some; one it did not answer there keeps the probe's. In the probe's order, the use's added after */
 export function mergeUses(inkless: readonly string[], uses: UseAnswers | null | undefined): string[] {
   if (!uses) return [...inkless]

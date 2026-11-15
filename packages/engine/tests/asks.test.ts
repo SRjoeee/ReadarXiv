@@ -1,15 +1,21 @@
-// The ink probe asked where the document uses a macro (the compile move's B4, the display design's F15), at its interfaces, on
-// content of our own (no TeX runs; lab/pdf/spikes/ask-cases.mjs holds the TeX): the asks' answers read from a pass's log in the
-// ink section's form (marks.ts readInkAnswered, useAnswersOf), merged into the marking's inkless (mergeUses); the bibliography's pass's files with the asks (live.ts askedFiles: each sample right before its
-// first use in running text, none in a heading, a caption, an algorithm's body or a sample whose groups do not close, ASK_TEX on
-// the main file's first line); and madeBibliography's `asks`: the pass asked with them, its answers returned, asked again as
-// today's where it did not run through.
+// The ink probe asked where the document uses a macro (the compile move's F15, PDF-READER §18.80), at its interfaces, on content
+// of our own (no TeX runs; lab/pdf/spikes/ask-cases.mjs holds the TeX): the asks' answers read from a pass's log in the ink
+// section's form (marks.ts readInkProbe, readInkAnswered, useAnswersOf), a sample used in a paragraph listed in a vertical box
+// and never inkless where it parts that paragraph; merged into the marking's inkless (mergeUses); where the asks stand (live.ts
+// askPlan: each sample right before its first use in running text, none in a heading, a caption, an algorithm's body or a
+// sample whose groups do not close) and the marked files that carry them (originalFiles `asks`: each before its piece's marks,
+// ASK_TEX in the head, no line moved). The loop's pass 1 that carries them: marked-loop.test.ts.
 import { describe, expect, it } from 'vitest'
-import { askedFiles, openPaper } from '../src/compile/live.ts'
-import { madeBibliography } from '../src/compile/paper.ts'
-import { UNMARKED_HEAD, unmarkedFiles } from '../src/compile/guard.ts'
-import { ASK_TEX, askable, inkSamples, mergeUses, readInkAnswered, useAnswersOf } from '../src/marks/marks.ts'
-import type { CompileRequest } from '../src/compile/live.ts'
+import { askPlan, openPaper, originalFiles } from '../src/compile/live.ts'
+import {
+  ASK_TEX,
+  askable,
+  inkSamples,
+  LAYOUT_CLASSES,
+  mergeUses,
+  readInkAnswered,
+  useAnswersOf,
+} from '../src/marks/marks.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const dec = (b: Uint8Array | undefined) => new TextDecoder().decode(b)
@@ -39,6 +45,61 @@ describe('the asks’ answers, read from the pass’s log', () => {
   it('answers a listing given whole with no error, inkless or not; one with an error or none is no answer', () => {
     expect(readInkAnswered(log, asked)).toEqual(['\\nada', '\\kw'])
     expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\nada'], inked: ['\\kw'] })
+  })
+  it('reads a sample set in a paragraph from its vertical box: one line and space beside it inkless; two lines, or a box beside, never', () => {
+    const LINE = '.\\hbox(6.9+1.9)x345.0, glue set 300.0fil'
+    const EMPTY = '..\\hbox(0.0+0.0)x0.0'
+    const ENDS = ['..\\penalty 10000', '..\\glue(\\parfillskip) 0.0 plus 1.0fil', '..\\glue(\\rightskip) 0.0']
+    const BOX = '\\vbox(6.9+1.9)x345.0'
+    const log = [
+      // (\\nada{} in a paragraph: its one line, the two empty boxes the ask sets around it)
+      listing(0, BOX, [LINE, EMPTY, EMPTY, ...ENDS]),
+      // (\\par there: the line it ends, the box after it a line of its own)
+      listing(1, '\\vbox(18.9+0.0)x345.0', [
+        LINE,
+        EMPTY,
+        ...ENDS,
+        '.\\glue(\\baselineskip) 12.0',
+        '.\\hbox(0.0+0.0)x0.0',
+      ]),
+      // (\\\\ there: two lines)
+      listing(2, '\\vbox(18.9+0.0)x345.0', [
+        LINE,
+        EMPTY,
+        '..\\glue 0.0 plus 1.0fil',
+        '..\\penalty -10000',
+        '.\\glue(\\baselineskip) 12.0',
+        LINE,
+        EMPTY,
+        ...ENDS,
+      ]),
+      // (\\vspace there: its glue after the line, which the line's \\vadjust put there)
+      listing(3, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\glue 10.0']),
+      // (a mark that leaves the line: material beside it)
+      listing(4, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\mark{x}']),
+      // (between paragraphs, \\par: nothing at all)
+      listing(5, '\\vbox(0.0+0.0)x0.0', []),
+      // (LuaTeX's line: its paragraph's node first, as TeX Live 2023's and 2025's LuaLaTeX list it)
+      listing(6, '\\vbox(0.0+0.0)x345.0, direction TLT', [
+        '.\\hbox(0.0+0.0)x345.0, glue set 345.0fil, direction TLT',
+        '..\\localpar',
+        '...\\localinterlinepenalty=0',
+        '...\\localbrokenpenalty=0',
+        '...\\localleftbox=null',
+        '...\\localrightbox=null',
+        '..\\hbox(0.0+0.0)x0.0, direction TLT',
+        '..\\hbox(0.0+0.0)x0.0, direction TLT',
+        ...ENDS,
+      ]),
+    ].join('\n')
+    const asked = ['\\nada{}', '\\mypar{}', '\\mycr{}', '\\vsp{}', '\\mk{}', '\\mypar', '\\lua{}']
+    expect(useAnswersOf(log, asked)).toEqual({
+      inkless: ['\\nada{}', '\\vsp{}', '\\mypar', '\\lua{}'],
+      inked: ['\\mypar{}', '\\mycr{}', '\\mk{}'],
+    })
+    // (in a horizontal box, the probe's, LuaTeX's paragraph node read as before: not known)
+    const probe = listing(0, NONE, ['.\\vbox(0.0+0.0)x10.0', '..\\hbox(0.0+0.0)x10.0', '...\\localpar'])
+    expect(useAnswersOf(probe, ['\\pb{}']).inkless).toEqual([])
   })
   it('takes each answered source’s answer over the probe’s, the probe’s where the use gave none', () => {
     const probe = ['\\kw', '\\tnote{b}', '\\undef']
@@ -81,26 +142,45 @@ const paperOf = () =>
     ]),
   )
 
-describe('the bibliography’s pass’s files with the asks (askedFiles)', () => {
+const files = (paper: ReturnType<typeof paperOf>, asks: ReturnType<typeof askPlan> | null = null) =>
+  originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, statements: true, asks })
+
+describe('where the asks stand (askPlan), and the marked files that carry them (originalFiles `asks`)', () => {
   it('asks each sample right before its first use in running text, none in a heading’s title or a caption, nor a group’s own edge', () => {
     const paper = paperOf()
-    const { files, asked } = askedFiles(paper, inkSamples(paper.units))
-    expect(asked).toEqual(['\\kw{}', '\\nada{}', '\\capt{}'])
-    const main = dec(files.get('main.tex')),
-      more = dec(files.get('more.tex'))
-    expect(main).toContain('Words \\axtask{0}{\\kw{}}\\kw{} and \\axtask{1}{\\nada{}}\\nada{} here')
-    expect(main).toContain('\\section{A title \\nada}')
-    expect(main).toContain('\\caption{A caption \\capt}')
-    expect(main).toContain('\\begingroup\\small a group\\endgroup{}')
+    const plan = askPlan(paper.project, inkSamples(paper.units))
+    expect(plan.asked).toEqual(['\\kw{}', '\\nada{}', '\\capt{}'])
+    const f = files(paper, plan)
+    const main = dec(f.get('main.tex')),
+      more = dec(f.get('more.tex'))
+    // (before the piece and the point that opens it, so that no mark is parted from its piece)
+    expect(main).toMatch(/Words \\axtask\{0\}\{\\kw\{\}\}\\axtpma\{p\d+\.\d+a\}\\kw\{\}/)
+    expect(main).toMatch(/\\axtask\{1\}\{\\nada\{\}\}\\axtpma\{p\d+\.\d+a\}\\nada\{\}/)
+    expect(main.split('\n').find((l) => l.startsWith('\\section'))).not.toContain('axtask')
+    expect(main.split('\n').find((l) => l.startsWith('\\begin{figure}'))).not.toContain('axtask')
+    expect(main).not.toMatch(/axtask\{\d+\}\{\\(?:begingroup|endgroup)/)
     // (a sample's first use in another file asked there; its later uses not)
-    expect(more).toBe('More \\kw{} words and \\axtask{2}{\\capt{}}\\capt{} there.\n')
+    expect(more).toMatch(/\\axtask\{2\}\{\\capt\{\}\}\\axtpma\{p\d+\.\d+a\}\\capt\{\}/)
+    expect(main.match(/\\axtask\{\d/g)).toHaveLength(2)
   })
-  it('writes ASK_TEX after the unmarked head, on the main file’s first line: every line of the paper where it was', () => {
+  it('writes ASK_TEX in the head, before the paper’s first byte: every line of the paper where it was, the bytes as without where none is asked', () => {
     const paper = paperOf()
-    const main = dec(askedFiles(paper, inkSamples(paper.units)).files.get('main.tex'))
-    expect(main.startsWith(`${UNMARKED_HEAD}${ASK_TEX}\\documentclass{article}\n`)).toBe(true)
+    const plan = askPlan(paper.project, inkSamples(paper.units))
+    const asked = files(paper, plan),
+      plain = files(paper)
+    const main = dec(asked.get('main.tex'))
     expect(ASK_TEX).not.toContain('\n')
-    expect(main.split('\n').length).toBe(dec(unmarkedFiles(paper).get('main.tex')).split('\n').length)
+    expect(main.slice(0, main.indexOf('\\documentclass{article}'))).toContain(ASK_TEX)
+    expect(main.split('\n').length).toBe(dec(plain.get('main.tex')).split('\n').length)
+    // (with the asks taken out, the marked files as without them)
+    const strip = (t: string) =>
+      t
+        .split(ASK_TEX)
+        .join('')
+        .replace(/\\axtask\{\d+\}\{\\(?:kw|nada|capt)\{\}\}/g, '')
+    for (const [path, b] of plain) expect(strip(dec(asked.get(path))), path).toBe(dec(b))
+    for (const asks of [null, { at: new Map(), asked: [] }])
+      expect([...files(paper, asks)].map(([p, b]) => [p, dec(b)])).toEqual([...plain].map(([p, b]) => [p, dec(b)]))
   })
   it('asks no use right after a piece that may read it as its argument: a later use is asked', () => {
     const p = openPaper(
@@ -113,52 +193,10 @@ describe('the bibliography’s pass’s files with the asks (askedFiles)', () =>
         ],
       ]),
     )
-    const { files, asked } = askedFiles(p, ['\\kw{}'])
-    expect(asked).toEqual(['\\kw{}'])
-    expect(dec(files.get('main.tex'))).toContain('A \\urldef\\kw{} b.')
-    expect(dec(files.get('main.tex'))).toContain('C \\axtask{0}{\\kw{}}\\kw{} d.')
-  })
-  it('gives the unmarked original where no sample is asked, and holds no file it asks nothing in', () => {
-    const paper = paperOf()
-    expect(askedFiles(paper, [])).toEqual({ files: unmarkedFiles(paper), asked: [] })
-    expect([...askedFiles(paper, ['\\kw{}']).files.keys()]).toEqual(['main.tex'])
-  })
-})
-
-describe('madeBibliography with `asks`', () => {
-  const ASKED_LOG = `This is pdfTeX\n${listing(0, '\\hbox(4.3+0.0)x5.8', INKED)}\n${listing(1, NONE, [])}\nAXT-END\n`
-  const host = (logs: string[], ok = true) => {
-    const asked: CompileRequest[] = []
-    const compile = async (req: CompileRequest) => {
-      const log = logs[asked.length] ?? logs.at(-1)!
-      asked.push(req)
-      return { ok, log, files: new Map([['main.aux', enc('\\relax\n')]]) }
-    }
-    return { asked, compile }
-  }
-  it('asks the pass with the asks and returns what TeX answered where the document uses each macro', async () => {
-    const paper = paperOf()
-    const h = host([ASKED_LOG])
-    const r = await madeBibliography(paper, { compile: h.compile, asks: true })
-    expect(h.asked.length).toBe(1)
-    expect(dec(h.asked[0]!.overrides!.get('main.tex'))).toContain(ASK_TEX)
-    expect(h.asked[0]).toMatchObject({ bibtex: true, draft: true, files: true })
-    expect(r.uses).toEqual({ inkless: ['\\nada{}'], inked: ['\\kw{}'] })
-  })
-  it('asks the pass again as today’s where the one with the asks did not run through, and returns no answer', async () => {
-    const paper = paperOf()
-    const h = host(['This is pdfTeX\n(That makes 100 errors; please try again.)\n', ASKED_LOG])
-    const r = await madeBibliography(paper, { compile: h.compile, asks: true })
-    expect(h.asked.length).toBe(2)
-    expect(dec(h.asked[1]!.overrides!.get('main.tex'))).toBe(dec(unmarkedFiles(paper).get('main.tex')))
-    expect(r.uses).toBeUndefined()
-  })
-  it('without `asks`, asks today’s pass alone', async () => {
-    const paper = paperOf()
-    const h = host([ASKED_LOG])
-    const r = await madeBibliography(paper, { compile: h.compile })
-    expect(h.asked.length).toBe(1)
-    expect(dec(h.asked[0]!.overrides!.get('main.tex'))).toBe(dec(unmarkedFiles(paper).get('main.tex')))
-    expect(r.uses).toBeUndefined()
+    const plan = askPlan(p.project, ['\\kw{}'])
+    expect(plan.asked).toEqual(['\\kw{}'])
+    const main = dec(files(p, plan).get('main.tex'))
+    expect(main).not.toMatch(/urldef[^\n]*axtask/)
+    expect(main).toMatch(/C \\axtask\{0\}\{\\kw\{\}\}\\axtpma\{p\d+\.\d+a\}\\kw\{\} d\./)
   })
 })

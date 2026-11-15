@@ -509,15 +509,6 @@ describe("the probe's raw log, returned beside the answers read from it", () => 
     }
   })
 })
-describe("the answers TeX gave where the document uses a macro (B4's `uses`), taken over the probe's", () => {
-  it("the marking's inkless with them: a source answered there takes that answer, the probe's stand elsewhere", async () => {
-    const answers = () => [draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX })]
-    const plain = await run(paperOf(), answers(), { converge: true })
-    const asked = await run(paperOf(), answers(), { converge: true, uses: { inkless: ['\\nada'], inked: [] } })
-    expect([...(pdfOf(plain.made).options.inkless as Iterable<string>)]).toEqual([])
-    expect([...(pdfOf(asked.made).options.inkless as Iterable<string>)]).toEqual(['\\nada'])
-  })
-})
 /** what the engine asked and made at d5673d033 (this file's cases run there, before Q1), each request and result as digests */
 const GOLDEN_AT_BASE: Record<string, unknown> = {
   'a paper: the probe, every pass, the final pass': {
@@ -727,6 +718,64 @@ describe('Q2 (reduce): a marked request that died is asked once more without the
 })
 
 // ---------------------------------------------------------------- option (i): the bibliography pass's files carried into pass 1
+describe("F15 (`asks`): the loop's pass 1 asks the paper's macros where the document uses them, and only it", () => {
+  const ASKED =
+    '\\documentclass{article}\n\\newcommand\\nada{}\n\\begin{document}\nWords \\nada{} here.\n\\end{document}\n'
+  const asking = () => paperOf({ 'main.tex': ASKED })
+  /** a draft's log with the ask of sample 0 listed as TeX lists a box of nothing */
+  const askedLog = logOf(
+    ['LAYOUT-PROBE 1 ink-at 0', '> \\box74=', '\\hbox(0.0+0.0)x0.0', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 0', ''].join(
+      '\n',
+    ),
+  )
+  const main = (q: CompileRequest | undefined) => dec(q?.overrides.get('main.tex'))
+  it('pass 1 carries the asks (ASK_TEX on its head, each before its use); no later pass does; off, pass 1 as before', async () => {
+    const off = await q1(asking(), [draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX })])
+    const on = await q1(asking(), [draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX })], { asks: true })
+    expect(main(on.asked[1])).toContain('\\axtask{0}{\\nada{}}')
+    expect(main(off.asked[1])).not.toContain('axtask')
+    expect(main(on.asked[1]).split('\n').length).toBe(main(off.asked[1]).split('\n').length)
+    expect(main(on.asked[2])).not.toContain('axtask')
+    expect(sorted(on.asked[2])).toEqual(sorted(off.asked[2]))
+    expect(pdfOf(on.made).cm).toEqual({ drafts: 1, marked: 1, settled: true })
+  })
+  it("its answers replace the probe's for every later request: a macro TeX set no ink for where it is used gets no point", async () => {
+    const off = await q1(asking(), [draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX })], { asks: true })
+    const on = await q1(asking(), [draftOf({ 'main.aux': AUX }, askedLog), fullOf({ 'main.aux': AUX })], { asks: true })
+    // (the probe gave no answer: a point opens it in pass 1; TeX set nothing where it is used: none in pass 2)
+    expect(main(on.asked[1])).toMatch(/\\axtpma\{p\d+\.\d+a\}\\nada\{\}/)
+    expect(main(off.asked[2])).toMatch(/\\axtpma\{p\d+\.\d+a\}\\nada\{\}/)
+    expect(main(on.asked[2])).not.toMatch(/\\axtpma\{p\d+\.\d+a\}\\nada\{\}/)
+    expect([...(pdfOf(on.made).options.inkless as Iterable<string>)]).toEqual(['\\nada{}'])
+    expect([...(pdfOf(off.made).options.inkless as Iterable<string>)]).toEqual([])
+  })
+  it('a pass 1 with asks that does not run through is asked again without them, and no answer is taken', async () => {
+    const dead: Compiled = {
+      ok: true,
+      pdf: null,
+      log: `${TEX}(That makes 100 errors; please try again.)\n`,
+      files: files({}),
+      ms: 100,
+    }
+    const { asked, made } = await q1(
+      asking(),
+      [dead, draftOf({ 'main.aux': AUX }, askedLog), fullOf({ 'main.aux': AUX })],
+      {
+        asks: true,
+      },
+    )
+    expect(main(asked[1])).toContain('axtask')
+    expect(main(asked[2])).not.toContain('axtask')
+    expect(pdfOf(made).cm).toEqual({ drafts: 2, marked: 1, settled: true })
+    expect([...(pdfOf(made).options.inkless as Iterable<string>)]).toEqual([])
+  })
+  it('without the loop, `asks` is not read: every request as before', async () => {
+    const a = await today(asking(), [todayOf(), finalOf()])
+    const b = await today(asking(), [todayOf(), finalOf()], { asks: true })
+    expect(b.asked.map(requestDigest)).toEqual(a.asked.map(requestDigest))
+  })
+})
+
 describe("the bibliography pass's files, carried into the loop's pass 1 (`carried`)", () => {
   const BIBSRC =
     '\\documentclass{article}\n\\begin{document}\nWe use the method of \\cite{a} here.\n\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n'

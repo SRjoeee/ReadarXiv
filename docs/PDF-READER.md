@@ -7308,42 +7308,52 @@ them `\natexlab` in shipped bibliographies). The readers it read with (the probe
 reading of the use answers) are gone with it; the probe's own log still reaches the back half for §18.78's readings, and the
 answers taken where a macro is used still decide the marking (§18.80).
 
-### 18.80 The ink probe asked where the document uses a macro (the compile move's B4, the display design's F15, 2026-11-16)
+### 18.80 The ink probe asked where the document uses a macro (the compile move's F15, 2026-11-16)
 
 The mark probe sets each of a paper's macros in a box of its own after the paper's preamble (§18.78), so a macro an environment
 defines otherwise, or one the body defines later, is read where the document does not use it: elsarticle's `\sep`, empty
 outside `keyword` and `\unskip, ` in it; threeparttable's `\tnote`, a superscript inside its table alone; a VLDB paper's
-`\vldbauthors`, filled by `\maketitle`. The marking gives an inkless answer no mark (§18.79's limit), so the use's answer is
-asked where the paper already compiles its own document before the marking: the bibliography's pass (`compile/paper.ts`
-madeBibliography with `asks`, an option `compiledOf` sets; today's reader asks nothing), no pass added.
+`\vldbauthors`, filled by `\maketitle`. The marking gives an inkless answer no mark, so the use's answer is asked where the
+paper already compiles its own document before the marks are read: the marked compile's first pass (`compile/paper.ts`
+markedOfPaper with `asks`, an option `compiledOf` sets with `converge`; today's reader asks nothing), no pass added, for every
+paper. Pass 1 is a draft of the marked files and never the settled pass, so no ask reaches B; the bibliography's pass is
+today's request.
 
-- **Where**: each ink sample of the paper as the pass opens it (no `.bbl` yet: an entry's macros keep the probe's answers) is
-  asked once, right before its first use in running text (`compile/live.ts` askedFiles, `\axtask{<i>}{<its source>}`): at the
-  token, since a paragraph's start lies before `\begin{keyword}`, where `\sep` is still empty. Not in a heading's title or a
-  caption (LaTeX copies their argument as written into the `.aux`, the `.toc` and hyperref's nameref title), nor in an
-  algorithm float's body (the front end's `pseudocode`), nor a sample whose own groups or conditionals do not close (`marks.ts`
-  askable: a paragraph's `\begingroup` piece; a paper's `\fi`, which copied into a branch TeX skips would end its conditional
-  early, 2610.21312v1), nor right after a piece that may read it as its argument (`marks.ts` looksAhead: `\urldef\tempurl`,
-  2402.10294v1); a later use is asked then.
-- **How** (`marks.ts` ASK_TEX): the ink section's own test of one sample, its source tokenized at the place. It changes
-  nothing the pass writes or sets: it expands to nothing where `\protect` is not `\@typeset@protect` and between an
-  alignment's rows (an align group in vertical mode: a token of ours there would begin a cell before `\hline`, colortbl's
-  `\rowcolor` or longtable's `\endhead`); every counter is given back after it (`\cl@@ckpt`, as `\include` does); its group
-  writes no file (`\@fileswfalse`); every group the sample left open is closed after it, math by `$`; and it ends with a
-  paragraph of its own in a box, whose end starts TeX's error count again (a paragraph's asks never add up to the hundred
-  errors that stop TeX). A pass with asks that does not run through is asked again as today's.
-- **Read** (`marks.ts` useAnswersOf, mergeUses): an answered use's answer, inkless or not, replaces the probe's for that source
-  before the marking reads `inkless`; the probe's stands where the use gave none. No element is stated `silent` by them
-  (§18.79).
+- **Where**: each ink sample of the paper is asked once, right before its first use in running text (`compile/live.ts`
+  askPlan, `\axtask{<i>}{<its source>}`), written by originalFiles `asks` into the marked units before the piece and the
+  points that open it, ASK_TEX in the head (no line of the paper moves): at the token, since a paragraph's start lies before
+  `\begin{keyword}`, where `\sep` is still empty. Not in a heading's title or a caption (LaTeX copies their argument as written
+  into the `.aux`, the `.toc` and hyperref's nameref title), nor in an algorithm float's body (the front end's `pseudocode`),
+  nor a sample whose own groups or conditionals do not close (`marks.ts` askable: a paragraph's `\begingroup` piece; a paper's
+  `\fi`, which copied into a branch TeX skips would end its conditional early, 2610.21312v1), nor right after a piece that may
+  read it as its argument (`marks.ts` looksAhead: `\urldef\tempurl`, 2402.10294v1); a later use is asked then.
+- **In the mode of its use** (`marks.ts` ASK_TEX): a sample used in a paragraph is set as a paragraph, in a vertical box at the
+  measure in force, between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`); between paragraphs, in a vertical box as
+  it stands; in a horizontal box (a table's cell), in a horizontal box; in a formula, in math in a horizontal box. A command that ends the paragraph or
+  the line where it is used (`\par`, `\\`, `\newline`, a class's `\sep` defined `\unskip\par`, as cas-sc's keywords
+  environment defines it: `cas-common.sty` 1612 to 1617) leaves two lines there, or a line and a box: it parts what stands
+  before it from what stands after, and readInkProbe never reads it inkless (an element, as `\authorcr` is). Set in a
+  horizontal box alone, the same `\par` sets nothing (TeX ignores it in restricted horizontal mode).
+- **Writes nothing** (ASK_TEX): it expands to nothing where `\protect` is not `\@typeset@protect` and between an alignment's
+  rows (an align group in vertical mode: a token of ours there would begin a cell before `\hline`, colortbl's `\rowcolor` or
+  longtable's `\endhead`); every counter is given back after it (`\cl@@ckpt`, as `\include` does); its group writes no file
+  (`\@fileswfalse`); every group the sample left open is closed after it, math by `$`; and it ends with a paragraph of its own
+  in a box, whose end starts TeX's error count again (a paragraph's asks never add up to the hundred errors that stop TeX).
+- **Read** (`marks.ts` useAnswersOf, mergeUses; `compile/paper.ts` convergeThenMark): after pass 1, an answered use's answer,
+  inkless or not, replaces the probe's for that source, and the marked files are made again where one moved, before any later
+  request (the passes, the guard's remedies, the fallback, the final pass); the probe's stands where the use gave none. A pass
+  1 with asks that does not run through is asked again without them. The stored plan holds the `inkless` the marking read.
+  No element is stated `silent` by them (§18.79).
 
-Held by the TeX gate's cases (`lab/pdf/spikes/ask-cases.mjs`, both years, the four engines: the `.bbl`, the `.aux` and the
-`.toc` byte for byte today's, as many errors outside the asks, each answer as the use sets it) and on six papers' own passes
-in Docker (72 s): the `.bbl` and the `.aux` byte for byte today's, no TeX error but the base's; the marking's inkless loses
-2608.25210v2's `\vldbauthors`, 2610.21313v1's `\tnote{a}`, `{b}`, `{d}` and 2610.20848v1's `\sep` (inked where used), and gains
-2610.19159v1's `\trajectoryMark{}` and 2610.21084v1's `\sep` (inkless where used: its `keywords` environment leaves `\sep` empty).
-F15's census over the 89's stored logs (asks at a paragraph's start, the 39 papers with the pass): 4 inkless answers turn inked,
-2 unanswered inkless, 1 unanswered inked, 10 inked unanswered. A paper whose bibliography's pass is asked is compiled anew: no
-stored compile answers the pass with its asks.
+Held by the TeX gate's cases (`lab/pdf/spikes/ask-cases.mjs`, both years, the four engines, on the loop's first pass: the
+`.bbl`, the `.aux` and the `.toc` byte for byte without the asks, as many errors outside the asks, each answer as the use sets
+it; `\par`, `\\`, `\newline` and a keywords environment's `\unskip\par` answered and never inkless where a paragraph uses
+them, where a horizontal box alone read `\par` and the keywords' `\unskip\par` inkless in all eight runs and `\\` and
+`\newline` inkless under latex). LuaTeX lists a paragraph's line with a node of its own first
+(`\localpar` and the values below it), read as no ink in an ask's vertical box alone: the probe's boxes read as before.
+Before the loop carried them, the asks rode the bibliography's pass (B4, which only a paper whose bibliography BibTeX makes
+has); the six papers' marking moves measured there: 2608.25210v2 `\vldbauthors`, 2610.21313v1 `\tnote{a}`, `{b}`, `{d}` and
+2610.20848v1 `\sep` inked where used; 2610.19159v1 `\trajectoryMark{}` inkless where used.
 
 ## 19. The engine's contract
 

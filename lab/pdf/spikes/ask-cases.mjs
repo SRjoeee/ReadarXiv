@@ -1,20 +1,22 @@
 // lab/pdf/spikes/ask-cases.mjs
-// The ink probe asked where the document uses a macro (the compile move's B4, the display design's F15: packages/engine/src/marks/
-// marks.ts ASK_TEX, askOf; compile/live.ts askedFiles; read by marks.ts useAnswersOf) under TeX: a small paper of our own, opened
-// as the prepare opens one (live.ts openPaper), its ink samples (marks.ts inkSamples) asked at their first use as the
-// bibliography's pass asks them (compile/paper.ts madeBibliography `asks`), compiled in each pinned TeX Live year's image under
-// pdfLaTeX, XeLaTeX, LuaLaTeX and latex as the host makes that pass (one draft pass, then BibTeX), twice: the unmarked original as
-// today's pass sends it (guard.ts unmarkedFiles: `base`) and with the asks (`asks`). Held: (1) the .bbl BibTeX makes, the .aux and
-// the .toc byte for byte the same both ways: the asks write nothing, step no counter and cite nothing; (2) no TeX error the base
-// has not; (3) each sample's answer where the document uses it: a macro an environment defines otherwise (elsarticle's `\sep`,
-// empty outside `keyword`, `\unskip, ` in it) sets ink; one defined in the body, after the preamble (the preamble's probe cannot
-// answer it) sets ink; a citation's macro sets ink and writes no citation; a counter's step and an empty macro set none, asked
-// at a use in running text, never in a section's title or a caption (which the .aux, the .toc and hyperref's nameref copy as
-// written: the paper loads hyperref, the title and the caption are labelled); a macro first used in a table's cell asked there;
-// a macro that leaves math open (`$a`) asked, its math closed after it; a skip of no ink answered. Each
-// sample asked at most once; a row's rule at a row's start not asked (no \noalign misplaced); a paragraph's own \begingroup and \endgroup
-// never asked; two macros of 35 errors each in one paragraph asked and the pass run through (the count starts again after each
-// ask). The errors outside the asks as many as the base's, and both passes run through. Exit 1 on a failure.
+// The ink probe asked where the document uses a macro (the compile move's F15, PDF-READER §18.80: packages/engine/src/marks/
+// marks.ts ASK_TEX, askOf; compile/live.ts askPlan and originalFiles `asks`; read by marks.ts useAnswersOf) under TeX: a small
+// paper of our own, opened as the prepare opens one (live.ts openPaper), its marked files written as the loop's first pass is
+// given them (originalFiles with the layout marks and the statements), its ink samples (marks.ts inkSamples) asked at their
+// first use, compiled in each pinned TeX Live year's image under pdfLaTeX, XeLaTeX, LuaLaTeX and latex as the host makes that
+// pass (one draft pass, then BibTeX: the paper ships no .bbl), twice: the marked files alone (`base`) and with the asks (`asks`).
+// Held: (1) the .bbl BibTeX makes, the .aux and the .toc byte for byte the same both ways: the asks write nothing, step no
+// counter and cite nothing; (2) as many TeX errors outside the asks as the base's, both run through; (3) each sample's answer
+// where the document uses it, measured in the mode of its use (a paragraph's sample set as a paragraph at the measure in force):
+// a macro an environment defines otherwise (elsarticle's `\sep`, empty outside `keyword`, `\unskip, ` in it) sets ink; one
+// defined in the body, after the preamble, sets ink; a citation's macro sets ink and writes no citation; a counter's step and
+// an empty macro set none (asked at a use in running text, never in a section's title or a caption, which the .aux, the .toc
+// and hyperref's nameref copy as written: the paper loads hyperref, the title and the caption are labelled); a macro first used
+// in a table's cell asked there; a macro that leaves math open (`$a`) asked, its math closed after it; a skip of no ink
+// answered; a command that ends the paragraph or the line where it is used (`\par`, `\\`, `\newline`, a keywords
+// environment's `\unskip\par`, as cas-sc's `\sep`) is never inkless. Each sample asked at most once; a row's rule at a row's
+// start not asked (no \noalign misplaced); a paragraph's own \begingroup and \endgroup never asked; two macros of 35 errors
+// each in one paragraph asked and the pass run through (the count starts again after each ask). Exit 1 on a failure.
 //   pnpm exec tsx lab/pdf/spikes/ask-cases.mjs [--years=2023,2025] [--engines=pdflatex,xelatex,lualatex,latex] [--out=<dir>]
 // Docker with the years' pinned images (lab/pdf/compile-images.json); no network.
 import { execFileSync } from 'node:child_process'
@@ -22,7 +24,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import * as LIVE from '../../../packages/engine/src/compile/live.ts'
-import { unmarkedFiles } from '../../../packages/engine/src/compile/guard.ts'
 import * as MARKS from '../../../packages/engine/src/marks/marks.ts'
 import { checkCompileImage, compileImageRef } from './compile-image.mjs'
 
@@ -48,6 +49,10 @@ const MAIN = String.raw`\documentclass{article}
 \newcommand\incell{\textbf{c}}
 \newcommand\myrule{\hline}
 \newcommand\openmath{$a}
+\newcommand\mypar{\par}
+\newcommand\mycr{\\}
+\newcommand\mynl{\newline}
+\newenvironment{kws}{\par\def\ksep{\unskip\par}}{\par}
 \newcommand\noisyA{\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA}
 \newcommand\noisyB{\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB}
 \begin{document}
@@ -65,6 +70,10 @@ Words \stepme{} after.\label{after} A gap \wide{} there.
 
 \begingroup\small A group of the paragraph's own.\endgroup{} Then two noisy ones \noisyA{} and \noisyB{} in one paragraph.
 
+Words that \mypar{} end here, a line \mycr{} cut, another \mynl{} too.
+
+\begin{kws}alpha \ksep beta \ksep gamma\end{kws}
+
 \begin{figure}\caption{A caption \capt}\label{f1}\end{figure}
 \renewcommand\later{Late}Then \later{} again.
 
@@ -75,7 +84,8 @@ Words \stepme{} after.\label{after} A gap \wide{} there.
 const BIB = `@misc{a, author = {A. Author}, title = {First}, year = {2020}}
 @misc{b, author = {B. Author}, title = {Second}, year = {2021}}
 `
-/** each sample's answer where the document uses it: `inked` set some ink, `inkless` set none */
+/** each sample's answer where the document uses it: `inked` set some ink, `inkless` set none, `kept` answered and not inkless:
+ *  a paragraph's or a line's end where a paragraph uses it (two lines there, or a line and a box) */
 const WANT = {
   '\\kw': 'inked',
   '\\later{}': 'inked',
@@ -92,6 +102,11 @@ const WANT = {
   '\\capt': undefined,
   // (a row's rule at a row's start: not asked there, where a token of ours would begin a cell before its \\hline)
   '\\myrule': undefined,
+  // (a paragraph's end or a line's where it is used: more than one line, or vertical material, in its paragraph: never inkless)
+  '\\mypar{}': 'kept',
+  '\\mycr{}': 'kept',
+  '\\mynl{}': 'kept',
+  '\\ksep': 'kept',
 }
 
 const files = new Map([
@@ -100,9 +115,10 @@ const files = new Map([
 ])
 const paper = LIVE.openPaper(files)
 const samples = MARKS.inkSamples(paper.units)
-// (before B4 the lab has no asks: the base's files on both sides, and no answer)
-const asked = LIVE.askedFiles ? LIVE.askedFiles(paper, samples) : { files: unmarkedFiles(paper), asked: [] }
-const sides = { base: unmarkedFiles(paper), asks: asked.files }
+// (the loop's first pass: the marked files, the statements after the layout marks; with the asks where they are known)
+const marked = (asks) => LIVE.originalFiles(paper, { lines: true, layout: MARKS.LAYOUT_CLASSES, statements: true, asks })
+const asked = LIVE.askPlan ? LIVE.askPlan(paper.project, samples) : { at: new Map(), asked: [] }
+const sides = { base: marked(null), asks: marked(asked) }
 
 let bad = 0
 for (const year of YEARS) {
@@ -145,10 +161,11 @@ for (const year of YEARS) {
     const errors = outside(log), baseErrors = outside(baseLog)
     if (errors.length !== baseErrors.length) faults.push(`TeX: ${errors.length} errors outside the asks, the base ${baseErrors.length}: ${errors.filter((x) => !baseErrors.includes(x)).slice(0, 3).join(' | ')}`)
     if (!/^AXT-END$/m.test(log) || !/^AXT-END$/m.test(baseLog)) faults.push('a pass did not run through')
-    const uses = MARKS.useAnswersOf ? MARKS.useAnswersOf(log, asked.asked) : { inkless: [], inked: [] }
+    const uses = MARKS.useAnswersOf(log, asked.asked)
     const got = Object.fromEntries([...uses.inkless.map((s) => [s, 'inkless']), ...uses.inked.map((s) => [s, 'inked'])])
     for (const [s, want] of Object.entries(WANT))
-      if (want === 'answered' ? got[s] === undefined : got[s] !== want) faults.push(`${s}: ${got[s] ?? 'no answer'}, not ${want ?? 'no answer'}`)
+      if (want === 'answered' ? got[s] === undefined : want === 'kept' ? got[s] !== 'inked' : got[s] !== want)
+        faults.push(`${s}: ${got[s] ?? 'no answer'}, not ${want ?? 'no answer'}`)
     // (a piece that opens or closes the paragraph's own group is never asked: marks.ts askable)
     for (const s of ['\\begingroup', '\\endgroup']) if (asked.asked.includes(s)) faults.push(`${s} asked`)
     const once = asked.asked.map((_, i) => (log.match(new RegExp(`^LAYOUT-PROBE 1 ink-at ${i}$`, 'gm')) ?? []).length)

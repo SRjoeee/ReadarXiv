@@ -49,7 +49,7 @@ import {
   texText,
 } from '../source/latex-front.ts'
 import { completeLog, END_TEX, LINES_TEX } from './tex.ts'
-import { UNMARKED_HEAD, unbalancedUnits, unmarkedFiles } from './guard.ts'
+import { unbalancedUnits } from './guard.ts'
 import type { CompleteGiven, MarkClass, Switches } from '../marks/marks.ts'
 import type { Fsys, SourceUnit, UnitSpan } from '../source/latex-front.ts'
 import type { UnitLines } from './tex-errors.ts'
@@ -86,57 +86,65 @@ export interface CompileRequest {
  *  its structural names and its theorem names */
 export type Paper = ReturnType<typeof openPaper>
 /** the units whose source LaTeX copies as written (the source reader's kinds): a heading's argument and a caption's, which the
- *  .aux, the .toc and the .lof hold as text and hyperref's nameref keeps as a label's title (askedFiles asks nothing there) */
+ *  .aux, the .toc and the .lof hold as text and hyperref's nameref keeps as a label's title (askPlan asks nothing there) */
 const COPIED: ReadonlySet<string> = new Set(['heading', 'caption'])
+/** where the ink probe's asks stand in a paper's units (askPlan): by unit index, each ask's piece (its index among the unit's
+ *  pieces, its source and which of the unit's placeholders of that source it is) and the ask's TeX; and the samples asked, by
+ *  their ask's index */
+export type AskPlan = {
+  at: Map<number, { k: number; src: string; nth: number; ask: string }[]>
+  asked: string[]
+}
 /**
- * The bibliography's pass's files with the ink probe's asks (the compile move's B4, F15; compile/paper.ts madeBibliography
- * `asks`): the unmarked original (guard.ts unmarkedFiles), each of `samples` whose own groups close in it (marks.ts askable)
- * asked (askOf, ASK_TEX) right before its first use in a unit of the paper's own, in the order the units stand (a unit nested in another is written inside it: its
- * outer one's use is asked), ASK_TEX after the unmarked head on the main file's first line; a file that holds no ask the paper's
- * own bytes, one that holds some as patch writes the paper's units, no mark among them. `asked`: the samples asked, by their
- * ask's index. None asked: the unmarked original
+ * Where the ink probe asks each of `samples` where the document uses it (the compile move's F15, PDF-READER §18.80; the loop's
+ * first pass, compile/paper.ts markedOfPaper `asks`): right before its first use in a unit of the paper's own, in the order the
+ * units stand, that is safe to ask at. Not in a unit nested in another (it is written inside its outer one, whose use is asked),
+ * a heading's or a caption's argument (COPIED), an algorithm float's body (the front end's `pseudocode`); not a sample whose own
+ * groups or conditionals do not close in it (marks.ts askable); not right after a piece that may read it as its argument, past
+ * white space (marks.ts looksAhead: `\\urldef\\tempurl`), a later use asked then
  */
-export function askedFiles(
-  paper: Paper,
-  samples: readonly string[],
-): { files: Map<string, Uint8Array>; asked: string[] } {
-  const { fsys, project } = paper
+export function askPlan(project: Paper['project'], samples: readonly string[]): AskPlan {
   const want = new Set(samples)
-  const asked: string[] = []
-  const at = new Map<SourceUnit, Map<number, string>>()
-  // (no ask where LaTeX copies the source as it stands: a heading's or a caption's argument, which the .aux and its lists hold
-  // as written, hyperref's nameref title too; nor in an algorithm float's body, set as its package sets code, the front end's
-  // `pseudocode`)
-  const code = new Set((project.pseudocode ?? []).map((i) => project.units[i]))
-  for (const u of project.units) {
-    if (u.nested || !u.file || COPIED.has(u.kind) || code.has(u)) continue
+  const plan: AskPlan = { at: new Map(), asked: [] }
+  const code = new Set(project.pseudocode ?? [])
+  project.units.forEach((u, i) => {
+    if (u.nested || !u.file || COPIED.has(u.kind) || code.has(i)) return
+    const seen = new Map<string, number>()
     u.pieces.forEach((p, k) => {
-      if (p.t !== 'ph' || !want.has(p.src) || !askable(p.src)) return
-      // (not right after a piece that may read it as its argument, past white space: that use is passed over, a later one asked)
+      if (p.t !== 'ph') return
+      const nth = seen.get(p.src) ?? 0
+      seen.set(p.src, nth + 1)
+      if (!want.has(p.src) || !askable(p.src)) return
       let j = k - 1
       while (j >= 0 && u.pieces[j]!.t === 'text' && !/\S/.test(u.pieces[j]!.s ?? '')) j--
       if (j >= 0 && looksAhead(u.pieces[j])) return
       want.delete(p.src)
-      const m = at.get(u) ?? at.set(u, new Map()).get(u)!
-      m.set(k, askOf(asked.length, p.src))
-      asked.push(p.src)
+      const at = plan.at.get(i) ?? plan.at.set(i, []).get(i)!
+      at.push({ k, src: p.src, nth, ask: askOf(plan.asked.length, p.src) })
+      plan.asked.push(p.src)
     })
-  }
-  if (!asked.length) return { files: unmarkedFiles(paper), asked }
-  const units = project.units.map((u) => {
-    const m = at.get(u)
-    return m ? { ...u, pieces: u.pieces.flatMap((p, k) => (m.has(k) ? [phPiece(m.get(k)!), p] : [p])) } : u
   })
-  // (the paper's own bytes, no file transcoded: as the unmarked original reads them)
-  const written = patch({ ...project, units, transcode: new Set<string>() }, new Map())
-  const files = new Map<string, Uint8Array>()
-  for (const f of new Set([...at.keys()].map((u) => u.file))) {
-    const b = written.get(f)
-    if (b) files.set(f, b)
+  return plan
+}
+/** a marked unit with its asks (originalFiles `asks`): each ask right before its piece (the `nth` placeholder of that source) and
+ *  before the marks of ours that open it (a placeholder whose source begins `\\axt`), so that no mark is parted from its piece */
+function withAsks(u: SourceUnit, asks: readonly { src: string; nth: number; ask: string }[]): SourceUnit {
+  const pieces = [...u.pieces]
+  for (const a of asks) {
+    let n = -1,
+      at = -1
+    for (let k = 0; k < pieces.length; k++) {
+      const p = pieces[k]!
+      if (p.t === 'ph' && p.src === a.src && ++n === a.nth) {
+        at = k
+        break
+      }
+    }
+    if (at < 0) continue
+    while (at > 0 && pieces[at - 1]!.t === 'ph' && /^\\axt/.test((pieces[at - 1] as { src: string }).src)) at--
+    pieces.splice(at, 0, phPiece(a.ask))
   }
-  const main = files.get(project.main) ?? fsys.read(project.main)!
-  files.set(project.main, latin1Bytes(`${UNMARKED_HEAD}${ASK_TEX}${latin1(main)}`))
-  return { files, asked }
+  return { ...u, pieces }
 }
 /** what originalFiles writes into `spans`: the main file's head of ours (`skip`) and each unit's lines and bytes, when asked */
 export type Spans = { skip?: number; lines?: () => UnitLines<SourceUnit>[] }
@@ -155,6 +163,9 @@ export type OriginalOptions = {
   transcode?: boolean
   reduced?: boolean
   statements?: boolean
+  /** with `layout`: the ink probe's asks where the document uses each sample (askPlan; the loop's first pass, compile/paper.ts
+   *  markedOfPaper `asks`), ASK_TEX in the head; none, or none asked: the bytes as before */
+  asks?: AskPlan | null
 }
 
 /** Whether a compile's last TeX pass stopped short of the document's end: TeX's fatal errors — an emergency stop (a
@@ -547,6 +558,7 @@ export function originalFiles(
     transcode = !layout,
     reduced = false,
     statements = false,
+    asks = null,
   }: OriginalOptions = {},
 ): Map<string, Uint8Array> {
   // (the paper's own bytes: patch transcodes no file)
@@ -558,8 +570,23 @@ export function originalFiles(
     patched: Map<string, Uint8Array> | null = null,
     called = false
   if (layout) {
-    const marked = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart }),
-      paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    const laid = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart })
+    // (the asks, where given, in the marked units: each before its piece and the marks that open it, the marks as they were)
+    const asked = asks?.asked.length ? asks : null
+    const of = new Map<SourceUnit, SourceUnit>()
+    const marked = asked
+      ? {
+          units: laid.units.map((u, i) => {
+            const a = asked.at.get(i)
+            if (!a) return u
+            const v = withAsks(u, a)
+            of.set(v, u)
+            return v
+          }),
+          mark: (u: SourceUnit) => laid.mark(of.get(u) ?? u),
+        }
+      : laid
+    const paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     // (an author's call the source states, \axtcall: its definition in the head, CALL_TEX)
     called = marked.units.some((u) => !!marked.mark(u)?.call)
     const asSource = unmarked
@@ -608,6 +635,7 @@ export function originalFiles(
     (layout
       ? (reduced ? LAYOUT_TEX_REDUCED : LAYOUT_TEX) +
         (statements && !reduced ? STATEMENTS_TEX : '') +
+        (asks?.asked.length ? ASK_TEX : '') +
         (dvi ? DVI_LAYOUT_TEX : '') +
         (called ? CALL_TEX : '') +
         (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) +

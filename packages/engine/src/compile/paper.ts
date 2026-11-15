@@ -23,7 +23,7 @@
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.ts'
 import {
-  askedFiles,
+  askPlan,
   DRAFT_OPTION,
   markedPreamble,
   NO_DRIVER_GROUP,
@@ -74,7 +74,7 @@ import {
 import type { Complete, MarkClass, Switches, UseAnswers } from '../marks/marks.ts'
 import type { NameKey } from '../marks/names.ts'
 import type { Fsys } from '../source/latex-front.ts'
-import type { Compiled, CompileRequest, Paper, Spans } from './live.ts'
+import type { AskPlan, Compiled, CompileRequest, Paper, Spans } from './live.ts'
 
 // ---------------------------------------------------------------- the types of the marked compile
 /** the host's limit a compile met, as a refusal names it (the web's `limit`, the TeX page's timeout, the budget's) */
@@ -147,9 +147,11 @@ export interface MarkedCompileOptions {
   /** the statements the rebuilt prepare's marked compile makes and today's does not (live.ts originalFiles `statements`,
    *  marks.ts STATEMENTS_TEX), in every marked request. The rebuilt prepare's (compiled.ts compiledOf) */
   statements?: boolean
-  /** what TeX answered where the document uses a macro (madeBibliography `asks`, its `uses`: B4, F15), taken over the probe's
-   *  answer for that macro (marks.ts mergeUses) before the marking reads its inkless. The rebuilt prepare's (compiled.ts) */
-  uses?: UseAnswers | null
+  /** with `converge`: the ink probe asks each of the paper's macros where the document first uses it, in the loop's first pass
+   *  (a draft, never the settled pass: convergeThenMark), and what TeX answered there replaces the probe's answer for every
+   *  later request, the marked files made again where it moved one (F15, PDF-READER §18.80). The rebuilt prepare's
+   *  (compiled.ts compiledOf); without `converge`, not read */
+  asks?: boolean
   compileBudgetMs?: number | null
   filesBound?: { count: number; bytes: number } | null
   OPS?: Record<string, number>
@@ -283,16 +285,13 @@ const BIBITEM_LINE = /^[ \t]*\\bibitem(?![A-Za-z@])/m
  */
 export async function madeBibliography(
   paper: Paper,
-  { compile, compilerOf = null, engines = null, asks = false }: Host & { asks?: boolean },
+  { compile, compilerOf = null, engines = null }: Host,
 ): Promise<
-  (
-    | { paper: Paper; made: { path: string; bytes: Uint8Array }; files: Map<string, Uint8Array>; ms: number }
-    | { kept: BibliographyKept; ms: number }
-  ) & { uses?: UseAnswers }
+  | { paper: Paper; made: { path: string; bytes: Uint8Array }; files: Map<string, Uint8Array>; ms: number }
+  | { kept: BibliographyKept; ms: number }
 > {
   const t0 = performance.now()
-  let uses: UseAnswers | null = null
-  const done = <R extends object>(r: R) => ({ ...r, ...(uses ? { uses } : {}), ms: Math.round(performance.now() - t0) })
+  const done = <R extends object>(r: R) => ({ ...r, ms: Math.round(performance.now() - t0) })
   const { main } = paper.project,
     job = jobName(main)
   const before = bibliographyKept(paper)
@@ -301,21 +300,18 @@ export async function madeBibliography(
   const engine = paper.meta.compiler!
   if (Array.isArray(engines) && !engines.includes(engine)) return done({ kept: 'engine' })
   let c: Compiled | null = null
-  const pass = async (overrides: Map<string, Uint8Array>) => {
-    try {
-      return await compile({ main, engine, rerun: false, bibtex: true, overrides, draft: true, files: true })
-    } catch (e) {
-      if (isMemoryError(e)) throw e
-      return null
-    }
-  }
-  // (with `asks`, the ink probe asks each of the paper's macros where the document first uses it, inside this pass: B4, F15.
-  // A pass with asks that does not run through is asked again as today's, so that the asks cost the bibliography nothing)
-  const ask = asks ? askedFiles(paper, inkSamples(paper.units)) : null
-  c = await pass(ask?.files ?? unmarkedFiles(paper))
-  if (ask?.asked.length) {
-    if (ranThrough(c)) uses = useAnswersOf(c!.log, ask.asked)
-    else c = await pass(unmarkedFiles(paper))
+  try {
+    c = await compile({
+      main,
+      engine,
+      rerun: false,
+      bibtex: true,
+      overrides: unmarkedFiles(paper),
+      draft: true,
+      files: true,
+    })
+  } catch (e) {
+    if (isMemoryError(e)) throw e
   }
   if (!ranThrough(c)) return done({ kept: 'compile' })
   if (!c!.files) return done({ kept: 'no-files' })
@@ -439,7 +435,7 @@ export async function markedOfPaper(
     reduce = false,
     carried = null,
     statements = false,
-    uses = null,
+    asks = false,
     compileBudgetMs = null,
     filesBound = null,
     pages = null,
@@ -545,8 +541,7 @@ export async function markedOfPaper(
     const { inkless, texts, decorated, apart } = readInkAnswers(log, paper.units)
     return {
       switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)),
-      // (where TeX was asked where the document uses a macro, that answer: B4)
-      inkless: mergeUses(inkless, uses),
+      inkless,
       texts,
       decorated,
       names: readNameProbe(log),
@@ -567,7 +562,10 @@ export async function markedOfPaper(
       if (isMemoryError(e)) throw e
     }
   }
-  const { switches, inkless, texts, decorated, names, lineskip, apart, blamed, log: probeLog } = probe
+  const { switches, texts, decorated, names, lineskip, apart, blamed, log: probeLog } = probe
+  /** the macros the marking gives no point: the probe's, then, where the loop's first pass asked where the document uses them,
+   *  those answers taken (`asks`: mergeUses) */
+  let inkless = probe.inkless
   const cm = converge ? { drafts: 0, marked: 0, settled: false } : null
   /** the loop's settled pass (convergeThenMark): asked in full with the final pass's main file, it is the base page itself */
   const settled = new WeakSet<Compiled>()
@@ -580,7 +578,7 @@ export async function markedOfPaper(
   let reduced = false
   /** the marked original's files, the units of `unmarked` as the paper's own and the babel names marked or not; reduced (no
    *  optional class's points) once a marked request died */
-  const filesOf = (unmarked: ReadonlySet<number>, named: boolean, spans: Spans) =>
+  const filesOf = (unmarked: ReadonlySet<number>, named: boolean, spans: Spans, plan: AskPlan | null = null) =>
     originalFiles(paper, {
       lines: true,
       layout: LAYOUT_CLASSES,
@@ -592,6 +590,7 @@ export async function markedOfPaper(
       ...(named ? {} : { names: false }),
       ...(reduced ? { reduced: true } : {}),
       ...(statements ? { statements: true } : {}),
+      ...(plan ? { asks: plan } : {}),
       spans,
     })
   // (before the compile: the units the probe's preamble blamed (`preamble`); each unit's writing against its source's braces; our
@@ -652,6 +651,18 @@ export async function markedOfPaper(
   }
   const marked = await stage('compile', async () => {
     files ??= filesOf(g.unmarked, g.names, spans)
+    // (the asks the loop's first pass carries, where the option asks for them and a sample has a use to ask at)
+    const plan = cm && asks ? askPlan(paper.project, inkSamples(paper.units)) : null
+    /** the answers the first pass gave where the document uses each macro: taken over the probe's, the marked files made again
+     *  where one moved, as every later request then reads them (the passes, the guard's attempts, the fallback, the final pass) */
+    const answered = (uses: UseAnswers) => {
+      const merged = mergeUses(inkless, uses)
+      if (merged.length === inkless.length && merged.every((x, i) => x === inkless[i])) return
+      inkless = merged
+      const sp: Spans = {}
+      files = filesOf(g.unmarked, g.names, sp)
+      spans = sp
+    }
     if (cm)
       return convergeThenMark(paper, markedAsk, () => files!, cm, {
         wall,
@@ -660,6 +671,9 @@ export async function markedOfPaper(
         keep: wantFinal,
         settled,
         seed: carried,
+        asks: plan?.asked.length
+          ? { files: () => filesOf(g.unmarked, g.names, {}, plan), asked: plan.asked, answered }
+          : null,
       })
     // (every pass, the bibliography's step as the paper needs it; one that did not run through (ranThrough) is no marked
     // original, whatever PDF it left — 2610.20713's, TL2025's 7 pages of 15 before its hundredth error; with the files it wrote,
@@ -1307,6 +1321,7 @@ async function convergeThenMark(
     keep = false,
     settled,
     seed = null,
+    asks = null,
   }: {
     wall: { spent: number; longest: number }
     budget: number | null | undefined
@@ -1314,6 +1329,12 @@ async function convergeThenMark(
     keep?: boolean
     settled: WeakSet<Compiled>
     seed?: ReadonlyMap<string, Uint8Array> | null
+    /** the asks pass 1 carries (markedOfPaper `asks`): its files with them, the samples asked, and what to do with the answers */
+    asks?: {
+      files: () => Map<string, Uint8Array>
+      asked: readonly string[]
+      answered: (uses: UseAnswers) => void
+    } | null
   },
 ): Promise<Compiled | null> {
   const { main } = paper.project,
@@ -1341,11 +1362,11 @@ async function convergeThenMark(
   }
   /** a pass (the first a draft of the marked files, every later one the final pass's files in full) and the files it was given
    *  as its own: those it was asked with, or their reduced copies where it died and was asked again so */
-  const pass = async (draft: boolean, bibtex: boolean | null) => {
+  const pass = async (draft: boolean, bibtex: boolean | null, given: Map<string, Uint8Array> | null = null) => {
     passes++
     if (draft) cm.drafts++
     else cm.marked++
-    const ownNow = () => (draft ? markedNow() : fullNow()!)
+    const ownNow = () => given ?? (draft ? markedNow() : fullNow()!)
     const c = await compile({
       main,
       engine,
@@ -1392,7 +1413,14 @@ async function convergeThenMark(
     })
   }
   if (!fullNow()) return fallback('no-draft-line')
-  const { c: first } = await pass(true, !shipped)
+  // (pass 1 with the asks where they are given: a draft, never the settled pass; its answers taken before any later request is
+  // made; one that does not run through asked again without them, so that the asks cost the loop no fallback)
+  const asked = asks ? asks.files() : null
+  let { c: first } = await pass(true, !shipped, asked)
+  if (asks && asked) {
+    if (ranThrough(first)) asks.answered(useAnswersOf(first.log, asks.asked))
+    else ({ c: first } = await pass(true, !shipped))
+  }
   if (!ranThrough(first)) return fallback('draft-failed')
   if (!first.files) return fallback('no-files')
   if (!shipped && otherBibJobs(first.files, main)) return fallback('aux-jobs')

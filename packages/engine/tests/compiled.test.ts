@@ -2,7 +2,7 @@
 // one it does not, and a refusal of the marked compile; and that the source's units are handed out (the caller's function,
 // awaited) before the marked compile is asked. The marked compile is a spy here: no TeX runs. The paper is made here.
 import { describe, expect, test, vi } from 'vitest'
-import { bibliographyKept, madeBibliography, markedOfPaper } from '../src/compile/paper.ts'
+import { markedOfPaper } from '../src/compile/paper.ts'
 import { type CompiledInput, compiledOf } from '../src/compiled.ts'
 import type { OriginalFacts, StoredInstrument } from '../src/plan.ts'
 import { FROM_UTF8, INSTRUMENT_OBJECTS } from '../src/plan.ts'
@@ -20,7 +20,6 @@ vi.mock('../src/compile/paper.ts', async (real) => {
     ...m,
     // (a paper whose bibliography needs no compile)
     bibliographyKept: vi.fn(() => 'none'),
-    madeBibliography: vi.fn(m.madeBibliography),
     markedOfPaper: vi.fn(async () => {
       marked.events.push('marked')
       return (
@@ -118,23 +117,13 @@ describe('the stored half', () => {
     const stored = await run(fresh.end.made)
     expect(stored.end.ok && stored.end.probeLog).toBe('the probe log')
   })
-  test("B4: the bibliography's pass asked with the asks, and what TeX answered where the document uses a macro handed to the marked compile", async () => {
-    vi.mocked(bibliographyKept).mockReturnValueOnce(null)
-    const uses = { inkless: ['\\nada'], inked: ['\\hlg'] }
-    vi.mocked(madeBibliography).mockResolvedValueOnce({ kept: 'no-bbl', ms: 0, uses })
-    await run(null)
-    expect(vi.mocked(madeBibliography).mock.calls.at(-1)?.[1]).toMatchObject({ asks: true })
-    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ uses })
-    // (a paper that needs no pass: none asked, none handed on)
-    await run(null)
-    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ uses: null })
-  })
   test('Q2: the marked compile asked with `reduce`; a reduced one said so in the plan and the result, and read back so', async () => {
     const fresh = await run(null)
     expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({
       converge: true,
       reduce: true,
       statements: true,
+      asks: true,
     })
     if (!fresh.end.ok || !fresh.end.made) throw new Error('no instrument made')
     // (not reduced: the plan as before, no `reduced` in it)

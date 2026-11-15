@@ -7,7 +7,6 @@
 // decides a stored byte is either this code's or one the host gives it (CompiledInput).
 import { bibliographyKept, madeBibliography, markedOfPaper } from './compile/paper.ts'
 import type { Compiled, CompileRequest, Paper } from './compile/live.ts'
-import type { UseAnswers } from './marks/marks.ts'
 import { type PdfLike, textOfPdf } from './compile/base.ts'
 import { isMemoryError } from './memory.ts'
 import {
@@ -100,8 +99,6 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
   let bbl: { path: string; bytes: Uint8Array } | null = null
   /** the files the bibliography's pass wrote, carried into the marked compile's pass 1 (option (i) of Q1) */
   let bibFiles: Map<string, Uint8Array> | null = null
-  /** what TeX answered where the document uses each macro, asked inside the bibliography's pass (B4, F15) */
-  let uses: UseAnswers | null = null
   if (plan) {
     if (plan.bbl) {
       bbl = plan.bbl
@@ -109,8 +106,7 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
     }
   } else if (bibliographyKept(paper) === null) {
     input.stage('compiling')
-    const r = await madeBibliography(paper, { compile: input.compile, engines: input.engines, asks: true })
-    uses = r.uses ?? null
+    const r = await madeBibliography(paper, { compile: input.compile, engines: input.engines })
     if ('paper' in r) {
       paper = r.paper
       bbl = r.made
@@ -149,7 +145,7 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
       converge: true,
       reduce: true,
       statements: true,
-      uses,
+      asks: true,
       carried: bibFiles,
       filesBound: input.filesBound ?? null,
       compileBudgetMs: null,
