@@ -4672,7 +4672,7 @@ term, 140 markers fewer.
 
 - **The kernel's control symbols `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's `\textasciitilde`, `\textbar`,
   `\textless`, `\textgreater`, `\textbackslash` are the character they set, in its word** (`latex-front.mjs` textCharacter, the
-  letter commands' path; since §18.81 the whole table of text symbols, the unit's edge before its first word, a note's mark
+  letter commands' path; since §18.83 the whole table of text symbols, the unit's edge before its first word, a note's mark
   after a word an element): its source beside it, written back byte for byte; a control word's skipped spaces and an empty group
   with it (`\textless 5` is "<5"), none after a control symbol (`5\% of` is "5% of"); a group around one alone spends its pair's
   id; a paper's own definition of the command keeps it a placeholder. `\_` stays the identifier rule's (§18.25): an identifier or
@@ -4708,7 +4708,7 @@ tag pair, a `must` bare group was a marker pair on Microsoft's, and placement an
 - **The rule** (`pipeline/instrument.mjs` passThroughOf, in piecesOf and spansOf): a group is a pair only if it changes how its
   content is set or the reader needs its extent; decided from the front end's own facts, carried through the instrument. A pair the
   front end read as setting its argument alone (latex-front.mjs identityPair, the open piece's `sets` 0) and a bare group holding no
-  declaration of its own (none directly inside it of the declarations a group scopes, §18.82; until then any placeholder that sets
+  declaration of its own (none directly inside it of the declarations a group scopes, §18.84; until then any placeholder that sets
   nothing, `mt.mjs` isInkless), both of
   its ends in the unit, are their content, their text joined with the text on either side. A group the front end says nothing of
   stays one: a paper's macro that sets more (`\multicolumn`, `\rotatebox`, `\fbox`), a group around a declaration (`{\em …}`);
@@ -5448,7 +5448,7 @@ toggle, its nine lines the ledger's float lines of a table with no cell (§18.45
   paragraph after the box. No such call in the 88. A paper's own wrapper around a tabular (2610.37668v1's
   `\newcommand{\fittabular}[3][\maxdimen]{…}`, whose body sets its third argument into a box register twice with `\sbox` and
   shows it once with `\usebox` inside `\resizebox` or `\makebox`) is no line box: its argument is read through the box register
-  (§18.80).
+  (§18.82).
 - **Over the 88** (the front end over every source, with the walk's every line-box call logged): 7 calls met, 6 of them
   2010.11929v2's author block rows (read before, unchanged: 362 units, the same texts and places) and 1 2608.06701v1's table;
   0 `\leftline` or `\rightline`; the other 39 `\centerline`s of the sources are in class and style definitions, a template no
@@ -7446,7 +7446,7 @@ no longer reads inkless. The run found four defects of the first build, each fix
 an ask's box (OWN_NODE), a sample reading past its source (`ink-eaten`), a sample spanning lines (not asked), a destination
 beside the line taken for material (SPACE_NODE).
 
-### 18.79 An entry whose first ink is a number it keeps: its start mark before the number, as before a formula (F29, 2026-11-15)
+### 18.81 An entry whose first ink is a number it keeps: its start mark before the number, as before a formula (F29, 2026-11-15)
 
 A bibliography entry with no author opens with its year: ACM-Reference-Format's software and web pages
 (`\bibinfo{year}{2023}\natexlab{}.` then the title), IEEEtran's `\BIBentryALTinterwordspacing (2024) {WHO} …`. The year is a
@@ -7477,7 +7477,7 @@ the next entry's text (2402.10294v1 p14, references [1] to [6]: [1] drawn over i
   move (the marks are not pieces): their marked compiles do. REVTeX's empty `\bibfield {number} {  }` heads (2610.20716v1's six)
   stay with no start mark (a mark there set the entry 7 pt right): no number.
 
-### 18.80 What a paper's command sets into a box register it shows is that box's content (F18, 2026-11-15)
+### 18.82 What a paper's command sets into a box register it shows is that box's content (F18, 2026-11-15)
 
 2610.37668v1 sets every table through its own `\fittabular[<pad>]{<columns>}{<tabular>}` (papermacros.sty): the body sets #3
 into a box register with `\sbox` twice (to measure it at no column separation, then at the separation that fills the line) and
@@ -7504,7 +7504,7 @@ cell and no unit (317 of the ledger's float lines, `nocells`, §18.45), whatever
   paper's units move. `\centerline{tabular}`
   (2608.06701v1's Table 4) is §18.46's, read since: no table in the three sets is held by a line box and read by no cell.
 
-### 18.81 LaTeX's text symbols are characters of the unit's text, but a sign at its edge and a note's mark (F9 (d), 2026-11-15)
+### 18.83 LaTeX's text symbols are characters of the unit's text, but a sign at its edge and a note's mark (F9 (d), 2026-11-15)
 
 §18.30 made eleven of the front end's text symbols characters of the text; the rest of its own table (`source/text-symbols.ts`
 TEXT_SYMBOLS: `\S`, `\textquotesingle`, `\textbullet`, `\dots`, `\textdegree`, `\textendash`, `\slash`, `\textdagger`, …) stayed
@@ -7549,14 +7549,14 @@ where it stands as a mark.
   placeholder of the run (RUN_SPACE) and is now its character in a text piece whose source is its command, read as the run's
   separator by that source. No unit whose pieces stay has another wire (a text piece's source of its own was none of a run's
   before): TRANSLATE stays.
-- **The reach, read by the source reader alone over the three sets** (against §18.80's tree; every paper's unit count the same):
+- **The reach, read by the source reader alone over the three sets** (against §18.82's tree; every paper's unit count the same):
   559 units in 50 papers move, by their pieces: 558 whose symbols are characters now (the 89: 38 in 13; the holdout 56 in 8;
   the third set 464 in 29; of the base's placeholders `\S` 458 in 21 papers, `\textquotesingle` 315 in 2, `\textasciicircum` 2
   in 2, after a word; no `\textunderscore`, `\textdollar`, `\textbraceleft` or `\textbraceright` is a placeholder in the three
   sets), and one paragraph through its nested unit; no unit moves by §18.30's eleven; 2610.42112v1's author block unchanged.
   The marked compile of each moves (a symbol that is text has no mark of its own).
 
-### 18.82 A bare group is a group only where it scopes a declaration (F9 (c), the coordinator's order of 2026-11-16)
+### 18.84 A bare group is a group only where it scopes a declaration (F9 (c), the coordinator's order of 2026-11-16)
 
 §18.31 wrote a bare group `{…}` as its content unless a placeholder that sets nothing (`mt.ts` isInkless) stood directly inside
 it: a switch the group would scope. That list holds more than declarations: `\relax`, `\nobreak`, `\protect`, `\-`, `\noindent`, a

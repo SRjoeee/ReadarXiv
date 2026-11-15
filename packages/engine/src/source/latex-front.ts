@@ -2060,7 +2060,7 @@ function inRegister(use: ParamUse, reg: string, inner: ParamUse) {
  * its own use in the register's content reads it; a register the body never shows (only measured: \\wd, \\ht) sets nothing of
  * it, and its parameters are no text. 2610.37668v1's `\\fittabular[<pad>]{<columns>}{<tabular>}`, its #3 set into a register
  * twice by \\sbox and shown once by \\usebox inside \\resizebox or \\makebox: read as an unknown command's argument, #3 was no
- * text and every table in the command none of the reader's (F18, PDF-READER §18.80)
+ * text and every table in the command none of the reader's (F18, PDF-READER §18.82)
  */
 function throughBoxes(use: ParamUse): ParamUse {
   for (const { reg, inner } of use.boxes) {
