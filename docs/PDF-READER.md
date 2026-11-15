@@ -7120,7 +7120,9 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   paragraph's, j), and sets one end point after the box, nothing between its end mark and it; each page's glyphs and rules those
   of the same document without our marks (pdfLaTeX's to 0.001 pt, LuaLaTeX's within 0.011, under dvipdfmx a run a point splits
   placed anew by the writer within 0.01); 240 of 240 compiles with every earlier case. Red with the start mark inside the box:
-  16 of 16 compiles wrong (the box's class, the end point before the end mark, a `\shortstack` with neither). Under XeLaTeX a
+  16 of 16 compiles wrong (the box's class, the end point before the end mark, a `\shortstack` with neither). Its macro
+  cases (`mergedMacro`: the same boxes, their lines ended by a paper's row-ending macro of each body's form, alone and mixed with
+  `\\`, the macro's cell marked as its control written with `\\` is): 248 of 248 compiles with every earlier case. Under XeLaTeX a
   `\makecell[r]` in an r column has its last glyph 0.0114 pt past the end point TeX set at it (pdfLaTeX's and LuaLaTeX's within
   0.0001): the gate holds an end point to its cell's last ink within 0.02 pt under dvipdfmx, its writer's placement.
 - **The lay: a line of a grid cell is laid in the cell's room in its column, whichever line it is** (the coordinator's statement,
