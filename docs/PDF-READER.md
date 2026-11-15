@@ -4740,12 +4740,29 @@ translator's to choose).
   byte; its argument walked as before, the pair's id spent. A paper's `\newcommand` and a `.bbl`'s `\providecommand` alike
   (2610.10069v1's `\newcommand{\enquote}[1]{``#1''}`, REVTeX's `\providecommand \enquote [1]{``#1''}` in 2307.16209v1). A
   definition that sets anything else stays the pair it was.
-- **csquotes' `\enquote`** (the paper defining none): the outer level's double marks, an `\enquote` inside one the inner level's
-  single, as csquotes alternates, `\enquote*` from the inner level (quoteMarks), where the marks can be read off the paper's
-  files: csquotes loaded with no style, `style=american`, `english` or `USenglish`, no `autostyle`, no `\setquotestyle`, no babel
-  or polyglossia language but English (`csquotesOf`). Another style, or a language's, is one placeholder as before: its marks are
-  the style's, which the compile's glyphs would tell (the element's own text, as an element's text is read); not read here. No
-  paper of the 88 loads csquotes.
+- **csquotes' `\enquote`** (the paper defining none): the outer level's marks, an `\enquote` inside one the inner level's, as
+  csquotes alternates, `\enquote*` from the inner level (quoteMarks), where the marks can be read off the paper's files
+  (`csquotesOf`: the first `\usepackage` of its .tex, .sty and .cls files that names csquotes, and that call's options). The
+  marks are a variant of csquotes' English style as csquotes.def declares it (`CSQUOTES_ENGLISH`): American, “ ” outside and
+  ‘ ’ inside, for `american`, `canadian`, `english`, `USenglish` and `usenglish`; British, ‘ ’ outside and “ ” inside, for
+  `british`, `australian`, `newzealand`, `UKenglish` and `ukenglish` (`CSQUOTES_NAMES`, csquotes.def's aliases). With no
+  `style=` and no `autostyle` option the variant is babel's main language's, which csquotes' default `autostyle=tryonce` takes
+  at the end of the preamble: the language its first `main=` option names, wherever it stands, else the last option without
+  `=` of its `\usepackage[…]{babel}` calls (babel loads the `main=` language last; its other key=value options are not read).
+  It is csquotes' default, American (`CSQUOTES_DEFAULT`), under `style=american`, `english` or `USenglish`, under
+  `autostyle=false`, with no language named, and under polyglossia, whose `\setmainlanguage[…]{<name>}` is read by its name
+  alone, as the pinned TeX Live sets the default's marks for `english`, `american` and `british` alike. The call is one
+  placeholder where csquotes is not seen (loaded by no `\usepackage` of the paper's files: by `\RequirePackage`, or by a class
+  or package outside them) or its marks are a style the source alone does not tell (the compile's glyphs would tell it; not
+  read here): a `style=` naming another style or alias (`canadian`, `british`), an `autostyle` option but `autostyle=false`, a
+  `\setquotestyle` anywhere, a babel or polyglossia main language that is no name of `CSQUOTES_NAMES`, whatever the style.
+  Three readings are not made, and the marks are those above: a language given as a class option (babel loaded with no
+  options of its own: the default's), polyglossia's `variant=` (`\setmainlanguage[variant=british]{english}`, which the pinned
+  TeX Live sets British, is given the American marks), a paper's own `\DeclareQuoteStyle` or `\DeclareQuoteAlias` (the
+  table's). The release tier's `csquotes-styles` (`lab/source/csquotes-styles.mjs`) holds `CSQUOTES_ENGLISH`,
+  `CSQUOTES_NAMES` and `CSQUOTES_DEFAULT` to csquotes.def in each pinned compile image, the marks read through tuenc.def,
+  every alias followed, a difference either way failing. Of round 3's 89 papers, 2611.03953v2 and the holdout's 36 none loads
+  csquotes; of its third set's 119 two do, one writing `\enquote`, neither naming a main language (lane r5b-front's count).
 - **An argument that holds a declaration keeps the group that scopes it** (`withMarks`, `declares`): `\enquote{\bfseries bold
   words}`, its pair written as marks alone, left the switch with no group, and the markers wire put it after the unit's text (the
   quoted words not bold, what followed bold). Such an argument keeps a `{`…`}` group, its source the call's own braces, the marks
