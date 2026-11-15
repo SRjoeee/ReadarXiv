@@ -60,9 +60,10 @@ export type MemberLay = { state: 'laid'; lay: FillLaid; over: boolean } | { stat
 
 /**
  * layFlow's F2-F8 and L9 for one member: its lay, each step written to `trace`. A merged cell the lay fills, its lines broken
- * between words alone (FitParams.words, lay/adapt.ts; docs/PDF-READER.md §18.75), that no state of its fit sets so, not even
- * below its floor, is laid as before, its words cut where a line must end: the rule never leaves a cell the original's that
- * today's lay draws
+ * between words first (FitParams.words, lay/adapt.ts; docs/PDF-READER.md §18.75), that its fit leaves unfit even so, not even
+ * below its floor, is laid again without the rule, its words cut where a line must end: the rule never leaves a cell the
+ * original's that today's lay draws (each walk of the fit lays a size's states as before already, fit/walk.ts triesOf; the
+ * steps after it, a lead's retry and a follower's, choose between layouts the rule may change)
  */
 export function layMember(p: Prepared, R: RuleParams, trace: Trace | null = null): MemberLay {
   const n = trace?.slots.length ?? 0

@@ -63,6 +63,9 @@ export type FitState = {
   /** how far under TeX's text block bottom the state's last line may stand (§18.37, statesOf's state before each shrink step,
    *  PAST_FOOT); once it sets every token, the depth its lines took (layoutUnit2) */
   over?: number
+  /** a merged table cell's fill (FitParams.words) laid at this state as before the rule, a word cut where a line must end: no
+   *  state of its size set it between words (fit/walk.ts triesOf, docs/PDF-READER.md §18.75); a state made from it keeps it */
+  split?: true
 }
 /** the unit's parameters: the target's rules (resolveRules' params), U.params', and the call's measure and patterns */
 export type FitParams = {
@@ -101,8 +104,9 @@ export type FitParams = {
   measure: FitMeasure
   /** each language's hyphenation patterns (hyphenationOf), the run's */
   patterns?: Readonly<Record<string, Patterns | null>>
-  /** a merged table cell the lay fills (lay/adapt.ts, docs/PDF-READER.md §18.75): its lines end only between words of the
-   *  target's text, the tokens' `midWord` and `wordEnds` (breaker/words.ts); a word no line holds fails the state */
+  /** a merged table cell the lay fills (lay/adapt.ts, docs/PDF-READER.md §18.75): at each size of its fit its lines end between
+   *  words of the target's text first, the tokens' `midWord` and `wordEnds` (breaker/words.ts), a word no line holds failing
+   *  the state; where no state of the size sets it so, those states as before (FitState.split, fit/walk.ts triesOf) */
   words?: boolean
   [more: string]: unknown
 }

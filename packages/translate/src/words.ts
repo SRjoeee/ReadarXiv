@@ -19,12 +19,28 @@
 // carries an address; a run-in label; every pair of the HTML page, which holds a `<sub>` or a `<sup>` as a pair of no style),
 // and any group of a unit with no letter (nothing is sent: hasLetter).
 //
-// The chain applies it once, to the unit before anything else reads it (chain.ts settle, rowContextOf): every wire writes the
-// unit so unwrapped, every reading reads the reply against it (the tags and markers wires, the runs floor, the acceptance
-// rule, the literal put-back and the references of groups.ts), so no wire and no reading decides it again. The unit's own
-// content, and so the original's, never changes; a row's sentences come back in the unit's own projection.
+// Letters glued to an element in the strict sense are the element's word, never a word of their own (the display design's F10):
+// where the text TeX set for an element (its `text`: on its line's baseline at its text's size, the prepare's statement,
+// contract.ts) begins or ends with a letter, a combining mark or a digit (Unicode's general categories L, M, N), the run of
+// letters and combining marks (L, M) of the unit's text that touches it on that side, as far as it goes, is offered to no
+// translator; the row has it back beside the element, literally, as the source sets it. What F10 exists for is a word's
+// letters sent alone, read as a word of their own: 2111.09276v1's Table 1 on staging, Google: `\hlyellow{guitar}s.`
+// went out as an element and "s.", and "s" came back as 秒, seconds; a name written with an accent command (`M\k{a}dry`) keeps
+// its letters with it, and a panel's letter after "Figure 2" is held. A digit is never held: a number goes through a
+// translator as written, and held back it would be cut at its decimal point or its comma (`0.2\pp` leaving "0." on the
+// wire); "s2" after an element holds back the "s" and leaves the "2". Nothing is held across any other character: a
+// possessive after a system's name ("TensorCast's") is a word of the sentence, which the translator translates beside the
+// element (held back, it would stand as written in the translation). An element that states no text (a raised
+// mark, `\textsuperscript{1}Carnegie`; one that sets nothing) holds nothing back, nor is the kind asked: the text decides, by
+// its characters' categories, no list. A run between two elements is the first's: it comes back after the element it follows,
+// else before the one it precedes, outside the groups that hold the element but not the run.
+//
+// The chain applies both rules once, to the unit before anything else reads it (chain.ts settle, rowContextOf): every wire
+// writes the unit so unwrapped, every reading reads the reply against it (the tags and markers wires, the runs floor, the
+// acceptance rule, the literal put-back and the references of groups.ts), so no wire and no reading decides it again. The
+// unit's own content, and so the original's, never changes; a row's sentences come back in the unit's own projection.
 import { hasLetter, headLength } from './accept.ts'
-import { type Piece, type Result, SOURCE, type UnitIn } from './contract.ts'
+import { type OutPiece, type Piece, type Result, SOURCE, type Sentences, type UnitIn } from './contract.ts'
 
 const OBJ = '￼'
 let segmenter: Intl.Segmenter | null = null
@@ -39,9 +55,19 @@ interface Whole {
 type Span = Extract<Piece, { t: 'span' }>
 const holdsFree = (ps: readonly Piece[]): boolean => ps.some((p) => p.t === 'span' && (!p.must || holdsFree(p.content)))
 
-/** The unit as a translator is sent it where a group that is not `must` cuts a word (the module's rule), with the way back for
- *  a row; null where none does, and the unit goes as it is */
+/** The unit as a translator is sent it (the module's two rules: a group that is not `must` and cuts a word unwrapped; letters
+ *  glued to an element's text held back), with the way back for a row; null where neither changes it, and the
+ *  unit goes as it is */
 export function wholeWordsOf(unit: UnitIn): Whole | null {
+  const groups = cutGroupsOf(unit)
+  const held = heldLettersOf(groups?.unit ?? unit)
+  if (!held) return groups
+  if (!groups) return held
+  return { unit: held.unit, back: (r) => groups.back(held.back(r)) }
+}
+
+/** the unit with each group that is not `must` and cuts a word unwrapped (the module's first rule); null where none does */
+function cutGroupsOf(unit: UnitIn): Whole | null {
   if (!holdsFree(unit.content) || !hasLetter(unit)) return null
   // the projection, each group's [start, end) in it, and the offsets where TeX sets a group's stop
   let projection = ''
@@ -119,4 +145,239 @@ export function wholeWordsOf(unit: UnitIn): Whole | null {
     return { ...r, sentences: { src, tr: r.sentences.tr } }
   }
   return { unit: { ...unit, content }, back }
+}
+
+type El = Extract<Piece, { t: 'el' }>
+/** a run of letters held back: the element it comes back beside, on which side, and the groups that hold the element but not
+ *  the run, innermost first (the row has it back outside them) */
+interface Held {
+  id: string
+  side: 'before' | 'after'
+  s: string
+  exits: string[]
+}
+/** an element in the projection this rule reads: the text TeX set for it, where it states one and is a word of the unit's
+ *  sentences; else U+FFFC, no letter of any word. One stating `after` is none (contract.ts: TeX sets it after the unit's text,
+ *  white space before it, a backref's list of pages; the chain gives it no translator, tailOf), its text no neighbour of the
+ *  unit's letters */
+const shownOf = (p: El): string => (p.text && p.after === undefined ? p.text : OBJ)
+/** a character an element's text ends a word with, on its side: a letter, a combining mark or a digit (Unicode's general
+ *  categories L, M, N) */
+const WORD_END = /^[\p{L}\p{M}\p{N}]$/u
+/** a character held back where it touches such a side: a letter or a combining mark (L, M), never a digit: a number goes
+ *  through a translator as written, and held back it would be cut at its decimal point or its comma (`0.2\pp`) */
+const HELD = /^[\p{L}\p{M}]$/u
+/** the projection position of each piece of the unit: a text's characters (with the groups around them) or an element */
+type At = { t: 'text'; piece: Piece; k: number; groups: string[] } | { t: 'el'; el: El; groups: string[] }
+
+/** The unit with the letters and marks glued to an element's text held back (the module's second rule, F10), and the way
+ *  back for a row; null where no element states a text that such a character touches */
+function heldLettersOf(unit: UnitIn): Whole | null {
+  // (the projection with each element's text in its place, each position's piece; an element stating none, U+FFFC)
+  let projection = ''
+  const at: At[] = []
+  const texts: { el: El; a: number; b: number }[] = []
+  const walk = (ps: readonly Piece[], groups: string[]) => {
+    for (const p of ps) {
+      if (p.t === 'text') {
+        for (let k = 0; k < p.s.length; k++) at.push({ t: 'text', piece: p, k, groups })
+        projection += p.s
+      } else if (p.t === 'el') {
+        const s = shownOf(p)
+        if (s !== OBJ) texts.push({ el: p, a: projection.length, b: projection.length + s.length })
+        for (let k = 0; k < s.length; k++) at.push({ t: 'el', el: p, groups })
+        projection += s
+      } else walk(p.content, [...groups, p.id])
+    }
+  }
+  walk(unit.content, [])
+  if (!texts.length) return null
+  // (each element's run on each side its text begins or ends with a letter, a mark or a digit: the unit's text characters of
+  // those categories that touch it, as far as they go; elements in source order, so that a run between two is the first's,
+  // after it)
+  const held = new Map<number, { el: Extract<At, { t: 'el' }>; side: 'before' | 'after' }>()
+  const cp = (x: number, back: boolean): { ch: string; n: number } | null => {
+    // (the code point ending at x, back; else the one starting at x)
+    if (x < 0 || x >= projection.length) return null
+    const lo = projection.charCodeAt(x)
+    if (back && lo >= 0xdc00 && lo <= 0xdfff && x > 0) return { ch: projection.slice(x - 1, x + 1), n: 2 }
+    const c = projection.codePointAt(x) as number
+    return { ch: String.fromCodePoint(c), n: c > 0xffff ? 2 : 1 }
+  }
+  const textAt = (x: number) => at[x]?.t === 'text'
+  for (const { a, b } of texts) {
+    const self = at[a] as Extract<At, { t: 'el' }>
+    const s = projection.slice(a, b)
+    if (WORD_END.test(s.slice(0, [...s][0]?.length ?? 0))) {
+      let x = a - 1
+      for (let c = cp(x, true); c && textAt(x) && !held.has(x) && HELD.test(c.ch); c = cp(x, true)) {
+        for (let k = 0; k < c.n; k++) held.set(x - k, { el: self, side: 'before' })
+        x -= c.n
+      }
+    }
+    if (WORD_END.test([...s].at(-1) ?? '')) {
+      let x = b
+      for (let c = cp(x, false); c && textAt(x) && !held.has(x) && HELD.test(c.ch); c = cp(x, false)) {
+        for (let k = 0; k < c.n; k++) held.set(x + k, { el: self, side: 'after' })
+        x += c.n
+      }
+    }
+  }
+  if (!held.size) return null
+  // (each held run, within one text piece and of one element's side)
+  const runs: Held[] = []
+  for (let x = 0; x < at.length; x++) {
+    const h = held.get(x)
+    if (!h) continue
+    const here = at[x] as Extract<At, { t: 'text' }>
+    let y = x
+    while (
+      held.get(y + 1)?.el === h.el &&
+      held.get(y + 1)?.side === h.side &&
+      (at[y + 1] as Extract<At, { t: 'text' }>).piece === here.piece
+    )
+      y++
+    runs.push({
+      id: h.el.el.id,
+      side: h.side,
+      s: here.piece.t === 'text' ? here.piece.s.slice(here.k, here.k + (y - x) + 1) : '',
+      exits: h.el.groups.filter((g) => !here.groups.includes(g)).reverse(),
+    })
+    x = y
+  }
+  // the unit without them
+  let n = 0
+  const keep: number[] = []
+  const strip = (ps: readonly Piece[]): Piece[] => {
+    const out: Piece[] = []
+    for (const p of ps) {
+      if (p.t === 'text') {
+        let s = ''
+        for (const ch of p.s) {
+          if (!held.has(n)) {
+            s += ch
+            keep.push(n)
+          }
+          n += ch.length
+        }
+        if (s) out.push({ t: 'text', s })
+      } else if (p.t === 'el') {
+        keep.push(n)
+        n += shownOf(p).length
+        out.push(p)
+      } else out.push({ ...p, content: strip(p.content) })
+    }
+    return out
+  }
+  const content = strip(unit.content)
+  // (the unit's own projection, each element one character: where each kept position of the sent unit's projection stands)
+  const ownOf = new Map<number, number>()
+  {
+    let own = 0
+    let x = 0
+    for (const a of at) {
+      if (a.t === 'el') {
+        if (x === 0 || at[x - 1]?.t !== 'el' || (at[x - 1] as Extract<At, { t: 'el' }>).el !== a.el) ownOf.set(x, own++)
+      } else ownOf.set(x, own++)
+      x++
+    }
+    ownOf.set(at.length, own)
+  }
+  const sentToOwn = [...keep.map((x) => ownOf.get(x) as number), ownOf.get(at.length) as number]
+  const back = (r: Result): Result => {
+    if (!r.ok) return r
+    const { content: row, inserted } = putBack(r.content, runs)
+    if (!r.sentences) return { ...r, content: row }
+    const sentences = mapSentences(r.sentences, sentToOwn, inserted)
+    if (!sentences) {
+      const { sentences: _s, ...rest } = r
+      return { ...rest, content: row }
+    }
+    return { ...r, content: row, sentences }
+  }
+  return { unit: { ...unit, content }, back }
+}
+
+/** a row with each held run back beside its element, outside the groups it left (where the row holds them around the element);
+ *  each inserted run's place in the row's projection before it, and its side */
+function putBack(
+  row: readonly OutPiece[],
+  runs: readonly Held[],
+): { content: OutPiece[]; inserted: { at: number; n: number; side: 'before' | 'after' }[] } {
+  const MARK = Symbol('held')
+  type Marked = OutPiece & { [MARK]?: 'before' | 'after' }
+  const clone = (ps: readonly OutPiece[]): OutPiece[] =>
+    ps.map((p) => (p.t === 'span' ? { ...p, content: clone(p.content) } : { ...p }))
+  const out = clone(row)
+  /** the path to an element: each level's list and the index in it */
+  const find = (
+    ps: OutPiece[],
+    id: string,
+    path: { list: OutPiece[]; i: number }[] = [],
+  ): { list: OutPiece[]; i: number }[] | null => {
+    for (const [i, p] of ps.entries()) {
+      if (p.t === 'el' && p.id === id) return [...path, { list: ps, i }]
+      if (p.t === 'span') {
+        const f = find(p.content, id, [...path, { list: ps, i }])
+        if (f) return f
+      }
+    }
+    return null
+  }
+  for (const side of ['after', 'before'] as const)
+    for (const h of side === 'after' ? [...runs].reverse() : runs) {
+      if (h.side !== side) continue
+      const path = find(out, h.id)
+      if (!path) continue
+      // (out of the groups the run stands outside of, innermost first, where the row holds the element in them)
+      let level = path.length - 1
+      for (const g of h.exits) {
+        const up = path[level - 1]
+        const node = up?.list[up.i]
+        if (!up || node?.t !== 'span' || node.id !== g) break
+        level--
+      }
+      const { list, i } = path[level] as { list: OutPiece[]; i: number }
+      const text: Marked = { t: 'text', s: h.s, [MARK]: side }
+      list.splice(side === 'after' ? i + 1 : i, 0, text)
+    }
+  // (each inserted run's place in the projection the reading gave, then the row's texts side by side as one)
+  const inserted: { at: number; n: number; side: 'before' | 'after' }[] = []
+  let old = 0
+  const scan = (ps: readonly OutPiece[]) => {
+    for (const p of ps as Marked[]) {
+      if (p.t === 'text') {
+        if (p[MARK]) inserted.push({ at: old, n: p.s.length, side: p[MARK] })
+        else old += p.s.length
+      } else if (p.t === 'el') old += 1
+      else scan(p.content)
+    }
+  }
+  scan(out)
+  const join = (ps: OutPiece[]): OutPiece[] => {
+    const res: OutPiece[] = []
+    for (const p of ps) {
+      const last = res[res.length - 1]
+      if (p.t === 'text' && last?.t === 'text') res[res.length - 1] = { t: 'text', s: last.s + p.s }
+      else res.push(p.t === 'span' ? { ...p, content: join(p.content) } : p.t === 'text' ? { t: 'text', s: p.s } : p)
+    }
+    return res
+  }
+  return { content: join(out), inserted }
+}
+
+/** a row's sentences after the put-back: the source's from the sent unit's projection to the unit's own; the row's past the
+ *  letters put back (a run put back after its element stays in the sentence before a start right after it, one put back
+ *  before its element in the sentence that starts at it); null where they no longer rise */
+function mapSentences(
+  s: Sentences,
+  sentToOwn: readonly number[],
+  inserted: readonly { at: number; n: number; side: 'before' | 'after' }[],
+): Sentences | null {
+  const src = s.src.map((x) => sentToOwn[x] ?? x)
+  const tr = s.tr.map(
+    (t) => t + inserted.reduce((a, x) => a + (x.at < t || (x.at === t && x.side === 'after') ? x.n : 0), 0),
+  )
+  const rises = (xs: number[]) => xs.every((x, i) => x > (i ? (xs[i - 1] as number) : 0))
+  return rises(src) && rises(tr) ? { src, tr } : null
 }

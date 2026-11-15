@@ -277,9 +277,10 @@ function breakLines(
   // ends only where the breaker lets it end AND a word of the target's text ends there, by the platform's segmentation
   // (breaker/words.ts). A token whose start stands inside a word (`midWord`), a space too, is held to the one before it as a
   // glued one is; a cut of a word longer than its line, or at a hyphenation point, is taken only where a word ends inside it
-  // (`wordEnds`): none, and the state fails, the fit stepping down its sizes. An element's text and a label state no words:
-  // cut as before)
-  const words = !!P.words
+  // (`wordEnds`): none, and the state fails. Where no state of a size sets the cell so, the walk lays those states as before
+  // (`st.split`, fit/walk.ts triesOf: the size never gives way to whole words, the owner's answer of 2026-11-16) before it
+  // steps the size down. An element's text and a label state no words: cut as before)
+  const words = !!P.words && !st.split
   /** a token held to the one before it in a group: glued (a space never), and in such a fill any whose start stands inside a
    *  word, a space too */
   const holds = (t: BreakToken) => (t.space ? words && !!t.midWord : !!t.glue || (words && !!t.midWord))

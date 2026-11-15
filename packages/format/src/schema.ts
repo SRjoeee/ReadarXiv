@@ -44,9 +44,11 @@ export type Piece =
       keys?: string[] | undefined
       stop?: string | undefined
       silent?: 1 | undefined
+      newblock?: 1 | undefined
       after?: string | undefined
       name?: string | undefined
       nameLang?: string | undefined
+      text?: string | undefined
     }
   | {
       t: 'span'
@@ -63,7 +65,7 @@ export type Piece =
 /**
  * A piece of a unit, in the source's order. A piece's id is local to its unit (its place in it), so equal units are equal
  * piece for piece. `el`: an element that travels with the text (a formula, a citation, …), its TeX source `src` for
- * identity only (`stop`, `silent` and `after` not in the id: each is read from `src`, or `stop` from the unit's run-in labels around it). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled (its command's style, or where the command names none the face TeX set its text in, read off its glyphs, named for what it changes; `stop` read off them too, not in the id); a group the unit's edge cuts
+ * identity only (`stop`, `silent`, `newblock`, `after` and `text` not in the id: each is read from `src`, from the unit's run-in labels around it, from the compile or from arXiv's page). `span`: a group of the source (`open` and `close` its TeX source, for identity), styled (its command's style, or where the command names none the face TeX set its text in, read off its glyphs, named for what it changes; `stop` read off them too, not in the id); a group the unit's edge cuts
  * (a cell's \\ inside a \shortstack) has no `open` (it began before the unit) or no `close` (it ends after it). A figure text's
  * run of glyphs in another face than its own is a group of no source, neither end, its style what the face changes (`bold`,
  * `medium`, `italic`, `upright`, a role) and its face the part's (SpanAt.style). `unit`: a unit
@@ -82,11 +84,20 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // or a line end where it ends its sentence and sets none (a forced break a run-in label follows: marks/run-ins.ts): a
       // translator may write it after the element so that the sentence ends there
       stop: z.string().optional(),
-      // the element sets nothing where it stands: no character and no space (today's mt.mjs isInkless, TeX's tables: a
+      // the element sets nothing where it stands: no character and no space. By TeX's tables (instrument/mt.ts isInkless: a
       // declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
-      // a table's row rule; never a space, a break, a fill or a skip), so no translator needs it: a wire may send it on no
-      // wire and put it back at its group's front or end
+      // a table's row rule); or, a command's or a declaration's element (kind `macro`, `other` or `url`), where the marked
+      // compile measured it empty at every occurrence of its unit (the instrument's `empty`) and arXiv's page confirms it, every
+      // placement of it in a part stating no ink and a text of nothing (El `ink` [], `text` ''): a conditional's `\fi`, a
+      // `\natexlab{}`, a `\urldef`'s stored `\url`. Never a space, a tie, a forced break, glue, TeX's alignment tab, one of
+      // TeX's glue or penalty primitives or the kernel's skip and break commands (source/tex-kernel.ts), nor an element that
+      // stands for content set elsewhere (a display, a formula, a note, a citation): no translator needs it, so a wire may
+      // send it on no wire and put it back at its group's front or end
       silent: flag.optional(),
+      // LaTeX's `\newblock`, where a new block of a bibliography entry begins (BibTeX's styles write it between an entry's
+      // authors, title and venue); a skip by its classes' definitions, never `silent`: an entry's parts are its blocks
+      // (Unit.entry)
+      newblock: flag.optional(),
       // TeX sets it after the unit's text, no word of its sentences (backref's list of the pages that cite a bibliography
       // entry: backref.sty's parscan reads the entry to its paragraph's end, sets it, then \BR@backref sets the list, its
       // \newblock's glue before it), and the white space that stands for that gap: no translator is given it, and it comes back
@@ -103,6 +114,13 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // the name only where this is the language it translates
       // from, or none is declared
       nameLang: z.string().optional(),
+      // a command's element (kind `macro`): the text TeX set for it where it stands, on its line's baseline at its text's size,
+      // as arXiv's page shows it at every placement of its unit (`\hl{guitar}`'s "guitar", `\k{a}`'s "ą"); absent where TeX
+      // raised or lowered it, set it at another size, or set nothing (a footnote's mark, `\textsuperscript{1}`, an empty
+      // macro), and for an element of any other kind (a formula, a number, a reference). Not in the id: read on
+      // arXiv's page. Letters glued to it that make one word with this text (UAX #29) are that word's, never a word of
+      // their own (packages/translate words.ts)
+      text: z.string().optional(),
     }),
     z.object({
       t: z.literal('span'),
@@ -121,7 +139,8 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
 )
 
 /** a unit, each distinct one once: `depth` a heading's level, `sentences` it is cut into sentences, `kept` the paper keeps it
- *  as it is (never translated), `of` the block its source ties it to where that is not its kind's (toggleKind) */
+ *  as it is (never translated), `entry` a bibliography entry, `of` the block its source ties it to where that is not its kind's
+ *  (toggleKind) */
 export const Unit = z.object({
   id: Id,
   kind: Kind,
@@ -129,6 +148,9 @@ export const Unit = z.object({
   depth: int.optional(),
   sentences: z.literal(true).optional(),
   kept: z.literal(true).optional(),
+  // the unit is a bibliography's entry (the source reader's `\bibitem`; its form with the author block's names, kind `named`,
+  // states it too): its parts are its blocks, each begun by a `newblock` element, one part where it states none. Not in the id
+  entry: z.literal(true).optional(),
   // the kind of the block the paper's source ties it to, whose reading option it follows: `author`, a note the source writes
   // inside an author command's argument or attaches to an author (a \thanks in \author{…}, acmart's \authornote), which the
   // names option shows translated or leaves the original's with the block (the owner's ruling of 2026-11-13). An open string,

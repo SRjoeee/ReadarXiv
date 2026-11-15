@@ -37,6 +37,7 @@ export const RULES = [
   'references',
   'pass-whole',
   'words',
+  'glued',
 ] as const
 export type Rule = (typeof RULES)[number]
 
@@ -294,6 +295,23 @@ export const CASES: readonly ChainCase[] = [
     name: 'a group that cuts a word: the word sent whole and plain, the row unstyled',
     target: 'de',
     units: [unit('w', [span('1', 'bold', [t('I')]), t('nduce the model to answer.')])],
+    translators: () => [upper()],
+  },
+  // ---- glued: the letters and marks that touch the text TeX set for an element are held back, put back beside it;
+  // a possessive after it, across its apostrophe, is offered as a word of the sentence
+  {
+    rule: 'glued',
+    name: 'a letter glued to an element’s text: not offered, back after the element; the digit after it and a possessive offered',
+    target: 'de',
+    units: [
+      unit('g', [
+        t('Polish the '),
+        { t: 'el', id: 'h', kind: 'macro', text: 'guitar' },
+        t('s2b now, as '),
+        { t: 'el', id: 'n', kind: 'macro', text: 'Tool' },
+        t("'s model does."),
+      ]),
+    ],
     translators: () => [upper()],
   },
 ]
