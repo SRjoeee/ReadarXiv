@@ -180,11 +180,12 @@ async function placedOf(
     take: !keep,
     classesOf: deps.classesOf,
   })
-  const t3 = now()
-  // (each page read whole on A and on B, neither Doc's `unread` stated: where the bundle's parts may confirm that TeX set
-  // nothing for an element, rule 3's measured half)
+  // (each page read whole on A and on B, neither Doc's `unread` stated, read with locate: where the bundle's parts may confirm
+  // that TeX set nothing for an element, rule 3's measured half)
   const whole = read.doc.pages.map((pg, i) => pg.unread === null && ins.ink.pages[i]?.unread === null)
-  // (B's ink and its owners: read by align and locate alone; the bundle reads the instrument's units and TeX's statements)
+  const t3 = now()
+  // (B's ink and its owners: read by align and locate alone, and each page's `unread` above; the bundle reads the instrument's
+  // units and TeX's statements)
   if (!keep) {
     ins.ink.pages.length = 0
     ins.glyphs.length = 0
