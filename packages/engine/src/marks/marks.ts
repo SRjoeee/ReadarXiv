@@ -1202,89 +1202,6 @@ export function endPiecesOf(pieces: readonly PieceLike[], ends: ReadonlySet<stri
   const before = pieces[j]
   return before?.t === 'ph' && FILL_SOURCE.test(before.src ?? '') ? [k] : []
 }
-/** a node TeX lists that separates what is set around it, at any depth of the listing: glue (a space, a skip or a fill:
- *  `\glue`, a named one's `\glue(\name)`, leaders) or a kern (a space: `\kern 2.0`, a font's `\kern2.0`). A `\vspace` set in
- *  a box is a `\vadjust` holding its glue */
-const SEPARATOR_NODE = /^\.+\\(?:glue|kern|leaders|cleaders|xleaders)(?![A-Za-z])/
-/** a penalty TeX lists, its value: one of -10000 or less forces a break (The TeXbook, ch. 14) */
-const PENALTY_NODE = /^\.+\\penalty (-?\d+)$/
-/** the box a sample is set in as TeX lists it first (`\hbox(h+d)xw`, a glue setting after it): its width as TeX prints it */
-const BOX_WIDTH = /^\\hbox\(-?[\d.]+\+-?[\d.]+\)x(-?[\d.]+)/
-/**
- * The samples TeX set nothing for (rule 3's measured half), from the probe's own log (inkSection): each sample TeX says sets no
- * ink (readInkProbe) whose box TeX lists of no width and holding no separator. No width: `x0.0`, which TeX prints for 0sp alone
- * (it prints a dimension in the fewest decimals that read back to the same scaled point, tex.web §103: one sp is `0.00002`),
- * the log's own precision. No separator: no glue, leaders or kern, no forced break (a penalty of -10000 or less). A paper's
- * macro defined as `\hspace{2.5em}` has width and glue (2610.37818v1's `\authorspace`, 25 pt); one defined as a forced break
- * (authblk's `\authorcr`, its `\\`: `\penalty 10000`, `\glue 0.0 plus 1.0fil`, `\penalty -10000`) has none of either width
- * and separates; one defined empty, a declaration, a key written to a file set nothing
- */
-export function readInkNothing(log: string | null | undefined, samples: readonly string[]): string[] {
-  const inkless = new Set(readInkProbe(log, samples))
-  const out: string[] = []
-  let at: number | null = null,
-    width: string | null = null,
-    listed = false,
-    separates = false,
-    done = false
-  for (const line of (log ?? '').split('\n')) {
-    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
-    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
-      const i = Number(r.fields[0])
-      if (r.tag === 'ink-at') {
-        at = i
-        width = null
-        listed = separates = done = false
-        continue
-      }
-      const s = samples[i]
-      if (at === i && s !== undefined && inkless.has(s) && width === '0.0' && !separates) out.push(s)
-      at = null
-      continue
-    }
-    if (at === null || done) continue
-    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) {
-      done = true
-      continue
-    }
-    if (/^> \\box\d+=/.test(line)) {
-      listed = true
-      continue
-    }
-    if (!listed) continue
-    if (width === null) {
-      width = BOX_WIDTH.exec(line)?.[1] ?? ''
-      continue
-    }
-    const penalty = PENALTY_NODE.exec(line)
-    if (SEPARATOR_NODE.test(line) || (penalty && Number(penalty[1]) <= -10000)) separates = true
-  }
-  return out
-}
-/** the command a placeholder's source begins with: its control word (TeX's letters in a document's body) or control symbol;
- *  else the source itself */
-const commandOfSource = (src: string): string => /^\s*(\\(?:[A-Za-z]+|[^A-Za-z]))/.exec(src)?.[1] ?? src
-/**
- * The placeholders' sources TeX set nothing for where the document uses them, at every use sample of their command (rule 3's
- * measured half): of the use answers (B4, useAnswersOf `nothing`: no ink, a box of no width, no glue, kern or forced break, read
- * by readInkNothing), those of a command every paper's macro of which (classOf 'macro') in the units is a source TeX answered so
- * where it is used. A command one use of which sets ink, one a use of which TeX was not asked about (a heading's, a caption's, a
- * bibliography entry's, which the bibliography's pass does not yet hold) or did not answer, is not stated to set nothing. The
- * probe's answer alone never is: it sets a macro after the preamble, outside its context (elsarticle's `\sep`, empty there and
- * `\unskip, ` in `keyword`), and the marking gives an inkless answer no point, so no part can confirm it (PDF-READER §18.79)
- */
-export function usedNothingOf(units: readonly Unit[], uses: UseAnswers | null | undefined): string[] {
-  if (!uses?.nothing.length) return []
-  const none = new Set(uses.nothing)
-  const every = new Map<string, boolean>()
-  for (const u of units)
-    for (const p of u.pieces ?? [])
-      if (classOf(p) === 'macro') {
-        const c = commandOfSource(p.src ?? '')
-        every.set(c, (every.get(c) ?? true) && none.has(p.src ?? ''))
-      }
-  return uses.nothing.filter((s) => every.get(commandOfSource(s)))
-}
 /**
  * What the back half reads of the mark probe's own log (the compile move's B3, by the brief's ruling 6: the log the box stores
  * beside the instrument, no field of the stored plan): the texts the ink section showed the samples and leads set, and those set
@@ -1304,18 +1221,13 @@ export function probeFactsOf(
   }
 }
 /** what TeX answered where the document uses a macro (the bibliography's pass's asks, ASK_TEX), by source: those it said set no
- *  ink (readInkProbe), those it answered otherwise (readInkAnswered), and of the inkless those it set nothing for at all, a box
- *  of no width holding no separator (readInkNothing: rule 3's measured half, usedNothingOf) */
-export type UseAnswers = { inkless: string[]; inked: string[]; nothing: string[] }
+ *  ink (readInkProbe) and those it answered otherwise (readInkAnswered) */
+export type UseAnswers = { inkless: string[]; inked: string[] }
 /** the asks' answers from the bibliography's pass's log, the asked samples by their ask's index */
 export function useAnswersOf(log: string | null | undefined, asked: readonly string[]): UseAnswers {
   const inkless = readInkProbe(log, asked),
     none = new Set(inkless)
-  return {
-    inkless,
-    inked: readInkAnswered(log, asked).filter((s) => !none.has(s)),
-    nothing: readInkNothing(log, asked),
-  }
+  return { inkless, inked: readInkAnswered(log, asked).filter((s) => !none.has(s)) }
 }
 /** the marking's inkless with the use's answers (B4): a source TeX answered where the document uses it takes that answer, set no
  *  ink or set some; one it did not answer there keeps the probe's. In the probe's order, the use's added after */

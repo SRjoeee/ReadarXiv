@@ -1,7 +1,6 @@
 // The ink probe asked where the document uses a macro (the compile move's B4, the display design's F15), at its interfaces, on
 // content of our own (no TeX runs; lab/pdf/spikes/ask-cases.mjs holds the TeX): the asks' answers read from a pass's log in the
-// ink section's form (marks.ts readInkAnswered, useAnswersOf), merged into the marking's inkless (mergeUses), rule 3's measured
-// half read from them alone (usedNothingOf); the bibliography's pass's files with the asks (live.ts askedFiles: each sample right before its
+// ink section's form (marks.ts readInkAnswered, useAnswersOf), merged into the marking's inkless (mergeUses); the bibliography's pass's files with the asks (live.ts askedFiles: each sample right before its
 // first use in running text, none in a heading, a caption, an algorithm's body or a sample whose groups do not close, ASK_TEX on
 // the main file's first line); and madeBibliography's `asks`: the pass asked with them, its answers returned, asked again as
 // today's where it did not run through.
@@ -9,16 +8,7 @@ import { describe, expect, it } from 'vitest'
 import { askedFiles, openPaper } from '../src/compile/live.ts'
 import { madeBibliography } from '../src/compile/paper.ts'
 import { UNMARKED_HEAD, unmarkedFiles } from '../src/compile/guard.ts'
-import {
-  ASK_TEX,
-  askable,
-  inkSamples,
-  mergeUses,
-  readInkAnswered,
-  readInkNothing,
-  useAnswersOf,
-  usedNothingOf,
-} from '../src/marks/marks.ts'
+import { ASK_TEX, askable, inkSamples, mergeUses, readInkAnswered, useAnswersOf } from '../src/marks/marks.ts'
 import type { CompileRequest } from '../src/compile/live.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -48,31 +38,12 @@ describe('the asks’ answers, read from the pass’s log', () => {
   const asked = ['\\nada', '\\kw', '\\undef', '\\myrule']
   it('answers a listing given whole with no error, inkless or not; one with an error or none is no answer', () => {
     expect(readInkAnswered(log, asked)).toEqual(['\\nada', '\\kw'])
-    expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\nada'], inked: ['\\kw'], nothing: ['\\nada'] })
+    expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\nada'], inked: ['\\kw'] })
   })
   it('takes each answered source’s answer over the probe’s, the probe’s where the use gave none', () => {
     const probe = ['\\kw', '\\tnote{b}', '\\undef']
-    expect(mergeUses(probe, { inkless: ['\\nada'], inked: ['\\kw', '\\tnote{b}'], nothing: [] })).toEqual([
-      '\\undef',
-      '\\nada',
-    ])
+    expect(mergeUses(probe, { inkless: ['\\nada'], inked: ['\\kw', '\\tnote{b}'] })).toEqual(['\\undef', '\\nada'])
     expect(mergeUses(probe, null)).toEqual(probe)
-  })
-  it('reads rule 3’s answer at the use: a source the use set ink for is none, whatever the probe set after the preamble', () => {
-    const units = [
-      {
-        kind: 'para',
-        pieces: [
-          { t: 'text', s: 'a ' },
-          { t: 'ph', src: '\\kw' },
-        ],
-      },
-    ] as never
-    // (the probe after the preamble: nothing; where the paper uses it, inside its environment: a comma and a space)
-    expect(readInkNothing(listing(0, NONE, []), ['\\kw'])).toEqual(['\\kw'])
-    const atUse = useAnswersOf(listing(0, '\\hbox(4.3+0.0)x5.8', INKED), ['\\kw'])
-    expect(usedNothingOf(units, atUse)).toEqual([])
-    expect(usedNothingOf(units, useAnswersOf(listing(0, NONE, []), ['\\kw']))).toEqual(['\\kw'])
   })
   it('asks no sample whose own groups do not close in it', () => {
     expect(askable('\\nada{}')).toBe(true)
@@ -172,7 +143,7 @@ describe('madeBibliography with `asks`', () => {
     expect(h.asked.length).toBe(1)
     expect(dec(h.asked[0]!.overrides!.get('main.tex'))).toContain(ASK_TEX)
     expect(h.asked[0]).toMatchObject({ bibtex: true, draft: true, files: true })
-    expect(r.uses).toEqual({ inkless: ['\\nada{}'], inked: ['\\kw{}'], nothing: ['\\nada{}'] })
+    expect(r.uses).toEqual({ inkless: ['\\nada{}'], inked: ['\\kw{}'] })
   })
   it('asks the pass again as today’s where the one with the asks did not run through, and returns no answer', async () => {
     const paper = paperOf()

@@ -118,9 +118,6 @@ interface Plan {
   inkless: Kept
   lineskip?: Kept
   decorated?: Kept
-  /** the sources TeX set nothing for where the document uses them (the marked compile's `nothing`, rule 3's measured half: B4's
-   *  asks), so that a prepare from the stored objects states `silent` as the compile's did; absent: none asked */
-  nothing?: Kept
   /** the marked compile left the optional classes of points out (design-performance Q2), so a prepare from the stored objects
    *  states it as the compile's did */
   reduced?: true
@@ -154,14 +151,7 @@ const storedInstrumentOf = ({
   const inkless = keeps(options.inkless)
   const lineskip = keeps(options.lineskip)
   const decorated = keeps(options.decorated)
-  const nothing = keeps(options.nothing)
-  if (
-    texts !== undefined &&
-    inkless !== undefined &&
-    lineskip !== undefined &&
-    decorated !== undefined &&
-    nothing !== undefined
-  ) {
+  if (texts !== undefined && inkless !== undefined && lineskip !== undefined && decorated !== undefined) {
     const p: Plan = {
       front: 'today',
       v: 1,
@@ -169,7 +159,6 @@ const storedInstrumentOf = ({
       inkless,
       ...(lineskip ? { lineskip } : {}),
       ...(decorated ? { decorated } : {}),
-      ...(nothing ? { nothing } : {}),
       ...(reduced ? { reduced: true as const } : {}),
       bbl: bbl ? { path: bbl.path, bytes: toBase64(bbl.bytes) } : null,
       facts: { pages: f.pages, day: f.day, banner: f.banner },
@@ -201,15 +190,7 @@ const planOf = (stored: StoredInstrument): ReadPlan | null => {
   const inkless = keptOf(p.inkless)
   const lineskip = 'lineskip' in p ? keptOf(p.lineskip) : null
   const decorated = 'decorated' in p ? keptOf(p.decorated) : null
-  const nothing = 'nothing' in p ? keptOf(p.nothing) : null
-  if (
-    texts === undefined ||
-    inkless === undefined ||
-    lineskip === undefined ||
-    decorated === undefined ||
-    nothing === undefined
-  )
-    return null
+  if (texts === undefined || inkless === undefined || lineskip === undefined || decorated === undefined) return null
   if ('reduced' in p && p.reduced !== true) return null
   const reduced = 'reduced' in p
   const f = p.facts
@@ -233,7 +214,6 @@ const planOf = (stored: StoredInstrument): ReadPlan | null => {
     inkless,
     ...(lineskip ? { lineskip } : {}),
     ...(decorated ? { decorated } : {}),
-    ...(nothing ? { nothing } : {}),
     ...(reduced ? { reduced: true as const } : {}),
     bbl,
     facts: { pages, day, banner },

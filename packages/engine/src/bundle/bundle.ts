@@ -139,36 +139,22 @@ const onGrid = (v: number): number => Math.round(v * 100) / 100
  *  or a reference's glyphs glued to letters ("$n$th") are another question, which no reader reads: a fact no reader reads is
  *  not stated */
 const COMMAND_KIND = 'macro'
-/**
- * Rule 3's measured half: a command's element TeX set nothing for where it stands (format's el `silent`; the kernel's list is
- * the instrument's, mt.ts isInkless): at every use of its command, where TeX was asked there, its box held no ink, had no width
- * and held no glue, kern or forced break (the instrument's PieceClass.nothing: B4's asks, marks.ts usedNothingOf); and the source
- * reader states it no separator (no tie, forced break or glue of its own, no `\newblock`, a skip by its classes' definitions).
- * No part is read for it: an element the probe calls inkless gets no point and is stated empty by that same answer, so its
- * placements confirm nothing (PDF-READER §18.79). A command never asked where it is used is never measured so
- */
-const measuredSilent = (el: Extract<Piece, { t: 'el' }>, c: PieceClass | undefined): boolean =>
-  !!c?.nothing && !c.tie && !c.brk && !c.glue && !el.newblock
 /** a unit's content as the bundle states it: each command's element with the text TeX set for it where it stands (format's el
- *  `text`, textAt), and `silent` where rule 3's measured half holds (measuredSilent), by `uid` and its piece id, its classes the
- *  instrument's. The instrument's content stays as it is: a copy where anything is stated */
+ *  `text`, textAt), by `uid` and its piece id. The instrument's content stays as it is: a copy where anything is stated */
 function statedOf(
   uid: string,
   content: readonly Piece[],
   placements: ReadonlyMap<string, readonly Placement[]>,
-  classes: ReadonlyMap<string, PieceClass>,
 ): Piece[] {
   let any = false
   const walk = (ps: readonly Piece[]): Piece[] =>
     ps.map((p) => {
       if (p.t === 'span') return { ...p, content: walk(p.content) }
       if (p.t !== 'el' || p.kind !== COMMAND_KIND) return p
-      const at = placements.get(`${uid}|${p.id}`)
-      const text = textAt(at)
-      const silent = !p.silent && measuredSilent(p, classes.get(p.id))
-      if (text === undefined && !silent) return p
+      const text = textAt(placements.get(`${uid}|${p.id}`))
+      if (text === undefined) return p
       any = true
-      return { ...p, ...(text !== undefined ? { text } : {}), ...(silent ? { silent: 1 as const } : {}) }
+      return { ...p, text }
     })
   const out = walk(content)
   return any ? out : (content as Piece[])
@@ -330,17 +316,16 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   }
   // (each element's placements in a part, by its row's unit id and its piece id: the El the part states and its member)
   const inPart = new Set(takes.flatMap((x) => x.take.flatMap((i) => located.flows[i]!)))
-  const placements = new Map<string, Placement[]>()
+  const placements = new Map<string, { el: El; size: number; onBase: boolean }[]>()
   for (const o of inPart) {
     const x = placed[o]!
     if (typeof x.text !== 'string') continue
-    const mem = members[o]!
     for (const [id, el] of x.els ?? []) {
       const k = `${x.text}|${id}`
       ;(placements.get(k) ?? placements.set(k, []).get(k)!).push({
         el,
         size: x.style.size,
-        onBase: !!mem.onBase?.has(id),
+        onBase: !!members[o]!.onBase?.has(id),
       })
     }
   }
@@ -359,7 +344,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     add({
       id: u.id,
       kind: u.kind,
-      content: statedOf(u.id, u.content, placements, new Map(u.classes ?? [])),
+      content: statedOf(u.id, u.content, placements),
       ...(u.depth !== undefined ? { depth: u.depth } : {}),
       ...(u.of ? { of: u.of } : {}),
       // (running text a translator cuts into sentences, the reader lighting each with its translation: words.ts bySentence)

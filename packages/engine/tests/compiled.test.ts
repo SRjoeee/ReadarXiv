@@ -120,7 +120,7 @@ describe('the stored half', () => {
   })
   test("B4: the bibliography's pass asked with the asks, and what TeX answered where the document uses a macro handed to the marked compile", async () => {
     vi.mocked(bibliographyKept).mockReturnValueOnce(null)
-    const uses = { inkless: ['\\nada'], inked: ['\\hlg'], nothing: ['\\nada'] }
+    const uses = { inkless: ['\\nada'], inked: ['\\hlg'] }
     vi.mocked(madeBibliography).mockResolvedValueOnce({ kept: 'no-bbl', ms: 0, uses })
     await run(null)
     expect(vi.mocked(madeBibliography).mock.calls.at(-1)?.[1]).toMatchObject({ asks: true })

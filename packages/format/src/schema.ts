@@ -84,15 +84,12 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // or a line end where it ends its sentence and sets none (a forced break a run-in label follows: marks/run-ins.ts): a
       // translator may write it after the element so that the sentence ends there
       stop: z.string().optional(),
-      // the element sets nothing where it stands: no character and no space. By TeX's tables (instrument/mt.ts isInkless: a
-      // declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
-      // a table's row rule); or, a command's element (kind `macro`), where TeX was asked where the document uses it and at every
-      // use of its command set it in a box of no ink, no width and no glue, kern or forced break (TeX's own listing of it there;
-      // never the probe's answer after the preamble alone): a paper's macro that gobbles its argument, a declaration. Never a
-      // space, a tie, a forced break, glue, `\newblock`, TeX's alignment tab, one of TeX's glue or penalty primitives or the
-      // kernel's skip and break commands (source/tex-kernel.ts), nor an element that stands for content set elsewhere (a
-      // display, a formula, a note, a citation): no translator needs it, so a wire may send it on no wire and put it back at its
-      // group's front or end
+      // the element sets nothing where it stands: no character and no space. By TeX's tables alone (instrument/mt.ts isInkless:
+      // a declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
+      // a table's row rule); never a space, a tie, a forced break, glue, `\newblock`, TeX's alignment tab, nor an element that
+      // stands for content set elsewhere (a display, a formula, a note, a citation). A paper's own command is never stated so: no
+      // reading of TeX's has yet stated what it sets where it stands (PDF-READER §18.79). No translator needs such an element, so
+      // a wire may send it on no wire and put it back at its group's front or end
       silent: flag.optional(),
       // LaTeX's `\newblock`, where a new block of a bibliography entry begins (BibTeX's styles write it between an entry's
       // authors, title and venue); a skip by its classes' definitions, never `silent`: an entry's parts are its blocks

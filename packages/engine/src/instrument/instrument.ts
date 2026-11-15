@@ -142,8 +142,6 @@ export type InstrumentInput = {
   options?: {
     texts?: unknown
     inkless?: readonly string[] | null
-    /** the sources TeX set nothing for where the document uses them (compile/paper.ts MarkedOptions `nothing`) */
-    nothing?: readonly string[] | null
     decorated?: unknown
     lineskip?: [number, number] | null
   }
@@ -2115,9 +2113,6 @@ export async function instrumentOf({
   const probe = probeLog ? probeFactsOf(probeLog, units) : null
   const shown = withTexts(textsOf(texts), probe?.texts)
   const endSamples = new Set(probe?.ends ?? [])
-  // (the sources TeX set nothing for where the document uses them, at every use of their command: the marked compile's
-  // `nothing`, B4's asks read by marks.ts usedNothingOf; rule 3's measured half)
-  const nothing = new Set(options.nothing ?? [])
   const names = new Set(pages.flatMap((pg) => pg.points.map((x) => x.name)))
   const follows = followsOf(units, names, shown, inkless)
   const own = ownOf(pages, {
@@ -2173,14 +2168,6 @@ export async function instrumentOf({
     for (const k of endPiecesOf(u.pieces, endSamples)) {
       const c = classes.find(([id]) => id === String(k))
       if (c) c[1].end = true
-    }
-    // (each placeholder TeX set nothing for at every sample of its command: PieceClass.nothing, read by the bundle's `silent`)
-    if (nothing.size) {
-      const byId = new Map(classes)
-      u.pieces.forEach((p, k) => {
-        const c = p.t === 'ph' && nothing.has(p.src ?? '') ? byId.get(String(k)) : undefined
-        if (c) c.nothing = true
-      })
     }
     const spans = spansOf(u.pieces, colours.get(i) ?? null),
       passed = passedOf(u.pieces)
