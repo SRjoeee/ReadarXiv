@@ -1,4 +1,4 @@
-// The stored half of the front half (DESIGN §16, "The prepare's two halves"): what decides the instrument's four stored objects,
+// The stored half of the front half (DESIGN §16, "The prepare's two halves"): what decides the instrument's five stored objects,
 // called by front.ts prepareFront before it states the instrument over B. The paper opened; a stored instrument read and taken
 // only for the original it was made with; the .bbl from its plan, or the bibliography TeX makes; the source's units handed out
 // (by the caller, of the paper as opened: the units are not the instrument's); then either the stored objects read back, or
@@ -34,7 +34,7 @@ export interface CompiledInput {
   files: Map<string, Uint8Array>
   /** what arXiv's PDF says (front.ts originalFactsOf) */
   original: OriginalFacts
-  /** the instrument's four objects a compile of the paper stored, or null */
+  /** the instrument's five objects a compile of the paper stored, or null */
   stored: StoredInstrument | null
   compile(q: CompileRequest): Promise<Compiled>
   /** the TeX engines the host runs */
@@ -46,9 +46,13 @@ export interface CompiledInput {
   note(name: string, data: unknown): void
   /** the source's units handed out, of the paper as opened (with its .bbl): awaited before any compile of the marks */
   units(paper: Paper): Promise<void>
+  /** the host's bound on the files one compile is given back to carry ({ count, bytes }: the box's one answer's), which the
+   *  marked compile's pass loop holds the files it carries to (paper.ts convergeThenMark `files-bound`); none: no bound */
+  filesBound?: { count: number; bytes: number } | null
 }
 /** the stored half's end: the paper as opened, B, its log and the marked compile's options (or the stored ones read back), and
- *  the four objects to store where TeX made them and their plan reads back; or why the paper cannot be typeset */
+ *  the five objects to store where TeX made them and their plan reads back, with the mark probe's raw log where the probe ran
+ *  (`probeLog`, null where the stored objects were read back); or why the paper cannot be typeset */
 export type CompiledResult =
   | { ok: false; why: PrepareWhy; detail: string }
   | {
@@ -58,6 +62,9 @@ export type CompiledResult =
       log: string
       options: Record<string, unknown>
       made: StoredInstrument | null
+      probeLog: string | null
+      /** the marked compile left the optional classes of points out (design-performance Q2), or a stored plan says it did */
+      reduced: boolean
     }
 
 /** each page's text of a compile's PDF (the layout guard's check), or null where PDF.js cannot read it */
@@ -80,7 +87,7 @@ async function pagesTextOf(
 /** The stored half: the paper opened, its bibliography made where TeX must make it (or the .bbl the plan kept), the source's
  *  units handed out, and B with its log and options: the stored instrument's where one was given and taken (the facts of A the
  *  marked compile read, its page count, its day, its banner, the same), else the marked compile and its final pass with arXiv's
- *  day and page count, and the four objects to store */
+ *  day and page count, and the five objects to store */
 export async function compiledOf(input: CompiledInput): Promise<CompiledResult> {
   let paper = opened(input.files)
   const read = input.stored ? planOf(input.stored) : null
@@ -90,6 +97,8 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
   if (input.stored && !plan)
     input.note('front', { stored: read ? 'made with another original: compiled anew' : 'unreadable: compiled anew' })
   let bbl: { path: string; bytes: Uint8Array } | null = null
+  /** the files the bibliography's pass wrote, carried into the marked compile's pass 1 (option (i) of Q1) */
+  let bibFiles: Map<string, Uint8Array> | null = null
   if (plan) {
     if (plan.bbl) {
       bbl = plan.bbl
@@ -101,6 +110,7 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
     if ('paper' in r) {
       paper = r.paper
       bbl = r.made
+      bibFiles = r.files ?? null
     }
     input.note('bibliography', 'paper' in r ? { entries: r.paper.units.length, ms: r.ms } : { kept: r.kept, ms: r.ms })
   }
@@ -110,9 +120,15 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
   let log: string
   let options: Record<string, unknown>
   let made: StoredInstrument | null = null
+  let probeLog: string | null = null
+  let reduced = false
   if (plan && input.stored) {
+    reduced = !!plan.reduced
     finalPdf = input.stored['b.pdf']
     log = FROM_UTF8.decode(input.stored.log)
+    // (an instrument stored before the probe's log was one of its objects has none)
+    const stored: Uint8Array | undefined = input.stored['probe.log']
+    probeLog = stored ? FROM_UTF8.decode(stored) : null
     options = {
       texts: unkeep(plan.texts),
       inkless: unkeep(plan.inkless),
@@ -122,8 +138,15 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
   } else {
     input.stage('compiling')
     const day = f.day
+    // (the marked compile as the pass loop, Q1: its first settled pass B and the log, one TeX pass fewer than today's compile and
+    // its final pass; the files it carries held to the host's bound)
     const m = await markedOfPaper(paper, {
       compile: input.compile,
+      converge: true,
+      reduce: true,
+      statements: true,
+      carried: bibFiles,
+      filesBound: input.filesBound ?? null,
       compileBudgetMs: null,
       engines: input.engines,
       pages: async () => f.pages,
@@ -146,9 +169,11 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
     finalPdf = base.pdf
     log = m.log ?? ''
     options = m.options ?? {}
+    probeLog = m.probeLog ?? null
+    reduced = !!m.guard?.reduced
     // (a plan whose options do not read back as they are is not kept: a later prepare compiles again)
-    made = storedInstrumentOf({ finalPdf, log, options, bbl, facts: f })
+    made = storedInstrumentOf({ finalPdf, log, probeLog: probeLog ?? '', options, bbl, facts: f, reduced })
     if (!made) input.note('front', { plan: "not kept: the probe's answers do not read back as they are" })
   }
-  return { ok: true, paper, finalPdf, log, options, made }
+  return { ok: true, paper, finalPdf, log, options, made, probeLog, reduced }
 }

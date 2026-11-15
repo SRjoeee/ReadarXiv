@@ -1443,16 +1443,64 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  * \autocite, fnpct) — where TeX's answer to the mark probe takes the marks off (layoutMarking's `switches`). pdfTeX may
  * draw a virtual font's glyph after a whatsit off where TeX set it; no corpus paper shows it (Task 2's TeX boxes)
  */
-/** the points (LAYOUT_TEX's last part): `\\axt@point{name}` in each engine, beside each destination; around each column's
+/**
+ * The classes of the points (POINTS, and the cell's end LAYOUT_TEX sets through \\axt@dest), each by the names its points
+ * are given, and whether it is `optional` (design-performance Q2, the compile move's B0): a class that states a fact of TeX's
+ * typesetting the instrument can also read, less exactly, from the page, and from which no unit's ownership or text is read.
+ * A marked compile that dies only with more of our points in its node lists (2610.30769v1 under pdfTeX 1.40.28) is asked
+ * again without the optional classes' TeX; every other class stays, so what is owned and what is read as text is read as
+ * ever. The paragraph ends are optional: what they state, the alignment TeX broke a paragraph by and where it ended, the
+ * page's lines state too. A cell's end (§18.74's `t<i>x`) is not: ownership reads where a cell's piece ends from it. A class
+ * added later says which it is
+ */
+export const POINT_CLASSES = {
+  /** each column's body and a text block shipped whole, `bs<n>` and `be<n>` with its AXT-BODY statement: a glyph's body */
+  body: { names: /^b[se]\d+$/, optional: false },
+  /** each float's box, `fs<n>` and `fe<n>`, and `fn<n>` beside a float of a type with no counter: what a float holds */
+  float: { names: /^f[sen]\d+$/, optional: false },
+  /** a caption's label where TeX sets it, `ka<n>` */
+  caption: { names: /^ka\d+$/, optional: false },
+  /** a pgf picture's own box, `zs` and `ze`: a figure's text between them */
+  picture: { names: /^z[se]$/, optional: false },
+  /** where TeX begins a front matter environment after the author block, `fm<n>`: the block's end */
+  front: { names: /^fm\d+$/, optional: false },
+  /** a biblatex entry's start, `bi<n>`, and a printed bibliography's end, `bz<n>`: one entry a unit */
+  bibliography: { names: /^b[iz]\d+$/, optional: false },
+  /** a paragraph's start, `q<n>` in its indentation box: the ledger's blocks */
+  'para-start': { names: /^q\d+$/, optional: false },
+  /** a paragraph's end with the alignment TeX broke it by, `qe<n><code>` */
+  'para-end': { names: /^qe\d+[clrj]$/, optional: true },
+  /** a display's ink and the text inside it, `dps`/`dpe`, `dts`/`dte`, `dms`/`dme` with its number */
+  display: { names: /^d(?:ps|pe|ts|te|ms|me)\d+$/, optional: false },
+  /** a table cell's end, `t<i>x` (LAYOUT_TEX's \\axt@cellend, through \\axt@dest): where a cell's piece ends */
+  'cell-end': { names: /^t\d+x$/, optional: false },
+  /** the point beside each destination of the marks' own (a unit's start and end, a placeholder's, a name's, a call's, a
+   *  figure's frame): every name no other class gives */
+  mark: { names: /^/, optional: false },
+} as const satisfies Record<string, { names: RegExp; optional: boolean }>
+/** a class of the points (POINT_CLASSES) */
+export type PointClass = keyof typeof POINT_CLASSES
+/** the class of a point by its name: the first whose names it is of (`mark`, every name, last) */
+export const pointClassOf = (name: string): PointClass =>
+  (Object.keys(POINT_CLASSES) as PointClass[]).find((c) => POINT_CLASSES[c].names.test(name))!
+
+/** the points (LAYOUT_TEX's last part), each part of its TeX with its class (POINT_CLASSES; null: shared, the point's own
+ *  definition and the bodies' and floats' count): `\\axt@point{name}` in each engine, beside each destination; around each column's
  *  body and each float's box; inside each pgf picture's own box (a TikZ or pgfplots picture: `zs` after pgf's
  *  \\pgfsys@beginpicture, `ze` before its \\pgfsys@endpicture, so that nothing outside the box moves), the figure's text between
  *  them (layout/figure-text.mjs); at each paragraph's start (`q<n>`, inside its indentation box) and at its end with TeX's
  *  alignment of it (`qe<n><code>`, layout/ink.mjs PARA_END) */
-export const POINTS_TEX = [
-  '\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}\\else\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}\\else\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}\\else\\def\\axt@point#1{}\\fi\\fi\\fi',
-  '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}',
-  '\\gdef\\axt@bn{0}\\def\\axt@bump{\\xdef\\axt@bn{\\the\\numexpr\\axt@bn+1\\relax}}',
-  '\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}\\def\\axt@vtg{\\edef\\axt@vback{\\vskip\\the\\lastskip\\relax\\axt@vback}\\unskip\\axt@vtake}\\def\\axt@vtk{\\edef\\axt@vback{\\kern\\the\\lastkern\\relax\\axt@vback}\\unkern\\axt@vtake}\\def\\axt@vtp{\\edef\\axt@vback{\\penalty\\the\\lastpenalty\\relax\\axt@vback}\\unpenalty\\axt@vtake}',
+export const POINTS: readonly (readonly [PointClass | null, string])[] = [
+  [
+    null,
+    '\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}\\else\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}\\else\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}\\else\\def\\axt@point#1{}\\fi\\fi\\fi',
+  ],
+  ['mark', '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}'],
+  [null, '\\gdef\\axt@bn{0}\\def\\axt@bump{\\xdef\\axt@bn{\\the\\numexpr\\axt@bn+1\\relax}}'],
+  [
+    'body',
+    '\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}\\def\\axt@vtg{\\edef\\axt@vback{\\vskip\\the\\lastskip\\relax\\axt@vback}\\unskip\\axt@vtake}\\def\\axt@vtk{\\edef\\axt@vback{\\kern\\the\\lastkern\\relax\\axt@vback}\\unkern\\axt@vtake}\\def\\axt@vtp{\\edef\\axt@vback{\\penalty\\the\\lastpenalty\\relax\\axt@vback}\\unpenalty\\axt@vtake}',
+  ],
   // (each bracketed body's statement, at the point that opens it, `AXT-BODY <n> <side> <\\columnwidth> <\\textwidth> <x>`: the
   // column it is (1 the left one, 2 the right one, LaTeX's \\if@firstcolumn where \\if@twocolumn; 0 a one-column page's body,
   // or a text block its class shipped whole) and where TeX shipped the body's box, its left edge (\\pdflastxpos, LuaTeX's
@@ -1463,17 +1511,35 @@ export const POINTS_TEX = [
   // of 2026-11-08), a dimension and no position, so the same in every engine. A \\write delayed to the shipout beside a saved
   // position: two whatsits beside the point, before its \\penalty10000, so that no place to break is made or lost and nothing
   // moves; written to the log alone)
-  '\\ifdefined\\pdflastxpos\\def\\axt@savepos{\\pdfsavepos}\\def\\axt@lastx{\\the\\pdflastxpos}\\else\\ifdefined\\lastxpos\\def\\axt@savepos{\\savepos}\\def\\axt@lastx{\\the\\lastxpos}\\else\\let\\axt@savepos\\relax\\let\\axt@lastx\\@empty\\fi\\fi',
-  '\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx\\space\\the\\dimexpr1in+\\voffset+\\topmargin+\\headheight+\\headsep+\\textheight\\relax}}\\axt@bw}',
-  '\\newif\\ifaxt@bodied',
-  '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\axt@body{\\if@twocolumn\\if@firstcolumn1\\else2\\fi\\else0\\fi}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}\\fi',
-  '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
+  [
+    'body',
+    '\\ifdefined\\pdflastxpos\\def\\axt@savepos{\\pdfsavepos}\\def\\axt@lastx{\\the\\pdflastxpos}\\else\\ifdefined\\lastxpos\\def\\axt@savepos{\\savepos}\\def\\axt@lastx{\\the\\lastxpos}\\else\\let\\axt@savepos\\relax\\let\\axt@lastx\\@empty\\fi\\fi',
+  ],
+  [
+    'body',
+    '\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx\\space\\the\\dimexpr1in+\\voffset+\\topmargin+\\headheight+\\headsep+\\textheight\\relax}}\\axt@bw}',
+  ],
+  ['body', '\\newif\\ifaxt@bodied'],
+  [
+    'body',
+    '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\axt@body{\\if@twocolumn\\if@firstcolumn1\\else2\\fi\\else0\\fi}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}\\fi',
+  ],
+  [
+    'body',
+    '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
+  ],
   // (a float of a type that has no counter, `fn<n>` beside its `fs<n>`, in its own box: \\c@\\@captype undefined where its box
   // ends, so that no \\caption can number it and TeX says it is no figure, table or algorithm: NeurIPS's \\@float{noticebox},
   // ICML's \\@float{copyrightbox}, which define \\ftype@<type> alone. The ledger reads its text as the page's own outside the
   // bodies, a note (PDF-READER §18.34))
-  '\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}',
-  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  [
+    'float',
+    '\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}',
+  ],
+  [
+    'float',
+    '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  ],
   // (a caption's label where TeX sets it, `ka<k>` before it: every caption maker is handed its label, \\fnum@<type>, as an
   // argument of its own — LaTeX's \\@caption, caption.sty's and every class's to \\@makecaption (#1), longtable's to
   // \\LT@makecaption (#2), float.sty's to its styles' \\floatc@plain and \\floatc@ruled (#1), algorithm2e's to
@@ -1490,11 +1556,26 @@ export const POINTS_TEX = [
   // (LaTeX's para/begin, once), so that no node is put on a vertical list; never while the gate is off (a list of figures, the
   // output routine). A measured copy's point goes with its box: the label TeX ships carries one. The label is what TeX set from
   // the point to the caption's start mark, whatever line it stands on (own.mjs MR 5, PDF-READER §18.34))
-  '\\gdef\\axt@kn{0}\\newif\\ifaxt@kwait\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}\\def\\axt@klate{\\ifaxt@kwait\\global\\axt@kwaitfalse\\ifaxt@off\\else\\ifhmode\\axt@kpt\\fi\\fi\\fi}',
-  '\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}',
-  '\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}',
-  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\let\\@makecaption\\axt@kmcw\\fi\\ifdefined\\@xfloat\\let\\axt@kxf\\@xfloat\\def\\@xfloat{\\axt@kmfr\\axt@kxf}\\fi\\ifdefined\\LT@makecaption\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}\\fi\\ifdefined\\floatc@plain\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}\\fi\\ifdefined\\floatc@ruled\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}\\fi\\ifdefined\\algocf@captiontext\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}\\fi\\ifdefined\\caption@@make\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
+  [
+    'caption',
+    '\\gdef\\axt@kn{0}\\newif\\ifaxt@kwait\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}\\def\\axt@klate{\\ifaxt@kwait\\global\\axt@kwaitfalse\\ifaxt@off\\else\\ifhmode\\axt@kpt\\fi\\fi\\fi}',
+  ],
+  [
+    'caption',
+    '\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}',
+  ],
+  [
+    'caption',
+    '\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}',
+  ],
+  [
+    'caption',
+    '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\let\\@makecaption\\axt@kmcw\\fi\\ifdefined\\@xfloat\\let\\axt@kxf\\@xfloat\\def\\@xfloat{\\axt@kmfr\\axt@kxf}\\fi\\ifdefined\\LT@makecaption\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}\\fi\\ifdefined\\floatc@plain\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}\\fi\\ifdefined\\floatc@ruled\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}\\fi\\ifdefined\\algocf@captiontext\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}\\fi\\ifdefined\\caption@@make\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}\\fi}\\fi',
+  ],
+  [
+    'picture',
+    '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
+  ],
   // (where TeX begins a front matter environment after the author block, `fm<n>`: the abstract, the keywords, IEEEtran's index
   // terms, the role table's environments of the front matter that are no author's (rules/arg-roles.mjs FRONT_ROLES
   // env:abstract, env:keywords, env:IEEEkeywords). A class may set the element's heading from a literal of its own, no babel name
@@ -1507,7 +1588,10 @@ export const POINTS_TEX = [
   // vertical mode"). One the environment sets in a box it keeps (elsarticle's \\absbox) is set in that box, where its heading
   // is; one whose environment keeps its text for the title block (acmart's, REVTeX's abstract) is disarmed where \\maketitle
   // runs first. From \\begin{document} on, a count kept in a macro, while the gate is on)
-  '\\newif\\ifaxt@fmwait\\gdef\\axt@fm{0}\\def\\axt@fmpt{\\ifaxt@off\\else\\xdef\\axt@fm{\\the\\numexpr\\axt@fm+1\\relax}\\axt@point{fm\\axt@fm}\\fi}\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{begindocument/end}{\\AddToHook{env/abstract/before}{\\axt@fmarm}\\AddToHook{env/keywords/before}{\\axt@fmarm}\\AddToHook{env/IEEEkeywords/before}{\\axt@fmarm}\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}}\\fi\\fi',
+  [
+    'front',
+    '\\newif\\ifaxt@fmwait\\gdef\\axt@fm{0}\\def\\axt@fmpt{\\ifaxt@off\\else\\xdef\\axt@fm{\\the\\numexpr\\axt@fm+1\\relax}\\axt@point{fm\\axt@fm}\\fi}\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{begindocument/end}{\\AddToHook{env/abstract/before}{\\axt@fmarm}\\AddToHook{env/keywords/before}{\\axt@fmarm}\\AddToHook{env/IEEEkeywords/before}{\\axt@fmarm}\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}}\\fi\\fi',
+  ],
   // (each biblatex entry's start, `bi<n>` where \\printbibliography sets it: biblatex's per-entry hook, run after the list's \\item,
   // the entry's paragraph begun there first, so that a numeric style's label, which the \\item sets, stands before the point, a count
   // kept in a macro. The printed bibliography is biber's data and no text of the source: the ledger cuts it one entry a unit by
@@ -1515,13 +1599,19 @@ export const POINTS_TEX = [
   // And each bibliography's end, `bz<n>` after its last entry n (biblatex's \\blx@endbibliography, before the list's end, where
   // \\endtrivlist's \\unskip and the paragraph's end would take the entry's last glues: taken before the point instead, as many),
   // so that the next bibliography's heading of a title of its own is no entry's)
-  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\blx@bibitem\\gdef\\axt@bi{0}\\gappto\\blx@hook@bibitem{\\axt@bipt}\\let\\axt@blxeb\\blx@endbibliography\\def\\blx@endbibliography{\\ifhmode\\unskip\\unskip\\axt@point{bz\\axt@bi}\\fi\\axt@blxeb}\\fi}\\fi\\def\\axt@bipt{\\leavevmode\\xdef\\axt@bi{\\the\\numexpr\\axt@bi+1\\relax}\\axt@point{bi\\axt@bi}}',
+  [
+    'bibliography',
+    '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\blx@bibitem\\gdef\\axt@bi{0}\\gappto\\blx@hook@bibitem{\\axt@bipt}\\let\\axt@blxeb\\blx@endbibliography\\def\\blx@endbibliography{\\ifhmode\\unskip\\unskip\\axt@point{bz\\axt@bi}\\fi\\axt@blxeb}\\fi}\\fi\\def\\axt@bipt{\\leavevmode\\xdef\\axt@bi{\\the\\numexpr\\axt@bi+1\\relax}\\axt@point{bi\\axt@bi}}',
+  ],
   // (each paragraph's start, q<n> at LaTeX's para/begin, inside its indentation box: \\IndentBox, not yet put back, wrapped
   // whole with the point before it, of its size; never a node of the paragraph's own, which would make a paragraph whose
   // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ no longer empty, a line
   // of its own: 2609.26457 p8 on TeX Live 2023, 2026-10-25. A paragraph with no indent (\\noindent, an \\item's, the first
   // after a heading whose class takes it) carries none and reads as the one before; the ledger's blocks, orphan-text.md §4)
-  '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
+  [
+    'para-start',
+    '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
+  ],
   // (each paragraph's end, `qe<n><code>` at LaTeX's para/end: in horizontal mode, before TeX breaks the paragraph, so with the
   // \leftskip, \rightskip and \parfillskip it breaks it by (`code` readAlign's: c centred, l flush left, r flush right, j
   // justified, of their stretch's order and amount, \axt@pecode). Placed right after the paragraph's last node of content: its
@@ -1547,11 +1637,26 @@ export const POINTS_TEX = [
   // ends, a unit's or none's, but while the gate is off (a contents list, the output routine, where points made 2610.30769v1's
   // hyperref links unstable and pdfTeX crash), as no mark is: an ink unit's alignment where no unit's end mark tells it
   // (ink-units.mjs alignOf))
-  '\\def\\axt@pos#1{\\ifnum\\gluestretchorder#1>\\z@ 1\\else\\ifdim\\gluestretch#1>\\z@ 1\\else0\\fi\\fi}',
-  '\\def\\axt@pecode{\\edef\\axt@pel{\\axt@pos\\leftskip}\\edef\\axt@per{\\axt@pos\\rightskip}\\edef\\axt@pef{\\axt@pos\\parfillskip}\\edef\\axt@pec{\\ifnum\\axt@pel\\axt@per=11 \\ifnum\\axt@pef=0 c\\else\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\leftskip\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\rightskip c\\else j\\fi\\else j\\fi\\fi\\else\\ifnum\\axt@pel=1 r\\else\\ifnum\\axt@per=1 l\\else j\\fi\\fi\\fi}}',
-  '\\def\\axt@pepop{\\let\\axt@penext\\relax\\ifnum\\lastnodetype=12 \\edef\\axt@peg{\\kern\\the\\lastkern\\relax\\axt@peg}\\unkern\\let\\axt@penext\\axt@pepop\\else\\ifnum\\lastnodetype=13 \\edef\\axt@peg{\\penalty\\the\\lastpenalty\\relax\\axt@peg}\\unpenalty\\let\\axt@penext\\axt@pepop\\fi\\fi\\axt@penext}',
-  '\\def\\axt@peat{\\ifnum\\lastnodetype=1 0\\else\\ifnum\\lastnodetype=2 0\\else\\ifnum\\lastnodetype=11 0\\else\\ifnum\\lastnodetype=-1 0\\else1\\fi\\fi\\fi\\fi}',
-  '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifaxt@off\\else\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\let\\axt@peg\\@empty\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\fi\\axt@pepop\\edef\\axt@pet{\\axt@peat}\\if1\\axt@pet\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi\\fi}\\fi\\fi',
+  [
+    'para-end',
+    '\\def\\axt@pos#1{\\ifnum\\gluestretchorder#1>\\z@ 1\\else\\ifdim\\gluestretch#1>\\z@ 1\\else0\\fi\\fi}',
+  ],
+  [
+    'para-end',
+    '\\def\\axt@pecode{\\edef\\axt@pel{\\axt@pos\\leftskip}\\edef\\axt@per{\\axt@pos\\rightskip}\\edef\\axt@pef{\\axt@pos\\parfillskip}\\edef\\axt@pec{\\ifnum\\axt@pel\\axt@per=11 \\ifnum\\axt@pef=0 c\\else\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\leftskip\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\rightskip c\\else j\\fi\\else j\\fi\\fi\\else\\ifnum\\axt@pel=1 r\\else\\ifnum\\axt@per=1 l\\else j\\fi\\fi\\fi}}',
+  ],
+  [
+    'para-end',
+    '\\def\\axt@pepop{\\let\\axt@penext\\relax\\ifnum\\lastnodetype=12 \\edef\\axt@peg{\\kern\\the\\lastkern\\relax\\axt@peg}\\unkern\\let\\axt@penext\\axt@pepop\\else\\ifnum\\lastnodetype=13 \\edef\\axt@peg{\\penalty\\the\\lastpenalty\\relax\\axt@peg}\\unpenalty\\let\\axt@penext\\axt@pepop\\fi\\fi\\axt@penext}',
+  ],
+  [
+    'para-end',
+    '\\def\\axt@peat{\\ifnum\\lastnodetype=1 0\\else\\ifnum\\lastnodetype=2 0\\else\\ifnum\\lastnodetype=11 0\\else\\ifnum\\lastnodetype=-1 0\\else1\\fi\\fi\\fi\\fi}',
+  ],
+  [
+    'para-end',
+    '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifaxt@off\\else\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\let\\axt@peg\\@empty\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\fi\\axt@pepop\\edef\\axt@pet{\\axt@peat}\\if1\\axt@pet\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi\\fi}\\fi\\fi',
+  ],
   // (each display TeX sets, wherever it stands and whatever opened it, an environment's or \\[ … \\]'s: its ink between `dps<n>`
   // and `dpe<n>` (layout/ink.mjs REGION_POINT, the region `display`), n the display's number in the pass, so that every reader
   // keeps that ink as the paper's whatever its face and wherever it stands (2608.08481v1 p7: displays (7) and (8) in REVTeX's
@@ -1587,21 +1692,64 @@ export const POINTS_TEX = [
   // every display form (equation, equation*, \\[ \\], displaymath, align, align* with \\intertext, gather, multline, eqnarray,
   // flalign, alignat, split, aligned, a minipage's, a theorem's, an item's, $$\\halign$$), each display's ink between its points
   // and nothing else, the $$ ones without an end)
-  '\\gdef\\axt@dpn{0}\\gdef\\axt@dpcl{}\\def\\axt@dpseen#1#2{\\expandafter\\xdef\\csname axt@dps@#1\\endcsname{\\detokenize{#2}}}\\def\\axt@dpaligned#1{\\expandafter\\gdef\\csname axt@dpa@#1\\endcsname{}}',
-  '\\def\\axt@dpopen{\\ifaxt@off\\else\\axt@dxmfalse\\axt@dxrfalse\\axt@dxwfalse\\fi\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}\\edef\\axt@dpk{\\@currenvir @\\the\\inputlineno}\\edef\\axt@dpk{\\detokenize\\expandafter{\\axt@dpk}}\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}\\fi\\ifaxt@off\\else\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname\\expandafter\\let\\expandafter\\axt@dpw\\csname axt@dps@\\axt@dpn\\endcsname\\ifx\\axt@dpw\\axt@dpk\\axt@point{dps\\axt@dpn}\\axt@dxmtrue\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend\\fi\\fi\\fi\\fi}',
-  '\\def\\axt@dpend{\\ifcsname axt@dph@\\@currenvir\\endcsname\\else\\expandafter\\global\\expandafter\\let\\csname axt@dph@\\@currenvir\\endcsname\\@empty\\ifdefined\\AddToHook\\edef\\axt@dpx{\\noexpand\\AddToHook{env/\\@currenvir/end}}\\axt@dpx{\\axt@dpclose}\\fi\\fi}',
-  '\\def\\axt@dpclose{\\ifx\\axt@dpcl\\@empty\\else\\ifmmode\\edef\\axt@dpz{\\@currenvir}\\ifx\\axt@dpz\\axt@dpce\\axt@point{dpe\\axt@dpcl}\\gdef\\axt@dpcl{}\\fi\\fi\\fi}',
-  '\\def\\axt@dphal{\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}\\fi\\ifaxt@off\\else\\axt@dxrtrue\\xdef\\axt@dpm{\\axt@dpn}\\gdef\\axt@dplv{-1}\\everycr\\expandafter{\\the\\everycr\\axt@dpcr}\\fi}',
-  '\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}',
-  '\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}',
-  '\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}',
-  '\\protected\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\protected\\def\\axt@dxz{\\axt@dxcl}',
-  '\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}',
-  '\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}',
-  '\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}',
-  '\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}',
-  '\\def\\axt@dpgo{\\everydisplay\\expandafter{\\the\\everydisplay\\axt@dpopen}\\everymath\\expandafter{\\the\\everymath\\axt@dxma}\\everyvbox\\expandafter{\\the\\everyvbox\\axt@dxvb}\\ifdefined\\textdef@\\let\\axt@@textdef\\textdef@\\def\\textdef@##1##2##3{\\axt@@textdef{##1}{##2}{\\axt@dxa##3\\axt@dxz}}\\fi\\let\\axt@@mbox\\mbox\\long\\def\\mbox##1{\\axt@@mbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@fbox\\fbox\\long\\def\\fbox##1{\\axt@@fbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@halign\\halign\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\ifaxt@dxw\\axt@dxrtrue\\fi\\axt@@halign}\\let\\axt@@rbrack\\]\\protected\\def\\]{\\axt@dpclose\\axt@@rbrack}}\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\axt@dpgo}\\else\\AtBeginDocument{\\axt@dpgo}\\fi',
-].join('')
+  [
+    'display',
+    '\\gdef\\axt@dpn{0}\\gdef\\axt@dpcl{}\\def\\axt@dpseen#1#2{\\expandafter\\xdef\\csname axt@dps@#1\\endcsname{\\detokenize{#2}}}\\def\\axt@dpaligned#1{\\expandafter\\gdef\\csname axt@dpa@#1\\endcsname{}}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpopen{\\ifaxt@off\\else\\axt@dxmfalse\\axt@dxrfalse\\axt@dxwfalse\\fi\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}\\edef\\axt@dpk{\\@currenvir @\\the\\inputlineno}\\edef\\axt@dpk{\\detokenize\\expandafter{\\axt@dpk}}\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}\\fi\\ifaxt@off\\else\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname\\expandafter\\let\\expandafter\\axt@dpw\\csname axt@dps@\\axt@dpn\\endcsname\\ifx\\axt@dpw\\axt@dpk\\axt@point{dps\\axt@dpn}\\axt@dxmtrue\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend\\fi\\fi\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpend{\\ifcsname axt@dph@\\@currenvir\\endcsname\\else\\expandafter\\global\\expandafter\\let\\csname axt@dph@\\@currenvir\\endcsname\\@empty\\ifdefined\\AddToHook\\edef\\axt@dpx{\\noexpand\\AddToHook{env/\\@currenvir/end}}\\axt@dpx{\\axt@dpclose}\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpclose{\\ifx\\axt@dpcl\\@empty\\else\\ifmmode\\edef\\axt@dpz{\\@currenvir}\\ifx\\axt@dpz\\axt@dpce\\axt@point{dpe\\axt@dpcl}\\gdef\\axt@dpcl{}\\fi\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dphal{\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}\\fi\\ifaxt@off\\else\\axt@dxrtrue\\xdef\\axt@dpm{\\axt@dpn}\\gdef\\axt@dplv{-1}\\everycr\\expandafter{\\the\\everycr\\axt@dpcr}\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}',
+  ],
+  ['display', '\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}'],
+  [
+    'display',
+    '\\protected\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\protected\\def\\axt@dxz{\\axt@dxcl}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}',
+  ],
+  ['display', '\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}'],
+  [
+    'display',
+    '\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpgo{\\everydisplay\\expandafter{\\the\\everydisplay\\axt@dpopen}\\everymath\\expandafter{\\the\\everymath\\axt@dxma}\\everyvbox\\expandafter{\\the\\everyvbox\\axt@dxvb}\\ifdefined\\textdef@\\let\\axt@@textdef\\textdef@\\def\\textdef@##1##2##3{\\axt@@textdef{##1}{##2}{\\axt@dxa##3\\axt@dxz}}\\fi\\let\\axt@@mbox\\mbox\\long\\def\\mbox##1{\\axt@@mbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@fbox\\fbox\\long\\def\\fbox##1{\\axt@@fbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@halign\\halign\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\ifaxt@dxw\\axt@dxrtrue\\fi\\axt@@halign}\\let\\axt@@rbrack\\]\\protected\\def\\]{\\axt@dpclose\\axt@@rbrack}}\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\axt@dpgo}\\else\\AtBeginDocument{\\axt@dpgo}\\fi',
+  ],
+]
+/** the points' TeX, every class's (LAYOUT_TEX's last part) */
+export const POINTS_TEX = POINTS.map(([, tex]) => tex).join('')
+/** the points' TeX of every class that is not optional (POINT_CLASSES), the shared parts with it: a reduced marked compile's
+ *  (design-performance Q2; live.ts originalFiles `reduced`) */
+export const POINTS_TEX_REDUCED = POINTS.filter(([c]) => c === null || !POINT_CLASSES[c].optional)
+  .map(([, tex]) => tex)
+  .join('')
 
 /**
  * The names (LAYOUT_TEX's, before its points): \axtnma{<key>} before a babel name's own text and \axtnmb{<key>} after it,
@@ -1847,6 +1995,12 @@ export const LAYOUT_TEX = [
   POINTS_TEX,
   '\\makeatother',
 ].join('')
+/** LAYOUT_TEX with the reduced points (POINTS_TEX_REDUCED in POINTS_TEX's one place): a reduced marked compile's, on the one
+ *  line LAYOUT_TEX is, so that no line of the paper moves */
+export const LAYOUT_TEX_REDUCED = LAYOUT_TEX.split(POINTS_TEX).join(POINTS_TEX_REDUCED)
+/** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (live.ts originalFiles
+ *  `statements`, after LAYOUT_TEX): lane cm-b's constant, which replaces this empty placeholder where the two lanes meet */
+export const STATEMENTS_TEX = ''
 
 // ---------------------------------------------------------------- a reference's item and its name
 /** a reference to a page, not to an item (\pageref): no item's name for it */

@@ -1,5 +1,6 @@
 // lab/pdf/spikes/cm-check.mjs
-// CM, converge then mark (layout/paper.mjs layoutMarksOfPaper `converge`), against today's layout compile (L: the marked
+// The pass loop (Q1, layout/paper.mjs layoutMarksOfPaper `converge`: the package's compile/paper.ts convergeThenMark; the
+// rebuilt prepare's identity is lab/pdf/spikes/q1-check.mjs), against today's layout compile (L: the marked
 // original with every pass, `rerun`, latexmk), both in one native TeX Live, on each paper given: the marked PDF's bytes,
 // the marks file's and the layout file's (layout/make.mjs makeLayout over the marks and arXiv's PDF, as
 // spikes/layout-make.mjs makes it), equal or every difference (the pages and lines L has that CM's PDF lost, as the

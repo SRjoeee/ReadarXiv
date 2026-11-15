@@ -7691,9 +7691,9 @@ own), each part carrying its pages' cell rules (`rules`).
   - *The web host*'s runner runs no latex today (its answer "unknown engine": refused 'engine', as before) until its
     sandbox runs the request above; the image holds latex, dvipdfmx and Ghostscript already.
 - **A compile that did not make the paper is a failed compile** (2026-10-19). A marked original
-  that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test CM's passes use too:
+  that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test the pass loop's passes use too:
   its last pass stopped short — an emergency stop, a hundred errors, TeX's capacity — or never logged END_TEX's AXT-END)
-  is the compile's refusal, whatever PDF it left, today's compile and CM's fallback alike; so is one of fewer pages than
+  is the compile's refusal, whatever PDF it left, today's compile and the loop's fallback alike; so is one of fewer pages than
   arXiv's PDF, which the pass counts from the document or the marks it is given (`stats.layout` { refused: 'compile',
   why }), its unit marks dropped with it. 2610.20713 on TL2025 stopped at its hundredth error after 7 of 15 pages, and
   2608.03994 went past 751 errors to 14 of 17, its tables broken; each had carried 95 % and 97 % of its lines, so the carry
@@ -7960,6 +7960,32 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   `{ pdf, log, check: { marks } }` once `layout/base.mjs` `finalCheck` finds its `axt-` destinations the draft's (each by name,
   page and place within `MARK_TOL`, 0.01 pt) and its page count, boxes and rotations the draft's; else `{ refused: 'final',
   why }`. The marks are read from the draft as before.
+- **The rebuilt prepare's compile loop** (`packages/engine/src/compile/paper.ts` `convergeThenMark`, `markedOfPaper`
+  `converge`, which `compiled.ts` `compiledOf` sets: design-performance Q1, 2026-11-15). The marked files are compiled one
+  pass at a time, pass 1 a draft (no PDF) with the bibliography step after it where the paper ships none, every later pass
+  the final pass's files above in full, each given the files the passes before it wrote (the bibliography's own pass's into
+  pass 1: `madeBibliography` `files`, `carried`); the first pass that writes back what it was given is the marks' PDF, the
+  log and the base page at once, its driver's checks under `latex` made of it, and no final pass follows. Each pass reads
+  what today's pass of the same number reads, and the settled one what today's final pass reads. Proven natively against
+  today's (`lab/pdf/spikes/q1-check.mjs`, TeX Live 2026, 2026-11-15) over the 89 and the holdout's 36, as `compiledOf` asks
+  it (the bibliography's files carried, `reduce` on): the 116 papers both sides made identical (B by SHA-256, every reading of
+  the log and our statements in it, the plan, the guard's record, the instrument, the bundle), none different, the 9 others
+  refused alike; TeX's passes 564 to 442 (median 5 to 4; the bibliography's files save a pass more on 9 of the 56 papers
+  whose bibliography TeX makes), its CPU 1,430.5 to 1,123.1 s (0.79; median 9.33 to 6.79 s a paper). **Its tail, stated**:
+  of n passes to the fixed point today spends n draft passes and one full pass, the loop one draft and n - 1 full ones, so
+  a paper of three passes whose full pass costs over about twice a draft pass costs more TeX. Seven of the 116 do:
+  2608.16117v1 +17.7 s (its full pass 9.19 times a draft pass), 2610.30769v1 +11.1 (6.62), 2610.21084v1 +8.2 (2.36),
+  2610.21770v1 +3.7 (4.42), 2608.05876v1 +1.7 (3.55), 2610.30034v1 +0.8 (2.07), 2610.19282v1 +0.5 (2.52); the net is
+  307.4 s saved of 1,430.5. (The loop alone, before the bibliography's files were carried, the first run: six, the same
+  but 2610.19282v1, net 291.5 s of 1,584.8 under a heavier load.) Which pass settles is not known before it runs, and a
+  predictor from the paper's files would be a tuned number: none is used. Unsettled at five passes, the final pass is
+  made over the fifth's files; where pass 1 does not run through, a pass returns no files or files past the host's bound,
+  pass 1 writes another bibliography job or names a missing .bib, or a full pass does not run through, today's compile is
+  asked, judged by the guard as today's, then its final pass. A marked request that dies (it did not run through, TeX ran,
+  no host's limit stopped it and its log states no error of TeX's: 2610.30769v1's pdfTeX at a shipout) is asked once more
+  without the optional class of points (`marks.ts` `POINT_CLASSES`: the paragraph ends), every marked request after it so
+  (`markedOfPaper` `reduce`, design-performance Q2); the plan, the instrument's `made`, the guard's record and the head say
+  `reduced`, and the paragraph ends and the alignment those points state are read off the page.
 - **A PDF figure as arXiv includes one** (`live.mjs` `NO_DRIVER_GROUP`, PIPELINE 44, 2026-10-31). graphics-def's pdftex.def 1.2d
   and luatex.def 1.2f (8d691483be, 2025-09-20, on CTAN 2025-09-30) write a transparency group,
   `/Group<</S/Transparency/K false/I false>>`, on every PDF page `\includegraphics` includes. The pinned TeX Live 2025 tree has
@@ -8017,7 +8043,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   arXiv's same page also holds for the paper's own text (`markTextBeyond`). Before either, the marking sets no mark inside a
   group opened by a command that reads that argument verbatim (`marks.mjs` `VERBATIM_ARG`: `\url`, `\nolinkurl`, `\path`,
   `\burl`, `\href`'s first argument), whatever definition the front end read for it.
-- **The paper's own bytes.** The layout compile and CM's unmarked drafts write a source of a declared Latin-1 family
+- **The paper's own bytes.** The layout compile and its pass loop's passes write a source of a declared Latin-1 family
   encoding that is not UTF-8 as its own bytes, under its own `\usepackage[…]{inputenc}` (`live.mjs` `originalFiles`
   `transcode`, off with `layout`): written as UTF-8, as only a translation could have it (the compiled translation switched
   the option to `utf8`), 2610.20581's `latin1` source set each é as Ã© and each no-break space in math as a `\^` error, 74 errors and a
@@ -10108,8 +10134,8 @@ lines) follows it, the original's with it off, translated with it on (the author
   2026-10-28). A paper that names `\bibliography{…}` over `.bib` files its package holds, loads no biblatex and ships no job's
   `.bbl` (102 of the local sources) had no entry unit: the units were cut before any compile, and the `.bbl` was first written
   inside the marked compile, unmarked. The host now asks, before it tells the paper's units, one pass of the unmarked original
-  (`guard.mjs` `unmarkedFiles`: the paper's own files) as a draft with the bibliography step (`bibtex`, CM's first draft's
-  request: BibTeX on the job's aux), its files returned; the `<job>.bbl` it wrote, a `thebibliography` with a `\bibitem`, is the
+  (`guard.mjs` `unmarkedFiles`: the paper's own files) as a draft with the bibliography step (`bibtex`, as the pass loop's
+  first pass asks it: BibTeX on the job's aux), its files returned; the `<job>.bbl` it wrote, a `thebibliography` with a `\bibitem`, is the
   job's `.bbl` the paper is opened again with (`live.mjs openPaper`), and from then on it is a shipped one (`meta.bbl`): written
   back marked, no BibTeX in the marked compile. No pass is made, and the paper stays as it was, where it ships its `.bbl`, names no
   `\bibliography`, loads biblatex, or lacks a `.bib` it names (latexmk -norc runs no BibTeX then, nor does the marked compile; a

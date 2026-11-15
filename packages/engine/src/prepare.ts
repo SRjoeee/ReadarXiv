@@ -198,7 +198,7 @@ async function placedOf(
 }
 
 /** what a prepare is handed, once: the source's files, A and, where a compile of the same original made them, the instrument's
- *  four objects (TeX does not run then) */
+ *  five objects (TeX does not run then) */
 export interface PrepareInputs {
   files: Map<string, Uint8Array>
   original: Uint8Array
@@ -212,6 +212,9 @@ export interface PrepareHost extends Pick<PrepareDeps, 'PL' | 'deflate' | 'infla
   tree: { year: string; served: readonly string[]; fallback: string }
   /** the TeX engines the host runs, as a paper names them (openPaper's meta.compiler) */
   engines: readonly string[]
+  /** the host's bound on the files one compile is given back to carry ({ count, bytes }: its one answer's), which the marked
+   *  compile's pass loop holds what it carries to (compiled.ts CompiledInput `filesBound`); none: no bound */
+  filesBound?: { count: number; bytes: number } | null
   pdfjs: PreparePdfJs
   /** PDF.js's document options, every document read with them */
   documentOptions: Record<string, unknown>
@@ -221,7 +224,7 @@ export interface PrepareHost extends Pick<PrepareDeps, 'PL' | 'deflate' | 'infla
   stage(s: PrepareStage): void
   /** a Units object of the source's units, before any compile of the marks */
   units(bytes: Uint8Array): Promise<void>
-  /** one of the instrument's four objects, where TeX made them */
+  /** one of the instrument's five objects, where TeX made them */
   instrument(name: keyof StoredInstrument, bytes: Uint8Array): Promise<void>
   /** a bundle object, as the back half makes it */
   object(x: BundleObject): Promise<void>
@@ -246,7 +249,7 @@ type Fronted = { instrument: Instrument; original: Uint8Array }
  * another tree is answered with it, before any compile), the front half, then the back half, every object handed to the host
  * as it is made. A paper refused is its reason; nothing here throws past it but the host's own faults. `take` hands the
  * inputs to the front half alone (frontOf): the source's files and what the front half makes beside the instrument (B among
- * its four objects) are reachable from its frame, which has ended when the back half runs, so that the back half's peak holds
+ * its five objects) are reachable from its frame, which has ended when the back half runs, so that the back half's peak holds
  * A and the instrument alone (DESIGN §16, "What the back half holds"). Nulling a local of a running function would not do: a
  * frame's registers keep what it read. `front` is the package's own (a test hands another to watch the frames)
  */
@@ -331,11 +334,12 @@ async function frontOf(
     engines: host.engines,
     pdfjs: host.pdfjs,
     documentOptions: host.documentOptions,
+    filesBound: host.filesBound ?? null,
   })
   if (!r.ok) return r
   if (!sentUnits) throw new Error('the front half sent no units')
   lap('front')
-  // (the instrument's four objects where TeX ran, in a run that was given none. A host that gives a prepare stored ones keeps
+  // (the instrument's five objects where TeX ran, in a run that was given none. A host that gives a prepare stored ones keeps
   // what it stored under their key and takes no other in that run, even where the front half did not take them (a plan it
   // cannot read, another original's facts) and TeX ran again: handed out there, they would end the run as the host's fault)
   if (r.made && !input.stored) for (const name of INSTRUMENT_OBJECTS) await host.instrument(name, r.made[name])

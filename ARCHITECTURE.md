@@ -123,7 +123,7 @@ element of the unit back exactly once), the translator that gave it, and its sen
 
 Two more values cross a seam and are not shapes of the paper. **The instrument** (`packages/engine/src/instrument.ts`) is what
 the front half hands the back half: B's pages read, each glyph's and box's owner, the units, TeX's statements; it is stored as
-four objects (`b.pdf`, `log`, `plan`, `definitions`: `StoredInstrument`, `packages/engine/src/plan.ts`) so that a prepare of
+five objects (`b.pdf`, `log`, `probe.log`, `plan`, `definitions`: `StoredInstrument`, `packages/engine/src/plan.ts`) so that a prepare of
 the same original runs no TeX. **The paper's document** (`PaperDoc`, `packages/format/src/doc.ts`) is what our server tells a
 reader of a paper: the prepare's run and stage, the source's units as soon as they are read, the layer that serves (its
 catalog, the head), and the asked target's run and its rows objects. A reader keeps the newest of two (`fold`); a word that
@@ -148,7 +148,7 @@ translation (`POST /api/v2/open`; the follow never starts work: `packages/reader
 serves, the reader shows A, and the paper's document tells the prepare's stage.
 
 **The prepare** runs on our server and, through the same door, in the lab. The host takes the inputs once (the source's files,
-A, and the four stored objects of an instrument made with the same original) and calls `prepare(take, host)`
+A, and the five stored objects of an instrument made with the same original) and calls `prepare(take, host)`
 (`packages/engine/src/prepare.ts`); the lab's runner, `lab/pdf/prepare-back/run.mjs`, calls it as the box does, from cached
 compiles. What the host owns enters as `host`: the compile, PDF.js and its options, zlib, pdf-lib, the TeX engines and trees
 it serves, where each object goes.
@@ -159,7 +159,7 @@ it serves, where each object goes.
 2. The front half, `prepareFront` (`packages/engine/src/front.ts`), in a frame of its own so that the source's files are let go
    before the back half begins. Its stored half, `compiledOf` (`packages/engine/src/compiled.ts`), opens the paper with the
    source reader (`packages/engine/src/source/latex-front.ts`), makes the bibliography where TeX must, hands the source's units
-   out as `Units` objects, then runs the marked compile with its final pass (`markedOfPaper`,
+   out as `Units` objects, then runs the marked compile as its pass loop, whose settled pass is B (`markedOfPaper`,
    `packages/engine/src/compile/paper.ts`: the probe, the marks of `packages/engine/src/marks/marks.ts`, the guard of
    `packages/engine/src/compile/guard.ts`), or reads a stored instrument back where A's facts are the ones it was made for.
    What is stored of a compile is `plan.ts`'s (`storedInstrumentOf`). `instrumentOf`
@@ -297,7 +297,7 @@ derived from bytes or from behaviour; a number raised by hand is the schema numb
 |---|---|---|
 | A rebuilt front half: a typed source reader under TeX's definitions, marks freed of the rule that they move nothing, a drafts-only compile plan | Today's front half, moved whole into `packages/engine/src/source/`, `marks/`, `own/`, `compile/` and `instrument/`: TypeScript, typed in place, behind `prepareFront` | The rebuilt one, run beside it over the 87 corpus papers, lost 314 units against the frozen baseline where today's loses 3, and stated none of the element classes, spans, cells and kept units the back half and the typesetter read (DESIGN §16, "One front half, today's") |
 | Each fact decided once, typed, at the source: no later module reads a piece's TeX with a pattern | Modules downstream of the source reader still read a piece's `src` with a pattern: in the typesetter `packages/typeset/src/breaker/tokens.ts`, `packages/typeset/src/emit/links.ts`, `packages/typeset/src/unit/breaks.ts`, `packages/typeset/src/unit/rename.ts`; in locate `packages/engine/src/locate/place.ts`, `packages/engine/src/locate/ink.ts`, `packages/engine/src/locate/facts.ts` (`packages/engine/src/locate/facts-pass.ts` reads a forced break by its element's kind, the source reader's statement, since §18.75's row-ending macro) | Each reads what the source reader wrote, and each is held by the gates of section 4; a fact moved to the source is one change per fact, with its own proof |
-| No final pass; B from the marked drafts; no probe and no guard unless their counts call for them | The marked compile keeps its probe, its final pass (B is the final pass's PDF, figures included) and its guard (`packages/engine/src/compile/paper.ts`, `packages/engine/src/compile/guard.ts`) | Locate's rules for text inside figures read a B that holds the figures: the drafts-only compile made 6,614 figure ticks and labels into units, for a saving that was this very pass (DESIGN §16) |
+| No final pass; B from the marked drafts; no probe and no guard unless their counts call for them | The marked compile keeps its probe, a full pass as B (the pass loop's settled pass, which is asked as the final pass is, figures included; the final pass itself after a fallback or five passes) and its guard (`packages/engine/src/compile/paper.ts`, `packages/engine/src/compile/guard.ts`) | Locate's rules for text inside figures read a B that holds the figures: the drafts-only compile made 6,614 figure ticks and labels into units, for a saving that was this very pass (DESIGN §16) |
 | One page stack of our own under both panes | The left pane is PDF.js's viewer (`packages/reader/src/panes/left.ts`), which still reads one private member of PDF.js; the right is the reader's stack | The design moves the left only where the stack matches the viewer's first paint. Measured on three papers, the stack matched the scroll trace and held 8 to 12 % less renderer memory, but painted the first page 8.5 ms (9 %) and 20.5 ms (17 %) later on two of them |
 | A `Host` that states facts: the original, an object by digest, the follow, the rows, the preferences, the words, opening a link | A `Host` that gives a network: `fetch`, `original(ref)`, `prefs` and, where the host makes rows, `translate` (`packages/reader/src/reader.ts`); the follow, the objects and the words are the reader's own over that `fetch` | They are the same code on both hosts once a host gives a `fetch`, so they live inside the reader; the host's `fetch` refuses any origin it does not serve (the extension's: our server and arXiv alone, `src/pdf-reader/host/v2.ts` `hostFetch`), and every object read is held to its digest. A host that states facts reopens that interface, and is left until after the cut-over |
 | A canvas painter, with the page's own weight and no layout cost | The SVG painter (`packages/reader/src/compose/paint.ts`) behind the same interface | The canvas changes how text looks, and the design ships it only after the maintainer has compared both on crops at three zooms; until then the SVG stays, as the design says |

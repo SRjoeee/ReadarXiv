@@ -90,10 +90,17 @@ async function compile(req) {
   if (!dir) { console.log('NEEDS_COMPILE', key); process.exit(3) }
   if (!existsSync(join(dir, 'out.log'))) return { ok: false, error: 'no log' }
   const pdf = existsSync(join(dir, 'out.pdf')) ? new Uint8Array(readFileSync(join(dir, 'out.pdf'))) : null
-  const files = req.files && existsSync(join(dir, 'files')) ? new Map(filesUnder(join(dir, 'files')).map(p => [p.split(sep).join('/'), new Uint8Array(readFileSync(join(dir, 'files', p)))])) : undefined
+  // (the files a compile wrote but its outputs and the tools' logs, as the box's jail gives them: a cache an older fill made holds
+  // every file that changed, these among them, which the pass loop would carry to the next pass where the box carries none)
+  const files = req.files && existsSync(join(dir, 'files')) ? new Map(filesUnder(join(dir, 'files')).map(p => p.split(sep).join('/')).filter(p => !OUTPUTS.test(p)).map(p => [p, new Uint8Array(readFileSync(join(dir, 'files', p)))])) : undefined
   return { ok: req.draft ? true : !!pdf?.length, pdf, log: readFileSync(join(dir, 'out.log'), 'latin1'), ...(files ? { files } : {}) }
 }
 const HOST_ENGINES = ['pdflatex', 'xelatex', 'lualatex', 'latex']
+/** what the box's jail leaves out of a compile's files (lab/pdf/spikes/cm-check.mjs's OUTPUTS): its outputs, the tools' logs */
+const OUTPUTS = /\.(?:pdf|xdv|dvi|log|blg|ilg|glg|fls|fdb_latexmk)$|\.synctex\.gz$/
+// (the box's bound on the files one compile gives back, which the marked compile's pass loop holds what it carries to: the
+// web's one answer's, 256 files and 8 MiB)
+const FILES_BOUND = { count: 256, bytes: 8 * 2 ** 20 }
 const deflate = b => new Uint8Array(deflateSync(b))
 // (the bounded inflate's refusal and a failed allocation thrown as they came: only a stream zlib refuses is read again raw. A
 // failed allocation read again raw came back as a data error the wrap took for its page's: memory.mjs)
@@ -118,6 +125,7 @@ const end = await prepare(() => ({ files: source, original: arxivBytes, stored: 
   made: madeId,
   tree: { year, served: SERVED, fallback: PINS.default },
   engines: HOST_ENGINES,
+  filesBound: FILES_BOUND,
   pdfjs,
   documentOptions,
   PL,

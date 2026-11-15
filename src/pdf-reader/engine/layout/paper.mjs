@@ -21,7 +21,7 @@ export const madeBibliography = async (paper, o) => {
  * the stage that failed with the times of those that ran. With `final` (default on), the base page too (`base`: the final pass,
  * { pdf, log, check: { marks } } once its marks are the draft's, base.mjs finalCheck, else { refused: 'final', why }), its
  * PDF opened by `open` beside the draft's. Never throws: a compiler that throws, a PDF that does not open and
- * a reading that refuses are each their stage's refusal, but a failed allocation, which goes on as itself. `converge`: the marked original made by convergeThenMark, its passes
+ * a reading that refuses are each their stage's refusal, but a failed allocation, which goes on as itself. `converge`: the marked original made by the pass loop (convergeThenMark, Q1), its passes
  * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them; `pages` and `engines` the guard's, and `tried`
  * TeX's why's, as markedOfPaper's
  */
@@ -29,7 +29,7 @@ export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge =
   const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound, pages, engines, tried, final, sourceDate, textOf, compilerOf })
   if (made.refused) return made
   const ms = { ...made.ms }
-  /** the result, with CM's record and the guard's where they ran, and the base page where it was asked */
+  /** the result, with the pass loop's record and the guard's where they ran, and the base page where it was asked */
   let base = made.base
   const result = r => ({ ...r, ...(made.cm ? { cm: made.cm } : {}), ...(made.guard ? { guard: made.guard } : {}), ...(base ? { base } : {}) })
   const t0 = performance.now()
