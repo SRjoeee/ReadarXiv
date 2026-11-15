@@ -52,6 +52,7 @@ vi.mock('../src/compile/paper.ts', async (real) => {
       options: structuredClone(OPTIONS),
       ms: { probe: 0, compile: 0 },
       base: { pdf: new Uint8Array([37, 80, 68, 70]), log: '' },
+      probeLog: 'the probe log',
     })),
   }
 })
@@ -275,6 +276,14 @@ describe('a stored instrument is taken only for the original it was made with, a
     for (const k of ['texts', 'inkless', 'lineskip', 'decorated'] as const)
       expect(retry.given.options[k], k).toStrictEqual(fresh.given.options[k])
     expect(retry.given.options.texts).toStrictEqual(OPTIONS.texts)
+  })
+  test("the mark probe's log handed to instrumentOf (`probeLog`, which its readers of the probe's log take): the compile's, and the stored one's when the instrument is made again from the stored objects", async () => {
+    const fresh = await run(null)
+    expect((fresh.given as { probeLog?: unknown }).probeLog).toBe('the probe log')
+    if (!fresh.r.ok || !fresh.r.made) throw new Error('the fresh run kept no plan')
+    const retry = await run(fresh.r.made)
+    expect([retry.compiles, retry.marked]).toEqual([0, 0])
+    expect((retry.given as { probeLog?: unknown }).probeLog).toBe('the probe log')
   })
   test('.bbl kept as the plan has always stored it (base64, padded), and the paper opened again with it on a retry', async () => {
     const fresh = await run(null)

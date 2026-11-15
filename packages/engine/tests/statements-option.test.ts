@@ -10,8 +10,8 @@ vi.mock('../src/marks/marks.ts', async (real) => ({
   ...(await real<typeof import('../src/marks/marks.ts')>()),
   STATEMENTS_TEX: SENTINEL,
 }))
-const { openPaper, originalFiles } = await import('../src/compile/live.ts')
-const { LAYOUT_CLASSES, LAYOUT_TEX, LAYOUT_TEX_REDUCED } = await import('../src/marks/marks.ts')
+const { openPaper, originalFiles, reducedFiles } = await import('../src/compile/live.ts')
+const { LAYOUT_CLASSES, LAYOUT_TEX } = await import('../src/marks/marks.ts')
 const { markedOfPaper } = await import('../src/compile/paper.ts')
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -29,12 +29,27 @@ describe('the statements option', () => {
       for (const reduced of [false, true]) {
         const off = originalFiles(paperOf(more), { lines: true, layout: LAYOUT_CLASSES, reduced })
         const on = originalFiles(paperOf(more), { lines: true, layout: LAYOUT_CLASSES, reduced, statements: true })
-        const layout = reduced ? LAYOUT_TEX_REDUCED : LAYOUT_TEX
         expect(dec(off.get('main.tex'))).not.toContain(SENTINEL)
-        expect(dec(on.get('main.tex'))).toBe(dec(off.get('main.tex')).replace(layout, () => `${layout}${SENTINEL}`))
+        // (a reduced compile writes none: the statements state no ownership and no text, Q2)
+        if (reduced) expect(dec(on.get('main.tex'))).toBe(dec(off.get('main.tex')))
+        else
+          expect(dec(on.get('main.tex'))).toBe(
+            dec(off.get('main.tex')).replace(LAYOUT_TEX, () => `${LAYOUT_TEX}${SENTINEL}`),
+          )
         expect(dec(on.get('main.tex')).split('\n')).toHaveLength(dec(off.get('main.tex')).split('\n').length)
         expect([...on.keys()]).toEqual([...off.keys()])
       }
+    }
+    // (a request's files reduced: the statements left out with the optional points, as originalFiles `reduced` writes them)
+    for (const more of [[], [['00README.json', readme('latex')]]] as [string, string][][]) {
+      const on = originalFiles(paperOf(more), { lines: true, layout: LAYOUT_CLASSES, statements: true })
+      const reduced = originalFiles(paperOf(more), {
+        lines: true,
+        layout: LAYOUT_CLASSES,
+        statements: true,
+        reduced: true,
+      })
+      expect(dec(reducedFiles(on, 'main.tex').get('main.tex'))).toBe(dec(reduced.get('main.tex')))
     }
     // (no layout marks, no statements: the bytes as before)
     expect(dec(originalFiles(paperOf(), { lines: true, statements: true }).get('main.tex'))).toBe(

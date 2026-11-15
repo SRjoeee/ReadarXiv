@@ -1085,7 +1085,7 @@ only how it meets the rest of the extension.
   through. The files the bibliography's pass wrote (`madeBibliography`'s `files`) are carried into pass 1 as a pass's are
   to the next (`carried`, Q1's option (i)). Its tail, stated: a paper of n passes to its fixed point costs today n draft
   passes and one full one, the loop one draft and n - 1 full ones, so a paper of three passes whose full pass costs over
-  about twice a draft pass costs more (PDF-READER §19.7's six papers); which pass settles is not known before it runs, and
+  about twice a draft pass costs more (PDF-READER §19.7's seven papers); which pass settles is not known before it runs, and
   no predictor is used. **A marked request that dies is asked once more, reduced** (Q2; `compiledOf` sets `reduce`): one
   that did not run through where TeX ran, no host's limit stopped it and its log states no error of TeX's (the engine's
   own death: 2610.30769v1's pdfTeX at a shipout with more of our points in its node lists) is asked again without the

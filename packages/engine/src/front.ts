@@ -176,17 +176,20 @@ export async function prepareFront(input: FrontInput): Promise<FrontResult> {
     filesBound: input.filesBound ?? null,
   })
   if (!c.ok) return c
-  const { paper, finalPdf, log, options, made, reduced } = c
+  const { paper, finalPdf, log, options, made, reduced, probeLog } = c
   input.stage('units')
-  const r = await instrumentOf({
+  // (the mark probe's log, the compile's or the stored one's, handed to its readers in the instrument: `probeLog`)
+  const given = {
     paper,
     finalPdf,
     options,
     log,
+    ...(probeLog !== null ? { probeLog } : {}),
     pdfjs: input.pdfjs,
     documentOptions: input.documentOptions,
     made: { compiler: paper.meta.compiler ?? 'pdflatex', tree: input.tree, front: 'today' },
-  })
+  }
+  const r = await instrumentOf(given)
   // (a reduced marked compile's B holds no optional class's points: said in the instrument's `made`, which the head states)
   const instrument = reduced
     ? { ...r.instrument, made: { ...r.instrument.made, reduced: true as const } }

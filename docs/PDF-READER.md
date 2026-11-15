@@ -7894,15 +7894,18 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   pass 1: `madeBibliography` `files`, `carried`); the first pass that writes back what it was given is the marks' PDF, the
   log and the base page at once, its driver's checks under `latex` made of it, and no final pass follows. Each pass reads
   what today's pass of the same number reads, and the settled one what today's final pass reads. Proven natively against
-  today's (`lab/pdf/spikes/q1-check.mjs`, TeX Live 2026, 2026-11-15) over the 89 and the holdout's 36: the 116 papers both
-  sides made identical (B by SHA-256, every reading of the log and our statements in it, the plan, the guard's record, the
-  instrument, the bundle), none different, the 9 others refused alike; TeX's passes 564 to 451 (median 5 to 4), its CPU
-  1,584.8 to 1,293.3 s (0.82; median 10.93 to 8.24 s a paper). **Its tail, stated**: of n passes to the fixed point today
-  spends n draft passes and one full pass, the loop one draft and n - 1 full ones, so a paper of three passes whose full
-  pass costs over about twice a draft pass costs more TeX. Six of the 116 do: 2608.16117v1 +27.1 s (its full pass 9.33
-  times a draft pass), 2610.30769v1 +9.7 (6.8), 2610.21084v1 +8.3 (2.26), 2610.21770v1 +3.5 (4.04), 2608.05876v1 +1.7
-  (3.29), 2610.30034v1 +0.3 (2.24); the net is 291.5 s saved of 1,584.8. Which pass settles is not known before it runs,
-  and a predictor from the paper's files would be a tuned number: none is used. Unsettled at five passes, the final pass is
+  today's (`lab/pdf/spikes/q1-check.mjs`, TeX Live 2026, 2026-11-15) over the 89 and the holdout's 36, as `compiledOf` asks
+  it (the bibliography's files carried, `reduce` on): the 116 papers both sides made identical (B by SHA-256, every reading of
+  the log and our statements in it, the plan, the guard's record, the instrument, the bundle), none different, the 9 others
+  refused alike; TeX's passes 564 to 442 (median 5 to 4; the bibliography's files save a pass more on 9 of the 56 papers
+  whose bibliography TeX makes), its CPU 1,430.5 to 1,123.1 s (0.79; median 9.33 to 6.79 s a paper). **Its tail, stated**:
+  of n passes to the fixed point today spends n draft passes and one full pass, the loop one draft and n - 1 full ones, so
+  a paper of three passes whose full pass costs over about twice a draft pass costs more TeX. Seven of the 116 do:
+  2608.16117v1 +17.7 s (its full pass 9.19 times a draft pass), 2610.30769v1 +11.1 (6.62), 2610.21084v1 +8.2 (2.36),
+  2610.21770v1 +3.7 (4.42), 2608.05876v1 +1.7 (3.55), 2610.30034v1 +0.8 (2.07), 2610.19282v1 +0.5 (2.52); the net is
+  307.4 s saved of 1,430.5. (The loop alone, before the bibliography's files were carried, the first run: six, the same
+  but 2610.19282v1, net 291.5 s of 1,584.8 under a heavier load.) Which pass settles is not known before it runs, and a
+  predictor from the paper's files would be a tuned number: none is used. Unsettled at five passes, the final pass is
   made over the fifth's files; where pass 1 does not run through, a pass returns no files or files past the host's bound,
   pass 1 writes another bibliography job or names a missing .bib, or a full pass does not run through, today's compile is
   asked, judged by the guard as today's, then its final pass. A marked request that dies (it did not run through, TeX ran,

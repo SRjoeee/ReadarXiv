@@ -471,8 +471,8 @@ export function markedPreamble(
  *  before. `reduced` (with `layout`: a reduced marked compile, design-performance Q2): no TeX of an optional class of points
  *  (marks.mjs POINT_CLASSES, LAYOUT_TEX_REDUCED), on the one line it stands on, so that no line moves; without `layout` the
  *  bytes as before. `statements` (with `layout`: the rebuilt prepare's marked compile, compiled.ts compiledOf): the statements
- *  today's reader's compile does not make (marks.ts STATEMENTS_TEX), right after the layout marks on their line; off, the bytes
- *  as before */
+ *  today's reader's compile does not make (marks.ts STATEMENTS_TEX), right after the layout marks on their line, none in a
+ *  reduced compile (they state no ownership and no text); off, the bytes as before */
 export function originalFiles(
   { fsys, project: read, meta }: Paper,
   {
@@ -549,7 +549,7 @@ export function originalFiles(
     (dvi ? DVI_MARK_DEF : '') +
     (layout
       ? (reduced ? LAYOUT_TEX_REDUCED : LAYOUT_TEX) +
-        (statements ? STATEMENTS_TEX : '') +
+        (statements && !reduced ? STATEMENTS_TEX : '') +
         (dvi ? DVI_LAYOUT_TEX : '') +
         (called ? CALL_TEX : '') +
         (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) +
@@ -568,12 +568,18 @@ export function originalFiles(
   return out
 }
 /** a marked request's files reduced (design-performance Q2; compile/paper.ts markedOfPaper `reduce`): its main file's points'
- *  TeX without the optional classes' (POINTS_TEX_REDUCED in POINTS_TEX's place: the bytes originalFiles `reduced` writes), every
+ *  TeX without the optional classes' (POINTS_TEX_REDUCED in POINTS_TEX's place) and without the statements after them (the bytes
+ *  originalFiles `reduced` writes), every
  *  other file, the carried ones among them, as it is; a main file of no layout marks as it is */
 export function reducedFiles(files: ReadonlyMap<string, Uint8Array>, main: string): Map<string, Uint8Array> {
   const out = new Map(files),
     bytes = files.get(main)
-  if (bytes) out.set(main, latin1Bytes(latin1(bytes).split(POINTS_TEX).join(POINTS_TEX_REDUCED)))
+  if (bytes) {
+    const text = latin1(bytes).split(POINTS_TEX).join(POINTS_TEX_REDUCED)
+    // (and the statements after the layout marks, which state no ownership and no text: originalFiles writes none reduced)
+    const statements = LAYOUT_TEX_REDUCED + STATEMENTS_TEX
+    out.set(main, latin1Bytes(STATEMENTS_TEX ? text.split(statements).join(LAYOUT_TEX_REDUCED) : text))
+  }
   return out
 }
 /** the babel names' marks off (originalFiles `names` false): NAMES_TEX's wrapper (\axt@nmall, which begindocument/end and
