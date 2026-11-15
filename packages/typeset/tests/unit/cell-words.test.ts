@@ -114,12 +114,13 @@ describe('a merged cell the lay fills: its lines end between words of the target
 })
 
 describe('where no break between words fits, the cell is smaller, not split', () => {
-  it('a room of 16 pt, three characters a line at 10, where 提高训练 | 速度 needs four: laid at 0.8, its words whole', () => {
-    // (today: 提高训 | 练速度 at the size 10, 训练 parted)
+  it('a room of 16 pt, three characters a line at 10, where 提高训练 | 速度 needs four: laid smaller, its words whole', () => {
+    // (today: 提高训 | 练速度 at the size 10, 训练 parted; under the rule four characters at 0.85, the tracking at its least,
+    // -0.03 em, take 15.98 pt)
     const [m] = layOf([cell(5, [100, 116])], rowsOf({ 5: [TEXT, BRK] }), 'zh')
     expect(textOf(m!)).toEqual(['提高训练', '速度'])
     expect(m!.fit!.size).toBeLessThan(10)
-    expect(m!.fit!.size).toBeCloseTo(8, 5)
+    expect(m!.fit!.size).toBeCloseTo(8.5, 5)
   })
   it('a word no size sets on a line of its room, not even below the floor: laid as before, cut, never left the original', () => {
     // (24 letters in a room of 12 at the size 10, and 20 at 0.6: no word ends inside it; today's cut by its characters)
