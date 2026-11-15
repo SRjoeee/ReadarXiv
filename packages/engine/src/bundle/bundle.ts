@@ -110,6 +110,56 @@ function classed(el: El, c: PieceClass | undefined, asInk = false): El {
   return out
 }
 
+/** an element's placements in a part: the El each states, its member's text size and locate's baseline reading (Member.onBase) */
+type Placement = { el: El; size: number; onBase: boolean }
+/** the text TeX set for an element where it stands, on its line's baseline at its text's size, where every placement of its unit
+ *  in a part states it: the El's text, the same at each, no footnote's mark (drawn raised whatever it is set as), its glyphs on
+ *  their line's baseline (locate's reading, Member.onBase, made for every class: an El of class `other` states its text with no
+ *  baseline read), at its member's text size, the two sizes read on the format's grid (a hundredth: El.style.size is written on
+ *  it, a member's Style.size as read off its glyphs, 2111.09276v1's cells 8.189157574 against 8.19); none where it stands in no
+ *  part */
+function textAt(ps: readonly Placement[] | undefined): string | undefined {
+  const t = ps?.[0]?.el.text
+  if (typeof t !== 'string' || !t) return undefined
+  return ps!.every(
+    (x) =>
+      x.el.text === t &&
+      !x.el.mark &&
+      x.onBase &&
+      x.el.style !== undefined &&
+      onGrid(x.el.style.size) === onGrid(x.size),
+  )
+    ? t
+    : undefined
+}
+/** a size on the format's grid, a hundredth of a PDF unit (schema.ts: the prepare writes its numbers on a 1/100 grid) */
+const onGrid = (v: number): number => Math.round(v * 100) / 100
+/** the kind of a command's element, the source reader's (marks.ts classOf `macro`: a paper's command or one no table names, a
+ *  kept command that sets a word's letters, `\hl{guitar}`): the one kind whose text the bundle states. A formula's, a number's
+ *  or a reference's glyphs glued to letters ("$n$th") are another question, which no reader reads: a fact no reader reads is
+ *  not stated */
+const COMMAND_KIND = 'macro'
+/** a unit's content as the bundle states it: each command's element with the text TeX set for it where it stands (format's el
+ *  `text`, textAt), by `uid` and its piece id. The instrument's content stays as it is: a copy where anything is stated */
+function statedOf(
+  uid: string,
+  content: readonly Piece[],
+  placements: ReadonlyMap<string, readonly Placement[]>,
+): Piece[] {
+  let any = false
+  const walk = (ps: readonly Piece[]): Piece[] =>
+    ps.map((p) => {
+      if (p.t === 'span') return { ...p, content: walk(p.content) }
+      if (p.t !== 'el' || p.kind !== COMMAND_KIND) return p
+      const text = textAt(placements.get(`${uid}|${p.id}`))
+      if (text === undefined) return p
+      any = true
+      return { ...p, text }
+    })
+  const out = walk(content)
+  return any ? out : (content as Piece[])
+}
+
 /** a unit's text as its source writes it: its text pieces, a group's opened, an element or a nested unit a space */
 const textOfPieces = (ps: readonly Piece[]): string =>
   ps.map((q) => (q.t === 'text' ? q.s : q.t === 'span' ? textOfPieces(q.content) : ' ')).join('')
@@ -220,6 +270,65 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   const { ins, located, addOn, original, paper } = input
   const members = located.members
   const states = members.map((m) => stateOf(m, addOn))
+  const placed = members.map((m, i) => placedOf(m, located.units ?? ins.units, states[i]!))
+  // ---- each page's part, as the flows it holds (a, b, c below), or none: what the units' statements read of the parts
+  const flowOf = new Map<number, number>()
+  located.flows.forEach((f, i) => {
+    for (const o of f) flowOf.set(o, i)
+  })
+  const flowPages = located.flows.map((f) => new Set(f.flatMap((o) => members[o]!.lines.map((l) => l[0]))))
+  const tiesOf = new Map<number, number[]>()
+  located.ties.forEach((t, i) => {
+    const ords = t.rule === 'cells' ? t.cells.flat() : t.ords
+    for (const o of ords) (tiesOf.get(o) ?? tiesOf.set(o, []).get(o)!).push(i)
+  })
+  const tieOrds = located.ties.map((t) => (t.rule === 'cells' ? t.cells.flat() : t.ords))
+  const takes: { a: Set<number>; b: Set<number>; c: Set<number>; take: number[] }[] = []
+  for (let p = 1; p <= paper.pages; p++) {
+    const a = new Set<number>()
+    located.flows.forEach((_, i) => {
+      if (flowPages[i]!.has(p)) a.add(i)
+    })
+    // a page none of whose members a reader could lay is A's: no part
+    const lays = [...a].some((i) => located.flows[i]!.some((o) => states[o]!.drawn && members[o]!.pages.includes(p)))
+    if (!lays) {
+      takes.push({ a, b: new Set(), c: new Set(), take: [] })
+      continue
+    }
+    const b = new Set<number>()
+    for (const i of a)
+      for (const o of located.flows[i]!) {
+        const first = members[o]!.lines[0]?.[0]
+        if (first !== undefined && first < p)
+          located.flows.forEach((_, j) => {
+            if (!a.has(j) && flowPages[j]!.has(first)) b.add(j)
+          })
+      }
+    const c = new Set<number>()
+    for (const i of [...a, ...b])
+      for (const o of located.flows[i]!)
+        for (const t of tiesOf.get(o) ?? [])
+          for (const q of tieOrds[t]!) {
+            const j = flowOf.get(q)
+            if (j !== undefined && !a.has(j) && !b.has(j)) c.add(j)
+          }
+    takes.push({ a, b, c, take: [...a, ...b, ...c].sort((x, y) => x - y) })
+  }
+  // (each element's placements in a part, by its row's unit id and its piece id: the El the part states and its member)
+  const inPart = new Set(takes.flatMap((x) => x.take.flatMap((i) => located.flows[i]!)))
+  const placements = new Map<string, { el: El; size: number; onBase: boolean }[]>()
+  for (const o of inPart) {
+    const x = placed[o]!
+    if (typeof x.text !== 'string') continue
+    for (const [id, el] of x.els ?? []) {
+      const k = `${x.text}|${id}`
+      ;(placements.get(k) ?? placements.set(k, []).get(k)!).push({
+        el,
+        size: x.style.size,
+        onBase: !!members[o]!.onBase?.has(id),
+      })
+    }
+  }
   // ---- Units: every unit of the instrument's but a babel name's word, those locate made on A (its ink units, kept blocks and
   // figure texts), and the units born on A
   const all = located.units ?? ins.units
@@ -235,12 +344,13 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     add({
       id: u.id,
       kind: u.kind,
-      content: u.content,
+      content: statedOf(u.id, u.content, placements),
       ...(u.depth !== undefined ? { depth: u.depth } : {}),
       ...(u.of ? { of: u.of } : {}),
       // (running text a translator cuts into sentences, the reader lighting each with its translation: words.ts bySentence)
       ...(!u.kept && bySentence(u.kind, !!u.figure) ? { sentences: true as const } : {}),
       ...(u.kept ? { kept: true as const } : {}),
+      ...(u.entry ? { entry: true as const } : {}),
     })
   }
   for (const [ord, b] of located.born)
@@ -252,7 +362,6 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     })
   // (the block's names its units hold elsewhere, docs/PDF-READER.md §19.15: each unit's variant right after it, so that a
   // translator is asked for both together)
-  const placed = members.map((m, i) => placedOf(m, all, states[i]!))
   const classes = new Map(all.map((u) => [u.id, new Map(u.classes ?? [])]))
   const names = namesOf(
     units,
@@ -276,51 +385,17 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   }
 
   // ---- parts
-  const flowOf = new Map<number, number>()
-  located.flows.forEach((f, i) => {
-    for (const o of f) flowOf.set(o, i)
-  })
-  const flowPages = located.flows.map((f) => new Set(f.flatMap((o) => members[o]!.lines.map((l) => l[0]))))
-  const tiesOf = new Map<number, number[]>()
-  located.ties.forEach((t, i) => {
-    const ords = t.rule === 'cells' ? t.cells.flat() : t.ords
-    for (const o of ords) (tiesOf.get(o) ?? tiesOf.set(o, []).get(o)!).push(i)
-  })
-  const tieOrds = located.ties.map((t) => (t.rule === 'cells' ? t.cells.flat() : t.ords))
   const faces = facesOf(members)
   const babel: [string, string][] = ins.units
     .filter((u) => u.kind === 'name' && u.name === undefined)
     .map((u) => [textOf(u.content), u.id])
   const partDigests: (string | null)[] = []
   for (let p = 1; p <= paper.pages; p++) {
-    const a = new Set<number>()
-    located.flows.forEach((_, i) => {
-      if (flowPages[i]!.has(p)) a.add(i)
-    })
-    // a page none of whose members a reader could lay is A's: no part
-    const lays = [...a].some((i) => located.flows[i]!.some((o) => states[o]!.drawn && members[o]!.pages.includes(p)))
-    if (!lays) {
+    const { a, b, c, take } = takes[p - 1]!
+    if (!take.length) {
       partDigests.push(null)
       continue
     }
-    const b = new Set<number>()
-    for (const i of a)
-      for (const o of located.flows[i]!) {
-        const first = members[o]!.lines[0]?.[0]
-        if (first !== undefined && first < p)
-          located.flows.forEach((_, j) => {
-            if (!a.has(j) && flowPages[j]!.has(first)) b.add(j)
-          })
-      }
-    const c = new Set<number>()
-    for (const i of [...a, ...b])
-      for (const o of located.flows[i]!)
-        for (const t of tiesOf.get(o) ?? [])
-          for (const q of tieOrds[t]!) {
-            const j = flowOf.get(q)
-            if (j !== undefined && !a.has(j) && !b.has(j)) c.add(j)
-          }
-    const take = [...a, ...b, ...c].sort((x, y) => x - y)
     const held = new Set(take.flatMap((i) => located.flows[i]!))
     const ties = located.ties.filter((_, t) => tieOrds[t]!.some((o) => held.has(o)))
     // (the page's annotations, and those of the members with a line on it on their other pages, with their page: a translation
