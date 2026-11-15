@@ -6211,6 +6211,10 @@ const BACKREF_WORD = /(?<![A-Za-z@\\])(?:page)?backref(?![A-Za-z@]|\s*=\s*false\
  *  letters and all ("10.1007/s00125-020-05190-9."), whose left may be any character but a letter or a digit ("doi:10.…") */
 const NUMBER_TOKEN = /[^\s\p{L}]*\d[^\s\p{L}]*/gu
 const DOI_TOKEN = /10\.\d{4,9}\/\S+/gu
+/** a placeholder keepNumbers makes of either: a token of one, characters TeX sets as written (none of its special characters,
+ *  so no command, group or formula: the marks' class of a number, marks.ts NUMBER) — the entry's first ink where it comes first
+ *  (headStartOf) */
+const KEPT_NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/[^\s\\{}$%#&^_~]+)$/u
 /** a text's tokens of either, in order: its DOIs, then its numbers outside them */
 function numberTokens(s: string) {
   const dois = [...s.matchAll(DOI_TOKEN)].map((m) => ({ index: m.index, text: m[0], doi: true }))
@@ -7023,7 +7027,8 @@ export function pseudoTranslate<F extends WalkFile>(
  * leading white space; -1, before the piece), or [-1, 0], none (the unit's head passed over, below). The adapter reads it
  * too: a piece before it TeX set before the unit's start point (pipeline/instrument.mjs).
  * Before the first word, inside any font command's group (nothing precedes it there to kern with); before an inline
- * formula or citation that comes first; before the macro when the word is glued to one (\\name's: between the two the
+ * formula, a citation, an identifier or a number a bibliography entry keeps (KEPT_NUMBER: a year, an entry with no author's
+ * first ink) that comes first; before the macro when the word is glued to one (\\name's: between the two the
  * mark would cost the kern, and a macro that looks ahead, as \\xspace does, would see the mark). Any other command at
  * the head of the paragraph is passed over — \\noindent, \\vspace, a run-in heading macro — since \\leavevmode ahead of
  * it would start the paragraph early and indent or move it. A text piece is cut after its leading space, which is
@@ -7127,8 +7132,10 @@ function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number]
       }
       break
     }
-    // (an inline formula or citation, and an identifier, text TeX sets as written (identifierSource): the first word)
-    if (p.t === 'ph' && (INLINE.test(p.src) || identifierSource(p.src))) {
+    // (an inline formula or citation, an identifier, and a number an entry keeps, text TeX sets as written (identifierSource,
+    // KEPT_NUMBER): the first word. An entry with no author, ACM's `\\bibinfo{year}{2023}\\natexlab{}.`, IEEEtran's `(2024) {WHO} …`:
+    // passed over, its year stood before the start mark, and where the year opened a group the entry had none (F29))
+    if (p.t === 'ph' && (INLINE.test(p.src) || identifierSource(p.src) || KEPT_NUMBER.test(p.src))) {
       startAt = k
       startCut = -1
       break

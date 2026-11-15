@@ -7181,6 +7181,29 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   (today 6.43), 2611.03953v2 p8 "Time to \\ target" at 7.17 pt (today 8.97; its column's box not stated, laid in its lines' own
   rooms, 27.8 and 20.3 pt wide) and "Recovery \\ at budget" at its size.
 
+### 18.79 An entry whose first ink is a number it keeps: its start mark before the number, as before a formula (F29, 2026-11-15)
+
+A bibliography entry with no author opens with its year: ACM-Reference-Format's software and web pages
+(`\bibinfo{year}{2023}\natexlab{}.` then the title), IEEEtran's `\BIBentryALTinterwordspacing (2024) {WHO} …`. The year is a
+number the entry keeps as the original's ink (`keepNumbers`), one placeholder, and the start mark (`source/latex-front.ts` startOf,
+`headStartOf`) passed over it as over any placeholder at a unit's head. So the year stood before the entry's start point, and
+where it was the first thing in a field's group, the group's close followed by `\natexlab{}`, the search ended with no start mark
+at all: the entry's ink was bounded only by the next entry's points, its year, its address and the next entry's label read as
+the next entry's text (2402.10294v1 p14, references [1] to [6]: [1] drawn over its label, [2] to [6] unlocated).
+
+- **The rule.** A placeholder of a number an entry keeps (`KEPT_NUMBER`: a token of keepNumbers' classes, characters TeX sets as
+  written, none of its special characters, the class the marking gives both its marks, marks.ts NUMBER) is the entry's first
+  word where it comes first, as an inline formula, a citation or an identifier is: the start mark goes before it, inside the
+  field's group (`\bibinfo{year}{\leavevmode\axtmark{207s}2023}`). The label, which `\bibitem` set when the paragraph began, stands
+  before the start point; TeX's own paragraph end (the paragraph-end point after the entry's last piece, B15's `qe`) confirms the
+  bound before the next label. A number after the entry's first word, and every other head, as before.
+- **The reach, read by the source reader alone over the 89 papers and 2611.03953v2, the holdout's 36 and the third set's 119**
+  (with the bibliographies BibTeX made, read from the lab's stored compiles): 9 entries in 3 papers, and no other unit of any kind
+  has a placeholder TeX sets as written before its first text: 2402.10294v1's six (ACM, no start mark), 2608.14557v1's two (ACM,
+  a made `.bbl`, no start mark), 2608.18887v1's one (IEEEtran, its start mark before "WHO", the year before it). No unit's pieces
+  move (the marks are not pieces): their marked compiles do. REVTeX's empty `\bibfield {number} {  }` heads (2610.20716v1's six)
+  stay with no start mark (a mark there set the entry 7 pt right): no number.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
