@@ -9327,7 +9327,9 @@ so that its translation keeps each run's style (the release sweep of 2026-10-25,
 note, a reference's italic title, a coloured term, all drawn in the unit's one style); and the glyphs a link annotation holds of
 it, where it holds part of the unit on a page, a group whose source names its target, `\href{…}{` or `\hyperlink{…}{` (inside
 the run's style groups, running on over a kept run the same link holds, one group a link: 2307.16209v1 p13's entry, its caption
-copy's formulas inside its link, cut at each was seven groups of one target no order pairs; `ink-units.ts` linkGroupsOf; the annotation's glyph points, the rule locate owns links by, so "2," holds
+copy's formulas inside its link, cut at each was seven groups of one target no order pairs; none whose edge falls between two
+letters or digits of a word, which no link TeX sets does: arXiv's margin stamp's link over the first letter of 2608.01482v1's
+"Corresponding author" and "Abstract"; `ink-units.ts` linkGroupsOf; the annotation's glyph points, the rule locate owns links by, so "2," holds
 the link on "2" alone; only where the part reads that source back as the annotation's target, `ink.ts` inkLinksOf: an explicit
 destination, no name, none), which the typesetter pairs by target as a source unit's `\href`: biblatex's back-references "(cit.
 on pp. 2, 8)", a running foot's "page N of 14", a citation, an equation's or a section's number in a list of figures' caption

@@ -220,6 +220,10 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(whole.content).toEqual([text('See page 14 here')])
     const explicit = run({ rect: [125, 697, 139, 709], dest: [{ num: 3, gen: 0 }, { name: 'XYZ' }] }).units.at(-1)!
     expect(explicit.content).toEqual([text('See page 14 here')])
+    // (nor for one whose edge falls between two letters of a word, "S|ee": no link TeX sets cuts a word so; arXiv's margin
+    // stamp's link over the first letter of 2608.01482v1's "Corresponding author" was cut into a group of its own)
+    const cut = run({ rect: [71, 697, 78, 709], url: 'https://arxiv.org/abs/2501.00001v1' }).units.at(-1)!
+    expect(cut.content).toEqual([text('See page 14 here')])
   })
   it('keeps one link group open over a formula the same link holds: one group a link (F32)', () => {
     // (2307.16209v1 p13's list of figures: an entry's link over its caption copy, its formulas inside it, all but the page

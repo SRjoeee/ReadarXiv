@@ -417,8 +417,24 @@ function linkGroupsOf(
     const partial = [...held].filter(([, gs]) => gs.size < mine.size).sort((a, b) => b[1].size - a[1].size)
     for (const [src, gs] of partial) for (const g of gs) out.set(`${p}|${g}`, src)
   }
+  // (none whose edge falls between two letters or digits of one word: no link TeX sets cuts a word so, and a group there would
+  // send a tag inside it; arXiv's margin stamp's link over the first letter of 2608.01482v1's "Corresponding author", "Abstract")
+  const cuts = new Set<string>()
+  for (const l of lines) {
+    const G = pages[l.page - 1]?.glyphs ?? []
+    for (const w of l.words)
+      for (let i = 1; i < w.gs.length; i++) {
+        const a = out.get(`${l.page}|${w.gs[i - 1]}`)
+        const b = out.get(`${l.page}|${w.gs[i]}`)
+        if (a === b || !WORD_CHAR.test(G[w.gs[i - 1]!]?.u ?? '') || !WORD_CHAR.test(G[w.gs[i]!]?.u ?? '')) continue
+        for (const s of [a, b]) if (s !== undefined) cuts.add(`${l.page}|${s}`)
+      }
+  }
+  if (cuts.size) for (const [k, s] of [...out]) if (cuts.has(`${k.slice(0, k.indexOf('|'))}|${s}`)) out.delete(k)
   return out
 }
+/** a character of a word: a letter or a digit */
+const WORD_CHAR = /^[\p{L}\p{N}]+$/u
 
 /** a style as a run tells it: a fill not told is the unit's */
 const styleKey = (st: Style, base: Style) => `${st.bold ? 1 : 0}${st.italic ? 1 : 0}${st.fill ?? base.fill}`
