@@ -51,9 +51,6 @@ interface BundleInput {
   made: string
   /** what PDF.js recovered from while B and A were read (read.ts readPdf), stated in the head where any */
   recovered?: Head['recovered']
-  /** each page (its number less one) read whole on A and on B (Doc.unread none on both: prepare.ts placedOf), where the parts
-   *  may confirm that TeX set nothing for an element (statedOf's `silent`); absent: no page is known read whole */
-  whole?: readonly boolean[]
 }
 
 /** each member's state in the bundle: why it stays the original's (PrepWhy), and the groups the add-on could not part */
@@ -113,9 +110,8 @@ function classed(el: El, c: PieceClass | undefined, asInk = false): El {
   return out
 }
 
-/** an element's placements in a part: the El each states, its member's text size and locate's baseline reading (Member.onBase),
- *  and whether its member is located with lines, each on a page read whole on A and on B (BundleInput `whole`) */
-type Placement = { el: El; size: number; onBase: boolean; whole: boolean }
+/** an element's placements in a part: the El each states, its member's text size and locate's baseline reading (Member.onBase) */
+type Placement = { el: El; size: number; onBase: boolean }
 /** the text TeX set for an element where it stands, on its line's baseline at its text's size, where every placement of its unit
  *  in a part states it: the El's text, the same at each, no footnote's mark (drawn raised whatever it is set as), its glyphs on
  *  their line's baseline (locate's reading, Member.onBase, made for every class: an El of class `other` states its text with no
@@ -145,20 +141,14 @@ const onGrid = (v: number): number => Math.round(v * 100) / 100
 const COMMAND_KIND = 'macro'
 /**
  * Rule 3's measured half: a command's element TeX set nothing for where it stands (format's el `silent`; the kernel's list is
- * the instrument's, mt.ts isInkless): at every sample of its command the probe's box held no ink, had no width and held no glue,
- * kern or forced break (the instrument's PieceClass.nothing, marks.ts probeFactsOf); the source reader states it no separator (no
- * tie, forced break or glue of its own, no `\newblock`, a skip by its classes' definitions); and the parts confirm it, every
- * placement of it in a part stating no ink and the text '' (locate's "TeX set nothing"), its member located on pages read whole
- * on both sides. A command the probe never samples (a URL's, a group's brace) is never measured so
+ * the instrument's, mt.ts isInkless): at every use of its command, where TeX was asked there, its box held no ink, had no width
+ * and held no glue, kern or forced break (the instrument's PieceClass.nothing: B4's asks, marks.ts usedNothingOf); and the source
+ * reader states it no separator (no tie, forced break or glue of its own, no `\newblock`, a skip by its classes' definitions).
+ * No part is read for it: an element the probe calls inkless gets no point and is stated empty by that same answer, so its
+ * placements confirm nothing (PDF-READER §18.79). A command never asked where it is used is never measured so
  */
-function measuredSilent(
-  el: Extract<Piece, { t: 'el' }>,
-  c: PieceClass | undefined,
-  ps: readonly Placement[] | undefined,
-): boolean {
-  if (!c?.nothing || c.tie || c.brk || c.glue || el.newblock) return false
-  return !!ps?.length && ps.every((x) => x.whole && !x.el.ink.length && x.el.text === '')
-}
+const measuredSilent = (el: Extract<Piece, { t: 'el' }>, c: PieceClass | undefined): boolean =>
+  !!c?.nothing && !c.tie && !c.brk && !c.glue && !el.newblock
 /** a unit's content as the bundle states it: each command's element with the text TeX set for it where it stands (format's el
  *  `text`, textAt), and `silent` where rule 3's measured half holds (measuredSilent), by `uid` and its piece id, its classes the
  *  instrument's. The instrument's content stays as it is: a copy where anything is stated */
@@ -175,7 +165,7 @@ function statedOf(
       if (p.t !== 'el' || p.kind !== COMMAND_KIND) return p
       const at = placements.get(`${uid}|${p.id}`)
       const text = textAt(at)
-      const silent = !p.silent && measuredSilent(p, classes.get(p.id), at)
+      const silent = !p.silent && measuredSilent(p, classes.get(p.id))
       if (text === undefined && !silent) return p
       any = true
       return { ...p, ...(text !== undefined ? { text } : {}), ...(silent ? { silent: 1 as const } : {}) }
@@ -345,14 +335,12 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     const x = placed[o]!
     if (typeof x.text !== 'string') continue
     const mem = members[o]!
-    const whole = mem.located && mem.pages.length > 0 && mem.pages.every((p) => input.whole?.[p - 1] === true)
     for (const [id, el] of x.els ?? []) {
       const k = `${x.text}|${id}`
       ;(placements.get(k) ?? placements.set(k, []).get(k)!).push({
         el,
         size: x.style.size,
         onBase: !!mem.onBase?.has(id),
-        whole,
       })
     }
   }

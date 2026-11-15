@@ -2,15 +2,18 @@
 // written here in TeX's form: the samples whose box TeX ends with ink a glue of infinite stretch pushed (readInkEnds), the pieces
 // a unit ends with that TeX sets as its end mark (endPiecesOf), and TeX's quotation marks read as the glyphs a text font sets for
 // them (readInkTexts' `quotes`); and rule 3's measured half: the samples TeX set nothing for, no ink, a box of no width and no
-// separator in it (readInkNothing), and the sources TeX set nothing for at every sample of their command (probeFactsOf `nothing`).
+// separator in it (readInkNothing), and the sources TeX set nothing for where the document uses them, at every use of their
+// command (usedNothingOf over B4's use answers: the probe's answer alone states none).
 import { describe, expect, it } from 'vitest'
 import {
   endPiecesOf,
-  probeFactsOf,
+  inkSamples,
   readInkDecorated,
   readInkEnds,
   readInkNothing,
   readInkTexts,
+  useAnswersOf,
+  usedNothingOf,
 } from '../../src/marks/marks.ts'
 
 /** one sample's listing as the ink section writes it */
@@ -165,37 +168,43 @@ describe('readInkNothing: the samples TeX set nothing for, no ink, no width and 
   })
 })
 
-describe('probeFactsOf `nothing`: the sources TeX set nothing for at every sample of their command', () => {
+describe('usedNothingOf: the sources TeX set nothing for where the document uses them, at every use of their command', () => {
   const text = (s: string) => ({ t: 'text' as const, s })
   const ph = (src: string) => ({ t: 'ph' as const, src })
   const unit = (pieces: ({ t: 'text'; s: string } | { t: 'ph'; src: string })[]) => ({ kind: 'para', pieces }) as never
-  it('takes a command none of whose samples sets anything; one that sets ink at a call is kept at every call', () => {
-    const units = [
-      unit([
-        text('a '),
-        ph('\\nada'),
-        text(' b '),
-        ph('\\opt{}'),
-        text(' c '),
-        ph('\\opt{x}'),
-        text(' d '),
-        ph('\\decl'),
-      ]),
-      unit([text('e '), ph('\\wide'), text(' f '), ph('\\brk'), text(' g '), ph('\\nada')]),
-    ]
-    const log = [
-      boxed(0, NONE, []),
-      boxed(1, NONE, []),
-      boxed(2, '\\hbox(4.30554+0.0)x5.27779', ['.\\OT1/cmr/m/n/10 x']),
-      boxed(3, NONE, []),
-      boxed(4, '\\hbox(0.0+0.0)x25.0', ['.\\glue 25.0']),
-      boxed(5, NONE, ['.\\penalty 10000', '.\\glue 0.0 plus 1.0fil', '.\\penalty -10000']),
-    ].join('\n')
-    expect(probeFactsOf(log, units).nothing).toEqual(['\\nada', '\\decl'])
+  // (the asks' log, each source asked at its use by its ask's index: B4's pass)
+  const asked = ['\\nada', '\\opt{}', '\\opt{x}', '\\decl', '\\wide', '\\brk']
+  const log = [
+    boxed(0, NONE, []),
+    boxed(1, NONE, []),
+    boxed(2, '\\hbox(4.30554+0.0)x5.27779', ['.\\OT1/cmr/m/n/10 x']),
+    boxed(3, NONE, []),
+    boxed(4, '\\hbox(0.0+0.0)x25.0', ['.\\glue 25.0']),
+    boxed(5, NONE, ['.\\penalty 10000', '.\\glue 0.0 plus 1.0fil', '.\\penalty -10000']),
+  ].join('\n')
+  const units = [
+    unit([
+      text('a '),
+      ph('\\nada'),
+      text(' b '),
+      ph('\\opt{}'),
+      text(' c '),
+      ph('\\opt{x}'),
+      text(' d '),
+      ph('\\decl'),
+    ]),
+    unit([text('e '), ph('\\wide'), text(' f '), ph('\\brk'), text(' g '), ph('\\nada')]),
+  ]
+  it('takes a command every use of which sets nothing; one a use of which sets ink, a skip, a forced break are kept', () => {
+    const uses = useAnswersOf(log, asked)
+    expect(uses.nothing).toEqual(['\\nada', '\\opt{}', '\\decl'])
+    expect(usedNothingOf(units, uses)).toEqual(['\\nada', '\\decl'])
   })
-  it('takes no command TeX was not asked about at one of its calls (a source no box can hold)', () => {
-    const units = [unit([text('a '), ph('\\nada'), text(' b '), ph('\\nada{\\verb|x|}')])]
-    expect(probeFactsOf(boxed(0, NONE, []), units).nothing).toEqual([])
+  it('takes no command a use of which TeX was not asked about there (a title’s, an entry’s); and none without use answers', () => {
+    const more = [...units, unit([text('h '), ph('\\decl{}')])]
+    expect(usedNothingOf(more, useAnswersOf(log, asked))).toEqual(['\\nada'])
+    // (the probe's answer after the preamble alone, however it reads, states nothing: no `uses`, no source)
+    expect(usedNothingOf(units, null)).toEqual([])
   })
 })
 
@@ -286,7 +295,7 @@ describe('D’s commands as the stored probe logs list them (lab-data s4/probes;
   it.each(D.map((r) => [r[0], r[1], r[5]] as const))('%s (%s): sets nothing %s', (src, _, sets) => {
     expect(nothing.has(src)).toBe(sets)
   })
-  it('asks nothing of a URL (the url class) or a group’s brace: the probe samples neither, so neither is stated', () => {
+  it('asks nothing of a URL (the url class) or a group’s brace: neither is an ink sample, so neither is asked where it is used', () => {
     const units = [
       {
         kind: 'reference',
@@ -303,6 +312,6 @@ describe('D’s commands as the stored probe logs list them (lab-data s4/probes;
         ],
       },
     ] as never
-    expect(probeFactsOf(boxed(0, NONE, []), units).nothing).toEqual([])
+    expect(inkSamples(units)).toEqual([])
   })
 })

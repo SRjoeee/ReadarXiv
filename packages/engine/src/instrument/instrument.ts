@@ -142,6 +142,8 @@ export type InstrumentInput = {
   options?: {
     texts?: unknown
     inkless?: readonly string[] | null
+    /** the sources TeX set nothing for where the document uses them (compile/paper.ts MarkedOptions `nothing`) */
+    nothing?: readonly string[] | null
     decorated?: unknown
     lineskip?: [number, number] | null
   }
@@ -2109,13 +2111,13 @@ export async function instrumentOf({
   const texts = options.texts,
     inkless = options.inkless ?? null
   // (the probe's own log, where the box hands it over: TeX's quotation marks read in the samples' texts, a text the stored
-  // reading gave none taken (F16); the samples TeX ends with ink a fill pushed (F14); and the sources TeX set nothing for at
-  // every sample of their command (rule 3's measured half), within the marking's inkless: the use's answer where TeX was asked
-  // where the document uses the macro, B4)
-  const probe = probeLog ? probeFactsOf(probeLog, units, inkless) : null
+  // reading gave none taken (F16); and the samples TeX ends with ink a fill pushed (F14))
+  const probe = probeLog ? probeFactsOf(probeLog, units) : null
   const shown = withTexts(textsOf(texts), probe?.texts)
   const endSamples = new Set(probe?.ends ?? [])
-  const nothing = new Set(probe?.nothing ?? [])
+  // (the sources TeX set nothing for where the document uses them, at every use of their command: the marked compile's
+  // `nothing`, B4's asks read by marks.ts usedNothingOf; rule 3's measured half)
+  const nothing = new Set(options.nothing ?? [])
   const names = new Set(pages.flatMap((pg) => pg.points.map((x) => x.name)))
   const follows = followsOf(units, names, shown, inkless)
   const own = ownOf(pages, {

@@ -5,9 +5,9 @@
 //   member, Member.onBase, which no part carries); a class it states El.text for without that reading (`other`, a paper's macro
 //   drawn from its ink, F10's `\hl{guitar}`) is read the same. A raised element, one set smaller, a footnote's mark, one whose
 //   placements disagree, one that stands in no part: none.
-// - an element's `silent` by rule 3's measured half: a command's element TeX set nothing for at every sample of its command (the
-//   instrument's PieceClass.nothing, the probe's listing), no separator by the source reader's statements, which every placement
-//   in a part confirms (no ink, the text ''), its member's pages read whole on both sides. Else as the kernel's list states it.
+// - an element's `silent` by rule 3's measured half: a command's element TeX set nothing for where the document uses it, at every
+//   use of its command (the instrument's PieceClass.nothing, B4's asks), no separator by the source reader's statements; no part
+//   is read for it (an inkless answer's element gets no point, so its placements confirm nothing). Else as the kernel's list.
 // Pages made by hand (helpers/doc.ts), our compile and arXiv's the same.
 import { type Piece, read, type Unit, unitId } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
@@ -223,7 +223,7 @@ describe('an entry, through the bundle', () => {
 })
 
 // ---------------------------------------------------------------- rule 3's measured half
-describe('`silent` where TeX set nothing at every sample of the command and the parts confirm it (rule 3’s measured half)', () => {
+describe('`silent` where TeX set nothing at every use of the command (rule 3’s measured half)', () => {
   // ("dirty guitars." on the line, `\\nada` set between "dirty " and "guitars.": no glyph of its own)
   const NADA: Piece[] = [t('dirty '), { t: 'el', id: '1', kind: 'macro', src: '\\nada' }, t('guitars.')]
   const nada = (cls: Record<string, unknown> = {}, el: Record<string, unknown> = {}): InstrumentUnit => {
@@ -236,7 +236,7 @@ describe('`silent` where TeX set nothing at every sample of the command and the 
     }
   }
   /** the bundle's element `1` of `units[0]`: the instrument's `empty` holds it (locate's text '') unless it sets ink here */
-  function silentOf(units: InstrumentUnit[], o: { whole?: boolean[]; inked?: boolean } = {}) {
+  function silentOf(units: InstrumentUnit[], o: { inked?: boolean } = {}) {
     const ins = instrument(ON, units, (_, n, j) => {
       const k = j - 14 * n
       return o.inked && k >= 6 && k < 12 ? [n, ROLE.element, 1] : [n, ROLE.text, -1]
@@ -251,7 +251,6 @@ describe('`silent` where TeX set nothing at every sample of the command and the 
         original: new Uint8Array(10),
         paper: { id: '2501.00001', version: 1, pages: 1 },
         made: 'test',
-        whole: o.whole ?? [true],
       }),
     ]
     const u = objects
@@ -262,22 +261,18 @@ describe('`silent` where TeX set nothing at every sample of the command and the 
     const parts = objects.filter((x) => x.kind === 'part').map((x) => read('part', x.bytes, x.digest))
     return { el, partEl: new Map(parts[0]?.flows.flat()[0]?.els ?? []).get('1') }
   }
-  it('states it where every placement states no ink and the text TeX set nothing for', () => {
+  it('states it where TeX set nothing at every use of the command', () => {
     const { el, partEl } = silentOf([nada()])
     expect([partEl?.ink, partEl?.text]).toEqual([[], ''])
     expect(el.silent).toBe(1)
   })
-  it('states none where the probe did not say so for every sample of its command, the parts confirming or not', () => {
+  it('states none where TeX was not asked where the command is used, or set something at a use of it, the part as it may be', () => {
     expect(silentOf([nada({ nothing: undefined })]).el.silent).toBeUndefined()
   })
-  it('states none where the element sets ink on the page, whatever the probe said', () => {
+  it('reads no part for it: the use’s answer decides, where the part states ink as where it states none (the silent gate reads it)', () => {
     const { el, partEl } = silentOf([nada()], { inked: true })
     expect(partEl?.ink.length).toBe(1)
-    expect(el.silent).toBeUndefined()
-  })
-  it('states none where a page its member stands on is not read whole on both sides', () => {
-    expect(silentOf([nada()], { whole: [false] }).el.silent).toBeUndefined()
-    expect(silentOf([nada()], { whole: [] }).el.silent).toBeUndefined()
+    expect(el.silent).toBe(1)
   })
   it('states none of a separator the source reader states (a tie, a forced break, glue, `\\newblock`)', () => {
     expect(silentOf([nada({ tie: true })]).el.silent).toBeUndefined()
@@ -285,7 +280,7 @@ describe('`silent` where TeX set nothing at every sample of the command and the 
     expect(silentOf([nada({ glue: [0.5, 'em'] })]).el.silent).toBeUndefined()
     expect(silentOf([nada({}, { src: '\\newblock', newblock: 1 })]).el.silent).toBeUndefined()
   })
-  it('states none of an element of another kind than a command’s (a URL, which the probe never samples)', () => {
+  it('states none of an element of another kind than a command’s (a URL, which no ask samples)', () => {
     expect(silentOf([nada({}, { kind: 'url' })]).el.silent).toBeUndefined()
   })
 })

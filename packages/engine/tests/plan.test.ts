@@ -49,6 +49,28 @@ describe('the stored plan, written and read back', () => {
     }
     expect(planOf(other)).toBe(null)
   })
+  test("the sources TeX set nothing for where the document uses them (B4's `nothing`) kept and read back; none asked, none kept", () => {
+    const stored = storedInstrumentOf({
+      finalPdf: B,
+      log: LOG,
+      probeLog: PROBE_LOG,
+      options: { ...OPTIONS, nothing: ['\\nada'] },
+      bbl: null,
+      facts: FACTS,
+    })
+    if (!stored) throw new Error('the writer kept no plan')
+    const read = planOf(stored)
+    expect(read?.nothing && unkeep(read.nothing)).toStrictEqual(['\\nada'])
+    const plain = storedInstrumentOf({
+      finalPdf: B,
+      log: LOG,
+      probeLog: PROBE_LOG,
+      options: OPTIONS,
+      bbl: null,
+      facts: FACTS,
+    })
+    expect(plain && JSON.parse(FROM_UTF8.decode(plain.plan))).not.toHaveProperty('nothing')
+  })
   test('the reader reads what the writer wrote: each option, the .bbl and the facts; B and the log as given', () => {
     const stored = storedInstrumentOf({
       finalPdf: B,

@@ -188,9 +188,9 @@ export interface PieceClass {
    *  infinite stretch pushed (the probe's listing: an author's \qed written in the text), or which the source pushes with a fill
    *  right before it (`\hfill $\square$`): marks.ts endPiecesOf; its element's El.end */
   end?: true
-  /** TeX set nothing for it at every sample of its command (rule 3's measured half, the probe's listing: no ink, a box of no
-   *  width, no glue, kern or forced break in it): marks.ts probeFactsOf `nothing`, which the bundle states `silent` by where the
-   *  parts confirm it (bundle.ts statedOf). No part carries it */
+  /** TeX set nothing for it where the document uses it, at every use of its command (rule 3's measured half, the asks' listing:
+   *  no ink, a box of no width, no glue, kern or forced break in it): the marked compile's `nothing`, marks.ts usedNothingOf, which
+   *  the bundle states `silent` by (bundle.ts statedOf). No part carries it */
   nothing?: true
 }
 

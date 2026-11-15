@@ -69,6 +69,7 @@ import {
   readSkipProbe,
   NAME_MARK_FILE,
   useAnswersOf,
+  usedNothingOf,
   withoutNameMarks,
 } from '../marks/marks.ts'
 import type { Complete, MarkClass, Switches, UseAnswers } from '../marks/marks.ts'
@@ -174,6 +175,9 @@ export type MarkedOptions = {
   lineskip: [lineskip: number, limit: number] | null
   complete: Complete | null
   apart: string[]
+  /** the sources TeX set nothing for where the document uses them, at every use of their command (marks.ts usedNothingOf over the
+   *  `uses`: rule 3's measured half), where TeX was asked there (B4); none without `uses` */
+  nothing?: string[]
 }
 /** the marked original (markedOfPaper), or why there is none; each stage's time, the loop's and the guard's records; the mark
  *  probe's log its answers were read from (`probeLog`, the raw log a host stores beside the instrument) */
@@ -678,6 +682,7 @@ export async function markedOfPaper(
     lineskip,
     complete,
     apart,
+    ...(uses ? { nothing: usedNothingOf(paper.units, uses) } : {}),
   }
   const record = (): GuardRecord => ({
     extra: g.extra,

@@ -7280,51 +7280,46 @@ compile's own reading takes (readInkAnswers', the units').
   instrument stored before the probe's log was one of its objects), the probe's readings read nothing and the source's six are
   stated.
 
-### 18.79 An element that sets nothing, as the probe's own listing states it (rule 3's measured half, the compile move's slice 4, 2026-11-15)
+### 18.79 An element that sets nothing, as TeX answers where the document uses it (rule 3's measured half, the compile move's slice 4, 2026-11-16)
 
 `silent` (format's el: the element sets nothing where it stands, so a wire sends it on no wire and puts it back at its group's
 front or end) is stated by the kernel's list as the wire move built it (`instrument/mt.ts` isInkless, in the instrument's
-content), or by TeX's own answer, written once where the Units object is written (`bundle.ts` statedOf, measuredSilent):
+content), or by TeX's answer taken where the element is used, written once where the Units object is written (`bundle.ts`
+statedOf, measuredSilent), and by nothing else:
 
-- **The probe's answer, at every sample of the command** (`marks.ts` readInkNothing, probeFactsOf `nothing`;
-  `PieceClass.nothing`): the ink section sets each sample in a box of its own and lists it (`\showbox`). A sample sets nothing
-  where TeX says it sets no ink (readInkProbe), its box has no width and holds no separator. No width is `x0.0`, which TeX
-  prints for 0sp alone (a dimension is printed in the fewest decimals that read back to the same scaled point: one sp is
-  `0.00002`), so no tolerance is read into it. No separator: no glue, leaders or kern at any depth of the listing, no forced
-  break (a penalty of -10000 or less). A command is measured so where every sample of it, the ink section's and the leads', sets
-  nothing and every call of it in the paper was asked (one past the ink section's budget, or no source a box can hold, is no
-  answer); one sample with ink (`\opt{}` empty, `\opt{x}` its x) keeps every call. Only the command class is sampled (`marks.ts`
-  classOf `macro`): a URL's element, a group's brace, a space or a break of the kernel's is never measured so.
+- **The answer at every use of the command** (B4's asks, §18.80; `marks.ts` useAnswersOf `nothing`, usedNothingOf; the marked
+  compile's `nothing`, the stored plan's; `PieceClass.nothing`): an ask sets the sample in a box of its own where the document
+  uses it and lists it (`\showbox`). It sets nothing where TeX says it sets no ink (readInkProbe), its box has no width and
+  holds no separator (readInkNothing). No width is `x0.0`, which TeX prints for 0sp alone (a dimension is printed in the fewest
+  decimals that read back to the same scaled point: one sp is `0.00002`), so no tolerance is read into it. No separator: no
+  glue, leaders or kern at any depth of the listing, no forced break (a penalty of -10000 or less). A command is measured so
+  where every paper's macro of it in the units is a source TeX answered so at its use: one use with ink (`\opt{}` empty,
+  `\opt{x}` its x), one TeX was not asked about where it is used (a heading's, a caption's, a bibliography entry's, which the
+  bibliography's pass does not yet hold) or did not answer keeps every use. Only the command class is asked: a URL's element, a
+  group's brace, a space or a break of the kernel's is never measured so.
 - **The source reader's statements**: no tie, forced break or glue of the element's own (PieceClass), no `\newblock` (a skip by
   its classes' definitions, the element's `newblock`).
-- **The parts confirm it**: every placement of the element in a part states no ink and the text '' (locate's "TeX set
-  nothing"), its member located on pages read whole on A and on B (neither Doc's `unread`: a page past the box budget, rotated,
-  capped or timed out holds no glyph, and an element's ink there would be missed; `prepare.ts` placedOf hands the bundle
-  `whole`). An element in no part is not stated.
+
+**Why not the probe, and why no part.** The mark probe sets a macro after the paper's preamble, outside its context:
+elsarticle's `\sep` is empty there and `\unskip, ` inside `keyword`; threeparttable's `\tnote` sets nothing outside its table
+and a superscript inside it. And the parts cannot confirm the probe: a sample it calls inkless gets no point from the marking,
+and the instrument states its piece empty by that same answer (`inklessPieces`), so its placements state no ink and the text ''
+whatever TeX set at its use. Built so (the slice's first form, 29eb0e604), the rule stated `\sep` silent 17 times in 4 papers
+and `\tnote{b}` once. So the probe's answer alone makes no element silent, and no part is read for it; the silent gate
+(`lab/pdf/prepare-back/silent-gate.mjs`) still fails a paper where a part states ink or text for an element stated silent.
 
 Read off the paper's own commands: 2610.37818v1's `\authorspace` (`\hspace{2.5em}`: 25 pt and its glue) and authblk's
-`\authorcr` (its `\\`: `\penalty 10000`, `\glue 0.0 plus 1.0fil`, `\penalty -10000`, no width) are kept as elements, where the
-wire move's census read them silent off their own sources; a `\natexlab{}`, ACM's `\showISBNx{…}`, revtex's `\email{…}`,
-hyperref's `\phantomsection` set nothing. The paper-names reading (`instrument/language.ts`) runs before the parts exist and
-reads no `silent` (§18.72; the wire move's ruling 4): read with the widened `silent` left out, it would move no name and no
-judged unit against the kernel's list's reading.
+`\authorcr` (its `\\`: `\penalty 10000`, `\glue 0.0 plus 1.0fil`, `\penalty -10000`, no width) are kept as elements, and so are
+the commands TeX gives no answer for or never asks (`\urldef`, `\tempurl`, jmlr2e's `\name`, aaai2027's `\corresponding`,
+`\url`, a brace). The paper-names reading (`instrument/language.ts`) reads no `silent` (§18.72; the wire move's ruling 4): read
+with the widened `silent` left out, it moved no name and no judged unit in the first form's 69 papers.
 
-Measured over the three sets' stored compiles (245 papers, each with its probe's log), the chain at the slice's head against
-the same head without it: 880 elements of the source's units become `silent` (885 occurrences) in 835 units (830 sent to a
-translator) of 69 papers, and 31 in the names' variants; 673 of them are `\natexlab{…}` (37 papers); every one is of kind
-`macro`. Nothing else moves but two papers' parts, whose names' `splits` (`bundle/names.ts`) lose a reference's `\natexlab` and
-`\showISBNx` cuts (2402.10294v1, 2610.21026v1); no unit's id, no ownership, no dump moves, and no element stated `silent`
-is one a part states ink or text for (the silent gate). The changed wires of the 92 pairs take 36 Google requests (243
-wires), counted dry. The wire move's census, by the instrument's measure of each unit rather than the probe's of each
-command, read 1,340 elements in 990 units of 91 papers: it took `\url`, `\urldef`'s pieces and a group's brace, which the
-probe never asks or cannot answer, and the two wide commands and the forced break above.
-
-**What the parts confirm.** A sample TeX says sets no ink is given no point by the marking, and the instrument states its
-piece empty (`inklessPieces`): its placements then state no ink and the text '' by the probe's own answer, so the parts confirm
-that no ink of A was given to it, not what TeX set at its use. Where the probe's place reads a command otherwise than its use
-(F15), the rule follows the probe: elsarticle's `\sep` (`\unskip, ` inside `keyword`, empty outside it) is stated silent 17
-times in 4 papers, threeparttable's `\tnote{b}` (a superscript inside its table) once (2610.21313v1). The probe asked where
-the document uses a macro (the compile move's B4) answers both.
+Measured where use answers exist (the six papers whose bibliography's pass B4 compiled with its asks): 30 elements become
+`silent` in 26 units (all sent) of 2 papers: 2608.25210v2's `\papertext{…}` (17, its `\newcommand{\papertext}[1]{}`),
+`\delete{…}` (8, `\sout{}`) and `\pagestyle{\vldbpagestyle}` (1); 2610.21084v1's `\sep` (4, in one unit). The last is TeX's
+answer at the token in cas-sc's `keywords` environment (\sep empty there), where arXiv's page sets each keyword apart: the class
+reads the environment's text past TeX's typesetting of the token, which no ask sees. A paper with no bibliography pass has no
+use answer and states no measured `silent` until the asks reach it.
 
 ### 18.80 The ink probe asked where the document uses a macro (the compile move's B4, the display design's F15, 2026-11-16)
 
@@ -7349,8 +7344,9 @@ madeBibliography with `asks`, an option `compiledOf` sets; today's reader asks n
   paragraph of its own in a box, whose end starts TeX's error count again (a paragraph's asks never add up to the hundred
   errors that stop TeX). A pass with asks that does not run through is asked again as today's.
 - **Read** (`marks.ts` useAnswersOf, mergeUses): an answered use's answer, inkless or not, replaces the probe's for that source
-  before the marking reads `inkless`; the probe's stands where the use gave none. Rule 3's measured half reads `nothing` within
-  that `inkless` (§18.79).
+  before the marking reads `inkless`; the probe's stands where the use gave none. Rule 3's measured half reads the use answers
+  alone (§18.79): the sources set nothing at every use of their command (usedNothingOf), the marked compile's `nothing`, which
+  the stored plan keeps so that a prepare from the stored objects states the same.
 
 Held by the TeX gate's cases (`lab/pdf/spikes/ask-cases.mjs`, both years, the four engines: the `.bbl`, the `.aux` and the
 `.toc` byte for byte today's, as many errors outside the asks, each answer as the use sets it) and on six papers' own passes
