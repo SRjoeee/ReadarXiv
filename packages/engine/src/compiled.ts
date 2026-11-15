@@ -46,9 +46,13 @@ export interface CompiledInput {
   note(name: string, data: unknown): void
   /** the source's units handed out, of the paper as opened (with its .bbl): awaited before any compile of the marks */
   units(paper: Paper): Promise<void>
+  /** the host's bound on the files one compile is given back to carry ({ count, bytes }: the box's one answer's), which the
+   *  marked compile's pass loop holds the files it carries to (paper.ts convergeThenMark `files-bound`); none: no bound */
+  filesBound?: { count: number; bytes: number } | null
 }
 /** the stored half's end: the paper as opened, B, its log and the marked compile's options (or the stored ones read back), and
- *  the four objects to store where TeX made them and their plan reads back; or why the paper cannot be typeset */
+ *  the four objects to store where TeX made them and their plan reads back, with the mark probe's raw log where the probe ran
+ *  (`probeLog`, null where the stored objects were read back); or why the paper cannot be typeset */
 export type CompiledResult =
   | { ok: false; why: PrepareWhy; detail: string }
   | {
@@ -58,6 +62,7 @@ export type CompiledResult =
       log: string
       options: Record<string, unknown>
       made: StoredInstrument | null
+      probeLog: string | null
     }
 
 /** each page's text of a compile's PDF (the layout guard's check), or null where PDF.js cannot read it */
@@ -110,6 +115,7 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
   let log: string
   let options: Record<string, unknown>
   let made: StoredInstrument | null = null
+  let probeLog: string | null = null
   if (plan && input.stored) {
     finalPdf = input.stored['b.pdf']
     log = FROM_UTF8.decode(input.stored.log)
@@ -122,8 +128,12 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
   } else {
     input.stage('compiling')
     const day = f.day
+    // (the marked compile as the pass loop, Q1: its first settled pass B and the log, one TeX pass fewer than today's compile and
+    // its final pass; the files it carries held to the host's bound)
     const m = await markedOfPaper(paper, {
       compile: input.compile,
+      converge: true,
+      filesBound: input.filesBound ?? null,
       compileBudgetMs: null,
       engines: input.engines,
       pages: async () => f.pages,
@@ -146,9 +156,10 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
     finalPdf = base.pdf
     log = m.log ?? ''
     options = m.options ?? {}
+    probeLog = m.probeLog ?? null
     // (a plan whose options do not read back as they are is not kept: a later prepare compiles again)
     made = storedInstrumentOf({ finalPdf, log, options, bbl, facts: f })
     if (!made) input.note('front', { plan: "not kept: the probe's answers do not read back as they are" })
   }
-  return { ok: true, paper, finalPdf, log, options, made }
+  return { ok: true, paper, finalPdf, log, options, made, probeLog }
 }

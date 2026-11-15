@@ -759,8 +759,9 @@ const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
 export function readInkTexts(
   log: string | null | undefined,
   samples: readonly string[],
+  { quotes = false }: { quotes?: boolean } = {},
 ): [source: string, text: string][] {
-  return inkTextsOf(log, samples, false)
+  return inkTextsOf(log, samples, false, quotes)
 }
 /** a box TeX lists of no width, at a depth of the sample's box (its dots): what it holds moves no character of the line */
 const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
@@ -782,15 +783,26 @@ const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
 export function readInkDecorated(
   log: string | null | undefined,
   samples: readonly string[],
+  { quotes = false }: { quotes?: boolean } = {},
 ): [source: string, text: string][] {
-  return inkTextsOf(log, samples, true)
+  return inkTextsOf(log, samples, true, quotes)
 }
+/** TeX's quotation marks as a text font (OT1, T1, LY1) sets them, read with `quotes` (readInkTexts): ' at 0x27 the right quote,
+ *  ` at 0x60 the left; the ligatures '' and `` the double ones, whatever slot each encoding gives them */
+const QUOTE: Readonly<Record<string, string>> = Object.freeze({ "'": '\u2019', '`': '\u2018' })
+const QUOTE_LIG: Readonly<Record<string, string>> = Object.freeze({ "''": '\u201D', '``': '\u201C' })
+/** a quotation mark of XeTeX's word (TU), which TeX's ligature mapping already made U+2018 to U+201D, as the log holds it: its
+ *  UTF-8 bytes read one character a byte */
+const TU_QUOTE = /\xe2\x80([\x98\x99\x9c\x9d])/g
 /** readInkTexts' reading, and with `decorated` readInkDecorated's: the decoration TeX painted with the characters passed over, and
- *  only a sample that has one given */
+ *  only a sample that has one given; with `quotes` (the compile move's F16, the back half's reading of the probe's own log),
+ *  TeX's quotation marks read as the glyphs a text font sets for them, which without it are no answer: `it's` read as “it’s”,
+ *  ``quality'' as “quality” (2610.21376v1's \new{…}, 2610.40576v1's highlighted cells, 7 answers in 4 papers of B15's probes) */
 function inkTextsOf(
   log: string | null | undefined,
   samples: readonly string[],
   decorated: boolean,
+  quotes = false,
 ): [source: string, text: string][] {
   const out: [source: string, text: string][] = []
   let at: number | null = null,
@@ -894,6 +906,12 @@ function inkTextsOf(
     if (c) {
       const [, enc, ch, lig] = c,
         punct = enc === 'T1' || enc === 'TU' ? PUNCT_WIDE : PUNCT_ALL
+      // (a quotation mark of a text font, read as its glyph where asked)
+      const q = quotes && TEXT_ENCODING.has(enc) && enc !== 'TU' ? (lig ? QUOTE_LIG[lig] : QUOTE[ch!]) : undefined
+      if (q) {
+        text += q
+        continue
+      }
       if (
         TEXT_ENCODING.has(enc) &&
         (lig ? /^[A-Za-z0-9]+$/.test(lig) : /^[A-Za-z0-9]$/.test(ch!) || (ch!.length === 1 && punct.includes(ch!)))
@@ -907,7 +925,11 @@ function inkTextsOf(
     // (XeTeX's word, outside a formula: its characters, each one a character node's would be)
     const w = math === 0 ? WORD_NODE.exec(line) : null
     if (w) {
-      if ([...w[1]!].every((ch) => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch))) text += w[1]
+      const word = quotes
+        ? w[1]!.replace(TU_QUOTE, (_, b: string) => String.fromCharCode(0x1f80 + b.charCodeAt(0)))
+        : w[1]!
+      if ([...word].every((ch) => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch) || (quotes && /[‘’“”]/.test(ch))))
+        text += word
       else bad = true
       continue
     }
@@ -986,6 +1008,129 @@ export function readInkApart(log: string | null | undefined, samples: readonly s
     if (listed && first === null && /^\.(?!\.)/.test(line)) first = line
   }
   return out
+}
+
+/** a glue of infinite stretch in a box's outer list as TeX lists it (`.\glue 0.0 plus 1.0fill`, a named one's `\glue(\name)`):
+ *  a fil, fill or filll, which pushes what follows it to its line's end */
+const FIL_GLUE = /^\.\\glue(?:\(\\[A-Za-z@]+\))? -?[\d.]+ plus [\d.]*[1-9][\d.]*fil{1,3}(?: |$)/
+/**
+ * The samples TeX ends with ink a glue of infinite stretch pushed (the compile move's F14), from the probe's own log
+ * (inkSection): each sample whose box TeX listed in full with no error between its rows, its outer list holding a fil, fill or
+ * filll glue (FIL_GLUE) before its last ink, a node of that list that sets some: a character, a rule both wide and high (or
+ * running), a box holding one. amsthm's \qed (`\hfill\quad` and the box of its square's rules), an author's own (`\hfill` and a
+ * symbol), LLNCS's (a fil, a penalty, a skip, a fil again and its square): set at a paragraph's end, TeX pushes it to its
+ * line's end, the unit's end mark (El.end). A fill after the last ink, or one inside a box only, pushes none; a listing not read
+ * whole is no answer. 27 of the 33 end marks the probes of B15 hold (lanes/probes-facts.md, F14)
+ */
+export function readInkEnds(log: string | null | undefined, samples: readonly string[]): string[] {
+  const out: string[] = []
+  let at: number | null = null,
+    listed = false,
+    bad = false,
+    done = false
+  // (the outer list's nodes so far: whether a fill stood before the last ink; the outer node being read and whether it sets ink)
+  let fill = false,
+    pushed = false,
+    current: 'ink' | 'box' | 'none' | null = null,
+    boxInk = false
+  const close = () => {
+    if (current === 'box' && boxInk) current = 'ink'
+    if (current === 'ink') pushed = fill
+    current = null
+    boxInk = false
+  }
+  for (const line of (log ?? '').split('\n')) {
+    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
+    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+      const i = Number(r.fields[0])
+      if (r.tag === 'ink-at') {
+        at = i
+        listed = bad = done = fill = pushed = boxInk = false
+        current = null
+        continue
+      }
+      if (at === i && done && !bad && pushed && samples[i] !== undefined) out.push(samples[i])
+      at = null
+      continue
+    }
+    if (at === null || done) continue
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) {
+      close()
+      done = listed
+      if (!done) bad = true
+      continue
+    }
+    if (TEX_ERROR.test(line)) {
+      bad = true
+      continue
+    }
+    if (/^> \\box\d+=/.test(line)) {
+      listed = true
+      continue
+    }
+    if (!listed || line === '' || /^\\[hv]box\(/.test(line)) continue
+    const outer = /^\.(?!\.)/.test(line)
+    const rule = RULE_NODE.exec(line)
+    const inked =
+      CHAR_NODE.test(line) ||
+      WORD_NODE.test(line) ||
+      (!!rule &&
+        (rule[3] === '*' || Number(rule[3]) > 0) &&
+        (rule[1] === '*' || rule[2] === '*' || Number(rule[1]) + Number(rule[2]) > 0))
+    if (!outer) {
+      // (a node inside an outer box: ink of that box's)
+      if (current === 'box' && inked) boxInk = true
+      continue
+    }
+    close()
+    if (FIL_GLUE.test(line)) fill = true
+    if (inked) current = 'ink'
+    else if (/^\.\\[hv]box\(/.test(line)) current = 'box'
+    else if (NO_INK_NODE.test(line) || rule) current = 'none'
+    else bad = true
+    if (current === 'ink' || current === 'box') pushed = false
+  }
+  return out
+}
+/** a source that is a glue of infinite stretch, TeX's own: \hfil, \hfill, LaTeX's \hspace{\fill} (its \fill, 0pt plus 1fill) */
+const FILL_SOURCE = /^\\(?:hfill?(?![A-Za-z@])|hspace\*?\s*\{\s*\\fill\s*\})\s*$/
+/**
+ * The pieces a unit ends with that TeX sets as its end mark (the compile move's F14, El.end on the piece's element), by their
+ * index in the unit's pieces: its last piece that sets ink (white space, groups' edges and placeholders that set none after it),
+ * a placeholder, where the probe says TeX ends its own box with ink a fill pushed (readInkEnds: amsthm's or an author's \qed
+ * written in the text), or where the source pushes it with a fill right before it, white space and groups' edges between
+ * (`\hfill $\square$`: 2610.40394v1's six). None where the unit's last ink is text, or no fill pushes it
+ */
+export function endPiecesOf(pieces: readonly PieceLike[], ends: ReadonlySet<string>): number[] {
+  const blank = (p: PieceLike) =>
+    (p.t === 'text' && !/\S/.test((p as { s?: string }).s ?? '')) || p.t === 'open' || p.t === 'close'
+  let k = pieces.length - 1
+  while (k >= 0 && (blank(pieces[k]!) || (pieces[k]!.t === 'ph' && classOf(pieces[k]) === null))) k--
+  const last = pieces[k]
+  if (last?.t !== 'ph') return []
+  if (ends.has(last.src ?? '')) return [k]
+  let j = k - 1
+  while (j >= 0 && blank(pieces[j]!)) j--
+  const before = pieces[j]
+  return before?.t === 'ph' && FILL_SOURCE.test(before.src ?? '') ? [k] : []
+}
+/**
+ * What the back half reads of the mark probe's own log (the compile move's B3, by the brief's ruling 6: the log the box stores
+ * beside the instrument, no field of the stored plan): the texts the ink section showed the samples and leads set, and those set
+ * beside a decoration, TeX's quotation marks read (F16: readInkTexts' and readInkDecorated's `quotes`); and the samples TeX ends
+ * with ink a fill pushed (F14: readInkEnds). The samples are readInkAnswers' own, the units' (inkSamples, leadSamples)
+ */
+export function probeFactsOf(
+  log: string | null | undefined,
+  units: readonly Unit[],
+): { texts: [string, string][]; decorated: [string, string][]; ends: string[] } {
+  const ink = inkSamples(units),
+    leads = leadSamples(units, ink)
+  return {
+    texts: readInkTexts(log, [...ink, ...leads], { quotes: true }),
+    decorated: readInkDecorated(log, [...ink, ...leads], { quotes: true }),
+    ends: readInkEnds(log, ink),
+  }
 }
 
 // ---- babel's names: what each one's own text is, TeX asked
@@ -1443,16 +1588,68 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  * \autocite, fnpct) — where TeX's answer to the mark probe takes the marks off (layoutMarking's `switches`). pdfTeX may
  * draw a virtual font's glyph after a whatsit off where TeX set it; no corpus paper shows it (Task 2's TeX boxes)
  */
-/** the points (LAYOUT_TEX's last part): `\\axt@point{name}` in each engine, beside each destination; around each column's
+/**
+ * The classes of the points (POINTS, and the cell's end LAYOUT_TEX sets through \\axt@dest), each by the names its points
+ * are given, and whether it is `optional` (design-performance Q2, the compile move's B0): a class that states a fact of TeX's
+ * typesetting the instrument can also read, less exactly, from the page, and from which no unit's ownership or text is read.
+ * A marked compile that dies only with more of our points in its node lists (2610.30769v1 under pdfTeX 1.40.28) is asked
+ * again without the optional classes' TeX; every other class stays, so what is owned and what is read as text is read as
+ * ever. The paragraph ends are optional: what they state, the alignment TeX broke a paragraph by and where it ended, the
+ * page's lines state too; so are the forced breaks' points (the compile move's F35, STATEMENTS_TEX's): where TeX ended a line,
+ * which the page's lines state less exactly. A cell's end (§18.74's `t<i>x`) is not: ownership reads where a cell's piece ends
+ * from it. A class added later says which it is
+ */
+export const POINT_CLASSES = {
+  /** each column's body and a text block shipped whole, `bs<n>` and `be<n>` with its AXT-BODY statement: a glyph's body */
+  body: { names: /^b[se]\d+$/, optional: false },
+  /** each float's box, `fs<n>` and `fe<n>`, and `fn<n>` beside a float of a type with no counter: what a float holds */
+  float: { names: /^f[sen]\d+$/, optional: false },
+  /** a caption's label where TeX sets it, `ka<n>` */
+  caption: { names: /^ka\d+$/, optional: false },
+  /** a pgf picture's own box, `zs` and `ze`: a figure's text between them */
+  picture: { names: /^z[se]$/, optional: false },
+  /** where TeX begins a front matter environment after the author block, `fm<n>`: the block's end */
+  front: { names: /^fm\d+$/, optional: false },
+  /** a biblatex entry's start, `bi<n>`, and a printed bibliography's end, `bz<n>`: one entry a unit */
+  bibliography: { names: /^b[iz]\d+$/, optional: false },
+  /** a paragraph's start, `q<n>` in its indentation box: the ledger's blocks */
+  'para-start': { names: /^q\d+$/, optional: false },
+  /** a paragraph's end with the alignment TeX broke it by, `qe<n><code>` */
+  'para-end': { names: /^qe\d+[clrj]$/, optional: true },
+  /** a display's ink and the text inside it, `dps`/`dpe`, `dts`/`dte`, `dms`/`dme` with its number */
+  display: { names: /^d(?:ps|pe|ts|te|ms|me)\d+$/, optional: false },
+  /** a table cell's end, `t<i>x` (LAYOUT_TEX's \\axt@cellend, through \\axt@dest): where a cell's piece ends */
+  'cell-end': { names: /^t\d+x$/, optional: false },
+  /** where TeX ends a line at a forced break, `kb<n>` (STATEMENTS_TEX's BREAKS_TEX, after \\@gnewline's \\unskip): the line
+   *  TeX ended there, which the page's lines state too, less exactly; kept apart from the marks' points (ink.ts `breaks`) */
+  'forced-break': { names: /^kb\d+$/, optional: true },
+  /** the point beside each destination of the marks' own (a unit's start and end, a placeholder's, a name's, a call's, a
+   *  figure's frame): every name no other class gives */
+  mark: { names: /^/, optional: false },
+} as const satisfies Record<string, { names: RegExp; optional: boolean }>
+/** a class of the points (POINT_CLASSES) */
+export type PointClass = keyof typeof POINT_CLASSES
+/** the class of a point by its name: the first whose names it is of (`mark`, every name, last) */
+export const pointClassOf = (name: string): PointClass =>
+  (Object.keys(POINT_CLASSES) as PointClass[]).find((c) => POINT_CLASSES[c].names.test(name))!
+
+/** the points (LAYOUT_TEX's last part), each part of its TeX with its class (POINT_CLASSES; null: shared, the point's own
+ *  definition and the bodies' and floats' count): `\\axt@point{name}` in each engine, beside each destination; around each column's
  *  body and each float's box; inside each pgf picture's own box (a TikZ or pgfplots picture: `zs` after pgf's
  *  \\pgfsys@beginpicture, `ze` before its \\pgfsys@endpicture, so that nothing outside the box moves), the figure's text between
  *  them (layout/figure-text.mjs); at each paragraph's start (`q<n>`, inside its indentation box) and at its end with TeX's
  *  alignment of it (`qe<n><code>`, layout/ink.mjs PARA_END) */
-export const POINTS_TEX = [
-  '\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}\\else\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}\\else\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}\\else\\def\\axt@point#1{}\\fi\\fi\\fi',
-  '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}',
-  '\\gdef\\axt@bn{0}\\def\\axt@bump{\\xdef\\axt@bn{\\the\\numexpr\\axt@bn+1\\relax}}',
-  '\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}\\def\\axt@vtg{\\edef\\axt@vback{\\vskip\\the\\lastskip\\relax\\axt@vback}\\unskip\\axt@vtake}\\def\\axt@vtk{\\edef\\axt@vback{\\kern\\the\\lastkern\\relax\\axt@vback}\\unkern\\axt@vtake}\\def\\axt@vtp{\\edef\\axt@vback{\\penalty\\the\\lastpenalty\\relax\\axt@vback}\\unpenalty\\axt@vtake}',
+export const POINTS: readonly (readonly [PointClass | null, string])[] = [
+  [
+    null,
+    '\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}\\else\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}\\else\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}\\else\\def\\axt@point#1{}\\fi\\fi\\fi',
+  ],
+  ['mark', '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}'],
+  [null, '\\gdef\\axt@bn{0}\\def\\axt@bump{\\xdef\\axt@bn{\\the\\numexpr\\axt@bn+1\\relax}}'],
+  [
+    'body',
+    '\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}\\def\\axt@vtg{\\edef\\axt@vback{\\vskip\\the\\lastskip\\relax\\axt@vback}\\unskip\\axt@vtake}\\def\\axt@vtk{\\edef\\axt@vback{\\kern\\the\\lastkern\\relax\\axt@vback}\\unkern\\axt@vtake}\\def\\axt@vtp{\\edef\\axt@vback{\\penalty\\the\\lastpenalty\\relax\\axt@vback}\\unpenalty\\axt@vtake}',
+  ],
   // (each bracketed body's statement, at the point that opens it, `AXT-BODY <n> <side> <\\columnwidth> <\\textwidth> <x>`: the
   // column it is (1 the left one, 2 the right one, LaTeX's \\if@firstcolumn where \\if@twocolumn; 0 a one-column page's body,
   // or a text block its class shipped whole) and where TeX shipped the body's box, its left edge (\\pdflastxpos, LuaTeX's
@@ -1463,17 +1660,35 @@ export const POINTS_TEX = [
   // of 2026-11-08), a dimension and no position, so the same in every engine. A \\write delayed to the shipout beside a saved
   // position: two whatsits beside the point, before its \\penalty10000, so that no place to break is made or lost and nothing
   // moves; written to the log alone)
-  '\\ifdefined\\pdflastxpos\\def\\axt@savepos{\\pdfsavepos}\\def\\axt@lastx{\\the\\pdflastxpos}\\else\\ifdefined\\lastxpos\\def\\axt@savepos{\\savepos}\\def\\axt@lastx{\\the\\lastxpos}\\else\\let\\axt@savepos\\relax\\let\\axt@lastx\\@empty\\fi\\fi',
-  '\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx\\space\\the\\dimexpr1in+\\voffset+\\topmargin+\\headheight+\\headsep+\\textheight\\relax}}\\axt@bw}',
-  '\\newif\\ifaxt@bodied',
-  '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\axt@body{\\if@twocolumn\\if@firstcolumn1\\else2\\fi\\else0\\fi}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}\\fi',
-  '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
+  [
+    'body',
+    '\\ifdefined\\pdflastxpos\\def\\axt@savepos{\\pdfsavepos}\\def\\axt@lastx{\\the\\pdflastxpos}\\else\\ifdefined\\lastxpos\\def\\axt@savepos{\\savepos}\\def\\axt@lastx{\\the\\lastxpos}\\else\\let\\axt@savepos\\relax\\let\\axt@lastx\\@empty\\fi\\fi',
+  ],
+  [
+    'body',
+    '\\def\\axt@body#1{\\axt@savepos\\edef\\axt@bw{\\noexpand\\write-1{AXT-BODY \\axt@bn\\space#1 \\the\\columnwidth\\space\\the\\textwidth\\space\\noexpand\\axt@lastx\\space\\the\\dimexpr1in+\\voffset+\\topmargin+\\headheight+\\headsep+\\textheight\\relax}}\\axt@bw}',
+  ],
+  ['body', '\\newif\\ifaxt@bodied'],
+  [
+    'body',
+    '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\axt@body{\\if@twocolumn\\if@firstcolumn1\\else2\\fi\\else0\\fi}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}\\fi',
+  ],
+  [
+    'body',
+    '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\axt@body{0}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
+  ],
   // (a float of a type that has no counter, `fn<n>` beside its `fs<n>`, in its own box: \\c@\\@captype undefined where its box
   // ends, so that no \\caption can number it and TeX says it is no figure, table or algorithm: NeurIPS's \\@float{noticebox},
   // ICML's \\@float{copyrightbox}, which define \\ftype@<type> alone. The ledger reads its text as the page's own outside the
   // bodies, a note (PDF-READER §18.34))
-  '\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}',
-  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  [
+    'float',
+    '\\def\\axt@fnpt{\\ifdefined\\@captype\\ifcsname c@\\@captype\\endcsname\\else\\axt@point{fn\\axt@bn}\\fi\\fi}',
+  ],
+  [
+    'float',
+    '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@fnpt\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  ],
   // (a caption's label where TeX sets it, `ka<k>` before it: every caption maker is handed its label, \\fnum@<type>, as an
   // argument of its own — LaTeX's \\@caption, caption.sty's and every class's to \\@makecaption (#1), longtable's to
   // \\LT@makecaption (#2), float.sty's to its styles' \\floatc@plain and \\floatc@ruled (#1), algorithm2e's to
@@ -1490,11 +1705,26 @@ export const POINTS_TEX = [
   // (LaTeX's para/begin, once), so that no node is put on a vertical list; never while the gate is off (a list of figures, the
   // output routine). A measured copy's point goes with its box: the label TeX ships carries one. The label is what TeX set from
   // the point to the caption's start mark, whatever line it stands on (own.mjs MR 5, PDF-READER §18.34))
-  '\\gdef\\axt@kn{0}\\newif\\ifaxt@kwait\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}\\def\\axt@klate{\\ifaxt@kwait\\global\\axt@kwaitfalse\\ifaxt@off\\else\\ifhmode\\axt@kpt\\fi\\fi\\fi}',
-  '\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}',
-  '\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}',
-  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\let\\@makecaption\\axt@kmcw\\fi\\ifdefined\\@xfloat\\let\\axt@kxf\\@xfloat\\def\\@xfloat{\\axt@kmfr\\axt@kxf}\\fi\\ifdefined\\LT@makecaption\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}\\fi\\ifdefined\\floatc@plain\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}\\fi\\ifdefined\\floatc@ruled\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}\\fi\\ifdefined\\algocf@captiontext\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}\\fi\\ifdefined\\caption@@make\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}\\fi}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
+  [
+    'caption',
+    '\\gdef\\axt@kn{0}\\newif\\ifaxt@kwait\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}\\def\\axt@klate{\\ifaxt@kwait\\global\\axt@kwaitfalse\\ifaxt@off\\else\\ifhmode\\axt@kpt\\fi\\fi\\fi}',
+  ],
+  [
+    'caption',
+    '\\protected\\def\\axt@ka{\\ifaxt@off\\else\\ifhmode\\axt@kpt\\else\\ifvmode\\ifdefined\\AddToHookNext\\ifaxt@kwait\\else\\global\\axt@kwaittrue\\AddToHookNext{para/begin}{\\axt@klate}\\fi\\fi\\fi\\fi\\fi}\\def\\axt@kf{\\ifx\\protect\\@typeset@protect\\axt@ka\\fi}',
+  ],
+  [
+    'caption',
+    '\\long\\def\\axt@kmcw#1#2{\\axt@kmc{\\axt@kf#1}{#2}}\\long\\def\\axt@kmfw#1#2{\\axt@kmf{\\axt@kf#1}{#2}}\\def\\axt@kmfr{\\ifdefined\\@makecaption\\ifx\\@makecaption\\axt@kmcw\\else\\ifx\\@makecaption\\axt@kmfw\\else\\let\\axt@kmf\\@makecaption\\let\\@makecaption\\axt@kmfw\\fi\\fi\\fi}',
+  ],
+  [
+    'caption',
+    '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\@makecaption\\let\\axt@kmc\\@makecaption\\let\\@makecaption\\axt@kmcw\\fi\\ifdefined\\@xfloat\\let\\axt@kxf\\@xfloat\\def\\@xfloat{\\axt@kmfr\\axt@kxf}\\fi\\ifdefined\\LT@makecaption\\let\\axt@klt\\LT@makecaption\\long\\def\\LT@makecaption#1#2#3{\\axt@klt#1{\\axt@kf#2}{#3}}\\fi\\ifdefined\\floatc@plain\\let\\axt@kfp\\floatc@plain\\long\\def\\floatc@plain#1#2{\\axt@kfp{\\axt@kf#1}{#2}}\\fi\\ifdefined\\floatc@ruled\\let\\axt@kfr\\floatc@ruled\\long\\def\\floatc@ruled#1#2{\\axt@kfr{\\axt@kf#1}{#2}}\\fi\\ifdefined\\algocf@captiontext\\let\\axt@kac\\algocf@captiontext\\long\\def\\algocf@captiontext#1#2{\\axt@kac{\\axt@kf#1}{#2}}\\fi\\ifdefined\\caption@@make\\let\\axt@kcc\\caption@@make\\long\\def\\caption@@make#1#2{\\axt@kcc{\\axt@kf#1}{#2}}\\fi}\\fi',
+  ],
+  [
+    'picture',
+    '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
+  ],
   // (where TeX begins a front matter environment after the author block, `fm<n>`: the abstract, the keywords, IEEEtran's index
   // terms, the role table's environments of the front matter that are no author's (rules/arg-roles.mjs FRONT_ROLES
   // env:abstract, env:keywords, env:IEEEkeywords). A class may set the element's heading from a literal of its own, no babel name
@@ -1507,7 +1737,10 @@ export const POINTS_TEX = [
   // vertical mode"). One the environment sets in a box it keeps (elsarticle's \\absbox) is set in that box, where its heading
   // is; one whose environment keeps its text for the title block (acmart's, REVTeX's abstract) is disarmed where \\maketitle
   // runs first. From \\begin{document} on, a count kept in a macro, while the gate is on)
-  '\\newif\\ifaxt@fmwait\\gdef\\axt@fm{0}\\def\\axt@fmpt{\\ifaxt@off\\else\\xdef\\axt@fm{\\the\\numexpr\\axt@fm+1\\relax}\\axt@point{fm\\axt@fm}\\fi}\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{begindocument/end}{\\AddToHook{env/abstract/before}{\\axt@fmarm}\\AddToHook{env/keywords/before}{\\axt@fmarm}\\AddToHook{env/IEEEkeywords/before}{\\axt@fmarm}\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}}\\fi\\fi',
+  [
+    'front',
+    '\\newif\\ifaxt@fmwait\\gdef\\axt@fm{0}\\def\\axt@fmpt{\\ifaxt@off\\else\\xdef\\axt@fm{\\the\\numexpr\\axt@fm+1\\relax}\\axt@point{fm\\axt@fm}\\fi}\\def\\axt@fmarm{\\ifhmode\\axt@fmpt\\else\\global\\axt@fmwaittrue\\fi}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{begindocument/end}{\\AddToHook{env/abstract/before}{\\axt@fmarm}\\AddToHook{env/keywords/before}{\\axt@fmarm}\\AddToHook{env/IEEEkeywords/before}{\\axt@fmarm}\\AddToHook{cmd/maketitle/before}{\\global\\axt@fmwaitfalse}\\AddToHook{para/begin}{\\ifaxt@fmwait\\global\\axt@fmwaitfalse\\axt@fmpt\\fi}}\\fi\\fi',
+  ],
   // (each biblatex entry's start, `bi<n>` where \\printbibliography sets it: biblatex's per-entry hook, run after the list's \\item,
   // the entry's paragraph begun there first, so that a numeric style's label, which the \\item sets, stands before the point, a count
   // kept in a macro. The printed bibliography is biber's data and no text of the source: the ledger cuts it one entry a unit by
@@ -1515,13 +1748,19 @@ export const POINTS_TEX = [
   // And each bibliography's end, `bz<n>` after its last entry n (biblatex's \\blx@endbibliography, before the list's end, where
   // \\endtrivlist's \\unskip and the paragraph's end would take the entry's last glues: taken before the point instead, as many),
   // so that the next bibliography's heading of a title of its own is no entry's)
-  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\blx@bibitem\\gdef\\axt@bi{0}\\gappto\\blx@hook@bibitem{\\axt@bipt}\\let\\axt@blxeb\\blx@endbibliography\\def\\blx@endbibliography{\\ifhmode\\unskip\\unskip\\axt@point{bz\\axt@bi}\\fi\\axt@blxeb}\\fi}\\fi\\def\\axt@bipt{\\leavevmode\\xdef\\axt@bi{\\the\\numexpr\\axt@bi+1\\relax}\\axt@point{bi\\axt@bi}}',
+  [
+    'bibliography',
+    '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\blx@bibitem\\gdef\\axt@bi{0}\\gappto\\blx@hook@bibitem{\\axt@bipt}\\let\\axt@blxeb\\blx@endbibliography\\def\\blx@endbibliography{\\ifhmode\\unskip\\unskip\\axt@point{bz\\axt@bi}\\fi\\axt@blxeb}\\fi}\\fi\\def\\axt@bipt{\\leavevmode\\xdef\\axt@bi{\\the\\numexpr\\axt@bi+1\\relax}\\axt@point{bi\\axt@bi}}',
+  ],
   // (each paragraph's start, q<n> at LaTeX's para/begin, inside its indentation box: \\IndentBox, not yet put back, wrapped
   // whole with the point before it, of its size; never a node of the paragraph's own, which would make a paragraph whose
   // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ no longer empty, a line
   // of its own: 2609.26457 p8 on TeX Live 2023, 2026-10-25. A paragraph with no indent (\\noindent, an \\item's, the first
   // after a heading whose class takes it) carries none and reads as the one before; the ledger's blocks, orphan-text.md §4)
-  '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
+  [
+    'para-start',
+    '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
+  ],
   // (each paragraph's end, `qe<n><code>` at LaTeX's para/end: in horizontal mode, before TeX breaks the paragraph, so with the
   // \leftskip, \rightskip and \parfillskip it breaks it by (`code` readAlign's: c centred, l flush left, r flush right, j
   // justified, of their stretch's order and amount, \axt@pecode). Placed right after the paragraph's last node of content: its
@@ -1547,11 +1786,26 @@ export const POINTS_TEX = [
   // ends, a unit's or none's, but while the gate is off (a contents list, the output routine, where points made 2610.30769v1's
   // hyperref links unstable and pdfTeX crash), as no mark is: an ink unit's alignment where no unit's end mark tells it
   // (ink-units.mjs alignOf))
-  '\\def\\axt@pos#1{\\ifnum\\gluestretchorder#1>\\z@ 1\\else\\ifdim\\gluestretch#1>\\z@ 1\\else0\\fi\\fi}',
-  '\\def\\axt@pecode{\\edef\\axt@pel{\\axt@pos\\leftskip}\\edef\\axt@per{\\axt@pos\\rightskip}\\edef\\axt@pef{\\axt@pos\\parfillskip}\\edef\\axt@pec{\\ifnum\\axt@pel\\axt@per=11 \\ifnum\\axt@pef=0 c\\else\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\leftskip\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\rightskip c\\else j\\fi\\else j\\fi\\fi\\else\\ifnum\\axt@pel=1 r\\else\\ifnum\\axt@per=1 l\\else j\\fi\\fi\\fi}}',
-  '\\def\\axt@pepop{\\let\\axt@penext\\relax\\ifnum\\lastnodetype=12 \\edef\\axt@peg{\\kern\\the\\lastkern\\relax\\axt@peg}\\unkern\\let\\axt@penext\\axt@pepop\\else\\ifnum\\lastnodetype=13 \\edef\\axt@peg{\\penalty\\the\\lastpenalty\\relax\\axt@peg}\\unpenalty\\let\\axt@penext\\axt@pepop\\fi\\fi\\axt@penext}',
-  '\\def\\axt@peat{\\ifnum\\lastnodetype=1 0\\else\\ifnum\\lastnodetype=2 0\\else\\ifnum\\lastnodetype=11 0\\else\\ifnum\\lastnodetype=-1 0\\else1\\fi\\fi\\fi\\fi}',
-  '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifaxt@off\\else\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\let\\axt@peg\\@empty\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\fi\\axt@pepop\\edef\\axt@pet{\\axt@peat}\\if1\\axt@pet\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi\\fi}\\fi\\fi',
+  [
+    'para-end',
+    '\\def\\axt@pos#1{\\ifnum\\gluestretchorder#1>\\z@ 1\\else\\ifdim\\gluestretch#1>\\z@ 1\\else0\\fi\\fi}',
+  ],
+  [
+    'para-end',
+    '\\def\\axt@pecode{\\edef\\axt@pel{\\axt@pos\\leftskip}\\edef\\axt@per{\\axt@pos\\rightskip}\\edef\\axt@pef{\\axt@pos\\parfillskip}\\edef\\axt@pec{\\ifnum\\axt@pel\\axt@per=11 \\ifnum\\axt@pef=0 c\\else\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\leftskip\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\rightskip c\\else j\\fi\\else j\\fi\\fi\\else\\ifnum\\axt@pel=1 r\\else\\ifnum\\axt@per=1 l\\else j\\fi\\fi\\fi}}',
+  ],
+  [
+    'para-end',
+    '\\def\\axt@pepop{\\let\\axt@penext\\relax\\ifnum\\lastnodetype=12 \\edef\\axt@peg{\\kern\\the\\lastkern\\relax\\axt@peg}\\unkern\\let\\axt@penext\\axt@pepop\\else\\ifnum\\lastnodetype=13 \\edef\\axt@peg{\\penalty\\the\\lastpenalty\\relax\\axt@peg}\\unpenalty\\let\\axt@penext\\axt@pepop\\fi\\fi\\axt@penext}',
+  ],
+  [
+    'para-end',
+    '\\def\\axt@peat{\\ifnum\\lastnodetype=1 0\\else\\ifnum\\lastnodetype=2 0\\else\\ifnum\\lastnodetype=11 0\\else\\ifnum\\lastnodetype=-1 0\\else1\\fi\\fi\\fi\\fi}',
+  ],
+  [
+    'para-end',
+    '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifaxt@off\\else\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\let\\axt@peg\\@empty\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\fi\\axt@pepop\\edef\\axt@pet{\\axt@peat}\\if1\\axt@pet\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi\\fi}\\fi\\fi',
+  ],
   // (each display TeX sets, wherever it stands and whatever opened it, an environment's or \\[ … \\]'s: its ink between `dps<n>`
   // and `dpe<n>` (layout/ink.mjs REGION_POINT, the region `display`), n the display's number in the pass, so that every reader
   // keeps that ink as the paper's whatever its face and wherever it stands (2608.08481v1 p7: displays (7) and (8) in REVTeX's
@@ -1587,21 +1841,59 @@ export const POINTS_TEX = [
   // every display form (equation, equation*, \\[ \\], displaymath, align, align* with \\intertext, gather, multline, eqnarray,
   // flalign, alignat, split, aligned, a minipage's, a theorem's, an item's, $$\\halign$$), each display's ink between its points
   // and nothing else, the $$ ones without an end)
-  '\\gdef\\axt@dpn{0}\\gdef\\axt@dpcl{}\\def\\axt@dpseen#1#2{\\expandafter\\xdef\\csname axt@dps@#1\\endcsname{\\detokenize{#2}}}\\def\\axt@dpaligned#1{\\expandafter\\gdef\\csname axt@dpa@#1\\endcsname{}}',
-  '\\def\\axt@dpopen{\\ifaxt@off\\else\\axt@dxmfalse\\axt@dxrfalse\\axt@dxwfalse\\fi\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}\\edef\\axt@dpk{\\@currenvir @\\the\\inputlineno}\\edef\\axt@dpk{\\detokenize\\expandafter{\\axt@dpk}}\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}\\fi\\ifaxt@off\\else\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname\\expandafter\\let\\expandafter\\axt@dpw\\csname axt@dps@\\axt@dpn\\endcsname\\ifx\\axt@dpw\\axt@dpk\\axt@point{dps\\axt@dpn}\\axt@dxmtrue\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend\\fi\\fi\\fi\\fi}',
-  '\\def\\axt@dpend{\\ifcsname axt@dph@\\@currenvir\\endcsname\\else\\expandafter\\global\\expandafter\\let\\csname axt@dph@\\@currenvir\\endcsname\\@empty\\ifdefined\\AddToHook\\edef\\axt@dpx{\\noexpand\\AddToHook{env/\\@currenvir/end}}\\axt@dpx{\\axt@dpclose}\\fi\\fi}',
-  '\\def\\axt@dpclose{\\ifx\\axt@dpcl\\@empty\\else\\ifmmode\\edef\\axt@dpz{\\@currenvir}\\ifx\\axt@dpz\\axt@dpce\\axt@point{dpe\\axt@dpcl}\\gdef\\axt@dpcl{}\\fi\\fi\\fi}',
-  '\\def\\axt@dphal{\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}\\fi\\ifaxt@off\\else\\axt@dxrtrue\\xdef\\axt@dpm{\\axt@dpn}\\gdef\\axt@dplv{-1}\\everycr\\expandafter{\\the\\everycr\\axt@dpcr}\\fi}',
-  '\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}',
-  '\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}',
-  '\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}',
-  '\\protected\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\protected\\def\\axt@dxz{\\axt@dxcl}',
-  '\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}',
-  '\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}',
-  '\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}',
-  '\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}',
-  '\\def\\axt@dpgo{\\everydisplay\\expandafter{\\the\\everydisplay\\axt@dpopen}\\everymath\\expandafter{\\the\\everymath\\axt@dxma}\\everyvbox\\expandafter{\\the\\everyvbox\\axt@dxvb}\\ifdefined\\textdef@\\let\\axt@@textdef\\textdef@\\def\\textdef@##1##2##3{\\axt@@textdef{##1}{##2}{\\axt@dxa##3\\axt@dxz}}\\fi\\let\\axt@@mbox\\mbox\\long\\def\\mbox##1{\\axt@@mbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@fbox\\fbox\\long\\def\\fbox##1{\\axt@@fbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@halign\\halign\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\ifaxt@dxw\\axt@dxrtrue\\fi\\axt@@halign}\\let\\axt@@rbrack\\]\\protected\\def\\]{\\axt@dpclose\\axt@@rbrack}}\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\axt@dpgo}\\else\\AtBeginDocument{\\axt@dpgo}\\fi',
-].join('')
+  [
+    'display',
+    '\\gdef\\axt@dpn{0}\\gdef\\axt@dpcl{}\\def\\axt@dpseen#1#2{\\expandafter\\xdef\\csname axt@dps@#1\\endcsname{\\detokenize{#2}}}\\def\\axt@dpaligned#1{\\expandafter\\gdef\\csname axt@dpa@#1\\endcsname{}}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpopen{\\ifaxt@off\\else\\axt@dxmfalse\\axt@dxrfalse\\axt@dxwfalse\\fi\\gdef\\axt@dpcl{}\\xdef\\axt@dpn{\\the\\numexpr\\axt@dpn+1}\\edef\\axt@dpk{\\@currenvir @\\the\\inputlineno}\\edef\\axt@dpk{\\detokenize\\expandafter{\\axt@dpk}}\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpseen{\\axt@dpn}{\\axt@dpk}}\\fi\\ifaxt@off\\else\\ifcsname axt@dpa@\\axt@dpn\\endcsname\\else\\ifcsname axt@dps@\\axt@dpn\\endcsname\\expandafter\\let\\expandafter\\axt@dpw\\csname axt@dps@\\axt@dpn\\endcsname\\ifx\\axt@dpw\\axt@dpk\\axt@point{dps\\axt@dpn}\\axt@dxmtrue\\xdef\\axt@dpcl{\\axt@dpn}\\xdef\\axt@dpce{\\@currenvir}\\axt@dpend\\fi\\fi\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpend{\\ifcsname axt@dph@\\@currenvir\\endcsname\\else\\expandafter\\global\\expandafter\\let\\csname axt@dph@\\@currenvir\\endcsname\\@empty\\ifdefined\\AddToHook\\edef\\axt@dpx{\\noexpand\\AddToHook{env/\\@currenvir/end}}\\axt@dpx{\\axt@dpclose}\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpclose{\\ifx\\axt@dpcl\\@empty\\else\\ifmmode\\edef\\axt@dpz{\\@currenvir}\\ifx\\axt@dpz\\axt@dpce\\axt@point{dpe\\axt@dpcl}\\gdef\\axt@dpcl{}\\fi\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dphal{\\if@filesw\\immediate\\write\\@auxout{\\string\\axt@dpaligned{\\axt@dpn}}\\fi\\ifaxt@off\\else\\axt@dxrtrue\\xdef\\axt@dpm{\\axt@dpn}\\gdef\\axt@dplv{-1}\\everycr\\expandafter{\\the\\everycr\\axt@dpcr}\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpcr{\\ifnum\\axt@dplv<\\z@\\noalign{\\xdef\\axt@dplv{\\the\\numexpr\\currentgrouplevel-1}\\axt@dpat{dps\\axt@dpm}}\\else\\ifnum\\currentgrouplevel=\\numexpr\\axt@dplv\\relax\\noalign{\\axt@dpat{dpe\\axt@dpm}}\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpat#1{\\edef\\axt@dpt{\\ifcase\\numexpr\\lastnodetype+1\\relax p\\or w\\or b\\or b\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or w\\or p\\or k\\or p\\or b\\else w\\fi}\\if k\\axt@dpt\\else\\axt@point{#1}\\if p\\axt@dpt\\penalty\\@M\\fi\\if b\\axt@dpt\\axt@dpdp\\fi\\fi}',
+  ],
+  ['display', '\\newif\\ifaxt@dxm\\newif\\ifaxt@dxr\\newif\\ifaxt@dxw\\gdef\\axt@dxn{0}\\gdef\\axt@dxst{}'],
+  [
+    'display',
+    '\\protected\\def\\axt@dxa{\\ifaxt@dxm\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dts\\axt@dxn}\\edef\\axt@dxcl{\\noexpand\\axt@point{dte\\axt@dxn}}\\axt@dxmfalse\\axt@dxrtrue\\else\\let\\axt@dxcl\\relax\\fi}\\protected\\def\\axt@dxz{\\axt@dxcl}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dxma{\\ifaxt@dxr\\xdef\\axt@dxn{\\the\\numexpr\\axt@dxn+1}\\axt@point{dms\\axt@dxn}\\xdef\\axt@dxst{dme\\axt@dxn,\\axt@dxst}\\aftergroup\\axt@dxpop\\axt@dxmtrue\\axt@dxrfalse\\axt@dxwfalse\\else\\ifaxt@dxw\\axt@dxmtrue\\axt@dxwfalse\\fi\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dxpop{\\ifx\\axt@dxst\\@empty\\else\\expandafter\\axt@dxpop@\\axt@dxst\\@nil\\fi}\\def\\axt@dxpop@#1,#2\\@nil{\\gdef\\axt@dxst{#2}\\axt@point{#1}}',
+  ],
+  ['display', '\\def\\axt@dxvb{\\ifaxt@dxm\\axt@dxwtrue\\fi\\ifaxt@dxr\\axt@dxwtrue\\fi\\axt@dxmfalse\\axt@dxrfalse}'],
+  [
+    'display',
+    '\\def\\axt@dpdp{\\dimen@\\prevdepth\\ifdim\\dimen@>-\\@m\\p@\\kern-\\dimen@\\nointerlineskip\\setbox\\z@\\hbox{}\\dp\\z@\\dimen@\\box\\z@\\fi}',
+  ],
+  [
+    'display',
+    '\\def\\axt@dpgo{\\everydisplay\\expandafter{\\the\\everydisplay\\axt@dpopen}\\everymath\\expandafter{\\the\\everymath\\axt@dxma}\\everyvbox\\expandafter{\\the\\everyvbox\\axt@dxvb}\\ifdefined\\textdef@\\let\\axt@@textdef\\textdef@\\def\\textdef@##1##2##3{\\axt@@textdef{##1}{##2}{\\axt@dxa##3\\axt@dxz}}\\fi\\let\\axt@@mbox\\mbox\\long\\def\\mbox##1{\\axt@@mbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@fbox\\fbox\\long\\def\\fbox##1{\\axt@@fbox{\\axt@dxa##1\\axt@dxz}}\\let\\axt@@halign\\halign\\protected\\def\\halign{\\ifmmode\\ifinner\\else\\axt@dphal\\fi\\fi\\ifaxt@dxw\\axt@dxrtrue\\fi\\axt@@halign}\\let\\axt@@rbrack\\]\\protected\\def\\]{\\axt@dpclose\\axt@@rbrack}}\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\axt@dpgo}\\else\\AtBeginDocument{\\axt@dpgo}\\fi',
+  ],
+]
+/** the points' TeX, every class's (LAYOUT_TEX's last part) */
+export const POINTS_TEX = POINTS.map(([, tex]) => tex).join('')
 
 /**
  * The names (LAYOUT_TEX's, before its points): \axtnma{<key>} before a babel name's own text and \axtnmb{<key>} after it,
@@ -1847,6 +2139,78 @@ export const LAYOUT_TEX = [
   POINTS_TEX,
   '\\makeatother',
 ].join('')
+
+/**
+ * The separations the rebuilt prepare's marked compile states (the compile move's B1: the display design's F12, 2d's glues, F40's
+ * form 1): messages to the log alone, by macros that set nothing, so that every glyph, box and point stays where it was (the TeX
+ * gate's cases, lab/pdf/spikes/gap-cases.mjs). After LAYOUT_TEX, whose heading mark and float bracket it reads, and only where
+ * its option asks (STATEMENTS_TEX): today's reader's marked TeX stays the bytes it was. Read by marks/channels.ts readHeads and
+ * readGlues; \parskip's shrink needs no TeX (LINES_TEX prints \parskip whole: readSkips).
+ * - **A heading's skips** (`AXT-SECT h<i>s b <before>`, `a <after>`, `l <\baselineskip>`, `p <\parskip>`, each as TeX prints
+ *   it). Once the document begins, LaTeX's \@startsection hands each heading's style, its sixth argument, which TeX executes right
+ *   before the title in every path the kernel's \@sect, \@ssect and a run-in title's \@svsechd take, a macro first: it assigns
+ *   the before-skip (#4) and the after-skip (#5) to skip registers as \@startsection and \@sect assign them, in the font around
+ *   the heading (the style's own switches follow it), with \baselineskip and \parskip there, in the group TeX sets the title in;
+ *   the heading's first mark TeX sets (\axt@hm, in horizontal mode, its start `h<i>s`) writes them and spends them. The sign is
+ *   the class's: a negative before-skip TeX adds negated (and indents no first paragraph), a negative after-skip sets the title in
+ *   the line, its negation the horizontal skip after it. A class that makes its headings with no \@startsection (KOMA-Script's
+ *   \scr@startsection, titlesec's own, a chapter's \@makechapterhead) states none; a heading of \@startsection's with no mark
+ *   (a class's own \section*{\refname}) spends nothing, its group gone with its title.
+ * - **The paper's separations** (`AXT-GLUE <at> <name> <glue>`): LaTeX's float separations (\textfloatsep, \floatsep,
+ *   \intextsep and the two-column \dbltextfloatsep, \dblfloatsep; a float page's \@fpsep, \@dblfpsep), its caption's skips
+ *   (\abovecaptionskip, \belowcaptionskip, where the class defines them), the footnotes' (\skip\footins, \footnotesep), once
+ *   the document begins (`at` 0) and again at each float (`at` the float's serial, its `fs<n>`) for each that changed since it
+ *   was last written: a caption's skips as the float's box holds them at its end, inside it (\@endfloatbox's first act closes the
+ *   box's group, and a caption skip a float sets is set in that group: the serial its bracket is about to be given), the
+ *   separations once the box is closed (after the bracket's wrap: one a float sets inside its box no output routine sees)
+ */
+export const GAPS_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\protected\def\axt@sgset#1#2{\begingroup\skip@#1\relax\@tempskipb#2\relax\xdef\axt@sgt{{\the\skip@}{\the\@tempskipb}{\the\baselineskip}{\the\parskip}}\endgroup\let\axt@sg\axt@sgt}`,
+  String.raw`\def\axt@sgw#1#2#3#4#5{\message{^^JAXT-SECT #5 b #1^^JAXT-SECT #5 a #2^^JAXT-SECT #5 l #3^^JAXT-SECT #5 p #4^^J}}`,
+  String.raw`\def\axt@sgtell#1{\ifdefined\axt@sg\expandafter\axt@sgw\axt@sg{#1}\global\let\axt@sg\@undefined\fi}`,
+  String.raw`\def\axt@glv#1#2#3{\edef\axt@glx{\the#3}\expandafter\ifx\csname axt@gl@#2\endcsname\axt@glx\else\expandafter\global\expandafter\let\csname axt@gl@#2\endcsname\axt@glx\message{^^JAXT-GLUE #1 #2 \axt@glx^^J}\fi}`,
+  String.raw`\def\axt@glflt#1{\axt@glv{#1}{textfloatsep}\textfloatsep\axt@glv{#1}{floatsep}\floatsep\axt@glv{#1}{intextsep}\intextsep\axt@glv{#1}{dbltextfloatsep}\dbltextfloatsep\axt@glv{#1}{dblfloatsep}\dblfloatsep\axt@glv{#1}{fpsep}\@fpsep\axt@glv{#1}{dblfpsep}\@dblfpsep\axt@glv{#1}{footins}{\skip\footins}\axt@glv{#1}{footnotesep}\footnotesep}`,
+  String.raw`\def\axt@glcap#1{\ifdefined\abovecaptionskip\axt@glv{#1}{abovecaptionskip}\abovecaptionskip\fi\ifdefined\belowcaptionskip\axt@glv{#1}{belowcaptionskip}\belowcaptionskip\fi}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@startsection\let\axt@sst\@startsection\def\@startsection#1#2#3#4#5#6{\axt@sst{#1}{#2}{#3}{#4}{#5}{\axt@sgset{#4}{#5}#6}}\fi\let\axt@sghm\axt@hm\protected\def\axt@hm#1{\ifaxt@off\else\ifhmode\axt@sgtell{#1}\fi\fi\axt@sghm{#1}}\axt@glflt{0}\axt@glcap{0}\ifdefined\@endfloatbox\let\axt@glfb\@endfloatbox\def\@endfloatbox{\axt@glcap{\the\numexpr\axt@bn+1\relax}\axt@glfb\ifvoid\@currbox\else\axt@glflt{\axt@bn}\fi}\fi}\fi`,
+  String.raw`\makeatother`,
+].join('')
+/**
+ * Each paragraph's measure as TeX breaks it into lines (the compile move's B2: the display design's F13), at its end:
+ * `AXT-MEASURE <n> <\hsize> <\hangindent> <\hangafter> <\leftskip> <\rightskip> <\parshape> [<indent> <length>]…`, n the end's
+ * serial (POINTS' para/end, `qe<n><code>`, whose hook runs first: the same paragraphs, the gate on, a list of nodes), each
+ * dimension as TeX prints it, the two skips' natural sizes, the shape's lines through e-TeX's \parshapeindent and
+ * \parshapelength, its count through the primitive \parshape as the head finds it, before any package (wrapfig makes \parshape a
+ * macro of its own and keeps the primitive as \@@parshape: read through the macro, `\the` stopped at it, a TeX error each
+ * wrapped paragraph). LaTeX's para/end runs before TeX breaks the paragraph, with the values it breaks it by; a message alone, set
+ * nothing (the TeX gate's measure cases, lab/pdf/spikes/measure-cases.mjs). Read by marks/channels.ts readMeasures
+ */
+export const MEASURE_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\let\axt@parshape\parshape`,
+  String.raw`\def\axt@msr{\begingroup\count@\z@\let\axt@msx\@empty\loop\ifnum\count@<\axt@parshape\advance\count@\@ne\edef\axt@msx{\axt@msx\space\the\parshapeindent\count@\space\the\parshapelength\count@}\repeat\message{^^JAXT-MEASURE \axt@pe\space\the\hsize\space\the\hangindent\space\the\hangafter\space\the\dimexpr\leftskip\relax\space\the\dimexpr\rightskip\relax\space\the\axt@parshape\axt@msx^^J}\endgroup}`,
+  String.raw`\ifdefined\AddToHook\ifdefined\IndentBox\AddToHook{para/end}{\ifaxt@off\else\ifnum\lastnodetype=-1 \else\axt@msr\fi\fi}\fi\fi`,
+  String.raw`\makeatother`,
+].join('')
+/**
+ * Where TeX ends a line at a forced break (the compile move's B2: the display design's F35): LaTeX's \@gnewline, every `\\`'s
+ * and \newline's way in a paragraph (`\unskip`, then `\nobreak\hfil\break`), once the document begins, sets a point `kb<n>`
+ * after the \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue
+ * taken, as before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to
+ * break made or lost. A point of the optional class `forced-break` (POINT_CLASSES), kept apart from the marks' points by
+ * pageInk (ink.ts FORCED_BREAK); the line TeX ended at a break the marking gives no mark (facts-pass.ts readElements). A `\\` of
+ * a centred or ragged block (\@centercr, which ends a paragraph) or a table's row sets none
+ */
+export const BREAKS_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\gdef\axt@kb{0}\def\axt@kbpt{\xdef\axt@kb{\the\numexpr\axt@kb+1\relax}\axt@point{kb\axt@kb}}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\axt@gnl{#1}}\fi}\fi`,
+  String.raw`\makeatother`,
+].join('')
+/** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (its option, after
+ *  LAYOUT_TEX: the compile move's lane B), each slice's in turn: the separations (GAPS_TEX), each paragraph's measure
+ *  (MEASURE_TEX) and the forced breaks' points (BREAKS_TEX) */
+export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX
 
 // ---------------------------------------------------------------- a reference's item and its name
 /** a reference to a page, not to an item (\pageref): no item's name for it */

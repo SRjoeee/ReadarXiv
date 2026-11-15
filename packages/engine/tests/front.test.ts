@@ -363,6 +363,37 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
       expect((seen[2 + 2 * i] as unknown[])[1]).toBe(answers[i])
     }
   })
+  test("the host's bound on a compile's files reaches the front half, and the marked compile with it (Q1's carried files); none given, none", async () => {
+    const A = await pdfOf(1, null)
+    const bound = { count: 256, bytes: 8 * 2 ** 20 }
+    const seen: unknown[] = []
+    const front: FrontHalf = async (input) => {
+      seen.push(input.filesBound)
+      return { ok: false, why: 'cannot-typeset', detail: 'measured' }
+    }
+    const take = () => ({ files: files({ 'main.tex': PAPER }), original: A, stored: null })
+    await prepare(take, host({ filesBound: bound }), front)
+    await prepare(take, host(), front)
+    expect(seen).toEqual([bound, null])
+    const calls = vi.mocked(markedOfPaper).mock.calls.length
+    const r = await prepareFront({
+      files: files({ 'main.tex': PAPER }),
+      tree: '2025',
+      original: { pages: 1, day: DAY, banner: '2025' },
+      stored: null,
+      compile: async () => ({ ok: false }),
+      units: async () => {},
+      stage: () => {},
+      note: () => {},
+      engines: ['pdflatex'],
+      pdfjs,
+      documentOptions: {},
+      filesBound: bound,
+    })
+    expect(r.ok).toBe(true)
+    expect(vi.mocked(markedOfPaper).mock.calls.length).toBe(calls + 1)
+    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ converge: true, filesBound: bound })
+  })
   test("a paper of another tree is answered with it before the front half runs; the source's own refusal and an unreadable A are reasons", async () => {
     const A = await pdfOf(1, null)
     const notes: [string, unknown][] = []

@@ -7181,6 +7181,130 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   (today 6.43), 2611.03953v2 p8 "Time to \\ target" at 7.17 pt (today 8.97; its column's box not stated, laid in its lines' own
   rooms, 27.8 and 20.3 pt wide) and "Recovery \\ at budget" at its size.
 
+### 18.76 The separations by class, as TeX holds them (the compile move's B1, 2026-11-15)
+
+The display design's F12 (a heading drawn a step smaller where today's keeps its size on two lines: no heading stated a
+separation, so none could borrow), its 2d's rule 2 facts (each gap's glue by class, natural and shrink: what F28's lay will read
+once the owner has seen it) and F40's form 1 (the skip TeX sets after a run-in title) are one mechanism: the marked compile states
+the glue TeX sets at each kind of gap, and the part names, under each member, the class of the gap TeX set there.
+
+- **What the compile states** (`packages/engine/src/marks/marks.ts` GAPS_TEX, read by `marks/channels.ts`). Messages to the log
+  alone, by macros that set nothing; after LAYOUT_TEX, and only where the rebuilt prepare's option asks (STATEMENTS_TEX):
+  today's reader's marked TeX is the bytes it was.
+  - Each heading's `\@startsection` skips (`AXT-SECT h<i>s b|a|l|p <glue>`, readHeads): once the document begins, `\@startsection`
+    hands each heading's style (its sixth argument, which TeX executes right before the title in every path: `\@sect`, `\@ssect`,
+    a run-in title's `\@svsechd`) a macro first, which assigns the before-skip and the after-skip to skip registers as
+    `\@startsection` and `\@sect` do, in the font around the heading, with `\baselineskip` and `\parskip`; the heading's first
+    mark writes them. A class that makes its headings without `\@startsection` states none: KOMA-Script (`\scr@startsection`),
+    titlesec (it reads the class's `\@startsection` arguments and sets its own), a chapter (`\@makechapterhead`). REVTeX 4.2,
+    acmart, IEEEtran, amsart and llncs define their own `\@startsection` or `\@sect` of the kernel's shape and are stated.
+  - The paper's separations (`AXT-GLUE <at> <name> <glue>`, readGlues): `\textfloatsep`, `\floatsep`, `\intextsep`,
+    `\dbltextfloatsep`, `\dblfloatsep`, a float page's `\@fpsep` and `\@dblfpsep`, `\abovecaptionskip` and `\belowcaptionskip`
+    where the class defines them, `\skip\footins` and `\footnotesep`: once the document begins, and again at each float where
+    one changed (its serial, B's `fs<n>`): a caption's skips inside the float's box, where a float sets them (the box's group
+    closes first thing in `\@endfloatbox`), the separations once the box is closed (one a float sets inside its box no output
+    routine reads).
+  - `\parskip`'s shrink: LINES_TEX already printed `\parskip` whole; readSkips reads its shrink.
+- **What the part states** (`locate/gaps.ts`, phase 10; `Room.gap`, an optional field: FORMAT stays 1). Under each member's last
+  line, the class of the gap TeX set there and that glue's natural size and shrink, by what stands under it (the next member's
+  line, the float each is of by B's brackets): a heading's `afterskip` (`runin` after a title set in the line, the after-skip
+  negated: F40's form 1); over a heading its `beforeskip` as TeX adds it; a float's last member its float's separation by TeX's
+  own case read from the page (2c's F-last and F-sep: `textfloatsep` under a top float, `intextsep` round a float set here,
+  `floatsep` over another float, the two-column pair across both columns, `fpsep` on a page of floats alone), and body text over
+  a float's first member the same; in a float `abovecaptionskip` over its caption and `belowcaptionskip` under it;
+  `footins` over the footnotes and `footnotesep` between two; `parskip` over a paragraph (the next one's). None where nothing of
+  the paper's own text follows, where ink no unit owns stands between (but the footnote rule and a float's own ink over its
+  caption), or where the glue is not stated. `sep` keeps its meaning; a heading set on lines of its own gains one: its
+  after-skip and the `\baselineskip` and `\parskip` around it, natural, TeX's normal separation from its last baseline to the
+  next paragraph's first. The borrow reads `sep` as before (§18.11): that is this change's only drawing change. Nothing reads
+  `Room.gap` to lay a page yet.
+- **Held** (`lab/pdf/spikes/gap-cases.mjs`, 2026-11-15): one document of every kind of heading, floats that set a separation
+  and a caption skip, a footnote, under eleven classes, both pinned years, pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx:
+  88 of 88 compiles with the statements are the PDF without them byte for byte (acmart under XeLaTeX but for its XMP packet's
+  clock time, every glyph, box and point the same), and every statement is TeX's own reading in the document. The reach,
+  counted on the lab's stored marked logs of 245 papers (not yet TeX's own count, which the compile move's corpus compile
+  makes): of 8,811 headings set with their marks (each paper's title among them), about 6,700 are made through
+  `\@startsection` (198 papers, 11 classes, and 3 papers of classes built on article's), 1,117 through titlesec (23 papers) and
+  KOMA-Script (2), 18 by mnras and 756 by classes the papers ship (18 papers), which TeX will tell. Of the 124 papers of the 88
+  and the holdout, 3 set a float or footnote separation in the body and 3 a caption skip or `\footnotesep` inside a float.
+- **A heading borrows only what TeX's glue gives** (the coordinator's ruling of 2026-11-15, on F12's own case: 2608.16117v1 p4
+  ord 12, elsarticle). The fact is stated as TeX has it: under that heading TeX's separation, its after-skip 9 pt, the body's
+  `\baselineskip` 14.5 pt and its `\parskip` 0 pt, is 23.41 PDF units, and the next ink's baseline stands 23.43 under the
+  heading's: 0.02 of room, 2.96 at the glue's least (its shrink), where a second line at the heading's pitch needs 14.35. So that
+  heading keeps stepping its size, as the rebuilt reader draws it. A `sep` of the after-skip alone is not built: it would set the
+  next line's ascenders against the heading's descenders, which TeX never does. Production's two full-size lines stand its second
+  line 9.08 over the next paragraph's baseline, nearer than TeX sets it, and that look is not copied. How many headings do gain
+  room is read at the compile move's corpus compile.
+- **Not built** (the owner's review of 2d, 2026-11-13): `spread` in the paragraph-end hook, `Style.box`, the equal-clear-space
+  floor.
+
+### 18.77 A paragraph's measure and a forced break's line, as TeX states them (the compile move's B2, 2026-11-15)
+
+The display design's F13 (a paragraph beside a wrapped figure laid over a caption, 2610.40576v1 p7 ord 71; a list's narrower
+measure, 2610.40394v1; three list items of one line read centred against the column, traces-b's item 5) and F35 (a forced
+break followed by an indent, `\\ \indent`, run into one paragraph: 2608.25210v2 t196) need two facts TeX holds where a
+paragraph ends and where a line ends at a forced break. Both are STATEMENTS_TEX's (§18.76): today's reader's marked TeX is the
+bytes it was.
+
+- **The measure** (`marks.ts` MEASURE_TEX; `marks/channels.ts` readMeasures; `Instrument.tex.measures`; `locate/measures.ts`).
+  At LaTeX's para/end, after the paragraph-end point's hook (the same paragraphs, its serial `n`), `AXT-MEASURE <n> <\hsize>
+  <\hangindent> <\hangafter> <\leftskip> <\rightskip> <\parshape> [<indent> <length>]…`: the values TeX breaks the paragraph by,
+  the shape's lines through e-TeX's `\parshapeindent` and `\parshapelength`, its count through the primitive `\parshape` as the
+  head finds it (wrapfig makes `\parshape` a macro of its own: read through it, every wrapped paragraph was a TeX error). The
+  instrument keeps the paragraphs whose measure is not the full `\hsize`. Phase 8 reads each into its lines' `m0..m1`: a line
+  is its paragraph's by its first text glyph's partner on B (the paragraph whose end follows it in B's stream), its rank TeX's
+  line number (B's order, a row two members share one line), its box at the left edge of its frame's column whose width is the
+  paragraph's `\hsize` (else the text block of that width; a minipage's, a `\parbox`'s or a p column's paragraph states none:
+  where its box stands TeX's statement does not say), shifted by the line's `\parshape` indent (its last entry past it) or its
+  `\hangindent` (after `\hangafter` lines, or the first `|\hangafter|`; a negative one hangs on the right), from `\leftskip`'s
+  natural size to its length less `\rightskip`'s. A display inside the paragraph counts three lines to TeX's shape: where the
+  shape varies by line, the lines after a held row state none. A table cell, a figure text and a name keep their measure.
+  - What moves: every line of a list item, a quotation, a bibliography entry (lists: `\parshape 1 \@totalleftmargin
+    \linewidth`), a wrapped paragraph, a hung or skipped one, gains TeX's measure where it had its column's; with it a single
+    line's room to widen into (the typesetter's `sideOf`, a name's), the alignment read of a one-line item (facts.ts alignOf reads
+    the line's measure: an item no longer inset from it reads justified, traces-b's item 5), and a member's room below its last
+    block. The paragraph's lay (`packages/typeset/src/unit/blocks.ts` measuresOf, which guesses a change of measure from the lines'
+    edges) is not changed here: the lay lane deletes that guessing and reads `Line[7..8]` (rebuild/google-lay stays unmerged).
+- **The forced break's line** (`marks.ts` BREAKS_TEX; the point class `forced-break`, optional; `ink.ts` FORCED_BREAK, kept apart
+  as `breaks` with `fm<n>`'s and `qe<n>`'s, so that no reader of the marks' points meets it; `facts-pass.ts` readElements).
+  LaTeX's `\@gnewline` (every `\\` and `\newline` in a paragraph) sets a point `kb<n>` after its own `\unskip`, before
+  `\nobreak\hfil\break`: past the line's last glyph, the kernel's own `\unskip` then finding the point and taking nothing. A
+  break the marking gives no mark (an invisible piece) is placed by its neighbours' points as before; inside their window, where
+  B holds as many of these points as breaks, each break's line is the one of the unit's last glyph before its point, in order
+  (2608.25210v2 t196: the window's line ends are two, its break one, its line full: no count of line ends told it). A `\\` of a
+  centred or ragged block (`\@centercr`, which ends a paragraph) and a table's row set none. Reach on the stored run (r3-int, 89
+  papers): 271 forced-break pieces, 354 placed copies, 220 stating their line, 134 not, in 15 papers.
+- **Held** (`lab/pdf/spikes/measure-cases.mjs`, both pinned years, four engines): no glyph, box or point of the compile without the
+  statements moves; every statement read is TeX's own placement (each full line of every placed paragraph from its measure's
+  left edge to its right, to 0.02 pt); each forced break's point stands right after the word before its `\\`, none in a centred
+  block or a table's row.
+
+### 18.78 What the probe's own log tells the back half (the compile move's B3, 2026-11-15)
+
+The display design's F14 (an author's own `\qed` or `\hfill $\square$` drawn glued after the last word) and F16 (a highlighted
+cell, a macro's text, left untranslated where TeX's quotation marks stood in it) are two readings of the mark probe's own log,
+which the box stores beside the instrument (the brief's ruling 6): no TeX moves, and no field of the stored plan. The
+instrument's builder reads it where it is handed over (`instrumentOf`'s `probeLog`; `marks.ts` probeFactsOf), the samples the
+compile's own reading takes (readInkAnswers', the units').
+
+- **F16, the quotation marks** (`marks.ts` readInkTexts and readInkDecorated with `quotes`): a character of a text font (OT1, T1,
+  LY1) that TeX sets as a quotation mark is read as the glyph the font sets there (`'` the right quote, `` ` `` the left, the
+  ligatures `''` and ``` `` ``` the double ones, whatever slot the encoding gives them; in XeTeX's word, the marks TeX's
+  ligature mapping already made). Without it such a sample is no answer; with it, only answers are added (the stored reading's
+  texts stand, a source it gave none takes the new one): the ownership finds those macros' ink by their text, and a cell a
+  decorated text holds is held (§18.61). On the lab's 217 stored probes: 10 texts and 2 decorated texts in 6 papers (the
+  probe-facts lane's 7 in 4 papers, and 2604.14228v3's 3, 2608.15761v1's 2).
+- **F14, the end mark the source writes** (`marks.ts` readInkEnds and endPiecesOf; `PieceClass.end`; `El.end` on the piece's
+  element, `locate/geometry.ts`): a unit's last ink (white space, groups' edges and placeholders that set nothing after it) is
+  its end mark where TeX ends that piece's own box with ink a glue of infinite stretch pushed (the probe's listing: a fil, fill
+  or filll in its outer list before its last ink; amsthm's `\qed` written in the text, an author's, LLNCS's), or where the
+  source pushes it with a fill right before it (`\hfil`, `\hfill`, `\hspace{\fill}`: 2610.40394v1's six `\hfill
+  $\square$`, the only ones of the 89). The typesetter sets such an element as an end mark where the translation ends with it
+  (El.end, §18.52). On the 217 stored probes: 6 samples so ended in 6 papers (the five the probe-facts lane named, and
+  2608.06007v1's macro, a fill, a formula and words, which TeX pushes to its line's end the same).
+- **To connect** (lane cm-a's `front.ts`): `prepareFront` hands `compiledOf`'s `probeLog` to `instrumentOf`. Until it does, the
+  probe's two readings read nothing and the source's six are stated.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
@@ -7644,9 +7768,9 @@ own), each part carrying its pages' cell rules (`rules`).
   - *The web host*'s runner runs no latex today (its answer "unknown engine": refused 'engine', as before) until its
     sandbox runs the request above; the image holds latex, dvipdfmx and Ghostscript already.
 - **A compile that did not make the paper is a failed compile** (2026-10-19). A marked original
-  that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test CM's passes use too:
+  that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test the pass loop's passes use too:
   its last pass stopped short — an emergency stop, a hundred errors, TeX's capacity — or never logged END_TEX's AXT-END)
-  is the compile's refusal, whatever PDF it left, today's compile and CM's fallback alike; so is one of fewer pages than
+  is the compile's refusal, whatever PDF it left, today's compile and the loop's fallback alike; so is one of fewer pages than
   arXiv's PDF, which the pass counts from the document or the marks it is given (`stats.layout` { refused: 'compile',
   why }), its unit marks dropped with it. 2610.20713 on TL2025 stopped at its hundredth error after 7 of 15 pages, and
   2608.03994 went past 751 errors to 14 of 17, its tables broken; each had carried 95 % and 97 % of its lines, so the carry
@@ -7970,7 +8094,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   arXiv's same page also holds for the paper's own text (`markTextBeyond`). Before either, the marking sets no mark inside a
   group opened by a command that reads that argument verbatim (`marks.mjs` `VERBATIM_ARG`: `\url`, `\nolinkurl`, `\path`,
   `\burl`, `\href`'s first argument), whatever definition the front end read for it.
-- **The paper's own bytes.** The layout compile and CM's unmarked drafts write a source of a declared Latin-1 family
+- **The paper's own bytes.** The layout compile and its pass loop's passes write a source of a declared Latin-1 family
   encoding that is not UTF-8 as its own bytes, under its own `\usepackage[…]{inputenc}` (`live.mjs` `originalFiles`
   `transcode`, off with `layout`): written as UTF-8, as only a translation could have it (the compiled translation switched
   the option to `utf8`), 2610.20581's `latin1` source set each é as Ã© and each no-break space in math as a `\^` error, 74 errors and a
@@ -10061,8 +10185,8 @@ lines) follows it, the original's with it off, translated with it on (the author
   2026-10-28). A paper that names `\bibliography{…}` over `.bib` files its package holds, loads no biblatex and ships no job's
   `.bbl` (102 of the local sources) had no entry unit: the units were cut before any compile, and the `.bbl` was first written
   inside the marked compile, unmarked. The host now asks, before it tells the paper's units, one pass of the unmarked original
-  (`guard.mjs` `unmarkedFiles`: the paper's own files) as a draft with the bibliography step (`bibtex`, CM's first draft's
-  request: BibTeX on the job's aux), its files returned; the `<job>.bbl` it wrote, a `thebibliography` with a `\bibitem`, is the
+  (`guard.mjs` `unmarkedFiles`: the paper's own files) as a draft with the bibliography step (`bibtex`, as the pass loop's
+  first pass asks it: BibTeX on the job's aux), its files returned; the `<job>.bbl` it wrote, a `thebibliography` with a `\bibitem`, is the
   job's `.bbl` the paper is opened again with (`live.mjs openPaper`), and from then on it is a shipped one (`meta.bbl`): written
   back marked, no BibTeX in the marked compile. No pass is made, and the paper stays as it was, where it ships its `.bbl`, names no
   `\bibliography`, loads biblatex, or lacks a `.bib` it names (latexmk -norc runs no BibTeX then, nor does the marked compile; a

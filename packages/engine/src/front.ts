@@ -44,6 +44,8 @@ export interface FrontInput {
   engines: readonly string[]
   pdfjs: PreparePdfJs
   documentOptions: Record<string, unknown>
+  /** the host's bound on the files one compile is given back to carry (compiled.ts CompiledInput `filesBound`) */
+  filesBound?: { count: number; bytes: number } | null
 }
 /** the front half's end: the instrument, with its four objects where TeX made them; or why there is none */
 export type FrontResult =
@@ -171,6 +173,7 @@ export async function prepareFront(input: FrontInput): Promise<FrontResult> {
     stage: (s) => input.stage(s),
     note: (n, d) => input.note(n, d),
     units: (paper) => input.units(unitsObjects(sourceUnitsOf(paper))),
+    filesBound: input.filesBound ?? null,
   })
   if (!c.ok) return c
   const { paper, finalPdf, log, options, made } = c

@@ -1069,6 +1069,21 @@ only how it meets the rest of the extension.
   the paper opened, a stored instrument taken or not, the bibliography, the marked compile with every argument it is given,
   and what is stored of it (`plan.ts` `storedInstrumentOf`); `prepareFront` hands it the units as a function and states the
   instrument after it. The two halves' orchestration is `prepare.ts`'s, so a change of it keys nothing anew.
+  **The marked compile is the pass loop** (Q1, the performance design of 2026-11-13; `compiledOf` sets `markedOfPaper`'s
+  `converge`, today's reader never does). Today's compile runs latexmk over the marked files to its fixed point, whose last
+  pass only witnesses that nothing changed, then the final pass sets the same pages again in full. The loop
+  (`compile/paper.ts` `convergeThenMark`) compiles the marked files one pass at a time: pass 1 a draft (no PDF), every
+  later pass the final pass's files (graphicx's draft line made the drivers' hooks) in full, each given what the passes
+  before it wrote; the first pass that writes back the files it was given is the marks' PDF, the log and B at once, and no
+  final pass follows (the driver's checks under `latex` are made of it). Each pass is given what today's pass of the same
+  number is given, and the settled one what today's final pass is given, so B is today's final pass's bytes wherever a
+  pass writes the same files in draft and in full: one TeX pass fewer a paper, proven paper by paper against today's in a
+  native TeX Live (`lab/pdf/spikes/q1-check.mjs`). Unsettled at five passes, the final pass is made over the fifth's files,
+  as after today's compile. Today's request, judged by the guard as today's, then its final pass, is asked where pass 1 did
+  not run through, a pass returned no files, pass 1 wrote another bibliography job or names a missing .bib, the files to
+  carry pass the host's bound (`filesBound`, the box's one answer's, 256 files and 8 MiB), or a full pass did not run
+  through. `markedOfPaper` also returns the mark probe's log its answers were read from (`probeLog`, `CompiledResult`'s),
+  for a host to store beside the instrument.
   **One front half, today's** (2026-11-09). A rebuilt front half (a typed source reader under TeX's definitions, a marks
   writer and a drafts-only compile plan, in `packages/engine/src/{source,marks,compile}/`) was run beside today's over
   the 87 corpus papers and deleted (its last state is the tag `f2-final-2026-11-09`): it stated none of the element

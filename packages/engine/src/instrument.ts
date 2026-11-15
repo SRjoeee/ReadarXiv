@@ -4,6 +4,7 @@
 // instrument.mjs); the back half reads nothing else of the source, the marks or the compile.
 import type { Piece, Style } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
+import type { GlueName, ParaMeasure } from './marks/channels.ts'
 import type { Recovered } from './read.ts'
 
 /** what a unit's ink is, of the unit's: its text (what a translation replaces), an element's (a piece that travels with the
@@ -181,6 +182,10 @@ export interface PieceClass {
   tie?: true
   /** a text macro's text as TeX sets it (the marking's probe), where its glyphs are the unit's text, no ink of its own */
   text?: string
+  /** TeX sets it as its unit's end mark (the compile move's F14): the unit's last ink, whose own box TeX ends with ink a glue of
+   *  infinite stretch pushed (the probe's listing: an author's \qed written in the text), or which the source pushes with a fill
+   *  right before it (`\hfill $\square$`): marks.ts endPiecesOf; its element's El.end */
+  end?: true
 }
 
 export interface Instrument {
@@ -220,8 +225,30 @@ export interface Instrument {
      *  none (no body bracketed and stated there, a two-column page whose columns TeX did not give the width of) */
     frames?: (TexFrame | null)[]
     /** each unit's \baselineskip and \parskip, natural, in PDF units, where its paragraph ends (marks/channels.ts readSkips,
-     *  LINES_TEX's AXT-LINES): TeX's normal paragraph separation there; a unit TeX set no paragraph for states none */
-    skips?: { unit: number; baselineskip: number; parskip: number }[]
+     *  LINES_TEX's AXT-LINES): TeX's normal paragraph separation there; and \parskip's shrink where it is of points (none: an
+     *  instrument made before it was read, or a shrink of an infinite order); a unit TeX set no paragraph for states none */
+    skips?: { unit: number; baselineskip: number; parskip: number; parskipShrink?: number }[]
+    /** each heading's skips as TeX evaluated them where it set its title, by unit index (marks/channels.ts readHeads,
+     *  STATEMENTS_TEX's AXT-SECT): LaTeX's \@startsection's before-skip and after-skip as the class gives them, signed (a
+     *  negative before-skip TeX adds negated; a negative after-skip sets the title in the line, its negation the skip after
+     *  it), natural and shrink, and \baselineskip and \parskip there, in PDF units; a heading TeX set through no \@startsection
+     *  (KOMA-Script's, titlesec's, a chapter's) states none */
+    heads?: {
+      unit: number
+      before: [number, number]
+      after: [number, number]
+      baselineskip: number
+      parskip: [number, number]
+    }[]
+    /** the paper's float, caption and footnote separations, natural and shrink in PDF units, by TeX's name (marks/channels.ts
+     *  readGlues, STATEMENTS_TEX's AXT-GLUE), in the order TeX wrote them: once the document begins (`at` 0), then at each
+     *  float where one changed (`at` the float's serial, B's `fs<n>`: a caption's skips as its box holds them, the separations
+     *  once it is closed): the last of a name at or before a float's serial is in force there */
+    glues?: { at: number; name: GlueName; natural: number; shrink: number }[]
+    /** each paragraph's measure as TeX breaks it into lines, where it is not the full \hsize (a \parshape, a \hangindent, a
+     *  \leftskip or \rightskip of some natural size), by its end's serial (B's `qe<n><code>`; marks/channels.ts readMeasures,
+     *  STATEMENTS_TEX's AXT-MEASURE), in PDF units */
+    measures?: ({ para: number } & ParaMeasure)[]
   }
   /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
   recovered?: Recovered

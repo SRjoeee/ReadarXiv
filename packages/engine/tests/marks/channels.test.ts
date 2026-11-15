@@ -1,6 +1,7 @@
 // The marked compile's log channels (src/marks/channels.ts), which the front half's adapter reads (src/pdf-reader/engine/
 // pipeline/instrument.mjs): each unit's alignment (AXT-ALIGN), each page's text frame (AXT-BODY at its body's opening point)
-// and each unit's paragraph skips (AXT-LINES).
+// and each unit's paragraph skips (AXT-LINES); the separations the rebuilt prepare's compile states (STATEMENTS_TEX: each
+// heading's AXT-SECT, the paper's AXT-GLUE).
 import { describe, expect, it } from 'vitest'
 import {
   boxedAlignOf,
@@ -8,9 +9,14 @@ import {
   readAlign,
   readBodies,
   readBoxAlign,
+  readGlues,
+  readHeads,
+  readMeasures,
   readRefNames,
   readSkips,
 } from '../../src/marks/channels.ts'
+
+const pt = (v: number) => (v * 72) / 72.27
 
 describe('readAlign: each unit’s alignment as TeX stated it at its end mark', () => {
   it('reads each unit’s alignment as its end mark states it, the first paragraph’s of one TeX set in two', () => {
@@ -231,6 +237,94 @@ describe('readSkips: each unit’s \\baselineskip and \\parskip at its paragraph
     expect(s.get(8)![0]).toBeCloseTo((12 * 72) / 72.27, 6)
     expect(s.get(8)![1]).toBeCloseTo((5.5 * 72) / 72.27, 6)
   })
+  it('reads \\parskip’s shrink, a third, where it is of points (zero where TeX printed none), none where it is infinite', () => {
+    const s = readSkips(
+      [
+        'AXT-LINES 3 5 13.6pt 10.95 0.0pt plus 1.0pt',
+        'AXT-LINES 8 2 12.0pt plus 1.0pt 10 5.5pt plus 2.0pt minus 1.5pt',
+        'AXT-LINES 9 2 12.0pt 10 6.0pt minus 1.0fil',
+      ].join('\n'),
+    )
+    expect(s.get(3)![2]).toBe(0)
+    expect(s.get(8)![2]).toBeCloseTo(pt(1.5), 6)
+    expect(s.get(9)!.length).toBe(2)
+  })
+})
+
+describe('readHeads: each heading’s \\@startsection skips where TeX set its title (STATEMENTS_TEX’s AXT-SECT)', () => {
+  it('reads the four glues of a heading’s first mark, signed as its class gives them, natural and shrink in PDF units', () => {
+    const h = readHeads(
+      [
+        'AXT-SECT h4s b -15.0694pt plus -4.30554pt minus -0.86108pt',
+        'AXT-SECT h4s a 9.90276pt plus 0.86108pt',
+        'AXT-SECT h4s l 12.0pt',
+        'AXT-SECT h4s p 0.0pt plus 1.0pt',
+        // (a run-in title's: its after-skip negative)
+        'AXT-SECT h9s b 13.99301pt plus 4.30554pt minus 0.86108pt',
+        'AXT-SECT h9s a -10.0pt',
+        'AXT-SECT h9s l 12.0pt',
+        'AXT-SECT h9s p 0.0pt plus 1.0pt',
+        // (a title set twice: its first)
+        'AXT-SECT h9s a -20.0pt',
+      ].join('\n'),
+    )
+    expect([...h.keys()]).toEqual([4, 9])
+    const s4 = h.get(4)!
+    expect(s4.before[0]).toBeCloseTo(pt(-15.0694), 6)
+    expect(s4.before[1]).toBeCloseTo(pt(-0.86108), 6)
+    expect(s4.after[0]).toBeCloseTo(pt(9.90276), 6)
+    expect(s4.after[1]).toBe(0)
+    expect(s4.baselineskip).toBeCloseTo(pt(12), 6)
+    expect(s4.parskip).toEqual([0, 0])
+    expect(h.get(9)!.after[0]).toBeCloseTo(pt(-10), 6)
+  })
+  it('joins a statement TeX wrapped at the log’s 79 columns; states nothing of a heading short of a glue, or of an infinite shrink', () => {
+    const long = 'AXT-SECT h123456789s b -16383.99998pt plus -16383.99998fill minus -16383.99998pt'
+    const h = readHeads(
+      [
+        long.slice(0, 79),
+        long.slice(79),
+        '',
+        'AXT-SECT h123456789s a 1.0pt',
+        'AXT-SECT h123456789s l 12.0pt',
+        'AXT-SECT h123456789s p 0.0pt',
+        'AXT-SECT h2s b 1.0pt',
+        'AXT-SECT h2s a 1.0pt',
+        'AXT-SECT h2s l 12.0pt',
+        'AXT-SECT h3s b 1.0pt minus 1.0fil',
+        'AXT-SECT h3s a 1.0pt',
+        'AXT-SECT h3s l 12.0pt',
+        'AXT-SECT h3s p 0.0pt',
+      ].join('\n'),
+    )
+    expect([...h.keys()]).toEqual([123456789])
+    expect(h.get(123456789)!.before[1]).toBeCloseTo(pt(-16383.99998), 4)
+  })
+})
+
+describe('readGlues: the paper’s float, caption and footnote separations (STATEMENTS_TEX’s AXT-GLUE)', () => {
+  it('reads each in TeX’s order, at the document’s start and at a float, natural and shrink; a dimension a glue of neither', () => {
+    const g = readGlues(
+      [
+        'AXT-GLUE 0 textfloatsep 20.0pt plus 2.0pt minus 4.0pt',
+        'AXT-GLUE 0 footnotesep 6.65pt',
+        'AXT-GLUE 0 fpsep 8.0pt plus 1.0fil',
+        'AXT-GLUE 0 unknownsep 1.0pt',
+        'AXT-GLUE 7 textfloatsep 5.0pt',
+        'AXT-GLUE 8 intextsep 1.0pt minus 1.0fill',
+      ].join('\n'),
+    )
+    expect(g.map((x) => [x.at, x.name])).toEqual([
+      [0, 'textfloatsep'],
+      [0, 'footnotesep'],
+      [0, 'fpsep'],
+      [7, 'textfloatsep'],
+    ])
+    expect(g[0]!.natural).toBeCloseTo(pt(20), 6)
+    expect(g[0]!.shrink).toBeCloseTo(pt(4), 6)
+    expect(g[1]!.shrink).toBe(0)
+    expect(g[2]!.shrink).toBe(0)
+  })
 })
 
 describe('readRefNames: each reference’s item type and the full name the paper gives it (AXT-REF, AXT-REFNAME)', () => {
@@ -318,5 +412,37 @@ describe('readRefNames: each reference’s item type and the full name the paper
   })
   it('states nothing where TeX wrote nothing (a log of before, a paper with no reference)', () => {
     expect(readRefNames('AXT-ALIGN 3 p 1 0.0pt 1 0.0pt 0 0.0pt').size).toBe(0)
+  })
+})
+
+describe('readMeasures: each paragraph’s measure as TeX breaks it (STATEMENTS_TEX’s AXT-MEASURE, at its end)', () => {
+  it('reads \\hsize, \\hangindent, \\hangafter, \\leftskip’s and \\rightskip’s natural sizes and \\parshape, by the end’s serial', () => {
+    const long = `AXT-MEASURE 12 345.0pt 0.0pt 1 0.0pt 0.0pt 4 ${Array.from({ length: 4 }, (_, i) => `${i * 10}.5pt 300.0pt`).join(' ')}`
+    const m = readMeasures(
+      [
+        'AXT-MEASURE 3 469.75499pt 0.0pt 1 0.0pt 0.0pt 1 25.0pt 444.75499pt',
+        'AXT-MEASURE 4 469.75499pt 20.0pt -2 10.0pt 0.0pt 0',
+        long.slice(0, 79),
+        long.slice(79),
+        '',
+        'AXT-MEASURE 5 469.75499pt 0.0pt 1 0.0pt 0.0pt 2 1.0pt',
+      ].join('\n'),
+    )
+    const near = (a: number[], b: number[]) => a.length === b.length && a.every((x, k) => Math.abs(x - b[k]!) < 1e-9)
+    expect([...m.keys()]).toEqual([3, 4, 12])
+    expect(m.get(3)!.hsize).toBeCloseTo(pt(469.75499), 6)
+    expect(near(m.get(3)!.shape!.flat(), [pt(25), pt(444.75499)])).toBe(true)
+    const four = m.get(4)!
+    expect(four.shape).toBeUndefined()
+    expect(four.hangafter).toBe(-2)
+    expect(near([four.hsize, four.hangindent, four.leftskip, four.rightskip], [pt(469.75499), pt(20), pt(10), 0])).toBe(
+      true,
+    )
+    expect(
+      near(
+        m.get(12)!.shape!.map(([i]) => i),
+        [0.5, 10.5, 20.5, 30.5].map(pt),
+      ),
+    ).toBe(true)
   })
 })
