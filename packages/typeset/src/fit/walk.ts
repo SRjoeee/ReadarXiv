@@ -4,8 +4,9 @@
 // held by the walk's, the chain's and the fill's replays on the corpus. The `borrow` knob is today's: a block's lines laid on into
 // the room under its last line, before its leading and its size (the owner's ruling of 2026-11-08, borrowing bounded by TeX's
 // facts: so that a page's body keeps one size); the room is TeX's (lay/adapt.ts), stated on each block (`free`).
-import { type Broken, breakLines, lineExtent } from '../breaker/break.ts'
+import { type Broken, breakLines, kernOf, lineExtent, SQUEEZE, tokW } from '../breaker/break.ts'
 import { laidOut } from '../breaker/place.ts'
+import { MissingMeasure } from '../metrics/table.ts'
 import { roomOf, type Slot, slotsAt } from '../breaker/slots.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, Layout } from './types.ts'
@@ -153,12 +154,12 @@ function sharedStates(P: FitParams, failed: FitParams, blocks: readonly FitBlock
     if (x.done || y.done || !sameState(x.value, y.value)) return n
   }
 }
-/** two of the fit's states alike but in their leading and the knob that set it: what B.break reads of a state but the slots */
-const butLead = (x: FitState, y: FitState) =>
+/** two of the fit's states alike but in what only moves or adds slots (slotsAt): the leading and the room taken under the last
+ *  line (`borrow`), and the knob that set them: what B.break reads of a state but the slots */
+const butSlots = (x: FitState, y: FitState) =>
   x.track === y.track &&
   x.trackLatin === y.trackLatin &&
   x.compress === y.compress &&
-  x.borrow === y.borrow &&
   x.scale === y.scale &&
   x.fitTrack === y.fitTrack &&
   x.box === y.box &&
@@ -193,23 +194,29 @@ const inOrder = (S: readonly Slot[]) => {
     }
   return true
 }
+/** the room a state takes whole (statesOf's borrow knob: its last step, every line its room holds) */
+const ROOM_ALL = 99
 /** a lay of the fit's: its state, its slots, B.break's lines, the size */
 type Lay = { st: FitState; S: Slot[]; r: Broken; f: number }
 /**
- * The leading knob re-breaks nothing where the breaks cannot change (the coordinator's ruling of 2026-11-16, docs/PDF-READER.md
- * §18.81). What B.break sets on each line is a function of the text, the size, the tracking, the word rule and each line's
- * measure and frame (sameAcross); the leading says where the lines stand, which B.break reads only in TeX's \lineskip rule
- * (settle, pushDown) and in overLast. The knob's states (statesOf: one state, its leading 0.05 closer each, to the floor) are
- * laid once the knob's first state failed by the floor's lay (`leadFloor`: the most slots) where a state's slots are the floor's
- * first ones, measure for measure and frame for frame, no slot over an earlier one of its column, and TeX's rule opens no line
- * of the floor's where the state's slots stand: a state that lacks a slot a line of the floor's stands on fails as surely (null,
- * not laid); one that holds them all, and the next slot as the floor does (B.break looks at it: a boundary, a URL kept whole, a
- * label alone), is laid as the floor's lines on its own slots, the same breaks, every item its own. Every other state is laid by
- * B.break as before: one whose measures change with the leading (a line beside a wrapped figure, a stay, a shared row's stop), a
- * unit with a frame break (strand lays a line again) or a forced break's room, a floor's lay TeX's rule opened. The walk takes
- * the floor's lay at the floor. The lays, and the state the walk stops at, are B.break's own
+ * The walk lays no state that surely fails, and re-breaks nothing where the breaks cannot change (the coordinator's rulings of
+ * 2026-11-16, docs/PDF-READER.md §18.81). A state's lay, `at`:
+ * - The bound (outfills): where the text, packed as tight as B.break packs it, outfills the state's slots, the state fails as
+ *   surely as laid; it is passed, unlaid. Any knob's state, the first of a size step's too.
+ * - The floor: what B.break sets on each line is a function of the text, the size, the tracking, the word rule and each line's
+ *   measure and frame (sameAcross); the leading and the room taken under the last line (`borrow`) say only how many slots there
+ *   are and where they stand, which B.break reads in TeX's \lineskip rule (settle, pushDown) and in overLast alone. Once a state
+ *   failed, the room and leading knobs' later states of it are laid by its floor's lay (the floor's leading, `leadFloor`, the
+ *   room taken whole: the most slots), where a state's slots are the floor's first ones, measure for measure and frame for frame,
+ *   no slot over an earlier one of its column, and TeX's rule opens no line of the floor's where the state's slots stand: a state
+ *   that lacks a slot a line of the floor's stands on fails as surely (passed, unlaid); one that holds them all, and the next
+ *   slot as the floor does (B.break looks at it: a boundary, a URL kept whole, a label alone), is laid as the floor's lines on its
+ *   own slots, the same breaks, every item its own.
+ * Every other state is laid by B.break as before: one whose measures change with the leading (a line beside a wrapped figure, a
+ * stay, a shared row's stop), a unit with a frame break (strand lays a line again) or a forced break's room, a floor's lay TeX's
+ * rule opened. The lays, and the state the walk stops at, are B.break's own
  */
-function leadLays(tokens: readonly Token[], blocks: readonly FitBlock[], s: number, P: FitParams, strict: boolean) {
+function fitLays(tokens: readonly Token[], blocks: readonly FitBlock[], s: number, P: FitParams, strict: boolean) {
   const layOn = (st: FitState, S: Slot[]): Lay => {
     const f = s * st.scale
     return { st, S, f, r: breakLines(tokens, S, f, st, P, st.scale, strict, blocks) }
@@ -218,24 +225,35 @@ function leadLays(tokens: readonly Token[], blocks: readonly FitBlock[], s: numb
   // (a frame break (strand lays a line again) or a forced break's room (pushDown) moves lines by where they stand)
   const free = !tokens.some((t) => t.pageBreak !== undefined || (t.newline !== undefined && (t.room ?? 0) > 0))
   type Floor = Lay & { at: number[] | null; extents: ReturnType<typeof lineExtent>[] }
-  let floor: Floor | null = null
+  /** the floor of the knob last asked: its lay; none where it asks a measure the host has not (MissingMeasure: a replay's table of
+   *  today's measures, which holds none today's walk did not lay), and every state of the knob is then laid as before */
+  let floor: { st: FitState; lay: Floor | null } | null = null
   const misses: FitState[] = []
   /** the floor's lay of state `st`'s knob, each of its lines' slot (none where a line opened, or stands on no slot of its own) */
-  const floorOf = (st: FitState): Floor => {
-    if (floor && butLead(floor.st, st)) return floor
-    const F = lay({ ...st, lead: P.leadFloor })
-    const at =
-      F.r.lines.every((l) => !l.opened) && inOrder(F.S)
-        ? F.r.lines.map((l) =>
-            F.S.findIndex((sl) => sl.page === l.page && sl.block === l.block && sl.baseline === l.baseline),
-          )
-        : null
-    floor = {
-      ...F,
-      at: at?.every((j) => j >= 0) ? at : null,
-      extents: F.r.lines.map((l) => lineExtent(l, F.f, F.st.scale, P.measure)),
+  const floorOf = (st: FitState): Floor | null => {
+    if (floor && butSlots(floor.st, st)) return floor.lay
+    const ref = { ...st, lead: P.leadFloor, borrow: ROOM_ALL }
+    try {
+      const F = lay(ref)
+      const at =
+        F.r.lines.every((l) => !l.opened) && inOrder(F.S)
+          ? F.r.lines.map((l) =>
+              F.S.findIndex((sl) => sl.page === l.page && sl.block === l.block && sl.baseline === l.baseline),
+            )
+          : null
+      floor = {
+        st: ref,
+        lay: {
+          ...F,
+          at: at?.every((j) => j >= 0) ? at : null,
+          extents: F.r.lines.map((l) => lineExtent(l, F.f, F.st.scale, P.measure)),
+        },
+      }
+    } catch (e) {
+      if (!(e instanceof MissingMeasure)) throw e
+      floor = { st: ref, lay: null }
     }
-    return floor
+    return floor.lay
   }
   /** how a state of the floor's knob on slots `S` is laid, as the floor's lay `F` shows: 'fails' where a line of the floor's stands
    *  on a slot the state lacks; 'same' where the state holds every slot the floor's lines stand on, and the slot after the last
@@ -275,22 +293,90 @@ function leadLays(tokens: readonly Token[], blocks: readonly FitBlock[], s: numb
     })
     return { st, S: S as Slot[], f: F.f, r: { ...F.r, lines } }
   }
-  /** a state's lay: B.break's, or the floor's lines on its slots; null where the floor's lay shows it fails */
+  // (the bound, which no break beats: closing marks hang their blank half past a line's end; a CJK script that breaks between
+  // characters squeezes its gaps)
+  const closes = tokens.some((t) => t.punct === 'close')
+  const squeezes = !!P.cjk && !P.keepAll
+  /**
+   * Whether the text cannot fit state `st`'s slots `S` however B.break breaks it. Its least advance at the state's size and
+   * tracking, each term from the breaker's own rules and none larger than it can be: every glyph's advance with the tracking
+   * (tokW); a word space at the least it shrinks to (spaceMin), less two a slot for the spaces a line's ends drop; a mark less its
+   * blank half, the most a compression or a squeeze takes; each item less the most a CJK squeeze closes a gap by (SQUEEZE em);
+   * an explicit glue only where it closes; a label nothing (its line hangs the text where TeX did); a token wider than a line, a
+   * line. Against the slots' measures, each with the breaker's tolerance (0.01) and a closing mark's hang; and in lines, each part
+   * of the text a forced break ends whole lines of its own, against the slots' number
+   */
+  const outfills = (st: FitState, S: readonly Slot[]): boolean => {
+    if (!S.length) return false
+    const f = s * st.scale
+    const hang = closes ? 0.5 * f : 0
+    let room = 0,
+      least = Number.POSITIVE_INFINITY,
+      most = 0
+    for (const sl of S) {
+      const w = sl.x1 - sl.x0 + 0.01 + hang
+      room += w
+      least = Math.min(least, w)
+      most = Math.max(most, w)
+    }
+    let width = 0,
+      space = 0,
+      part = 0,
+      drawn = false,
+      lines = 0
+    for (const t of tokens) {
+      if (t.newline !== undefined) {
+        if (drawn) lines += Math.max(1, Math.ceil(part / most - 1e-9))
+        part = 0
+        drawn = false
+        continue
+      }
+      if (t.blockTo !== undefined || t.pageBreak !== undefined) continue
+      if (t.space) {
+        const w = tokW(t, f, st, st.scale) * P.spaceMin
+        width += w
+        space = Math.max(space, w)
+        continue
+      }
+      const w = t.label
+        ? 0
+        : Math.max(
+            0,
+            tokW(t, f, st, st.scale) -
+              (t.punct ? 0.5 * f : 0) -
+              (squeezes ? SQUEEZE * f : 0) +
+              Math.min(0, kernOf(t, f)),
+          )
+      width += Math.min(w, least)
+      part += Math.min(w, most)
+      drawn = true
+    }
+    if (drawn) lines += Math.max(1, Math.ceil(part / most - 1e-9))
+    return width - 2 * space * S.length > room + 1e-6 || lines > S.length
+  }
+  /** a state's lay: B.break's, or the floor's lines on its slots; null where it fails as surely (the bound, or the floor's lay) */
   const at = (st: FitState): Lay | null => {
     const S = slotsAt(blocks, st, P, s)
-    if (!free || st.knob !== 'lead') return layOn(st, S)
-    if (floor && st.lead === floor.st.lead && butLead(floor.st, st)) return floor.at ? moved(floor, st, S) : floor
-    if (st.lead > P.leadFloor && misses.some((x) => butLead(x, st))) {
-      const F = floorOf(st)
-      const as = asFloor(F, S)
-      if (as === 'fails') {
-        misses.push(st)
-        return null
-      }
-      if (as === 'same') {
-        const L = moved(F, st, S)
-        if (L.r.rest < L.r.total) misses.push(st)
-        return L
+    if (outfills(st, S)) {
+      misses.push(st)
+      return null
+    }
+    if (free && (st.knob === 'lead' || st.knob === 'borrow')) {
+      const was = floor?.lay
+      if (was && st.lead === was.st.lead && st.borrow === was.st.borrow && butSlots(was.st, st))
+        return was.at ? moved(was, st, S) : was
+      if (misses.some((x) => butSlots(x, st))) {
+        const F = floorOf(st)
+        const as = F ? asFloor(F, S) : null
+        if (as === 'fails') {
+          misses.push(st)
+          return null
+        }
+        if (as === 'same' && F) {
+          const L = moved(F, st, S)
+          if (L.r.rest < L.r.total) misses.push(st)
+          return L
+        }
       }
     }
     const L = layOn(st, S)
@@ -319,8 +405,8 @@ export function layoutUnit2(
   let last: Laid | null = null,
     tried = 0
   const skip = failed ? sharedStates(P, failed, blocks, s) : 0
-  // (the leading knob's states laid where their lines can differ: leadLays)
-  const lays = leadLays(tokens, blocks, s, P, true)
+  // (each state laid where its lines can differ and it can fit: fitLays)
+  const lays = fitLays(tokens, blocks, s, P, true)
   let passed: FitState | null = null
   for (const st of triesOf(P, blocks, s, skip)) {
     tried++
@@ -348,7 +434,7 @@ export function layoutUnit2(
   if (last.r.rest < last.r.total && tokens.some((t) => t.blockTo !== undefined)) {
     let past: Laid | null = null,
       passedPast: FitState | null = null
-    const run = leadLays(tokens, blocks, s, P, false)
+    const run = fitLays(tokens, blocks, s, P, false)
     for (const st of triesOf(P, blocks, s, skip)) {
       tried++
       const L = run.at(st)

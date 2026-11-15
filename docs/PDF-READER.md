@@ -7385,28 +7385,39 @@ ink stands TeX's distance from the line's end, scaled (TeX's box flush right: on
 end-mark.test.ts` ("stands where TeX set it at the size the fit draws it"). The two other lines I5 lists, 2610.20285v1-zh unit 258
 (0.30 pt) and 2610.21106v1-zh unit 42 or 2610.21085v1-zh unit 64 (0.04 and 0.01 pt), are of other causes, not traced here.
 
-### 18.81 The leading knob re-breaks nothing where the breaks cannot change (the coordinator's ruling of 2026-11-16)
+### 18.81 The walk lays no state that surely fails, and re-breaks nothing where the breaks cannot change (the coordinator's rulings of 2026-11-16)
 
-What the breaker sets on each line is a function of the text, the size, the tracking, the word rule and each line's measure and
-frame; the leading says only where the lines stand, which the breaker reads in TeX's `\lineskip` rule alone (`settle`, `pushDown`)
-and in `overLast`. Each state of the fit's leading knob (`fit/walk.ts` statesOf: one state, its leading 0.05 closer each, down to
-`leadFloor`) paid a full lay. They are now laid, in one place (`fit/walk.ts` `leadLays`, the walk's two loops), by the floor's
-lay of the same state, the state with the most slots, laid once the knob's first state failed: where a state's slots are the
-floor's first ones, measure for measure and frame for frame (block, page, measure, boundary, flow, hang, flush), none stands over
-an earlier one of its column, and TeX's rule would open no line of the floor's where the state's slots stand, a state that lacks
-a slot a line of the floor's stands on fails (it is passed, unlaid), and one that holds them all and the slot after them as the
-floor does (the breaker looks at it: a boundary, a URL kept whole, a label alone) takes the floor's lines on its own slots, every
-item its own. Every other state is laid as before: one whose measures change with the leading (a line beside a wrapped figure, a
-stay, a shared row's stop), a unit with a frame break or a forced break's room, a floor's lay TeX's rule opened. The walk takes
-the floor's lay at the floor.
+The fit's walk (`fit/walk.ts` statesOf: the tracking, then the room under the last line, then the leading, then the size; the
+order the owner reviewed for body text, unchanged) paid a full lay of the breaker for every state it tried. A state is now laid,
+in one place (`fit/walk.ts` `fitLays`, the walk's two loops), only where it can fit and its lines can differ from a lay made:
 
-The lays and the state the walk stops at are the breaker's own. Held so: the 92 pairs' every page laid with each passed state and
-each taken one laid all the same and compared (`lanes/cm-d/count`: 2,595 pages; 6,815 states passed, none of which a lay sets
-whole; 4,117 taken, each byte for byte the breaker's; every page's whole lay equal); and the reader gate's dumps on both stores
-byte for byte as before, every summary line equal. The count (the breaker's lays a page, every page of the 92 pairs, Google's
-rows w1): 253.5 to 249.7 (-1.5 %); Chinese, whose base leading walks down from 1.3, 262.9 to 258.6 (-1.6 %; 2610.20030v1 -7.4 %,
-2610.21176v1 -5.5 %, 1512.03385v1 -4.8 %), the other targets, whose base is the floor, as before; one pair pays 0.1 % more
-(2610.21884v1-zh: a floor laid that the next state did not need). The states a fit, 2.41, are the walk's as before.
+- **The bound.** Before any state is laid (a tracking, room or leading state, a size step's first), the text's least advance at
+  that state's size and tracking, each term from the breaker's own rules and none larger than it can be: every glyph's advance
+  with the tracking (`tokW`); a word space at the least it shrinks to (`spaceMin`), less two a slot for the spaces a line's ends
+  drop; a mark less its blank half, the most a compression or a squeeze takes; each item less the most a CJK squeeze closes a gap
+  by (`SQUEEZE`); an explicit glue only where it closes; a label nothing; a token wider than a line, one line. Against the slots'
+  measures, each with the breaker's tolerance and a closing mark's hang; and in lines, each part of the text a forced break ends
+  taking whole lines of its own, against the number of slots. Where the text cannot fit even packed without a break, the state
+  fails as surely as laid: it is passed, unlaid. Where the bound does not decide, the state is laid.
+- **The floor.** What the breaker sets on each line is a function of the text, the size, the tracking, the word rule and each
+  line's measure and frame; the leading and the room taken under the last line say only how many slots there are and where they
+  stand, which the breaker reads in TeX's `\lineskip` rule alone (`settle`, `pushDown`) and in `overLast`. Once a state failed,
+  the later states of the room and leading knobs that differ from it in those two alone are laid by its floor's lay (the floor's
+  leading, `leadFloor`, the room taken whole: the most slots): where a state's slots are the floor's first ones, measure for
+  measure and frame for frame (block, page, measure, boundary, flow, hang, flush), none stands over an earlier one of its column,
+  and TeX's rule would open no line of the floor's where the state's slots stand, a state that lacks a slot a line of the floor's
+  stands on fails (passed, unlaid), and one that holds them all and the slot after them as the floor does (the breaker looks at
+  it: a boundary, a URL kept whole, a label alone) takes the floor's lines on its own slots, every item its own. The floor is
+  speculative: where it asks a measure the host has not (a replay's table of today's measures), the knob's states are laid as
+  before.
+
+Every other state is laid as before: one whose measures change with the leading (a line beside a wrapped figure, a stay, a
+shared row's stop), a unit with a frame break or a forced break's room, a floor's lay TeX's rule opened.
+
+The lays and the state the walk stops at are the breaker's own. Held so, at today's bases: the 92 pairs' every page laid with
+each passed state and each taken one laid all the same and compared (`lanes/cm-d/count`: 2,595 pages; 45,293 states passed by the bound and 3,078 by the floor, none of which a lay sets whole; 5,832 taken from the floor, each byte for byte the breaker's); every page's
+whole lay equal; and the reader gate's dumps on both stores byte for byte as before, every summary line equal. The count (the
+breaker's lays a page, every page of the 92 pairs, Google's rows w1): 253.5 to 235.3 (-7.2 %; 249.7 with the floor of the leading alone, its first form): German -35.4 %, Spanish -37.8 %, Polish -17.3 %, Japanese -7.4 %, Chinese -6.7 %; one pair pays 0.1 % more (2610.21827v1-zh, 135.0 to 135.2: a floor laid that the next state did not need). The states a fit, 2.41, are the walk's as before.
 
 ## 19. The engine's contract
 

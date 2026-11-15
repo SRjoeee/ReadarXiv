@@ -153,9 +153,11 @@ const urlCut = (t: BreakToken, room: number, scale: number, least: boolean) => {
 }
 /** the explicit glue after a token at size f (tokensOf2 kernOn's `kernW`, at 100 px), an advance its laid item holds apart from
  *  its width (`kern`) */
-const kernOf = (t: BreakToken, f: number): number => ((t.kernW ?? 0) * f) / 100
+const kernOf = (t: Pick<Token, 'kernW'>, f: number): number => ((t.kernW ?? 0) * f) / 100
 /** a token's own width at size f: no kern after it (tokensOf2 kernOn's `kernW`), which its item holds apart (kernOf) */
-const tokW = (t: BreakToken, f: number, st: FitState, scale: number): number => {
+/** what tokW reads of a token: the breaker's and the walk's (fit/walk.ts fitLays' bound) */
+type Measured = Pick<Token, 'cw' | 'space' | 'w100' | 'cls' | 's'> & { crop?: unknown }
+const tokW = (t: Measured, f: number, st: FitState, scale: number): number => {
   if (t.crop) return (t.cw as number) * scale
   if (t.space) return (t.w100 * f) / 100
   let w = (t.w100 * f) / 100
@@ -1104,4 +1106,4 @@ function breakLines(
   return { lines: lines.filter((l) => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
-export { breakLines, gapsOf, hangOf, inWord, latinishOf, leadOf, noLineStart, squeezable, tabOf }
+export { breakLines, gapsOf, hangOf, inWord, kernOf, latinishOf, leadOf, noLineStart, SQUEEZE, squeezable, tabOf, tokW }
