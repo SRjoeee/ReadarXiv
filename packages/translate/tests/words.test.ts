@@ -107,7 +107,7 @@ describe('a group with an edge inside a word goes on no wire: the word travels w
     const { sent, result } = await viaGoogle(u, (w) =>
       w.replace('Short for ', '简称').replace('Bolt-on parts.', '螺栓部件。'),
     )
-    expect(sent).toEqual(['Short for <span id="1" translate="no">x1</span>Bolt-on parts.'])
+    expect(sent).toEqual(['Short for <b translate=no>x1</b>Bolt-on parts.'])
     expect(ok(result).content).toEqual([tx('简称'), sp('1', [{ t: 'el', id: '2' }]), tx('螺栓部件。')])
   })
   it('a group that cuts a word with a stop TeX set at its end: the stop after the words, the sentences in the unit’s own projection', async () => {
@@ -159,7 +159,7 @@ describe('a group of whole words travels as before', () => {
   it('a group beside an element: an element is no letter of a word', async () => {
     const u = unit('x', [span('1', 'bold', [t('RQ')]), el('2'), t(' holds.')])
     expect((await viaGoogle(u, () => '<span id="1">RQ</span><x id="2"/> 成立。')).sent).toEqual([
-      '<span id="1">RQ</span><span id="2" translate="no">x2</span> holds.',
+      '<span id="1">RQ</span><b translate=no>x2</b> holds.',
     ])
   })
 })

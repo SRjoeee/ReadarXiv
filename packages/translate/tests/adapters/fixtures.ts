@@ -572,4 +572,22 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     taken: true,
     why: 'the space between two elements the source sets side by side taken back, beside a tie kept (text.ts glueOf)',
   },
+  {
+    unit: 1,
+    raw: '设<b translate=no>x1</b>如<b translate=no>x2</b>所述。<x id="4"/>更多内容见第<b translate=no>x3</b>节。',
+    taken: true,
+    why: 'each element as Google is sent it, `<b translate=no>` holding its token, read by that token (tags.ts TagSpelling)',
+  },
+  {
+    unit: 1,
+    raw: '设<b translate=no></b>x1如<b translate=no>x2</b>所述。<x id="4"/>更多内容见第<b translate=no>x3</b>节。',
+    taken: false,
+    why: 'a `<b>` emptied, its token left as text: the wire’s contract broken (tags.ts tokenOf)',
+  },
+  {
+    unit: 23,
+    raw: '每个标记都关注其左侧。<x id="3"/>我们<b translate=no>x1</b> 报告两种规模。<x id="4"/><b translate=no>x2</b>',
+    taken: true,
+    why: 'a mark glued after a stop that the reply carried into the next sentence, as `<b>`: back right after the stop’s marker (tags.ts leadsBack)',
+  },
 ]

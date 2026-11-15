@@ -63,22 +63,22 @@ describe('google: the wire, byte for byte (golden)', () => {
   it('writes each fixture unit as tags, with boundary markers where a unit lights by sentence', () => {
     expect(UNITS.map((u) => t.write(u, 'zh-Hans'))).toEqual([
       'We study the problem. <x id="1"/>It is hard.',
-      'Let <span id="1" translate="no">x1</span> be as in <span id="2" translate="no">x2</span>. <x id="4"/>See Section <span id="3" translate="no">x3</span> for more.',
+      'Let <b translate=no>x1</b> be as in <b translate=no>x2</b>. <x id="4"/>See Section <b translate=no>x3</b> for more.',
       '<span id="1">Bold words</span> and <span id="2">a link <span id="3">inside</span></span> end.',
-      'We have<span id="1" translate="no">x1</span>. <x id="2"/>Then we go on.',
-      'Values <span id="1" translate="no">x1</span> <span id="2" translate="no">x2</span>, and <span id="3" translate="no">x3</span><span id="4" translate="no">x4</span> hold.',
+      'We have<b translate=no>x1</b>. <x id="2"/>Then we go on.',
+      'Values <b translate=no>x1</b> <b translate=no>x2</b>, and <b translate=no>x3</b><b translate=no>x4</b> hold.',
       '<span id="1">Whole bold heading</span>',
       '<span id="1">Setup:</span> we train the model for 3 epochs.',
-      'a &lt; b &amp; c &gt; d @ home # 95<span id="1" translate="no">x1</span> accuracy.',
-      'A link around a formula: <span id="1" translate="no">x1</span> done.',
-      'Words<span id="1" translate="no">x1</span>. <x id="2"/>More words follow here.',
-      'It matters on seasonal timescales<span id="1" translate="no">x1</span>, alters the jet stream<span id="2" translate="no">x2</span> and the surface<span id="3" translate="no">x3</span>, as the quasi-biennial oscillation and El Ni<span id="4" translate="no">x4</span>o southern oscillations do.',
-      'We use the 30 km zonal wind threshold:<span id="1" translate="no">x1</span> thresholds<span id="2" translate="no">x2</span> hold.',
-      'We can quantify the forecast skill of the emulator using the RMSE: <span id="1" translate="no">x1</span>',
-      'The model <span id="1" translate="no">x1</span> reads.',
-      'At each step the model is auto-regressive<span id="1" translate="no">x1</span>, consuming the previously generated symbols.',
-      'We reach 95<span id="1" translate="no">x1</span> accuracy.',
-      'a 3<span id="1" translate="no">x1</span>10 speed-up',
+      'a &lt; b &amp; c &gt; d @ home # 95<b translate=no>x1</b> accuracy.',
+      'A link around a formula: <b translate=no>x1</b> done.',
+      'Words<b translate=no>x1</b>. <x id="2"/>More words follow here.',
+      'It matters on seasonal timescales<b translate=no>x1</b>, alters the jet stream<b translate=no>x2</b> and the surface<b translate=no>x3</b>, as the quasi-biennial oscillation and El Ni<b translate=no>x4</b>o southern oscillations do.',
+      'We use the 30 km zonal wind threshold:<b translate=no>x1</b> thresholds<b translate=no>x2</b> hold.',
+      'We can quantify the forecast skill of the emulator using the RMSE: <b translate=no>x1</b>',
+      'The model <b translate=no>x1</b> reads.',
+      'At each step the model is auto-regressive<b translate=no>x1</b>, consuming the previously generated symbols.',
+      'We reach 95<b translate=no>x1</b> accuracy.',
+      'a 3<b translate=no>x1</b>10 speed-up',
     ])
   })
   it('asks the endpoint its own shape: [[items, from, to], client], its public key, the target by region', async () => {
@@ -110,15 +110,15 @@ describe('google: an element is a word of its sentence', () => {
     ],
     true,
   )
-  it('is written as an inline element holding its number, not to be translated; a boundary marker stays a void', () => {
+  it('is written as an inline element holding its token, not to be translated; a boundary marker stays a void', () => {
     expect(g.write(u, 'zh-Hans')).toBe(
-      'The values are stored in a table <span id="1" translate="no">x1</span>. <x id="4"/>The rows and columns are kept in <span id="2" translate="no">x2</span> and <span id="3" translate="no">x3</span>.',
+      'The values are stored in a table <b translate=no>x1</b>. <x id="4"/>The rows and columns are kept in <b translate=no>x2</b> and <b translate=no>x3</b>.',
     )
   })
   it('is read back where the reply sets it, its token not read as text', () => {
     const r = readTagged(
       u,
-      '这些值存储在表<span id="1" translate="no">x1</span>中。<x id="4"/>行和列保存在<span id="2" translate="no">x2</span>和<span id="3" translate="no">x3</span>中。',
+      '这些值存储在表<b translate=no>x1</b>中。<x id="4"/>行和列保存在<b translate=no>x2</b>和<b translate=no>x3</b>中。',
     )
     expect(r?.content).toEqual([
       { t: 'text', s: '这些值存储在表' },
@@ -139,12 +139,10 @@ describe('google: an element is a word of its sentence', () => {
     expect(
       readTagged(
         u,
-        '表<span id="1" translate="no">x1</span><span id="1" translate="no">x1</span>。<x id="4"/>行<span id="2" translate="no">x2</span>和<span id="3" translate="no">x3</span>。',
+        '表<b translate=no>x1</b><b translate=no>x1</b>。<x id="4"/>行<b translate=no>x2</b>和<b translate=no>x3</b>。',
       ),
     ).toBeNull()
-    expect(
-      readTagged(u, '表。<x id="4"/>行<span id="2" translate="no">x2</span>和<span id="3" translate="no">x3</span>。'),
-    ).toBeNull()
+    expect(readTagged(u, '表。<x id="4"/>行<b translate=no>x2</b>和<b translate=no>x3</b>。')).toBeNull()
   })
   it('the tags wire an LLM is sent, and Chrome’s, keep the void', () => {
     expect(tagsWire.write(u)).toBe(
@@ -156,6 +154,80 @@ describe('google: an element is a word of its sentence', () => {
   })
 })
 
+// (the shortest element Google keeps whole, design-performance Q5: HTML's `<b>` with `translate=no`, holding the token, no id;
+// its slot is the token's number, the wire's contract. Lane wire-w's probe of 2026-11-15, 45 requests: on the Q5 probe's 280
+// units, the 48 merged cells of lane hdr-lines and 20 units of the HTML page every class read the same as with
+// `<span id="n" translate="no">xn</span>`, every tag back as sent, 2,169 of 2,169; 12 % fewer characters)
+describe('google: an element is `<b translate=no>` holding its token, read back by its token', () => {
+  const u = unit('q', [t('Let '), el('m', 'math'), t(' be as in '), el('c', 'cite'), t('. It holds.')], true)
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const els = (c: OutPiece[] | undefined) => c?.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')
+  it('is written with no id: the token names its slot; a group stays a span with its id, a boundary marker a void', () => {
+    expect(g.write(u, 'zh-Hans')).toBe(
+      'Let <b translate=no>x1</b> be as in <b translate=no>x2</b>. <x id="3"/>It holds.',
+    )
+    const s = unit('s', [span('i', 'italic', [t('a word')]), t(' and '), el('m', 'math'), t('.')])
+    expect(g.write(s, 'zh-Hans')).toBe('<span id="1">a word</span> and <b translate=no>x2</b>.')
+  })
+  it('a reply read by the token each `<b>` holds, wherever the reply sets it, its attribute kept or not', () => {
+    const r = readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x2</b>所述。<x id="3"/>它成立。')
+    expect(els(r?.content)).toBe('设#m如#c所述。它成立。')
+    expect(r?.sentences).toEqual({ src: [18], tr: [7] })
+    // (the elements in the reply's own order; the attribute's other spellings, or none)
+    expect(els(readTagged(u, '如<b translate="no">x2</b>所述，设<b>x1</b>。<x id="3"/>它成立。')?.content)).toBe(
+      '如#c所述，设#m。它成立。',
+    )
+    expect(
+      els(readTagged(u, '设<b translate=no> x1 </b>如<b translate=no>&#120;2</b>所述。<x id="3"/>它成立。')?.content),
+    ).toBe('设#m如#c所述。它成立。')
+  })
+  it('a `<b>` that holds no token, another text beside its token, or a slot that is no element is unread', () => {
+    // (emptied, its token left as text)
+    expect(readTagged(u, '设<b translate=no></b>x1如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    // (its token and a word of the translation)
+    expect(readTagged(u, '设<b translate=no>x1 值</b>如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    // (a word in it and no token: Google's own bold)
+    expect(
+      readTagged(u, '设<b>注意</b><b translate=no>x1</b>如<b translate=no>x2</b>所述。<x id="3"/>它成立。'),
+    ).toBeNull()
+    // (a token of a slot the unit lacks, of a group's slot, of a boundary marker's)
+    expect(readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x9</b>所述。<x id="3"/>它成立。')).toBeNull()
+    const s = unit('s', [span('i', 'italic', [t('a word')]), t(' and '), el('m', 'math'), t('.')])
+    expect(readTagged(s, '<b translate=no>x1</b>和<b translate=no>x2</b>。')).toBeNull()
+    expect(
+      readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x2</b>所述。<b translate=no>x3</b>它成立。'),
+    ).toBeNull()
+  })
+  it('a `<b>` twice, never closed, closed by another tag’s close, or a close with no open, is unread', () => {
+    expect(
+      readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x1</b><b translate=no>x2</b>所述。<x id="3"/>它成立。'),
+    ).toBeNull()
+    expect(readTagged(u, '设<b translate=no>x1如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    expect(readTagged(u, '设<b translate=no>x1</span>如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    expect(readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x2</b></b>所述。<x id="3"/>它成立。')).toBeNull()
+    const s = unit('s', [span('i', 'italic', [t('a word')]), t(' and '), el('m', 'math'), t('.')])
+    expect(readTagged(s, '<span id="1">一个词</b>和<b translate=no>x2</b>。')).toBeNull()
+  })
+  it('its token left as text beside it, or a token of the form the text lacks, is unread', () => {
+    expect(readTagged(u, '设<b translate=no>x1</b> x1 如<b translate=no>x2</b>所述。<x id="3"/>它成立。')).toBeNull()
+    expect(readTagged(u, '设<b translate=no>x1</b>如<b translate=no>x2</b>所述（x7）。<x id="3"/>它成立。')).toBeNull()
+  })
+  it('a reply in the spelling before it, `<span id="n" translate="no">xn</span>`, still reads (stored replies are read again)', () => {
+    const r = readTagged(
+      u,
+      '设<span id="1" translate="no">x1</span>如<span id="2" translate="no">x2</span>所述。<x id="3"/>它成立。',
+    )
+    expect(els(r?.content)).toBe('设#m如#c所述。它成立。')
+    expect(r?.sentences).toEqual({ src: [18], tr: [7] })
+  })
+  it('the void spelling (Chrome’s, an LLM’s) is unchanged, and reads a `<b>` as Google’s reading does', () => {
+    expect(tagsWire.write(u)).toBe('Let <x id="1"/> be as in <x id="2"/>. <x id="3"/>It holds.')
+    expect(els(tagsWire.read(u, '设<b translate=no>x1</b>如<x id="2"/>所述。<x id="3"/>它成立。')?.content)).toBe(
+      '设#m如#c所述。它成立。',
+    )
+  })
+})
+
 // (Google's translateHtml takes a styled group written as an element HTML does not know, `<t id="n">…</t>`, as a break: it
 // translated the text before it alone, wrote "……" where the group's words belong and set the group after ("so the experts act
 // as <t>parameter priors</t> without…" -> "因此专家可以作为……<t>参数先验</t>而不…"), and translated the group's words out of their
@@ -163,8 +235,8 @@ describe('google: an element is a word of its sentence', () => {
 // </span>，而不…". Lane reply-dots' probes, 2026-11-13: dots gone in 61 of 61 units, DESIGN §6.2)
 describe('google: a styled group is a span of its sentence', () => {
   const g = google({ fetch: scriptedFetch(googleEcho).fetch })
-  const reply = (group: string, el2 = '<span id="2" translate="no">x2</span>') =>
-    `该方法使权重保持可训练，因此专家充当${group}，而不将其限制在这个范围内。<x id="5"/>它达到 81%，而基线为 70% ${el2}代码可在<span id="3" translate="no">x3</span>处获取<span id="4" translate="no">x4</span>`
+  const reply = (group: string, el2 = '<b translate=no>x2</b>') =>
+    `该方法使权重保持可训练，因此专家充当${group}，而不将其限制在这个范围内。<x id="5"/>它达到 81%，而基线为 70% ${el2}代码可在<b translate=no>x3</b>处获取<b translate=no>x4</b>`
   const read = [
     { t: 'text', s: '该方法使权重保持可训练，因此专家充当' },
     { t: 'span', id: 'p', content: [{ t: 'text', s: '学习到的先验' }] },
@@ -177,7 +249,7 @@ describe('google: a styled group is a span of its sentence', () => {
   ]
   it('is written as HTML’s inline element holding its words; an element as one holding its token, not to be translated', () => {
     expect(g.write(STYLED_OBJECT, 'zh-Hans')).toBe(
-      'The method keeps the weights trainable, so the experts serve as <span id="1">learned priors</span> without tying it to this range. <x id="5"/>It reaches 81% against 70% for the baseline.<span id="2" translate="no">x2</span> Code is available at <span id="3" translate="no">x3</span>.<span id="4" translate="no">x4</span>',
+      'The method keeps the weights trainable, so the experts serve as <span id="1">learned priors</span> without tying it to this range. <x id="5"/>It reaches 81% against 70% for the baseline.<b translate=no>x2</b> Code is available at <b translate=no>x3</b>.<b translate=no>x4</b>',
     )
   })
   it('a returned span is a group or an element by its id, as the unit’s content knows it', () => {
@@ -192,10 +264,8 @@ describe('google: a styled group is a span of its sentence', () => {
   })
   it('a group’s span holding a token-shaped text is still the group', () => {
     const u = unit('v', [t('The variable '), span('v', 'italic', [t('x2')]), t(' is set by '), el('m', 'math'), t('.')])
-    expect(g.write(u, 'zh-Hans')).toBe(
-      'The variable <span id="1">x2</span> is set by <span id="2" translate="no">x2</span>.',
-    )
-    expect(readTagged(u, '变量<span id="1">x2</span>由<span id="2" translate="no">x2</span>设定。')?.content).toEqual([
+    expect(g.write(u, 'zh-Hans')).toBe('The variable <span id="1">x2</span> is set by <b translate=no>x2</b>.')
+    expect(readTagged(u, '变量<span id="1">x2</span>由<b translate=no>x2</b>设定。')?.content).toEqual([
       { t: 'text', s: '变量' },
       { t: 'span', id: 'v', content: [{ t: 'text', s: 'x2' }] },
       { t: 'text', s: '由' },
@@ -219,7 +289,7 @@ describe('google: a styled group is a span of its sentence', () => {
 // probe, 2026-11-13, DESIGN §6.2. The sentence stays the source's: its stop and the element glued after it)
 describe('google: on the wire a sentence ends at its stop', () => {
   const g = google({ fetch: scriptedFetch(googleEcho).fetch })
-  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  const w = (n: number) => `<b translate=no>x${n}</b>`
   it('the boundary marker stands right after the stop, before an element the source glues after it; at the unit’s end too', () => {
     expect(g.write(GLUED_STOP, 'zh-Hans')).toBe(
       `Every token attends to its left.<x id="3"/>${w(1)} We report two sizes.<x id="4"/>${w(2)}`,
@@ -270,7 +340,7 @@ describe('google: on the wire a sentence ends at its stop', () => {
 // lab's Google store, every other kept first). The reading sets it back right after that marker, the sentence's end in the
 // reply; one the reply set anywhere in its own sentence stays. Lane glued-mark, 2026-11-13, DESIGN §6.2)
 describe('google: an element glued after a stop goes back to its sentence when the reply carried it into the next', () => {
-  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  const w = (n: number) => `<b translate=no>x${n}</b>`
   const show = (c: OutPiece[] | undefined) => c?.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')
   it('moved past a word of the next sentence: right after the marker, the white space the reply set after it gone with it', () => {
     const r = readTagged(GLUED_STOP, `每个标记都关注其左侧。<x id="3"/>我们${w(1)} 报告两种规模。<x id="4"/>${w(2)}`)
@@ -356,7 +426,7 @@ describe('google: an element glued after a stop goes back to its sentence when t
 // bibliography units, none on B14's. Lane glued-mark, 2026-11-13, DESIGN §6.2)
 describe('google: a stop followed by a tie and a word or a number ends no sentence', () => {
   const g = google({ fetch: scriptedFetch(googleEcho).fetch })
-  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  const w = (n: number) => `<b translate=no>x${n}</b>`
   it('a one-letter initial, its surname after the tie (`and~M.~Casals`)', () => {
     const u = unit(
       'ini',
@@ -435,10 +505,7 @@ describe('google: an element the source glued to its word comes back glued', () 
     ])
   })
   it('read the same from the words Google is sent', () => {
-    const r = readTagged(
-      u,
-      '名字史密斯 <span id="1" translate="no">x1</span> 和 3 <span id="2" translate="no">x2</span> k 单位的大小。',
-    )
+    const r = readTagged(u, '名字史密斯 <b translate=no>x1</b> 和 3 <b translate=no>x2</b> k 单位的大小。')
     expect(r?.content.map((p) => (p.t === 'text' ? p.s : `#${p.id}`)).join('')).toBe(
       '名字史密斯#n 和 3#kk 单位的大小。',
     )
@@ -458,7 +525,7 @@ describe('google: an element the source glued to its word comes back glued', () 
 // the source's own space, and what the reply sets beside it stays. Google spaced 3,384 of 3,493 such pairs over the lab's 90
 // pairs (B14's store), 2111.09276v1's `\hlyellow{high}\hlblue{lighted}` drawn "high lighted")
 describe('google: two elements the source sets side by side come back side by side', () => {
-  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  const w = (n: number) => `<b translate=no>x${n}</b>`
   it('the white space a reply puts between them taken back; the source’s own spaces beside them kept', () => {
     const u = unit('h', [t('The edited tokens are '), el('a', 'macro'), el('b', 'macro'), t(').')])
     expect(readTagged(u, `编辑过的标记是 ${w(1)} ${w(2)} ）。`)?.content).toEqual([
@@ -526,7 +593,7 @@ describe('google: a reply that leaves an element’s token as text is unread, as
     el('d', 'math'),
     t(' the width.'),
   ])
-  const w = (n: number, s = `x${n}`) => `<span id="${n}" translate="no">${s}</span>`
+  const w = (n: number, s = `x${n}`) => `<b translate=no>${s}</b>`
   it('moved to another word, its token left behind', () => {
     expect(readTagged(u, `不同${w(1)}类型的成本。x1 为长度，${w(2)}为宽度。`)).toBeNull()
   })
@@ -555,7 +622,7 @@ describe('google: a reply that leaves an element’s token as text is unread, as
 // (the contract counts the tokens' form, not only the plan's own tokens: Google wrote a number of the text in the tokens' form,
 // "increasing <x4> to 50" -> "将<x4>升级到 x50" (2610.40576v1, lane stray-stop's fill); a paper's own string of that form reads)
 describe('google: a reply that writes a string of the tokens’ form the text does not hold is unread', () => {
-  const w = (n: number) => `<span id="${n}" translate="no">x${n}</span>`
+  const w = (n: number) => `<b translate=no>x${n}</b>`
   it('a number of the text written as a token', () => {
     const u = unit('n', [t('Raising '), el('k', 'math'), t(' to 50 brings no benefit.')])
     expect(readTagged(u, `将${w(1)}提高到 x50 没有带来好处。`)).toBeNull()
@@ -582,7 +649,7 @@ describe('google: a reply that writes a string of the tokens’ form the text do
 // `&#120;1` is "x1", a string of the tokens' form a reader would see)
 describe('google: the tokens’ form is counted in the text as the reading keeps it, not in the wire’s spelling', () => {
   const g = google({ fetch: scriptedFetch(googleEcho).fetch })
-  const w = (n: number, s = `x${n}`) => `<span id="${n}" translate="no">${s}</span>`
+  const w = (n: number, s = `x${n}`) => `<b translate=no>${s}</b>`
   const u = unit('h', [t('Letters A and B, then '), el('k', 'math'), t('.')])
   it('a hex character reference is its character: read', () => {
     expect(readTagged(u, `字母 &#65; 和 &#x42;，然后${w(1)}。`)?.content).toEqual([
@@ -610,9 +677,7 @@ describe('google: the tokens’ form is counted in the text as the reading keeps
   })
   it('the wire’s own escaping counts alike on both sides: a paper’s literal `&#x42;` is its text, as often as it writes it', () => {
     const lit = unit('l', [t('Write B as &#x42; in HTML, as '), el('k', 'math'), t(' shows.')])
-    expect(g.write(lit, 'zh-Hans')).toBe(
-      'Write B as &amp;#x42; in HTML, as <span id="1" translate="no">x1</span> shows.',
-    )
+    expect(g.write(lit, 'zh-Hans')).toBe('Write B as &amp;#x42; in HTML, as <b translate=no>x1</b> shows.')
     expect(readTagged(lit, `在 HTML 中把 B 写成 &amp;#x42;，如${w(1)}所示。`)?.content[0]).toEqual({
       t: 'text',
       s: '在 HTML 中把 B 写成 &#x42;，如',
@@ -678,7 +743,7 @@ describe('google: the sentences a unit is asked in, where a reference or a citat
     const n = own(content)
     return g
       .write(u, 'zh-Hans')
-      .replace(/<span id="\d+" translate="no">x\d+<\/span>/g, '#')
+      .replace(/<b translate=no>x\d+<\/b>/g, '#')
       .replace(/<x id="(\d+)"\/>/g, (_, d: string) => (Number(d) > n ? '‖' : '#'))
       .replace(/<span id="\d+">|<\/span>/g, '')
       .split('‖')
@@ -733,7 +798,7 @@ describe('google: the sentences a unit is asked in, where a reference or a citat
   })
   it('the fixture unit the digest holds it by: boundary markers before the citation and before the next sentence alone', () => {
     expect(g.write(SOURCE_LINES, 'zh-Hans')).toBe(
-      'Sampling remains computationally expensive. <x id="2"/><span id="1" translate="no">x1</span> proposes a one-step sampler. <x id="3"/>Then we go on.',
+      'Sampling remains computationally expensive. <x id="2"/><b translate=no>x1</b> proposes a one-step sampler. <x id="3"/>Then we go on.',
     )
   })
 })
@@ -769,7 +834,7 @@ describe('google: a display that states no stop of its own', () => {
   it('ends its sentence where the text after it begins one: a stop after it, and the cutter cuts there; not where it goes on', () => {
     const g = google({ fetch: scriptedFetch(googleEcho).fetch })
     expect(g.write(DISPLAY_ENDS, 'zh-Hans')).toBe(
-      'Each part is formalized as: <span id="1" translate="no">x1</span>. <x id="3"/>The next field is a list of effects, formalized as a tuple: <span id="2" translate="no">x2</span> where kind is its kind.',
+      'Each part is formalized as: <b translate=no>x1</b>. <x id="3"/>The next field is a list of effects, formalized as a tuple: <b translate=no>x2</b> where kind is its kind.',
     )
   })
   it("reads the reply's stop after it as the one the wire wrote, taken back", () => {
@@ -795,9 +860,7 @@ describe('google: a character TeX writes escaped, sent as text', () => {
   it('"&", "<" and ">" travel as entities and come back as the characters, beside a tag on either side', () => {
     const u = unit('u', [t('R&D <'), el('1'), t('> 5% of A&B'), el('2'), t('&.')])
     const wire = g.write(u, 'zh-Hans')
-    expect(wire).toBe(
-      'R&amp;D &lt;<span id="1" translate="no">x1</span>&gt; 5% of A&amp;B<span id="2" translate="no">x2</span>&amp;.',
-    )
+    expect(wire).toBe('R&amp;D &lt;<b translate=no>x1</b>&gt; 5% of A&amp;B<b translate=no>x2</b>&amp;.')
     expect(readTagged(u, wire)?.content).toEqual([
       { t: 'text', s: 'R&D <' },
       { t: 'el', id: '1' },
