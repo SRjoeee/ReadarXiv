@@ -6708,7 +6708,9 @@ states it from the compile move (its C1, 2026-11-15); a part made before holds n
   glyphs the instrument owns are the entry before it's last stop and the label set as text), what states the point, in
   design-display 2a's order: a group's open (`SpanAt.opens`), an element (`El.opens`), a forced break TeX
   ended the line before at (`El.ends`; in centred and ragged text LaTeX's `\\` is `\par`), a region (the paragraph before
-  ends with a display, or the line before or its own is held: a block of its own already), else its first word alone. The first
+  ends with a display, the line before or its own is held, or the two are not consecutive lines of one run as `Room.runs`
+  reads one: another page, another column, ink TeX set between them: an end there may be another paragraph's, a float's,
+  and is a block's edge already), else its first word alone. The first
   word is the first of the member's placed words (`Placed.words`; a word by its first glyph on A, the opening marks set against
   it included, an element's word by any glyph of its) that TeX set from the end on, past the unit's glyphs of no letter or digit
   and its label's, on the paragraph's line. Every point but a region's states it where it is found (`Placed.paras`, `[offset,

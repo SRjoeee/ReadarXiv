@@ -799,6 +799,22 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
     }
     // (a held line: a display's row, its block, a held line of the unit's (KEPT))
     const held = (k: number) => k >= 0 && k < mem.lines.length && !!((mem.lines[k] as Line)[9] & 1)
+    // (lines k and k + 1 consecutive lines of one run, as geometry.ts's Room.runs reads a run: on one page, the lower under the
+    // upper and across its column, the first ink under the upper the lower's own (no ink TeX set between them across their hull,
+    // a float's or another's, a glyph's top or a box's, its hundredth aside))
+    const oneRun = (k: number) => {
+      const u = mem.lines[k] as Line
+      const l = mem.lines[k + 1] as Line
+      if (u[0] !== l[0] || u[4] <= l[4]) return false
+      if (Math.max(u[8], u[3]) <= Math.min(l[7], l[2]) || Math.min(u[7], u[2]) >= Math.max(l[8], l[3])) return false
+      const h0 = Math.min(u[2], l[2])
+      const h1 = Math.max(u[3], l[3])
+      const between = (top: number, x0: number, x1: number) =>
+        top > l[5] + 0.005 && top < u[6] - 0.5 && x1 > h0 && x0 < h1
+      for (const g of fx.bandOn(u[0], l[6], u[6])) if (!gA(g.a).unseen && between(gA(g.a).top, g.x0, g.x1)) return false
+      for (const b of fx.boxes(u[0])) if (between(b.y1, b.x0, b.x1)) return false
+      return true
+    }
     // (the paragraph's first word (design-display 2a, F1): the first of the member's placed words (Placed.words, sentences.ts
     // wordAt: a word by its first glyph on A, the opening marks set against it included; an element's by any glyph of its) that
     // TeX set from glyph `from` of B's stream on, past the unit's glyphs of no letter or digit and its label's, on the line TeX
@@ -886,11 +902,12 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
           stateWord(word, j)
           continue
         }
-        // (a region: the paragraph before ends with a display (B's glyph before the end a display's), or the line before or its
-        // own is held: a block of its own already, the runs state it; no first word)
+        // (a region: the paragraph before ends with a display (B's glyph before the end a display's), the line before or its own
+        // is held, or the two are not consecutive lines of one run (a float TeX set between them, another column, another page:
+        // an end there may be another paragraph's, the float's): a block of its own already, the runs state it; no first word)
         const display =
           !!before && 'piece' in before && mem.elements.some(([id, el]) => id === before.piece && el.kind === 'display')
-        if (display || held(j - 1) || held(j)) {
+        if (display || held(j - 1) || held(j) || !oneRun(j - 1)) {
           st.region++
           continue
         }

@@ -2759,6 +2759,28 @@ describe('a paragraph TeX opened inside a unit, stated by its first word (design
     expect(L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 1, text: 0, words: 0 })
     expect(L.stats.opensUnstated).toBeUndefined()
   })
+  it('states no first word where a float TeX set stands between the two lines (a region: 2a, case iii)', () => {
+    // (B's paragraph end right after the member's last glyph before a float's caption that TeX set between two of its lines, in
+    // the middle of a sentence: the lines are not consecutive lines of one run, so no first word; the same lines with nothing
+    // between them state it)
+    const B = docOf([
+      {
+        lines: [
+          'A first paragraph is cut',
+          { text: 'Figure 1. A caption', y: 650 },
+          { text: 'by a float set here', y: 600 },
+        ],
+      },
+    ])
+    const u = para([text('A first paragraph is cut by a float set here')])
+    const cap = { ...para([text('Figure 1. A caption')]), kind: 'caption' }
+    const { L, flows } = partOf(owned(B, [u, { ...cap, id: unitId('caption', cap.content) }], [[0, 1, 0]], [], [24]), B)
+    expect(flows.find((x) => x.ord === 0)!.paras).toBeUndefined()
+    expect(L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 1, text: 0, words: 0 })
+    const B2 = docOf([{ lines: ['A first paragraph is cut', 'by a float set here'] }])
+    const two = partOf(owned(B2, [u], [[0, 0]], [], [24]), B2)
+    expect(two.flows[0]!.paras).toEqual([[25, 1]])
+  })
   it('counts plain, and lists, a paragraph whose first word is not placed on A (letters TeX did not set in order)', () => {
     const B = docOf([{ lines: ['A first paragraph ends.', 'Teh second one', 'runs on'] }])
     const { L, flows } = partOf(owned(B, [plain], [[0, 0, 0]], [], [23]), B)
