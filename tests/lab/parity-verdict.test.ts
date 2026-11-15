@@ -1488,7 +1488,7 @@ describe('the measures read the joined set: a unit of today cut into members of 
   // translated and the box a member its prepare keeps for its one pitch (§18.22). A table cell set on two lines after S2: today's
   // two line units, v2's one member. The join by their pieces (join.mjs piecesJoin) hands measurePage the groups)
   type D = { flag: string; worse: boolean; nearer: string; unit: string; ruling?: string; v2?: { value: unknown } }
-  const ctx = (v2: ReturnType<typeof v2Of>, pieceGroups: { today: number[]; members: number[] }[], prep: { ord: number }[] = []) => ({
+  const ctx = (v2: ReturnType<typeof v2Of>, pieceGroups: { today: number[]; members: number[]; pages?: Record<number, number[]> }[], prep: { ord: number }[] = []) => ({
     prepByOrd: new Map(prep.map((u) => [u.ord, u])),
     todayOf: new Map(Object.entries(v2.today).map(([k, t]) => [Number(k), t.today])),
     turned: new Set(),
@@ -1533,5 +1533,65 @@ describe('the measures read the joined set: a unit of today cut into members of 
     const v2Cell = { units: [{ id: 21, lines: [drawnLine(100, 160, 500, 'abcdef', 8), drawnLine(100, 160, 488, 'abcdef', 8)] }] }
     const p = measurePage('p-zh', v2, rec({ today, v2: v2Cell }), ctx(v2, [{ today: [30, 31], members: [21] }]))
     expect((p.diffs as D[]).filter((x) => x.worse).map((x) => [x.flag, x.unit])).toEqual([['size', 't30 cell']])
+  })
+  it('a group on one page reads the same with the pages its members stand on as without them', () => {
+    for (const pitch of [[12], []]) {
+      const without = measurePage('p-zh', split(pitch), rec({ today: today7, v2: v2Lead }), ctx(split(pitch), [{ today: [7], members: [11, 12] }]))
+      const withPages = measurePage('p-zh', split(pitch), rec({ today: today7, v2: v2Lead }), ctx(split(pitch), [{ today: [7], members: [11, 12], pages: { 11: [N], 12: [N] } }]))
+      expect(withPages.diffs).toEqual(without.diffs)
+    }
+  })
+})
+
+describe("shown: a unit of today cut into members of v2 across a page break is judged on each page by the members that stand on it", () => {
+  // (today's t40 a paragraph set over a page break, v2's members 20 and 21 its halves; the group, as the join by pieces states it
+  // (join.mjs piecesJoin), with the pages the part states a line of each member on: the bundle's, never v2's drawing)
+  type D = { flag: string; worse: boolean; v2?: { value: unknown } }
+  const on = (pg: number, y: number) => [pg, ...factLine(72, 300, y).slice(1)]
+  const fact = (ord: number, lines: unknown[]) => ({ ord, kind: 'para', align: 'j', style: { size: 10 }, lines })
+  /** v2.mjs's file of the pair over pages 1 and 2: each page's members and states, the part's facts of those with a line there */
+  const v2Two = (states: Record<number, [number, string][]>, facts: Record<number, object[]>) => ({
+    pages: Object.fromEntries([1, 2, 3].map((pg) => [pg, { members: (states[pg] ?? []).map(([ord, state]) => ({ ord, state, lines: [] })), links: [] }])),
+    facts: Object.fromEntries([1, 2, 3].map((pg) => [pg, { members: facts[pg] ?? [], links: 0 }])),
+    today: {},
+  })
+  const ctx = (pieceGroups: object[]) => ({ prepByOrd: new Map(), todayOf: new Map(), turned: new Set(), led: new Map(), top: new Set(), pieceGroups })
+  /** page `pg` measured: today draws t40 there on the line `y`, v2 draws the members `drawn` there on it */
+  const page = (v2: ReturnType<typeof v2Two>, pg: number, y: number, drawn: number[], group: object) =>
+    measurePage(
+      'p-zh',
+      v2,
+      { ...rec({ today: { units: [{ id: 40, lines: [drawnLine(72, 300, y, 'abcdefghij')] }] }, v2: { units: drawn.map((id) => ({ id, lines: [drawnLine(72, 300, y, 'abcdefghij')] })) } }), page: pg },
+      ctx([group]),
+    )
+  const shown = (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === 'shown').map((d) => [d.worse, d.v2?.value])
+  const half1 = fact(20, [on(1, 100)]),
+    half2 = fact(21, [on(2, 700)])
+  const cut = { today: [40], members: [20, 21], pages: { 20: [1], 21: [2] } }
+  it('each member drawn on the page it stands on: neither page misses a translation', () => {
+    const v2 = v2Two({ 1: [[20, 'laid']], 2: [[21, 'laid']] }, { 1: [half1], 2: [half2] })
+    expect(shown(page(v2, 1, 100, [20], cut))).toEqual([])
+    expect(shown(page(v2, 2, 700, [21], cut))).toEqual([])
+  })
+  it("the member of page 2 neither drawn nor kept by a ruled mark: page 2 misses it, page 1 misses nothing", () => {
+    const v2 = v2Two({ 1: [[20, 'laid']], 2: [[21, 'unfit']] }, { 1: [half1], 2: [half2] })
+    expect(shown(page(v2, 1, 100, [20], cut))).toEqual([])
+    expect(shown(page(v2, 2, 700, [], cut))).toEqual([[true, 'part 21: unfit']])
+  })
+  it('a member that stands on both pages, drawn on one: missing on the other', () => {
+    const both = fact(20, [on(1, 100), on(2, 712)])
+    const v2 = v2Two({ 1: [[20, 'laid']], 2: [[20, 'none'], [21, 'laid']] }, { 1: [both], 2: [both, half2] })
+    const group = { today: [40], members: [20, 21], pages: { 20: [1, 2], 21: [2] } }
+    expect(shown(page(v2, 1, 100, [20], group))).toEqual([])
+    expect(shown(page(v2, 2, 700, [21], group))).toEqual([[true, 'part 20: none']])
+  })
+  it('a page today draws the unit on that none of its members stands on: every member missing there', () => {
+    const v2 = v2Two({ 1: [[20, 'laid']], 2: [[21, 'laid']] }, { 1: [half1], 2: [half2] })
+    expect(shown(page(v2, 3, 400, [], cut))).toEqual([[true, 'part 20: no member on the page; part 21: no member on the page']])
+  })
+  it('a member the bundle states no line of stands on no page, so no page excuses it: missing where its group is judged', () => {
+    const v2 = v2Two({ 1: [[20, 'laid']] }, { 1: [half1] })
+    const group = { today: [40], members: [20, 21], pages: { 20: [1], 21: [] } }
+    expect(shown(page(v2, 1, 100, [20], group))).toEqual([[true, 'part 21: no member on the page']])
   })
 })

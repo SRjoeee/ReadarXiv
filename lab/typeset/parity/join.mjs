@@ -370,19 +370,21 @@ const sameWords = (a, b) =>
  * today's order, whose words together are its own; a run whose first alone says them, none. Over what the
  * one-to-one join (`todayOf`: part ord -> today's ord, todayJoin) left, on a page both stand on (a unit of today's by its lines'
  * pages, a member by the parts that hold it), each unit and member in one group at most. `bundle` the paper's L1 bundle,
- * `prepared` today's prepare dump's units ({ ord, lines, pieces }). Returns the groups, `{ today: [ords], members: [ords] }`,
- * in today's order
+ * `prepared` today's prepare dump's units ({ ord, lines, pieces }). Returns the groups, `{ today: [ords], members: [ords],
+ * pages: { [member ord]: [pages] } }`, in today's order: `pages` each member's pages the part states a line of it on, where it
+ * stands on A (a part holds whole flows, bundle.ts, so the parts that carry a member are more pages than those), which the
+ * verdict judges it on (measurePage's `shown`)
  */
 export function piecesJoin(bundle, prepared, todayOf) {
   const joinedToday = new Set(todayOf.values())
-  // (each member once, its pages the parts that hold it, its words its unit's)
+  // (each member once, its pages the parts that hold it, the pages it stands on its lines', its words its unit's)
   const members = new Map()
   for (const [pg, part] of bundle.parts)
     for (const flow of part.flows)
       for (const m of flow) {
         if (todayOf.has(m.ord) || typeof m.text !== 'string') continue
         const content = bundle.units.get(m.text)?.content
-        const x = members.get(m.ord) ?? { ord: m.ord, pages: new Set(), words: wordsOf(v2Texts(content)), bare: wordsOf(v2Texts(content, false)) }
+        const x = members.get(m.ord) ?? { ord: m.ord, pages: new Set(), on: [...new Set(m.lines.map((l) => l[0]))].sort((a, b) => a - b), words: wordsOf(v2Texts(content)), bare: wordsOf(v2Texts(content, false)) }
         x.pages.add(pg)
         members.set(m.ord, x)
       }
@@ -398,6 +400,7 @@ export function piecesJoin(bundle, prepared, todayOf) {
   const meets = (a, b) => [...a.pages].some((p) => b.pages.has(p))
   const used = { today: new Set(), members: new Set() }
   const groups = []
+  const pagesOf = (ms) => Object.fromEntries(ms.map((m) => [m.ord, m.on]))
   // (each side's words read twice, a v2 member's with its groups' opens and closes and without them (`bare`: a merged cell's
   // box, `\makecell{`, stands round its rows, and today's unit a row holds none of it), today's alike both times: two say the
   // same where either reading does)
@@ -425,7 +428,7 @@ export function piecesJoin(bundle, prepared, todayOf) {
       if (!run) continue
       for (const m of run) used.members.add(m.ord)
       used.today.add(t.ord)
-      groups.push({ today: [t.ord], members: run.map((m) => m.ord) })
+      groups.push({ today: [t.ord], members: run.map((m) => m.ord), pages: pagesOf(run) })
       break
     }
   }
@@ -436,7 +439,7 @@ export function piecesJoin(bundle, prepared, todayOf) {
       if (!run) continue
       for (const t of run) used.today.add(t.ord)
       used.members.add(m.ord)
-      groups.push({ today: run.map((t) => t.ord), members: [m.ord] })
+      groups.push({ today: run.map((t) => t.ord), members: [m.ord], pages: pagesOf([m]) })
       break
     }
   }
