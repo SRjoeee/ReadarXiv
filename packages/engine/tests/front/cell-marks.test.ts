@@ -88,7 +88,7 @@ describe("a cell whose lines a paper's row-ending macro ends is marked as its co
     for (const [macro, literal] of [
       ['\\br', '\\\\'],
       ['\\brs', '\\\\[2pt]'],
-    ])
+    ] as const)
       it(`${name}, ${macro} for ${literal}: a formula after the break`, () => {
         const row = (b: string) => `x & ${box(`Error rate ${b} $x$ on test set`)} & y`
         expect(markedWith(row(macro))).toBe(markedWith(row(literal)).replace(literal, macro))
