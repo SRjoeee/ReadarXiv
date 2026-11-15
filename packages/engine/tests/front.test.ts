@@ -191,6 +191,22 @@ describe("the source's units, before any compile", () => {
       { cls: 'space', brk: true, unknown: false },
     ])
   })
+  test("an ink unit's pieces, made of a unit's content (locate/ink.ts flatOf: an element's kind on it), read as forced breaks by their kind", () => {
+    // (an ink unit that echoes a heading broken by `\\` or by a paper's row-ending macro, a contents line or a running head:
+    // its pieces are the unit's content flattened, each element's kind its own, the statement the instrument read)
+    const flat = [
+      { t: 'text', s: 'A heading' },
+      { t: 'ph', src: '\\\\', kind: 'break' },
+      { t: 'text', s: 'on two lines' },
+      { t: 'ph', src: '\\br', kind: 'break' },
+      { t: 'text', s: 'or three' },
+    ]
+    const got = new Map(classesOf(flat as never)) as Map<string, { cls: string; brk?: true }>
+    expect([got.get('1'), got.get('3')].map((c) => ({ cls: c?.cls, brk: !!c?.brk }))).toEqual([
+      { cls: 'space', brk: true },
+      { cls: 'space', brk: true },
+    ])
+  })
   test('cut into windows under the Units bound, every unit once and in order', () => {
     const big = (i: number): Unit => ({
       id: i.toString(16).padStart(64, '0'),
