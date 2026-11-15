@@ -3,8 +3,9 @@
 // Placed.paras) and whose row carries its anchor (the group or the element between the row's texts, else the sentence start
 // paired with the point's first word: unit/breaks.ts `pairing`) is laid with its first word starting a line of the member: a
 // laid line of the member on the page of TeX's line begins with the paragraph's first thing (its first letters and digits,
-// NFKC, either case; an element's crop by its piece). The defect a reader sees is a paragraph that starts on the last line of the
-// one before; one that starts a line of its member has none, whether that line stands on TeX's baseline or not (the
+// NFKC, either case; an element's crop by its piece; a first thing with no letter or digit, a mark, by the line's beginning as
+// drawn, white space apart). The defect a reader sees is a paragraph that starts on the last line of the one before; one
+// that starts a line of its member has none, whether that line stands on TeX's baseline or not (the
 // coordinator's ruling of 2026-11-13: the baseline belongs to the spacing design). Those whose line stands on TeX's baseline
 // (the comparator's 0.01 pt) are counted beside, never failed. Read off the entry's Page (layPage, the product's lay), on the
 // page that holds TeX's line; a member not laid there shows the original's (counted apart). A point the row gives no
@@ -99,11 +100,21 @@ function firstWordOf(m: Placed, unit: Unit | undefined, id: string, j: number): 
   return w && w[1] === j ? w[0] : undefined
 }
 const textOf = (l: Laid['lines'][number]) => l[3].map((it) => it.s).join('')
+/** a text as drawn, NFKC, white space out */
+const drawnOf = (s: string): string => s.normalize('NFKC').replace(/\s+/gu, '')
 /** whether a laid line begins with `f`: its first item a crop of that element, or its text's first twelve letters and digits
- *  `f`'s (as many as the shorter holds: a line that ends in its first word, a paragraph's text an element follows) */
+ *  `f`'s (as many as the shorter holds: a line that ends in its first word, a paragraph's text an element follows). A first
+ *  thing that holds no letter or digit (a mark an element follows: the ": " before a doi's number) is held against the line's
+ *  own beginning as drawn, white space apart, like with like: its first character set against the line's first letters and
+ *  digits, it read a line that begins with it as run on (2608.25210v2's licence note, round 4b) */
 const begins = (l: Laid['lines'][number], f: First): boolean => {
   const it = l[3][0]
   if (f.el !== undefined && it && 'piece' in it && it.piece === f.el) return true
+  if (!/[\p{L}\p{N}]/u.test(f.text.normalize('NFKC'))) {
+    const mark = drawnOf(f.text),
+      drawn = drawnOf(textOf(l))
+    return mark !== '' && drawn !== '' && (drawn.startsWith(mark) || mark.startsWith(drawn))
+  }
   const a = firstOf(textOf(l)),
     b = firstOf(f.text)
   return a !== '' && b !== '' && (a.startsWith(b) || b.startsWith(a))

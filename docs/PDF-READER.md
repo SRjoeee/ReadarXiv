@@ -6745,7 +6745,10 @@ states it, in a later round; until then no part holds it and nothing drawn moves
 - **The gate** (the reader gate, `lab/typeset/gate-l1.mjs --entry`, `packages/typeset/tests/replay/paras-gate.ts`): each point a
   part states (a group's open, an element, a first word) whose row carries its anchor (the group or the element between the
   row's texts, else the sentence start paired with its first word) is laid with its first word starting a line of the member: a
-  laid line of the member on the page of TeX's line begins with the paragraph's first thing. The defect a reader sees is a
+  laid line of the member on the page of TeX's line begins with the paragraph's first thing, like with like: its first letters
+  and digits against the line's, or, where the first thing holds none (a mark an element follows: the ": " before a doi's
+  number), the line's own beginning as drawn, white space apart (round 4b: compared with the line's letters and digits, such a
+  mark read the line that begins with it as run on, 2608.25210v2's licence note). The defect a reader sees is a
   paragraph that starts on the last line of the one before; one that starts a line of its member has none, whether that line
   stands on TeX's baseline or not (the coordinator's ruling of 2026-11-13: the baseline is the spacing design's). A point run on
   fails the run; those on TeX's baseline are counted beside, never failed; a point with no anchor flows on and is counted by why.

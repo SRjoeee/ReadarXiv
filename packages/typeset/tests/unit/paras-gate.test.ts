@@ -171,4 +171,78 @@ describe('the gate’s pass: the point’s first word starts a line of the membe
     expect(g.off.length).toBe(1)
     expect([...g.offBy]).toEqual([['run on', 1]])
   })
+  it('holds a first thing with letters by its letters and digits, as before: a mark the line draws ahead of them is no matter', () => {
+    const g = gateOf(
+      pageOf([
+        [700, 'Der erste Absatz endet hier.'],
+        [676, '„Der zweite Absatz beginnt hier und'],
+      ]),
+    )
+    expect([g.opened, g.onTexLine]).toEqual([1, 1])
+    expect(g.off).toEqual([])
+  })
+})
+
+describe('a first thing with no letter or digit: a mark an element follows, held against the line’s beginning as drawn', () => {
+  // (2608.25210v2's licence note, round 4b: the reply took the word out of the group the part states the point at, which now
+  // opens on ": " and a link; the lay opened the line there, and the gate, setting ":" against the line's letters and digits,
+  // read it as run on)
+  const spans: Placed['spans'] = [['1', { cmd: 'href', opens: 2 }]]
+  const els: Placed['els'] = [
+    ['2', { kind: 'other', ink: [[1, 80, 674, 200, 683, 676]], copy: 'https://example.org/x' }],
+  ]
+  const moved: OutPiece[] = [
+    { t: 'text', s: `${FIRST_DE}doi ` },
+    {
+      t: 'span',
+      id: '1',
+      content: [
+        { t: 'text', s: ': ' },
+        { t: 'el', id: '2' },
+      ],
+    },
+    { t: 'text', s: ' und weiter.' },
+  ]
+  const pageOf = (lines: [number, string][]): Page => ({
+    page: 1,
+    wait: { rows: [], faces: [] },
+    members: [
+      {
+        ord: 0,
+        page: 1,
+        state: 'laid',
+        off: 1,
+        lines: lines.map(([y, s]) => [y, 72, 72 + s.length * 5, [{ s, x: 72, face: 'serif' as never, size: 10 }]]),
+        lit: { left: [], right: [], own: [] },
+      },
+    ],
+    links: [],
+  })
+  const gateOf = (page: Page) => {
+    const g = newParasGate()
+    const m = member({ spans, els })
+    parasGate(g, 'test-de', 1, page, part(m), rowsOf(row(moved)), new Map())
+    return g
+  }
+  it('passes the point whose line begins with that mark', () => {
+    const g = gateOf(
+      pageOf([
+        [700, 'Der erste Absatz endet hier. doi'],
+        [676, ': https://example.org/x und weiter.'],
+      ]),
+    )
+    expect([...g.anchor]).toEqual([['group', 1]])
+    expect([g.opened, g.onTexLine]).toEqual([1, 1])
+    expect(g.off).toEqual([])
+  })
+  it('fails it run on where its line begins otherwise', () => {
+    const g = gateOf(
+      pageOf([
+        [700, 'Der erste Absatz endet hier. doi :'],
+        [676, 'https://example.org/x und weiter.'],
+      ]),
+    )
+    expect(g.opened).toBe(0)
+    expect([...g.offBy]).toEqual([['run on', 1]])
+  })
 })
