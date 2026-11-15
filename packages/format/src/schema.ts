@@ -267,13 +267,21 @@ export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z
  *  star), the fill TeX set its run in (a colour piece's, read off the marked compile's log; any other group's, read off its
  *  text's glyphs on A where it is not the fill around it: a link's that hyperref colours); a link group's target where its source names it, as Link.to states an annotation's (an
  *  \href's address, TeX's escapes undone, a \url's text, each in the WHATWG URL parser's form; a \hyperlink's destination by
- *  its name): what the typesetter pairs the group's translation with its annotations by */
+ *  its name): what the typesetter pairs the group's translation with its annotations by; `runin` a title its author set in the
+ *  line at a paragraph's opening with no mark after it (`\noindent\textbf{Global Matching} We leverage …`: a group that opens a
+ *  paragraph of its unit, sets a face, is followed in the source by white space, alone or beside horizontal spacing of the
+ *  paper's own, and then by what begins a sentence, its text ending with no closing mark), the engine's reading of its unit's
+ *  source (bundle/run-in.ts), the same on every member of the unit: the typesetter sets the target script's separation between
+ *  two sentences after it where the translation holds no mark there, the paper's own space there counting toward it
+ *  (docs/PDF-READER.md §18.76). Absent on any other group; a part made before states none, and its titles are
+ *  laid as before */
 export const SpanAt = z.object({
   style: Style.optional(),
   opens: int.optional(),
   cmd: z.string().optional(),
   colour: int.optional(),
   to: LinkTo.optional(),
+  runin: flag.optional(),
 })
 /** a member's label: its kind, its ink (on its own baseline: a raised mark's raised), its style and parts; `line` the index of
  *  its member's text line it stands on, by an element's rule (the line whose band its ink meets, the nearest by baseline: El.ink's

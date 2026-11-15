@@ -141,3 +141,26 @@ export function sentenceCuts(
   }
   return cuts
 }
+
+/**
+ * Where a sentence opens after `end`, a place of the projection that may end one though no stop of its own ends it there (a
+ * title its author sets at a paragraph's opening with white space after it and no stop, `\textbf{Global Matching} We leverage
+ * …`, the display design's F40): the offset of the first text after it, past white space and the elements between, which are
+ * no text there (a citation set against the title annotates it, and hides no start); null where none opens. Read as after an
+ * abbreviation that may end a sentence (TERMINAL_ABBR), where what follows decides: one opens where the cutter cuts there with
+ * a stop set at `end`, and what follows is no continuation (CONTINUES: lower case, a digit, an opening bracket: "RQ1 concerns
+ * …", "Results 3 models …", "… trees (Section 3). One …"). The cutter's own merges hold (`Model A We …`: an initial's)
+ */
+export function opensAfter(
+  projection: string,
+  end: number,
+  standIn: (at: number) => StandIn | undefined = () => undefined,
+): number | null {
+  const text = running(projection)
+  let first = end
+  while (first < text.length && (text[first] === OBJ || /\s/.test(text[first] as string))) first++
+  if (first >= text.length || CONTINUES.test(text.slice(first))) return null
+  const asked = `${projection.slice(0, end)}.${projection.slice(end)}`
+  const cuts = sentenceCuts(asked, (at) => (at < end ? standIn(at) : at - 1 < first ? 'annotation' : standIn(at - 1)))
+  return cuts.some((c) => c > end && c <= first + 1) ? first : null
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sentenceCuts } from '../src/index.ts'
+import { opensAfter, sentenceCuts } from '../src/index.ts'
 
 const OBJ = '￼'
 
@@ -59,5 +59,39 @@ describe('sentenceCuts over a projection', () => {
     expect(sentenceCuts(comma, cite)).toEqual([])
     const capital = `It holds. ${OBJ} We go on.`
     expect(sentenceCuts(capital, cite)).toEqual([capital.indexOf('We')])
+  })
+})
+
+// (a title an author sets at a paragraph's opening with no stop after it, `\textbf{Global Matching} We leverage …`, the display
+// design's F40: the place may end a sentence though nothing ends it there, as after an abbreviation that may end one, where
+// what follows decides; words of our own)
+describe('opensAfter: where a sentence opens after a place that may end one with no stop of its own', () => {
+  const end = (s: string, title: string) => s.indexOf(title) + title.length
+  it('opens at a word that begins a sentence: its offset', () => {
+    const p = 'Global Matching We leverage the model.'
+    expect(opensAfter(p, end(p, 'Matching'))).toBe(p.indexOf('We'))
+  })
+  it('opens at none where what follows goes on: lower case, a digit, an opening bracket', () => {
+    for (const [p, title] of [
+      ['RQ1 concerns the forecast.', 'RQ1'],
+      ['Results 3 models were trained.', 'Results'],
+      ['A tree learner (Section 3). One model.', 'learner'],
+    ] as const)
+      expect(opensAfter(p, end(p, title))).toBeNull()
+  })
+  it('reads the elements between the place and the text as no text: a citation hides no start, nor a lower-case word', () => {
+    const cite = () => 'citation'
+    const opens = `T5 ${OBJ} We propose a model.`
+    expect(opensAfter(opens, 2, cite)).toBe(opens.indexOf('We'))
+    const subject = `COIN ${OBJ} is a dataset.`
+    expect(opensAfter(subject, 4, cite)).toBeNull()
+  })
+  it('opens at none where the place ends with an abbreviation’s letter, as the cutter merges one (`Model A We …`)', () => {
+    const p = 'Model A We see.'
+    expect(opensAfter(p, end(p, 'A'))).toBeNull()
+  })
+  it('opens at none where nothing follows', () => {
+    expect(opensAfter('Global Matching ', 15)).toBeNull()
+    expect(opensAfter(`Global Matching ${OBJ}`, 15, () => 'x')).toBeNull()
   })
 })

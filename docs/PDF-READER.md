@@ -7577,6 +7577,57 @@ it cut its words on the wire: 2610.21377v1's 176 bibliography initials `{.\nobre
   stated every unit of 2610.21377v1 all the same: a group it did not read as bare fell to its next reading, a command's pair
   the candidate does not write, which drops it as well.
 
+### 18.76 A title set in the line with no mark after it is kept apart from its sentence (the owner's ruling A of 2026-11-13; the display design's F40; the coordinator's variant C of 2026-11-16)
+
+The owner, shown `\noindent\textbf{Global Matching} We leverage …` drawn in Chinese with the title flush against its text
+(2111.09276v1 pp5-6, about twenty titles: 「全局匹配我们利用…」): one character's width after the title, by the method that is
+right in the long run (「用长期最正确的方法做就行」). A heading the class sets in the line (`\paragraph`: a heading unit of its own,
+drawn with the original's gap) and a title that ends with a stop or a colon are right already and are not touched.
+
+- **No translator is told.** The wire is the one of before and a reply is read as before: no digest moves, no row is asked
+  again. A first form cut the title off as a sentence of its own on the tags wire and joined the two sentences back with an
+  ideographic space; Google, given the title alone, translated 15 of 26 titles worse than within their sentence ("Howto100M" as
+  "how to reach 100 million", "Global Matching" as worldwide matching; the base wire asked again the same day: no drift). A cut
+  of ours that makes the translator's answer worse is not the method that is right in the long run: withdrawn.
+- **The engine states the fact** (`packages/engine` bundle/run-in.ts `runInsOf`, once per unit over the paragraphs every member
+  of it states TeX opened at its groups, written by bundle.ts on each member's spans: the part's `SpanAt.runin`; optional, not in
+  the unit's id, FORMAT stays 1). A group of a unit of the paper's running text (a paragraph, the abstract, a theorem's body, a
+  caption, a footnote: never an author block, whose names one after another set off by `\quad` are no title and its sentence)
+  that a translator cuts into sentences (Unit.sentences, no entry) is stated where
+  it (a) opens a paragraph of its unit (no text of the unit before it, or SpanAt.opens; the outermost group there), (b) sets a
+  face (bold, italic, small capitals, a code face, a face read off its glyphs: not a colour, a link, an underline or a group of
+  no style), (c) is followed in the source by white space, alone or beside horizontal spacing of the paper's own (a text that
+  begins with it, a tie, or an element the instrument states glue of: `\hspace`, `\quad`, a kern; past what sets nothing),
+  and (d) then by what begins a sentence by the cutter's own reading (`@readarxiv/text` `opensAfter`: a stop set at the group's
+  close, what follows no continuation), with only white space, ties, citations and notes' marks between, its first character a
+  letter (a table row's "**SSMB (Ours)** + HardNet [cite] + MNN" is one name, 2608.27181v1); its text ends with no
+  closing mark (Terminal_Punctuation or a dash, past closing brackets and quotes) and it states no `stop`. A vertical skip
+  (`\vspace`) or a forced break after it leaves it: the title is not set in the line of its text. A formula that opens the
+  sentence is a miss of the rule. The paper's own horizontal space counts toward the separation, it does not stand for it (the
+  coordinator's amendment of 2026-11-16: 2111.09276v1 p4's "Object Replacement" + `\hspace{0.2em}`, the wider of its page's
+  titles in the original, stood closer to its text than its siblings when the element alone was its separation).
+- **The lay draws it** (`packages/typeset` breaker/tokens.ts, the one place; lay/read.ts carries the statement onto the group's
+  open piece). In a script that writes no spaces between its words (Chinese, Japanese: not Korean, `keepAll`), after the close of
+  a group so stated, before the first thing drawn after it past a tie, a citation or a note's mark (its sentence's text, or an
+  element the row begins that sentence with): a gap of one em of the line's size, a CJK character's advance, set as the paper's
+  own `\quad` is (a kern on what precedes it: no stretch of a justified line's, dropped where a line ends there); the white
+  space the row set there is its place. Where the paper's own horizontal space is laid there (its `El.glue`, which the lay reads
+  as it lays any glue, kernOn), the gap is what it leaves missing up to one em, never negative: after `\hspace{0.2em}` 0.8 em,
+  after `\quad` nothing. None where the row holds a closing mark there (the
+  title's text ends with one, or the text after it begins with one: "Oracle" and a full-width colon, the reply's own
+  separation), where a break stands, or where the title no longer opens a sentence in the row (text before it that ends no
+  sentence: Google folded 2111.09276v1's "\textbf{wikiHow} We treat wikiHow as …" into one sentence, the group its object).
+  In a script that writes spaces the reply's own space is there: nothing is added.
+- **Over the 92 pairs** (the built statement over the integration's units and parts, lane f40-runin): 38 groups stated, 33
+  titles and 5 labels ("(a)", "(b)"), none that is no title; 2 titles missed (2111.09276v1's "Textual Similarity" and "Visual
+  Similarity": a formula opens their sentence). Not stated, not set in the line of their text: 3 (`\vspace` once, a forced
+  break twice); not stated by their face: 2 titles that end with their own stop and the ink units' coloured labels. On
+  Google's stored rows the lay completes 33 separations in Chinese (one em each; 0.8 em after "Object Replacement"'s own
+  0.2 em), adds nothing after 2610.21106v1's three titles (their `\quad` is the em), nothing after "Oracle" (its colon) or
+  the moved "wikiHow", and nothing in the one Spanish row.
+- **Versions**: PIPELINE moves (the parts state `runin`: prepared again); LAYOUT moves (a line holding such a title is laid
+  otherwise); the translators' digests and the rows' keys stay.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

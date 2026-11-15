@@ -26,14 +26,15 @@ export type LayoutUnit = {
  *  slant) */
 type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined }
 /** a piece of a row as today's unit holds it (rows.mjs unitOf: the translation's pieces in its order, `k` the source's; a
- *  group's open with the face TeX set it in, where its part states one); `par` a piece of the typesetter's own, never in a Row
+ *  group's open with the face TeX set it in, where its part states one, and `runin` where its part states the group a title set
+ *  in the line, SpanAt.runin); `par` a piece of the typesetter's own, never in a Row
  *  nor on a wire: a paragraph TeX opened at its first word (Placed.paras), cut into the row where a sentence start pairs with
  *  that word (paraPieces), `next` the line TeX opened it on; it sets nothing and stands in the translation's projection as a
  *  group's edge does, for none */
 export type V0Piece =
   | { t: 'text'; s: string; k?: number }
   | { t: 'ph'; src: string; k?: number }
-  | { t: 'open'; src?: string; id?: unknown; k?: number; face?: OpenFace }
+  | { t: 'open'; src?: string; id?: unknown; k?: number; face?: OpenFace; runin?: true }
   | { t: 'close'; src?: string; id?: unknown; k?: number }
   | { t: 'nested'; src?: string; k?: number }
   | { t: 'par'; next: number; src?: undefined; k?: undefined }

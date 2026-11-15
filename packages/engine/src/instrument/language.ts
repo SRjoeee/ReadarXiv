@@ -91,8 +91,8 @@ export const RUNNING = new Set(['para', 'abstract', 'theorem', 'caption', 'footn
 /** what an element reads as to the sentence cutter (@readarxiv/text sentenceCuts), by its kind alone: packages/translate's
  *  standInOf (wire/text.ts), the same table: a note's mark the sentence before it's, a citation where it stands, a reference a
  *  number, a formula a word, a break or a space a space; any other element a word. An element stated `silent` is read so too,
- *  by its kind, never left out of the projection: this reading reads no `silent` */
-function standInOf(kind: string): string | undefined {
+ *  by its kind, never left out of the projection: this reading reads no `silent` (and bundle/run-in.ts's) */
+export function standInOf(kind: string): string | undefined {
   if (kind === 'cite') return 'citation'
   if (kind === 'note-mark' || kind === 'footnote') return 'annotation'
   if (kind === 'ref' || kind === 'eqref') return '1'

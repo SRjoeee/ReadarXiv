@@ -2523,6 +2523,78 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     // (an end the unit's text does not meet at the group's open, inside the group's text before "Determine": no group stated)
     expect(partOf(owned(B, units, [], [43]), B).spans).toEqual([['1', { cmd: 'mypython' }]])
   })
+  it('states a title set in the line on its group, the part’s SpanAt.runin: at the unit’s start and where TeX opened a paragraph', () => {
+    // (the display design's F40, variant C: `\noindent\textbf{Setup} We train …` and `\medbreak\noindent\textbf{Data} We …`, the
+    // lay's to separate; bundle/run-in.ts runInsOf. Words of our own)
+    const B = docOf([{ lines: ['Setup We train the', 'model on two sets.', 'Data We use them'] }])
+    const content = [
+      { t: 'span' as const, id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [text('Setup')] },
+      text(' We train the model on two sets.\n'),
+      { t: 'el' as const, id: '3', kind: 'macro', src: '\\medbreak' },
+      text('\n'),
+      { t: 'span' as const, id: '5', style: 'bold', open: '\\textbf{', close: '}', content: [text('Data')] },
+      text(' We use them'),
+    ]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [['3', { cls: 'zero', cmd: 'medbreak' }]],
+        spans: [
+          ['0', { cmd: 'textbf' }],
+          ['5', { cmd: 'textbf' }],
+        ],
+      },
+    ]
+    const m = partOf(owned(B, units, [], [36]), B)
+    expect(m.spans).toEqual([
+      ['0', { cmd: 'textbf', runin: 1 }],
+      ['5', { cmd: 'textbf', opens: 2, runin: 1 }],
+    ])
+    // (where no placement states the paragraph TeX opened at the second group, the first alone)
+    expect(partOf(owned(B, units, [], []), B).spans).toEqual([
+      ['0', { cmd: 'textbf', runin: 1 }],
+      ['5', { cmd: 'textbf' }],
+    ])
+  })
+  it('states a title the source follows with its own horizontal space (the instrument’s glue class): SpanAt.runin', () => {
+    // (the coordinator's amendment: `\\textbf{Setup} \\hspace{0.2em} We …`, the glue counting toward the lay's em; a vertical
+    // skip there states nothing)
+    const B = docOf([{ lines: ['Setup We train the', 'model on two sets.'] }])
+    const unitOf = (src: string, cls: InstrumentUnit['classes']): InstrumentUnit[] => {
+      const content = [
+        { t: 'span' as const, id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [text('Setup')] },
+        text(' '),
+        { t: 'el' as const, id: '3', kind: 'other', src },
+        text(' We train the model on two sets.'),
+      ]
+      return [{ id: unitId('para', content), kind: 'para', content, classes: cls, spans: [['0', { cmd: 'textbf' }]] }]
+    }
+    const glued = unitOf('\\hspace{0.2em}', [['3', { cls: 'zero', cmd: 'hspace', glue: [0.2, 'em', 1] }]])
+    expect(partOf(owned(B, glued, [], []), B).spans).toEqual([['0', { cmd: 'textbf', runin: 1 }]])
+    // (an author block's names one after another, each set off by the paper's \\quad: no running text, no title; 2503.06072v3,
+    // 2608.11605v1)
+    const names = glued.map((u) => {
+      const content = [
+        { t: 'span' as const, id: '0', style: 'bold', open: '\\textbf{', close: '}', content: [text('Ann Lee')] },
+        text(' '),
+        { t: 'el' as const, id: '3', kind: 'other', src: '\\quad' },
+        text(' Bo Chen and Cy Dee'),
+      ]
+      return {
+        ...u,
+        id: unitId('author', content),
+        kind: 'author',
+        content,
+        classes: [['3', { cls: 'space', cmd: 'quad', glue: [1, 'em', 1] }]],
+      } as InstrumentUnit
+    })
+    const C = docOf([{ lines: ['Ann Lee Bo Chen and Cy Dee'] }])
+    expect(partOf(owned(C, names, [], []), C).spans).toEqual([['0', { cmd: 'textbf' }]])
+    const skipped = unitOf('\\vspace{0.2cm}', [['3', { cls: 'zero', cmd: 'vspace' }]])
+    expect(partOf(owned(B, skipped, [], []), B).spans).toEqual([['0', { cmd: 'textbf' }]])
+  })
   it('states no group that closes before the text TeX’s paragraph begins with (today’s: the group holds that text)', () => {
     // (2610.20716v1's centred title, `…Bound Dark\texorpdfstring{\\}{} theory and …`: TeX's \\ in a centred block ends the
     // paragraph inside the group, and the text after the end stands after the group's close)
@@ -2614,7 +2686,8 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     const B = docOf([{ lines: ['A first paragraph ends.', 'Title The second one', 'runs on'] }])
     const units = runIn([text('A first paragraph ends.')], [])
     const m = partOf(owned(B, units, [], [23]), B)
-    expect(m.spans).toEqual([['8', { cmd: 'textbf', opens: 1 }]])
+    // (its title, set in the line before a sentence, stated so too: bundle/run-in.ts)
+    expect(m.spans).toEqual([['8', { cmd: 'textbf', opens: 1, runin: 1 }]])
   })
   it('meets a group after the paragraph before ends with an element: that piece is the before side (a footnote’s mark)', () => {
     const B = docOf([{ lines: ['A first paragraph ends.1', 'Title The second one', 'runs on'] }])
@@ -2626,13 +2699,13 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
       [['5', { cls: 'num', mark: true, nested: true }]],
     )
     const m = partOf(owned(B, units, [[23, 5]], [24]), B)
-    expect(m.spans).toEqual([['8', { cmd: 'textbf', opens: 1 }]])
+    expect(m.spans).toEqual([['8', { cmd: 'textbf', opens: 1, runin: 1 }]])
     // (an element whose class sets no ink by name, which TeX set ink for here: it bounds the window as the mark does)
     const units2 = runIn(
       [text('A first paragraph ends.'), { t: 'el' as const, id: '5', kind: 'other', src: '\\mymark' }],
       [['5', { cls: 'zero', cmd: 'mymark' }]],
     )
-    expect(partOf(owned(B, units2, [[23, 5]], [24]), B).spans).toEqual([['8', { cmd: 'textbf', opens: 1 }]])
+    expect(partOf(owned(B, units2, [[23, 5]], [24]), B).spans).toEqual([['8', { cmd: 'textbf', opens: 1, runin: 1 }]])
   })
   it('counts a paragraph end inside a unit that states no point: an open where the next paragraph begins, or plain text', () => {
     const B = docOf([{ lines: ['A first paragraph ends.', 'Title The second one', 'runs on'] }])

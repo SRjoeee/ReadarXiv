@@ -23,9 +23,11 @@ import {
   write,
 } from '@readarxiv/format'
 import type { Instrument, InstrumentUnit, PieceClass } from '../instrument.ts'
+import { RUNNING } from '../instrument/language.ts'
 import type { Located, Member } from '../locate/locate.ts'
 import { bySentence } from '../locate/words.ts'
 import { namesOf, partNames } from './names.ts'
+import { runInsOf } from './run-in.ts'
 import type { AddOn } from '../wrap/wrap.ts'
 
 export type BundleObject =
@@ -164,8 +166,13 @@ function statedOf(
 const textOfPieces = (ps: readonly Piece[]): string =>
   ps.map((q) => (q.t === 'text' ? q.s : q.t === 'span' ? textOfPieces(q.content) : ' ')).join('')
 
-/** a member as its parts hold it */
-function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState): Placed {
+/** a member as its parts hold it; `runin` its unit's groups stated as titles set in the line (run-in.ts runInsOf) */
+function placedOf(
+  mem: Member,
+  units: readonly InstrumentUnit[],
+  st: MemberState,
+  runin: ReadonlySet<string> | undefined,
+): Placed {
   const unit = mem.unit >= 0 ? units[mem.unit] : undefined
   const echo = unit?.echo !== undefined ? units[unit.echo]?.id : undefined
   const p: Placed = {
@@ -201,12 +208,14 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   // fill around it, locate's fills.ts: a link's that hyperref colours; a colour piece's the log's)
   // (and the face of a group whose command names none where the instrument states none: the face its own text's glyphs hold
   // on A, where it is not the face around it; a group the instrument faced on B keeps that)
+  // (and a title its unit's source sets in the line with no mark after it, the same on every member of the unit: run-in.ts)
   if (
     unit?.spans?.length ||
     mem.spanOpens?.size ||
     mem.spanStyles?.length ||
     mem.spanFills?.length ||
-    mem.spanFaces?.length
+    mem.spanFaces?.length ||
+    runin?.size
   ) {
     const spans = new Map(
       (unit?.spans ?? []).map(([id, x]): [string, NonNullable<Placed['spans']>[number][1]] => [id, { ...x }]),
@@ -217,6 +226,7 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
       if (spans.get(id)?.colour === undefined) spans.set(id, { ...spans.get(id), colour })
     for (const [id, style] of mem.spanFaces ?? [])
       if (spans.get(id)?.style === undefined) spans.set(id, { ...spans.get(id), style })
+    for (const id of runin ?? []) spans.set(id, { ...spans.get(id), runin: 1 })
     p.spans = [...spans]
   }
   // (a caption's label: its float's type, by which its name is drawn in the target's word)
@@ -270,7 +280,24 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
   const { ins, located, addOn, original, paper } = input
   const members = located.members
   const states = members.map((m) => stateOf(m, addOn))
-  const placed = members.map((m, i) => placedOf(m, located.units ?? ins.units, states[i]!))
+  // (each unit's titles set in the line, read once over its source, the paragraphs TeX opened at its groups wherever a member
+  // of it states one (SpanAt.opens) and the elements it states glue of (PieceClass.glue): a unit of the paper's running text
+  // (language.ts RUNNING: a paragraph, the abstract, a theorem's body, a caption, a footnote) a translator cuts into sentences
+  // (Unit.sentences), not an entry's; never an author block, whose names one after another set off by the paper's \quad are no
+  // title and its sentence (2503.06072v3, 2608.11605v1))
+  const sourceUnits = located.units ?? ins.units
+  const opened = new Map<number, Set<string>>()
+  for (const m of members)
+    for (const [id] of m.spanOpens ?? []) (opened.get(m.unit) ?? opened.set(m.unit, new Set()).get(m.unit)!).add(id)
+  const runins = new Map<number, Set<string>>()
+  for (const m of members) {
+    const u = sourceUnits[m.unit]
+    if (!u || runins.has(m.unit) || u.kept || u.entry || !RUNNING.has(u.kind) || !bySentence(u.kind, !!u.figure))
+      continue
+    const glued = new Set((u.classes ?? []).flatMap(([id, c]) => (c.glue ? [id] : [])))
+    runins.set(m.unit, runInsOf(u.content, opened.get(m.unit) ?? new Set(), glued))
+  }
+  const placed = members.map((m, i) => placedOf(m, sourceUnits, states[i]!, runins.get(m.unit)))
   // ---- each page's part, as the flows it holds (a, b, c below), or none: what the units' statements read of the parts
   const flowOf = new Map<number, number>()
   located.flows.forEach((f, i) => {

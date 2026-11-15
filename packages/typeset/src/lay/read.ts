@@ -101,7 +101,9 @@ export function rowPieces(m: Placed, content: readonly OutPiece[]): V0Piece[] {
         // (the face TeX set it in, where its command names no style the rules know: SpanAt.style)
         const st = spans.get(p.id)?.style
         const face = st ? { face: { role: st.role, bold: st.bold, slant: st.slant } } : {}
-        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id, ...face })
+        // (a title its source sets in the line with no mark after it: SpanAt.runin, tokens.ts sets the separation after it)
+        const runin = spans.get(p.id)?.runin ? { runin: true as const } : {}
+        out.push({ t: 'open', src: srcOfSpan(spans.get(p.id)), id, k: id, ...face, ...runin })
         walk(p.content)
         out.push({ t: 'close', src: '}', id })
       }
