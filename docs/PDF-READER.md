@@ -3042,7 +3042,8 @@ made between two blocks, the file's hundredths within 0.025); any other gap keep
 line or a `\vadjust` among them, and with no `\lineskip` told nothing is closed. The first line never moves (B′: a
 paragraph's start stays), every line under a closed gap moves up by it, none stands lower than the original's own, and what
 the closed gaps free stays at the block's foot. TeX's rule reopens a pair where the translation's own line is tall
-(breakLines' `settle`, on the drawn ink, which stands in for TeX's boxes). Where the pair holds a formula TeX set in the
+(breakLines' `settle`, on the drawn ink, which stands in for TeX's boxes: its text's and each crop's segment box on its own
+baseline, a trail's and an end mark's among them, §18.79). Where the pair holds a formula TeX set in the
 original, TeX measured that formula's room itself: the distance it set between the formula's line and the next (the formula
 on the upper line) or the one before (on the lower), `texRoomOf`; where that distance already keeps the two lines' ink
 `\lineskiplimit` apart, TeX's rule holds at it, and the pair is set no farther apart. So a formula that stays on its line
@@ -7627,6 +7628,129 @@ drawn with the original's gap) and a title that ends with a stop or a colon are 
   the moved "wikiHow", and nothing in the one Spanish row.
 - **Versions**: PIPELINE moves (the parts state `runin`: prepared again); LAYOUT moves (a line holding such a title is laid
   otherwise); the translators' digests and the rows' keys stay.
+
+### 18.79 A trail's and an end mark's crop has an extent (2026-11-15)
+
+The display design's F42 (found by the typing lane T3). A member's trail (`El.trail`, §18.16, §18.59: a class's marks after a name,
+a `\thanks` mark) and its end mark (`El.end`, §18.52: amsthm's QED box) are drawn as crops of their ink, glued after the
+translation's last token. `lay/adapt.ts` built each crop's segment box (`gap.box`, the ink TeX set, which the breaker reads for a
+crop's extent, never the rectangle drawn) without the baseline the crop is set by; B.break's `cropExtent` reads the extent as the
+box's top less that baseline and the baseline less its bottom, so the line holding such a crop had an extent of NaN, and TeX's
+`\lineskip` rule (breakLines' `settle`, the drawn ink standing in for TeX's boxes) never opened a pair of lines it came too near,
+nor did `laidOut` count one it left. The box now states the crop's own baseline, the line the mark stands on (`cropOfBox`'s,
+the trail's last line on its page, the end mark's text line), as every other crop's box does.
+
+Reach over the 92 pairs' parts (round 3's last chain): 370 such crops, 247 end marks (246 QED boxes of theorems, one a
+paragraph's) and 123 trails (109 on author lines, 9 references, 3 affiliations, 2 headings); 34 of the QED boxes stand over
+their line's tallest glyph by 0.4 pt at most, no trail over its line's box: the marks themselves stand under a translated line's
+own text. But the NaN of a mark's box made its whole line's extent NaN, so a formula's crop on that line was never read either.
+Read now, on the stored rows of the 92 pairs (the reader gate against round 3's dumps): TeX's rule opens the pair over a
+theorem's last line where a tall formula shares it with the QED box (2610.21377v1-zh p17 ord 136, 2.86 pt; 2610.40645v1-ja p31
+ord 264, 1.80 pt), and where the line so opened falls past its block's foot at the original's size the fit steps the size
+(2610.30034v1-zh p10 ord 204, 0.975, where today's reader steps it too; 2610.20266v1-zh's ord 143 on its second page, Google's
+rows alone). The display gate, both modes and the added pairs: no page newly worse. The test
+(`packages/typeset/tests/unit/crop-extent.test.ts`) lays a mark 11 pt over a 10 pt line within 1 pt of the line above: the pair is opened to
+TeX's 14 pt, a trail's and an end mark's alike, and a mark inside its line's room opens nothing.
+
+### 18.80 An end mark drawn smaller stands where TeX set it, scaled (2026-11-16)
+
+A unit's end mark (§18.52) is a crop, drawn at the fit's scale: its width the crop's times the scale. Its distance from its line's
+right edge (`pad`, `packages/typeset/src/lay/adapt.ts`: from the line's right edge to the crop rectangle's, which stands 0.4 pt of
+antialiasing margin past the ink) was set unscaled, by the breaker's room for it (`breaker/break.ts`) and by the placement
+(`breaker/place.ts` placeItems), so a unit laid smaller drew the mark's ink that margin times one less the scale past where TeX set
+it. 2610.30034v1-zh p10 unit 204, laid a step smaller since §18.79 (0.975): its QED box 0.01 pt past its measure's end, the reader
+gate's I5 "past the slot with spaces to shrink". The pad is now taken at the fit's scale, as the crop it measures to is drawn: the
+ink stands TeX's distance from the line's end, scaled (TeX's box flush right: on the end). Test: `packages/typeset/tests/unit/
+end-mark.test.ts` ("stands where TeX set it at the size the fit draws it"). The two other lines I5 lists, 2610.20285v1-zh unit 258
+(0.30 pt) and 2610.21106v1-zh unit 42 or 2610.21085v1-zh unit 64 (0.04 and 0.01 pt), are of other causes, not traced here.
+
+### 18.81 The walk lays no state that surely fails, and re-breaks nothing where the breaks cannot change (the coordinator's rulings of 2026-11-16)
+
+The fit's walk (`fit/walk.ts` statesOf: the tracking, then the room under the last line, then the leading, then the size; the
+order the owner reviewed for body text, unchanged) paid a full lay of the breaker for every state it tried. A state is now laid,
+in one place (`fit/walk.ts` `fitLays`, the walk's two loops), only where it can fit and its lines can differ from a lay made:
+
+- **The bound.** Before any state is laid (a tracking, room or leading state, a size step's first), the text's least advance at
+  that state's size and tracking, each term from the breaker's own rules and none larger than it can be: every glyph's advance
+  with the tracking (`tokW`); a word space at the least it shrinks to (`spaceMin`), less two a slot for the spaces a line's ends
+  drop; a mark less its blank half, the most a compression or a squeeze takes; each item less the most a CJK squeeze closes a gap
+  by (`SQUEEZE`); an explicit glue only where it closes; a label nothing; a token wider than a line, one line. Against the slots'
+  measures, each with the breaker's tolerance and a closing mark's hang; and in lines, each part of the text a forced break ends
+  taking whole lines of its own, against the number of slots. Where the text cannot fit even packed without a break, the state
+  fails as surely as laid: it is passed, unlaid. Where the bound does not decide, the state is laid.
+- **The floor.** What the breaker sets on each line is a function of the text, the size, the tracking, the word rule and each
+  line's measure and frame; the leading and the room taken under the last line say only how many slots there are and where they
+  stand, which the breaker reads in TeX's `\lineskip` rule alone (`settle`, `pushDown`) and in `overLast`. Once a state failed,
+  the later states of the room and leading knobs that differ from it in those two alone are laid by its floor's lay (the floor's
+  leading, `leadFloor`, the room taken whole: the most slots): where a state's slots are the floor's first ones, measure for
+  measure and frame for frame (block, page, measure, boundary, flow, hang, flush), none stands over an earlier one of its column,
+  and TeX's rule would open no line of the floor's where the state's slots stand, a state that lacks a slot a line of the floor's
+  stands on fails (passed, unlaid), and one that holds them all and the slot after them as the floor does (the breaker looks at
+  it: a boundary, a URL kept whole, a label alone) takes the floor's lines on its own slots, every item its own. The floor is
+  speculative: where it asks a measure the host has not (a replay's table of today's measures), the knob's states are laid as
+  before.
+
+Every other state is laid as before: one whose measures change with the leading (a line beside a wrapped figure, a stay, a
+shared row's stop), a unit with a frame break or a forced break's room, a floor's lay TeX's rule opened.
+
+The lays and the state the walk stops at are the breaker's own. Held so, at today's bases: the 92 pairs' every page laid with
+each passed state and each taken one laid all the same and compared (`lanes/cm-d/count`: 2,595 pages; 45,293 states passed by the bound and 3,078 by the floor, none of which a lay sets whole; 5,832 taken from the floor, each byte for byte the breaker's); every page's
+whole lay equal; and the reader gate's dumps on both stores byte for byte as before, every summary line equal. The count (the
+breaker's lays a page, every page of the 92 pairs, Google's rows w1): 253.5 to 235.3 (-7.2 %; 249.7 with the floor of the leading alone, its first form): German -35.4 %, Spanish -37.8 %, Polish -17.3 %, Japanese -7.4 %, Chinese -6.7 %; one pair pays 0.1 % more (2610.21827v1-zh, 135.0 to 135.2: a floor laid that the next state did not need). The states a fit, 2.41, are the walk's as before.
+
+### 18.82 Japanese at jlreq's pitch, Korean at xetexko's (the owner's choice of 2026-11-15)
+
+The line pitch a translation starts from (the fit's leading base over the original's own pitch, U.params `leadOf`) was each
+script's: Chinese ctex's spread of 1.3 on a solid-set original's pitch, never wider than 1.3 times the original's own; Japanese
+and Korean the original's own (1). Shown whole pages laid at each class's pitch (jarticle, jsarticle and jlreq; xetexko and
+oblivoir), the owner chose jlreq for Japanese and xetexko for Korean, under one condition, that the reader's work does not grow.
+His words (the export of 2026-11-15T17:10:35Z): 「改用 jlreq」, 「改用 xetexko」; 「改了之后，确实看起来挺均匀的。只要理论上不影响性能，我们就改吧」.
+
+- **Japanese**, one rule at every size: a block's pitch is jlreq's body pitch, 1.7 times its own size (`jlreq.cls:411`,
+  `baselineskip={17zw/10}`, TeX Live 2025), so its base is 1.7 × its size over its original pitch (a block with no pitch of its
+  own: over the 1.2 × size the lay takes for it), never under 1: a loose original keeps its own pitch. The package's rule data
+  holds it as a script field, `leadEm`, 1.7 (`packages/typeset/src/data/rules/scripts.ts`; today's rule set, §18.5, has no such
+  field). jlreq states each smaller and larger size a pitch of its own, as a multiple of that size: footnotesize 1.4375 (`:1319`),
+  small 1.444 (`:1328`), scriptsize 1.143 (`:1342`), tiny 1.2 (`:1343`), large 1.417 (`:1344`), Large 1.5 (`:1345`), LARGE 1.471
+  (`:1346`), huge 1.4 (`:1347`), Huge 1.32 (`:1348`): the one rule stands 18 % wider than jlreq at footnotesize and small. The
+  rule by size needs the document's body size, which no part states (a fact the compile would state); it is not built.
+- **Korean**: xetexko's `\linespread{1.38889}` under its `hangul` option, on the class's own pitch (`xetexko.sty:2596-2601`;
+  luatexko states the same, `luatexko.sty:992-997`): `leadBase` 1.38889, by Chinese's path (the spread of a solid-set original's
+  pitch, never wider than 1.38889 times the original's own, never under it).
+- Chinese, traditional Chinese and the alphabets as before.
+
+The versions: none moves by its own rule. The rule set's VERSION was deleted as read by nothing (e5bc90a1e); the reader lays a
+page when it is read, and nothing stored is keyed by the leading; the units (PIPELINE), what a translator is sent (TRANSLATE)
+and the cache keys are untouched.
+
+The condition, measured (the breaker's lays a page, every page, Google's rows w1, against the walk before §18.81): 2602.23285v2-ja
+180.1 to 128.4 (-28.7 %), 2609.20976v1-ja 148.1 to 116.8 (-21.1 %), 2610.19159v1-ja 231.0 to 130.6 (-43.5 %), 2610.40645v1-ja
+160.8 to 132.1 (-17.9 %), 2610.40645v1-ko's pages 4, 11 and 32 118.0 to 107.3 (-9.0 %). The looser start sends more units through
+the tracking and room knobs before the leading (2610.40645v1-ja, tracking states tried a page 9.3 to 43.9), and the walk lays
+almost none of them: they surely fail (§18.81's bound), or take the floor's lines (tracking laid 9.3 to 6.3, the leading 0 to
+14.8 of 50.6 tried, the lays outside the walk 127.2 to 93.4). Tests: `packages/typeset/tests/unit/script-pitch.test.ts`.
+
+The gates (2026-11-16). The reader gate lays its entry with today's recorded rule set (`gate-l1.ts`, the tap's), so it shows no
+change to the rule data; laid instead with the package's own (a lab hook, the bases off and on), over the Japanese pairs and the
+pack's Korean ones on the door's rows and the Japanese pairs on Google's: I3, I4 and I5 none before and after, I10 no fault, I11
+every box painted whole; lines past their slot by a closing mark's blank half 193 to 33 (door) and 181 to 26 (Google). Members
+laid otherwise on the door's rows: 1,511 of the Japanese pairs' 2,648 and 616 of the Korean pairs' 648, most by their leading
+alone; their median line gap, in ems of their size, 1.10-1.44 to 1.16-1.58 (Japanese) and 1.15-1.26 to 1.39-1.47 (Korean). The
+display gate, the three Japanese pairs it holds, against the same at today's bases: pages worse 0 to 9 (the default) and 1 to 10
+(every option on), the readings newly worse of two kinds, the same in both modes: a paragraph's line count off the original's,
+farther than today's (8: the looser pitch holds fewer lines in the original's height; 2610.40645v1-ja p14 t93 eight lines, today
+seven, now five; one a line more, 2602.23285v2-ja p19 t180), and a first line off the original's (1: 2609.20976v1-ja p8 t41,
+3.1 pt); pages covered by the owner's rulings 21 to 33 (L1 13, L2 9, Fm 3, TRS 3) and 22 to 36.
+
+What the bases cost by the page fill's evening (§18.57, the owner's ruling of 2026-11-12: a paragraph tighter than its page's band
+takes the fit's own knobs again, one size step at most). A page's band follows its paragraphs' leadings, which the bases raise,
+so a paragraph that fits at full size at the original's pitch stands under it and is evened by the step: with the bases, Japanese
+members laid one step smaller (0.975 of their size), 8 on the door's rows (2602.23285v2-ja t83; 2610.19159v1-ja t385, t391, t523,
+t577; 2610.40645v1-ja t44, t60, t197) and 9 on Google's (2609.20976v1-ja t7, t46; 2610.19159v1-ja t523, t833, t929, t977, t983;
+2610.40645v1-ja t44, t83), and two a step larger (door: 2610.19159v1-ja t273, 2610.40645v1-ja t3). The walk steps no size: with
+the evening's size step taken out, no member is laid smaller than without the bases. 2610.40645v1-ja p7 t44: 10.91 pt, leading 1,
+six lines without the bases; 10.64 pt, 1.199, five lines with them. The coordinator's ruling of 2026-11-16: that ruling's effect,
+accepted; it goes to the owner with this page, and if he prefers the size, the evening's size step is what changes.
 
 ## 19. The engine's contract
 

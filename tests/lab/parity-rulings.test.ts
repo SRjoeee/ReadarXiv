@@ -36,6 +36,40 @@ const rec = (today: object = {}, v2: object = {}, px: object = {}) => ({ page: N
 const paragraph = (k: number, top: number, pitch: number, size: number, x0 = 312, x1 = 563) => Array.from({ length: k }, (_, i) => drawn(top - i * pitch, x0, x1, size, '\u5b57'.repeat(20)))
 const side = (lines: number, size: number, osize: number, olines: number, more: object = {}) => ({ lines, size, osize, olines, ...more })
 
+describe("JK: a Japanese or Korean paragraph at its script's pitch (the owner's choice of 2026-11-16), fewer lines filling its height", () => {
+  // (a paragraph of 6 original lines at 10 pt on a 12 pt pitch, 700 down to 640; v2 sets it in fewer at a leading the lay states,
+  // its lines from 700 at that pitch; today's 6. Jlreq's pitch, 1.7 x 10 over 12: 1.417 the base over the original's)
+  const ol = Array.from({ length: 6 }, (_, i) => fact(312, 563, 700 - i * 12, 10))
+  const page = (pair: string, lead: number, k: number) => {
+    const laidLines = Array.from({ length: k }, (_, i) => [700 - i * 12 * lead, 312, 563, []])
+    const v2 = {
+      pair,
+      facts: { [N]: { members: [{ ord: 40, kind: 'para', align: 'j', style: { size: 10 }, lines: ol }], ties: [] } },
+      pages: { [N]: { members: [{ ord: 40, state: 'laid', fit: { size: 10, lead, track: 0, borrowed: 0 }, lines: laidLines }] } },
+    }
+    const { page: p } = judged(
+      { diffs: [worse('line-count', 't40 para', 6, 6, k, [0, 6 - k])], units: [{ key: 't40', kind: 'para', part: 40, align: 'j', sides: { today: side(6, 10, 10, 6), v2: side(k, 10, 10, 6) } }] },
+      { v2, rec: rec() },
+    )
+    const d = (p.diffs as (Diff & { coveredSays?: string })[])[0]!
+    return [d.worse, d.covered ?? null, d.coveredSays ?? null]
+  }
+  it('fewer lines at the pitch the lay states over the original\'s, its last line within a laid pitch of the original\'s last: covered by JK', () => {
+    // (5 lines at 1.4 x 12 = 16.8: its last at 632.8, 7.2 under the original's last)
+    expect(page('2610.00000v1-ja', 1.4, 5)).toEqual([false, 'JK', "laid at 1.4 x the original's pitch (the script's base 1.417), its last line -7.2 pt from the original's last, under one laid pitch (16.8)"])
+    expect(page('2610.00000v1-ko', 1.38889, 5)[1]).toBe('JK')
+  })
+  it("at the original's pitch with fewer lines (a band left empty), a laid pitch or more left over the original's last, more lines, or another script: worse", () => {
+    expect(page('2610.00000v1-ja', 1, 5)).toEqual([true, null, null])
+    // (4 lines at 1.2 x 12 = 14.4: its last at 656.8, 16.8 over the original's last, more than a laid pitch)
+    expect(page('2610.00000v1-ja', 1.2, 4)).toEqual([true, null, null])
+    // (7 lines, more than the original's 6: a line more is room taken, never the pitch's)
+    expect(page('2610.00000v1-ja', 1.4, 7)).toEqual([true, null, null])
+    expect(page('2610.00000v1-zh', 1.4, 5)).toEqual([true, null, null])
+    expect(page('2610.00000v1-de', 1.4, 5)).toEqual([true, null, null])
+  })
+})
+
 describe("TRS and Fm: the page fill's evening (his rules of 2026-11-12, 17:25), read from what the lay states", () => {
   // (a tight paragraph the page's fill evened: v2's Page member states it, `evened`: the knobs taken, its line count on the page
   // before them, and for the foot the depth its state allows past TeX's text block bottom)
@@ -969,9 +1003,10 @@ describe('the rulings file', () => {
       // (WB the coordinator's ruling of 2026-11-13 on the owner's report of the day before, the law it rests on built in B.break;
       // AN the owner's ruling of 2026-11-13 on the author block's notes, built in lane f2-author; CT his choice of 2026-11-13 on a
       // table's cells, built in lane cells-like-body; CU the coordinator's ruling (c) of 2026-11-13 under it, the same lane)
-      // (CB the owner's decision of 2026-11-13, his choice of the column's box, built in lane cell-col)
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' || r.id === 'CU' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' || r.id === 'CT' ? r.verdict === "the owner's ruling" : r.id === 'CB' ? r.verdict === "the owner's decision" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
-      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' || r.id === 'CT' || r.id === 'CU' || r.id === 'CB' ? '2026-11-13' : '2026-11-12')
+      // (CB the owner's decision of 2026-11-13, his choice of the column's box, built in lane cell-col; JK his choice of 2026-11-16
+      // of jlreq's and xetexko's pitch, built in lane cm-d)
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' || r.id === 'CU' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' || r.id === 'CT' ? r.verdict === "the owner's ruling" : r.id === 'CB' ? r.verdict === "the owner's decision" : r.id === 'JK' ? r.verdict === "the owner's choice" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
+      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' || r.id === 'CT' || r.id === 'CU' || r.id === 'CB' ? '2026-11-13' : r.id === 'JK' ? '2026-11-16' : '2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)

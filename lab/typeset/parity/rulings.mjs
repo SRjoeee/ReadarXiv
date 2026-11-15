@@ -9,6 +9,8 @@
 // T2 is his answer of the same day on the readiness page (`seen`). No floor is widened: a bound a condition needs is a measure's
 // own noise floor (verdict.mjs NEAR), the engine's own grain (SIZE_STEP), a fact the page states, or a number in his own words. What
 // the page states beside a covered difference (L2's cause, S4's steps) is reported (`coveredSays`), never a condition.
+import { rulesFor, scriptOf } from '../../../packages/typeset/src/rules-for.ts'
+import { leadOf } from '../../../packages/typeset/src/unit/params.ts'
 import { inkedLine, NEAR } from './verdict.mjs'
 import { OVER_MIN, SIZE_STEP } from './fidelity.mjs'
 
@@ -851,7 +853,65 @@ export const RULINGS = [
       return `laid in its room in its column ${f.column[0]}-${f.column[1]}${d.flag === 'size' && d.v2.value < d.today.value ? ", where today's line runs past it" : ''}`
     },
   },
+  {
+    id: 'JK',
+    title: "a Japanese or Korean paragraph at its script's pitch, fewer lines filling the height the original's take",
+    verdict: "the owner's choice",
+    date: '2026-11-16',
+    seen: "whole pages laid at each class's pitch (staging/check-list-spacing2: jarticle, jsarticle, jlreq; xetexko, oblivoir), his choice exported 2026-11-15T17:10:35Z; the rule as built: PDF-READER §18.82 (rebuild/cm-d 737d765c2); the class the coordinator ruled the pitch's own effect (2026-11-16, the display gate's nine pages)",
+    words: '改用 jlreq / 改用 xetexko / 改了之后，确实看起来挺均匀的。只要理论上不影响性能，我们就改吧',
+    example:
+      "2610.40645v1-ja p14 t93: 5 lines at the original's 10.91 pt and jlreq's pitch (1.369 x 13.55) against today's 7 and the original's 8, its last line 4.64 pt over the original's last; 2602.23285v2-ja p7 t74: 11 lines against 12 and 13, its last line under the original's",
+    condition:
+      "line-count: a member of a target whose script the ruling set a pitch for, Japanese or Korean (rules-for.ts scriptOf: Jpan, Kore), whose own base pitch (U.params leadOf over the rule set the tree holds, at the original's size and its pitch on the page, the upper median of its gaps as U.blocks reads it) stands above the original's; v2 sets it in fewer lines on the page than the original, at the original's size (within the size floor), laid above the original's pitch as the lay states it (its Page member's `fit.lead` over 1), and its lines fill its block at the pitch they are laid at: its last line on the page stands less than one laid pitch (the least gap between its laid lines there, else its leading times the original's pitch) over the original's last line on the page, or under it; the unit whole (WHOLE). A member laid at the original's pitch with fewer lines (a band left empty), one whose last line leaves a laid pitch or more over the original's last, one of more lines than the original, or another script, is judged as before",
+    holds(d, x) {
+      if (d.flag !== 'line-count' || !d.unit || d.pages) return false
+      const target = String(x.v2?.pair ?? '').split('-').at(-1)
+      if (!target || !PITCHED.has(scriptOf(target))) return false
+      if (!(Number.isFinite(d.v2?.value) && Number.isFinite(d.original) && d.v2.value < d.original)) return false
+      const u = x.unit(d)
+      if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(u.key) || !atOriginal(u.sides.v2)) return false
+      return pitchFill(u, x, target) !== null
+    },
+    says(d, x) {
+      const u = x.unit(d)
+      const f = pitchFill(u, x, String(x.v2.pair).split('-').at(-1))
+      return `laid at ${f.lead} x the original's pitch (the script's base ${f.base}), its last line ${r2(f.over)} pt from the original's last, under one laid pitch (${r2(f.pitch)})`
+    },
+  },
 ]
+/** JK: the scripts whose pitch the owner's choice of 2026-11-16 set (PDF-READER §18.82): Japanese (jlreq), Korean (xetexko) */
+const PITCHED = new Set(['Jpan', 'Kore'])
+/** the upper median of the gaps between rows (baselines, top first), as U.blocks reads a block's pitch; none for one row */
+function upperMedianGap(rows) {
+  const g = rows
+    .slice(1)
+    .map((y, k) => rows[k] - y)
+    .filter((v) => v > 0)
+    .sort((a, b) => a - b)
+  return g.length ? g[g.length >> 1] : null
+}
+/**
+ * JK's facts of a member on the page: the script's base over its original pitch (leadOf, the rule set the tree holds), the
+ * leading it is laid at (its fit's), its laid pitch, and how far its last line stands over the original's last; null where its
+ * base is not above the original's, it is laid at the original's pitch, or its last line leaves a laid pitch or more over the
+ * original's last (a band left empty)
+ */
+function pitchFill(u, x, target) {
+  const m = x.laid(u.part),
+    f = x.member(u.part)
+  const lead = m?.fit?.lead
+  if (!f || !(lead > 1) || !m.lines?.length) return null
+  const ol = f.lines.filter((l) => l[0] === x.n).map((l) => l[4]).sort((a, b) => b - a)
+  const p0 = upperMedianGap(ol)
+  if (p0 === null) return null
+  const base = leadOf([{ pitch0: p0 }], f.style?.size ?? u.sides.v2.osize, rulesFor(target).set)
+  if (!(base > 1)) return null
+  const ys = m.lines.map((l) => l[0]).sort((a, b) => b - a)
+  const pitch = pitchOf(ys) ?? lead * p0
+  const over = ys.at(-1) - ol.at(-1)
+  return over < pitch ? { base, lead, pitch, over } : null
+}
 /** CU: today's reasons for a cell its settle withheld with its group for a cell it could not draw (today's reader dump), and the
  *  states of a v2 member left the original's by a failure of its own drawing or row, not its group's nor for no row */
 const CELL_HELD = new Set(['group: a cell unfit', 'group: a cell not drawn'])
