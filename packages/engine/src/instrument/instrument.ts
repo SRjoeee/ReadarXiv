@@ -2109,10 +2109,12 @@ export async function instrumentOf({
   const texts = options.texts,
     inkless = options.inkless ?? null
   // (the probe's own log, where the box hands it over: TeX's quotation marks read in the samples' texts, a text the stored
-  // reading gave none taken (F16); and the samples TeX ends with ink a fill pushed (F14))
+  // reading gave none taken (F16); the samples TeX ends with ink a fill pushed (F14); and the sources TeX set nothing for at
+  // every sample of their command (rule 3's measured half))
   const probe = probeLog ? probeFactsOf(probeLog, units) : null
   const shown = withTexts(textsOf(texts), probe?.texts)
   const endSamples = new Set(probe?.ends ?? [])
+  const nothing = new Set(probe?.nothing ?? [])
   const names = new Set(pages.flatMap((pg) => pg.points.map((x) => x.name)))
   const follows = followsOf(units, names, shown, inkless)
   const own = ownOf(pages, {
@@ -2168,6 +2170,14 @@ export async function instrumentOf({
     for (const k of endPiecesOf(u.pieces, endSamples)) {
       const c = classes.find(([id]) => id === String(k))
       if (c) c[1].end = true
+    }
+    // (each placeholder TeX set nothing for at every sample of its command: PieceClass.nothing, read by the bundle's `silent`)
+    if (nothing.size) {
+      const byId = new Map(classes)
+      u.pieces.forEach((p, k) => {
+        const c = p.t === 'ph' && nothing.has(p.src ?? '') ? byId.get(String(k)) : undefined
+        if (c) c.nothing = true
+      })
     }
     const spans = spansOf(u.pieces, colours.get(i) ?? null),
       passed = passedOf(u.pieces)

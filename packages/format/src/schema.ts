@@ -86,13 +86,13 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       stop: z.string().optional(),
       // the element sets nothing where it stands: no character and no space. By TeX's tables (instrument/mt.ts isInkless: a
       // declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
-      // a table's row rule); or, a command's or a declaration's element (kind `macro`, `other` or `url`), where the marked
-      // compile measured it empty at every occurrence of its unit (the instrument's `empty`) and arXiv's page confirms it, every
-      // placement of it in a part stating no ink and a text of nothing (El `ink` [], `text` ''): a conditional's `\fi`, a
-      // `\natexlab{}`, a `\urldef`'s stored `\url`. Never a space, a tie, a forced break, glue, TeX's alignment tab, one of
-      // TeX's glue or penalty primitives or the kernel's skip and break commands (source/tex-kernel.ts), nor an element that
-      // stands for content set elsewhere (a display, a formula, a note, a citation): no translator needs it, so a wire may
-      // send it on no wire and put it back at its group's front or end
+      // a table's row rule); or, a command's element (kind `macro`, the one the mark probe samples), where at every sample of
+      // its command the probe's box held no ink, had no width and held no glue, kern or forced break (TeX's own listing of it)
+      // and arXiv's page confirms it, every placement of it in a part stating no ink and a text of nothing (El `ink` [], `text`
+      // ''), on pages read whole: a `\natexlab{}`, an empty conditional of the paper's, an anchor. Never a space, a tie, a
+      // forced break, glue, `\newblock`, TeX's alignment tab, one of TeX's glue or penalty primitives or the kernel's skip and
+      // break commands (source/tex-kernel.ts), nor an element that stands for content set elsewhere (a display, a formula, a
+      // note, a citation): no translator needs it, so a wire may send it on no wire and put it back at its group's front or end
       silent: flag.optional(),
       // LaTeX's `\newblock`, where a new block of a bibliography entry begins (BibTeX's styles write it between an entry's
       // authors, title and venue); a skip by its classes' definitions, never `silent`: an entry's parts are its blocks

@@ -110,6 +110,7 @@ export async function* prepareBack(
     paper: { ...deps.paper, pages: p.pages },
     made: deps.made,
     ...(recovered.length ? { recovered } : {}),
+    whole: p.whole,
   }))
     yield x
   const t5 = now()
@@ -151,6 +152,7 @@ async function placedOf(
   pages: number
   pagesA: ReadPage<AlignFacts>[] | null
   recovered: Recovered
+  whole: boolean[]
   times: { t1: number; t2: number; t3: number }
 }> {
   const keep = deps.keep === true
@@ -179,6 +181,9 @@ async function placedOf(
     classesOf: deps.classesOf,
   })
   const t3 = now()
+  // (each page read whole on A and on B, neither Doc's `unread` stated: where the bundle's parts may confirm that TeX set
+  // nothing for an element, rule 3's measured half)
+  const whole = read.doc.pages.map((pg, i) => pg.unread === null && ins.ink.pages[i]?.unread === null)
   // (B's ink and its owners: read by align and locate alone; the bundle reads the instrument's units and TeX's statements)
   if (!keep) {
     ins.ink.pages.length = 0
@@ -193,6 +198,7 @@ async function placedOf(
     pages: read.doc.pages.length,
     pagesA: keep ? read.pages : null,
     recovered: read.recovered,
+    whole,
     times: { t1, t2, t3 },
   }
 }

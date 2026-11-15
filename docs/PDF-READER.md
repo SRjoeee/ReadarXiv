@@ -7276,8 +7276,37 @@ compile's own reading takes (readInkAnswers', the units').
   $\square$`, the only ones of the 89). The typesetter sets such an element as an end mark where the translation ends with it
   (El.end, §18.52). On the 217 stored probes: 6 samples so ended in 6 papers (the five the probe-facts lane named, and
   2608.06007v1's macro, a fill, a formula and words, which TeX pushes to its line's end the same).
-- **To connect** (lane cm-a's `front.ts`): `prepareFront` hands `compiledOf`'s `probeLog` to `instrumentOf`. Until it does, the
-  probe's two readings read nothing and the source's six are stated.
+- **Connected**: `prepareFront` hands `compiledOf`'s `probeLog` to `instrumentOf` (`front.ts`); where no probe ran (an
+  instrument stored before the probe's log was one of its objects), the probe's readings read nothing and the source's six are
+  stated.
+
+### 18.79 An element that sets nothing, as the probe's own listing states it (rule 3's measured half, the compile move's slice 4, 2026-11-15)
+
+`silent` (format's el: the element sets nothing where it stands, so a wire sends it on no wire and puts it back at its group's
+front or end) is stated by the kernel's list as the wire move built it (`instrument/mt.ts` isInkless, in the instrument's
+content), or by TeX's own answer, written once where the Units object is written (`bundle.ts` statedOf, measuredSilent):
+
+- **The probe's answer, at every sample of the command** (`marks.ts` readInkNothing, probeFactsOf `nothing`;
+  `PieceClass.nothing`): the ink section sets each sample in a box of its own and lists it (`\showbox`). A sample sets nothing
+  where TeX says it sets no ink (readInkProbe), its box has no width and holds no separator. No width is `x0.0`, which TeX
+  prints for 0sp alone (a dimension is printed in the fewest decimals that read back to the same scaled point: one sp is
+  `0.00002`), so no tolerance is read into it. No separator: no glue, leaders or kern at any depth of the listing, no forced
+  break (a penalty of -10000 or less). A command is measured so where every sample of it, the ink section's and the leads', sets
+  nothing and every call of it in the paper was asked (one past the ink section's budget, or no source a box can hold, is no
+  answer); one sample with ink (`\opt{}` empty, `\opt{x}` its x) keeps every call. Only the command class is sampled (`marks.ts`
+  classOf `macro`): a URL's element, a group's brace, a space or a break of the kernel's is never measured so.
+- **The source reader's statements**: no tie, forced break or glue of the element's own (PieceClass), no `\newblock` (a skip by
+  its classes' definitions, the element's `newblock`).
+- **The parts confirm it**: every placement of the element in a part states no ink and the text '' (locate's "TeX set
+  nothing"), its member located on pages read whole on A and on B (neither Doc's `unread`: a page past the box budget, rotated,
+  capped or timed out holds no glyph, and an element's ink there would be missed; `prepare.ts` placedOf hands the bundle
+  `whole`). An element in no part is not stated.
+
+Read off the paper's own commands: 2610.37818v1's `\authorspace` (`\hspace{2.5em}`: 25 pt and its glue) and authblk's
+`\authorcr` (its `\\`: `\penalty 10000`, `\glue 0.0 plus 1.0fil`, `\penalty -10000`, no width) are kept as elements, where the
+wire move's census read them silent off their own sources; a `\natexlab{}`, ACM's `\showISBNx{…}`, revtex's `\email{…}`,
+hyperref's `\phantomsection` set nothing. The paper-names reading (`instrument/language.ts`) runs before the parts exist and
+reads no `silent` (§18.72; the wire move's ruling 4).
 
 ## 19. The engine's contract
 
