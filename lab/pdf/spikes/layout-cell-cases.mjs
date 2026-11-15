@@ -80,6 +80,27 @@ const BOXES = [
   ['\\parbox[t]{2cm}{', 'Two \\\\ lines', '}', 'j'],
 ]
 const TABINCELL = '\\newcommand{\\tabincell}[2]{\\begin{tabular}{@{}#1@{}}#2\\end{tabular}}'
+/** a paper's own row-ending macros (rowEndsOf: no parameter, a body that ends a row), one for each form of such a body; inside a
+ *  cell's box each is the forced break `\\\\` is there (§18.75), marked as the cell written with `\\\\` is */
+const ROW_ENDS = '\\newcommand{\\br}{\\\\}\\newcommand{\\brs}{\\\\[2pt]}\\newcommand{\\brt}{\\tabularnewline}\\newcommand{\\brh}{\\\\\\hline}'
+/** the boxes of BOXES with their lines ended by such a macro, and four that mix the macro and `\\\\` (a \\tabularnewline body in the
+ *  boxes that are tabulars, \\makecell's and a nested tabular; a body that draws a rule in a nested tabular) */
+const MACRO_BOXES = [
+  ['\\makecell{', 'Two \\br lines', '}'],
+  ['\\makecell[l]{', 'Two \\brs lines', '}'],
+  ['\\makecell[r]{', 'Two \\brt lines', '}'],
+  ['\\shortstack{', 'Two \\br lines', '}'],
+  ['\\shortstack[l]{', 'Two \\brs lines', '}'],
+  ['\\begin{tabular}[c]{@{}c@{}}', 'Two \\br lines', '\\end{tabular}'],
+  ['\\begin{tabular}[c]{@{}c@{}}', 'Two \\brt lines', '\\end{tabular}'],
+  ['\\begin{tabular}[c]{@{}c@{}}', 'Two \\brh lines', '\\end{tabular}'],
+  ['\\tabincell{c}{', 'Two \\br lines', '}'],
+  ['\\parbox[t]{2cm}{', 'Two \\br lines', '}', 'j'],
+  ['\\makecell{', 'Two \\\\ more \\br lines', '}'],
+  ['\\shortstack{', 'Two \\br more \\\\ lines', '}'],
+  ['\\begin{tabular}[c]{@{}c@{}}', 'Two \\\\ more \\brh lines', '\\end{tabular}'],
+  ['\\parbox[t]{2cm}{', 'Two \\br more \\\\ lines', '}', 'j'],
+]
 /** each case: its document, each cell's alignment as TeX set it (a letter where TeX's reading must state it, '-' where nothing
  *  may be stated), and the cells no template of LaTeX's set, for which no class may be written (AXT-CELL) */
 const CASES = {
@@ -300,6 +321,13 @@ const CASES = {
     `${LONG} & & \\\\`,
     '\\end{tabular}',
   ].join('\n')), { 560: 'l', 561: 'c', 562: 'r', 563: 'r', 564: 'c', 565: 'l' }],
+  // (the same, the lines ended by a paper's row-ending macro (§18.75), alone and mixed with `\\\\`: marked as `\\\\`'s are)
+  mergedMacro: [doc(`\\usepackage{makecell}${TABINCELL}${ROW_ENDS}`, [
+    '\\begin{tabular}{lcr}',
+    ...MACRO_BOXES.map((b, k) => `${[0, 1, 2].map((c) => M(600 + 3 * k + c, b)).join(' & ')} \\\\`),
+    `${LONG} & ${LONG} & ${LONG} \\\\`,
+    '\\end{tabular}',
+  ].join('\n')), Object.fromEntries(MACRO_BOXES.flatMap((b, k) => [0, 1, 2].map((c) => [600 + 3 * k + c, b[3] ?? 'lcr'[c]])))],
 }
 /** what each cell's end point holds after its end mark, where it is not nothing: the characters of its trailing piece, or how many
  *  glyphs it sets (by case, by cell); every other cell of a LaTeX template holds nothing there */
@@ -313,6 +341,7 @@ const NO_END = { kernel: [4, 7] }
 const MERGED = {
   mergedAlone: Array.from({ length: 30 }, (_, k) => 500 + k),
   mergedUnder: [560, 561, 562, 563, 564, 565],
+  mergedMacro: Array.from({ length: 3 * MACRO_BOXES.length }, (_, k) => 600 + k),
 }
 const END_AFTER = {
   endTabular: { 201: 'v', 203: 'x', 205: 'B' },
