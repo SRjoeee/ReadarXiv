@@ -32,6 +32,8 @@ import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import type { Owned } from './ownership.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from '../own/stream.ts'
+import { gapsOf } from './gaps.ts'
+import { paragraphMeasures } from './measures.ts'
 import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
@@ -64,7 +66,7 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
 }
 
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
-const ON_BASE = 0.05
+export const ON_BASE = 0.05
 
 export function lineGeometry(w: Work, owned: Owned): void {
   const { ins, B, inkA, m, pageA, pageB, placeSpan, unitB, roleB, emptyPiece, outsidePiece, gA, atA } = w.ix
@@ -498,6 +500,8 @@ export function lineGeometry(w: Work, owned: Owned): void {
         } else ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), r2(y0)])
       })
       const el: El = { kind: p.kind, ink }
+      // (TeX sets it as its unit's end mark: a fill pushed it to its line's end, its own box's or the source's (F14))
+      if (classOf.get(id)?.end) el.end = 1
       if (rowsKept(id) || outside.has(id)) el.keep = 1
       // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
       // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
@@ -744,6 +748,8 @@ export function frameMeasures(w: Work): void {
   const { inkA, gA, framesA } = w.ix
   const { members, units } = w
   columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined), framesA)
+  // (TeX's own measure of a line where its paragraph states one that is not its frame: measures.ts)
+  paragraphMeasures(w)
 }
 
 export function rooms(w: Work): void {
@@ -752,9 +758,13 @@ export function rooms(w: Work): void {
   const ink = inkIndex(inkA)
   // (TeX's paragraph separation where each unit's paragraph ends: its \baselineskip and \parskip, LINES_TEX's AXT-LINES)
   const texSep = new Map((ins.tex.skips ?? []).map((k) => [k.unit, r2(k.baselineskip + k.parskip)]))
+  // (the separation TeX set under each member by its class, and a heading's paragraph separation: gaps.ts, from the marked
+  // compile's statements, STATEMENTS_TEX's)
+  const gaps = gapsOf(w, ink.under)
   for (const mem of members)
-    if (mem.lines.length)
-      mem.room = roomOf(mem, inkA, m.offA, ink, {
+    if (mem.lines.length) {
+      const g = gaps.get(mem)
+      const room = roomOf(mem, inkA, m.offA, ink, {
         frames: framesA,
         // (a table's cell keeps its own room, a figure text, an ink figure and a name theirs: no run's room is theirs to borrow)
         runs: !(
@@ -763,14 +773,16 @@ export function rooms(w: Work): void {
           mem.kind === 'name' ||
           (mem.unit >= 0 && units[mem.unit]?.cell)
         ),
-        sep: mem.unit >= 0 && mem.name === undefined ? texSep.get(mem.unit) : undefined,
+        sep: mem.unit >= 0 && mem.name === undefined ? (texSep.get(mem.unit) ?? g?.sep) : undefined,
       })
+      mem.room = g?.gap ? { ...room, gap: g.gap } : room
+    }
 }
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure TeX's frame of it where TeX shipped the page's frame
- *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below; TeX's \parshape
- *  and \hangindent measures: stage 1b) */
+ *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below). TeX's own measure of
+ *  a paragraph that states one (its \parshape, \hangindent, \leftskip, \rightskip) is read after it (measures.ts) */
 function columnsAndMeasures(
   members: Member[],
   inkA: Doc,

@@ -145,6 +145,7 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
       converge: true,
       reduce: true,
       statements: true,
+      asks: true,
       carried: bibFiles,
       filesBound: input.filesBound ?? null,
       compileBudgetMs: null,

@@ -193,22 +193,163 @@ export function readBodies(log: string): Map<number, TexBody> {
   }
   return out
 }
+/** a glue as TeX prints it (`\the` of a skip, what \showthe shows): its natural size, then its stretch and its shrink where not
+ *  zero, each a number of points or of an infinite order (fil, fill, filll); groups: natural, stretch, its order, shrink, its order.
+ *  A dimension is a glue of neither */
+const GLUE = String.raw`(-?\d+(?:\.\d+)?)pt(?: plus (-?\d+(?:\.\d+)?)(pt|fil{1,3}))?(?: minus (-?\d+(?:\.\d+)?)(pt|fil{1,3}))?`
+/** a glue TeX printed, natural and shrink in PDF units ([natural, shrink]): null where its shrink is of an infinite order, which
+ *  no number states (TeX may shrink it to nothing and past), or where it is no glue of TeX's form */
+export function glueOf(printed: string): [number, number] | null {
+  const m = new RegExp(`^${GLUE}$`).exec(printed.trim())
+  if (!m) return null
+  if (m[5] !== undefined && m[5] !== 'pt') return null
+  const natural = Number(m[1]) * BP_PER_PT
+  const shrink = m[4] !== undefined ? Number(m[4]) * BP_PER_PT : 0
+  return Number.isFinite(natural) && Number.isFinite(shrink) ? [natural, shrink] : null
+}
+/** the log's lines that begin with `tag`, each joined to the lines TeX wrapped it onto (a printed line of the log's 79 columns
+ *  goes on on the next; a statement ends in a line break of its own, so a line of 79 is followed by its rest or by an empty
+ *  one) */
+function taggedLines(log: string, tag: string): string[] {
+  const lines = log.split('\n')
+  const out: string[] = []
+  for (let k = 0; k < lines.length; k++) {
+    if (!lines[k]!.startsWith(tag)) continue
+    let s = lines[k]!
+    for (let w = lines[k]!; w.length === 79 && k + 1 < lines.length; ) {
+      w = lines[++k]!
+      s += w
+    }
+    out.push(s)
+  }
+  return out
+}
 /**
  * Each unit's \baselineskip and \parskip, natural, where its paragraph ends (LINES_TEX's `AXT-LINES <unit> <\prevgraf>
  * <\baselineskip> <size> <\parskip>`, the last TeX pass's), in PDF units, by unit index: TeX's normal paragraph separation
- * there, their sum, which the next ink under a borrowed line keeps (the owner's ruling of 2026-11-08). A unit TeX set no
- * paragraph for (a caption measured in a box alone, a heading, the front matter's) states none; nor does a compile made
- * before \parskip was stated
+ * there, their sum, which the next ink under a borrowed line keeps (the owner's ruling of 2026-11-08); and \parskip's shrink, a
+ * third, where it is of points (TeX's least separation there is the natural less it: the display design's 2d, rule 2), none
+ * where it is of an infinite order. A unit TeX set no paragraph for (a caption measured in a box alone, a heading, the front
+ * matter's) states none; nor does a compile made before \parskip was stated
  */
-export function readSkips(log: string): Map<number, [number, number]> {
-  const out = new Map<number, [number, number]>()
-  const glue =
-    '(-?\\d+(?:\\.\\d+)?)pt(?: plus -?\\d+(?:\\.\\d+)?(?:pt|fil{1,3}))?(?: minus -?\\d+(?:\\.\\d+)?(?:pt|fil{1,3}))?'
-  const re = new RegExp(`^AXT-LINES (\\d{1,9}) \\d+ ${glue} \\d+(?:\\.\\d+)? ${glue} *$`, 'gm')
+export function readSkips(log: string): Map<number, [number, number, number?]> {
+  const out = new Map<number, [number, number, number?]>()
+  const re = new RegExp(`^AXT-LINES (\\d{1,9}) \\d+ ${GLUE} \\d+(?:\\.\\d+)? ${GLUE} *$`, 'gm')
   // (a statement longer than the log's 79 columns wrapped: joined)
   for (const m of log.replace(/^(AXT-LINES .{69})\n/gm, '$1').matchAll(re)) {
-    const [bs, ps] = [Number(m[2]) * BP_PER_PT, Number(m[3]) * BP_PER_PT]
-    if (Number.isFinite(bs) && Number.isFinite(ps) && bs > 0) out.set(Number(m[1]), [bs, ps])
+    const [bs, ps] = [Number(m[2]) * BP_PER_PT, Number(m[7]) * BP_PER_PT]
+    if (!(Number.isFinite(bs) && Number.isFinite(ps) && bs > 0)) continue
+    // (\parskip's shrink: of points, else none stated; zero where TeX printed none)
+    const shrink = m[11] === undefined ? 0 : m[11] === 'pt' ? Number(m[10]) * BP_PER_PT : Number.NaN
+    out.set(Number(m[1]), Number.isFinite(shrink) ? [bs, ps, shrink] : [bs, ps])
+  }
+  return out
+}
+/** a heading's skips as TeX evaluated them where it set its title (readHeads): its before-skip and its after-skip as its class
+ *  gives them to \@startsection, signed, natural and shrink; \baselineskip, natural, and \parskip, natural and shrink, there; in
+ *  PDF units */
+export type HeadSkips = {
+  before: [number, number]
+  after: [number, number]
+  baselineskip: number
+  parskip: [number, number]
+}
+/**
+ * Each heading's skips (STATEMENTS_TEX's GAPS_TEX: `AXT-SECT h<i>s b <before>`, `a <after>`, `l <\baselineskip>`, `p
+ * <\parskip>`, written by the heading's first mark TeX set, its start), by unit index: the first of a unit (a title set twice, in a
+ * box measured first, is the same), where all four are stated, each a glue of points (glueOf); none for a heading TeX set through
+ * no \@startsection, nor in a compile made before the statement. The sign is the class's (marks.ts GAPS_TEX): the part reads it
+ */
+export function readHeads(log: string): Map<number, HeadSkips> {
+  const got = new Map<number, Partial<Record<'b' | 'a' | 'l' | 'p', [number, number] | null>>>()
+  for (const line of taggedLines(log, 'AXT-SECT ')) {
+    const m = /^AXT-SECT h(\d{1,9})[se] ([abpl]) (.*)$/.exec(line)
+    if (!m) continue
+    const unit = Number(m[1])
+    const k = m[2] as 'b' | 'a' | 'l' | 'p'
+    const one = got.get(unit) ?? got.set(unit, {}).get(unit)!
+    if (!(k in one)) one[k] = glueOf(m[3]!)
+  }
+  const out = new Map<number, HeadSkips>()
+  for (const [unit, g] of [...got].sort((a, b) => a[0] - b[0])) {
+    if (!g.b || !g.a || !g.l || !g.p) continue
+    out.set(unit, { before: g.b, after: g.a, baselineskip: g.l[0], parskip: g.p })
+  }
+  return out
+}
+/** a paragraph's measure as TeX breaks it into lines (readMeasures), in PDF units: its \hsize, \hangindent and \hangafter,
+ *  \leftskip's and \rightskip's natural sizes, and its \parshape's lines ([indent, length], where it has a shape) */
+export type ParaMeasure = {
+  hsize: number
+  hangindent: number
+  hangafter: number
+  leftskip: number
+  rightskip: number
+  shape?: [number, number][]
+}
+const DIMEN = /^(-?\d+(?:\.\d+)?)pt$/
+/**
+ * Each paragraph's measure where TeX ends it (STATEMENTS_TEX's MEASURE_TEX: `AXT-MEASURE <n> <\hsize> <\hangindent>
+ * <\hangafter> <\leftskip> <\rightskip> <\parshape> [<indent> <length>]…`, written at LaTeX's para/end, its 79-column wraps
+ * joined), by the serial of its end (`qe<n><code>`): the first of a serial, where every dimension is of TeX's form and the shape
+ * holds as many lines as its count; none in a compile made before the statement
+ */
+export function readMeasures(log: string): Map<number, ParaMeasure> {
+  const out = new Map<number, ParaMeasure>()
+  for (const line of taggedLines(log, 'AXT-MEASURE ')) {
+    const w = line.trim().split(/ +/)
+    if (w.length < 8) continue
+    const n = Number(w[1])
+    const count = Number(w[7])
+    if (!Number.isInteger(n) || out.has(n) || !Number.isInteger(count) || count < 0 || w.length !== 8 + 2 * count)
+      continue
+    const dims = [w[2], w[3], w[5], w[6], ...w.slice(8)].map((x) => DIMEN.exec(x ?? '')?.[1])
+    const hangafter = Number(w[4])
+    if (dims.some((x) => x === undefined) || !Number.isInteger(hangafter)) continue
+    const [hsize, hangindent, leftskip, rightskip, ...rest] = dims.map((x) => Number(x) * BP_PER_PT) as number[]
+    const shape = Array.from({ length: count }, (_, k): [number, number] => [rest[2 * k]!, rest[2 * k + 1]!])
+    out.set(n, {
+      hsize: hsize!,
+      hangindent: hangindent!,
+      hangafter,
+      leftskip: leftskip!,
+      rightskip: rightskip!,
+      ...(shape.length ? { shape } : {}),
+    })
+  }
+  return out
+}
+/** the separations GAPS_TEX states the paper's values of, by the names it writes them under (TeX's own: \textfloatsep … ,
+ *  \@fpsep as `fpsep`, \skip\footins as `footins`) */
+export const GLUE_NAMES = Object.freeze([
+  'textfloatsep',
+  'floatsep',
+  'intextsep',
+  'dbltextfloatsep',
+  'dblfloatsep',
+  'fpsep',
+  'dblfpsep',
+  'abovecaptionskip',
+  'belowcaptionskip',
+  'footins',
+  'footnotesep',
+] as const)
+export type GlueName = (typeof GLUE_NAMES)[number]
+/**
+ * The paper's float, caption and footnote separations as TeX held them (STATEMENTS_TEX's GAPS_TEX: `AXT-GLUE <at> <name>
+ * <glue>`), in the order TeX wrote them: once the document begins (`at` 0), then at each float where one changed (`at` the
+ * float's serial, its bracket's `fs<n>`: a caption's skips as its box holds them, the separations once it is closed): natural and
+ * shrink in PDF units (glueOf; a glue whose shrink is of an infinite order states none). The values in force at a float are the
+ * last of each name written at or before its serial
+ */
+export function readGlues(log: string): { at: number; name: GlueName; natural: number; shrink: number }[] {
+  const names: ReadonlySet<string> = new Set(GLUE_NAMES)
+  const out: { at: number; name: GlueName; natural: number; shrink: number }[] = []
+  for (const line of taggedLines(log, 'AXT-GLUE ')) {
+    const m = /^AXT-GLUE (\d{1,9}) ([a-z]{1,32}) (.*)$/.exec(line)
+    if (!m || !names.has(m[2]!)) continue
+    const g = glueOf(m[3]!)
+    if (g) out.push({ at: Number(m[1]), name: m[2] as GlueName, natural: g[0], shrink: g[1] })
   }
   return out
 }

@@ -614,6 +614,80 @@ export function inkSection(samples: readonly string[], from = 0): string {
   )
   return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
+/**
+ * The ink probe's asks where the document uses a macro (the compile move's F15, PDF-READER §18.80): the TeX the loop's first
+ * pass (compile/paper.ts markedOfPaper with `asks`) writes in its main file's head, and `\axtask{<i>}{<the piece's source>}` right
+ * before a sample's first use (compile/live.ts askPlan, originalFiles `asks`). An ask is the ink section's own test of one sample
+ * (inkSection: its rows, its box, \showbox, the group levels it unwinds), its source tokenized where the document uses it and set
+ * in the mode it is used in, read by readInkProbe and readInkAnswered over the asked samples, every group the sample left open
+ * closed after it (ASK_UNWIND). The mode: in a paragraph, the sample is set as a paragraph, in a vertical box at the measure in
+ * force (\hsize, \parshape, the skips as they stand), between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`), so that a
+ * sample that ends the paragraph or the line there leaves two lines, or a line and a box, which readInkProbe never reads as
+ * inkless; between paragraphs, in a vertical box as it stands; in a horizontal box (a table's cell, an \mbox) and in a formula,
+ * in a horizontal box, in math for the formula. The mode is read and its conditional closed before the sample runs. Right after
+ * the sample stands \axt@aseen, which says it was reached: a sample that took it as its argument read past its own source, and
+ * the ask writes `ink-eaten <i>` (eatenOf: no answer).
+ * It changes nothing the pass writes or sets: where \protect is
+ * not \@typeset@protect (a moving argument written to the .aux, a .toc, a mark) it expands to nothing; in an alignment between
+ * its rows (an align group, \currentgrouptype 6, in vertical mode: where TeX looks for \noalign or \omit, and a token of ours
+ * would begin a cell before a \hline, colortbl's \rowcolor or longtable's \endhead) it expands to nothing; an index is asked once
+ * (a caption measured, then set); its conditional is closed before the sample runs (a paper's `\fi`); every counter is given back
+ * after it as \include's checkpoint gives them (\cl@@ckpt); its group writes no file (\@fileswfalse: a \cite or a \label inside
+ * writes no line to the .aux, so the .bbl BibTeX makes of it is the same); and it ends with a paragraph of its own in a box
+ * (\everypar empty), whose end starts TeX's error count again, as the ink section's empty paragraph after each sample does: the
+ * errors of a paragraph's asks never add up to the hundred that stop TeX. "! OK." counts no error of TeX's
+ */
+/** the groups an ask closes after its sample, down to the level it began at (ASK_TEX, the probe's PROBE_UNWIND with every group
+ *  TeX can be left in inside a box): a semi-simple group by \\endgroup, a math shift group by `$`, a math left group by \\right.,
+ *  every other but an alignment's by \\egroup (a sample that leaves `$x` open must leave no math after the ask) */
+const ASK_UNWIND =
+  '\\gdef\\axt@aue{\\global\\let\\axt@unwound\\axt@aunwind\\egroup}\\gdef\\axt@aunwind{\\global\\let\\axt@unwound\\relax\\ifnum\\currentgrouplevel>\\axt@level\\relax\\ifcase\\currentgrouptype\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\global\\let\\axt@unwound\\axt@aunwind\\endgroup\\or\\global\\let\\axt@unwound\\axt@aunwind$\\or\\global\\let\\axt@unwound\\axt@aunwind\\right.\\fi\\fi\\axt@unwound}'
+export const ASK_TEX = [
+  '\\makeatletter',
+  '\\newbox\\axt@abox',
+  ASK_UNWIND,
+  '\\def\\axtask{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@askable\\else\\expandafter\\@gobbletwo\\fi}',
+  '\\def\\axt@askable{\\ifnum\\currentgrouptype=6 \\ifvmode\\expandafter\\expandafter\\expandafter\\@gobbletwo\\else\\expandafter\\expandafter\\expandafter\\axt@ask\\fi\\else\\expandafter\\axt@ask\\fi}',
+  // (the box each mode sets its sample in, and which one: read where the ask stands, its conditional closed before the sample;
+  // right after the sample, a token that says it was reached: a sample that took it as its argument read past its own source)
+  '\\def\\axt@aseen{\\global\\let\\axt@aseenok\\relax}',
+  '\\long\\def\\axt@aset@p#1{\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\hbox{}#1\\axt@aseen\\hbox{}\\@@par}}',
+  '\\long\\def\\axt@aset@v#1{\\setbox\\axt@abox\\vbox{\\everypar{}#1\\axt@aseen}}',
+  '\\long\\def\\axt@aset@h#1{\\setbox\\axt@abox\\hbox{#1\\axt@aseen}}',
+  '\\long\\def\\axt@aset@m#1{\\setbox\\axt@abox\\hbox{$#1\\axt@aseen$}}',
+  '\\def\\axt@amode{\\ifmmode\\let\\axt@aset\\axt@aset@m\\else\\ifvmode\\let\\axt@aset\\axt@aset@v\\else\\ifinner\\let\\axt@aset\\axt@aset@h\\else\\let\\axt@aset\\axt@aset@p\\fi\\fi\\fi}',
+  '\\protected\\long\\def\\axt@ask#1#2{\\ifcsname axt@asked@#1\\endcsname\\expandafter\\@gobbletwo\\else\\expandafter\\axt@asknow\\fi{#1}{#2}}',
+  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\axt@amode\\global\\let\\axt@aseenok\\@undefined\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\axt@aset{#2}\\axt@aunwind\\ifx\\axt@aseenok\\relax\\else${probeRow('ink-eaten', '#1')}\\fi\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}}`,
+  '\\makeatother',
+].join('')
+/** one ask (ASK_TEX): sample `i` of the asked, its source as the piece writes it */
+export const askOf = (i: number, src: string): string => `\\axtask{${i}}{${src}}`
+/** whether a sample can be asked where the document uses it: its own groups close in it (as many \\begingroup as \\endgroup, \\bgroup
+ *  as \\egroup; its braces balance, inkSamples' boxable), and so do its conditionals (each \\if… closed by its \\fi, no \\else or
+ *  \\or outside one). One that opens or closes a group of the paragraph around it (a paper's `\\begingroup` piece, its `\\endgroup`
+ *  further on) would take that paragraph's groups apart there; one that holds a conditional's end, copied into a branch TeX skips
+ *  (a paper's `\\fi` inside its own `\\iffalse`), would end that conditional early: TeX counts a skipped branch's \\if… and \\fi
+ *  whatever braces stand around them (2610.21312v1's `\\fi`) */
+export const askable = (src: string): boolean => {
+  const n = (re: RegExp) => (src.match(re) ?? []).length
+  if (
+    n(/\\begingroup(?![A-Za-z@])/g) !== n(/\\endgroup(?![A-Za-z@])/g) ||
+    n(/\\bgroup(?![A-Za-z@])/g) !== n(/\\egroup(?![A-Za-z@])/g)
+  )
+    return false
+  let depth = 0
+  for (const m of src.matchAll(/\\(if[A-Za-z@]*|fi|else|or)(?![A-Za-z@])/g)) {
+    const w = m[1]!
+    if (w.startsWith('if')) depth++
+    else if (w === 'fi') {
+      if (--depth < 0) return false
+    } else if (depth === 0) return false
+  }
+  return depth === 0
+}
+/** whether a piece may read what follows it as its own (marks' LOOKS_AHEAD: a paper's macro, a footnote's call, a prefix): no ask
+ *  right after one, which it would take as its argument (`\\urldef\\tempurl\\url{…}`: `\\urldef` reads the next two tokens) */
+export const looksAhead = (p: PieceLike | null | undefined): boolean => LOOKS_AHEAD(p)
 /** the probe document of the layout marks: its punctuation section, then its ink section, its name section, its skip section,
  *  the punctuation section of the paper's own macros (probeSamples' `own`, numbered on from the asked ones), and last the ink
  *  section of the leads (leadSamples, numbered on from `ink`): a call of one of the paper's macros runs whatever its body does,
@@ -650,18 +724,61 @@ const NO_INK_NODE =
   /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\(|mark|pdfcolorstack|write|openout|closeout|pdfdest|pdfsave|pdfrestore|pdfsetmatrix|vadjust|discretionary|leaders|cleaders|xleaders)/
 /** a rule TeX lists: its height, depth and width (`*` running) */
 const RULE_NODE = /^\.+\\rule\(([-\d.*]+)\+([-\d.*]+)\)x([-\d.*]+)$/
+/** the asks whose sample took the token set right after it as its argument (ASK_TEX's `ink-eaten <i>` row): it read past its own
+ *  source, into the ask's tokens, which its use never gives it (url's `\\urldef`, which reads the name and the command after it:
+ *  2402.10294v1). No answer: the probe's stands. The probe writes no such row */
+function eatenOf(log: string | null | undefined): Set<number> {
+  const out = new Set<number>()
+  for (const line of (log ?? '').split('\n')) {
+    if (!line.startsWith('LAYOUT-PROBE 1 ink-eaten ')) continue
+    const [r] = readProbe(line)
+    if (r?.tag === 'ink-eaten' && r.fields.length === 1) out.add(Number(r.fields[0]))
+  }
+  return out
+}
+/** a node of a vertical list that is neither a line nor material of its own: glue, a kern, a penalty, and a node that sets
+ *  nothing and takes no place (a mark, a write, a destination, a colour or matrix of the driver's): hyperref's
+ *  `\\phantomsection` between paragraphs leaves its destination there (2610.37818v1), no separator */
+const SPACE_NODE =
+  /^\.\\(?:glue|kern|penalty|mark|write|openout|closeout|pdfdest|pdfcolorstack|pdfsave|pdfrestore|pdfsetmatrix)/
+/** LuaTeX's node at a paragraph's start and the values it lists below it (none of them a box: `\\localleftbox=null`), in a
+ *  paragraph's line: read in an ask's vertical box alone (the probe's boxes are horizontal, and their reading as it was) */
+const LOCAL_PAR_NODE = /^\.+\\(?:localpar|local(?:interline|broken)penalty=-?\d+|local(?:left|right)box=null)$/
+/** the marks' own nodes, as TeX lists them in an ask's box in the loop's first pass (the marked files: a paragraph's point the
+ *  POINTS' para/begin hook puts in its indent box, a forced break's, a unit's destination): a point, pdfTeX's and LuaTeX's
+ *  literal and XeTeX's special (marks.ts \\axt@point), and a destination, XeTeX's and dvipdfmx's special (latex-front.ts
+ *  \\axt@dest; pdfTeX's \\pdfdest is NO_INK_NODE's). Read as no ink in an ask's box alone (useAnswersOf): the probe's document
+ *  holds no mark */
+const OWN_NODE =
+  /^\.+\\(?:pdfliteral direct\{\/axt-[^\s{}]+ ri\}|special\{pdf:(?:code \/axt-[^\s{}]+ ri|dest \(axt-[^\s()]+\) \[@thispage \/XYZ @xpos @ypos null\])\})$/
 /**
- * The sources TeX set no ink for, from the probe's log (inkSection): each sample whose box TeX listed in full, of nodes
+ * The sources TeX set no ink for, from the probe's log (inkSection, ASK_TEX): each sample whose box TeX listed in full, of nodes
  * that set nothing — no character, no rule both wide and high (TeX ships no rule of no width or height: a strut), no
  * literal, special, insertion or node it lists otherwise — with no error between its rows but the listing's own `! OK.`.
- * A sample with no listing, an error, a line cut short or a node not known is no answer: what it sets is not known
+ * An ask's sample set where the document uses it in a paragraph, or between paragraphs, is listed in a vertical box (ASK_TEX):
+ * there it set no ink only where that box holds at most one line, and beside it nothing but space and nodes that take no place
+ * (SPACE_NODE: a destination, a write, a mark). A sample
+ * that ends the paragraph or the line where it is used (`\\par`, `\\\\`, `\\newline`, cas-sc's `\\sep`, which its keywords
+ * environment makes `\\par`) leaves two lines there, or a line and a box: it parts what stands before it from what stands
+ * after, and is never inkless. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
+ * destinations in the box are no ink (OWN_NODE). A sample with no listing, an error, a line cut short or a node not known is
+ * no answer: what it sets is not known
  */
-export function readInkProbe(log: string | null | undefined, samples: readonly string[]): string[] {
+export function readInkProbe(
+  log: string | null | undefined,
+  samples: readonly string[],
+  { ask = false }: { ask?: boolean } = {},
+): string[] {
+  const eaten = eatenOf(log)
   const out: string[] = []
   let at: number | null = null,
     nodes: string[] | null = null,
     bad = false,
-    done = false
+    done = false,
+    /** the listing's box is a vertical one (an ask's in a paragraph or between them), and the lines and material in it */
+    vertical = false,
+    parted = false,
+    lines = 0
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
@@ -671,9 +788,11 @@ export function readInkProbe(log: string | null | undefined, samples: readonly s
         nodes = null
         bad = false
         done = false
+        vertical = parted = false
+        lines = 0
         continue
       }
-      if (at === i && nodes && !bad && samples[i] !== undefined) out.push(samples[i])
+      if (at === i && nodes && !bad && !parted && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
       at = null
       continue
     }
@@ -693,11 +812,15 @@ export function readInkProbe(log: string | null | undefined, samples: readonly s
       continue
     }
     if (nodes === null) continue
-    if (/^\\hbox\(/.test(line) && !nodes.length) {
+    if (/^\\[hv]box\(/.test(line) && !nodes.length) {
+      vertical = line.startsWith('\\v')
       nodes.push(line)
       continue
     }
-    if (NO_INK_NODE.test(line)) {
+    // (in a vertical box, what stands in it: one line, and beside it no material but space)
+    if (vertical && /^\.(?!\.)/.test(line) && !SPACE_NODE.test(line) && !(ask && OWN_NODE.test(line)))
+      if (!/^\.\\hbox\(/.test(line) || ++lines > 1) parted = true
+    if (NO_INK_NODE.test(line) || (vertical && LOCAL_PAR_NODE.test(line)) || (ask && OWN_NODE.test(line))) {
       nodes.push(line)
       continue
     }
@@ -712,6 +835,37 @@ export function readInkProbe(log: string | null | undefined, samples: readonly s
     }
     if (line === '') continue
     bad = true
+  }
+  return out
+}
+
+/** the samples TeX answered in the ink section's form (inkSection, ASK_TEX): its box listed (`> \box…=`), the listing's own end
+ *  (`! OK.`), and no error between its rows but that end; inkless or not (a vertical box's of two lines answered: readInkProbe).
+ *  A sample with no listing or an error is no answer */
+export function readInkAnswered(log: string | null | undefined, samples: readonly string[]): string[] {
+  const eaten = eatenOf(log)
+  const out: string[] = []
+  let at: number | null = null,
+    listed = false,
+    ok = false,
+    bad = false
+  for (const line of (log ?? '').split('\n')) {
+    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
+    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+      const i = Number(r.fields[0])
+      if (r.tag === 'ink-at') {
+        at = i
+        listed = ok = bad = false
+        continue
+      }
+      if (at === i && listed && ok && !bad && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
+      at = null
+      continue
+    }
+    if (at === null) continue
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) ok = listed
+    else if (TEX_ERROR.test(line)) bad = true
+    else if (/^> \\box\d+=/.test(line)) listed = true
   }
   return out
 }
@@ -759,8 +913,9 @@ const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
 export function readInkTexts(
   log: string | null | undefined,
   samples: readonly string[],
+  { quotes = false }: { quotes?: boolean } = {},
 ): [source: string, text: string][] {
-  return inkTextsOf(log, samples, false)
+  return inkTextsOf(log, samples, false, quotes)
 }
 /** a box TeX lists of no width, at a depth of the sample's box (its dots): what it holds moves no character of the line */
 const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
@@ -782,15 +937,26 @@ const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
 export function readInkDecorated(
   log: string | null | undefined,
   samples: readonly string[],
+  { quotes = false }: { quotes?: boolean } = {},
 ): [source: string, text: string][] {
-  return inkTextsOf(log, samples, true)
+  return inkTextsOf(log, samples, true, quotes)
 }
+/** TeX's quotation marks as a text font (OT1, T1, LY1) sets them, read with `quotes` (readInkTexts): ' at 0x27 the right quote,
+ *  ` at 0x60 the left; the ligatures '' and `` the double ones, whatever slot each encoding gives them */
+const QUOTE: Readonly<Record<string, string>> = Object.freeze({ "'": '\u2019', '`': '\u2018' })
+const QUOTE_LIG: Readonly<Record<string, string>> = Object.freeze({ "''": '\u201D', '``': '\u201C' })
+/** a quotation mark of XeTeX's word (TU), which TeX's ligature mapping already made U+2018 to U+201D, as the log holds it: its
+ *  UTF-8 bytes read one character a byte */
+const TU_QUOTE = /\xe2\x80([\x98\x99\x9c\x9d])/g
 /** readInkTexts' reading, and with `decorated` readInkDecorated's: the decoration TeX painted with the characters passed over, and
- *  only a sample that has one given */
+ *  only a sample that has one given; with `quotes` (the compile move's F16, the back half's reading of the probe's own log),
+ *  TeX's quotation marks read as the glyphs a text font sets for them, which without it are no answer: `it's` read as “it’s”,
+ *  ``quality'' as “quality” (2610.21376v1's \new{…}, 2610.40576v1's highlighted cells, 7 answers in 4 papers of B15's probes) */
 function inkTextsOf(
   log: string | null | undefined,
   samples: readonly string[],
   decorated: boolean,
+  quotes = false,
 ): [source: string, text: string][] {
   const out: [source: string, text: string][] = []
   let at: number | null = null,
@@ -894,6 +1060,12 @@ function inkTextsOf(
     if (c) {
       const [, enc, ch, lig] = c,
         punct = enc === 'T1' || enc === 'TU' ? PUNCT_WIDE : PUNCT_ALL
+      // (a quotation mark of a text font, read as its glyph where asked)
+      const q = quotes && TEXT_ENCODING.has(enc) && enc !== 'TU' ? (lig ? QUOTE_LIG[lig] : QUOTE[ch!]) : undefined
+      if (q) {
+        text += q
+        continue
+      }
       if (
         TEXT_ENCODING.has(enc) &&
         (lig ? /^[A-Za-z0-9]+$/.test(lig) : /^[A-Za-z0-9]$/.test(ch!) || (ch!.length === 1 && punct.includes(ch!)))
@@ -907,7 +1079,11 @@ function inkTextsOf(
     // (XeTeX's word, outside a formula: its characters, each one a character node's would be)
     const w = math === 0 ? WORD_NODE.exec(line) : null
     if (w) {
-      if ([...w[1]!].every((ch) => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch))) text += w[1]
+      const word = quotes
+        ? w[1]!.replace(TU_QUOTE, (_, b: string) => String.fromCharCode(0x1f80 + b.charCodeAt(0)))
+        : w[1]!
+      if ([...word].every((ch) => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch) || (quotes && /[‘’“”]/.test(ch))))
+        text += word
       else bad = true
       continue
     }
@@ -986,6 +1162,146 @@ export function readInkApart(log: string | null | undefined, samples: readonly s
     if (listed && first === null && /^\.(?!\.)/.test(line)) first = line
   }
   return out
+}
+
+/** a glue of infinite stretch in a box's outer list as TeX lists it (`.\glue 0.0 plus 1.0fill`, a named one's `\glue(\name)`):
+ *  a fil, fill or filll, which pushes what follows it to its line's end */
+const FIL_GLUE = /^\.\\glue(?:\(\\[A-Za-z@]+\))? -?[\d.]+ plus [\d.]*[1-9][\d.]*fil{1,3}(?: |$)/
+/**
+ * The samples TeX ends with ink a glue of infinite stretch pushed (the compile move's F14), from the probe's own log
+ * (inkSection): each sample whose box TeX listed in full with no error between its rows, its outer list holding a fil, fill or
+ * filll glue (FIL_GLUE) before its last ink, a node of that list that sets some: a character, a rule both wide and high (or
+ * running), a box holding one. amsthm's \qed (`\hfill\quad` and the box of its square's rules), an author's own (`\hfill` and a
+ * symbol), LLNCS's (a fil, a penalty, a skip, a fil again and its square): set at a paragraph's end, TeX pushes it to its
+ * line's end, the unit's end mark (El.end). A fill after the last ink, or one inside a box only, pushes none; a listing not read
+ * whole is no answer. 27 of the 33 end marks the probes of B15 hold (lanes/probes-facts.md, F14)
+ */
+export function readInkEnds(log: string | null | undefined, samples: readonly string[]): string[] {
+  const out: string[] = []
+  let at: number | null = null,
+    listed = false,
+    bad = false,
+    done = false
+  // (the outer list's nodes so far: whether a fill stood before the last ink; the outer node being read and whether it sets ink)
+  let fill = false,
+    pushed = false,
+    current: 'ink' | 'box' | 'none' | null = null,
+    boxInk = false
+  const close = () => {
+    if (current === 'box' && boxInk) current = 'ink'
+    if (current === 'ink') pushed = fill
+    current = null
+    boxInk = false
+  }
+  for (const line of (log ?? '').split('\n')) {
+    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
+    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+      const i = Number(r.fields[0])
+      if (r.tag === 'ink-at') {
+        at = i
+        listed = bad = done = fill = pushed = boxInk = false
+        current = null
+        continue
+      }
+      if (at === i && done && !bad && pushed && samples[i] !== undefined) out.push(samples[i])
+      at = null
+      continue
+    }
+    if (at === null || done) continue
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) {
+      close()
+      done = listed
+      if (!done) bad = true
+      continue
+    }
+    if (TEX_ERROR.test(line)) {
+      bad = true
+      continue
+    }
+    if (/^> \\box\d+=/.test(line)) {
+      listed = true
+      continue
+    }
+    if (!listed || line === '' || /^\\[hv]box\(/.test(line)) continue
+    const outer = /^\.(?!\.)/.test(line)
+    const rule = RULE_NODE.exec(line)
+    const inked =
+      CHAR_NODE.test(line) ||
+      WORD_NODE.test(line) ||
+      (!!rule &&
+        (rule[3] === '*' || Number(rule[3]) > 0) &&
+        (rule[1] === '*' || rule[2] === '*' || Number(rule[1]) + Number(rule[2]) > 0))
+    if (!outer) {
+      // (a node inside an outer box: ink of that box's)
+      if (current === 'box' && inked) boxInk = true
+      continue
+    }
+    close()
+    if (FIL_GLUE.test(line)) fill = true
+    if (inked) current = 'ink'
+    else if (/^\.\\[hv]box\(/.test(line)) current = 'box'
+    else if (NO_INK_NODE.test(line) || rule) current = 'none'
+    else bad = true
+    if (current === 'ink' || current === 'box') pushed = false
+  }
+  return out
+}
+/** a source that is a glue of infinite stretch, TeX's own: \hfil, \hfill, LaTeX's \hspace{\fill} (its \fill, 0pt plus 1fill) */
+const FILL_SOURCE = /^\\(?:hfill?(?![A-Za-z@])|hspace\*?\s*\{\s*\\fill\s*\})\s*$/
+/**
+ * The pieces a unit ends with that TeX sets as its end mark (the compile move's F14, El.end on the piece's element), by their
+ * index in the unit's pieces: its last piece that sets ink (white space, groups' edges and placeholders that set none after it),
+ * a placeholder, where the probe says TeX ends its own box with ink a fill pushed (readInkEnds: amsthm's or an author's \qed
+ * written in the text), or where the source pushes it with a fill right before it, white space and groups' edges between
+ * (`\hfill $\square$`: 2610.40394v1's six). None where the unit's last ink is text, or no fill pushes it
+ */
+export function endPiecesOf(pieces: readonly PieceLike[], ends: ReadonlySet<string>): number[] {
+  const blank = (p: PieceLike) =>
+    (p.t === 'text' && !/\S/.test((p as { s?: string }).s ?? '')) || p.t === 'open' || p.t === 'close'
+  let k = pieces.length - 1
+  while (k >= 0 && (blank(pieces[k]!) || (pieces[k]!.t === 'ph' && classOf(pieces[k]) === null))) k--
+  const last = pieces[k]
+  if (last?.t !== 'ph') return []
+  if (ends.has(last.src ?? '')) return [k]
+  let j = k - 1
+  while (j >= 0 && blank(pieces[j]!)) j--
+  const before = pieces[j]
+  return before?.t === 'ph' && FILL_SOURCE.test(before.src ?? '') ? [k] : []
+}
+/**
+ * What the back half reads of the mark probe's own log (the compile move's B3, by the brief's ruling 6: the log the box stores
+ * beside the instrument, no field of the stored plan): the texts the ink section showed the samples and leads set, and those set
+ * beside a decoration, TeX's quotation marks read (F16: readInkTexts' and readInkDecorated's `quotes`); the samples TeX ends
+ * with ink a fill pushed (F14: readInkEnds). The samples are readInkAnswers' own, the units' (inkSamples, leadSamples)
+ */
+export function probeFactsOf(
+  log: string | null | undefined,
+  units: readonly Unit[],
+): { texts: [string, string][]; decorated: [string, string][]; ends: string[] } {
+  const ink = inkSamples(units),
+    leads = leadSamples(units, ink)
+  return {
+    texts: readInkTexts(log, [...ink, ...leads], { quotes: true }),
+    decorated: readInkDecorated(log, [...ink, ...leads], { quotes: true }),
+    ends: readInkEnds(log, ink),
+  }
+}
+/** what TeX answered where the document uses a macro (the loop's first pass's asks, ASK_TEX), by source: those it said set no
+ *  ink (readInkProbe) and those it answered otherwise (readInkAnswered) */
+export type UseAnswers = { inkless: string[]; inked: string[] }
+/** the asks' answers from the loop's first pass's log, the asked samples by their ask's index */
+export function useAnswersOf(log: string | null | undefined, asked: readonly string[]): UseAnswers {
+  const inkless = readInkProbe(log, asked, { ask: true }),
+    none = new Set(inkless)
+  return { inkless, inked: readInkAnswered(log, asked).filter((s) => !none.has(s)) }
+}
+/** the marking's inkless with the use's answers (F15): a source TeX answered where the document uses it takes that answer, set no
+ *  ink or set some; one it did not answer there keeps the probe's. In the probe's order, the use's added after */
+export function mergeUses(inkless: readonly string[], uses: UseAnswers | null | undefined): string[] {
+  if (!uses) return [...inkless]
+  const inked = new Set(uses.inked),
+    had = new Set(inkless)
+  return [...inkless.filter((s) => !inked.has(s)), ...uses.inkless.filter((s) => !had.has(s))]
 }
 
 // ---- babel's names: what each one's own text is, TeX asked
@@ -1450,8 +1766,9 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  * A marked compile that dies only with more of our points in its node lists (2610.30769v1 under pdfTeX 1.40.28) is asked
  * again without the optional classes' TeX; every other class stays, so what is owned and what is read as text is read as
  * ever. The paragraph ends are optional: what they state, the alignment TeX broke a paragraph by and where it ended, the
- * page's lines state too. A cell's end (§18.74's `t<i>x`) is not: ownership reads where a cell's piece ends from it. A class
- * added later says which it is
+ * page's lines state too; so are the forced breaks' points (the compile move's F35, STATEMENTS_TEX's): where TeX ended a line,
+ * which the page's lines state less exactly. A cell's end (§18.74's `t<i>x`) is not: ownership reads where a cell's piece ends
+ * from it. A class added later says which it is
  */
 export const POINT_CLASSES = {
   /** each column's body and a text block shipped whole, `bs<n>` and `be<n>` with its AXT-BODY statement: a glyph's body */
@@ -1474,6 +1791,9 @@ export const POINT_CLASSES = {
   display: { names: /^d(?:ps|pe|ts|te|ms|me)\d+$/, optional: false },
   /** a table cell's end, `t<i>x` (LAYOUT_TEX's \\axt@cellend, through \\axt@dest): where a cell's piece ends */
   'cell-end': { names: /^t\d+x$/, optional: false },
+  /** where TeX ends a line at a forced break, `kb<n>` (STATEMENTS_TEX's BREAKS_TEX, after \\@gnewline's \\unskip): the line
+   *  TeX ended there, which the page's lines state too, less exactly; kept apart from the marks' points (ink.ts `breaks`) */
+  'forced-break': { names: /^kb\d+$/, optional: true },
   /** the point beside each destination of the marks' own (a unit's start and end, a placeholder's, a name's, a call's, a
    *  figure's frame): every name no other class gives */
   mark: { names: /^/, optional: false },
@@ -1998,9 +2318,78 @@ export const LAYOUT_TEX = [
 /** LAYOUT_TEX with the reduced points (POINTS_TEX_REDUCED in POINTS_TEX's one place): a reduced marked compile's, on the one
  *  line LAYOUT_TEX is, so that no line of the paper moves */
 export const LAYOUT_TEX_REDUCED = LAYOUT_TEX.split(POINTS_TEX).join(POINTS_TEX_REDUCED)
+
+/**
+ * The separations the rebuilt prepare's marked compile states (the compile move's B1: the display design's F12, 2d's glues, F40's
+ * form 1): messages to the log alone, by macros that set nothing, so that every glyph, box and point stays where it was (the TeX
+ * gate's cases, lab/pdf/spikes/gap-cases.mjs). After LAYOUT_TEX, whose heading mark and float bracket it reads, and only where
+ * its option asks (STATEMENTS_TEX): today's reader's marked TeX stays the bytes it was. Read by marks/channels.ts readHeads and
+ * readGlues; \parskip's shrink needs no TeX (LINES_TEX prints \parskip whole: readSkips).
+ * - **A heading's skips** (`AXT-SECT h<i>s b <before>`, `a <after>`, `l <\baselineskip>`, `p <\parskip>`, each as TeX prints
+ *   it). Once the document begins, LaTeX's \@startsection hands each heading's style, its sixth argument, which TeX executes right
+ *   before the title in every path the kernel's \@sect, \@ssect and a run-in title's \@svsechd take, a macro first: it assigns
+ *   the before-skip (#4) and the after-skip (#5) to skip registers as \@startsection and \@sect assign them, in the font around
+ *   the heading (the style's own switches follow it), with \baselineskip and \parskip there, in the group TeX sets the title in;
+ *   the heading's first mark TeX sets (\axt@hm, in horizontal mode, its start `h<i>s`) writes them and spends them. The sign is
+ *   the class's: a negative before-skip TeX adds negated (and indents no first paragraph), a negative after-skip sets the title in
+ *   the line, its negation the horizontal skip after it. A class that makes its headings with no \@startsection (KOMA-Script's
+ *   \scr@startsection, titlesec's own, a chapter's \@makechapterhead) states none; a heading of \@startsection's with no mark
+ *   (a class's own \section*{\refname}) spends nothing, its group gone with its title.
+ * - **The paper's separations** (`AXT-GLUE <at> <name> <glue>`): LaTeX's float separations (\textfloatsep, \floatsep,
+ *   \intextsep and the two-column \dbltextfloatsep, \dblfloatsep; a float page's \@fpsep, \@dblfpsep), its caption's skips
+ *   (\abovecaptionskip, \belowcaptionskip, where the class defines them), the footnotes' (\skip\footins, \footnotesep), once
+ *   the document begins (`at` 0) and again at each float (`at` the float's serial, its `fs<n>`) for each that changed since it
+ *   was last written: a caption's skips as the float's box holds them at its end, inside it (\@endfloatbox's first act closes the
+ *   box's group, and a caption skip a float sets is set in that group: the serial its bracket is about to be given), the
+ *   separations once the box is closed (after the bracket's wrap: one a float sets inside its box no output routine sees)
+ */
+export const GAPS_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\protected\def\axt@sgset#1#2{\begingroup\skip@#1\relax\@tempskipb#2\relax\xdef\axt@sgt{{\the\skip@}{\the\@tempskipb}{\the\baselineskip}{\the\parskip}}\endgroup\let\axt@sg\axt@sgt}`,
+  String.raw`\def\axt@sgw#1#2#3#4#5{\message{^^JAXT-SECT #5 b #1^^JAXT-SECT #5 a #2^^JAXT-SECT #5 l #3^^JAXT-SECT #5 p #4^^J}}`,
+  String.raw`\def\axt@sgtell#1{\ifdefined\axt@sg\expandafter\axt@sgw\axt@sg{#1}\global\let\axt@sg\@undefined\fi}`,
+  String.raw`\def\axt@glv#1#2#3{\edef\axt@glx{\the#3}\expandafter\ifx\csname axt@gl@#2\endcsname\axt@glx\else\expandafter\global\expandafter\let\csname axt@gl@#2\endcsname\axt@glx\message{^^JAXT-GLUE #1 #2 \axt@glx^^J}\fi}`,
+  String.raw`\def\axt@glflt#1{\axt@glv{#1}{textfloatsep}\textfloatsep\axt@glv{#1}{floatsep}\floatsep\axt@glv{#1}{intextsep}\intextsep\axt@glv{#1}{dbltextfloatsep}\dbltextfloatsep\axt@glv{#1}{dblfloatsep}\dblfloatsep\axt@glv{#1}{fpsep}\@fpsep\axt@glv{#1}{dblfpsep}\@dblfpsep\axt@glv{#1}{footins}{\skip\footins}\axt@glv{#1}{footnotesep}\footnotesep}`,
+  String.raw`\def\axt@glcap#1{\ifdefined\abovecaptionskip\axt@glv{#1}{abovecaptionskip}\abovecaptionskip\fi\ifdefined\belowcaptionskip\axt@glv{#1}{belowcaptionskip}\belowcaptionskip\fi}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@startsection\let\axt@sst\@startsection\def\@startsection#1#2#3#4#5#6{\axt@sst{#1}{#2}{#3}{#4}{#5}{\axt@sgset{#4}{#5}#6}}\fi\let\axt@sghm\axt@hm\protected\def\axt@hm#1{\ifaxt@off\else\ifhmode\axt@sgtell{#1}\fi\fi\axt@sghm{#1}}\axt@glflt{0}\axt@glcap{0}\ifdefined\@endfloatbox\let\axt@glfb\@endfloatbox\def\@endfloatbox{\axt@glcap{\the\numexpr\axt@bn+1\relax}\axt@glfb\ifvoid\@currbox\else\axt@glflt{\axt@bn}\fi}\fi}\fi`,
+  String.raw`\makeatother`,
+].join('')
+/**
+ * Each paragraph's measure as TeX breaks it into lines (the compile move's B2: the display design's F13), at its end:
+ * `AXT-MEASURE <n> <\hsize> <\hangindent> <\hangafter> <\leftskip> <\rightskip> <\parshape> [<indent> <length>]…`, n the end's
+ * serial (POINTS' para/end, `qe<n><code>`, whose hook runs first: the same paragraphs, the gate on, a list of nodes), each
+ * dimension as TeX prints it, the two skips' natural sizes, the shape's lines through e-TeX's \parshapeindent and
+ * \parshapelength, its count through the primitive \parshape as the head finds it, before any package (wrapfig makes \parshape a
+ * macro of its own and keeps the primitive as \@@parshape: read through the macro, `\the` stopped at it, a TeX error each
+ * wrapped paragraph). LaTeX's para/end runs before TeX breaks the paragraph, with the values it breaks it by; a message alone, set
+ * nothing (the TeX gate's measure cases, lab/pdf/spikes/measure-cases.mjs). Read by marks/channels.ts readMeasures
+ */
+export const MEASURE_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\let\axt@parshape\parshape`,
+  String.raw`\def\axt@msr{\begingroup\count@\z@\let\axt@msx\@empty\loop\ifnum\count@<\axt@parshape\advance\count@\@ne\edef\axt@msx{\axt@msx\space\the\parshapeindent\count@\space\the\parshapelength\count@}\repeat\message{^^JAXT-MEASURE \axt@pe\space\the\hsize\space\the\hangindent\space\the\hangafter\space\the\dimexpr\leftskip\relax\space\the\dimexpr\rightskip\relax\space\the\axt@parshape\axt@msx^^J}\endgroup}`,
+  String.raw`\ifdefined\AddToHook\ifdefined\IndentBox\AddToHook{para/end}{\ifaxt@off\else\ifnum\lastnodetype=-1 \else\axt@msr\fi\fi}\fi\fi`,
+  String.raw`\makeatother`,
+].join('')
+/**
+ * Where TeX ends a line at a forced break (the compile move's B2: the display design's F35): LaTeX's \@gnewline, every `\\`'s
+ * and \newline's way in a paragraph (`\unskip`, then `\nobreak\hfil\break`), once the document begins, sets a point `kb<n>`
+ * after the \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue
+ * taken, as before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to
+ * break made or lost. A point of the optional class `forced-break` (POINT_CLASSES), kept apart from the marks' points by
+ * pageInk (ink.ts FORCED_BREAK); the line TeX ended at a break the marking gives no mark (facts-pass.ts readElements). A `\\` of
+ * a centred or ragged block (\@centercr, which ends a paragraph) or a table's row sets none
+ */
+export const BREAKS_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\gdef\axt@kb{0}\def\axt@kbpt{\xdef\axt@kb{\the\numexpr\axt@kb+1\relax}\axt@point{kb\axt@kb}}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\axt@gnl{#1}}\fi}\fi`,
+  String.raw`\makeatother`,
+].join('')
 /** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (live.ts originalFiles
- *  `statements`, after LAYOUT_TEX): lane cm-b's constant, which replaces this empty placeholder where the two lanes meet */
-export const STATEMENTS_TEX = ''
+ *  `statements`, which compiledOf sets: after LAYOUT_TEX on its line, and left out of a reduced compile), each slice's in turn:
+ *  the separations (GAPS_TEX), each paragraph's measure (MEASURE_TEX) and the forced breaks' points (BREAKS_TEX) */
+export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX
 
 // ---------------------------------------------------------------- a reference's item and its name
 /** a reference to a page, not to an item (\pageref): no item's name for it */

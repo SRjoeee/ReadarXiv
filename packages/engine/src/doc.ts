@@ -81,6 +81,9 @@ export interface DocMarks {
   paraEnds: (DocPoint & { point: number; para: number })[]
   /** where TeX begins a front matter environment no author's (`fm<n>`): the author block's end (locate/author-block.ts) */
   fronts?: DocPoint[]
+  /** where TeX ends a line at a forced break (`kb<n>`, ink.ts FORCED_BREAK): the line TeX ended at a break the marking gives
+   *  no mark (locate/facts-pass.ts) */
+  breaks?: DocPoint[]
   regions: { kind: string; from: number; to: number }[]
   pictures: DocPoint[]
 }

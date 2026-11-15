@@ -84,15 +84,12 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // or a line end where it ends its sentence and sets none (a forced break a run-in label follows: marks/run-ins.ts): a
       // translator may write it after the element so that the sentence ends there
       stop: z.string().optional(),
-      // the element sets nothing where it stands: no character and no space. By TeX's tables (instrument/mt.ts isInkless: a
-      // declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
-      // a table's row rule); or, a command's or a declaration's element (kind `macro`, `other` or `url`), where the marked
-      // compile measured it empty at every occurrence of its unit (the instrument's `empty`) and arXiv's page confirms it, every
-      // placement of it in a part stating no ink and a text of nothing (El `ink` [], `text` ''): a conditional's `\fi`, a
-      // `\natexlab{}`, a `\urldef`'s stored `\url`. Never a space, a tie, a forced break, glue, TeX's alignment tab, one of
-      // TeX's glue or penalty primitives or the kernel's skip and break commands (source/tex-kernel.ts), nor an element that
-      // stands for content set elsewhere (a display, a formula, a note, a citation): no translator needs it, so a wire may
-      // send it on no wire and put it back at its group's front or end
+      // the element sets nothing where it stands: no character and no space. By TeX's tables alone (instrument/mt.ts isInkless:
+      // a declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
+      // a table's row rule); never a space, a tie, a forced break, glue, `\newblock`, TeX's alignment tab, nor an element that
+      // stands for content set elsewhere (a display, a formula, a note, a citation). A paper's own command is never stated so: no
+      // reading of TeX's has yet stated what it sets where it stands (PDF-READER §18.79). No translator needs such an element, so
+      // a wire may send it on no wire and put it back at its group's front or end
       silent: flag.optional(),
       // LaTeX's `\newblock`, where a new block of a bibliography entry begins (BibTeX's styles write it between an entry's
       // authors, title and venue); a skip by its classes' definitions, never `silent`: an entry's parts are its blocks
@@ -310,9 +307,11 @@ export const Label = z.object({
  *  its own, over another's ink TeX set between two of its lines), each [that line's index, the depth under its baseline of the
  *  next ink across the run (from its lines' own start to their column's end: a glyph's baseline, a box's top), the depth under
  *  it of TeX's text block bottom in its column there (the foot of the box TeX shipped the column's text in)], stated where TeX
- *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural:
- *  what a translation may borrow under a run, never past that bottom nor nearer the next ink than `sep` (the owner's ruling of
- *  2026-11-08). A part made before 2026-11-08 may state the room under each run otherwise (`ends`, which nothing reads) */
+ *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural (a
+ *  heading's, under its title set on lines of its own: its \@startsection after-skip and the \baselineskip and \parskip around
+ *  it, natural, TeX's normal separation from its last baseline to the next paragraph's first): what a translation may borrow
+ *  under a run, never past that bottom nor nearer the next ink than `sep` (the owner's ruling of 2026-11-08). A part made
+ *  before 2026-11-08 may state the room under each run otherwise (`ends`, which nothing reads) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
@@ -343,6 +342,40 @@ export const Room = z.object({
   over: num.optional(),
   runs: z.array(z.tuple([int, num, num])).optional(),
   sep: num.optional(),
+  // (the separation TeX set under its last line, by its class: [the glue's name, TeX's own, its natural size, its shrink], PDF
+  // units, the glue in force there as the marked compile states it. `parskip` a paragraph over a paragraph (the next one's
+  // \parskip); `afterskip` under a heading (its \@startsection after-skip), `runin` after a heading set in the line (the
+  // horizontal skip TeX sets after its title, the after-skip negated), `beforeskip` over a heading (its before-skip as TeX adds
+  // it); under a float's last member its float's (`textfloatsep` over the text under a top float, `intextsep` round a float
+  // set here, `floatsep` over the next float, `dbltextfloatsep` and `dblfloatsep` a float across both columns, `fpsep` and
+  // `dblfpsep` between the floats of a float page), and over a float's first member from text above it (`intextsep`, or
+  // `textfloatsep` over a bottom float); in a float, over its caption `abovecaptionskip`, under it `belowcaptionskip`; over the
+  // footnotes `footins` (\skip\footins), between two `footnotesep` (TeX's strut at a note's top: no shrink). Absent where TeX's
+  // class of the gap is not stated or not known: what follows is no unit's text, ink no unit owns stands between, the class makes
+  // its headings without \@startsection, a part made before. Nothing reads it to lay a page yet (the display design's 2d, F40)
+  gap: z
+    .tuple([
+      z.enum([
+        'parskip',
+        'afterskip',
+        'runin',
+        'beforeskip',
+        'textfloatsep',
+        'floatsep',
+        'intextsep',
+        'dbltextfloatsep',
+        'dblfloatsep',
+        'fpsep',
+        'dblfpsep',
+        'abovecaptionskip',
+        'belowcaptionskip',
+        'footins',
+        'footnotesep',
+      ]),
+      num,
+      num,
+    ])
+    .optional(),
   // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's) on a
   // line's band within its text block, wholly before the line's start or after its end, each side's pieces as one box: [that
   // line's index, x0, y0, x1, y1]. TeX set it on the line and no translation replaces it: a translation's line laid over it,

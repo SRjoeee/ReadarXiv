@@ -20,6 +20,9 @@ import {
   readAlign,
   readBoxAlign,
   readCellBoxes,
+  readGlues,
+  readHeads,
+  readMeasures,
   readRefNames,
   readSkips,
 } from '../marks/channels.ts'
@@ -32,10 +35,12 @@ import { runIns } from '../marks/run-ins.ts'
 import { unitId } from '@readarxiv/format'
 import {
   classOf,
+  endPiecesOf,
   followsOf,
   headEnd,
   INK_ANY,
   leadStep,
+  probeFactsOf,
   readColours,
   readSkipProbe,
   refKeyOf,
@@ -141,6 +146,9 @@ export type InstrumentInput = {
     lineskip?: [number, number] | null
   }
   log?: string
+  /** the mark probe's own log, as the box stores it beside the instrument (the compile move's B3): read for TeX's quotation marks
+   *  in the samples' texts and for the samples TeX ends with ink a fill pushed (marks.ts probeFactsOf); none, as before */
+  probeLog?: string | null
   pdfjs: PdfJs
   documentOptions?: Record<string, unknown>
   made?: { compiler?: string; tree?: string; front?: string }
@@ -1935,6 +1943,17 @@ export function outsidePieces(
 /** the texts the marking's probe showed the paper's macros set, by source: as markedOfPaper's options hold them (readInkTexts'
  *  [source, text] pairs: what the box and the lab hand in), as the marks file's `marking.texts` (flat [source, text, …]) or a
  *  Map; null where none is given */
+/** the texts a reading gave (textsOf's), with those another reading of the same probe gives for a source the first gave none:
+ *  the back half's reading of TeX's quotation marks (probeFactsOf), which only adds answers */
+function withTexts(
+  base: Map<string, string> | null,
+  more: readonly (readonly [string, string])[] | undefined,
+): Map<string, string> | null {
+  if (!more?.length) return base
+  const out = new Map(base ?? [])
+  for (const [src, text] of more) if (!out.has(src)) out.set(src, text)
+  return out
+}
 export function textsOf(texts: unknown): Map<string, string> | null {
   if (texts instanceof Map) return texts
   if (!Array.isArray(texts)) return null
@@ -2033,6 +2052,7 @@ export async function instrumentOf({
   finalPdf,
   options = {},
   log = '',
+  probeLog = null,
   pdfjs,
   documentOptions = {},
   made = {},
@@ -2088,7 +2108,11 @@ export async function instrumentOf({
   })
   const texts = options.texts,
     inkless = options.inkless ?? null
-  const shown = textsOf(texts)
+  // (the probe's own log, where the box hands it over: TeX's quotation marks read in the samples' texts, a text the stored
+  // reading gave none taken (F16); and the samples TeX ends with ink a fill pushed (F14))
+  const probe = probeLog ? probeFactsOf(probeLog, units) : null
+  const shown = withTexts(textsOf(texts), probe?.texts)
+  const endSamples = new Set(probe?.ends ?? [])
   const names = new Set(pages.flatMap((pg) => pg.points.map((x) => x.name)))
   const follows = followsOf(units, names, shown, inkless)
   const own = ownOf(pages, {
@@ -2126,7 +2150,7 @@ export async function instrumentOf({
   const classesBy: Map<string, PieceClass>[] = []
   const facts = unitFactsOf(paper)
   // (the probe's decorated texts: the cells a decorated word holds whole, and the pieces of no point found by their text below)
-  const decorated = textsOf(options.decorated)
+  const decorated = withTexts(textsOf(options.decorated), probe?.decorated)
   const held = decoratedCellsOf(units, decorated, facts.kept)
   units.forEach((u, i) => {
     // (its run-in labels and what TeX set for its groups, once B's glyphs are owned: marksOf, below)
@@ -2139,8 +2163,13 @@ export async function instrumentOf({
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown),
-      spans = spansOf(u.pieces, colours.get(i) ?? null),
+    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown)
+    // (the piece the unit ends with that TeX sets as its end mark: El.end on its element, F14)
+    for (const k of endPiecesOf(u.pieces, endSamples)) {
+      const c = classes.find(([id]) => id === String(k))
+      if (c) c[1].end = true
+    }
+    const spans = spansOf(u.pieces, colours.get(i) ?? null),
       passed = passedOf(u.pieces)
     classesBy[i] = new Map(classes)
     out.push({
@@ -2288,11 +2317,21 @@ export async function instrumentOf({
   // (each page's text frame as TeX shipped it: the bodies' statements in the log, LAYOUT_TEX's AXT-BODY, at their points)
   const frames = framesOf(pages, lastTexLog(log))
   // (each unit's \baselineskip and \parskip where its paragraph ends, LINES_TEX's AXT-LINES: TeX's paragraph separation there)
-  const skips = [...readSkips(lastTexLog(log))].map(([unit, [baselineskip, parskip]]) => ({
+  // (and \parskip's shrink where it is of points: TeX's least separation there)
+  const skips = [...readSkips(lastTexLog(log))].map(([unit, [baselineskip, parskip, parskipShrink]]) => ({
     unit,
     baselineskip,
     parskip,
+    ...(parskipShrink !== undefined ? { parskipShrink } : {}),
   }))
+  // (each heading's \@startsection skips and the paper's float, caption and footnote separations, where the marked compile states
+  // them: STATEMENTS_TEX's AXT-SECT and AXT-GLUE)
+  const heads = [...readHeads(lastTexLog(log))].map(([unit, h]) => ({ unit, ...h }))
+  const glues = readGlues(lastTexLog(log))
+  // (each paragraph's measure as TeX breaks it, STATEMENTS_TEX's AXT-MEASURE: those that are not the full \hsize)
+  const measures = [...readMeasures(lastTexLog(log))]
+    .filter(([, x]) => x.shape || x.hangindent !== 0 || x.leftskip !== 0 || x.rightskip !== 0)
+    .map(([para, x]) => ({ para, ...x }))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
@@ -2319,6 +2358,9 @@ export async function instrumentOf({
         paragraphEnds,
         ...(frames.some(Boolean) ? { frames } : {}),
         ...(skips.length ? { skips } : {}),
+        ...(heads.length ? { heads } : {}),
+        ...(glues.length ? { glues } : {}),
+        ...(measures.length ? { measures } : {}),
       },
       made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' },
     },

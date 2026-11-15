@@ -123,6 +123,7 @@ describe('the stored half', () => {
       converge: true,
       reduce: true,
       statements: true,
+      asks: true,
     })
     if (!fresh.end.ok || !fresh.end.made) throw new Error('no instrument made')
     // (not reduced: the plan as before, no `reduced` in it)

@@ -132,6 +132,9 @@ interface FactsIndex {
   blockOf: (l: Line) => [number, number]
   /** B's paragraph ends, global, each glyph position once */
   ends: number[]
+  /** where TeX ended a line at a forced break (B's `kb<n>` points, DocMarks.breaks: STATEMENTS_TEX's BREAKS_TEX), global, in
+   *  stream order: the glyph before which it stands */
+  forced: number[]
   /** each element's opening and end point on B, by unit and piece */
   placeAt: Map<string, number>
   placeEnd: Map<string, number>
@@ -246,6 +249,10 @@ function open({
   const ends = [
     ...new Set((ins.tex.paragraphEnds ?? []).flatMap((l, p) => l.map((g) => (m.offB[p] as number) + g))),
   ].sort((x, y) => x - y)
+  // (where TeX ended a line at a forced break, globally: B's `kb<n>` points)
+  const forced = ins.ink.pages
+    .flatMap((pg, p) => (pg.marks?.breaks ?? []).map((x) => (m.offB[p] as number) + x.glyph))
+    .sort((x, y) => x - y)
   // (each element's opening point on B, by unit and piece: the glyph before which it begins, global; and its end point, the
   // glyph before which what follows it begins)
   const placeAt = new Map<string, number>()
@@ -286,6 +293,7 @@ function open({
     linesOn,
     blockOf,
     ends,
+    forced,
     placeAt,
     placeEnd,
     column,
@@ -461,7 +469,7 @@ function memberFacts(fx: FactsIndex, mem: Member): void {
 
 /** its elements' facts: style, brackets, the mark after a display or on a held line, a forced break's line and room */
 function readElements(fx: FactsIndex, r: MemberReading): void {
-  const { ins, m, unitB, gA, pageA, placeAt, placeEnd, ends } = fx
+  const { ins, m, unitB, gA, pageA, placeAt, placeEnd, ends, forced } = fx
   const { mem, unit, lineOf, sizeOf, own } = r
   // (the line TeX ended at a point of B's stream: that of the unit's last glyph before it, carried to A)
   const lineBefore = (point: number) => {
@@ -546,7 +554,11 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
   // - where nothing that sets ink stands between the group and one of them, that point is the group's (no glyph of B between
   //   them), and its line the one TeX ended there, as a placed break's: at the unit's end its last line, which has no line
   //   after it to state;
-  // - else it lies in the window of B's stream between the two, with each group of the window. Every forced break ends a line
+  // - else it lies in the window of B's stream between the two, with each group of the window. Where the marked compile set its
+  //   points where TeX ended a line at a forced break (`kb<n>`, STATEMENTS_TEX's BREAKS_TEX: after \@gnewline's \unskip, past the
+  //   line's last glyph) and the window holds as many as breaks, each break's line is the one of the unit's last glyph before its
+  //   point, in order (the compile move's F35: 2608.25210v2 t196, a break at the end of a full line after a line TeX wrapped,
+  //   which no count of line ends tells); else, as before the point: every forced break ends a line
   //   and a group one of its own, so where the window's lines end there as often as it holds groups, TeX ended each at one of
   //   them, in order (a paragraph's end TeX states there among them: in a centred or ragged block LaTeX's `\\` is
   //   \@centercr, which ends a paragraph, 2610.30034v1's title, 2608.25210v2 t8); else, in a unit TeX states it set centred
@@ -631,6 +643,20 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
         if (e > w.lo && (unitB[e - 1] as number) === mem.unit) {
           const j = lineBefore(e)
           if (j !== undefined && j !== closed.at(-1)) closed.push(j)
+        }
+      }
+      // (TeX's own: the points it set where it ended a line at a forced break, inside the window, as many as its breaks: the k-th
+      // break's line the one of the unit's last glyph before the k-th point, a break after a break the same line, the empty one
+      // TeX set after it no line of the page's)
+      const kb = forced.filter((b) => b > w.lo && b <= w.hi)
+      const flat = w.groups.flat()
+      if (kb.length && kb.length === flat.length) {
+        const at = kb.map((b) => lineBefore(b))
+        if (at.every((j) => j !== undefined && !((mem.lines[j] as Line)[9] & 1))) {
+          flat.forEach((el, q) => {
+            breaks.push([el, at[q] as number])
+          })
+          continue
         }
       }
       let lines: number[] | null = null
