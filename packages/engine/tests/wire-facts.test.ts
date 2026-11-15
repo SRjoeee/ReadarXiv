@@ -179,6 +179,18 @@ describe('an element’s text, where TeX set it on its line at its text’s size
     const { el } = stated(moved(ON, isEl, { size: 7 }), [unitOf()])
     expect(el.text).toBeUndefined()
   })
+  it('states it for a command’s element alone: a formula’s or a reference’s glyphs on the line get none', () => {
+    // (F10's case is a kept command whose text is a word's letters, `\hl{guitar}` + "s"; letters glued to a formula's or a
+    // number's glyphs, "$n$th", are another question, and a fact no reader reads is not stated)
+    const of = (el: Piece, cls: string) => {
+      const content: Piece[] = [t('dirty '), el, t('s.')]
+      return unitOf({ id: unitId('para', content), content, classes: [['1', { cls }]] })
+    }
+    const formula = stated(ON, [of({ t: 'el', id: '1', kind: 'math', src: '$\\sys$' }, 'macro')])
+    expect(formula.members[0]!.onBase?.has('1')).toBe(true)
+    expect(formula.el.text).toBeUndefined()
+    expect(stated(ON, [of({ t: 'el', id: '1', kind: 'ref', src: '\\ref{guitar}' }, 'num')]).el.text).toBeUndefined()
+  })
   it('states none for a footnote’s mark, which is drawn raised whatever it is set as', () => {
     const { el } = stated(ON, [unitOf({ classes: [['1', { cls: 'num', mark: true }]] })])
     expect(el.text).toBeUndefined()

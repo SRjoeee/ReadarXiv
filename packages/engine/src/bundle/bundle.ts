@@ -134,8 +134,13 @@ function textAt(ps: readonly Placement[] | undefined): string | undefined {
 }
 /** a size on the format's grid, a hundredth of a PDF unit (schema.ts: the prepare writes its numbers on a 1/100 grid) */
 const onGrid = (v: number): number => Math.round(v * 100) / 100
-/** a unit's content as the bundle states it: each element with the text TeX set for it where it stands (format's el `text`,
- *  textAt), by `uid` and its piece id. The instrument's content stays as it is: a copy where anything is stated */
+/** the kind of a command's element, the source reader's (marks.ts classOf `macro`: a paper's command or one no table names, a
+ *  kept command that sets a word's letters, `\hl{guitar}`): the one kind whose text the bundle states. A formula's, a number's
+ *  or a reference's glyphs glued to letters ("$n$th") are another question, which no reader reads: a fact no reader reads is
+ *  not stated */
+const COMMAND_KIND = 'macro'
+/** a unit's content as the bundle states it: each command's element with the text TeX set for it where it stands (format's el
+ *  `text`, textAt), by `uid` and its piece id. The instrument's content stays as it is: a copy where anything is stated */
 function statedOf(
   uid: string,
   content: readonly Piece[],
@@ -145,7 +150,7 @@ function statedOf(
   const walk = (ps: readonly Piece[]): Piece[] =>
     ps.map((p) => {
       if (p.t === 'span') return { ...p, content: walk(p.content) }
-      if (p.t !== 'el') return p
+      if (p.t !== 'el' || p.kind !== COMMAND_KIND) return p
       const text = textAt(placements.get(`${uid}|${p.id}`))
       if (text === undefined) return p
       any = true
