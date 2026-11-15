@@ -83,7 +83,8 @@ const DISPLAY_TAIL = new RegExp(
 const DISPLAY_STOP =
   /\\(?:text|mbox|textrm|textnormal|mathrm|hbox)\s*\{\s*([.,;:])\s*\}$|(?<!\\(?:right|middle|left|[bB]igg?[lrm]?)\s*)(?<!\\)([.,;:])$/
 /** the punctuation a display's source sets at its end, which is its sentence's (`x = y.\label{e}\end{equation}`), or null;
- *  read in its last 2,000 characters, where a display's end lies whatever its length */
+ *  read in its last 2,000 characters, where a display's end lies whatever its length, past at most 64 of the things
+ *  DISPLAY_TAIL reads off that end: UTF-16 code units and a count of matches, both unmeasured */
 export function displayStop(src: unknown): string | null {
   if (typeof src !== 'string' || !DISPLAY.test(src)) return null
   let s = src.length > 2000 ? src.slice(-2000) : src

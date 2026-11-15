@@ -42,7 +42,7 @@ export function numberCrop(
   }
 }
 
-export type NumberedInput = {
+type NumberedInput = {
   numbered: boolean
   layout: Layout
   tokens: readonly Token[]

@@ -6,7 +6,7 @@
 // characters.
 
 /** a glyph's style by its font's name, as today's reader reads it (fonts.mjs classifyFont) */
-export type FontStyle = {
+type FontStyle = {
   fam: 'serif' | 'sans' | 'mono' | 'math'
   bold: boolean
   italic: boolean
@@ -16,7 +16,7 @@ export type FontStyle = {
   name: string
 }
 /** a font's class and design by its PostScript name (classifyRole) */
-export type FontClass = { cls: string; design: string }
+type FontClass = { cls: string; design: string }
 
 /** the PostScript name without its subset tag */
 const bare = (name: string): string => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
@@ -158,7 +158,7 @@ const DESIGNS: readonly { design: string; cls: string; ps: RegExp }[] = [
   },
   { design: 'utopia', cls: 'serif', ps: /^(?:Utopia|Erewhon)/ },
 ]
-/** the English families a paper's body is set in */
+/** the English families a paper's body is set in: our own vocabulary, the designs the reader has a text face for and `other` */
 const ENGLISH_FAMILIES = Object.freeze([
   'cm',
   'times',
@@ -168,8 +168,8 @@ const ENGLISH_FAMILIES = Object.freeze([
   'garamond',
   'utopia',
   'other',
-])
-const SERIF_DESIGN = new Set(ENGLISH_FAMILIES)
+] as const)
+const SERIF_DESIGN: ReadonlySet<string> = new Set(ENGLISH_FAMILIES)
 
 // a name no table holds: its class guessed from its words
 const MONO_WORD = /(?:Mono|Courier|Typewriter|Consol|Code|Menlo|Monaco|Fixed)/i

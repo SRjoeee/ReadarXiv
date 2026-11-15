@@ -4,7 +4,7 @@
 // the original's source (the same source, and so the same chunks, the left's document reads), its rest of the add-on's.
 import { type Bound, type ByteSource, RangeRefusal } from './source.ts'
 
-export interface ComposedSource extends ByteSource {
+interface ComposedSource extends ByteSource {
   /** the original's length: where the add-on begins */
   readonly seam: number
   readonly bound: Bound

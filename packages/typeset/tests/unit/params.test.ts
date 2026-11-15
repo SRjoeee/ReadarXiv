@@ -1,8 +1,8 @@
-// U.params on synthetic units: the branches the sample does not show (a unit of no glyph read, a formula's style, no pitch to
-// read the leading against) and the edges' label part.
+// U.params on synthetic units: the branches the sample does not show (a unit of no glyph read, no pitch to read the leading
+// against) and the edges' label part.
 import { describe, expect, it } from 'vitest'
 import type { Block } from '../../src/unit/blocks.ts'
-import { baseStyleOf, cjkAdvance, leadOf, params, sizeOf } from '../../src/unit/params.ts'
+import { cjkAdvance, leadOf, params, sizeOf } from '../../src/unit/params.ts'
 
 const unit = { kind: 'para', pieces: [] }
 const block = (pitch0: number | null) => ({ pitch0 }) as Block
@@ -17,20 +17,6 @@ describe('U.params', () => {
       ]),
     ).toBeCloseTo(10, 9)
     expect(sizeOf({ orig: { size: 9.96 } }, { cjk: true }, unit, [])).toBe(9.96)
-  })
-
-  it('sets a unit whose original is a formula’s, or none, in serif, bold for a heading', () => {
-    expect(baseStyleOf({ orig: { size: 9, st: { fam: 'math' } } }, 'heading', 'cm')).toEqual({
-      fam: 'serif',
-      bold: true,
-      italic: false,
-      caps: false,
-      design: 'cm',
-    })
-    expect(baseStyleOf({ orig: { size: 9, st: { fam: 'sans', bold: true } } }, 'para', 'cm')).toEqual({
-      fam: 'sans',
-      bold: true,
-    })
   })
 
   it('leads by the script’s leading of a solid-set original, never closer than the original’s pitch', () => {

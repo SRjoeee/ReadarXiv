@@ -156,8 +156,8 @@ export type TextItem = Extract<Item, { face: FaceId }> & {
   slant?: number
 }
 /** a crop as it is drawn: design-a's Item, with its width on the line (the item's) */
-export type CropItem = Extract<Item, { src: unknown }> & { w: number }
-export type DisplayItem = TextItem | CropItem
+type CropItem = Extract<Item, { src: unknown }> & { w: number }
+type DisplayItem = TextItem | CropItem
 export type DisplayLine = [y: number, x0: number, x1: number, items: DisplayItem[]]
 
 /** a run's own fill as the drawing writes it (svgOfUnit fillAttr: a fill as it is); a colour that is no fill names none, so the run

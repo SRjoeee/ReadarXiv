@@ -192,6 +192,8 @@ function slotsAt(blocks: readonly FitBlock[], st: FitState, P: FitParams, s: num
     // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; and its gaps TeX's
     // \lineskip rule opened closed to the pitch, blocks2's `E`)
     const G = onGrid && b.E ? b.E : (b.G ?? b.B)
+    // (400 slots a block at most, a count of lines: the loop ends under the block's foot by its break, and the bound ends it
+    // where it would not, a pitch of 0 or none; a page of 792 pt holds 66 lines at 12 pt. Unmeasured, no document states it)
     for (let k = 0; k < 400; k++) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
@@ -241,7 +243,7 @@ function slotsAt(blocks: readonly FitBlock[], st: FitState, P: FitParams, s: num
       if (firstBlock && k === 0 && b.start === undefined && b.hang !== undefined && !b.centred && b.hang < x0) {
         hangGap = (b.hangGap ?? 0) * st.scale
         x0 = b.hang
-      } else if (firstBlock && k > 0 && b.hang !== undefined && !b.centred && Math.abs(x0 - mx0) < 0.01) hung = true
+      } else if (firstBlock && k > 0 && b.hang !== undefined && !b.centred) hung = true
       // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
       // that ends 2 em before it), whose top stands under its baseline in reach of its descent: it ends 2 em before the display,
       // as TeX's own test asks of the line before a display set so, and what no longer fits is the fit's. 2608.16117 page 23,

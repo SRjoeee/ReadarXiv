@@ -59,17 +59,17 @@ describe('tableGrid: a table body as its cells lay it out', () => {
 
 describe('loadProject: each cell unit carries its place in its table', () => {
   const tex = doc('\\begin{tabular}{ll}\n\\toprule\nModel & Training cost \\\\\n\\midrule\nAlphaNet & fast training \\\\\nBetaNet & slow \\begin{tabular}{c}long\\\\training\\end{tabular} \\\\\n\\bottomrule\n\\end{tabular}\n\n\\begin{tabular}{l}\nOne cell of another table \\\\\n\\end{tabular}')
-  it('its table, row, column and span, and whether its row is the header\'s; a nested table\'s lines are the outer cell\'s', () => {
+  // (a one-column tabular of several rows nested in a cell sets lines of that cell's text, one unit with its forced break, and is
+  // no table of its own: the next table is the paper's second, PDF-READER §18.75; it was three units and the third table)
+  it('its table, row, column and span, and whether its row is the header\'s; a nested one-column table\'s lines are the outer cell\'s text', () => {
     expect(cells(tex)).toEqual([
       { text: 'Model', table: 1, row: 0, col: 0, span: 1, head: true },
       { text: 'Training cost', table: 1, row: 0, col: 1, span: 1, head: true },
       { text: 'AlphaNet', table: 1, row: 1, col: 0, span: 1, head: false },
       { text: 'fast training', table: 1, row: 1, col: 1, span: 1, head: false },
       { text: 'BetaNet', table: 1, row: 2, col: 0, span: 1, head: false },
-      { text: 'slow', table: 1, row: 2, col: 1, span: 1, head: false },
-      { text: 'long', table: 1, row: 2, col: 1, span: 1, head: false },
-      { text: 'training', table: 1, row: 2, col: 1, span: 1, head: false },
-      { text: 'One cell of another table', table: 3, row: 0, col: 0, span: 1, head: false },
+      { text: 'slow long training', table: 1, row: 2, col: 1, span: 1, head: false },
+      { text: 'One cell of another table', table: 2, row: 0, col: 0, span: 1, head: false },
     ])
   })
   it('the groups: the header, each column, the cells spanning the same columns; no group outside a table', () => {

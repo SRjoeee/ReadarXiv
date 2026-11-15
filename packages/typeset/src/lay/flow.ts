@@ -293,9 +293,10 @@ function layLine(
       // (a member after the first opens on a line the members before it hold: its first word, which the breaker cuts by its
       // characters where a line holds nothing yet, is never cut there; where the rest of the line does not hold it whole, the
       // member goes on to the next line, as the mark it carried (above) made it go before. A CJK name of no space, its first
-      // word, stood cut over two lines)
+      // word, stood cut over two lines. One whose first line is on the next line already (the room left on this one a sliver,
+      // B.slots) is laid from there alike)
       const L0 = got.lay.state === 'laid' ? got.lay.lay.layout : null
-      if (k > 0 && L0 && L0.lines.length > 1 && Math.abs(L0.lines[0]!.baseline - ys[r]!) < 0.05 && r + 1 < R.length) {
+      if (k > 0 && L0 && L0.lines.length > 1 && r + 1 < R.length) {
         const textOf = (t: { s?: string; crop?: { text?: unknown } }) =>
           t.s ?? (typeof t.crop?.text === 'string' ? t.crop.text : '')
         let word = ''

@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { HOLDER_JOIN } from '../../lab/pdf/prepare-back/stated.mjs'
 // @ts-expect-error — a plain node module of the lab
-import { candidateAddress, candidateKept, candidateKeptElements, candidateKeptToday, candidatePitch, heldJoin, joinedJoin, joinedPlan, todayJoin } from '../../lab/typeset/parity/join.mjs'
+import { candidateAddress, candidateKept, candidateKeptElements, candidateKeptToday, candidatePitch, heldJoin, joinedJoin, joinedPlan, piecesJoin, todayJoin } from '../../lab/typeset/parity/join.mjs'
 import { unitId } from '../../packages/format/src/ids.ts'
 
 type Content = { t: 'text'; s: string }[]
@@ -478,5 +478,79 @@ describe("the ink of the elements the candidate's prepare keeps as the original'
     } finally {
       rmSync(run, { recursive: true, force: true })
     }
+  })
+})
+
+describe("a unit of today cut into several members of v2, and several of today's units one member: joined by their pieces' words", () => {
+  // (2608.25210v2-zh p3 after S1: today's t55 a lead sentence with its prompt box; v2's part sets them apart, member 55 the lead
+  // and 56 the box. A table cell set on two lines after S2: today's two line units, v2's one member. No id joins them: the
+  // words their pieces hold do, in order, every one of each side's; a member or a unit of today the one-to-one join took is no
+  // part of a group)
+  const today = (ord: number, page: number, ...texts: string[]) => ({
+    ord,
+    kind: 'para',
+    lines: [{ page }],
+    pieces: texts.flatMap((t, k) => (k ? [{ kind: 'ph', src: '\\_' }, { kind: 'text', s: t }] : [{ kind: 'text', s: t }])),
+  })
+  const on3 = { lines: [[3]] }
+  const v2Part = bundle(
+    { 3: [member(55, 'para', H, on3), member(56, 'para', P, on3), member(70, 'cell', Q, on3), member(80, 'para', R, on3), member(81, 'para', F, on3)] },
+    [
+      { id: H, kind: 'para', content: text(': [sentence_1] and [sentence_2] are placeholders for two test sentences.') },
+      { id: P, kind: 'para', content: text('llm_equal_human: Are the following two sentences semantically equivalent?') },
+      { id: Q, kind: 'cell', content: [{ t: 'text', s: 'Error rate' }, { t: 'el', id: 'b' } as never, { t: 'text', s: 'on test set' }] },
+      { id: R, kind: 'para', content: text('A paragraph joined one to one.') },
+      { id: F, kind: 'para', content: text('Unrelated words of another member.') },
+    ],
+  )
+  const units = [
+    today(55, 3, ': [sentence', '1] and [sentence', '2] are placeholders for two test sentences.', 'llm', 'equal', 'human: Are the following two sentences semantically equivalent?'),
+    today(70, 3, 'Error rate'),
+    today(71, 3, 'on test set'),
+    today(80, 3, 'A paragraph joined one to one.'),
+    today(90, 3, 'Some other text of today.'),
+  ]
+  it('joins one unit of today to the members that hold its words in order, and the units of today one member holds', () => {
+    expect(piecesJoin(v2Part, units, new Map([[80, 80]]))).toEqual([
+      { today: [55], members: [55, 56], pages: { 55: [3], 56: [3] } },
+      { today: [70, 71], members: [70], pages: { 70: [3] } },
+    ])
+  })
+  it('never one already joined one to one, nor units whose words no member holds whole', () => {
+    expect(piecesJoin(v2Part, units, new Map([[55, 55], [70, 70], [80, 80]]))).toEqual([])
+  })
+  // (2611.03953v2-zh p8 after S2: today's t118, a paragraph the one-to-one join leaves (v2 holds `\method{}` as an element, so
+  // their ids differ), v2's member 118 its words whole; the next member the one-to-one join left on the page, 137, a merged cell
+  // `\makecell{Time to\\target}` whose rows are today's t137 and t138. The paragraph's few hundred words and the cell's four
+  // were within a tenth of today's paragraph's: the paragraph was joined to members 118 and 137, and the cell to nothing)
+  const many = Array.from({ length: 60 }, (_, k) => `word${k}`).join(' ')
+  const box = (s1: string, s2: string) => [{ t: 'span', open: '\\makecell{', close: '}', content: [{ t: 'text', s: s1 }, { t: 'el', id: 'b', src: '\\\\' }, { t: 'text', s: s2 }] }]
+  const on8 = { lines: [[8]] }
+  const cellPart = bundle({ 8: [member(118, 'para', H, on8), member(137, 'cell', Q, on8), member(138, 'cell', R, on8)] }, [
+    { id: H, kind: 'para', content: text(many) },
+    { id: Q, kind: 'cell', content: box('Time to', 'target') as never },
+    { id: R, kind: 'cell', content: box('Recovery', 'at budget') as never },
+  ])
+  const cellUnits = [today(118, 8, many), today(137, 8, 'Time to'), today(138, 8, 'target'), today(139, 8, 'Recovery'), today(140, 8, 'at budget')]
+  it("never extends a run past a member that alone holds the unit's words: one member is no group of pieces", () => {
+    expect(piecesJoin(cellPart, cellUnits, new Map()).filter((g: { today: number[] }) => g.today.includes(118))).toEqual([])
+  })
+  it("joins a merged cell to its rows though its box's macro is no word of theirs (today's rows hold no group round them)", () => {
+    expect(piecesJoin(cellPart, cellUnits, new Map())).toEqual([
+      { today: [137, 138], members: [137], pages: { 137: [8] } },
+      { today: [139, 140], members: [138], pages: { 138: [8] } },
+    ])
+  })
+  // (a unit of today's set over a page break, which v2 cuts there: member 20 its lines on page 1, member 21 on page 2, one flow.
+  // A part holds whole flows (packages/engine/src/bundle/bundle.ts: every flow with a line on its page, and for a member of one
+  // whose first line is on an earlier page every flow with a line there), so both pages' parts hold both members: the pages a
+  // member stands on are those the part states a line of it on, never the parts that carry it)
+  const brokenPart = bundle({ 1: [member(20, 'para', H, { lines: [[1]] }), member(21, 'para', P, { lines: [[2]] })], 2: [member(20, 'para', H, { lines: [[1]] }), member(21, 'para', P, { lines: [[2]] })] }, [
+    { id: H, kind: 'para', content: text('The first half of a sentence set at the foot of a page') },
+    { id: P, kind: 'para', content: text('and its second half set at the head of the next one.') },
+  ])
+  const broken = { ord: 40, kind: 'para', lines: [{ page: 1 }, { page: 2 }], pieces: [{ kind: 'text', s: 'The first half of a sentence set at the foot of a page and its second half set at the head of the next one.' }] }
+  it('states with each group the pages each member stands on: those the part states a line of it on, not those whose parts carry it', () => {
+    expect(piecesJoin(brokenPart, [broken], new Map())).toEqual([{ today: [40], members: [20, 21], pages: { 20: [1], 21: [2] } }])
   })
 })

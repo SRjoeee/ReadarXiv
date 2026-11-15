@@ -213,10 +213,9 @@ function numberAt(b: Uint8Array, i: number, j: number): number | undefined {
   const v = frac ? m / POW10[frac]! : m
   return neg ? -v : v
 }
-/** the keywords a content stream is made of that are at most three bytes long (PDF 32000-1 Annex A), by their bytes packed (a
- *  token holds no byte 0, white space), so that reading one makes no string */
-const SHORT = new Map<number, string>()
-for (const t of [
+/** the operators of a content stream, all 73 (PDF 32000-1:2008 Annex A, Table A.1), each at most three bytes long: held to
+ *  @cantoo/pdf-lib's PDFOperatorNames, which lists them, by packages/engine/tests/mirrors.test.ts */
+export const OPERATORS = Object.freeze([
   'b',
   'B',
   'b*',
@@ -290,7 +289,11 @@ for (const t of [
   'y',
   "'",
   '"',
-]) {
+])
+/** the operators (OPERATORS) by their bytes packed (a token holds no byte 0, white space), so that reading one makes no
+ *  string */
+const SHORT = new Map<number, string>()
+for (const t of OPERATORS) {
   let key = 0
   for (let x = t.length - 1; x >= 0; x--) key = key * 256 + t.charCodeAt(x)
   SHORT.set(key, t)

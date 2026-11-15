@@ -105,7 +105,7 @@ export type OwnedHow = (typeof OWNED_HOW)[number]
 export const OWNED = 6
 /** the glyph columns ownedOf reads of a page (ink.mjs packGlyphs), and the owned rows after it (marks.mjs): a glyph's
  *  origin, baseline, size and character */
-export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'])
+export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'] as const)
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i])) as Readonly<Record<OwnedHow, number>>
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])(\d+)$/
@@ -235,7 +235,8 @@ function lineEnd(G: StreamGlyphs, glyphs: readonly Place[], anchor: number | nul
 }
 /** the characters of the text after an opening point alone that it is found by */
 export const WANT = 8
-/** the glyph visits a paper's ownership may cost: real ranges never overlap, and cost the glyphs once */
+/** the glyph visits a paper's ownership may cost: real ranges never overlap, and cost the glyphs once. A count of visits;
+ *  unmeasured */
 const WORK = 20_000_000
 
 /** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's (own.mjs's
@@ -522,6 +523,15 @@ function headEntries(
  *   start: that text is no unit's of the source, and none of it the piece's. Nothing at all before the
  *   next point is a piece of nothing; nothing before the text after it, with glyphs there, is none (REVTeX sets the
  *   punctuation after a citation before its number).
+ * - A piece of a table cell (docs/PDF-READER.md §18.74): an element's ink is what TeX set between its two points, and where TeX
+ *   gives it no closing point it ends where TeX ends what it stands in, never later; for a piece of a cell, the cell's end. A
+ *   piece after its cell's end mark with its opening point alone (its source ends in a control word, or its class may read
+ *   ahead) ends at its cell's end point, `t<i>x`, which LAYOUT_TEX sets at the cell template's end and the marking names among
+ *   its unit's next marks (`ends`): its unit's next mark, as any. Before that point was set it ran to the next unit's start: the
+ *   row's other entries no unit is, the rules between the columns, the rules under its row and a later row's ground (the design's
+ *   E1: 2610.21176v1 p13's `\checkmark` its table's bottom rule). Where TeX states no cell end (a table no template of LaTeX's
+ *   sets: tabularray's tblr, a plain \halign; a p column of LaTeX's own tabular without array.sty, whose template latex.ltx's
+ *   \@classv builds and the marks do not wrap), the reading is as before, to the next mark: no bound is guessed
  * - Past another region's mark (pastOther): an opening point alone whose next mark is another region's (a float TeX shipped into
  *   the stream after a display, before the text after it), the text after it not found before that mark, owns what its own region
  *   holds from it to the next mark there on its page, up to the text after it (2610.20507v1's display (16) before its Figure 3)
@@ -877,6 +887,8 @@ export function ownedOf(
           return erasure && f.through && N.name === f.through
             ? { how: HOW["open, to its unit's next mark"], glyphs, boxes }
             : none(HOW['open, an unmarked piece follows'])
+        // (its unit's next mark: its end mark, its next piece's opening, or, a cell's piece, its cell's end point, `t<i>x`: what
+        // TeX set in the cell after the piece's opening point and no later; with no cell end stated, the next unit's start below)
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
         if (later && Number(later[1]) > Number(m[2])) return toStart(glyphs, boxes, N)
         return none(HOW["open, the next mark not its unit's"])

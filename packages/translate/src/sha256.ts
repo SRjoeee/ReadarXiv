@@ -13,7 +13,7 @@ const K = new Uint32Array([
 ])
 
 /** a string's UTF-8 bytes (a lone surrogate as U+FFFD, as TextEncoder writes it) */
-export function utf8(s: string): Uint8Array {
+function utf8(s: string): Uint8Array {
   const out: number[] = []
   for (let i = 0; i < s.length; i++) {
     let c = s.charCodeAt(i)

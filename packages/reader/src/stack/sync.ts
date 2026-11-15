@@ -37,7 +37,7 @@ export interface Follower<P extends FollowPane = FollowPane> {
 }
 /** a ScrollTimeline's constructor (the compositor's timeline on a scroller's block axis) */
 type Compositor = new (o: { source: Element; axis: string }) => AnimationTimeline
-export interface FollowerOptions<P extends FollowPane> {
+interface FollowerOptions<P extends FollowPane> {
   panes: { left: P; right: P }
   active(): boolean
   target(from: P): number | null

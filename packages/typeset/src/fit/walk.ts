@@ -27,7 +27,7 @@ export const firstCompress = (P: { compressMax: number }): number => (P.compress
 export const PAST_FOOT = 1.5
 
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
-export function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Generator<FitState> {
+function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Generator<FitState> {
   // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
   const t0 = P.cjk ? (P.trackStart ?? 0) : 0
   // (capScale: the most its lines' room between the rules over and under them leaves it, cellBands: never above)

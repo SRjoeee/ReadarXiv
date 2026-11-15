@@ -5,6 +5,13 @@
 // baseline's reader-dump format, the members the adapter did not set by what stops them, and, per adapted member, the first
 // field of its setting that differs from today's (round.ts prepare over the same round: the blocks' pages, baselines and
 // measures, their alignment and indent, the size, the leading, the edges): the rule whose stated facts changed it.
+// The runner never mixes two numberings: what it hands the lay names members by today's ords alone (the ledger's and the
+// dumps'), never by a part's. Each member is renamed by its unit of today's, and a member no unit of today's joins has no ord
+// of today's: a tie leaves it out, and a follower, a row or a RowLine member it is names no member (todayMember, todayTies),
+// and pieceCrops reads each member's crops' piece indices from its own unit of today's (cropLays). A part ord kept among
+// today's names whichever unit of today's holds that number, and so another unit wherever an insertion moved the part's ords
+// (lane hdr-lines, 2026-11-15: 2608.25210v2-zh's e021ea1f6aed capped by a heading's size tie through the part ord of the
+// heading's paragraph, which joins no unit, once S1's three inserted units moved the paper's ords by 3).
 import type { OutPiece, Part, Row, Unit } from '@readarxiv/format'
 import { layPage, nameOf } from '../../src/lay/entry.ts'
 import { waitOf } from '../../src/lay/wait.ts'
@@ -356,6 +363,41 @@ export function entryByToday<M extends { ord: number }>(
     if (u) out.set(u.ord, m)
   }
   return out
+}
+
+/** the ord of no member (format's Placed.ord counts from 0): what the runner names a member by that no unit of today's joins */
+const NO_ORD = -1
+
+/** an adapted member as the runner hands it to the lay: named by its unit's ord of today's (`ord`), and the follower, the row
+ *  and the RowLine's members its fields name by theirs (`unitOf`: part ord -> today's unit), one no unit joins by none */
+export function todayMember(mem: FlowMember, ord: number, unitOf: ReadonlyMap<number, { ord: number }>): FlowMember {
+  const todayOrd = (o: number) => unitOf.get(o)?.ord ?? NO_ORD
+  mem.ord = ord
+  if (mem.follower) mem.follower = { ...mem.follower, id: todayOrd(mem.follower.id) }
+  if (mem.rowStart) mem.rowStart = { ...mem.rowStart, row: { ...mem.rowStart.row, id: todayOrd(mem.rowStart.row.id) } }
+  if (mem.line) mem.line = { ...mem.line, ords: mem.line.ords.map(todayOrd) }
+  return mem
+}
+
+/** a page's ties as the runner hands them to the lay, in today's ords (`unitOf`: part ord -> today's unit), a member no unit
+ *  joins left out: a table's cells those of them `handed` (the members laid on the page), each stated spanning */
+export function todayTies(
+  ties: readonly { rule: string; cells?: readonly (readonly number[])[]; ords?: readonly number[] }[],
+  unitOf: ReadonlyMap<number, { ord: number }>,
+  handed: ReadonlySet<number>,
+): ({ rule: 'size'; ords: number[] } | { rule: 'cells'; cells: number[]; spanning: number[] })[] {
+  const today = (os: readonly number[]) => os.flatMap((o) => unitOf.get(o)?.ord ?? [])
+  return ties.map((t) => {
+    if (t.rule !== 'cells') return { rule: 'size' as const, ords: today(t.ords ?? []) }
+    const cells = today((t.cells ?? []).flat()).filter((o) => handed.has(o))
+    return { rule: 'cells' as const, cells, spanning: cells }
+  })
+}
+
+/** the adapted members (by part ord) as the runner hands them to pieceCrops, by their unit's ord of today's (todayMember's):
+ *  pieceCrops reads each one's crops' piece indices back from the ledger's unit of its key */
+export function cropLays(adapted: ReadonlyMap<number, FlowMember>): Parameters<typeof pieceCrops>[1] {
+  return new Map([...adapted.values()].map((m) => [m.ord, { tokens: m.tokens } as never]))
 }
 
 /** the first field of a member's setting that differs from today's prepared one, or 'equal' */
@@ -952,7 +994,6 @@ export function gateL1Pair(
       R,
       measure: (measure ?? (c.P as Raw).measure) as never,
       patterns: (c.P as Raw).patterns as never,
-      view: (pg) => views.get(pg),
       rulesOf: (pg) => today?.rules(pg),
       lineskip: (bundle.parts.values().next().value?.paper.lineskip as [number, number] | undefined) ?? null,
       reading,
@@ -967,12 +1008,7 @@ export function gateL1Pair(
     // (the CJK body face's size correction, B.faces': today's trackStart, as U.params read it, where the reading is today's)
     if (o.reading !== 'part') got.member.P.trackStart = up?.trackStart as number
     // (named by today's ords, which the ledger and the dumps hold: L1's ord of a unit can differ)
-    const todayOrd = (o: number) => unitOf.get(o)?.ord ?? o
-    const mem = got.member
-    mem.ord = u.ord
-    if (mem.follower) mem.follower = { ...mem.follower, id: todayOrd(mem.follower.id) }
-    if (mem.rowStart)
-      mem.rowStart = { ...mem.rowStart, row: { ...mem.rowStart.row, id: todayOrd(mem.rowStart.row.id) } }
+    const mem = todayMember(got.member, u.ord, unitOf)
     adapted.set(ord, mem)
     const td = prepare(c)
     let setting = settingDiff(mem, td, o.reading !== 'part')
@@ -1004,7 +1040,7 @@ export function gateL1Pair(
     // classes above are the member's own)
     if (o.substitute?.length) substitute(mem, td, o.substitute)
   }
-  pieceCrops(pair, new Map([...adapted].map(([o, m]) => [o, { tokens: m.tokens } as never])))
+  pieceCrops(pair, cropLays(adapted))
   const dumped = new Map<
     number,
     {
@@ -1105,14 +1141,7 @@ export function gateL1Pair(
     // Today's settleGroup withholds the group whole for any cell it cannot draw: the runner states every cell of it spanning,
     // which settleTies so withholds, where the entry holds a group for a spanning cell alone, ruling (c) of 2026-11-13)
     const handed = new Set(flows.flat().map((m) => m.ord))
-    const ties = ((part.ties ?? []) as { rule: string; cells?: number[][]; ords?: number[] }[]).map((t) => {
-      if (t.rule !== 'cells') return { rule: 'size' as const, ords: (t.ords ?? []).map((o) => unitOf.get(o)?.ord ?? o) }
-      const cells = (t.cells ?? [])
-        .flat()
-        .map((o) => unitOf.get(o)?.ord ?? o)
-        .filter((o) => handed.has(o))
-      return { rule: 'cells' as const, cells, spanning: cells }
-    })
+    const ties = todayTies((part.ties ?? []) as { rule: string; cells?: number[][]; ords?: number[] }[], unitOf, handed)
     // (a flow whose lay throws is left the original's alone by the composition, design-a §1.4: its members 'error', the reason
     // with them)
     let got: ReturnType<typeof layPagePrepared> | null = null

@@ -64,6 +64,8 @@ export interface Member {
   labelMeasure?: [number, number]
   style: Style
   align: 'j' | 'l' | 'c' | 'r'
+  /** a table cell of several lines: how its lines stand in its box, read off A (columns.ts innerOf; Placed.inner, §18.75) */
+  inner?: 'l' | 'c' | 'r'
   lead: number
   room: Room
   pages: number[]
@@ -233,7 +235,7 @@ export interface Index {
 
 /** the artefacts' reading the units made on A take (artefacts.ts): whether a unit set wholly in a face of one pitch is kept as
  *  an artefact (the paper's body face is none of them), and the test a figure text is kept by */
-export interface Pitch {
+interface Pitch {
   artefacts: boolean
   figureArtefact: (text: readonly number[], turned: readonly [number, number][]) => boolean
 }
@@ -267,7 +269,7 @@ export interface Work {
 }
 
 /** the fields of the record one phase assigns once (Work's comment names each one's writer and readers) */
-export interface Assigned {
+interface Assigned {
   trailSep: Map<number, number>
   pitch: Pitch
   born: Map<number, { kind: string; content: Piece[] }>

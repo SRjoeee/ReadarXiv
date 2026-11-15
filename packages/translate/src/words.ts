@@ -29,7 +29,7 @@ import { type Piece, type Result, SOURCE, type UnitIn } from './contract.ts'
 const OBJ = '￼'
 let segmenter: Intl.Segmenter | null = null
 
-export interface Whole {
+interface Whole {
   /** the unit as every translator is sent it */
   unit: UnitIn
   /** a row of it with its sentences in the unit's own projection; dropped where they no longer rise */

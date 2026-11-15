@@ -6,7 +6,7 @@
 import { Fault, type FetchReply, type Signal } from '../contract.ts'
 
 /** a Retry-After header in milliseconds: seconds, or an HTTP date */
-export function retryAfterMs(value: string | null, now = Date.now()): number | undefined {
+function retryAfterMs(value: string | null, now = Date.now()): number | undefined {
   if (!value) return undefined
   const s = Number(value)
   if (Number.isFinite(s) && s >= 0) return Math.round(s * 1000)

@@ -43,7 +43,7 @@ import {
 } from '../marks/marks.ts'
 import { ownOf } from '../own/own.ts'
 import { READ_ALONE, regionsOf, WANT } from '../own/stream.ts'
-import { BACKREF_LIST, lastTexLog, startOf } from '../source/latex-front.ts'
+import { BACKREF_LIST, forcedBreak, lastTexLog, startOf } from '../source/latex-front.ts'
 import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.ts'
 import { textPieceOf } from '../source/text-piece.ts'
@@ -699,8 +699,6 @@ function phClass2(src: string): { cls: string; unknown?: true } {
  *  it is drawn as; a LaTeX text symbol's character as it is (\textasciicircum's caret is no such mark) */
 const symbolDrawn = (src: string): string => symbolText(src) ?? texToText2(src).replace(/^\^\(?|\)$/g, '')
 const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
-/** a text's graphemes, each a string: what a reader sees as one character */
-const graphemesOf = (t: string): string[] => Array.from(GRAPHEMES.segment(t), (g) => g.segment)
 /**
  * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
  * kind the file's crops exempt (tex.mjs cropsOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's
@@ -724,8 +722,9 @@ function phClassProven(src: string): { cls: string; unknown?: true } {
 
 // ---- what the typesetter's rules read of a piece's source besides its class (the rest of today's reads of `src`: tokensOf2's
 // glue, style commands and links L2:2406-2620, U.breaks' forced breaks TEX:84, U.rename's citation notes L2:1279, U.elements'
-// macros learnt by their source L2:1382), stated as facts so that the part carries them and no rule reads a source; glueOf,
-// FORCED_BREAK and the note's reading copied from today's as they are, held equal to them by tests/pdf-reader/instrument-classes.test.ts
+// macros learnt by their source L2:1382), stated as facts so that the part carries them and no rule reads a source; glueOf
+// and the note's reading copied from today's as they are, held equal to them by tests/pdf-reader/instrument-classes.test.ts. A
+// forced break is the source reader's statement on its piece (forcedBreak, §18.75), not read here from its source
 const DIMEN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(pt|bp|mm|cm|in|pc|dd|cc|sp|em)$/
 const BP: Readonly<Record<string, number>> = {
   pt: 72 / 72.27,
@@ -760,19 +759,21 @@ export function glueOf(
   const brk = m[1] !== 'kern'
   return d[2] === 'em' ? { em: Number(d[1]), brk } : { bp: Number(d[1]) * BP[d[2]!]!, brk }
 }
-/** a forced break's source (tex.mjs:84 FORCED_BREAK) */
-export const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a forced break's source, the pattern the source reader states a placeholder one by (phPiece), under today's name: today's
+ *  reader reads its own copy of it (tex.mjs:84) and re-exports this one (pipeline/instrument.mjs) */
+export { BREAK_SOURCE as FORCED_BREAK } from '../source/latex-front.ts'
 /**
  * The kind a bundle's element states (the translator contract's ElKind, what a sentence cutter reads it as): a tie `~` a
  * `space` (TeX's interword space, which it sets whatever the space factor: the author's word that a stop before it ends no
- * sentence), a forced line break a `break` (FORCED_BREAK: a line's end, which in a paragraph separates its words as a space
- * does), each read so by today's cutter (mt.mjs splitContextOf); any other today's classOf's, `other` where it names none.
+ * sentence), a forced line break a `break` (the source reader's statement, forcedBreak: a line's end, which in a paragraph
+ * separates its words as a space does; `\\\\`, and a paper's row-ending macro inside a grid cell, §18.75), each read so by
+ * today's cutter (mt.mjs splitContextOf); any other today's classOf's, `other` where it names none.
  * Before, both were `other`, which the package's cutter reads as a word: `R.~S.~Sutton` was cut after its initials, and a line
  * after `\\` ran on into the next only by the source's own line end (lane fig-cut, 2026-11-10). Neither enters a unit's id
  * (format's unitId reads an element's source)
  */
 export const elementKindOf = (p: PieceLike | null | undefined): string =>
-  isTie(p) ? 'space' : FORCED_BREAK.test(p?.src ?? '') ? 'break' : (classOf(p) ?? 'other')
+  isTie(p) ? 'space' : forcedBreak(p) ? 'break' : (classOf(p) ?? 'other')
 /** a tie: the front end's placeholder for the source's `~` (latex-front.mjs, its one spelling of TeX's \nobreakspace; the
  *  command `\nobreakspace` itself is read as one that sets no ink, marks.mjs INVISIBLE_WORDS): \penalty10000 and interword
  *  glue, a space no line breaks at (PieceClass.tie, El.tie) */
@@ -796,14 +797,16 @@ export function commandOf(src: string): { cmd: string; bare?: true } | null {
   const m = /^\\([A-Za-z]+\*?)/.exec(src)
   return m ? { cmd: m[1]!, ...(/^\\[A-Za-z]+$/.test(src) ? { bare: true } : {}) } : null
 }
-/** what a piece's source tells the rules besides its class: its glue, its command, a forced break, a citation's note, an
- *  earlier piece of the unit with the same source (`same`: the source's identity, which U.elements' macros are learnt by),
- *  and the fill TeX set its run in (a colour piece's, readColours: `colours` by piece index) */
+/** what a piece's source tells the rules besides its class: its glue, its command, a citation's note, an earlier piece of the
+ *  unit with the same source (`same`: the source's identity, which U.elements' macros are learnt by), and the fill TeX set its
+ *  run in (a colour piece's, readColours: `colours` by piece index); and whether it is a forced break, the source reader's
+ *  statement on the piece (`brk`, forcedBreak) */
 function sourceFactsOf(
   src: string,
   k: number,
   first: Map<string, string>,
   colours: ReadonlyMap<number, number> | null,
+  brk: boolean,
 ): Partial<PieceClass> {
   const x: Partial<PieceClass> = {}
   const g = glueOf(src)
@@ -814,7 +817,7 @@ function sourceFactsOf(
         : [g.bp, 'bp', ...(g.brk ? ([1] as const) : ([] as const))]
   const c = commandOf(src)
   if (c) Object.assign(x, c)
-  if (FORCED_BREAK.test(src)) x.brk = true
+  if (brk) x.brk = true
   const note = noteOf(src)
   if (note !== null) x.note = note
   const f = first.get(src)
@@ -894,6 +897,12 @@ function urlsShown(pieces: readonly PieceIn[]): Map<number, number> {
   return out
 }
 
+/** the classes of a placeholder that draws no ink: a space's (`\\\\`'s among them), one of no width's (\\newline's) */
+const INKLESS_CLASSES = new Set(['space', 'zero'])
+/** whether a piece classesOf reads is a forced break, as it is stated: the source reader's statement on a source unit's piece
+ *  (forcedBreak), or, on an ink unit's piece made of a unit's content (locate/ink.ts flatOf, ink-units.ts's copies for an echo),
+ *  its element's kind, `break`, the instrument's reading of that statement */
+const statedBreak = (p: PieceIn): boolean => forcedBreak(p) || (p as { kind?: unknown }).kind === 'break'
 export function classesOf(
   pieces: readonly PieceIn[],
   colours: ReadonlyMap<number, number> | null = null,
@@ -915,29 +924,33 @@ export function classesOf(
     const src = unicodeOf(p.src)
     // (the placeholder's class, placeholdersOf L2:1065: phClassProven, a symbol that is no text symbol a formula; its
     // drawing as a symbol, `sym`, where phClass2 reads it as one: the tokens' class, cls2)
-    const c = phClassProven(src),
-      copy = copyOf(src) || ''
+    // (a forced break sets no ink: one whose source reads as a class that draws, a paper's row-ending macro the reader states a
+    // break inside a grid cell (read as the paper's macro, umacro), is read as `\\\\` is; one whose source reads as none (`\\\\`
+    // space, \\newline zero) as its source)
+    const as = statedBreak(p) && !INKLESS_CLASSES.has(phClassProven(src).cls) ? '\\\\' : src
+    const c = phClassProven(as),
+      copy = copyOf(as) || ''
     const x: PieceClass = { cls: c.cls, ...(c.unknown ? { unknown: true } : {}), ...(copy ? { copy } : {}) }
-    if (phClass2(src).cls === 'symbol') {
-      const own = symbolText(src)
+    if (phClass2(as).cls === 'symbol') {
+      const own = symbolText(as)
       x.sym =
         own !== null
           ? [own]
           : [
               copy.replace(/^\^\(?|\)$/g, ''),
-              ...(/^\$?\^/.test(src.replace(/^\$/, '')) || /^\^/.test(copy) ? ([true] as const) : ([] as const)),
+              ...(/^\$?\^/.test(as.replace(/^\$/, '')) || /^\^/.test(copy) ? ([true] as const) : ([] as const)),
             ]
     }
-    if (/^\\footnotemark/.test(src)) x.mark = true
+    if (/^\\footnotemark/.test(as)) x.mark = true
     if (isTie(p)) x.tie = true
     // (a text piece, TeX setting its characters as written: a code or URL mark, a plain-text source; no formula, drawnAs
     // L2:1778 formulaOf)
-    if (textPieceOf(src)) x.literal = true
+    if (textPieceOf(as)) x.literal = true
     // (a text macro's text, the marking's probe's: what TeX sets for it (the marks file's `texts`), which today's reader finds
     // its rendering by among the unit's characters where the macro's glyphs are the unit's text (no points of its own))
     const t = (c.cls === 'macro' || c.cls === 'umacro') && texts ? (texts.get(p.src) ?? texts.get(src)) : undefined
     if (typeof t === 'string' && /\S/.test(t)) x.text = t
-    Object.assign(x, sourceFactsOf(src, k, first, colours))
+    Object.assign(x, sourceFactsOf(src, k, first, colours, statedBreak(p)))
     // (a piece that sets a URL \urldef stored: the \url piece's class and copy, a text piece, a URL)
     if (shown.has(k)) {
       const u = unicodeOf(pieces[shown.get(k)!]!.src),
@@ -1295,7 +1308,10 @@ export function boundedEmpty(
     }
     // (the start point's piece as patch finds it, over the source's text as patch writes it)
     const start = S
-      ? startOf(P.map((q) => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)))[0]
+      ? startOf(
+          P.map((q) => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)),
+          unit?.kind === 'cell',
+        )[0]
       : -1
     const last = P.findLastIndex(real)
     const seen = new Map<string, boolean>()
@@ -1896,7 +1912,10 @@ export function outsidePieces(
     if (!S || !P.length || twice.has(u)) return
     const f = first.get(u)
     if (f && (f[0] < S[0] || (f[0] === S[0] && f[1] < S[1]))) return
-    const start = startOf(P.map((q) => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)))[0]
+    const start = startOf(
+      P.map((q) => (q.t === 'text' && !q.tr && q.src !== undefined ? { ...q, s: q.src } : q)),
+      unit?.kind === 'cell',
+    )[0]
     for (let k = 0; k < start; k++) if (P[k]!.t === 'ph') out.push({ unit: u, piece: String(k) })
   })
   return out

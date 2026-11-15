@@ -141,13 +141,12 @@ export const NO_DRIVER_GROUP = ['pdftex.def', 'luatex.def']
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
  *  \resizebox around it, angle=) turns or scales its frame and not the marks, whose rectangle then has the size of no
  *  figure on the left, and the reader leaves that frame as it is */
-const DRAFT =
-  [
-    DRAFT_OPTION,
-    '\\makeatletter\\AddToHook{package/graphics/after}{\\newcount\\axt@g\\let\\axt@setfile\\Gin@setfile%',
-    '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
-    '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
-  ].join('\n') + '\n'
+const DRAFT = `${[
+  DRAFT_OPTION,
+  '\\makeatletter\\AddToHook{package/graphics/after}{\\newcount\\axt@g\\let\\axt@setfile\\Gin@setfile%',
+  '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
+  '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
+].join('\n')}\n`
 /** where the main file's \\begin{document} stands as TeX finds it (latex-front.mjs documentBounds: none in a comment, a
  *  definition or a filecontents), -1 where it has none: what goes before the document goes there */
 const beginDocument = (text: string): number => documentBounds(text).begin

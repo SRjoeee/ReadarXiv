@@ -343,17 +343,14 @@ const known = (spec: string | undefined): spec is string =>
   typeof spec === 'string' && spec !== '?' && !spec.includes('u')
 const asParams = (spec: string): Params => (spec === '=' ? REGISTER : parse(spec))
 const BINDING_INDEX = new Map(BINDINGS.map((b, k) => [b, k]))
-/**
- * The LaTeXML bindings a paper has: its class and packages as its files name them (\documentclass, \LoadClass,
- * \usepackage, \RequirePackage, comments left out), with those their bindings load in turn. A class LaTeXML has no
- * binding for is read as the longest one whose name begins its name (revtex4-2 as revtex4), as LaTeXML reads it. A
- * Set of BINDINGS' indices, for commandParams
- */
-export function bindingsOf(texts: readonly string[]): Set<number> {
-  return bindingsOfText(texts.map(uncommented))
-}
 /** a text with its comments taken out, each to its line's end */
 const uncommented = (t: string) => t.replace(/(^|[^\\])%.*$/gm, '$1')
+/**
+ * The LaTeXML bindings a paper has, of its files' texts with their comments taken out: its class and packages as its files
+ * name them (\documentclass, \LoadClass, \usepackage, \RequirePackage), with those their bindings load in turn. A class
+ * LaTeXML has no binding for is read as the longest one whose name begins its name (revtex4-2 as revtex4), as LaTeXML reads
+ * it. A Set of BINDINGS' indices, for commandParams (paperOf's `bindings`)
+ */
 function bindingsOfText(texts: readonly string[]): Set<number> {
   const out = new Set<number>(),
     queue: number[] = []
@@ -386,7 +383,7 @@ function bindingsOfText(texts: readonly string[]): Set<number> {
   while (queue.length) for (const r of REQUIRES[queue.pop()!] ?? []) add(r)
   return out
 }
-/** whether a paper (paperOf) loads a binding (`subfigure.sty`): its files name it, or a binding they name requires it (bindingsOf) */
+/** whether a paper (paperOf) loads a binding (`subfigure.sty`): its files name it, or a binding they name requires it (bindingsOfText) */
 export const loads = (paper: ArgPaper | null | undefined, binding: string): boolean =>
   !!paper?.bindings.has(BINDING_INDEX.get(binding))
 /** a name's parameters by the forms LaTeXML gives it: where a paper's bindings (`bindings`) define it, theirs, and none
@@ -406,7 +403,7 @@ const byForms = (
   return pools[name] !== undefined && known(pools[name]) ? asParams(pools[name]) : null
 }
 /** a command's parameters ({ shape, role } each, by the letters above), or null where the table does not know them: as
- *  written out here, else by LaTeXML's forms for the paper's bindings (bindingsOf; null for none known) */
+ *  written out here, else by LaTeXML's forms for the paper's bindings (paperOf's `bindings`; null for none known) */
 export function commandParams(name: string, bindings: KeySet<number> | null = null): Params | null {
   return known(CURATED[name]) ? asParams(CURATED[name]) : byForms(COMMANDS, PACKAGE_COMMANDS, name, bindings)
 }
@@ -414,7 +411,7 @@ export function commandParams(name: string, bindings: KeySet<number> | null = nu
  *  is another command's (melba.cls's \def\firstname{…}, which LaTeXML's moderncv gives an argument) */
 const OWN_COMMANDS =
   /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|newtoks|DeclareMathOperator\*?)\s*\{?\s*\\([A-Za-z@]+)/g
-/** a paper as the table reads it: the bindings its files load (bindingsOf), the packages they load by name (`packages`:
+/** a paper as the table reads it: the bindings its files load (bindingsOfText), the packages they load by name (`packages`:
  *  \usepackage and \RequirePackage, each name of a list) and the commands they define (`own`), whose arguments the table
  *  cannot know (llncs.cls' \newtoks\titlerunning among them) — not a command defined anew only inside its own call's
  *  argument, which is the kernel's where it is called (inOwnCall), nor a fallback a package the paper loads overrides

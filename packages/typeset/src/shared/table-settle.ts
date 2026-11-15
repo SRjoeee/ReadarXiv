@@ -8,7 +8,7 @@
 //
 // Its inputs, per laid cell: whether its lay was refused (the round's last word) and whether its layout is clipped.
 
-export type LaidCell = { refused: boolean; clipped: boolean }
+type LaidCell = { refused: boolean; clipped: boolean }
 
 /** S.table.settle: why a cell of the group is withheld, or null where the group is painted whole (RUN:2411 settleGroup) */
 export function tableSettle(cells: readonly LaidCell[]): 'a cell unfit' | null {

@@ -46,7 +46,7 @@ import { type ParasStated, paraPieces, type V0Piece } from '../unit/breaks.ts'
 
 /** what a caller may ask of a lay besides its Page. A head's names are no option: the target's are the rules' (Rules.heads),
  *  the paper's own its name units' rows (Part.paper.names, ownNamesOf), so that every caller lays one page alike */
-export type EntryOptions = {
+type EntryOptions = {
   /** where given, what became of each of the part's links (lay/links.ts LinkFate, by its index): the gate's count */
   linkFates?: LinkFate[]
   /** where given, every member begun on a pass page of the call, as laid and filled (lay/page.ts UnitLay), a member of a pass
@@ -249,7 +249,7 @@ export function nameOf(
  *  row of its own on the label's baseline, at its size, in its runs by script (a name's: nameScriptRuns), set as TeX set that
  *  line against its measure (Label.align): centred on the label's middle, from its start, or to its end. Nothing else of its
  *  member moves: no line of the member's leads with it */
-export function labelRowOf(
+function labelRowOf(
   lb: NonNullable<Placed['label']>,
   row: { text: string; st: Parameters<typeof faceOf>[1] },
   faceFor: (st: Parameters<typeof faceOf>[1], cls: 'cjk' | 'latin') => ReturnType<typeof faceOf>,
@@ -502,7 +502,6 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       R,
       measure,
       patterns: rules.hyph as never,
-      view: () => undefined,
       rulesOf: bandRulesOf(m),
       lineskip,
       reading: {

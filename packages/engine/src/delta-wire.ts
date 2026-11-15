@@ -92,8 +92,10 @@ export function wrapWhy(stats: unknown, unhidden: unknown, labelKept: unknown): 
   const isCount = (v: unknown): boolean => Number.isSafeInteger(v) && (v as number) >= 0
   if (stats === null || typeof stats !== 'object' || Array.isArray(stats)) return 'stats: not an object'
   for (const k of WRAP_STATS) if (!Object.hasOwn(stats, k)) return `stats.${k}: missing`
-  for (const k of ['wrapped', 'refusedPages', 'split', 'groups', 'labelKept'])
-    if (!isCount((stats as Record<string, unknown>)[k])) return `stats.${k}: not an integer 0 or more`
+  // (each of WRAP_STATS a count, in its order, but `unhidden`: its counts by code, read below)
+  for (const k of WRAP_STATS)
+    if (k !== 'unhidden' && !isCount((stats as Record<string, unknown>)[k]))
+      return `stats.${k}: not an integer 0 or more`
   const u = (stats as Record<string, unknown>).unhidden
   if (
     u === null ||

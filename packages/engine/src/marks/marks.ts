@@ -16,6 +16,7 @@
 import {
   BACKREF_LIST,
   calledAt,
+  forcedBreak,
   frontMarks,
   identifierSource,
   lastTexLog,
@@ -39,8 +40,8 @@ type Unit = SourceUnit<string | null>
 type Piece = SourcePiece<string | null>
 /** a piece as the classes read it: its kind, its source (a nested unit's call has none) and a call's source before its note */
 export type PieceLike = { t: string; src?: string | undefined; pre?: string | undefined }
-/** a mark's class (classOf) */
-export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro' | 'number'
+/** a mark's class (classOf): one of MARK_CLASSES */
+export type MarkClass = (typeof MARK_CLASSES)[number]
 /** what TeX answered to the mark probe (readMarkProbe): per command, a code a follower (FOLLOWERS); per look-ahead pair
  *  (aheadKey), one code */
 export type Switches = Record<string, string>
@@ -91,8 +92,8 @@ export type MarkingOptions = {
 export type Marking = { units: Unit[]; mark: (u: Unit) => UnitMark }
 
 // ---------------------------------------------------------------- the classes
-/** every class, in this order */
-export const MARK_CLASSES: readonly MarkClass[] = Object.freeze([
+/** every class, in this order: the marks' own vocabulary */
+export const MARK_CLASSES = Object.freeze([
   'math',
   'display',
   'cite',
@@ -103,13 +104,15 @@ export const MARK_CLASSES: readonly MarkClass[] = Object.freeze([
   'footnote',
   'macro',
   'number',
-])
+] as const)
 /** the classes the run marks when asked: the global default, every class (Task 2's corpus check). The paper's own switch
  *  (layoutMarking's `switches`, what TeX answers to the mark probe) takes marks off a command's placeholders where TeX
  *  says they would change what follows them */
 export const LAYOUT_CLASSES: readonly MarkClass[] = Object.freeze([...MARK_CLASSES])
 
-/** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument */
+/** control words whose placeholder sets no ink, besides the declarations latex-front reads as taking no argument: latex.ltx's
+ *  \label, \index, the phantoms, \hspace, \vspace and \nobreakspace, a class's \footnotesize and \normalsize (size10.clo's),
+ *  TeX's \hskip, \vskip and \kern, xspace.sty's \xspace, color.sty's \color */
 const INVISIBLE_WORDS = [
   'label',
   'index',
@@ -166,7 +169,9 @@ export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
   const src = piece.src ?? ''
-  if (INVISIBLE.test(src) || STRUCTURE.test(src)) return null
+  // (a forced break sets no ink, and a mark there would move a line: as the source reader states it (forcedBreak, `\\\\` and a
+  // paper's row-ending macro inside a grid cell, §18.75), among what INVISIBLE reads)
+  if (forcedBreak(piece) || INVISIBLE.test(src) || STRUCTURE.test(src)) return null
   // a placeholder that can set no letters is no text rendering: never ink, never LOST — one of the commands the role
   // table proves so (arg-roles.mjs textless: rules, space, a length's or a counter's setting, a definition, a register's
   // assignment; a strut's \\rule{0pt}{2.2ex}, \\specialrule{1pt}{-1pt}{0pt}, \\addlinespace[2pt]), its arguments all there.
@@ -195,8 +200,9 @@ export const FOLLOWERS = Object.freeze(['.', ',', ';', ':', '!', '?', 'word', 'c
 const PUNCT = '.,;:!?'
 /** the punctuation marks a package may set before a citation's or a call's own ink, moved from after it (cite.sty's
  *  \\CiteMoveChars, natmove's, fnpct's): those the probe asks about (TeX answers 3 for those it moves, layoutMarking), a piece's
- *  closing mark after one of them holding it first (followsOf `moved`) */
-const MOVED = PUNCT
+ *  closing mark after one of them holding it first (followsOf `moved`); a set of its characters, which the first character of a
+ *  text of none is not */
+const MOVED: ReadonlySet<string | undefined> = new Set(PUNCT)
 /** the classes whose commands the probe asks about: a package may look past their closing brace (a paper's macro has its
  *  opening mark alone (LOOKS_AHEAD), but one that reads nothing past its arguments, which the probe asks about too) */
 const ASKED: ReadonlySet<string | null> = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
@@ -983,7 +989,9 @@ export function readInkApart(log: string | null | undefined, samples: readonly s
 }
 
 // ---- babel's names: what each one's own text is, TeX asked
-/** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well */
+/** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well; the key's macro as
+ *  babel.sty's \bbl@ini@captions@aux names it, the key then `name`, held by the release check's babel-names
+ *  (lab/marks/babel-names.mjs) */
 export const NAME_MACROS: Readonly<Record<NameKey, string>> = Object.freeze({
   abstract: 'abstractname',
   ref: 'refname',
@@ -1325,6 +1333,20 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   cell's own unit shares the line. Before, two units wrote none: the lay had no line of several members then, and each,
  *   given the class, would have been set on its own middle.
  *   Assignments, \aftergroup and \message: no node
+ * - **The cell's end** (docs/PDF-READER.md §18.74). An element's ink is what TeX set
+ *   between its two points; where TeX gives it no closing point, it ends where TeX ends what the element stands in, never later,
+ *   and for a piece of a table cell that is the cell's end. A cell's end mark goes after its last text, and a piece after it whose
+ *   opening mark stands alone (its source ends in a control word, or its class may read ahead) had no bound but the next mark,
+ *   the next unit's start: past the cell's end, the row's other entries, the rules between the columns and under the row
+ *   (2610.21176v1 p13's `\checkmark` owned the table's bottom rule). So the template's end sets a point, `t<i>x`, where it
+ *   writes AXT-CELL (the cell's index defined at its own group level): a destination and its point, after the template's v-part
+ *   and every \unskip of LaTeX's, array's and colortbl's, before the column rule and the inter-column material after it, the
+ *   next entry, a \\'s rules; a whatsit at the end of the cell's box, which moves no glyph or rule (layout-cell-cases.mjs: every
+ *   preamble kind under both years and four engines, its end cases; under dvipdfmx the text run it splits is placed anew by the
+ *   writer, nearer TeX's place). The marking names it among the ends of its cell's pieces (followsOf), and the stream's reading
+ *   stops there (stream.ts ownedOf). A cell no template of LaTeX's sets (tblr, a plain \halign) states none, nor a p column of
+ *   LaTeX's own tabular with array.sty not loaded, whose template latex.ltx's \@classv builds where \axt@mkw wraps \@classz
+ *   alone (no AXT-CELL there either): those are read as before. No pending mark is flushed there (\axt@dest, not \axt@mark)
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
  *   MARK_DEF's own \axtmark is gated too, so a caption's start mark is set where its float is and not first in the list
@@ -1651,7 +1673,7 @@ export function classNamesTex(texts: readonly string[]): string {
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
  *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
  *  alternation and the prefilter from it, so the two cannot drift */
-export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb']
+export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb'] as const
 
 /** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`
  *  and `\axtnmb`), inert where they are read (\@starttoc's \axt@off, pdfstringdef, the nameref names' unmark). Only these:
@@ -1776,7 +1798,7 @@ export const LAYOUT_TEX = [
   '\\def\\axt@us#1{\\ifnum\\currentgrouptype=6 \\axt@uin{#1}\\else\\ifnum\\currentgrouplevel>\\z@\\axt@agplain{\\axt@usg{#1}}{\\axt@agtbox{\\axt@usg{#1}}}\\fi\\fi}\\def\\axt@usg#1{\\expandafter\\gdef\\csname axt@cv@#1\\endcsname{\\axt@us{#1}}\\expandafter\\aftergroup\\csname axt@cv@#1\\endcsname}',
   '\\def\\axt@agtbox#1{\\ifnum\\currentgrouptype=2 \\ifnum\\currentgrouplevel>\\axt@clvl\\relax\\else#1\\fi\\fi}\\protected\\def\\axt@cl{\\xdef\\axt@clvl{\\the\\currentgrouplevel}}\\gdef\\axt@clvl{-1}',
   '\\def\\axt@uin#1{\\ifnum\\axt@clv=\\currentgrouplevel\\else\\ifnum\\axt@ulv=\\currentgrouplevel\\edef\\axt@uc{\\expandafter\\axt@uls\\axt@uc\\@nil,#1 \\the\\currentgrouplevel}\\else\\edef\\axt@uc{#1 \\the\\currentgrouplevel}\\edef\\axt@ulv{\\the\\currentgrouplevel}\\fi\\fi}\\def\\axt@uls#1 #2\\@nil{#1}\\def\\axt@clv{\\ifdefined\\axt@cc\\expandafter\\axt@lvl\\axt@cc\\@nil\\else-1\\fi}\\def\\axt@lvl#1 #2\\@nil{#2}\\def\\axt@ulv{-1}',
-  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi\\gdef\\axt@clvl{-1}}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\fi}',
+  '\\protected\\def\\axt@te#1{\\ifdefined\\axt@cc\\expandafter\\axt@tec\\axt@cc\\@nil{#1}\\fi\\ifdefined\\axt@uc\\expandafter\\axt@tel\\axt@uc\\@nil{#1}\\fi\\gdef\\axt@clvl{-1}}\\def\\axt@tec#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\message{^^JAXT-CELL #1 #3^^J}\\axt@cellend{#1}\\fi}\\def\\axt@cellend#1{\\axt@colseen\\ifaxt@off\\else\\axt@dest{t#1x}\\fi}',
   '\\def\\axt@tel#1 #2\\@nil#3{\\ifnum#2=\\currentgrouplevel\\@for\\axt@x:=#1\\do{\\message{^^JAXT-CELL \\axt@x\\space#3^^J}}\\fi}',
   '\\def\\axt@ate{\\xdef\\@preamble{\\unexpanded\\expandafter{\\@preamble}\\axt@te{\\the\\@chnum}}}',
   '\\def\\axt@czw{\\let\\axt@icol\\insert@column\\def\\insert@column{\\noexpand\\axt@cl\\axt@icol}\\axt@cz\\let\\insert@column\\axt@icol\\axt@ate}\\def\\axt@mkw#1{\\let\\axt@cz\\@classz\\let\\@classz\\axt@czw\\axt@mkp{#1}\\let\\@classz\\axt@cz}',
@@ -1961,7 +1983,9 @@ export function readColours(log: string | null | undefined): [unit: number, k: n
 /** every destination name the marked original may hold (without its 'axt-'): a unit's start or end (MARK_DEF), a page's
  *  columns, a cell's (t) or a heading's (h) start or end, a placeholder's (p) or a footnote call's (n) opening or closing
  *  mark by its unit and source piece index, a draft image frame's corner (g), a babel name's start or end by its
- *  occurrence and key (n<occurrence>.<key>.s, NAMES_TEX) */
+ *  occurrence and key (n<occurrence>.<key>.s, NAMES_TEX). Not a cell's end point (`t<i>x`, LAYOUT_TEX's template end): the
+ *  stream's reading alone reads it (stream.ts ownedOf, by the marking's `ends`), and the marks file, whose names this
+ *  pattern filters, takes none of it */
 export const MARK_NAME = /^(?:\d+[se]|c[12]-\d+|[th]\d+[se]|[pn]\d+\.\d+[ab]|g\d+[abt]|n\d+\.[a-z]{1,16}\.[se])$/
 
 // ---------------------------------------------------------------- the marking
@@ -2086,8 +2110,13 @@ export function headEnd(pieces: readonly Piece[], from = 0): number {
   }
   return pieces.length
 }
-/** a forced break, which in a table the scanner does not read as one ends a row: what follows begins the next row */
+/** a forced break, which in a table the scanner does not read as one ends a row: what follows begins the next row (`\\\\` with
+ *  its star, its room and the spaces before it, \\cr, \\crcr, \\tabularnewline: \\newline ends no row) */
 const BREAK = /^\\(?:\\|(?:cr|crcr|tabularnewline)(?![A-Za-z@]))/
+/** whether a piece is such a break: by its source (BREAK), or as the source reader states it a forced break (forcedBreak), a
+ *  paper's row-ending macro inside a grid cell, whose body ends a row as `\\\\` does (§18.75); not \\newline, stated one too */
+const breaks = (p: Piece | undefined): boolean =>
+  p?.t === 'ph' && (BREAK.test(p.src ?? '') || (forcedBreak(p) && !/^\\newline$/.test(p.src ?? '')))
 /** the pieces passed over, by index: at the unit's head (headEnd), and the same way after each forced break and each
  *  alignment tab, where a table's row or cell may begin in a table the scanner read as prose (aastex's deluxetable:
  *  \enddata after the last row's \\; tabularray's \SetCell, which must open its cell) */
@@ -2098,7 +2127,7 @@ function passedOver(pieces: readonly Piece[]): Set<number> {
   }
   skip(0)
   pieces.forEach((p, k) => {
-    if (p.t === 'ph' && (BREAK.test(p.src ?? '') || p.src === '&')) skip(k + 1)
+    if (breaks(p) || (p.t === 'ph' && p.src === '&')) skip(k + 1)
   })
   return out
 }
@@ -2376,13 +2405,13 @@ export function layoutMarking(
       const blank = (r: Piece): boolean => r.t === 'text' && !/[^ \t\r\n]/.test(r.s)
       for (let k = 0; k < u.pieces.length; k++) {
         const p = u.pieces[k]!
-        if (p.t !== 'ph' || !BREAK.test(p.src ?? '') || out[k]!.length !== 1 || out[k]![0] !== u.pieces[k]) continue
+        if (!breaks(p) || out[k]!.length !== 1 || out[k]![0] !== u.pieces[k]) continue
         let j = k + 1
         while (j < u.pieces.length && blank(u.pieces[j]!)) j++
         const q = u.pieces[j]
         if (
           q?.t !== 'ph' ||
-          BREAK.test(q.src ?? '') ||
+          breaks(q) ||
           q.src === '&' ||
           !passed?.has(j) ||
           out[j]!.length !== 1 ||
@@ -2395,7 +2424,7 @@ export function layoutMarking(
         for (let b = k - 1; b >= 0; b--) {
           const r = u.pieces[b]!
           if (blank(r)) continue
-          if (r.t === 'ph' && BREAK.test(r.src ?? '') && out[b]!.length === 1) {
+          if (breaks(r) && out[b]!.length === 1) {
             f = b
             continue
           }
@@ -2530,11 +2559,15 @@ export const asSet = (s: string): string =>
     .replace(/[~\s]/g, '')
 /** a unit's end marks, any of which may be the next mark after its last piece */
 const endsOf = (i: number): string[] => [`${i}e`, `t${i}e`, `h${i}e`]
+/** a cell's end point (LAYOUT_TEX's template end, \\axt@cellend): where TeX ends what a piece of the cell stands in, its unit's
+ *  last mark; none of a unit that is no cell's */
+const cellEndOf = (u: Unit | undefined, i: number): string[] => (u?.kind === 'cell' ? [`t${i}x`] : [])
 /**
  * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
  * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
  * characters of the text after it in its unit up to the next visible piece (and, `rest`, the whole of it as the spell check
- * reads one: stream.mjs spellOf), its unit's next marks, and whether a visible
+ * reads one: stream.mjs spellOf), its unit's next marks (a cell's end point among them: where TeX ends what a piece of a cell
+ * stands in, LAYOUT_TEX's template end, so that a cell's piece with its opening mark alone ends there), and whether a visible
  * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
  * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
@@ -2657,7 +2690,7 @@ export function followsOf(
         trail = {
           want: asSet(rest).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT),
           rest: spellOf(rest),
-          ends: [...(fnext ? [`${fnext}a`] : []), ...endsOf(i)],
+          ends: [...(fnext ? [`${fnext}a`] : []), ...endsOf(i), ...cellEndOf(u, i)],
         }
     }
     const text = shown && parted && ((through && !others) || trail) ? shown.get(u.pieces[k]!.src) : undefined
@@ -2669,14 +2702,13 @@ export function followsOf(
     // set before its own ink — cite.sty's superscripts, natmove, fnpct: `\\cite{a}.` set ".¹" — and where TeX answered so, the
     // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first,
     // where none stands after them (stream.mjs ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
-    const moved =
-      ASKED.has(classOf(u.pieces[k])) && after[0] !== undefined && MOVED.includes(after[0]) ? after[0] : null
+    const moved = ASKED.has(classOf(u.pieces[k])) && MOVED.has(after[0]) ? after[0] : null
     return {
       closing: names.has(`${name.slice(0, -1)}b`),
       want,
       rest: spellOf(after),
       display,
-      ends: [...(next ? [`${next}a`] : []), ...endsOf(i)],
+      ends: [...(next ? [`${next}a`] : []), ...endsOf(i), ...cellEndOf(u, i)],
       blocked,
       through,
       group,

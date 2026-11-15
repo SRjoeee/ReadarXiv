@@ -3,6 +3,7 @@
 // inputs it reads from outside the repository, the tier it first runs in, the invariants it holds and how its output is
 // read. Nothing here is a new gate: a gate's pass is its own (its exit code, or the counts its own output states against the
 // bound its own header names), and an invariant no gate holds is said so (`gap`). Not shipped.
+import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { CACHE as SWEEP_CACHE } from '../../packages/typeset/tests/replay/today.ts'
@@ -10,6 +11,9 @@ import { ADDED, ADDED_HEADING } from '../typeset/added.mjs'
 import { PAIRS as PARITY_PAIRS } from '../typeset/parity/pairs.mjs'
 import { SLICES, TABLES } from '../typeset/served-metrics.mjs'
 import { perfOf } from './perf.mjs'
+
+/** the compile images each TeX Live year's papers are compiled in, by year (lab/pdf/compile-images.json) */
+const COMPILE_PINS = JSON.parse(readFileSync(new URL('../pdf/compile-images.json', import.meta.url), 'utf8'))
 
 /** the tiers, each holding the gates of the ones before it (lab/release-check/CI.md says where each runs) */
 export const TIERS = ['fast', 'full', 'release']
@@ -945,6 +949,60 @@ export const GATES = [
   },
   todayE2e('e2e:reader', "today's reader (AXT_READER=today, the way back) on the stand-in of the v1 layer API: tests/e2e/reader.mjs's own checks"),
   todayE2e('e2e:registration', "today's reader (AXT_READER=today): a laid page's copy, SVG and links registered at every zoom"),
+  // ---------------------------------------------------------------- the definitions the engine's lists mirror, in the TeX trees
+  // (a list of a package's names whose header names the file it copies, held to that file as each pinned compile image holds it:
+  // design 3c's second kind of list. The files are copied out of the local images, never pulled: `--pull never`)
+  {
+    id: 'babel-names',
+    title: "the babel names the layout marks wrap (packages/engine/src/marks/names.ts NAME_KEYS and NAME_ENGLISH, marks.ts NAME_MACROS) against babel's own files in each pinned compile image's TeX Live (lab/pdf/compile-images.json): every key a key of babel-en.ini's [captions], its value the English one there, its macro the one babel.sty's \\bbl@ini@captions@aux names (lab/marks/babel-names.mjs)",
+    tier: 'release',
+    stage: 'pipeline',
+    holds: [],
+    needs: () => [exists('docker', which('docker'))],
+    steps: ctx => [
+      ...Object.entries(COMPILE_PINS.images).map(([year, pin]) => ({
+        cmd: ['docker', 'run', '--rm', '--pull', 'never', '--network', 'none', '-v', `${join(ctx.work, 'babel-names', year)}:/out`, pin.texlive, 'sh', '-c', 'cp "$(kpsewhich babel-en.ini)" "$(kpsewhich babel.sty)" /out/'],
+        slot: 'docker',
+        fresh: join(ctx.work, 'babel-names', year),
+      })),
+      { cmd: ['node', '--import', 'tsx', 'lab/marks/babel-names.mjs', ...Object.keys(COMPILE_PINS.images).map(year => join(ctx.work, 'babel-names', year))] },
+    ],
+  },
+  {
+    id: 'csquotes-styles',
+    title: "the source reader's table of csquotes' English style (packages/engine/src/source/latex-front.ts CSQUOTES_ENGLISH, CSQUOTES_NAMES, CSQUOTES_DEFAULT) against csquotes' own file in each pinned compile image's TeX Live (lab/pdf/compile-images.json): each variant's marks csquotes.def's \\DeclareQuoteStyle[…]{english} as tuenc.def reads its commands, every name it gives a variant and no other (lab/source/csquotes-styles.mjs)",
+    tier: 'release',
+    stage: 'pipeline',
+    holds: [],
+    needs: () => [exists('docker', which('docker'))],
+    steps: ctx => [
+      ...Object.entries(COMPILE_PINS.images).map(([year, pin]) => ({
+        cmd: ['docker', 'run', '--rm', '--pull', 'never', '--network', 'none', '-v', `${join(ctx.work, 'csquotes-styles', year)}:/out`, pin.texlive, 'sh', '-c', 'cp "$(kpsewhich csquotes.def)" "$(kpsewhich tuenc.def)" /out/'],
+        slot: 'docker',
+        fresh: join(ctx.work, 'csquotes-styles', year),
+      })),
+      { cmd: ['node', '--import', 'tsx', 'lab/source/csquotes-styles.mjs', ...Object.keys(COMPILE_PINS.images).map(year => join(ctx.work, 'csquotes-styles', year))] },
+    ],
+  },
+  // (the typesetter's lists of what each face file holds, held to the files themselves: the check's own reference,
+  // lab/typeset/face-files.json, names each face's file, each alphabet's letters and each file's binding SHA-256; the 83
+  // files are no repository's but a folder of the lab's, AXT_FACE_FILES, else <lab data>/refactor-2026-11/face-files; read with
+  // fontTools by AXT_PYTHON, else python3; where either is absent the gate is skipped, saying which)
+  {
+    id: 'face-files',
+    title: "the typesetter's face coverage (packages/typeset/src/data/faces.ts HOLDS and SMCP) against the face files' own OpenType tables: an alphabet listed for a face where its file's best Unicode cmap maps every letter of it, every such alphabet listed; a face in SMCP where its file's GSUB has `smcp`, no other; every file of its binding SHA-256 (lab/typeset/face-tables.py reads the files with fontTools, lab/typeset/face-files.mjs judges, by lab/typeset/face-files.json)",
+    tier: 'release',
+    stage: 'reader',
+    holds: [],
+    needs: ctx => [
+      exists("the 83 face files (AXT_FACE_FILES, else the lab data's face-files)", faceFilesOf(ctx)),
+      exists(`fontTools for ${pythonOf()} (AXT_PYTHON, else python3)`, fontToolsOf(pythonOf())),
+    ],
+    steps: ctx => [
+      { cmd: [pythonOf(), '-I', 'lab/typeset/face-tables.py', faceFilesOf(ctx), join(ctx.work, 'face-files', 'tables.json')], fresh: join(ctx.work, 'face-files') },
+      { cmd: ['node', '--import', 'tsx', 'lab/typeset/face-files.mjs', join(ctx.work, 'face-files', 'tables.json')] },
+    ],
+  },
   // ---------------------------------------------------------------- the private repository's (named, never run here)
   { id: 'private-platform', title: "the private repository's platform tier: the Worker, the paper's object and the Workflows under workerd, the routes' contract suite, the persisted contracts", tier: 'full', stage: 'platform', holds: [], private: true },
   { id: 'private-box', title: "the private repository's box tier: the security suite on native amd64", tier: 'release', stage: 'box', holds: ['I9'], private: true },
@@ -1137,6 +1195,16 @@ const lastLine = t => t.trim().split('\n').filter(l => !/^\s*at /.test(l)).at(-1
 function which(bin) {
   for (const dir of (process.env.PATH ?? '').split(':')) if (dir && existsSync(join(dir, bin))) return join(dir, bin)
   return ''
+}
+
+/** the folder of the face files the `face-files` gate reads: AXT_FACE_FILES, else the lab data's */
+const faceFilesOf = ctx => process.env.AXT_FACE_FILES ?? lab(ctx, 'face-files')
+/** the Python the `face-files` gate reads the files with: AXT_PYTHON, else python3 on the PATH */
+const pythonOf = () => process.env.AXT_PYTHON ?? (which('python3') || 'python3')
+/** where fontTools is for that Python (isolated, as the gate runs it), '' where it has none */
+function fontToolsOf(python) {
+  const r = spawnSync(python, ['-I', '-c', 'import fontTools, sys; sys.stdout.write(fontTools.__file__)'], { encoding: 'utf8', timeout: 30_000 })
+  return r.status === 0 ? r.stdout.trim() : ''
 }
 
 function corpusJudge(ctx, out, proofs) {

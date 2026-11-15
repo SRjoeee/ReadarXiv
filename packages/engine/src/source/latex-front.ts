@@ -34,8 +34,28 @@ export type Fsys = { list(): string[]; read(path: string): Uint8Array | null }
  *  differ (an accent's letter, a file transcoded); `bared`, where an indent TeX skips stood before it (patch); `opens`, the
  *  layout compile's opening mark before it (layout/marks.mjs) */
 export type TextPiece = { t: 'text'; s: string; src?: string; tr?: boolean; bared?: boolean; opens?: boolean }
-/** what the unit keeps as the source writes it: a command, a formula, a group's edge */
-export type PhPiece = { t: 'ph'; src: string; s?: undefined; bared?: boolean; opens?: boolean }
+/** what the unit keeps as the source writes it: a command, a formula, a group's edge. `brk`: a forced break of the unit's text,
+ *  stated where the piece is made (phPiece) and read wherever a forced break is asked of it (forcedBreak); not enumerable, as an
+ *  open piece's `sets` is, so that the unit's JSON, its hash and its marks are as they were */
+export type PhPiece = { t: 'ph'; src: string; s?: undefined; bared?: boolean; opens?: boolean; readonly brk?: true }
+/** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84) */
+export const BREAK_SOURCE = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a placeholder of the source `src`, stating whether it is a forced break of its unit's text (`brk`, §18.75): where its source
+ *  is one (BREAK_SOURCE), and where the walk states it (`brk` true: a paper's row-ending macro inside a grid cell, which ends a
+ *  line of the box the cell holds as `\\\\` does there). Every placeholder the reader makes is made here */
+export function phPiece(src: string, brk = BREAK_SOURCE.test(src)): PhPiece {
+  const p: PhPiece = { t: 'ph', src }
+  if (brk) Object.defineProperty(p, 'brk', { value: true })
+  return p
+}
+/** whether a piece is a forced break of its unit's text, as the reader stated it where it made the piece (phPiece) */
+export const forcedBreak = (p: { t?: string } | null | undefined): boolean =>
+  p?.t === 'ph' && (p as { brk?: unknown }).brk === true
+/** a copy of a piece (an object spread takes no property that is not enumerable), stating what the piece states */
+function restated<P extends object>(copy: P, of: { t?: string }): P {
+  if (forcedBreak(of)) Object.defineProperty(copy, 'brk', { value: true })
+  return copy
+}
 /** a pair's open (`sets` 0: its command sets its argument and nothing else, identityPair; not enumerable) and its close, by id */
 export type OpenPiece = {
   t: 'open'
@@ -182,7 +202,7 @@ type Ctx = {
   floats: Set<SourceUnit<WalkFile>>
   bibliography: string[]
   backref: boolean
-  quotes: { known: boolean; levels?: [string, string][] } | null
+  quotes: { known: boolean; levels?: readonly (readonly [string, string])[] } | null
   tblrEnvs: Set<string>
   tblrMath: boolean
   ownAuthors?: Map<string, { role: string; param: number }>
@@ -790,7 +810,9 @@ const envDefinitionsOf = (texts: readonly string[]) => {
   }
   return out
 }
-/** the code environments a package defines, whose body the paper's own may open (codeEnvsOf) */
+/** the code environments a package defines, whose body the paper's own may open (codeEnvsOf): latex.ltx's verbatim,
+ *  fancyvrb.sty's Verbatim, BVerbatim and LVerbatim, listings.sty's lstlisting, minted.sty's minted, alltt.sty's alltt,
+ *  tcolorbox's tcblisting (tcblistingscore.code.tex) */
 const LISTINGS = new Set([
   'verbatim',
   'Verbatim',
@@ -911,7 +933,7 @@ function accentBase(s: string, k: number, to: number): { base: string; end: numb
   return inner && skipSpaces(s, inner.end) === e - 1 ? { base: inner.base, end: e } : null
 }
 /**
- * The letter an accent command at s[i] makes (`end` past its name): \\~n, \\~{n}, \\v c, \\'\\i, \\'{\\i} → ñ, ñ, č, í, í,
+ * The letter an accent command makes, read from `end`, past its name: \\~n, \\~{n}, \\v c, \\'\\i, \\'{\\i} → ñ, ñ, č, í, í,
  * where the letter is one Unicode has, every strategy sets it (SETTABLE) and the paper keeps the accent its own (not
  * one of `own`, the accents it defines anew: \\def\\v{\\varphi}); with where its source ends, or null. A letter in its
  * word, the engine reads the word whole: El Ni{\\~n}o went out as `El Ni @d#@e#@f# o southern oscillations`, and came
@@ -919,7 +941,6 @@ function accentBase(s: string, k: number, to: number): { base: string; end: numb
  */
 function accentLetter(
   s: string,
-  i: number,
   end: number,
   name: string,
   to: number,
@@ -937,7 +958,7 @@ const LETTER_COMMANDS = new Map(
   ['o', 'O', 'ss', 'ae', 'AE', 'oe', 'OE', 'aa', 'AA', 'l', 'L'].map((n) => [n, TEXT_SYMBOLS[`\\${n}`]]),
 )
 /**
- * The letter a letter command at s[i] sets (`end` past its name), as TeX sets it in its word: the spaces after the control
+ * The letter a letter command at s[i] sets (`name`, read from s[i]), as TeX sets it in its word: the spaces after the control
  * word TeX skips, and an empty group ending it, with it — `\\L ukasz`, `\\L{}ukasz`, `Bj\\o rn`, `Stra\\ss e` are Łukasz, Bjørn,
  * Straße —; where the paper does not define the command itself (\\def\\o{\\omega}: ownLetters); with where its source ends, or
  * null.
@@ -947,7 +968,6 @@ const LETTER_COMMANDS = new Map(
 function letterCommand(
   s: string,
   i: number,
-  end: number,
   name: string,
   to: number,
   own: ReadonlySet<string> | null | undefined,
@@ -972,7 +992,7 @@ const TEXT_CHARACTERS = new Map(
   ]),
 )
 /**
- * The character a text symbol at s[i] sets (`end` past its name), as TeX sets it: a control word's skipped spaces and an empty
+ * The character a text symbol at s[i] sets (`name`, read from s[i]), as TeX sets it: a control word's skipped spaces and an empty
  * group ending it with it (`\\textless 5` is "<5"), a control symbol alone (`5\\% of` is "5% of": TeX skips no space after one),
  * an empty group right after it with it; where the paper does not define the command itself (ownLetters); with where its source
  * ends, or null. A placeholder, it went out as a marker, and Microsoft split the term there ("R&D" came back as "D", a verb, then "R&"); as
@@ -983,7 +1003,6 @@ const TEXT_CHARACTERS = new Map(
 function textCharacter(
   s: string,
   i: number,
-  end: number,
   name: string,
   to: number,
   own: ReadonlySet<string> | null | undefined,
@@ -994,7 +1013,7 @@ function textCharacter(
     const e = s.startsWith('{}', i + 2) ? i + 4 : i + 2
     return e <= to ? { letter: char, end: e } : null
   }
-  return letterCommand(s, i, end, name, to, own, char)
+  return letterCommand(s, i, name, to, own, char)
 }
 /** the letter commands and the text characters (textCharacter) a paper's own files define anew (\\renewcommand{\\o}{\\omega},
  *  \\def\\L{\\mathcal{L}}, \\renewcommand{\\textbar}{…}, a \\let): there the command is the paper's, and no letter is made of it */
@@ -2025,6 +2044,20 @@ function paramUse(
       i = Math.min(afterEnd, to)
       continue
     }
+    // any other environment reads its own arguments as it declares them (environmentParams, as the walk reads a table's), a
+    // parameter there text only where the argument's role is: a tabular's preamble and a minipage's width are none. Read as
+    // free groups after `\\begin{name}`, 1512.03385v1's \\tabincell{c}{…} = \\begin{tabular}{@{}#1@{}}#2\\end{tabular} had two
+    // prose parameters, so no prose argument, and each call was one placeholder: its Table 13 header no unit, in English
+    if (env) {
+      const ep = environmentParams(env[1]!.trim(), paper?.bindings ?? null)
+      const r = ep && readArgs(s, end + env[0].length, ep, to)
+      if (r?.complete) {
+        for (const a of r.args)
+          paramUse(s, a.start + 1, a.end - 1, textual && (a.role === 't' || a.role === 'c'), use, storing)
+        i = r.end
+        continue
+      }
+    }
     const { args, end: e, known } = commandArgs(s, end, name)
     const reqs = args.filter((a) => a.kind === 'req')
     // typeset as prose: the text of a font command or a box, of a caption or a footnote (2608.06007's
@@ -2177,6 +2210,8 @@ function resolveKeeps(macros: Map<string, Macro>) {
     }
     keeps.set(name, k)
   }
+  // (each pass follows a kept argument one call further down, and one that keeps nothing new ends the reading: at most four
+  // passes, a count of passes; unmeasured)
   for (let pass = 0; pass < 4; pass++) {
     let changed = false
     for (const [name, m] of macros) {
@@ -2615,6 +2650,7 @@ function setsWords(macro: Macro) {
             )
             .replace(/\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\$[^$]*\$/g, ' ')
         : ''
+    // (the innermost groups out, a level a pass: at most 20 levels, a count of passes; unmeasured)
     for (let n = 0; n < 20 && /\{[^{}]*\}/.test(t); n++) t = t.replace(/\{[^{}]*\}/g, ' ')
     // (an optional argument's brackets, a box's [c][14.5pt], and a dimension after a command, \\rowcolor{gray!8}[0pt], are no words)
     t = t
@@ -2663,6 +2699,42 @@ function macroArgs(s: string, i: number, macro: { params: number; opt: boolean }
 const BLOCK =
   /\n[ \t]*\n|\\(?:par|item|part|chapter|(?:sub)*section|(?:sub)?paragraph|caption)(?![A-Za-z@])|\\begin\s*\{([^}]+)\}/g
 const holdsBlock = (text: string) => [...text.matchAll(BLOCK)].some((m) => !m[1] || !MATH_ENVS.test(m[1].trim()))
+/** whether position `i` of `s` stands inside a cell of the table the walk reads (Builder.cells), not at the end of the grid's
+ *  row: a `\\` there ends a line of a box the cell holds (a \\makecell's, a \\shortstack's, a nested one-column tabular's), a
+ *  forced break of the cell's text, not the cell. A table cell's alone: an author block's tabular is cut at its rows */
+function inGridCell(b: Builder, s: string, i: number): boolean {
+  return b.kind === 'cell' && b.cells?.s === s && b.cells.grid.some((c) => c.start <= i && i < c.end)
+}
+/** where a table environment's own arguments end, as the walk reads them: as its declaration gives them, else by its form
+ *  (tabularx's, tabular*'s and tabulary's {width}[pos]{spec}, else [pos]{spec}) */
+function tableArgsEnd(s: string, afterBegin: number, bodyEnd: number, env: string, ctx: Ctx): number {
+  const tp = ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null),
+    tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
+  return tr?.complete
+    ? tr.end
+    : argsOfForm(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{')
+        .end
+}
+/** whether a macro's body sets its prose parameter inside an environment of its own, not math (a minipage's paragraph, a
+ *  tabular's cells, a tcolorbox, a centred list): TeX sets that environment's content apart from the text around the call, as
+ *  the walk reads the same environment written in place (every environment but math ends the text before it), so the call's
+ *  argument is a block of its own. The environment's own arguments are not its content (environmentParams, as paramUse reads
+ *  them). Walked as a pair inside the paragraph, 2610.37818v1's five \\fdpanel{width}{image}{label} calls, each a minipage,
+ *  made one paragraph of five boxes' labels */
+function proseInEnvironment(macro: Macro): boolean {
+  if (macro.prose === undefined) return false
+  const def = uncommented(macro.def),
+    param = new RegExp(`#${macro.prose}(?!\\d)`)
+  for (const m of def.matchAll(/\\begin\s*\{([^}]+)\}/g)) {
+    const env = m[1]!.trim()
+    if (MATH_ENVS.test(env)) continue
+    const at = m.index + m[0].length,
+      ep = environmentParams(env, paper?.bindings ?? null),
+      r = ep && readArgs(def, at, ep)
+    if (param.test(def.slice(r?.complete ? r.end : at, endOfEnv(def, at, env)[0]))) return true
+  }
+  return false
+}
 
 // ---------------------------------------------------------------- units
 /** the kinds set in the running text, which a display standing alone after them belongs to */
@@ -2681,6 +2753,7 @@ export function displayLetters(src: string, macros: ReadonlyMap<string, string> 
     const t = s.replace(/\\([A-Za-z@]+)/g, (m: string, name: string) =>
       macros.has(name) ? ` ${macros.get(name)} ` : m,
     )
+    // (a pass whose text would pass 20,000 UTF-16 code units is not taken: the text the pass before left; unmeasured)
     if (t === s || t.length > 20000) break
     s = t
   }
@@ -2797,6 +2870,9 @@ class Builder<F extends WalkFile = WalkFile> {
   declare captype: string | undefined
   declare within: string | undefined
   declare cellMode: boolean | undefined
+  /** the grid of the table whose body the walk reads (tableGrid over its text `s`): a row's end the walk meets ends a cell's unit
+   *  only where it ends the grid's cell, outside every group and nested environment of it (inGridCell) */
+  declare cells: { s: string; grid: readonly GridCell[] } | null | undefined
   constructor(
     file: F,
     units: SourceUnit<F>[],
@@ -2824,10 +2900,10 @@ class Builder<F extends WalkFile = WalkFile> {
     this.cur.pieces.push(p)
     this.cur.end = end
   }
-  /** `display`: a formula set on lines of its own (displayOutside) */
-  ph(src: string, start: number, end: number, display = false) {
+  /** `display`: a formula set on lines of its own (displayOutside); `brk`, a forced break the walk states (phPiece) */
+  ph(src: string, start: number, end: number, display = false, brk?: true) {
     if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }
-    const p: PhPiece = { t: 'ph', src }
+    const p = brk ? phPiece(src, true) : phPiece(src)
     if (display) this.displays.add(p)
     this.cur.pieces.push(p)
     this.cur.end = end
@@ -2987,16 +3063,16 @@ function escapedLocals<F extends WalkFile>(pieces: readonly SourcePiece<F>[]) {
           out.push(
             sliceSkips(before, { ...before, s: before.s.slice(0, -head.length) }, 0, before.s.length - head.length),
           )
-        out.push({
-          t: 'ph',
-          src:
+        out.push(
+          phPiece(
             head +
-            pieces
-              .slice(k, j + 1)
-              .map((x) => x.src ?? x.s)
-              .join('') +
-            rest,
-        })
+              pieces
+                .slice(k, j + 1)
+                .map((x) => x.src ?? x.s)
+                .join('') +
+              rest,
+          ),
+        )
         if ((tail as TextPiece).s.length > rest.length)
           out.push(
             sliceSkips(
@@ -3078,7 +3154,7 @@ function keepRead<F extends WalkFile>(
         pieces[j]!.t === 'text' && !CHARACTERS.has(pieces[j]!)
           ? pieces[j]!.s!.slice(j === ka ? oa : 0, j === kb ? b : undefined)
           : pieces[j]!.src
-    out.push({ t: 'ph', src })
+    out.push(phPiece(src))
     if (pieces[kb]!.t === 'text' && b < pieces[kb]!.s!.length) {
       k = kb
       off = b
@@ -3191,7 +3267,7 @@ function keepAddresses<F extends WalkFile>(pieces: readonly SourcePiece<F>[]) {
       let at = 0
       for (const m of p.s.matchAll(EMAIL)) {
         if (m.index > at) out.push(sliceSkips(p, { ...p, s: p.s.slice(at, m.index) }, at, m.index))
-        out.push({ t: 'ph', src: m[0] })
+        out.push(phPiece(m[0]))
         at = m.index + m[0].length
       }
       if (at < p.s.length) out.push(sliceSkips(p, { ...p, s: p.s.slice(at) }, at))
@@ -3336,16 +3412,16 @@ function ifmmodeLetter(s: string, end: number, to: number, ctx: Ctx): Letter | n
   if (s[k] === '\\') {
     const cmd = commandAt(s, k)
     one =
-      accentLetter(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownAccents) ||
-      letterCommand(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownLetters)
+      accentLetter(s, cmd.end, cmd.name, c.elseTo, ctx.ownAccents) ||
+      letterCommand(s, k, cmd.name, c.elseTo, ctx.ownLetters)
   } else if (s[k] === '{' && s[k + 1] === '\\') {
     const g = matchGroup(s, k),
       cmd = commandAt(s, k + 1)
     const inner =
       g > 0 &&
       g <= c.elseTo &&
-      (accentLetter(s, k + 1, cmd.end, cmd.name, g - 1, ctx.ownAccents) ||
-        letterCommand(s, k + 1, cmd.end, cmd.name, g - 1, ctx.ownLetters))
+      (accentLetter(s, cmd.end, cmd.name, g - 1, ctx.ownAccents) ||
+        letterCommand(s, k + 1, cmd.name, g - 1, ctx.ownLetters))
     if (inner && inner.end === g - 1) one = { letter: inner.letter, end: g }
   }
   // (the branch the letter alone, up to its \\fi: a space after an accent's group is a word's end, `\\'{e} \\fi`, left to the walk)
@@ -3407,10 +3483,11 @@ function probeBranch(s: string, from: number, to: number, b: Builder, ctx: Ctx):
     kind: b.kind ?? 'para',
     start: from,
     end: from,
-    pieces: [{ t: 'ph', src: '' }],
+    pieces: [phPiece('')],
   }
   sb.kind = b.kind
   sb.cellMode = b.cellMode
+  sb.cells = b.cells
   sb.cur = outer
   // (each display it sets, whatever unit it ends in: the builder's own record of them)
   let display = false
@@ -4147,6 +4224,42 @@ function frontCommand(
  *  dry runs among them): its cost, which a test holds to the source's length */
 let walkSteps = 0
 export const walkStepCount = () => walkSteps
+/** a tabular nested in a table's cell, read as the lines of that cell's text where it is one column of several rows (§18.75):
+ *  its begin and end a pair round them, walked, and true; else false, the walk reads it as before. `endText` the walk's own */
+function nestedCellLines(
+  s: string,
+  i: number,
+  afterBegin: number,
+  bodyEnd: number,
+  afterEnd: number,
+  env: string,
+  b: Builder,
+  ctx: Ctx,
+  endText: () => void,
+): boolean {
+  if (TABLE_ENVS.test(env) && ctx.tables && b.cellMode && inGridCell(b, s, i)) {
+    const argsEnd = tableArgsEnd(s, afterBegin, bodyEnd, env, ctx),
+      rows = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter).filter((c) =>
+        /\S/.test(s.slice(c.start, c.end)),
+      )
+    if (rows.every((c) => c.col === 0 && c.span === 1) && rows.some((c) => c.row > 0)) {
+      endText()
+      const id = b.open(s.slice(i, argsEnd), i)
+      walk(s, argsEnd, bodyEnd, b, ctx)
+      b.close(id, s.slice(bodyEnd, afterEnd), afterEnd)
+      return true
+    }
+  }
+  return false
+}
+/** a table's body walked with its grid known to inGridCell (Builder.cells, §18.75: a `\\` inside a grid cell a forced break of
+ *  its text), the grid of the table around it back after */
+function walkInGrid(s: string, from: number, to: number, grid: readonly GridCell[], b: Builder, ctx: Ctx): void {
+  const savedCells = b.cells
+  b.cells = { s, grid }
+  walk(s, from, to, b, ctx)
+  b.cells = savedCells
+}
 function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   let i = from,
     textStart = -1
@@ -4163,7 +4276,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
   // unit's leading and line probe, which go before its first piece, cannot come between them. Only a command whose
   // arguments the walk knows: a heading's or a caption's, another of the paper's macros, one of the role table's; one it
   // does not know (\\xspace, \\fi) leaves what follows the call as it was read before. `thens`, how many in a row: a
-  // macro that ends in itself goes no further than a few
+  // macro that ends in itself goes no further than four (a count of calls in a row; unmeasured)
   let then: { name: string; end: number } | null = null,
     thens = 0
   const goOn = (macro: Macro, call: { end: number }, at: number) => {
@@ -4262,7 +4375,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // pieces (a copy's translations are found again by them: cache.mjs sourceHash)
       const k = skipSpaces(s, i + 1),
         accent = s[k] === '\\' ? commandAt(s, k) : null
-      const letter = accent && accentLetter(s, k, accent.end, accent.name, e - 1, ctx.ownAccents)
+      const letter = accent && accentLetter(s, accent.end, accent.name, e - 1, ctx.ownAccents)
       if (letter && skipSpaces(s, letter.end) === e - 1) {
         endText()
         b.pairId++
@@ -4278,7 +4391,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         accent &&
         k === i + 1 &&
         ctx.letters !== false &&
-        (letterCommand(s, k, accent.end, accent.name, e - 1, ctx.ownLetters) ||
+        (letterCommand(s, k, accent.name, e - 1, ctx.ownLetters) ||
           (accent.name === 'ifmmode' ? ifmmodeLetter(s, accent.end, e - 1, ctx) : null))
       if (kernelLetter && kernelLetter.end === e - 1) {
         endText()
@@ -4294,7 +4407,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         accent &&
         k === i + 1 &&
         ctx.letters !== false &&
-        textCharacter(s, k, accent.end, accent.name, e - 1, ctx.ownLetters)
+        textCharacter(s, k, accent.name, e - 1, ctx.ownLetters)
       if (character && character.end === e - 1) {
         endText()
         b.pairId += pairsOf(s, i, e, b, ctx)
@@ -4508,6 +4621,14 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         i = afterEnd
         continue
       }
+      // a tabular of one column and several rows nested in a table's cell sets lines of that cell's text (TeX: a box in the
+      // cell's entry, its rows the box's lines, as \makecell's and \shortstack's are): its begin and end a pair round them, each
+      // row's end a forced break (inGridCell). One of one row is its own cell as before (nothing to join: its pieces, its id and
+      // its rows the same); one of several columns a table of its own, below (nestedCellLines)
+      if (nestedCellLines(s, i, afterBegin, bodyEnd, afterEnd, env, b, ctx, endText)) {
+        i = afterEnd
+        continue
+      }
       endText()
       b.flush()
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
@@ -4542,33 +4663,25 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           i = afterEnd
           continue
         }
-        // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are. In an
-        // author block its cells are the block's units, cut at & and \\ as cells are (blockKind), placed in no grid
-        const tp = ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null),
-          tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
-        // (one the table does not know by its form: tabularx's, tabular*'s and tabulary's {width}[pos]{spec}, else [pos]{spec})
-        const argsEnd = tr?.complete
-          ? tr.end
-          : argsOfForm(
-              s,
-              afterBegin,
-              env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{',
-            ).end
+        // a table: each cell is a unit of its own; & and \\ end it where they end the grid's cell (a `\\` inside a cell is a
+        // forced break of its text: inGridCell). The column specification and width stay as they are. In an author block its
+        // cells are the block's units, cut at & and \\ as cells are (blockKind), placed in no grid
+        const argsEnd = tableArgsEnd(s, afterBegin, bodyEnd, env, ctx)
         // (the paper's tables numbered in the order they begin, a table nested in a cell after the one it is in)
         const saved = b.kind,
           savedCell = b.cellMode,
           first = b.units.length,
           // biome-ignore lint/suspicious/noAssignInExpressions: as written
           table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1)
-        b.kind = blockKind(b, 'cell')
-        b.cellMode = true
-        walk(s, argsEnd, bodyEnd, b, ctx)
-        b.flush()
-        b.kind = saved
-        b.cellMode = savedCell
         // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
         // a table nested in a cell gives its units the outer cell's place, set after its own
         const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
+        b.kind = blockKind(b, 'cell')
+        b.cellMode = true
+        walkInGrid(s, argsEnd, bodyEnd, grid, b, ctx)
+        b.flush()
+        b.kind = saved
+        b.cellMode = savedCell
         noteBlocks(placeCells(b.units.slice(first), b.file, grid, table), grid, s, table, b, ctx)
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
@@ -4606,13 +4719,13 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           first = b.units.length,
           // biome-ignore lint/suspicious/noAssignInExpressions: as written
           table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1)
+        const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
         b.kind = blockKind(b, 'cell')
         b.cellMode = true
-        walk(s, argsEnd, bodyEnd, b, ctx)
+        walkInGrid(s, argsEnd, bodyEnd, grid, b, ctx)
         b.flush()
         b.kind = saved
         b.cellMode = savedCell
-        const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
         noteBlocks(placeCells(b.units.slice(first), b.file, grid, table), grid, s, table, b, ctx)
         i = afterEnd
         continue
@@ -4811,7 +4924,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           parent.pieces.push({ t: 'nested', pre: s.slice(i, inner.start), unit: inner, post: s.slice(inner.end, e) })
           parent.end = e
         } else if (parent && made === 0) {
-          parent.pieces.push({ t: 'ph', src: s.slice(i, e) })
+          parent.pieces.push(phPiece(s.slice(i, e)))
           parent.end = e
         } else if (parent) b.flush() // a footnote of several paragraphs: the paragraph ends before it
         i = e
@@ -4959,14 +5072,17 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
     }
-    // a macro of the paper's whose body ends a table's row, in a cell (\\newcommand{\\tightrow}{\\\\[-4pt]}: rowEndsOf): the row's end,
-    // as `\\\\` is there, an empty group after it with it. Read as a placeholder, the next row's first cell ran on in the cell it
-    // ends (2610.21924v1's 30 cells)
+    // a macro of the paper's whose body ends a table's row, in a cell (\\newcommand{\\tightrow}{\\\\[-4pt]}: rowEndsOf), an empty
+    // group after it with it: where the grid ends the cell, the row's end, as `\\\\` is there (read as a placeholder, the next
+    // row's first cell ran on in the cell it ends: 2610.21924v1's 30 cells); inside a grid cell, in a box the cell holds, a line's
+    // end, the forced break `\\\\` is there, stated on its piece (read as a paper's macro, the cell's lines were laid as one text)
     if (b.cellMode && ctx.rowEnds?.has(name)) {
       endText()
-      b.flush()
-      const k = skipSpaces(s, end)
-      i = s.startsWith('{}', k) && k + 2 <= to ? k + 2 : end
+      const k = skipSpaces(s, end),
+        e = s.startsWith('{}', k) && k + 2 <= to ? k + 2 : end
+      if (inGridCell(b, s, i)) b.ph(s.slice(i, e), i, e, false, true)
+      else b.flush()
+      i = e
       continue
     }
     // (an accent the paper defines anew as a macro of no argument stays the accent's placeholder with its letter, below)
@@ -5060,9 +5176,15 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
       if (arg?.group) {
-        // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
-        // is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
-        if (holdsBlock(s.slice(arg.start + 1, arg.end - 1))) {
+        // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages), or
+        // that the macro's body sets inside an environment of its own (proseInEnvironment: a minipage's, a tabular's
+        // content), is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair.
+        // In a table's cell the grid's cell bounds the unit already: there the call is the pair round its argument, before
+        // which the cell's start mark stands where its text spans the box's lines (\\tabincell{c}{LOC \\\\ method})
+        if (
+          holdsBlock(s.slice(arg.start + 1, arg.end - 1)) ||
+          (proseInEnvironment(macro) && !(b.cellMode && inGridCell(b, s, i)))
+        ) {
           endText()
           b.flush()
           walk(s, arg.start + 1, arg.end - 1, b, ctx)
@@ -5144,7 +5266,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // an accent and its letter: the letter itself in its word where it is one every strategy sets (accentLetter), else
     // one opaque piece, \'o, \'{o}, \"\i, \v c. Left as text, the letter would be translated away and the accent put on
     // whatever comes next — pdfTeX stops at a CJK character there
-    const letter = ACCENTS.has(name) && accentLetter(s, i, end, name, to, ctx.ownAccents)
+    const letter = ACCENTS.has(name) && accentLetter(s, end, name, to, ctx.ownAccents)
     if (letter) {
       endText()
       b.letter(letter.letter, s.slice(i, letter.end), i, letter.end)
@@ -5152,7 +5274,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     // a letter command, \\L ukasz, \\L{}ukasz, Bj\\o rn: the letter in its word (letterCommand), TeX's skipped spaces with it
-    const kernelLetter = ctx.letters !== false && letterCommand(s, i, end, name, to, ctx.ownLetters)
+    const kernelLetter = ctx.letters !== false && letterCommand(s, i, name, to, ctx.ownLetters)
     if (kernelLetter) {
       endText()
       b.pairId += pairsOf(s, i, kernelLetter.end, b, ctx)
@@ -5160,7 +5282,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       i = kernelLetter.end
       continue
     }
-    const character = ctx.letters !== false && textCharacter(s, i, end, name, to, ctx.ownLetters)
+    const character = ctx.letters !== false && textCharacter(s, i, name, to, ctx.ownLetters)
     if (character) {
       endText()
       b.pairId += pairsOf(s, i, character.end, b, ctx)
@@ -5184,7 +5306,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       const { args, end: e } = argsAfter(s, end, 1)
       const stop = args[0]?.kind === 'opt' ? e : end
       endText()
-      if (b.cellMode) {
+      // (in a table, the end of the grid's row: the cell's unit ends; inside a grid cell, in a box the cell holds, a line's end:
+      // a forced break of the cell's text, as in a paragraph)
+      if (b.cellMode && !inGridCell(b, s, i)) {
         b.flush()
         i = stop
         continue
@@ -5829,7 +5953,7 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
       const ends = (u: SourceUnit<WalkFile>, next: SourceUnit<WalkFile> | undefined) =>
         PARAGRAPH_END.test(uncommented(s.slice(u.end, next ? next.start : z)))
       const first = made.find((u, j) => ends(u, made[j + 1])) ?? made.at(-1)
-      first?.pieces.push({ t: 'ph', src: BACKREF_LIST })
+      first?.pieces.push(phPiece(BACKREF_LIST))
     }
   })
   b.kind = saved
@@ -5884,12 +6008,50 @@ function wrapOf(macro: Macro | BibDef | undefined, arg: number) {
     return null
   return { before: texMarks(m[1]!), after: texMarks(m[3]!) }
 }
+/** a variant of csquotes' English style */
+type QuoteVariant = 'american' | 'british'
+/** csquotes' English style as csquotes.def (v5.2o) declares it, each variant's marks, the outer level's then the inner's:
+ *  \DeclareQuoteStyle[american]{english} \textquotedblleft and \textquotedblright, then \textquoteleft and \textquoteright;
+ *  [british]{english} the two the other way round. Held to csquotes.def in each pinned compile image by the release check's
+ *  csquotes-styles (lab/source/csquotes-styles.mjs) */
+export const CSQUOTES_ENGLISH: Readonly<Record<QuoteVariant, readonly (readonly [string, string])[]>> = Object.freeze({
+  american: [
+    ['\u201c', '\u201d'],
+    ['\u2018', '\u2019'],
+  ],
+  british: [
+    ['\u2018', '\u2019'],
+    ['\u201c', '\u201d'],
+  ],
+})
+/** the names csquotes.def gives a variant of its English style, the variant each selects: its aliases of the style
+ *  (\DeclareQuoteAlias[<variant>]{english}{<name>}) and its babel aliases of those (\DeclareQuoteAlias{<variant>}{<name>}), but
+ *  `default` (CSQUOTES_DEFAULT) and its style paths (`latin/britishquotes`), no language's names. Held to csquotes.def as
+ *  CSQUOTES_ENGLISH is */
+export const CSQUOTES_NAMES: Readonly<Record<string, QuoteVariant>> = Object.freeze({
+  american: 'american',
+  canadian: 'american',
+  english: 'american',
+  british: 'british',
+  australian: 'british',
+  newzealand: 'british',
+  USenglish: 'american',
+  usenglish: 'american',
+  UKenglish: 'british',
+  ukenglish: 'british',
+})
+/** the variant csquotes.def makes its default style (\DeclareQuoteAlias[american]{english}{default}) */
+export const CSQUOTES_DEFAULT: QuoteVariant = 'american'
 /**
- * csquotes' quotation marks where the paper loads it and they can be read off its own files: the outer level's double marks
- * and the inner level's single (`levels`), as its English style sets them, where it is loaded with no style, `style=american`,
- * `english` or `USenglish`, and no `autostyle`, no \\setquotestyle, no babel or polyglossia language but English; `{ known:
- * false }` where the style is another the source alone cannot tell (the compile's glyphs would be the fact: not read here); null
- * where csquotes is not loaded
+ * csquotes' quotation marks where the paper loads it and they can be read off its own files: the outer level's and the inner
+ * level's (`levels`), as a variant of its English style sets them (CSQUOTES_ENGLISH), where it is loaded with no style but
+ * `style=american`, `english` or `USenglish`, no `autostyle` but `autostyle=false`, no \\setquotestyle, and babel's or
+ * polyglossia's main language, where one is named, one of CSQUOTES_NAMES; `{ known: false }` where the style is another the
+ * source alone cannot tell (the compile's glyphs would be the fact: not read here); null where csquotes is not loaded. The
+ * variant: babel's main language's (its `main=`, else its last language option), which csquotes' default option
+ * autostyle=tryonce takes at the end of the preamble; csquotes' default (CSQUOTES_DEFAULT) where `style=` or `autostyle=false`
+ * keeps it, where no language is named, and under polyglossia, whose main language csquotes reads as \\mainbabelname: by its
+ * name alone (the reader reads no `variant=`) the pinned TeX Live set the default's marks
  */
 function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
   const t = texts.map(uncommented).join('\n')
@@ -5900,30 +6062,32 @@ function csquotesOf(texts: readonly string[]): Ctx['quotes'] {
     .map((x) => x.trim())
     .filter(Boolean)
   const style = opts.find((o) => /^style\s*=/.test(o))?.replace(/^style\s*=\s*/, '')
-  const english = (l: string) =>
-    /^(?:american|english|USenglish|UKenglish|british|canadian|australian|newzealand)$/.test(l)
-  const babel = [...t.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/g)].flatMap((b) =>
+  const variantOf = (l: string | undefined) =>
+    l !== undefined && Object.hasOwn(CSQUOTES_NAMES, l) ? CSQUOTES_NAMES[l] : undefined
+  // babel's main language: the one its `main=` option names, wherever it stands among the options, else its last language
+  // option. babel.sty (v26.3) stores each key=value option as \bbl@opt@<key> (lines 401, 405-410), appends \bbl@opt@main to the
+  // languages it loads (4238-4240) and takes it out of the list before it (4260-4273): the main language is loaded last. Its
+  // other key=value options (provide=, shorthands=, …) are not read
+  const babelOptions = [...t.matchAll(/\\usepackage\s*\[([^\]]*)\]\s*\{babel\}/g)].flatMap((b) =>
     b[1]!
       .split(',')
       .map((x) => x.trim())
-      .filter((x) => x && !x.includes('=')),
+      .filter(Boolean),
   )
+  const babelMain = babelOptions.map((x) => /^main\s*=\s*(.+)$/.exec(x)?.[1]).find((x) => x !== undefined)
+  const babelLanguage = babelMain ?? babelOptions.filter((x) => !x.includes('=')).at(-1)
   const main = /\\setmainlanguage\s*(?:\[[^\]]*\])?\s*\{([^}]*)\}/.exec(t)?.[1]?.trim()
+  // (the styles a `style=` names that the reader reads: csquotes.def's aliases of the American variant, american, english and
+  // USenglish; another, of either variant, is a style it does not tell)
   const known =
     !opts.some((o) => /^autostyle\b/.test(o) && !/=\s*false$/.test(o)) &&
     !/\\setquotestyle\b/.test(t) &&
     (!style || /^(?:american|english|USenglish)$/.test(style)) &&
-    (!babel.length || english(babel.at(-1)!)) &&
-    (!main || english(main))
-  return known
-    ? {
-        known,
-        levels: [
-          ['\u201c', '\u201d'],
-          ['\u2018', '\u2019'],
-        ],
-      }
-    : { known }
+    (babelLanguage === undefined || variantOf(babelLanguage) !== undefined) &&
+    (!main || variantOf(main) !== undefined)
+  if (!known) return { known }
+  const adapts = !style && !opts.some((o) => /^autostyle\b/.test(o))
+  return { known, levels: CSQUOTES_ENGLISH[(adapts && !main && variantOf(babelLanguage)) || CSQUOTES_DEFAULT] }
 }
 /** csquotes' marks for an \\enquote at the walk's quotation level (`ctx.quoteLevel`, 0 outside one; `\\enquote*` one level in,
  *  `end` past its name and star), alternating by level; null where the paper does not load csquotes or its marks are unknown */
@@ -6100,7 +6264,7 @@ function keepNumbers<F extends WalkFile>(pieces: readonly SourcePiece<F>[]) {
         right = end < n ? /\s/.test(p.s[end]!) : APART(pieces[k + 1])
       if (!left || !right || at(m.index) < 0 || at(end) < 0 || src.slice(at(m.index), at(end)) !== m.text) continue
       if (m.index > last) out.push(part(last, m.index))
-      out.push({ t: 'ph', src: m.text })
+      out.push(phPiece(m.text))
       last = end
     }
     if (!out.length) return [p]
@@ -6213,7 +6377,9 @@ function frontMatter(s: string, from: number, to: number, b: Builder, ctx: Ctx) 
 const THEOREM_DEFINERS =
   /\\(?:newtheorem\*?|spnewtheorem\*?|newmdtheoremenv|newproof|newdefinition|newexample|newremark)\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}|\\declaretheorem\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
 /** the theorem-like environments of a paper, as its files define them (\\newtheorem, thmtools' \\declaretheorem, llncs'
- *  \\spnewtheorem, elsarticle's \\newproof, mdframed's), and those the common classes define themselves */
+ *  \\spnewtheorem, elsarticle's \\newproof, mdframed's), and those the common classes define themselves: eight of llncs.cls's
+ *  own (\\spnewtheorem theorem and proof, \\spn@wtheorem corollary, definition, example, lemma, proposition, remark), proof
+ *  amsthm.sty's too */
 const theoremsOf = (texts: readonly string[]) => {
   const names = new Set(['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example'])
   for (const m of texts.map(uncommented).join('\n').matchAll(THEOREM_DEFINERS))
@@ -6425,7 +6591,7 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
   // encoding the paper declares; it is read as none of the package's own files otherwise)
   const mainRel = [normalizePath(main), normalizePath(`${main}.tex`)].find((f) => fsys.read(f)),
     bbl = mainRel ? normalizePath(`${jobName(mainRel)}.bbl`) : null
-  decoders = decodersOf(bbl && fsys.read(bbl) ? [...own, { file: bbl, text: sourceText(bbl) }] : own, sourceText, main)
+  decoders = decodersOf(bbl && fsys.read(bbl) ? [...own, { file: bbl, text: sourceText(bbl) }] : own, main)
   try {
     return readProject(fsys, main, tables, sourceText, own)
   } finally {
@@ -6435,7 +6601,7 @@ export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
 }
 /** each of the package's files that is not UTF-8, by its normalized name, with its decoding (INPUT_ENCODINGS): the one the
  *  main file declares, else latin1 */
-function decodersOf(own: readonly { file: string; text: string }[], sourceText: unknown, main: string) {
+function decodersOf(own: readonly { file: string; text: string }[], main: string) {
   const out = new Map<string, Decoder>(),
     bad = own.filter((x) => !isUtf8Text(x.text))
   if (!bad.length) return out
@@ -6458,7 +6624,7 @@ export function texFilesOf(fsys: Fsys, main: string): string[] {
     .list()
     .filter((f) => /\.(tex|sty|cls)$/i.test(f))
     .map((f) => ({ file: f, text: texText(fsys.read(f)!) }))
-  const dec = decodersOf(own, null, main)
+  const dec = decodersOf(own, main)
   return own.map((x) => {
     const d = dec.get(x.file)
     return d ? d(x.text) : UTF8_LAX.decode(latin1Bytes(x.text))
@@ -6866,8 +7032,55 @@ export function pseudoTranslate<F extends WalkFile>(
  * 1706.03762v7's \\author, which had no start mark): the mark goes before the group, so that the letter is the unit's
  * own ink. Any other group before the first word is as before (REVTeX's empty `\\bibfield {number} {  }`, before which
  * a mark set the entry's text 7 pt right: 2610.20716v1)
+ * A table cell set on several lines (`cell`: a cell unit, §18.75): its lines are the rows of a box the cell holds (\\makecell,
+ * \\shortstack, a nested one-column tabular, a paper macro's box), and a start mark inside the box defines the cell's index in
+ * the box's first entry (LAYOUT_TEX's \\axt@cs, carried to the innermost alignment entry), whose template would write the box's
+ * class (AXT-CELL) and set the cell's end point (`t<i>x`) after the box's first line. So where every forced break of the cell
+ * stands inside a group of it, the mark goes before the open piece of the innermost group that holds them all, at the outer
+ * entry's level, unless the first word stands before it; never before a \\multicolumn, whose \\omit opens the entry (the
+ * mark stays inside it, as before). The end mark stays after the last word, inside the box
  */
-export function startOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number] {
+export function startOf(pieces: readonly SourcePiece<WalkFile>[], cell = false): [number, number] {
+  const [at, cut] = headStartOf(pieces)
+  if (!cell || at < 0) return [at, cut]
+  const box = cellBox(pieces, at)
+  return box >= 0 ? [box, -1] : [at, cut]
+}
+
+/** a \\multicolumn's open piece: its content is the entry's own (its \\omit replaced the template), no group of a box */
+const MULTICOLUMN = /^\\multicolumn(?![A-Za-z@])/
+/** the open piece a cell's start mark goes before, by index, where the head's start (`at`) stands inside the box that holds the
+ *  cell's lines: the innermost group of its pieces that holds every forced break of it (forcedBreak: `\\\\`, and a paper's row-ending
+ *  macro the walk states one), a \\multicolumn's passed through, where
+ *  the start stands inside that group; where no group holds them all (each in a box of its own) and none stands outside every
+ *  group, the outermost group the start stands in. -1 where the start stays: no break, a break outside every group, or the
+ *  start outside the box (its first word before it) */
+function cellBox(pieces: readonly SourcePiece<WalkFile>[], at: number): number {
+  const open: number[] = []
+  let common: number[] | null = null,
+    enclosing: number[] = []
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]!
+    if (k === at) enclosing = [...open]
+    if (p.t === 'open') open.push(MULTICOLUMN.test(p.src) ? -1 : k)
+    else if (p.t === 'close') open.pop()
+    else if (forcedBreak(p)) {
+      const groups = open.filter((o) => o >= 0)
+      if (!groups.length) return -1
+      // (the groups open at every break so far: the common head of their stacks)
+      let n = 0
+      while (common && n < common.length && common[n] === groups[n]) n++
+      common = common === null ? groups : common.slice(0, n)
+    }
+  }
+  if (common === null) return -1
+  const inside = enclosing.filter((o) => o >= 0)
+  if (common.length) return inside.includes(common.at(-1)!) ? common.at(-1)! : -1
+  return inside[0] ?? -1
+}
+
+/** startOf's reading of a unit's head, a cell's box aside */
+function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number] {
   let startAt = -1,
     startCut = 0,
     opened = -1
@@ -6959,7 +7172,7 @@ export function patch(
       const q = p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p,
         r = p.t === 'text' && !p.tr ? SKIPPED.get(p) : null
       if (!r) {
-        pieces.push(bare ? { ...q, bared: true } : q)
+        pieces.push(bare ? restated({ ...q, bared: true }, q) : q)
         bare = false
         continue
       }
@@ -6979,7 +7192,7 @@ export function patch(
       bare = false
     }
     const m = mark?.(u)
-    let [startAt, startCut] = m ? startOf(pieces) : [-1, 0]
+    let [startAt, startCut] = m ? startOf(pieces, u.kind === 'cell') : [-1, 0]
     // the marks that open the piece the start mark goes before (a layout opening mark, layout/marks.mjs layoutMarking's
     // `opens`) come after the start mark, which sets its point where the unit begins, in horizontal mode, after everything
     // \leavevmode lets \everypar set first. Before it, in vertical mode, an opening mark waits for the next mark TeX sets,
@@ -7382,19 +7595,18 @@ export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox
  *  read then alone every revtex and aastex paper's last page was one column (the review of 2026-10-01). And as
  *  \\end{document} begins, before the grid closes: a last page with no unit mark on it — the references alone — was
  *  read one column too (2608.20847's page 9, aastex 2608.12606's page 20; the re-review of 2026-10-02) */
-export const MARK_DEF =
-  [
-    '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
-    '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
-    '\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} xyz\\relax}',
-    '\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} xyz\\relax\\fi}',
-    '\\else\\def\\axt@dest#1{}\\fi\\fi\\fi',
-    '\\def\\axt@colsnow{\\ifdefined\\pagegrid@col\\ifnum\\pagegrid@col>\\@ne 2\\else 1\\fi\\else\\ifnum\\ifdefined\\col@number\\col@number\\else\\@ne\\fi>\\@ne 2\\else\\if@twocolumn 2\\else 1\\fi\\fi\\fi}\\gdef\\axt@colmax{1}',
-    '\\def\\axt@colseen{\\ifnum\\axt@colsnow>\\axt@colmax\\relax\\xdef\\axt@colmax{\\axt@colsnow}\\fi}',
-    '\\protected\\def\\axtmark#1{\\axt@colseen\\axt@dest{#1}}',
-    '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
-    ...END_MARK,
-  ].join('\n') + '\n'
+export const MARK_DEF = `${[
+  '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
+  '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
+  '\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} xyz\\relax}',
+  '\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} xyz\\relax\\fi}',
+  '\\else\\def\\axt@dest#1{}\\fi\\fi\\fi',
+  '\\def\\axt@colsnow{\\ifdefined\\pagegrid@col\\ifnum\\pagegrid@col>\\@ne 2\\else 1\\fi\\else\\ifnum\\ifdefined\\col@number\\col@number\\else\\@ne\\fi>\\@ne 2\\else\\if@twocolumn 2\\else 1\\fi\\fi\\fi}\\gdef\\axt@colmax{1}',
+  '\\def\\axt@colseen{\\ifnum\\axt@colsnow>\\axt@colmax\\relax\\xdef\\axt@colmax{\\axt@colsnow}\\fi}',
+  '\\protected\\def\\axtmark#1{\\axt@colseen\\axt@dest{#1}}',
+  '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
+  ...END_MARK,
+].join('\n')}\n`
 /** whether a compiler is arXiv's `latex` (its 00README's, or the one guessed for a package of EPS figures alone: paper-meta.mjs):
  *  pdfTeX in DVI mode, \\pdfoutput 0, whose DVI arXiv makes a PDF by dvips and ps2pdf, and a host by dvipdfmx
  *  (live.d.mts CompileRequest), which reads the marks' specials (DVI_MARK_DEF) */
@@ -7636,29 +7848,27 @@ export function latinFontsFor(probe: FontProbe | null | undefined): string {
   if (face(probe.rm)) out.push(`\\setmainfont{${face(probe.rm)}}${GYRE_FACES}`)
   if (face(probe.sf)) out.push(`\\setsansfont{${face(probe.sf)}}${GYRE_FACES}`)
   if (face(probe.tt)) out.push(`\\setmonofont{${face(probe.tt)}}${GYRE_FACES}`)
-  return out.length ? out.join('\n') + '\n' : ''
+  return out.length ? `${out.join('\n')}\n` : ''
 }
 
 /** pdfTeX-only primitives that arXiv sources use outside any \\ifpdf, made harmless under XeTeX. Goes first in the main file */
-export const XETEX_SHIM =
-  [
-    '\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi',
-    '\\ifdefined\\pdfminorversion\\else\\newcount\\pdfminorversion\\fi',
-    '\\ifdefined\\pdfcompresslevel\\else\\newcount\\pdfcompresslevel\\fi',
-    '\\ifdefined\\pdfobjcompresslevel\\else\\newcount\\pdfobjcompresslevel\\fi',
-    '\\ifdefined\\pdfsuppresswarningpagegroup\\else\\newcount\\pdfsuppresswarningpagegroup\\fi',
-    '\\ifdefined\\pdfinfo\\else\\long\\def\\pdfinfo#1{}\\fi',
-    '\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi',
-    '\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi',
-  ].join('\n') + '\n'
+export const XETEX_SHIM = `${[
+  '\\ifdefined\\pdfoutput\\else\\newcount\\pdfoutput\\fi',
+  '\\ifdefined\\pdfminorversion\\else\\newcount\\pdfminorversion\\fi',
+  '\\ifdefined\\pdfcompresslevel\\else\\newcount\\pdfcompresslevel\\fi',
+  '\\ifdefined\\pdfobjcompresslevel\\else\\newcount\\pdfobjcompresslevel\\fi',
+  '\\ifdefined\\pdfsuppresswarningpagegroup\\else\\newcount\\pdfsuppresswarningpagegroup\\fi',
+  '\\ifdefined\\pdfinfo\\else\\long\\def\\pdfinfo#1{}\\fi',
+  '\\ifdefined\\pdfglyphtounicode\\else\\def\\pdfglyphtounicode#1#2{}\\fi',
+  '\\ifdefined\\pdfgentounicode\\else\\newcount\\pdfgentounicode\\fi',
+].join('\n')}\n`
 
 // ---------------------------------------------------------------- engine adaptation: rules for known incompatibilities
 /** R1, before \documentclass under XeTeX: what pdfTeX papers use that XeLaTeX lacks, and the engine guard of some templates */
-export const XETEX_SHIM_R1 =
-  [
-    '\\providecommand\\DeclareUnicodeCharacter[2]{}', // inputenc's, not loaded under XeLaTeX
-    '\\RequirePackage{iftex}\\let\\RequirePDFTeX\\relax', // a template's "pdfTeX only" guard (AAAI 2027)
-  ].join('\n') + '\n'
+export const XETEX_SHIM_R1 = `${[
+  '\\providecommand\\DeclareUnicodeCharacter[2]{}', // inputenc's, not loaded under XeLaTeX
+  '\\RequirePackage{iftex}\\let\\RequirePDFTeX\\relax', // a template's "pdfTeX only" guard (AAAI 2027)
+].join('\n')}\n`
 /** R2, under XeTeX: a pdftex driver option names the wrong backend for hyperref, graphicx, color */
 export function stripPdftexOption(text: string): string {
   return text.replace(
@@ -7670,10 +7880,9 @@ export function stripPdftexOption(text: string): string {
   )
 }
 /** R3, before \begin{document}, any engine: a template's "package X is forbidden" errors become warnings */
-export const FORBIDDEN_TO_WARNING =
-  [
-    '\\makeatletter',
-    '\\let\\axt@PackageError\\PackageError',
-    '\\long\\def\\PackageError#1#2#3{\\in@{forbid}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\in@{must not use}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\axt@PackageError{#1}{#2}{#3}\\fi\\fi}',
-    '\\makeatother',
-  ].join('\n') + '\n'
+export const FORBIDDEN_TO_WARNING = `${[
+  '\\makeatletter',
+  '\\let\\axt@PackageError\\PackageError',
+  '\\long\\def\\PackageError#1#2#3{\\in@{forbid}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\in@{must not use}{#2}\\ifin@\\PackageWarning{#1}{#2}\\else\\axt@PackageError{#1}{#2}{#3}\\fi\\fi}',
+  '\\makeatother',
+].join('\n')}\n`

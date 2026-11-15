@@ -6,8 +6,10 @@
 // letter of it, the letters as src/pdf-reader/engine/rules/font-roles.mjs LETTER_SETS states them (`Latn` A-Z a-z, `Cyrl`
 // U+0410-U+044F, a language's its script's and its own, breaker/faces.ts LETTERS' keys); a face sets small capitals where its
 // file's GSUB table has the `smcp` feature. Made at 065c1d973 by tests/pdf-reader/font-letters.test.ts from the coverage
-// table that scripts/font-roles.py reads out of the files. The files, the catalogue's (Source Han Serif's OTFs from Adobe's
-// release 2.003R, Nimbus's from URW's base35 release 20200910, every other TeX Live 2025's, the compile image
+// table that scripts/font-roles.py reads out of the files; held to the files by the release check's `face-files` gate
+// (lab/typeset/face-tables.py reads them, face-files.mjs judges), whose own reference, lab/typeset/face-files.json, holds each
+// face's file, each alphabet's letters and each file's binding SHA-256. The files, the catalogue's (Source Han Serif's OTFs
+// from Adobe's release 2.003R, Nimbus's from URW's base35 release 20200910, every other TeX Live 2025's, the compile image
 // texlive/texlive@sha256:7056390e…), each group's in the order regular, bold, italic, bold italic, those it has (Source Han
 // Serif's and Harano Aji's: regular, medium, bold):
 //   shs-sc, shs-tc, shs-k: SourceHanSerif{SC,TC,K}-{Regular,Medium,Bold}.otf; haranoaji: HaranoAjiMincho-{Regular,Medium,
@@ -110,7 +112,8 @@ export const FACES: Readonly<Record<string, CatalogueFace>> = {
   'pt-mono-bold': { family: 'axt-slab-mono', weight: 700, style: 'normal', size: 1 },
 }
 
-/** each face's alphabets whose every letter it holds (a language's own, and a script's bare letters): its file's cmap */
+/** each face's alphabets whose every letter it holds (a language's own, and a script's bare letters): its file's cmap, the
+ *  OpenType character map (its best Unicode subtable), as the header says */
 export const HOLDS: Readonly<Record<string, readonly string[]>> = {
   'biolinum-bold': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
   'biolinum-bolditalic': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
@@ -197,7 +200,7 @@ export const HOLDS: Readonly<Record<string, readonly string[]>> = {
   'xcharter-regular': ['Latn', 'Cyrl', 'de', 'fr', 'es', 'pt', 'ru', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'uk'],
 }
 
-/** the faces that draw small capitals by their smcp feature: their file's GSUB */
+/** the faces that draw small capitals by their smcp feature: their file's GSUB, the OpenType `smcp` feature */
 export const SMCP: readonly string[] = [
   'biolinum-bold',
   'biolinum-bolditalic',

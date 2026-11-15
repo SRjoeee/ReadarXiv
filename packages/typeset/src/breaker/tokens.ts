@@ -134,7 +134,7 @@ export type TRes = {
   heldMarks?: string[]
   [more: string]: unknown
 }
-export type Reading = {
+type Reading = {
   get(k: number): TRes | undefined
   measured?: { st?: TStyle | null; fill?: number | null; pieces?: ReadonlyMap<number, number> | null } | null
   capsRatio?: number
@@ -176,9 +176,9 @@ export type TokensInput = {
   tagWords: boolean
 }
 /** the tokens, with the unit's base style (today's `tokens.base`) and U.marks' decisions taken while they were made */
-export type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
+type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
 
-export const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
+const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 /** a fill not told (layout/fills.mjs UNKNOWN) */
 const UNKNOWN = -1
 /** a link group's open: \href's, \hyperref's and \hyperlink's (L2:2245), and \url's, which the prepare reads as a link group
@@ -327,6 +327,9 @@ const BP: Record<string, number> = {
   cc: (((12 * 1238) / 1157) * 72) / 72.27,
   sp: 72 / 72.27 / 65536,
 }
+/** TeX's explicit glue in em, as latex.ltx defines it: \enspace \kern.5em; \thinspace and \, a thin space, \: a medium and
+ *  \; a thick one (\tmspace's \thinmuskip, \medmuskip and \thickmuskip, 3, 4 and 5 mu of 18 an em: .16667em, .2222em,
+ *  .2777em in text); \quad \hskip1em and \qquad \hskip2em. A kern no line breaks at, a skip one may */
 const KERNS: Record<string, number> = {
   '\\enspace': 0.5,
   '\\thinspace': 1 / 6,
@@ -424,7 +427,7 @@ export function caseRuns(
   return out.map(({ src, k, at: a, n }) => ({ s: k === 1 ? src : upper(src), k, at: a, n }))
 }
 /** a rendering's runs with the names a package generated in it in the target's (L2:1309 renameRuns) */
-export function renameRuns<R extends { text: string }>(
+function renameRuns<R extends { text: string }>(
   runs: readonly R[],
   rename: readonly [number, number, string][],
 ): R[] | null {
@@ -444,7 +447,7 @@ export function renameRuns<R extends { text: string }>(
   return out
 }
 /** a crop resolution as its readers take it, one a part (L2:1875 cropPartsOf) */
-export function cropPartsOf(r: TRes): Record<string, unknown>[] {
+function cropPartsOf(r: TRes): Record<string, unknown>[] {
   if (!r.parts) return [r]
   return r.parts.map((q, i) => ({
     ...r,

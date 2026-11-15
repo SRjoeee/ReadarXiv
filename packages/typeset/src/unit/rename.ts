@@ -47,9 +47,12 @@ export type RefNames = {
 /** a replacement: [start, end, word] over the text the page shows */
 export type Rename = [start: number, end: number, word: string]
 /** a resolution as the rule reads it */
-export type Renamable = { mode: string; sup?: boolean; src?: string; text?: string }
+type Renamable = { mode: string; sup?: boolean; src?: string; text?: string }
 
-/** the commands whose text TeX's cross-referencing packages generate (tex-names.mjs:14 GENERATED_COMMANDS) */
+/** the commands whose text TeX's cross-referencing packages generate, a counter type's name before the number: cleveref.sty's
+ *  \cref and \Cref with their range, page and name forms, hyperref.sty's \autoref and \Autoref (TeX Live 2025). The engine's
+ *  packages/engine/src/source/tex-names.ts GENERATED_COMMANDS, which its source reader reads, held equal to it by
+ *  tests/typeset/tex-names.test.ts */
 export const GENERATED_COMMANDS: readonly string[] = Object.freeze([
   'cref',
   'Cref',
@@ -71,7 +74,7 @@ export const GENERATED_COMMANDS: readonly string[] = Object.freeze([
   'Autoref',
 ])
 /** a placeholder whose text a package generates (L2:1277 GENERATED_REF) */
-export const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
+const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
 /** a citation's note, its last optional argument (L2:1279 CITE_NOTE) */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
 /** the targets whose names do not inflect (tex-names.mjs:17) */
@@ -119,7 +122,7 @@ const unspaced = (s: string) =>
 const has = (table: Readonly<Record<string, string>>, w: string) => Object.hasOwn(table, w) && !!table[w]
 
 /** a generated reference's name in the target, or null (tex-names.mjs:74 refName) */
-export function refName(
+function refName(
   english: string,
   n: RefNames,
   labels: Readonly<Record<string, string>> | null,
@@ -149,7 +152,7 @@ function conjunctionOf(t: NonNullable<RefNames['target']>, c: string, own: OwnNa
 
 /** a generated reference's text in the target's names: its replacements in order; null where a part of it is no number,
  *  name or conjunction the target has a word for; empty where it holds no name (tex-names.mjs:103 refInTarget) */
-export function refInTarget(
+function refInTarget(
   text: string,
   n: RefNames,
   labels: Readonly<Record<string, string>> | null,
@@ -233,8 +236,6 @@ export function rename<K>(
   return out
 }
 
-/** a row of today's (rows.mjs unitOf) as nameOfRow reads it */
-export type NameRow = { kind?: string; src?: unknown; state?: string; pieces?: readonly { t?: string; s?: unknown }[] }
 /** a name's translation as the target's word: its text pieces joined, white space one space, an ideographic full stop the
  *  translator ends a word with gone (L2:1269) */
 const wordOf = (texts: readonly string[]) =>
@@ -244,21 +245,6 @@ const wordOf = (texts: readonly string[]) =>
     .trim()
     .replace(/[\u3002\uff0e]$/u, '')
     .trim()
-/** a structural name's row as [its English, the target's word for it]: its source's text and its translation's text
- *  pieces joined, white space one space, an ideographic full stop at its end gone; null for another unit, a row of no
- *  translation or an empty one (L2:1266 nameOfRow) */
-export function nameOfRow(u: NameRow | null | undefined): [english: string, word: string] | null {
-  if (
-    u?.kind !== 'name' ||
-    typeof u.src !== 'string' ||
-    !Array.isArray(u.pieces) ||
-    (u.state !== 'whole' && u.state !== 'partial')
-  )
-    return null
-  const english = u.src.replace(/\s+/g, ' ').trim()
-  const word = wordOf(u.pieces.filter((q) => q?.t === 'text' && typeof q.s === 'string').map((q) => q.s as string))
-  return english && word ? [english, word] : null
-}
 
 /** a row's text pieces in order, its groups' with them (a v0 row's text between a group's open and close is its own) */
 function textsOf(content: readonly OutPiece[], out: string[] = []): string[] {

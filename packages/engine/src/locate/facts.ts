@@ -831,8 +831,6 @@ export function labelParts(
 }
 
 // ---------------------------------------------------------------- forced breaks and their room (C14, D9)
-/** a forced break's source (today's FORCED_BREAK TEX:84) */
-export const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
 /** the pitch of a run of baseline gaps: their median (today's break-room.mjs pitchOf) */
 export function pitchOf(gaps: readonly number[]): number | null {
   const g = gaps.filter((v) => v > 0).sort((a, b) => a - b)

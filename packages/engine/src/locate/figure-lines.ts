@@ -141,7 +141,9 @@ export function figureLinesOf(
       for (const [g, k] of map) if (!held.has(k)) (byUnit.get(k) ?? byUnit.set(k, []).get(k)!).push(g)
       for (const [k, gs] of byUnit) {
         const u = fig.units[k]
-        if (!u || u.why || Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6) continue
+        // (turned: its direction across; a unit holding a level glyph is level or turned within a run's 1e-3 of it, figureUnitsOf,
+        // its direction along then within 5.0000013e-7 of 1)
+        if (!u || u.why || Math.abs(u.uy ?? 0) > 1e-6) continue
         const G = glyphsOn(pi + 1)
         const own = gs.filter((g) => real(G[g])).sort((a, b) => G[a]!.x0 - G[b]!.x0)
         if (setApart({ order: [{ t: 'text', glyphs: own }], els: [] }, G)) {
@@ -456,7 +458,8 @@ function linesOf(
     const lines: Line[] = []
     for (const [k, gs0] of runOf) {
       const u = fig.units[k]!
-      if (Math.abs((u.ux ?? 1) - 1) > 1e-6 || Math.abs(u.uy ?? 0) > 1e-6) continue
+      // (a turned run is no level line: its direction across tells it, as in figureLinesOf's scripts above)
+      if (Math.abs(u.uy ?? 0) > 1e-6) continue
       const gs = gs0.filter((g) => real(glyphs[g])).sort((a, b) => glyphs[a]!.x0 - glyphs[b]!.x0)
       if (!gs.length) continue
       lines.push(lineOf([k], gs, new Set(), glyphs, figOf(glyphs[gs[0]!]!)))
@@ -1958,10 +1961,12 @@ function closed(shape: { segs: ArrayLike<number> } | null): boolean {
     }
   return [...deg.values()].every((d) => d % 2 === 0)
 }
+/** whether a met stroke's segments are all level (a met stroke has one at least: figure-text.ts shapeRoom meets a unit through
+ *  a segment's part alone) */
 const flat = (shape: { segs: ArrayLike<number> }) => {
   for (let i = 0; i + 3 < shape.segs.length; i += 4)
     if (Math.abs(shape.segs[i + 1]! - shape.segs[i + 3]!) > 1e-3) return false
-  return shape.segs.length >= 4
+  return true
 }
 const inside = (g: G, x0: number, y0: number, x1: number, y1: number) =>
   (g.ix0 ?? g.x0) > x0 && (g.ix1 ?? g.x1) < x1 && g.bottom > y0 && g.top < y1

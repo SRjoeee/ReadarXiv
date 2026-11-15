@@ -12,7 +12,7 @@ import { settleLayout } from './settle.ts'
 /** a unit laid on the page: whether the fill may take it, whether it was refused, its pages */
 export type PassUnit = FillLaid & { fillable?: boolean; pages: readonly number[] }
 /** a unit the fill took: its page's target, its fill leading (the unit's as one where it was laid in runs) */
-export type Filled = {
+type Filled = {
   p: PassUnit
   target: number
   fillLead: number | null | undefined

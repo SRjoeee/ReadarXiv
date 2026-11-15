@@ -3,9 +3,9 @@
 // L2:1868. Its segments are the layout file's today; A's El.ink (one box per TeX line, its baseline) once lane L1 states it.
 
 /** a segment's box: its extent, top, bottom and the baseline of the line TeX set it on; `lines` its segments' count */
-export type SegBox = { x0: number; x1: number; top: number; bottom: number; baseline: number; lines?: number }
+type SegBox = { x0: number; x1: number; top: number; bottom: number; baseline: number; lines?: number }
 /** one crop of an element: its page, its rectangle [x0, y0, x1, y1] and baseline, the segment it is cut from */
-export type CropPart = { page: number; crop: [number, number, number, number]; baseline: number; seg: SegBox }
+type CropPart = { page: number; crop: [number, number, number, number]; baseline: number; seg: SegBox }
 
 /** a crop from a segment's box: the box, its antialiased edge a fraction of a point around, on its line's baseline */
 export function cropOfBox(box: SegBox): { crop: [number, number, number, number]; baseline: number } {

@@ -39,7 +39,7 @@ export const ATTEMPTS = 3
  *  three attempts with backoff), unmeasured */
 export const BACKOFF_MS = 500
 /** a 429's cooldown at least, ms (chain.ts MIN_COOL_MS): the policy carried over (DESIGN §8), unmeasured */
-export const MIN_COOL_MS = 1_000
+const MIN_COOL_MS = 1_000
 /** a 429's cooldown where it names none, ms: the request layer's base pause (`RATE_LIMIT_BASE_PAUSE_MS`,
  *  src/providers/request/retry-policy.ts; DESIGN §8.3), unmeasured */
 export const DEFAULT_COOL_MS = 5_000
@@ -51,15 +51,15 @@ export const LAST_WAITS = 2
  *  failed one is and the unit told the time named, which a host offers its retry by (#638: a Retry-After of an hour, slept
  *  twice, held a call two hours, in an extension's background that is a service worker). The cooldown itself stays the
  *  endpoint's: the translator is asked nothing until it ends */
-export const patienceOf = (t: Translator): number => ATTEMPTS * t.limits.callMs
+const patienceOf = (t: Translator): number => ATTEMPTS * t.limits.callMs
 /** the breaker (global-gate.ts GATE_DEFAULTS): opens when OPEN_AT of at least MIN_OUTCOMES of the last WINDOW outcomes
  *  failed; skips its translator for BREAKER_MS, then lets one probe through; never skips the chain's last */
 export const BREAKER = { window: 50, minOutcomes: 20, openAt: 0.5, coolMs: 5 * 60_000 } as const
 /** a store read answers within this, ms, or is all misses (answers.ts GET 2 s): a hanging store is a miss, never waited on
  *  to translate (DESIGN §9, the translation cache); a ruling, unmeasured */
-export const STORE_READ_MS = 2_000
+const STORE_READ_MS = 2_000
 /** a store write is given this long, ms (answers.ts PUT 5 s): DESIGN §9's ruling, unmeasured */
-export const STORE_WRITE_MS = 5_000
+const STORE_WRITE_MS = 5_000
 /** buffered store writes go out at this many entries, and at the end of a call */
 export const WRITE_EVERY = 200
 /** a stored value at most, in UTF-16 code units of the translator's raw reply (design-a §1.6). DESIGN §9 states the bound
@@ -67,7 +67,7 @@ export const WRITE_EVERY = 200
 export const VALUE_MAX = 64 * 1024
 /** `supports` answers within this, ms, or the translator is passed over: the probes' deadline (DESIGN §8.5, `PROBE_MS`
  *  2 s); a ruling, unmeasured */
-export const SUPPORTS_MS = 2_000
+const SUPPORTS_MS = 2_000
 /** a gate's answer within this, ms, or the request goes through without it (global-gate.ts GLOBAL_CALL_MS: fails open);
  *  unmeasured */
 export const GATE_MS = 1_000
@@ -283,7 +283,7 @@ const refusedWhole = (f: Fault): boolean =>
  * stage once (`passed`), or every stage still before it when it has its result (`done`); an aborted call lets every held
  * unit go
  */
-export function stagesOf(
+function stagesOf(
   n: number,
   stages: number,
   signal: Signal,

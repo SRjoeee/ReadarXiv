@@ -50,11 +50,11 @@ export type OptionalContentConfig = Awaited<ReturnType<PDFDocumentProxy['getOpti
 /** CSS px a PDF unit at scale 1 (PDF.js's PixelsPerInch.PDF_TO_CSS_UNITS) */
 export const PDF_TO_CSS = 96 / 72
 /** how far past the view a slot is near: one pane's height above and below */
-export const NEAR = '100% 0px 100% 0px'
+const NEAR = '100% 0px 100% 0px'
 /** how long after a keyboard's jump the slot jumped to may still take the focus when it comes to show its page, ms: the
  *  jump's scroll brings it near within a frame or two, and a slot that comes near later is the reader's own scroll.
  *  Unmeasured */
-export const FOCUS_WAIT_MS = 2000
+const FOCUS_WAIT_MS = 2000
 /** how long after a zoom's or a pinch's steps are drawn again the laid pages' text layers stay out of style and layout (ms),
  *  places.mjs TEXT_BACK_MS: steps a little further apart than their drawing delay find them still out (PDF-READER
  *  §11.11); unmeasured */
@@ -65,7 +65,7 @@ export const RECOPY_MS = 600
 /** the longest a laid page's drawing waits for the left's page being drawn before it is put in place, ms (layer-side.mjs
  *  LEFT_WAIT_MS): the two panes paint within one frame of each other, the left first, unless the left is slower than this.
  *  It is past the 1.21 to 1.24 s the left's page took alone on 2602.23285v2's page 8 at k 2, measured in PDF-READER §11.8 */
-export const LEFT_WAIT_MS = 1500
+const LEFT_WAIT_MS = 1500
 /** the pages of a laid page's document kept parsed (operator lists, decoded images) after their drawings go (visibility.mjs) */
 export const WARM_PAGES = 4
 /** the mark of a slot whose drawing is kept off the view: the reader's sheet holds the drawing out of the layout tree */
@@ -79,7 +79,7 @@ export const KEEP_PIXELS = 2 ** 25
  *  its WebKit tells no memory and kills a tab past its process's limit */
 export const IOS_KEEP_PIXELS = 2 ** 23
 /** the share of a device's memory the kept drawings may take (KEEP_SHARE, §11.8) */
-export const KEEP_SHARE = 1 / 64
+const KEEP_SHARE = 1 / 64
 /** the memory a device is taken to have where the browser tells none, GiB as `navigator.deviceMemory` states it
  *  (KEEP_MEMORY_GB, §11.8); a ruling, unmeasured */
 export const KEEP_MEMORY_GB = 4
@@ -161,13 +161,13 @@ export interface ViewContent {
 }
 /** the left pane's own drawing of the page, copied (no second render), while it waits for its layer; `fallback` drawn where the
  *  left's drawing of it fails */
-export interface LeftContent {
+interface LeftContent {
   kind: 'left'
   key: string
   fallback: ViewContent
 }
 /** a page of text in grey, while there is no original to draw (round 4's skeleton) */
-export interface SkeletonContent {
+interface SkeletonContent {
   kind: 'skeleton'
   key: string
 }
@@ -201,7 +201,7 @@ type Listener<K extends keyof StackEvents> = (e: StackEvents[K]) => void
  * on one pane and not yet on the other would be a few pixels apart (2307.16209v1 p2 at 2.37: 1894 against 1899 px). The rounding
  * is a function of the page's viewport and the screen alone, so the first drawing of page n at a scale tells it for every pane
  */
-export interface Rounding {
+interface Rounding {
   get(n: number, scale: number): readonly [string, string] | null
   set(n: number, scale: number, x: string, y: string): void
   on(f: (n: number) => void): () => void
@@ -228,7 +228,7 @@ export function roundingTable(): Rounding {
 }
 
 /** the left pane's pages, as a slot that shows the left's drawing reads them */
-export interface LeftPages {
+interface LeftPages {
   /** the left's canvas of page n where it is drawn at its page view's scale now, else null */
   canvas(n: number): HTMLCanvasElement | null
   /** the left's page box of page n (its loading mark is mirrored from its classes), or null */
@@ -239,7 +239,7 @@ export interface LeftPages {
   holds(n: number): boolean
 }
 
-export interface StackOptions {
+interface StackOptions {
   scroller: HTMLElement
   kit: Kit
   scheduler: Scheduler

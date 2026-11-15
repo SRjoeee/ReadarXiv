@@ -1,4 +1,5 @@
-// COPIED as it is from src/pdf-reader/engine/rules/content-classes.mjs (abe884b5e) for today's ink makers beside it, which locate runs over arXiv's page.
+// COPIED from src/pdf-reader/engine/rules/content-classes.mjs (abe884b5e) for today's ink makers beside it, which locate runs over arXiv's page,
+// without the readings of the reader's toggles, which nothing of the packages calls (the reader's are packages/format's).
 // The content classes (docs/route/orphan-text.md): every text glyph of our final pass belongs to exactly one, and each class
 // has one translation path and one reader toggle. One table, read by the maker child's ledger (layout/ledger.mjs), by the
 // sweep and by the readers' settings: a class is translated once on the server, into the shared cache, and a toggle only shows
@@ -9,8 +10,6 @@
 
 /** the reader's toggles, in the order the settings list them: `always` and `never` are no toggle */
 export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'references', 'names', 'never'] as const)
-/** a class's toggle (TOGGLES) */
-export type Toggle = (typeof TOGGLES)[number]
 
 /**
  * Each class: `toggle` (TOGGLES); `state`, what exists today — `built` (translated and drawn: the source's units, and the ink
@@ -20,7 +19,7 @@ export type Toggle = (typeof TOGGLES)[number]
  * class (OCR reads an image, which holds no glyph); `truth`, what its text and its place are read from. In the ledger's code
  * order (CLASS_IDS): a code is an index here, kept in a Uint8Array a page
  */
-export const CLASSES = Object.freeze({
+const CLASSES = Object.freeze({
   body: Object.freeze({
     toggle: 'always',
     state: 'built',
@@ -128,9 +127,9 @@ export const CLASS_CODE = Object.freeze(
 )
 
 /** the kind of a figure's ink unit (layout/figure-text.mjs): its text our glyphs', its place its run's (the parts' figure rows) */
-export const FIGURE_KIND = 'inkfigures'
+const FIGURE_KIND = 'inkfigures'
 /** a unit's class by its kind (latex-front.mjs's kinds, and the ink units'); a kind not here is `body` */
-export const UNIT_CLASS: Readonly<Record<string, ClassId>> = Object.freeze({
+const UNIT_CLASS: Readonly<Record<string, ClassId>> = Object.freeze({
   para: 'body',
   heading: 'body',
   abstract: 'body',
@@ -180,23 +179,3 @@ export const TOGGLE_DEFAULTS = Object.freeze({
   references: false,
   names: false,
 })
-/** the toggles on under a reader's `classes` (the door's option: { [toggle]: boolean } over TOGGLE_DEFAULTS; null, the
- *  defaults), as a Set shownTranslated reads */
-export const classesOn = (classes: Readonly<Record<string, boolean>> | null | undefined): Set<string> =>
-  new Set(
-    Object.entries({ ...TOGGLE_DEFAULTS, ...(classes ?? {}) })
-      .filter(([, v]) => v)
-      .map(([k]) => k),
-  )
-/** whether a unit is shown translated under the toggles on (`on`, classesOn's): its class's (unitClass) */
-export const unitShown = (u: Parameters<typeof unitClass>[0], on: ReadonlySet<string> | null | undefined): boolean => {
-  const cls = unitClass(u)
-  return cls !== null && shownTranslated(cls, on)
-}
-
-/** whether a class is shown translated under a reader's settings (`on`: the toggles turned on; `always` is, `never` is not) */
-export const shownTranslated = (cls: string, on: ReadonlySet<string> | null | undefined): boolean => {
-  // (CLASSES read by any name: none for a name no class has)
-  const t = (CLASSES as Readonly<Record<string, { readonly toggle: Toggle } | undefined>>)[cls]?.toggle
-  return t === 'always' || (t !== undefined && t !== 'never' && !!on?.has?.(t))
-}

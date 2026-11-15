@@ -64,7 +64,7 @@ export type LinkOwner =
  *  its groups off on the page and the page's boxes its lines are drawn in (a turned one's the page's box of its run's; none for
  *  a name drawn as its member's lead, its word among that member's lines). No piece of it is drawn apart (its row sets an element
  *  as a space) and it draws no link group */
-export type DrawnWhole = { m: Placed; off: number; drawn: readonly Page['links'][number][0][] }
+type DrawnWhole = { m: Placed; off: number; drawn: readonly Page['links'][number][0][] }
 
 /** a link group's command, as the breaker tags its tokens (LINK_OPEN): \url's with \href's */
 const LINK_CMD = /^(?:href|hyperref|hyperlink|url)$/
