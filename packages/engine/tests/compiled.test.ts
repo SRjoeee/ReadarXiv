@@ -2,6 +2,7 @@
 // one it does not, and a refusal of the marked compile; and that the source's units are handed out (the caller's function,
 // awaited) before the marked compile is asked. The marked compile is a spy here: no TeX runs. The paper is made here.
 import { describe, expect, test, vi } from 'vitest'
+import { markedOfPaper } from '../src/compile/paper.ts'
 import { type CompiledInput, compiledOf } from '../src/compiled.ts'
 import type { OriginalFacts, StoredInstrument } from '../src/plan.ts'
 import { FROM_UTF8 } from '../src/plan.ts'
@@ -28,6 +29,7 @@ vi.mock('../src/compile/paper.ts', async (real) => {
           options: structuredClone(OPTIONS),
           ms: { probe: 0, compile: 0 },
           base: { pdf: new Uint8Array([37, 80, 68, 70]), log: '' },
+          probeLog: 'the probe log',
         }
       )
     }),
@@ -39,7 +41,7 @@ const PAPER = '\\documentclass{article}\n\\begin{document}\nA paragraph with \\h
 const FACTS: OriginalFacts = { pages: 1, day: 1_700_000_000, banner: '2025' }
 
 /** the stored half of the paper, given `stored` and `original`: its end, the order its steps ran in, its notes */
-async function run(stored: StoredInstrument | null, original = FACTS) {
+async function run(stored: StoredInstrument | null, original = FACTS, more: Partial<CompiledInput> = {}) {
   marked.events = []
   const notes: [string, unknown][] = []
   const input: CompiledInput = {
@@ -57,6 +59,7 @@ async function run(stored: StoredInstrument | null, original = FACTS) {
       await new Promise((r) => setTimeout(r, 0))
       marked.events.push('units')
     },
+    ...more,
   }
   const end = await compiledOf(input)
   return { end, events: [...marked.events], notes }
@@ -92,6 +95,18 @@ describe('the stored half', () => {
     expect(notes).toContainEqual(['front', { stored: 'made with another original: compiled anew' }])
     expect(events).toEqual(['units', 'marked'])
     expect(end.ok && end.made && Object.keys(end.made)).toEqual(['b.pdf', 'log', 'plan', 'definitions'])
+  })
+  test("the marked compile asked as Q1 (converge), with the host's bound on a compile's files; the probe's raw log returned", async () => {
+    const bound = { count: 256, bytes: 8 * 2 ** 20 }
+    const { end } = await run(null, FACTS, { filesBound: bound })
+    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ converge: true, filesBound: bound })
+    expect(end.ok && end.probeLog).toBe('the probe log')
+    // (none given: no bound; one taken from a stored instrument: no probe ran)
+    const fresh = await run(null)
+    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ converge: true, filesBound: null })
+    if (!fresh.end.ok || !fresh.end.made) throw new Error('no instrument made')
+    const stored = await run(fresh.end.made)
+    expect(stored.end.ok && stored.end.probeLog).toBe(null)
   })
   test('the marked compile refused: the paper cannot be typeset, its words; the units were handed out first', async () => {
     marked.answer = { refused: 'compile', why: 'TeX stopped', ms: {} }

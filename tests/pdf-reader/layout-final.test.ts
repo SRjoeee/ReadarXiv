@@ -146,19 +146,20 @@ describe('the final pass', () => {
     }
   })
 
-  it('carries a converged compile\'s files: CM\'s carried files with its last pass\'s, its own beside', async () => {
-    // (a draft, then a marked pass that writes what it was given: settled)
-    const wrote = () => new Map([['main.aux', enc('\\relax\n')], ['main.out', enc('\\BOOKMARK\n')], ['main.pdf', DRAFT]])
+  it('makes none after the pass loop\'s settled pass (Q1, `converge`): that pass, asked in full with this main file, is the base page', async () => {
+    // (a draft, then a full pass that writes back what it was given: settled)
+    const wrote = () => new Map([['main.aux', enc('\\relax\n')], ['main.out', enc('\\BOOKMARK\n')]])
     const draft: Compiled = { ok: true, log: log(), files: wrote(), ms: 100 }
-    const pass: Compiled = { ok: true, pdf: DRAFT, log: log(), files: wrote(), ms: 100 }
-    const c = compiler([PROBE, draft, pass, finalAnswer()])
+    const pass: Compiled = { ok: true, pdf: FINAL, log: log(), files: wrote(), ms: 100 }
+    const c = compiler([PROBE, draft, pass])
     const made = await markedOfPaper(paperOf(), { compile: c.compile, converge: true })
-    expect(made).toMatchObject({ base: { pdf: FINAL }, cm: { settled: true } })
+    expect(made).toMatchObject({ pdf: FINAL, base: { pdf: FINAL }, cm: { settled: true } })
+    expect(c.asked).toHaveLength(3)
     const f = c.asked.at(-1) as CompileRequest
-    expect(f).toMatchObject({ rerun: false, bibtex: false })
+    expect(f).toMatchObject({ rerun: false, bibtex: false, draft: false, files: true })
+    expect(dec(f.overrides.get('main.tex')).split('\n')[0]).toBe(NO_DRIVER_GROUP)
     expect(dec(f.overrides.get('main.aux'))).toBe('\\relax\n')
     expect(f.overrides.has('main.out')).toBe(true)
-    expect(f.overrides.has('main.pdf')).toBe(false)
   })
 
   it('is none (`final`) with no files to make it over, no compile left in the budget, a pass that did not run through or threw', async () => {

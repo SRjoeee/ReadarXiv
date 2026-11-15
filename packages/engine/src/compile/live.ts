@@ -105,7 +105,7 @@ export const stoppedShort = (log: string | null | undefined): boolean =>
   )
 /**
  * Whether a compile ran through, the one test of a compile's success wherever a PDF or a log of it is taken (the marked
- * original and CM's passes, layout/paper.mjs): TeX ran (`ok`), and its last pass
+ * original and the pass loop's passes, compile/paper.ts): TeX ran (`ok`), and its last pass
  * neither stopped short (stoppedShort) nor ended before the document's end — every compile carries END_TEX, and only a
  * pass that set the last page logs it (completeLog). A pass halted at a TeX error writes no such line, whatever the
  * compiler made of it: a TeX page that took a halted pass's status for a success gave 2610.02069's final as the 18 pages
@@ -457,12 +457,12 @@ export function markedPreamble(
  *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before. `pastBegin`
  *  (on with `layout`: the layout compile, our base page): a unit's line probe after an environment's \\begin goes past the
  *  spaces \\begin skips (latex-front.mjs patch), which it would set; off, the bytes as before. `transcode`
- *  (off with `layout`: the layout compile and CM's drafts, our base page): a file of a declared Latin-1 family encoding
+ *  (off with `layout`: the layout compile, its pass loop's passes, our base page): a file of a declared Latin-1 family encoding
  *  that is not UTF-8 (project.transcode) is written as the paper's own bytes, under the paper's own \\usepackage[…]{inputenc},
  *  as every other file is. On, patch writes it as UTF-8, which only a translation of the source could have (this switches no
  *  inputenc option): 2610.20581's latin1 source, transcoded under its own inputenc, set each é as Ã© and each no-break
  *  space in math as a \\^ error, 74 errors and a page more than arXiv's. On by default without `layout`, as the bytes were
- *  before (CM's unlayered drafts pass it off: layout/paper.mjs convergeThenMark) */
+ *  before */
 export function originalFiles(
   { fsys, project: read, meta }: Paper,
   {

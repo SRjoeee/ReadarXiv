@@ -11,9 +11,9 @@
 //      and a compiler need not call that a success
 //   2. the marked original (live.mjs originalFiles with `lines` and the layout marks of every class), marked with those
 //      answers, compiled in full: its marks are where each marked piece stands, so it must be marked as the maker will
-//      read it (the file carries the switch, MARKS_SCHEMA 2 or more). With `converge` (CM, converge then mark:
-//      convergeThenMark below), the passes that only make the aux and its lists are those of the unmarked original, as
-//      drafts, and the marked one is compiled once in their files, for as long as its own files differ from them
+//      read it (the file carries the switch, MARKS_SCHEMA 2 or more). With `converge` (Q1, the pass loop: convergeThenMark
+//      below), one pass at a time, the first a draft and every later one the final pass's files in full, until a pass writes
+//      back the files it was given: that pass is the marks' PDF and log and the base page at once
 //   3. its PDF opened by the caller, and read once (marks.mjs readMarked) with the compile's last pass's log, the paper's
 //      units and PDF.js's operator codes (markedOfPaper stops before it: the marked original and what reads it, for a host
 //      that reads it elsewhere, the page pass a page at a time), so that each marked piece's own ink is read from its operator lists: the marks
@@ -24,10 +24,8 @@
 import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.ts'
 import {
   DRAFT_OPTION,
-  listsMissing,
   markedPreamble,
   NO_DRIVER_GROUP,
-  notFound,
   openPaper,
   originalFiles,
   probeFiles,
@@ -76,12 +74,12 @@ import type { Compiled, CompileRequest, Paper, Spans } from './live.ts'
 // ---------------------------------------------------------------- the types of the marked compile
 /** the host's limit a compile met, as a refusal names it (the web's `limit`, the TeX page's timeout, the budget's) */
 export type RefusalLimit = string
-/** CM's record (convergeThenMark): its draft and marked passes, whether it settled, why it fell back to the one-pass request */
+/** the loop's record (convergeThenMark): its draft and full passes, whether one settled, why it fell back to today's request */
 export interface ConvergeRecord {
   drafts: number
   marked: number
   settled: boolean
-  fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' | 'files-bound'
+  fallback?: 'no-files' | 'draft-failed' | 'aux-jobs' | 'bib-missing' | 'files-bound' | 'pass-failed' | 'no-draft-line'
 }
 /** a check of the layout guard's that failed */
 export type GuardCheck = 'preamble' | 'braces' | 'ran' | 'pages' | 'aux' | 'text' | 'errors'
@@ -128,6 +126,8 @@ type Host = {
 /** markedOfPaper's options */
 export interface MarkedCompileOptions {
   compile(req: CompileRequest): Promise<Compiled>
+  /** the marked compile as the pass loop (Q1, convergeThenMark): its first settled full pass is B and the log. The rebuilt
+   *  prepare's (compiled.ts compiledOf); today's reader never sets it */
   converge?: boolean
   compileBudgetMs?: number | null
   filesBound?: { count: number; bytes: number } | null
@@ -154,7 +154,8 @@ export type MarkedOptions = {
   complete: Complete | null
   apart: string[]
 }
-/** the marked original (markedOfPaper), or why there is none; each stage's time, CM's and the guard's records */
+/** the marked original (markedOfPaper), or why there is none; each stage's time, the loop's and the guard's records; the mark
+ *  probe's log its answers were read from (`probeLog`, the raw log a host stores beside the instrument) */
 export type Marked =
   | {
       pdf: Uint8Array
@@ -164,6 +165,7 @@ export type Marked =
       cm?: ConvergeRecord
       guard?: GuardRecord
       base?: FinalPass
+      probeLog: string
     }
   | {
       refused: MarkedRefusal
@@ -242,7 +244,7 @@ const BIBITEM_LINE = /^[ \t]*\\bibitem(?![A-Za-z@])/m
  * The bibliography BibTeX makes of a paper that ships none (PDF-READER §19.13; the owner's ruling of 2026-10-28: a .bbl the
  * compile makes is a shipped one): where the walk met \\bibliography{…} (the front end's `bibliography`), the package holds no
  * job's .bbl and loads no biblatex, and every .bib it names is the package's, one pass of the unmarked original (guard.mjs
- * unmarkedFiles) as a draft, with the bibliography step (`bibtex`: BibTeX on the job's aux, CM's first draft's request), its
+ * unmarkedFiles) as a draft, with the bibliography step (`bibtex`: BibTeX on the job's aux, as the loop's first pass asks it), its
  * files asked. Its `<job>.bbl`, a thebibliography, is the job's .bbl the paper is opened with again (live.mjs openPaper): its
  * entries are units after every other (latex-front.mjs entriesLast), and every compile after this one reads it as a shipped
  * one (`meta.bbl`: written back marked, no BibTeX run over it). The paper's other units must be the same with it and without:
@@ -362,7 +364,7 @@ export async function madeBibliography(
  * only where it has any). A paper whose marked original passes costs no compile more. On a check that fails, the units the
  * evidence blames are left unmarked and the marked original compiled again, at most GUARD_EXTRA compiles in all, the
  * unmarked original's among them, none where `compileBudgetMs` (the host's budget across every compile of the paper, as
- * CM's: its wall less 1.2 times the longest compile so far) cannot hold one:
+ * the loop's: its wall less 1.2 times the longest compile so far) cannot hold one:
  *   - TeX that never ran (no engine banner) or a host's limit is no mark's fault: refused at once ('engine' where the host
  *     names the engine unknown, else 'compile': a host's own failure, its cap on a compile's result)
  *   - errors alone (it ran through to arXiv's pages, nothing out of place): the unmarked original compiled; errors no more
@@ -439,7 +441,7 @@ export async function markedOfPaper(
       ms,
     }
   // (each compile's wall as the host counts it, its `ms`, else as long as it took here — what the host's compile budget is
-  // spent by: CM's bets and the guard's compiles —, and the last one's)
+  // spent by: the loop's passes and the guard's compiles —, and the last one's)
   const wall = { spent: 0, last: 0, longest: 0 }
   /** whether the host's budget holds one more compile as long as the longest so far, and a fifth (none given: always) */
   const budgetLeft = () =>
@@ -517,6 +519,7 @@ export async function markedOfPaper(
       lineskip: readSkipProbe(log),
       apart,
       blamed,
+      log,
     }
   })
   if (!probe) return { refused: 'probe', ms }
@@ -530,9 +533,11 @@ export async function markedOfPaper(
       if (isMemoryError(e)) throw e
     }
   }
-  const { switches, inkless, texts, decorated, names, lineskip, apart, blamed } = probe
+  const { switches, inkless, texts, decorated, names, lineskip, apart, blamed, log: probeLog } = probe
   const cm = converge ? { drafts: 0, marked: 0, settled: false } : null
-  /** the result, with CM's record where it ran */
+  /** the loop's settled pass (convergeThenMark): asked in full with the final pass's main file, it is the base page itself */
+  const settled = new WeakSet<Compiled>()
+  /** the result, with the loop's record where it ran */
   const result = (r: Marked): Marked => (cm ? { ...r, cm } : r)
   const job = jobName(main),
     count = paper.units.length,
@@ -593,6 +598,7 @@ export async function markedOfPaper(
         budget: compileBudgetMs,
         bound: filesBound,
         keep: wantFinal,
+        settled,
       })
     // (every pass, the bibliography's step as the paper needs it; one that did not run through (ranThrough) is no marked
     // original, whatever PDF it left — 2610.20713's, TL2025's 7 pages of 15 before its hundredth error; with the files it wrote,
@@ -623,7 +629,7 @@ export async function markedOfPaper(
   if (!marked)
     return guarded({
       refused: 'compile',
-      why: cm ? 'a marked pass did not run through, or the compile threw' : 'the compile threw',
+      why: 'the compile threw',
       ms,
     })
   /** the unmarked original's verdict, once it was compiled (ownVerdict): a refusal names it, as `own` */
@@ -647,7 +653,7 @@ export async function markedOfPaper(
         g.unmarked = standing.unmarked
         g.names = standing.named
         accepted = standing
-        return guarded({ pdf: standing.c!.pdf!, log: lastTexLog(standing.c!.log), options, ms })
+        return guarded({ pdf: standing.c!.pdf!, log: lastTexLog(standing.c!.log), options, ms, probeLog })
       }
       if (ranThrough(marked) && marked!.pdf?.length) {
         const M = pagesOfLog(marked!.log)
@@ -660,7 +666,7 @@ export async function markedOfPaper(
             }),
           )
         accepted = { c: marked!, files }
-        return guarded({ pdf: marked!.pdf, log: lastTexLog(marked!.log), options, ms })
+        return guarded({ pdf: marked!.pdf, log: lastTexLog(marked!.log), options, ms, probeLog })
       }
       return guarded(
         owned({ refused: 'compile', why: whyText(`the marked original did not run through; ${g.judged}`), ms }),
@@ -678,7 +684,9 @@ export async function markedOfPaper(
    * finalCheck, the host's to ask): { pdf, log }, or { refused: 'final', why }. The line was empty before 2026-10-31; it now
    * includes a PDF figure as arXiv's TeX Live 2025, the state of 2025-08-03, does, with no transparency group of the driver's
    * (graphics-def 8d691483be came after it): our figure forms are then arXiv's, which the delta copies, and drawn as arXiv's
-   * are. The marked compile is left as it is, so that its marks and the units read from it are what they were
+   * are. The marked compile is left as it is, so that its marks and the units read from it are what they were. The loop's
+   * settled pass (`converge`, convergeThenMark) was itself asked with this main file in full over the files it wrote back, so
+   * it is the base page, judged by the same checks (baseOf), and no pass is made after it
    */
   async function finalPass(
     e: { c: Compiled | null; files: Map<string, Uint8Array> | null } | null,
@@ -690,19 +698,18 @@ export async function markedOfPaper(
     }
     const no = (why: string, limit: RefusalLimit | null = null) =>
       out({ refused: 'final', why: whyText(why), ...(limit ? { limit } : {}) })
+    if (e?.c && settled.has(e.c)) return baseOf(e.c)
     const req = e?.c ? requestOf.get(e.c) : null
     if (!req || !(e!.files instanceof Map)) return no("the marked original's compile is not known")
     if (!(e!.c!.files instanceof Map)) return no('the marked compile returned no files to make the final pass over')
     if (!budgetLeft()) return no('no compile left within the compile budget', 'budget')
-    const bytes = e!.files.get(main)
-    const text = bytes ? latin1(bytes) : ''
-    if (!text.startsWith(`${DRAFT_OPTION}\n`))
-      return no("the marked original's main file does not begin with graphicx's draft option")
+    const head = finalMainOf(e!.files.get(main))
+    if (!head) return no("the marked original's main file does not begin with graphicx's draft option")
     const outputs = outputsOf(job),
       over = new Map()
     for (const [p, b] of [...req.overrides, ...e!.c!.files])
       if (e!.files.has(p) || !outputs.test(p)) over.set(p, e!.files.get(p) ?? b)
-    over.set(main, latin1Bytes(`${NO_DRIVER_GROUP}\n${text.slice(DRAFT_OPTION.length + 1)}`))
+    over.set(main, head)
     let c: Compiled | null = null
     try {
       c = await asked({ main, engine, rerun: false, bibtex: false, overrides: over })
@@ -710,31 +717,34 @@ export async function markedOfPaper(
       if (isMemoryError(x)) throw x
       return no(`the final pass threw: ${(x as { message?: unknown } | null)?.message ?? x}`)
     }
-    if (ranThrough(c) && c.pdf?.length) {
-      // (under `latex` the DVI is drawn by dvipdfmx, and arXiv's by dvips and ps2pdf: a special dvipdfmx could not draw, a
-      // PSTricks picture's, is ink our page lacks and arXiv's has. The host gives the driver's terminal after TeX's log, behind
-      // its own line (base.mjs DRIVER_OUTPUT_MARK); where it gives none, or cut it, what the driver could not draw is not known:
-      // no base page of ours)
-      if (engine === 'latex' && !driverOutputGiven(c.log))
-        return no(
-          `the host gave no output of the final pass's dvipdfmx: its log lacks the line \`${DRIVER_OUTPUT_MARK}\``,
-        )
-      if (engine === 'latex' && driverOutputTruncated(c.log))
-        return no("the host's dvipdfmx output was cut: its special failures cannot be checked")
-      const lost = engine === 'latex' ? driverLostInk(c.log) : null
-      if (lost?.count) {
-        const [page, what] = lost.samples[0]!
-        return no(
-          `the final pass's dvipdfmx could not draw ${lost.count} special${lost.count === 1 ? '' : 's'} of the page (${page ? `page ${page}: ` : ''}${what})`,
-        )
-      }
-      return out({ pdf: c.pdf, log: lastTexLog(c.log) })
-    }
+    if (ranThrough(c) && c.pdf?.length) return out(baseOf(c))
     const limit = c ? limitOf(c) : null
     if (limit) return no(`the final pass was stopped by the host's ${limit} limit`, limit)
     if (!c || !texRan(c.log)) return no(`the final pass ran no TeX${firstLine(c) ? `: ${firstLine(c)}` : ''}`)
     const err = firstError(c.log)
     return no(`the final pass did not run through${err ? `: ${err}` : ''}`)
+  }
+
+  /** a pass that ran through with a PDF, asked as the final pass is, as the base page: { pdf, log }, or why it is none. Under
+   *  `latex` the DVI is drawn by dvipdfmx, and arXiv's by dvips and ps2pdf: a special dvipdfmx could not draw, a PSTricks
+   *  picture's, is ink our page lacks and arXiv's has. The host gives the driver's terminal after TeX's log, behind its own line
+   *  (base.mjs DRIVER_OUTPUT_MARK); where it gives none, or cut it, what the driver could not draw is not known: no base page */
+  function baseOf(c: Compiled): FinalPass {
+    const no = (why: string): FinalPass => ({ refused: 'final', why: whyText(why) })
+    if (engine === 'latex' && !driverOutputGiven(c.log))
+      return no(
+        `the host gave no output of the final pass's dvipdfmx: its log lacks the line \`${DRIVER_OUTPUT_MARK}\``,
+      )
+    if (engine === 'latex' && driverOutputTruncated(c.log))
+      return no("the host's dvipdfmx output was cut: its special failures cannot be checked")
+    const lost = engine === 'latex' ? driverLostInk(c.log) : null
+    if (lost?.count) {
+      const [page, what] = lost.samples[0]!
+      return no(
+        `the final pass's dvipdfmx could not draw ${lost.count} special${lost.count === 1 ? '' : 's'} of the page (${page ? `page ${page}: ` : ''}${what})`,
+      )
+    }
+    return { pdf: c.pdf!, log: lastTexLog(c.log) }
   }
 
   /** the checks after the compile, and the remedies */
@@ -801,7 +811,7 @@ export async function markedOfPaper(
     ]
     const done = (e: Evidence) => {
       accepted = e
-      return guarded({ pdf: e.c!.pdf!, log: lastTexLog(e.c!.log), options, ms })
+      return guarded({ pdf: e.c!.pdf!, log: lastTexLog(e.c!.log), options, ms, probeLog })
     }
     // (a why without the log's control characters, within WHY_MAX)
     const refuse = (r: { refused: MarkedRefusal; why?: string; limit?: RefusalLimit }) =>
@@ -1116,7 +1126,8 @@ export function handoverOf(
   return want !== null && others.includes(want) ? want : others[0]!
 }
 
-/** CM's bound: the TeX passes it runs at most, its drafts and marked passes together (latexmk's max_repeat) */
+/** the loop's bound: the TeX passes it runs at most, its draft and full passes together (latexmk's max_repeat); unsettled
+ *  there, the final pass is one more, as it is after today's compile */
 const PASSES = 5
 const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i])
 /** whether a file a pass wrote is the copy it was given, a babel name's marks aside in the aux and the lists (marks.mjs
@@ -1163,38 +1174,47 @@ const bibMissing = (files: ReadonlyMap<string, Uint8Array>, fsys: Fsys): boolean
     })
 }
 
+/** the final pass's main file of a marked one (finalPass, the loop's full passes): graphicx's draft option's line made
+ *  NO_DRIVER_GROUP's, one line for one, so that no line moves; null where the file does not begin with that line */
+const finalMainOf = (bytes: Uint8Array | null | undefined): Uint8Array | null => {
+  const text = bytes ? latin1(bytes) : ''
+  return text.startsWith(`${DRAFT_OPTION}\n`)
+    ? latin1Bytes(`${NO_DRIVER_GROUP}\n${text.slice(DRAFT_OPTION.length + 1)}`)
+    : null
+}
+
 /**
- * CM, converge then mark (paper.d.mts): the files the marked original's passes read, made by the unmarked original's
- * (live.mjs originalFiles with `lines`: MARK_DEF's unit marks and the line probes, which a caption writes into its list
- * and nameref into its names, as the marked one does; `transcode` off, the paper's own bytes as the marked one's) in draft passes, then the marked original (`marked`) compiled in
- * them, one pass at a time, until a pass writes the files it was given. `cm` counts the passes as they run, so that a
- * compile that throws (the stage's refusal) leaves them told
- *   - draft 1 asks BibTeX where the paper ships no bibliography; draft 2 runs only where draft 1 left the next pass
- *     something to read that it had not: a bibliography or an index (a tool's) of other bytes than the copy the pass
- *     was given, or, where it was given none, with text and one the pass looked for (live.mjs notFound: "No file
- *     <job>.bbl.") — BibTeX writes an empty thebibliography for an aux that cites with no \bibdata, which a paper with
- *     its bibliography inline never reads (1706.03762) —, or a contents list it set from nothing (live.mjs
- *     listsMissing). Every later pass asks for the bibliography step only where its input changed since the step last
- *     ran (bibInput)
- *   - each pass is given every file the passes before it returned (Compiled `files`: every file the host saw written,
- *     a rewrite of the same bytes too), the latest copy of each, in place of the paper's own file of that path; never in
- *     place of one of the pass's own (the original's files, marked or not: a file TeX rewrote there is the unmarked
- *     copy, which would take the marks away); a file not returned keeps its bytes
- *   - a marked pass whose every returned file has the bytes it was given at that path (sameFile: a babel name's marks
- *     aside in the aux and the lists; a file it was given none of is new) is the fixed point latexmk would stop at: its PDF and log are the
- *     marks'. Else the next pass is a marked one again, to PASSES TeX passes in all, where the last one's PDF is kept,
- *     not settled
- *   - a bet — the second draft, a marked pass after the first — is not started where the host's compile budget
- *     (`budget`, ms of its wall across the probe and the passes) has less left than 1.2 times the longest pass so far:
- *     without draft 2 the marked passes go on; without the next marked pass the last one's PDF is kept, not settled
- *   - a draft that did not run through (not ok — a limit, the budget spent —, stopped short, no AXT-END: nonstop
- *     mode goes on after an error as latexmk -f does) falls back to today's compile (`fallback`), as does a pass that ran
- *     through and returned no files (a host that cannot, or files past its bound), or the first draft wrote a bibliography job
- *     beside the main one's (otherBibJobs: chapterbib, multibib, bibunits — no bibliography shipped), which latexmk runs
- *     and the one-pass request does not, or names a .bib the project lacks
- *     (bibMissing: latexmk skips the bibliography step then, BibTeX does not); or the files the next pass would be given (carried and
- *     returned, its own aside) are past the host's `filesBound` (a host holds one pass's files to it; `files-bound`); a marked pass that did not run
- *     through, or gave no PDF, is the compile's refusal (null), with no fallback after it
+ * The marked compile as the pass loop (Q1, design-performance 2026-11-13; markedOfPaper `converge`): the marked original
+ * (`marked`, the files today's compile is given) compiled one pass at a time in the files the passes before it wrote, until
+ * a pass writes back the files it was given; that pass is the marks' PDF and log and the base page at once, so that the pass
+ * today's compile ends on (latexmk's last, which only witnesses that nothing changed) and the final pass are one pass. Each
+ * pass is given the files today's pass of the same number is given, so it writes the files that pass writes, and the settled
+ * one is given what today's final pass is given: the same main file, the same files, the same day. `cm` counts the passes as
+ * they run, so that a compile that throws (the stage's refusal) leaves them told
+ *   - pass 1 is the marked files as a draft (no PDF), with the bibliography step after it where the paper ships no
+ *     bibliography; every later pass is the final pass's files (finalMainOf: graphicx's draft line made NO_DRIVER_GROUP's),
+ *     in full, asking the bibliography step only where its input changed since the step last ran (bibInput)
+ *   - each pass is given every file the passes before it returned (Compiled `files`: every file the host saw written, a
+ *     rewrite of the same bytes too), the latest copy of each, in place of the paper's own file of that path; never in place
+ *     of one of the pass's own (the marked files: a file TeX rewrote there is the original's copy, which would take the marks
+ *     away); a file not returned keeps its bytes
+ *   - a full pass whose every returned file has the bytes it was given at that path (sameFile: a babel name's marks aside in
+ *     the aux and the lists; a file it was given none of is new) is the fixed point latexmk would stop at: it is recorded
+ *     `settled` and stands as the base page (finalPass makes no pass after it). Else the next pass, to PASSES TeX passes in
+ *     all; the last one unsettled is the marks', and the final pass is made over the files it wrote (today's final pass then)
+ *   - a later pass is not started where the host's compile budget (`budget`, ms of its wall across the probe and the passes)
+ *     has less left than 1.2 times the longest pass so far: the last one's PDF is kept, not settled
+ *   - today's request for the marked original (`fallback`, answered as it comes: the guard judges it as today's, and the final
+ *     pass is made over it) where pass 1 did not run through (not ok — a limit, the budget spent —, stopped short, no AXT-END:
+ *     nonstop mode goes on after an error as latexmk -f does: `draft-failed`), where a pass ran through and returned no files (a
+ *     host that cannot, or files past its own bound: `no-files`), where pass 1 wrote a bibliography job beside the main one's
+ *     (otherBibJobs: chapterbib, multibib, bibunits — no bibliography shipped: `aux-jobs`), which latexmk runs and a one-pass
+ *     request does not, or names a .bib the project lacks (bibMissing: latexmk skips the bibliography step then, BibTeX does
+ *     not: `bib-missing`), where the files the next pass would be given (carried and returned, its own aside) are past the
+ *     host's `filesBound` (a host holds one pass's files to it: `files-bound`), and where a full pass did not run through or
+ *     gave no PDF (`pass-failed`: today's compile is read by the guard, whose remedies a refusal here would skip). The marked
+ *     main file always begins with graphicx's draft line (originalFiles); one that did not would be today's compile too
+ *     (`no-draft-line`)
  */
 async function convergeThenMark(
   paper: Paper,
@@ -1206,19 +1226,18 @@ async function convergeThenMark(
     budget,
     bound,
     keep = false,
+    settled,
   }: {
     wall: { spent: number; longest: number }
     budget: number | null | undefined
     bound: { count: number; bytes: number } | null | undefined
     keep?: boolean
+    settled: WeakSet<Compiled>
   },
 ): Promise<Compiled | null> {
   const { main } = paper.project,
     engine = paper.meta.compiler!,
     shipped = !!paper.meta.bbl
-  // (the paper's own bytes, as the marked passes' are: originalFiles `transcode`, so that the aux the drafts write is the one
-  // the marked passes would)
-  const unmarked = originalFiles(paper, { lines: true, transcode: false })
   const carried = new Map<string, Uint8Array>()
   let passes = 0,
     bibSeen: string | null = null
@@ -1266,8 +1285,8 @@ async function convergeThenMark(
   const bibtexNext = () => !shipped && bibInput(carried) !== bibSeen
   const fallback = async (why: NonNullable<ConvergeRecord['fallback']>) => {
     cm.fallback = why
-    // (today's request for the marked original, judged as today's: ran through, a PDF)
-    const c = await compile({
+    // (today's request for the marked original, answered as it comes: the guard reads it as it reads today's)
+    return compile({
       main,
       engine,
       rerun: true,
@@ -1275,47 +1294,32 @@ async function convergeThenMark(
       overrides: marked,
       ...(keep ? { files: true } : {}),
     })
-    return ranThrough(c) && c.pdf?.length ? c : null
   }
-  const first = await pass(unmarked, true, !shipped)
+  const head = finalMainOf(marked.get(main))
+  if (!head) return fallback('no-draft-line')
+  /** the files of every pass after the first: the final pass's */
+  const full = new Map(marked).set(main, head)
+  const first = await pass(marked, true, !shipped)
   if (!ranThrough(first)) return fallback('draft-failed')
   if (!first.files) return fallback('no-files')
   if (!shipped && otherBibJobs(first.files, main)) return fallback('aux-jobs')
   if (!shipped && bibMissing(first.files, paper.fsys)) return fallback('bib-missing')
-  // (the aux from the files' bytes: the `aux` field may be a lossy decoding)
-  const auxBytes = first.files.get(`${jobName(main)}.aux`),
-    missed = notFound(first.log)
-  const readNext = (p: string, b: Uint8Array) => {
-    const had = givenAt(unmarked, p)
-    return had ? !sameFile(p, b, had) : missed.has(p) && /\S/.test(latin1(b))
-  }
-  const more =
-    [...first.files].some(([p, b]) => /\.(?:bbl|ind)$/.test(p) && readNext(p, b)) ||
-    listsMissing({ log: first.log, aux: auxBytes ? latin1(auxBytes) : null }, main)
-  const second = more && affordable()
-  if (!fits(first, second ? unmarked : marked)) return fallback('files-bound')
+  if (!fits(first, full)) return fallback('files-bound')
   take(first, !shipped)
-  if (second) {
-    const bibtex = bibtexNext()
-    const again = await pass(unmarked, true, bibtex)
-    if (!ranThrough(again)) return fallback('draft-failed')
-    if (!again.files) return fallback('no-files')
-    if (!fits(again, marked)) return fallback('files-bound')
-    take(again, bibtex)
-  }
   let last: Compiled | null = null
   while (passes < PASSES && (!last || affordable())) {
     const bibtex = bibtexNext()
-    const c = await pass(marked, false, bibtex)
-    if (!ranThrough(c) || !c.pdf?.length) return null
+    const c = await pass(full, false, bibtex)
+    if (!ranThrough(c) || !c.pdf?.length) return fallback('pass-failed')
     if (!c.files) return fallback('no-files')
     last = c
-    cm.settled = [...c.files].every(([p, b]) => sameFile(p, b, givenAt(marked, p)))
+    cm.settled = [...c.files].every(([p, b]) => sameFile(p, b, givenAt(full, p)))
     if (cm.settled) {
       take(c, bibtex)
+      settled.add(c)
       break
     }
-    if (passes < PASSES && affordable() && !fits(c, marked)) return fallback('files-bound')
+    if (passes < PASSES && affordable() && !fits(c, full)) return fallback('files-bound')
     take(c, bibtex)
   }
   return last

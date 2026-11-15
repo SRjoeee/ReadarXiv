@@ -238,12 +238,12 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     expect([has(blamed.asked[2], '\\axtmark{1s}'), has(blamed.asked[2], '\\axthmark{h0s}')]).toEqual([false, true])
     // (a probe over the marked preamble that ran through with no error of ours there: its answers, one probe, every unit marked)
     const clean = compiler([{ ok: false, log: `${PROBE_LOG}AXT-END\n` }, ran(PDF, '', 3)])
-    expect(await markedOfPaper(p, { final: false, compile: clean.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(await markedOfPaper(p, { final: false, compile: clean.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(clean.asked).toHaveLength(2)
     expect(has(clean.asked[1], '\\axtmark{1s}')).toBe(true)
     // (one that stopped before its body wrote a row: asked again over the paper's own preamble, nothing blamed, the guard as before)
     const short = compiler([{ ok: false, log: `${TEX}! Emergency stop.\n` }, PROBE, ran(PDF, '', 3)])
-    expect(await markedOfPaper(p, { final: false, compile: short.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(await markedOfPaper(p, { final: false, compile: short.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(short.asked).toHaveLength(3)
     expect(has(short.asked[2], '\\axtmark{1s}')).toBe(true)
     // (one that stopped there after an error at a mark of ours: its unit named all the same, no compile more)
@@ -255,7 +255,7 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     // unit until PIPELINE 45 kept its diagrams as the paper has them; 2610.21377v1's still): the paper's own preamble's
     // probe stops there too, and its rows are taken as they are; one probe)
     const body = compiler([{ ok: false, log: `${PROBE_LOG}! TeX capacity exceeded, sorry [input stack size=10000].\n` }, ran(PDF, '', 3)])
-    expect(await markedOfPaper(p, { final: false, compile: body.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(await markedOfPaper(p, { final: false, compile: body.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(body.asked).toHaveLength(2)
   })
 })
@@ -299,7 +299,7 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const aux = '\\@writefile{lof}{\\contentsline {figure}{\\numberline {1}{\\ignorespaces \\axtmark {1s}A caption.\\axtend {1e}}}{3}{figure.1}}\n'
     const c = compiler([PROBE, ran(PDF, '', 3, { aux })])
     const made = await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3 })
-    expect(made).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: { probe: expect.any(Number), compile: expect.any(Number) } })
+    expect(made).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: { probe: expect.any(Number), compile: expect.any(Number) } })
     expect(c.asked).toHaveLength(2)
   })
 
@@ -335,7 +335,7 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     ]) {
       for (const answer of [ran(PDF, '', 3, { aux }), ran(PDF, '', 3, { files: new Map([['main.aux', enc(aux)]]) })]) {
         const c = compiler([PROBE, answer])
-        expect(await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+        expect(await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
         expect(c.asked).toHaveLength(2)
       }
     }
@@ -360,7 +360,7 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const once = '\\enotez@note {1}{1}{0}{0}{0}{a}{\\axtlines {2}\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
     const other = 'pdfTeX warning (ext4): destination with the same identifier (name{axt-h9e}) has been already used, duplicate ignored\n'
     const kept = compiler([PROBE, ran(PDF, other, 3, { aux: once })])
-    expect(await markedOfPaper(paperOf(), { final: false, compile: kept.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(await markedOfPaper(paperOf(), { final: false, compile: kept.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(kept.asked).toHaveLength(2)
   })
 
@@ -591,13 +591,13 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const paper = paperOf(SOURCE, [['00README.json', readme], ['supplement.tex', '\\documentclass{article}\\begin{document}S\\end{document}\n']])
     expect(paper.meta.toplevels).toBe(2)
     const two = compiler([PROBE, ran(PDF, '', 3)])
-    expect(await markedOfPaper(paper, { final: false, compile: two.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(await markedOfPaper(paper, { final: false, compile: two.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(two.asked).toHaveLength(2)
     // (no 00README, two uncited \documentclass files, 1008.0072v1's case: the toplevel sources guessed, the same rule)
     const guessed = paperOf(SOURCE, [['supplement.tex', '\\documentclass{article}\\begin{document}S\\end{document}\n']])
     expect(guessed.meta).toMatchObject({ main: 'main.tex', mainGuessed: true, toplevels: 2 })
     const both = compiler([PROBE, ran(PDF, '', 3)])
-    expect(await markedOfPaper(guessed, { final: false, compile: both.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(await markedOfPaper(guessed, { final: false, compile: both.compile, pages: 4 })).toEqual({ pdf: PDF, log: expect.any(String), probeLog: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(both.asked).toHaveLength(2)
   })
 })

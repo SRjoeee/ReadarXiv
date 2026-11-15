@@ -7618,9 +7618,9 @@ own), each part carrying its pages' cell rules (`rules`).
   - *The web host*'s runner runs no latex today (its answer "unknown engine": refused 'engine', as before) until its
     sandbox runs the request above; the image holds latex, dvipdfmx and Ghostscript already.
 - **A compile that did not make the paper is a failed compile** (2026-10-19). A marked original
-  that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test CM's passes use too:
+  that did not run through (`ranThrough` in `pipeline/live.mjs`, the one test the pass loop's passes use too:
   its last pass stopped short — an emergency stop, a hundred errors, TeX's capacity — or never logged END_TEX's AXT-END)
-  is the compile's refusal, whatever PDF it left, today's compile and CM's fallback alike; so is one of fewer pages than
+  is the compile's refusal, whatever PDF it left, today's compile and the loop's fallback alike; so is one of fewer pages than
   arXiv's PDF, which the pass counts from the document or the marks it is given (`stats.layout` { refused: 'compile',
   why }), its unit marks dropped with it. 2610.20713 on TL2025 stopped at its hundredth error after 7 of 15 pages, and
   2608.03994 went past 751 errors to 14 of 17, its tables broken; each had carried 95 % and 97 % of its lines, so the carry
@@ -7944,7 +7944,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   arXiv's same page also holds for the paper's own text (`markTextBeyond`). Before either, the marking sets no mark inside a
   group opened by a command that reads that argument verbatim (`marks.mjs` `VERBATIM_ARG`: `\url`, `\nolinkurl`, `\path`,
   `\burl`, `\href`'s first argument), whatever definition the front end read for it.
-- **The paper's own bytes.** The layout compile and CM's unmarked drafts write a source of a declared Latin-1 family
+- **The paper's own bytes.** The layout compile and its pass loop's passes write a source of a declared Latin-1 family
   encoding that is not UTF-8 as its own bytes, under its own `\usepackage[…]{inputenc}` (`live.mjs` `originalFiles`
   `transcode`, off with `layout`): written as UTF-8, as only a translation could have it (the compiled translation switched
   the option to `utf8`), 2610.20581's `latin1` source set each é as Ã© and each no-break space in math as a `\^` error, 74 errors and a
@@ -10035,8 +10035,8 @@ lines) follows it, the original's with it off, translated with it on (the author
   2026-10-28). A paper that names `\bibliography{…}` over `.bib` files its package holds, loads no biblatex and ships no job's
   `.bbl` (102 of the local sources) had no entry unit: the units were cut before any compile, and the `.bbl` was first written
   inside the marked compile, unmarked. The host now asks, before it tells the paper's units, one pass of the unmarked original
-  (`guard.mjs` `unmarkedFiles`: the paper's own files) as a draft with the bibliography step (`bibtex`, CM's first draft's
-  request: BibTeX on the job's aux), its files returned; the `<job>.bbl` it wrote, a `thebibliography` with a `\bibitem`, is the
+  (`guard.mjs` `unmarkedFiles`: the paper's own files) as a draft with the bibliography step (`bibtex`, as the pass loop's
+  first pass asks it: BibTeX on the job's aux), its files returned; the `<job>.bbl` it wrote, a `thebibliography` with a `\bibitem`, is the
   job's `.bbl` the paper is opened again with (`live.mjs openPaper`), and from then on it is a shipped one (`meta.bbl`): written
   back marked, no BibTeX in the marked compile. No pass is made, and the paper stays as it was, where it ships its `.bbl`, names no
   `\bibliography`, loads biblatex, or lacks a `.bib` it names (latexmk -norc runs no BibTeX then, nor does the marked compile; a

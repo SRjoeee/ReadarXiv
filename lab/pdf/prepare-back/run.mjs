@@ -91,6 +91,9 @@ async function compile(req) {
   return { ok: req.draft ? true : !!pdf?.length, pdf, log: readFileSync(join(dir, 'out.log'), 'latin1'), ...(files ? { files } : {}) }
 }
 const HOST_ENGINES = ['pdflatex', 'xelatex', 'lualatex', 'latex']
+// (the box's bound on the files one compile gives back, which the marked compile's pass loop holds what it carries to: the
+// web's one answer's, 256 files and 8 MiB)
+const FILES_BOUND = { count: 256, bytes: 8 * 2 ** 20 }
 const deflate = b => new Uint8Array(deflateSync(b))
 // (the bounded inflate's refusal and a failed allocation thrown as they came: only a stream zlib refuses is read again raw. A
 // failed allocation read again raw came back as a data error the wrap took for its page's: memory.mjs)
@@ -113,6 +116,7 @@ const end = await prepare(() => ({ files: source, original: arxivBytes, stored: 
   made: madeId,
   tree: { year, served: SERVED, fallback: PINS.default },
   engines: HOST_ENGINES,
+  filesBound: FILES_BOUND,
   pdfjs,
   documentOptions,
   PL,

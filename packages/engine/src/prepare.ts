@@ -212,6 +212,9 @@ export interface PrepareHost extends Pick<PrepareDeps, 'PL' | 'deflate' | 'infla
   tree: { year: string; served: readonly string[]; fallback: string }
   /** the TeX engines the host runs, as a paper names them (openPaper's meta.compiler) */
   engines: readonly string[]
+  /** the host's bound on the files one compile is given back to carry ({ count, bytes }: its one answer's), which the marked
+   *  compile's pass loop holds what it carries to (compiled.ts CompiledInput `filesBound`); none: no bound */
+  filesBound?: { count: number; bytes: number } | null
   pdfjs: PreparePdfJs
   /** PDF.js's document options, every document read with them */
   documentOptions: Record<string, unknown>
@@ -331,6 +334,7 @@ async function frontOf(
     engines: host.engines,
     pdfjs: host.pdfjs,
     documentOptions: host.documentOptions,
+    filesBound: host.filesBound ?? null,
   })
   if (!r.ok) return r
   if (!sentUnits) throw new Error('the front half sent no units')
