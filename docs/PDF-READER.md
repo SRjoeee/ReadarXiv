@@ -7255,7 +7255,8 @@ where it stands as a mark.
 - **Where it is the unit's text** (`textSymbolHere`: the walk's reading, and the lab differential's, `prepare-back/stated.mjs`;
   the coordinator's statement (B) of 2026-11-16). An ASCII character of the table is text in every position: a character a
   paper types as text, whatever name LaTeX gives it for its fonts' sake (§18.30's eleven, and `\textquotesingle`,
-  `\textasciicircum`, `\textunderscore`, `\textdollar`, `\textbraceleft`, `\textbraceright`): a cell `\# layers` and a paragraph
+  `\textquotedbl`, `\slash`, `\textasciicircum`, `\textunderscore`, `\textdollar`, `\textbraceleft`, `\textbraceright`): a cell
+  `\# layers` and a paragraph
   `\textbar{} Variant …` go out whole, as before F9 (d). A sign beyond ASCII, one set as a mark (`\textbullet`, `\S`,
   `\textdagger`, …), before the unit's first word as the start mark reads it (a text piece, or an inline formula, a citation, an
   identifier, a kept number: `firstWordPiece`, headStartOf's) stays the placeholder it was: the unit's edge, which startOf
@@ -7263,6 +7264,12 @@ where it stands as a mark.
   list, each `\textbullet The …`). A first reading made every symbol of the table the edge there, §18.30's eleven with them, and
   moved 72 units in 24 papers whose cell or paragraph opens with `\#`, `\%`, `\$` or `\textbar` ("# layers", "$/1M tokens"),
   each a unit sent whole before, to an edge and a shorter text: the statement put them back.
+- **The lab's differential reads the same** (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`): today's TeX of a
+  unit as the candidate writes it, each symbol a character where `textSymbolHere` reads it so over the pieces before it, from
+  TEXT_CHARACTERS; it held a copy of §18.30's eleven, which stated a unit with another symbol of the table by a weaker reading or
+  not at all. Restated over the 89's dumps as F9 (c)'s commit made them, 36 units of 14 papers once "held whole by another
+  unit" are the same unit as the candidate writes it (2609.20976v1's "black hole\textendash{}galaxy" entry), and one lost is
+  stated (2610.40576v1's cell of `\dots`, kept as the original by its group of one pitch); no statement turns to a loss.
 - **A note's mark.** The table's symbols LaTeX's footnote symbols set (latex.ltx's `\@fnsymbol`: `\textdagger`, `\textdaggerdbl`,
   `\textsection`, `\textparagraph`, and `\dag`, `\ddag`, `\S`, `\P` which set them) are a note's mark where they stand right after
   a word with no space between (past the groups closed after it and the marks before them: `Doe\textdagger`,
@@ -7299,6 +7306,10 @@ it cut its words on the wire: 2610.21377v1's 176 bibliography initials `{.\nobre
   face (§18.56); a pair the front end read as setting its argument alone is unchanged.
 - **Where it acts.** After TeX, in the instrument: `instrument/instrument.ts` is outside the compiled side's closure (compiledOf
   imports it nowhere), so no paper compiles again; the units the rule changes get new ids and are asked again.
+- **The lab's differential reads the same** (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`, a bare group the
+  candidate writes as its content): passThroughOf itself, read off today's pieces, its copy of §18.31's rule deleted. The copy
+  stated every unit of 2610.21377v1 all the same: a group it did not read as bare fell to its next reading, a command's pair
+  the candidate does not write, which drops it as well.
 
 ## 19. The engine's contract
 
