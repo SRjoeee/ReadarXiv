@@ -7385,6 +7385,29 @@ ink stands TeX's distance from the line's end, scaled (TeX's box flush right: on
 end-mark.test.ts` ("stands where TeX set it at the size the fit draws it"). The two other lines I5 lists, 2610.20285v1-zh unit 258
 (0.30 pt) and 2610.21106v1-zh unit 42 or 2610.21085v1-zh unit 64 (0.04 and 0.01 pt), are of other causes, not traced here.
 
+### 18.81 The leading knob re-breaks nothing where the breaks cannot change (the coordinator's ruling of 2026-11-16)
+
+What the breaker sets on each line is a function of the text, the size, the tracking, the word rule and each line's measure and
+frame; the leading says only where the lines stand, which the breaker reads in TeX's `\lineskip` rule alone (`settle`, `pushDown`)
+and in `overLast`. Each state of the fit's leading knob (`fit/walk.ts` statesOf: one state, its leading 0.05 closer each, down to
+`leadFloor`) paid a full lay. They are now laid, in one place (`fit/walk.ts` `leadLays`, the walk's two loops), by the floor's
+lay of the same state, the state with the most slots, laid once the knob's first state failed: where a state's slots are the
+floor's first ones, measure for measure and frame for frame (block, page, measure, boundary, flow, hang, flush), none stands over
+an earlier one of its column, and TeX's rule would open no line of the floor's where the state's slots stand, a state that lacks
+a slot a line of the floor's stands on fails (it is passed, unlaid), and one that holds them all and the slot after them as the
+floor does (the breaker looks at it: a boundary, a URL kept whole, a label alone) takes the floor's lines on its own slots, every
+item its own. Every other state is laid as before: one whose measures change with the leading (a line beside a wrapped figure, a
+stay, a shared row's stop), a unit with a frame break or a forced break's room, a floor's lay TeX's rule opened. The walk takes
+the floor's lay at the floor.
+
+The lays and the state the walk stops at are the breaker's own. Held so: the 92 pairs' every page laid with each passed state and
+each taken one laid all the same and compared (`lanes/cm-d/count`: 2,595 pages; 6,815 states passed, none of which a lay sets
+whole; 4,117 taken, each byte for byte the breaker's; every page's whole lay equal); and the reader gate's dumps on both stores
+byte for byte as before, every summary line equal. The count (the breaker's lays a page, every page of the 92 pairs, Google's
+rows w1): 253.5 to 249.7 (-1.5 %); Chinese, whose base leading walks down from 1.3, 262.9 to 258.6 (-1.6 %; 2610.20030v1 -7.4 %,
+2610.21176v1 -5.5 %, 1512.03385v1 -4.8 %), the other targets, whose base is the floor, as before; one pair pays 0.1 % more
+(2610.21884v1-zh: a floor laid that the next state did not need). The states a fit, 2.41, are the walk's as before.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
