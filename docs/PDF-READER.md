@@ -6752,9 +6752,12 @@ A tie after a stop is TeX's own statement that the space there is a word space a
 `\penalty10000\ `, and no end-of-sentence space is ever set at it. So where the source ties a word or a number to a stop, the tags
 wire (Google's, Chrome's built-in translator's, the LLM services') marks no sentence end there: no boundary marker, no cut of the
 row's sentences (`wire/tags.ts` planTags `tied`). A word or a number is text that begins with a letter or a digit, or an element
-the sentence cutter reads as one (a number, a reference, a formula, a paper's macro); a tie and then a mark, which annotates the
-sentence before it (a note's mark, a footnote's call, a citation), keeps the end, the mark glued to the sentence that ended
-(2111.09276v1's `search.~\footnote{…}`). No word list and no language's case decide it: the tie is the source's.
+the sentence cutter reads as one (a number, a reference, a formula, a paper's macro), read from the tie past what sets no
+character (an element of kind `other`, a skip or a switch; one the cutter reads as white space, a space or a forced break; one
+stated `silent`, which goes on no wire: lane wire-w, 2026-11-15); a tie and then a mark, which annotates the sentence before it
+(a note's mark, a footnote's call, a citation), keeps the end, the mark glued to the sentence that ended (2111.09276v1's
+`search.~\footnote{…}`). No word list and no language's case decide it: the tie is the source's. A bibliography entry the
+source reader states (`entry`) is cut at its blocks alone, each `\newblock`, its cutter asked nothing (DESIGN §6.2).
 
 Why: on round B15's wire the boundary marker stands right after a sentence's stop, before the elements the source glues after it
 (DESIGN §6.2), and the cutter ended sentences at abbreviations' dots a tie follows. After "vol." Google then completed the

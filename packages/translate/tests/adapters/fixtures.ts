@@ -328,6 +328,28 @@ export const VOLUME_TIE: UnitIn = unit(
   ],
   true,
 )
+/** a bibliography entry, words of our own (the display design's F39): its parts are its blocks, each begun by a `\newblock`;
+ *  no stop inside a block ends a part ("Proc.", "vol.") */
+export const ENTRY: UnitIn = {
+  id: 'entry',
+  sentences: true,
+  entry: true,
+  content: [
+    t('A. Author and B. Writer. '),
+    { t: 'el', id: 'n1', kind: 'other', newblock: 1 },
+    t('A study of things. '),
+    { t: 'el', id: 'n2', kind: 'other', newblock: 1 },
+    t('In Proc. of the Conf. on Systems, vol. '),
+    el('v', 'number'),
+    t(', pp. 1--10, 2019.'),
+  ],
+}
+/** a tie after a stop, then a forced break, then a word, words of our own: the tie read past what sets no character */
+export const TIE_PAST: UnitIn = unit(
+  'tie-past',
+  [t('It ends here.'), el('s', 'space'), el('b', 'break'), t('Then more words. Then the rest.')],
+  true,
+)
 /** the tags wire's fixture units: Google's and the built-in translator's (their behaviour digests are taken over these with
  *  GOOGLE_REPLIES, tests/digests.ts) */
 export const TAGS_UNITS: UnitIn[] = [
@@ -345,6 +367,8 @@ export const TAGS_UNITS: UnitIn[] = [
   SILENT_LABEL,
   SILENT_AROUND,
   SILENT_STOP,
+  /* 30, 31 */ ENTRY,
+  TIE_PAST,
 ]
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
@@ -630,5 +654,11 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: '它对基线达到 81%。<x id="2"/>代码可在<b translate=no>x1</b>处获取。',
     taken: true,
     why: 'a stop before a conditional of no ink ends its sentence: the boundary marker there (the cutter reads the unit without it)',
+  },
+  {
+    unit: 30,
+    raw: '作者 A. Author 和 B. Writer。<x id="4"/><b translate=no>x1</b>关于事物的研究。<x id="5"/><b translate=no>x2</b>载于系统会议论文集，第 <b translate=no>x3</b> 卷，第 1--10 页，2019。',
+    taken: true,
+    why: 'a bibliography entry’s parts are its blocks: a boundary marker before each `\\newblock`, its sentences there (tags.ts entry)',
   },
 ]

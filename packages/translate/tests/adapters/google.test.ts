@@ -573,6 +573,99 @@ describe('google: a stop followed by a tie and a word or a number ends no senten
       'We search the web. <x id="1"/>Then we encode.',
     )
   })
+  // (the tie read past what sets no character, lane glued-mark §5: a skip or a switch, kind `other`; a space or a forced break,
+  // which the cutter reads as white space; what is stated `silent`, off the wire's projection already. The first piece after
+  // the tie that sets something decides)
+  it('a tie, then an element that sets no character, then a mark: the end stays, the marker right after the stop', () => {
+    const u = unit(
+      'om',
+      [t('We search the web.'), el('s', 'space'), el('o', 'other'), el('a', 'note-mark'), t(' Then we encode.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`We search the web.<x id="4"/>${w(1)}${w(2)}${w(3)} Then we encode.`)
+  })
+  it('a tie, then a forced break, then a word: no sentence ends there', () => {
+    const u = unit(
+      'bw',
+      [t('It ends here.'), el('s', 'space'), el('b', 'break'), t('Then more words. Then the rest.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`It ends here.${w(1)}${w(2)}Then more words. <x id="3"/>Then the rest.`)
+  })
+  it('a tie, then an element that sets nothing, then a number: no sentence ends there', () => {
+    const u = unit(
+      'sn',
+      [t('In Systems, vol.'), el('s', 'space'), quiet('q'), el('n', 'number'), t('. Then more.')],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`In Systems, vol.${w(1)}${w(2)}. <x id="3"/>Then more.`)
+  })
+})
+
+// (F39, the display design's: a bibliography entry's parts are its blocks. BibTeX's styles write `\newblock` between an entry's
+// authors, title and venue, the source's own statement of its parts; inside a bibliography the classes set the stop's space
+// factor code to 1000 (`\sfcode`\.\@m`), no sentence space after any stop, so no stop inside an entry ends a sentence. For an
+// entry (the unit states `entry`: the source reader's `\bibitem`) the cutter is not asked: a boundary marker stands right
+// before each element that states `newblock`, none at the entry's head and no end marker; one with none is one part. Lane
+// glued-mark's probe of 2026-11-13, 9 requests over 85 entries: invented volumes, issues and pages fell from 24 entries to 2,
+// every block's stop kept, 48 of 48, 1 reply refused of 85)
+describe('google: a bibliography entry’s parts are its blocks', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  const nb = (id: string): Piece => ({ t: 'el', id, kind: 'other', newblock: 1 })
+  const entry = (id: string, content: Piece[], o: { entry?: boolean; sentences?: boolean } = {}) => ({
+    id,
+    content,
+    ...(o.sentences === false ? {} : { sentences: true }),
+    ...(o.entry === false ? {} : { entry: true }),
+  })
+  const parts = [
+    t('A. Author and B. Writer. '),
+    nb('n1'),
+    t('A study of things. '),
+    nb('n2'),
+    t('In Proc. of the Conf. on Systems, vol. '),
+    el('v', 'number'),
+    t(', pp. 1--10, 2019.'),
+  ]
+  it('a boundary marker right before each `\\newblock`, and nowhere else: no abbreviation’s or initial’s stop ends a part', () => {
+    expect(g.write(entry('e', parts), 'zh-Hans')).toBe(
+      `A. Author and B. Writer. <x id="4"/>${w(1)}A study of things. <x id="5"/>${w(2)}In Proc. of the Conf. on Systems, vol. ${w(3)}, pp. 1--10, 2019.`,
+    )
+  })
+  it('none at its head, and no end marker after its last stop', () => {
+    const u = entry('h', [nb('n0'), t('A. Author. '), nb('n1'), t('A title, 2019.'), el('f', 'note-mark')])
+    expect(g.write(u, 'zh-Hans')).toBe(`${w(1)}A. Author. <x id="4"/>${w(2)}A title, 2019.${w(3)}`)
+  })
+  it('an entry that states no block is one part, whatever its stops', () => {
+    const u = entry('o', [t('J. Smith. 2018. A title of a paper. Phys. Rev. D 12. Then a note.')])
+    expect(g.write(u, 'zh-Hans')).toBe('J. Smith. 2018. A title of a paper. Phys. Rev. D 12. Then a note.')
+  })
+  it('the parts read back at the markers: each sentence of the row starts at its block', () => {
+    const r = readTagged(
+      entry('e', parts),
+      `作者 A. Author 和 B. Writer。<x id="4"/>${w(1)}关于事物的研究。<x id="5"/>${w(2)}载于系统会议论文集，第 ${w(3)} 卷，第 1--10 页，2019。`,
+    )
+    expect(r?.sentences).toEqual({ src: [25, 45], tr: [25, 34] })
+  })
+  it('a unit that is no entry is cut by the cutter, its `\\newblock` as it was; an entry that lights no sentence has no marker', () => {
+    const strip = (ps: readonly Piece[]): Piece[] =>
+      ps.map((p) =>
+        p.t === 'el' ? { t: 'el', id: p.id, kind: p.kind } : p.t === 'span' ? { ...p, content: strip(p.content) } : p,
+      )
+    expect(g.write(entry('x', parts, { entry: false }), 'zh-Hans')).toBe(
+      g.write(entry('x', strip(parts), { entry: false }), 'zh-Hans'),
+    )
+    expect(g.write(entry('x', parts, { entry: false }), 'zh-Hans')).not.toBe(g.write(entry('e', parts), 'zh-Hans'))
+    expect(g.write(entry('s', parts, { sentences: false }), 'zh-Hans')).toBe(
+      `A. Author and B. Writer. ${w(1)}A study of things. ${w(2)}In Proc. of the Conf. on Systems, vol. ${w(3)}, pp. 1--10, 2019.`,
+    )
+  })
+  it('the void spelling (Chrome’s, an LLM’s) cuts an entry alike', () => {
+    expect(tagsWire.write(entry('e', parts))).toBe(
+      'A. Author and B. Writer. <x id="4"/><x id="1"/>A study of things. <x id="5"/><x id="2"/>In Proc. of the Conf. on Systems, vol. <x id="3"/>, pp. 1--10, 2019.',
+    )
+  })
 })
 
 // (TeX set no space between a word and the mark, the script or the accent it carries: where the source glued an element to

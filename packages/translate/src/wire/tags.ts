@@ -299,7 +299,10 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
   const items: Item[] = []
   /** each group's stop and the projection offset of its end, in order: the cutter reads it there */
   const stopsAt: [number, string][] = []
-  const kinds = new Map<number, { kind: string; stop: string | undefined; reads: string | undefined }>()
+  const kinds = new Map<
+    number,
+    { kind: string; stop: string | undefined; reads: string | undefined; newblock: boolean }
+  >()
   /** each element's id by its projection offset */
   const idAt = new Map<number, string>()
   /** the ids of what rides in an element's tag before it and after it (offWire), by the offset of the first and the last
@@ -315,7 +318,7 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       if (p.t === 'text') at += p.s.length
       else if (silentPiece(p)) continue
       else if (p.t === 'el') {
-        kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
+        kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads, newblock: !!p.newblock })
         idAt.set(at, p.id)
         at += 1
       } else at = readsOf(p.content, at)
@@ -342,7 +345,7 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
         // (it sets nothing, and no element beside it sets something: on no wire, back where its group begins or ends)
         items.push({ t: 'off', out: asOut([p]) })
       } else if (p.t === 'el') {
-        kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
+        kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads, newblock: !!p.newblock })
         idAt.set(at, p.id)
         items.push({
           t: 'void',
@@ -535,16 +538,29 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       return { first, ids }
     }
     /** whether the elements glued after a stop begin with a tie (the source reader's `space`: TeX's `~`, `\penalty10000\ `, a
-     *  word space at which TeX sets no end-of-sentence space) right after it and then a word or a number: text beginning with a
-     *  letter or a digit, or an element the cutter reads as such, not a mark that annotates the sentence before (a note's mark,
-     *  a footnote's call, a citation) nor white space (a space, a break). The source itself states that stop no sentence's end */
+     *  word space at which TeX sets no end-of-sentence space) right after it and then a word or a number: from the tie, the
+     *  first piece after it that sets a character decides (past an element of kind `other`, the source reader's for a skip or a
+     *  switch, which set none, text.ts inWord, and one the cutter reads as white space, a space or a forced break; what is stated
+     *  `silent` is out of the projection already): text beginning with a letter or a digit, or an element the cutter reads as
+     *  such, not a mark that annotates the sentence before (a note's mark, a footnote's call, a citation). The source itself
+     *  states that stop no sentence's end. Where nothing sets a character up to the unit's end, the end stays */
+    const setsNone = (kind: string): boolean => {
+      const s = standInOf(kind)
+      return kind === 'other' || (s !== undefined && !s.trim())
+    }
     const tied = (g: { first: number }): boolean => {
       if (kinds.get(orig[g.first] as number)?.kind !== 'space') return false
-      const next = g.first + 1
+      let next = g.first + 1
+      while (
+        next < projection.length &&
+        projection[next] === OBJ &&
+        setsNone(kinds.get(orig[next] as number)?.kind ?? 'other')
+      )
+        next++
       if (next >= projection.length) return false
       if (projection[next] !== OBJ) return /[\p{L}\p{N}]/u.test(projection[next] as string)
       const s = standInOf(kinds.get(orig[next] as number)?.kind ?? 'other')
-      return s !== 'annotation' && s !== 'citation' && !(s !== undefined && !s.trim())
+      return s !== 'annotation' && s !== 'citation'
     }
     const mark = (w: number) => {
       marks.push(slots.length + marks.length + 1)
@@ -560,26 +576,43 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     // own statement; over the lab's Google store at RB1, 533 such ends, every one after an initial or an abbreviation ("M.~Casals",
     // "vol.~36", "Amer.~Math.~Soc."), none a sentence's, and with the marker right after "vol." Google wrote a volume, an issue
     // and pages the paper lacks, 42 bibliography units)
-    for (const q of sentenceCuts(projection, standIn)) {
-      const c = orig[q] as number
-      const g = glued(q)
-      if (g && tied(g)) continue
-      const moved = g ? wireAt(orig[g.first] as number) : null
-      const w = moved !== null && moved > at ? moved : wireAt(c)
-      if (w <= at || w >= wire.length) continue
-      if (g && w === moved) leads.set(slots.length + marks.length + 1, g.ids)
-      mark(w)
-      // (in the unit's own projection, what sets nothing counted where it stands)
-      cuts.push(unitAt[c] as number)
-    }
-    // (the unit's last stop with elements glued after it, where the cutter would end a sentence were one to follow: a marker
-    // of the wire's alone there, no sentence's start)
-    const g = glued(projection.length)
-    if (g && !tied(g) && sentenceCuts(`${projection} ${NEXT}`, standIn).includes(projection.length + 1)) {
-      const w = wireAt(orig[g.first] as number)
-      if (w > at && w < wire.length) {
-        endMark = slots.length + marks.length + 1
+    if (unit.entry) {
+      // (a bibliography entry's parts are its blocks, the display design's F39: BibTeX's styles write `\newblock` between an
+      // entry's authors, title and venue, the source's own statement of its parts, and inside a bibliography the classes set
+      // the stop's space factor code to 1000, `\sfcode`\.\@m`, no sentence space after any stop. So the cutter is not asked:
+      // a boundary marker right before each element that states `newblock`, none at the entry's head, no end marker; an entry
+      // that states none is one part. No abbreviation, no word list: the two are the source's and its classes' own. Lane
+      // glued-mark's probe over 85 entries of the lab's Google store: the volumes, issues and pages Google wrote that the paper
+      // lacks fell from 24 entries to 2, every block's own stop kept, 48 of 48, 1 reply of 85 refused)
+      const blocks = [...kinds.entries()].flatMap(([p, k]) => (k.newblock ? [p] : [])).sort((a, b) => a - b)
+      for (const c of blocks) {
+        const w = wireAt(c)
+        if (w <= at || w >= wire.length) continue
         mark(w)
+        cuts.push(unitAt[c] as number)
+      }
+    } else {
+      for (const q of sentenceCuts(projection, standIn)) {
+        const c = orig[q] as number
+        const g = glued(q)
+        if (g && tied(g)) continue
+        const moved = g ? wireAt(orig[g.first] as number) : null
+        const w = moved !== null && moved > at ? moved : wireAt(c)
+        if (w <= at || w >= wire.length) continue
+        if (g && w === moved) leads.set(slots.length + marks.length + 1, g.ids)
+        mark(w)
+        // (in the unit's own projection, what sets nothing counted where it stands)
+        cuts.push(unitAt[c] as number)
+      }
+      // (the unit's last stop with elements glued after it, where the cutter would end a sentence were one to follow: a marker
+      // of the wire's alone there, no sentence's start)
+      const g = glued(projection.length)
+      if (g && !tied(g) && sentenceCuts(`${projection} ${NEXT}`, standIn).includes(projection.length + 1)) {
+        const w = wireAt(orig[g.first] as number)
+        if (w > at && w < wire.length) {
+          endMark = slots.length + marks.length + 1
+          mark(w)
+        }
       }
     }
     wire = sent + wire.slice(at)
