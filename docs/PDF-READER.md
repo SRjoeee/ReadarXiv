@@ -3042,7 +3042,8 @@ made between two blocks, the file's hundredths within 0.025); any other gap keep
 line or a `\vadjust` among them, and with no `\lineskip` told nothing is closed. The first line never moves (B′: a
 paragraph's start stays), every line under a closed gap moves up by it, none stands lower than the original's own, and what
 the closed gaps free stays at the block's foot. TeX's rule reopens a pair where the translation's own line is tall
-(breakLines' `settle`, on the drawn ink, which stands in for TeX's boxes). Where the pair holds a formula TeX set in the
+(breakLines' `settle`, on the drawn ink, which stands in for TeX's boxes: its text's and each crop's segment box on its own
+baseline, a trail's and an end mark's among them, §18.79). Where the pair holds a formula TeX set in the
 original, TeX measured that formula's room itself: the distance it set between the formula's line and the next (the formula
 on the upper line) or the one before (on the lower), `texRoomOf`; where that distance already keeps the two lines' ink
 `\lineskiplimit` apart, TeX's rule holds at it, and the pair is set no farther apart. So a formula that stays on its line
@@ -7304,6 +7305,24 @@ compile's own reading takes (readInkAnswers', the units').
   2608.06007v1's macro, a fill, a formula and words, which TeX pushes to its line's end the same).
 - **To connect** (lane cm-a's `front.ts`): `prepareFront` hands `compiledOf`'s `probeLog` to `instrumentOf`. Until it does, the
   probe's two readings read nothing and the source's six are stated.
+
+### 18.79 A trail's and an end mark's crop has an extent (2026-11-15)
+
+The display design's F42 (found by the typing lane T3). A member's trail (`El.trail`, §18.16, §18.59: a class's marks after a name,
+a `\thanks` mark) and its end mark (`El.end`, §18.52: amsthm's QED box) are drawn as crops of their ink, glued after the
+translation's last token. `lay/adapt.ts` built each crop's segment box (`gap.box`, the ink TeX set, which the breaker reads for a
+crop's extent, never the rectangle drawn) without the baseline the crop is set by; B.break's `cropExtent` reads the extent as the
+box's top less that baseline and the baseline less its bottom, so the line holding such a crop had an extent of NaN, and TeX's
+`\lineskip` rule (breakLines' `settle`, the drawn ink standing in for TeX's boxes) never opened a pair of lines it came too near,
+nor did `laidOut` count one it left. The box now states the crop's own baseline, the line the mark stands on (`cropOfBox`'s,
+the trail's last line on its page, the end mark's text line), as every other crop's box does.
+
+Reach over the 92 pairs' parts (round 3's last chain): 370 such crops, 247 end marks (246 QED boxes of theorems, one a
+paragraph's) and 123 trails (109 on author lines, 9 references, 3 affiliations, 2 headings); 34 of the QED boxes stand over
+their line's tallest glyph by 0.4 pt at most, no trail over its line's box. A translation's line sets a pitch of the size times
+the script's leading, so no such mark comes within `\lineskiplimit` of the line above it on the stored rows. The test
+(`packages/typeset/tests/unit/crop-extent.test.ts`) lays a mark 11 pt over a 10 pt line within 1 pt of the line above: the pair is opened to
+TeX's 14 pt, a trail's and an end mark's alike, and a mark inside its line's room opens nothing.
 
 ## 19. The engine's contract
 

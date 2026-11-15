@@ -709,7 +709,9 @@ export function adapt(i: AdaptInput): Adapted {
       ...box,
       text: trail[1].copy ?? '',
       k: TRAIL_K,
-      gap: { box: { x0, x1, bottom: y0, top: y1 } },
+      // (its segment's box on the baseline the crop is set by: B.break's cropExtent reads its extent over and under it, which
+      // TeX's \lineskip rule reads; a box with no baseline gave the line no extent at all, and the rule never opened it: §18.79)
+      gap: { box: { x0, x1, bottom: y0, top: y1, baseline: box.baseline } },
     }
     // (one TeX set past a word's gap (El.sep, §18.59: an author's mark after `\hspace` or `\,`, a postal code after a space)
     // that far after the translation's end, at its scale: the kern after the last token, as an `\hspace` element's (tokens.ts
@@ -771,7 +773,8 @@ export function adapt(i: AdaptInput): Adapted {
           ...box,
           text: endEl[1].copy ?? '',
           k: END_K,
-          gap: { box: { x0, x1, bottom: y0, top: y1 } },
+          // (on its line's baseline, as the trail's: §18.79)
+          gap: { box: { x0, x1, bottom: y0, top: y1, baseline: box.baseline } },
         }
         tokens = Object.assign(
           [...tokens, { crop, cw: box.crop[2] - box.crop[0], w100: 0, endMark } as unknown as (typeof tokens)[number]],
