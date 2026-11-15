@@ -463,6 +463,17 @@ differ by the end points, rendering intents (no ink), and the text runs they par
 engine's: besides its version it holds what the engine changed under LAYOUT 39 after `74c3d51e` was made (PIPELINE 74 to 98),
 which made no pack: 1512.03385v1 is cut into 366 units where the file before held 371, and the placeholder rows move on six
 papers; 2608.16117v1's alone is the one before but for its version. 21 new objects.
+The pack of round 3's cell end points (`b3eb17c8`, LAYOUT 41: a cell's end point `t<i>x` the marked original states at its
+template's end, where a cell piece's ownership stops, `docs/PDF-READER.md` §18.74) is `04dfd071`'s with each output's
+`layout.json`, `base.pdf` and `base.json` made again the same way, every compile made again, by the round's engine (PIPELINE
+103), and by the same steps: every other file is `04dfd071`'s own bytes (the translations, references, geometry, faces, patterns
+and sources: the instrument is the same). Each base page is glyph for glyph the one before (every page's text items, pages and
+boxes the same), its operator lists gaining the cells' end points (rendering intents, no ink) and, where the cut moved, its
+units' marks; 2608.16117v1's is byte for byte the one before. Each layout file is the round's engine's: five papers' are the ones
+before but for their version; 1512.03385v1's cut gains five table cells, none laid, every other row the one before under its new
+number; 2608.04322v1's two cells written on several lines are one unit each (§18.75). 20 new objects. The frozen translations give
+a unit the row of its number, so over this pack the rules gate reads those two papers' later units against other units' rows (49
+pages moved, every one theirs; the five other papers' totals equal): the pack's keying, not the drawing.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
