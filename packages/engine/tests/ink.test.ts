@@ -221,6 +221,33 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     const explicit = run({ rect: [125, 697, 139, 709], dest: [{ num: 3, gen: 0 }, { name: 'XYZ' }] }).units.at(-1)!
     expect(explicit.content).toEqual([text('See page 14 here')])
   })
+  it('keeps one link group open over a formula the same link holds: one group a link (F32)', () => {
+    // (2307.16209v1 p13's list of figures: an entry's link over its caption copy, its formulas inside it, all but the page
+    // number TeX set against the title's end; cut at each formula it was seven groups of one target, which no order pairs with
+    // its two annotations, and the caption seven tags. Here "Mode x is 0 or 1 here" with x a formula, the link over "Mode x is
+    // 0 or 1" (glyphs 0 to 15), "here" outside it)
+    const { B, A } = pair({
+      lines: ['Mode x is 0 or 1 here', 'Body text here'],
+      points: [
+        ['bs1', 21],
+        ['be1', 35],
+      ],
+    })
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs)
+        if (g.n === 0 && g.u === 'x') {
+          g.font = 'ABCDEF+CMMI10'
+          g.base = 'CMMI10'
+        }
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+    const an = { annotationType: 2, rect: [71, 697, 169, 709], dest: 'figure.1' }
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A), annotations: [[an]] })
+    const content = L.units.at(-1)!.content
+    expect(content.filter((p) => p.t === 'span')).toHaveLength(1)
+    expect(content[0]).toMatchObject({ t: 'span', open: '\\hyperlink{figure.1}{' })
+    expect((content[0] as { content: { t: string }[] }).content.map((p) => p.t)).toEqual(['text', 'el', 'text'])
+    expect(content.slice(1)).toEqual([text(' here')])
+  })
 
   it('states each of an ink unit’s placeholders its own kept run’s ink, as today’s file draws each by its own segments', () => {
     // (the maker cuts each run of a math or typewriter face its own placeholder, and knows its glyphs: today's file draws each by

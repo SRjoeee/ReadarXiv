@@ -1241,7 +1241,11 @@ export function inkUnitsOf(
               text += w.ts[i]!
             }
         } else {
-          closeLink()
+          // (a kept run every glyph of which the open link holds goes into its group, a formula inside a caption's link: one group
+          // a link, as TeX's hyperref set one; any other closes it, and opens none of its own (an element's link is its element's))
+          const G0 = pages[l.page - 1]!.glyphs!
+          const held = w.gs.filter((g) => /\S/u.test(G0[g]?.u ?? ''))
+          if (!(link !== null && held.length && held.every((g) => linkAt.get(`${l.page}|${g}`) === link))) closeLink()
           const lastPh = phs.at(-1)
           // (a run of one face over a gap or a line: one placeholder, its source the run's characters whole — the piece's too, which
           // kept the first word's alone. Never over a line where a script stands at the break: TeX sets a script on its line after
