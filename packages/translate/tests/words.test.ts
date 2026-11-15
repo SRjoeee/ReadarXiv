@@ -102,13 +102,14 @@ describe('a group with an edge inside a word goes on no wire: the word travels w
     expect(ok(result).content).toEqual([tx('然后'), sp('1', [tx('归纳步骤')]), tx('运行。')])
   })
   it('a group whose head is a declaration keeps its head in a copy of itself; its words go plain', async () => {
-    // (`{\bf B}olt-on`: the declaration, loose, would hold past the group, so it comes back in a copy holding it alone)
+    // (`{\bf B}olt-on`: the declaration, loose, would hold past the group, so it comes back in a copy holding it alone; it sets
+    // nothing, so the copy goes on no wire and comes back at the unit's end, as the markers wire puts it)
     const u = unit('h', [t('Short for '), span('1', 'other', [quiet('2'), t('B')]), t('olt-on parts.')])
     const { sent, result } = await viaGoogle(u, (w) =>
       w.replace('Short for ', '简称').replace('Bolt-on parts.', '螺栓部件。'),
     )
-    expect(sent).toEqual(['Short for <b translate=no>x1</b>Bolt-on parts.'])
-    expect(ok(result).content).toEqual([tx('简称'), sp('1', [{ t: 'el', id: '2' }]), tx('螺栓部件。')])
+    expect(sent).toEqual(['Short for Bolt-on parts.'])
+    expect(ok(result).content).toEqual([tx('简称螺栓部件。'), sp('1', [{ t: 'el', id: '2' }])])
   })
   it('a group that cuts a word with a stop TeX set at its end: the stop after the words, the sentences in the unit’s own projection', async () => {
     // (projection "PreStep Then it ends." with TeX's "." after "Step"; sent "PreStep. Then it ends.")

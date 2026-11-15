@@ -5,6 +5,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 ## Unreleased
 
 - Changed: with Google translating, each formula, citation or reference of a passage is sent to Google in a shorter form that Google keeps as whole as before, so a paper is asked of Google in about a sixth fewer characters and fewer requests.
+- Fixed: with Google translating, a sentence keeps its full stop where the paper sets something that prints nothing right after it, such as a label, a conditional of its own or an empty mark, and the sentence after it is translated as a sentence of its own. Google had dropped the stop and run the two sentences together.
 
 - Fixed: in the PDF reader, a table's header the paper writes through a macro of its own that sets the text in a small table of one column, such as "LOC method" on two lines, is translated; it had stayed as printed. A figure's panel labels written through such a macro, each in its own box, are each translated as a text of its own.
 - Changed: in the PDF reader, a table's cell may use its own column's share of the space the paper leaves between columns: half of it on each side its text grows to, never past a rule or its neighbour's half. A short header such as "Final" or "Total", which had been drawn smaller in a column that visibly had room, is drawn at the original's size, and a longer one closer to it.

@@ -212,6 +212,13 @@ export const SILENT_AROUND: UnitIn = unit('silent-around', [
   span('m', 'other', [t('Method')]),
   t(' '),
 ])
+/** a stop before a conditional of no ink (2611.03953v2's abstract, words of our own: `…baseline.\ifx{} Code is available at
+ *  \url{…}.\fi`): the tags wire sends neither conditional, and its cutter ends the sentence at the stop */
+export const SILENT_STOP: UnitIn = unit(
+  'silent-stop',
+  [t('It reaches 81% for the baseline.'), quiet('i'), t(' Code is available at '), el('u', 'url'), t('.'), quiet('f')],
+  true,
+)
 /** run-in heads a paper's macro sets (2608.25210v2's `\topic{…}`, `{\bf #1.}`, words of our own): a kept span TeX ends with a
  *  stop of its own, which its source does not write (`stop`, the source reader's), written at the span's end on the wire; a
  *  span on no wire with one, written after its words */
@@ -334,6 +341,10 @@ export const TAGS_UNITS: UnitIn[] = [
   GLUED_STOP,
   SIDE_BY_SIDE,
   VOLUME_TIE,
+  /* 26, 27, 28, 29 */ SILENT,
+  SILENT_LABEL,
+  SILENT_AROUND,
+  SILENT_STOP,
 ]
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
@@ -589,5 +600,35 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: '每个标记都关注其左侧。<x id="3"/>我们<b translate=no>x1</b> 报告两种规模。<x id="4"/><b translate=no>x2</b>',
     taken: true,
     why: 'a mark glued after a stop that the reply carried into the next sentence, as `<b>`: back right after the stop’s marker (tags.ts leadsBack)',
+  },
+  {
+    unit: 26,
+    raw: '我们训练一个示例模型<b translate=no>x1</b>在<span id="2">每个</span>词上，然后停止。',
+    taken: true,
+    why: 'elements that set nothing on no wire: back at the unit’s front and end, one beside a citation in its tag, a head after its group’s open (tags.ts off)',
+  },
+  {
+    unit: 26,
+    raw: '我们训练一个示例模型<b translate=no>x1</b>在每个词上，然后停止。',
+    taken: true,
+    why: 'the group of a head that sets nothing lost (not `must`): the head back in a copy of the group, never loose',
+  },
+  {
+    unit: 27,
+    raw: '<span id="1">设置：</span>我们训练它。',
+    taken: true,
+    why: 'a kept span’s head that sets nothing, back after its open',
+  },
+  {
+    unit: 28,
+    raw: '<span id="1">方法</span>',
+    taken: true,
+    why: 'an element that sets nothing before a span around the rest',
+  },
+  {
+    unit: 29,
+    raw: '它对基线达到 81%。<x id="2"/>代码可在<b translate=no>x1</b>处获取。',
+    taken: true,
+    why: 'a stop before a conditional of no ink ends its sentence: the boundary marker there (the cutter reads the unit without it)',
   },
 ]

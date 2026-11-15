@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { CHROME_DIGEST, chrome } from '../../src/adapters/chrome.ts'
 import { google, readTagged, tagsWire } from '../../src/adapters/google.ts'
 import { GLUED_LEAD, GLUED_SPACE, SENTINEL } from '../../src/wire/text.ts'
+import { accept } from '../../src/accept.ts'
 import { chainOf } from '../../src/chain.ts'
 import type { FetchInit, OutPiece, Piece, Result } from '../../src/contract.ts'
 import { echo, NEVER, scriptedFetch } from '../../src/testing/fakes.ts'
 import { fakeClock } from '../../src/testing/ports.ts'
 import { translatorSuite } from '../../src/testing/suite.ts'
-import { el, span, t, unit } from '../pieces.ts'
+import { el, quiet, span, t, unit } from '../pieces.ts'
 import {
   DISPLAY_ENDS,
   GOOGLE_REPLIES,
@@ -225,6 +226,91 @@ describe('google: an element is `<b translate=no>` holding its token, read back 
     expect(els(tagsWire.read(u, '设<b translate=no>x1</b>如<x id="2"/>所述。<x id="3"/>它成立。')?.content)).toBe(
       '设#m如#c所述。它成立。',
     )
+  })
+})
+
+// (rule 3 of the reduction design's 8.11: an element that sets nothing where it stands, `silent`, is not in the sentence; the
+// markers wire has sent it on no wire since 2026-11-09, and the tags wire now does, by the same rule and the same put-back
+// (markers.ts withOff). Google kept no stop before such an element written as a word: `…for MOPD.\ifarxiv{} Code is
+// available at \url{…}.\fi` came back with both stops gone, and the cutter read `\ifarxiv{}` as a word glued to the stop,
+// one sentence where TeX set two; off the wire, 12 of 12 such stops came back, lane reply-dots' probe 3 of 2026-11-13)
+describe('google: an element that sets nothing goes on no wire, and is put back where its group begins or ends', () => {
+  const g = google({ fetch: scriptedFetch(googleEcho).fetch })
+  const w = (n: number) => `<b translate=no>x${n}</b>`
+  const show = (c: OutPiece[] | undefined): string | undefined =>
+    c?.map((p) => (p.t === 'text' ? p.s : p.t === 'el' ? `#${p.id}` : `{${show(p.content)}}#${p.id}`)).join('')
+  it('alone, on no wire: back at the front of its group where nothing of it went out before it, else at its end', () => {
+    const u = unit('s', [quiet('lab'), t('We train an exam'), quiet('hy'), t('ple model. It ends.'), quiet('k')], true)
+    expect(g.write(u, 'zh-Hans')).toBe('We train an example model. <x id="1"/>It ends.')
+    const r = readTagged(u, '我们训练一个示例模型。<x id="1"/>它结束了。')
+    expect(show(r?.content)).toBe('#lab我们训练一个示例模型。它结束了。#hy#k')
+    expect(accept(u, r?.content ?? [])).toEqual({ ok: true })
+    // (the sentences in the unit's own projection, its elements that set nothing counted where they stand)
+    expect(r?.sentences).toEqual({ src: [29], tr: [12] })
+  })
+  it('beside an element that sets something, white space alone between, in that element’s tag, in its place', () => {
+    const after = unit('a', [t('See the table'), el('c', 'cite'), quiet('l'), t('. It ends.')], true)
+    expect(g.write(after, 'zh-Hans')).toBe(`See the table${w(1)}. <x id="2"/>It ends.`)
+    expect(show(readTagged(after, `见表${w(1)}。<x id="2"/>它结束了。`)?.content)).toBe('见表#c#l。它结束了。')
+    const before = unit('b', [t('Values '), quiet('n'), t(' '), el('m', 'math'), t(' hold.')])
+    expect(g.write(before, 'zh-Hans')).toBe(`Values ${w(1)} hold.`)
+    expect(show(readTagged(before, `数值${w(1)}成立。`)?.content)).toBe('数值#n #m成立。')
+  })
+  it('the cutter reads the unit without it: a stop before a conditional of no ink ends its sentence (2611.03953v2’s shape)', () => {
+    const u = unit(
+      'c',
+      [
+        t('It reaches 81% for the baseline.'),
+        quiet('i'),
+        t(' Code is available at '),
+        el('u', 'url'),
+        t('.'),
+        quiet('f'),
+      ],
+      true,
+    )
+    expect(g.write(u, 'zh-Hans')).toBe(`It reaches 81% for the baseline. <x id="2"/>Code is available at ${w(1)}.`)
+    const r = readTagged(u, `它对基线达到 81%。<x id="2"/>代码可在${w(1)}处获取。`)
+    expect(show(r?.content)).toBe('它对基线达到 81%。代码可在#u处获取。#i#f')
+    expect(r?.sentences).toEqual({ src: [34], tr: [11] })
+  })
+  it('riding in a mark glued after a stop: the next sentence starts after both, where the reply keeps them after the marker', () => {
+    const u = unit('m', [t('It ends.'), el('a', 'note-mark'), quiet('l'), t(' Then more words.')], true)
+    expect(g.write(u, 'zh-Hans')).toBe(`It ends.<x id="2"/>${w(1)} Then more words.`)
+    const r = readTagged(u, `它结束了。<x id="2"/>${w(1)}然后更多词。`)
+    expect(show(r?.content)).toBe('它结束了。#a#l然后更多词。')
+    expect(r?.sentences).toEqual({ src: [11], tr: [7] })
+  })
+  it('inside a word it leaves the word whole (`exam\\-ple`), and the white space beside it is one space', () => {
+    expect(
+      g.write(unit('h', [t('An exam'), quiet('hy'), t('ple of a word '), quiet('l'), t(' here.')]), 'zh-Hans'),
+    ).toBe('An example of a word here.')
+  })
+  it('a styled group’s head that sets nothing comes back after the group’s open; where the reply lost the group, in a copy of it', () => {
+    const u = unit('h', [t('We train on '), span('g', 'colour', [quiet('bf'), t('every')]), t(' word.')])
+    expect(g.write(u, 'zh-Hans')).toBe('We train on <span id="1">every</span> word.')
+    const kept = readTagged(u, '我们在<span id="1">每个</span>词上训练。')
+    expect(show(kept?.content)).toBe('我们在{#bf每个}#g词上训练。')
+    expect(accept(u, kept?.content ?? [])).toEqual({ ok: true })
+    // (the group is not `must`: the reply may lose it, and the declaration then comes back in a copy of it, never loose)
+    const lost = readTagged(u, '我们在每个词上训练。')
+    expect(show(lost?.content)).toBe('我们在每个词上训练。{#bf}#g')
+    expect(accept(u, lost?.content ?? [])).toEqual({ ok: true })
+  })
+  it('a group of no word holding only such elements goes on no wire as one piece; one that holds an element that sets something is that element’s tag', () => {
+    const u = unit('z', [
+      t('Short for '),
+      span('1', 'other', [quiet('2')]),
+      t('Bolt-on parts, '),
+      span('3', 'other', [quiet('4'), el('5', 'math')]),
+      t('.'),
+    ])
+    expect(g.write(u, 'zh-Hans')).toBe(`Short for Bolt-on parts, ${w(1)}.`)
+    expect(show(readTagged(u, `螺栓部件的简称，${w(1)}。`)?.content)).toBe('螺栓部件的简称，{#4#5}#3。{#2}#1')
+  })
+  it('the void spelling (Chrome’s, an LLM’s) leaves it off alike; the markers wire as before', () => {
+    const u = unit('s', [quiet('lab'), t('We train an exam'), quiet('hy'), t('ple model. It ends.')], true)
+    expect(tagsWire.write(u)).toBe('We train an example model. <x id="1"/>It ends.')
   })
 })
 

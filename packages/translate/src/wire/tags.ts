@@ -6,9 +6,9 @@
 // begins (Google brings `<x id="N"/>` back exactly where it was set; `<s/>` gets closers appended, `<wbr>` is dropped:
 // measured), and where they land are the translation's sentences.
 import { sentenceCuts } from '@readarxiv/text'
-import { asOut, projectionOf, textOf } from '../accept.ts'
+import { asOut, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
-import { contentOf, refill, type Tok } from './markers.ts'
+import { contentOf, type Off, refill, type Tok, withOff } from './markers.ts'
 import {
   type Beside,
   decode,
@@ -50,6 +50,12 @@ interface TagsPlan {
   /** a boundary marker set right after the unit's last stop, before the elements glued after it: the wire's alone, no
    *  sentence's start (absent where the unit ends otherwise) */
   endMark?: number
+  /** what sets nothing and went on no wire (offWire): back at the unit's front or end, or a pair's, by its id (markers.ts Off) */
+  off: Off
+  /** each pair's group around it (null: the unit), whether something of that group went out before the pair, and its depth:
+   *  a reply that loses a pair (one that is not `must` may come back unstyled) has what `off` puts back in it come back in a
+   *  copy of it in that group, never loose (a declaration loose would hold past its group) */
+  parents: ReadonlyMap<string, { parent: string | null; after: boolean; depth: number }>
 }
 
 /** the model's and the engines' spellings of a tag (the extension's tokens.ts TAG_RE): `<x id="1"/>`, `<x id="1" />`,
@@ -190,9 +196,92 @@ type Item =
     }
   | { t: 'open'; id: string; letters: boolean; depth: number }
   | { t: 'close' }
+  /** what sets nothing and goes on no wire: back where its group begins or ends (`off`) */
+  | { t: 'off'; out: OutPiece[] }
 
 const elsOf = (content: readonly Piece[]): Extract<Piece, { t: 'el' }>[] =>
   content.flatMap((p): Extract<Piece, { t: 'el' }>[] => (p.t === 'el' ? [p] : p.t === 'span' ? elsOf(p.content) : []))
+/** the elements of pieces that set something (not `silent`) */
+const setting = (content: readonly Piece[]): Extract<Piece, { t: 'el' }>[] => elsOf(content).filter((q) => !q.silent)
+/** a piece the wire writes as one tag of its own: an element, or a span holding no text */
+const voidPiece = (p: Piece): boolean => p.t === 'el' || (p.t === 'span' && !SOLID.test(textOf(p.content)))
+/** a piece that sets nothing where it stands: an element stated `silent`, or a span holding no text, not `must`, whose
+ *  elements, one at least, all are (the markers wire's span head of such elements alone, `{\bfseries w}`'s copy) */
+const silentPiece = (p: Piece): boolean =>
+  p.t === 'el'
+    ? !!p.silent
+    : p.t === 'span' && !p.must && voidPiece(p) && elsOf(p.content).length > 0 && !setting(p.content).length
+/** the projection the wire's cutter reads: accept.ts projectionOf, what sets nothing out */
+const sentProjection = (content: readonly Piece[]): string =>
+  content
+    .map((p) => (p.t === 'text' ? p.s : silentPiece(p) ? '' : p.t === 'el' ? OBJ : sentProjection(p.content)))
+    .join('')
+const sentLength = (content: readonly Piece[]): number => sentProjection(content).length
+
+/**
+ * Rule 3 of the reduction design (8.11; contract.ts `silent`): what sets nothing is not in the sentence. The unit's pieces as
+ * the wire sends them, the markers wire's rule (markers.ts itemsOf): a piece that sets nothing beside one that sets something,
+ * white space alone between them, rides in that one's tag (before the first such of a stretch, else after the one before
+ * it), the white space between them with it, out of the wire; one with no such neighbour stays in the pieces, `silent`, for
+ * planTags to send on no wire and the reading to put back where its group begins or ends. Each projection offset of the
+ * unit's (accept.ts projectionOf) is stated kept, on the wire, or not (`keep`), in order: the cutter's offsets map back
+ */
+function offWire(content: readonly Piece[]): {
+  content: Piece[]
+  riders: Map<Piece, { before: OutPiece[]; after: OutPiece[] }>
+  keep: boolean[]
+} {
+  const riders = new Map<Piece, { before: OutPiece[]; after: OutPiece[] }>()
+  const keep: boolean[] = []
+  const mark = (ps: readonly Piece[], on: boolean) => {
+    for (const p of ps) {
+      if (p.t === 'text') for (let k = 0; k < p.s.length; k++) keep.push(on)
+      else if (p.t === 'el') keep.push(on && !p.silent)
+      else mark(p.content, on && !silentPiece(p))
+    }
+  }
+  const white = (p: Piece | undefined) => p?.t === 'text' && !SOLID.test(p.s)
+  const list = (ps: readonly Piece[]): Piece[] => {
+    const rides = new Set<number>()
+    for (let i = 0; i < ps.length; ) {
+      if (!voidPiece(ps[i] as Piece)) {
+        i++
+        continue
+      }
+      // (a stretch: pieces of a tag of their own, white space alone between)
+      let j = i
+      for (let k = i + 1; k < ps.length && (voidPiece(ps[k] as Piece) || white(ps[k])); k++)
+        if (voidPiece(ps[k] as Piece)) j = k
+      const hosts: number[] = []
+      for (let k = i; k <= j; k++) if (voidPiece(ps[k] as Piece) && !silentPiece(ps[k] as Piece)) hosts.push(k)
+      for (const [h, at] of hosts.entries()) {
+        const host = ps[at] as Piece
+        const before = h === 0 && at > i ? asOut(ps.slice(i, at)) : []
+        if (before.length) for (let k = i; k < at; k++) rides.add(k)
+        // (after it, up to the last piece that sets nothing before the next one that sets something)
+        const until = h + 1 < hosts.length ? (hosts[h + 1] as number) : j + 1
+        let last = -1
+        for (let k = at + 1; k < until; k++) if (voidPiece(ps[k] as Piece)) last = k
+        const after = last > at ? asOut(ps.slice(at + 1, last + 1)) : []
+        if (after.length) for (let k = at + 1; k <= last; k++) rides.add(k)
+        if (before.length || after.length) riders.set(host, { before, after })
+      }
+      i = j + 1
+    }
+    const out: Piece[] = []
+    for (const [k, p] of ps.entries()) {
+      if (rides.has(k)) mark([p], false)
+      // (a span holding text, a pair on the wire: its own pieces as the wire sends them)
+      else if (p.t === 'span' && !voidPiece(p)) out.push({ ...p, content: list(p.content) })
+      else {
+        mark([p], true)
+        out.push(p)
+      }
+    }
+    return out
+  }
+  return { content: list(content), riders, keep }
+}
 
 /** an element's own stop as the tags wire reads it: its punctuation; a line end is the markers wire's (Microsoft cuts its
  *  sentence there; here our cutter reads the sentences, and the tags' white space is none) */
@@ -202,19 +291,29 @@ const ownStop = (stop: string | undefined): string | undefined =>
 /** A unit's tags wire, its tags written `as` (TagSpelling) */
 export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
   // (a display that ends its sentence states the stop it ends it with: written after it, taken back on reading, read by the
-  // cutter as its sentence's end)
-  const content = displayEnds(unit.content)
+  // cutter as its sentence's end; what sets nothing goes on no wire, offWire, the projection's offsets here the wire's own,
+  // `unitAt` each one's in the unit's)
+  const { content, riders, keep } = offWire(displayEnds(unit.content))
+  const unitAt = keep.flatMap((on, k) => (on ? [k] : []))
+  unitAt.push(keep.length)
   const items: Item[] = []
   /** each group's stop and the projection offset of its end, in order: the cutter reads it there */
   const stopsAt: [number, string][] = []
   const kinds = new Map<number, { kind: string; stop: string | undefined; reads: string | undefined }>()
   /** each element's id by its projection offset */
   const idAt = new Map<number, string>()
-  /** the elements of pieces that go as one void, by their projection offsets: what each reads as to the cutter */
+  /** the ids of what rides in an element's tag before it and after it (offWire), by the offset of the first and the last
+   *  element its tag holds: a sentence a reading starts after the element starts after them */
+  const riding = new Map<number, { before: string[]; after: string[] }>()
+  const idsOf = (ps: readonly OutPiece[]): string[] =>
+    ps.flatMap((q) => (q.t === 'el' ? [q.id] : q.t === 'span' ? idsOf(q.content) : []))
+  /** the elements of pieces that go as one void, by their projection offsets: what each reads as to the cutter (what sets
+   *  nothing, which rides in the void, none) */
   const readsOf = (ps: readonly Piece[], at0: number): number => {
     let at = at0
     for (const p of ps) {
       if (p.t === 'text') at += p.s.length
+      else if (silentPiece(p)) continue
       else if (p.t === 'el') {
         kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
         idAt.set(at, p.id)
@@ -223,17 +322,31 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     }
     return at
   }
+  /** a void's tag: the piece, and what rides in it before and after it (stated by its first and its last element's offset) */
+  const outOf = (p: Piece, at: number): OutPiece[] => {
+    const own = asOut([p])
+    const r = riders.get(p)
+    if (!r) return own
+    const pr = p.t === 'span' ? sentProjection(p.content) : OBJ
+    const [first, last] = [at + pr.indexOf(OBJ), at + pr.lastIndexOf(OBJ)]
+    riding.set(first, { before: idsOf(r.before), after: first === last ? idsOf(r.after) : [] })
+    if (first !== last) riding.set(last, { before: [], after: idsOf(r.after) })
+    return [...r.before, ...own, ...r.after]
+  }
   const walk = (ps: readonly Piece[], at: number, depth: number): number => {
     for (const p of ps) {
       if (p.t === 'text') {
         items.push({ t: 'text', s: p.s, at })
         at += p.s.length
+      } else if (silentPiece(p)) {
+        // (it sets nothing, and no element beside it sets something: on no wire, back where its group begins or ends)
+        items.push({ t: 'off', out: asOut([p]) })
       } else if (p.t === 'el') {
         kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads })
         idAt.set(at, p.id)
         items.push({
           t: 'void',
-          out: [{ t: 'el', id: p.id }],
+          out: outOf(p, at),
           at,
           len: 1,
           stop: ownStop(p.stop),
@@ -252,19 +365,21 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
         }
         items.push({ t: 'close' })
       } else {
-        const len = projectionOf(p.content).length
-        const last = [...p.content].reverse().find((q) => q.t === 'el')
+        const len = sentLength(p.content)
+        // (its last element that sets something; its elements as the glue reads them, those that set something)
+        const sets = setting(p.content)
+        const last = [...p.content].reverse().find((q): q is Extract<Piece, { t: 'el' }> => q.t === 'el' && !q.silent)
         // (one void on the wire, but each element inside reads to the sentence cutter as itself)
         readsOf(p.content, at)
         items.push({
           t: 'void',
-          out: [{ t: 'span', id: p.id, content: asOut(p.content) }],
+          out: outOf(p, at),
           at,
           len,
-          stop: last?.t === 'el' ? ownStop(last.stop) : undefined,
-          word: elsOf(p.content).every(inWord),
-          line: last?.t === 'el' && LINE_END.test(last.stop ?? ''),
-          ends: endsOf(elsOf(p.content)),
+          stop: last ? ownStop(last.stop) : undefined,
+          word: sets.every(inWord),
+          line: !!last && LINE_END.test(last.stop ?? ''),
+          ends: endsOf(sets),
         })
         at += len
       }
@@ -279,12 +394,26 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
    *  void's last before it, its first after it), '' at an edge */
   const besideOf = (i: number, d: 1 | -1): Beside => {
     let j = i + d
-    while (items[j]?.t === 'open' || items[j]?.t === 'close') j += d
+    // (past what goes on no wire too: TeX set nothing there)
+    while (items[j]?.t === 'open' || items[j]?.t === 'close' || items[j]?.t === 'off') j += d
     const x = items[j]
     return x?.t === 'text' ? x.s : x?.t === 'void' && x.ends ? (d < 0 ? x.ends.last : x.ends.first) : ''
   }
   const kept: { id: string; depth: number }[] = []
   const open: number[] = []
+  // (each group on the wire, the unit and every pair, and whether something of it went out yet; what went on no wire, by where
+  // it comes back, the markers wire's Off; and each pair's group around it, for a reply that loses the pair)
+  const groups: { id: string | null; seen: boolean }[] = [{ id: null, seen: false }]
+  const seen = () => {
+    for (const g of groups) g.seen = true
+  }
+  const off = {
+    front: [] as OutPiece[],
+    back: [] as OutPiece[],
+    heads: new Map<string, OutPiece[]>(),
+    tails: new Map<string, OutPiece[]>(),
+  }
+  const parents = new Map<string, { parent: string | null; after: boolean; depth: number }>()
   let wire = ''
   /** the wire as written so far without its spans' tags: what glue reads before an element (text.ts glueOf) */
   let bare = ''
@@ -301,15 +430,28 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
         const ch = it.s[k] as string
         if (!it.fixed) reach(it.at + k)
         let w = ''
-        if (!/\s/.test(ch)) w = escapeTags(ch)
-        else if (!/\s$/.test(wire) && !(k > 0 && /\s/.test(it.s[k - 1] as string))) w = ' '
+        if (!/\s/.test(ch)) {
+          w = escapeTags(ch)
+          seen()
+        } else if (!/\s$/.test(wire) && !(k > 0 && /\s/.test(it.s[k - 1] as string))) w = ' '
         wire += w
         bare += w
+      }
+    } else if (it.t === 'off') {
+      // (into its innermost group on the wire: before that group's first thing on it, else after its last)
+      const g = groups[groups.length - 1] as { id: string | null; seen: boolean }
+      if (g.id === null) (g.seen ? off.back : off.front).push(...it.out)
+      else {
+        const at = g.seen ? off.tails : off.heads
+        at.set(g.id, [...(at.get(g.id) ?? []), ...it.out])
       }
     } else if (it.t === 'void') {
       reach(it.at)
       slots.push({ t: 'void', out: it.out, own: false })
-      const next = items[i + 1]
+      seen()
+      let n = i + 1
+      while (items[n]?.t === 'off') n++
+      const next = items[n]
       // (glued to the piece beside it in the source, a text or another element: the white space a reply sets there taken
       // back; text.ts glueOf, the wire up to it read past its own spans' tags)
       const glued = glueOf(besideOf(i, -1), bare, besideOf(i, 1), it.word, it.line, it.ends)
@@ -325,9 +467,15 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       if (it.letters) kept.push({ id: it.id, depth: it.depth })
       open.push(slots.length)
       wire += openTag(as, slots.length)
+      const g = groups[groups.length - 1] as { id: string | null; seen: boolean }
+      parents.set(it.id, { parent: g.id, after: g.seen, depth: groups.length })
+      seen()
+      groups.push({ id: it.id, seen: false })
     } else {
       open.pop()
       wire += closeTag(as)
+      seen()
+      groups.pop()
     }
   }
   cutAt[length] = wire.length
@@ -339,9 +487,9 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
   const leads = new Map<number, string[]>()
   let endMark: number | undefined
   if (unit.sentences) {
-    // (the projection the cutter reads: each group's stop at its end, as the source would write it, `orig` each of its
-    // offsets' in the unit's projection, a stop's that of the group's end)
-    const plain = projectionOf(content)
+    // (the projection the cutter reads: what goes on no wire out, each group's stop at its end, as the source would write it,
+    // `orig` each of its offsets' in the wire's projection, a stop's that of the group's end)
+    const plain = sentProjection(content)
     let projection = ''
     const orig: number[] = []
     let from = 0
@@ -378,7 +526,12 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       while (k >= 0 && CLOSER.test(projection[k] as string)) k--
       if (k < 0 || !STOP.test(projection[k] as string)) return null
       const ids: string[] = []
-      for (let i = first; i < q; i++) if (projection[i] === OBJ) ids.push(idAt.get(orig[i] as number) as string)
+      for (let i = first; i < q; i++)
+        if (projection[i] === OBJ) {
+          // (with what rides in its tag)
+          const r = riding.get(orig[i] as number)
+          ids.push(...(r?.before ?? []), idAt.get(orig[i] as number) as string, ...(r?.after ?? []))
+        }
       return { first, ids }
     }
     /** whether the elements glued after a stop begin with a tie (the source reader's `space`: TeX's `~`, `\penalty10000\ `, a
@@ -416,7 +569,8 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       if (w <= at || w >= wire.length) continue
       if (g && w === moved) leads.set(slots.length + marks.length + 1, g.ids)
       mark(w)
-      cuts.push(c)
+      // (in the unit's own projection, what sets nothing counted where it stands)
+      cuts.push(unitAt[c] as number)
     }
     // (the unit's last stop with elements glued after it, where the cutter would end a sentence were one to follow: a marker
     // of the wire's alone there, no sentence's start)
@@ -440,6 +594,8 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     gluedAfter,
     leads,
     ...(endMark !== undefined ? { endMark } : {}),
+    off,
+    parents,
   }
 }
 
@@ -561,6 +717,37 @@ function leadsBack(raw: string, plan: TagsPlan): string {
   return text
 }
 
+/**
+ * What goes back where (markers.ts withOff) for a reply's tokens: the plan's own, but where the reply lost a pair (one that is
+ * not `must` may come back unstyled; on the markers wire every kept span comes back, or the reply is unread) what was to come
+ * back after its open or before its close comes back in a copy of it, in the pair's own group, at that group's front where
+ * nothing of the group went out before the pair, else at its end: never loose, as a span on no wire keeps its head (accept.ts
+ * headLength). Innermost first, so that a copy of a lost pair inside a lost pair is held by the copy of the outer one
+ */
+function offOf(toks: readonly Tok[], plan: TagsPlan): Off {
+  if (!plan.off.heads.size && !plan.off.tails.size) return plan.off
+  const opened = new Set(toks.flatMap((t) => (t.t === 'open' ? [t.id] : [])))
+  const lost = [...plan.parents.entries()].filter(([id]) => !opened.has(id)).sort((a, b) => b[1].depth - a[1].depth)
+  if (!lost.some(([id]) => plan.off.heads.has(id) || plan.off.tails.has(id))) return plan.off
+  const front = [...plan.off.front]
+  const back = [...plan.off.back]
+  const heads = new Map(plan.off.heads)
+  const tails = new Map(plan.off.tails)
+  for (const [id, { parent, after }] of lost) {
+    const held = [...(heads.get(id) ?? []), ...(tails.get(id) ?? [])]
+    heads.delete(id)
+    tails.delete(id)
+    if (!held.length) continue
+    const copy: OutPiece = { t: 'span', id, content: held }
+    if (parent === null) (after ? back : front).push(copy)
+    else {
+      const at = after ? tails : heads
+      at.set(parent, [...(at.get(parent) ?? []), copy])
+    }
+  }
+  return { front, back, heads, tails }
+}
+
 /** A reply → content, and where its marked sentences begin, or null where it cannot be read */
 export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at?: number[] } | null {
   const { text, marked, ids } = unmark(leadsBack(raw, plan), plan.marks, plan.endMark)
@@ -666,7 +853,8 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
     LETTER.test(decode(wireText))
   )
     return null
-  const content = contentOf(refill(toks, plan.refill), [])
+  // (what went on no wire put back where its group begins or ends, the markers wire's own put-back)
+  const content = contentOf(refill(withOff(toks, offOf(toks, plan)), plan.refill), [])
   if (!content) return null
   if (!marked) return { content }
   // the sentinels' places in the translation's projection, then the sentinels out. The end marker is the wire's alone: no

@@ -46,10 +46,13 @@ export type Piece =
        *  marked compile measured empty at every occurrence of its unit and arXiv's page confirms set nothing at every
        *  placement, a conditional's `\fi`, a `\natexlab{}`; never a space, a tie, a forced break, glue, an alignment tab,
        *  TeX's glue or penalty primitives, the kernel's skip and break commands, nor an element that stands for content set
-       *  elsewhere): no translator needs it. The markers wire and the runs floor send it on no wire (each marker a hard
-       *  boundary to Microsoft, each runs' edge a cut), beside an element that sets something in that one's marker; read
-       *  back, it stands at the front of its innermost kept group (the unit, a `must` span) where nothing of the group went
-       *  out before it, else at the group's end. The tags wire sends it as any element */
+       *  elsewhere): no translator needs it. Every wire and the runs floor send it on no wire (each marker a hard boundary
+       *  to Microsoft, each runs' edge a cut; to Google an element written as a word at a sentence's end took that
+       *  sentence's stop, and the tags wire's cutter read it as a word), beside an element that sets something, white space
+       *  alone between them, in that one's marker or tag; read back, it stands at the front of its innermost kept group (the
+       *  unit, a span the wire kept: on the markers wire a `must` one, on the tags wire any its reply brought back, else in a
+       *  copy of that span in the group around it) where nothing of the group went out before it, else at the group's end.
+       *  The tags wire's cutter reads the unit without it */
       silent?: boolean | 1 | undefined
       /** LaTeX's `\newblock` (the PDF's source reader), where a new block of a bibliography entry (UnitIn.entry) begins:
        *  BibTeX's styles write it between an entry's authors, title and venue; a skip by its classes' definitions, never
