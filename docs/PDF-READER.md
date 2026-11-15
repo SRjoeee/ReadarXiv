@@ -7201,11 +7201,14 @@ the glue TeX sets at each kind of gap, and the part names, under each member, th
   `\@startsection` (198 papers, 11 classes, and 3 papers of classes built on article's), 1,117 through titlesec (23 papers) and
   KOMA-Script (2), 18 by mnras and 756 by classes the papers ship (18 papers), which TeX will tell. Of the 124 papers of the 88
   and the holdout, 3 set a float or footnote separation in the body and 3 a caption skip or `\footnotesep` inside a float.
-- **What it does not give** (2608.16117v1 p4 ord 12, the case F12 names, elsarticle): TeX's separation under the heading, its
-  after-skip 9 pt and the body's 14.5 pt `\baselineskip`, leaves the heading 0.02 of room over its next paragraph, and 2.96 at
-  the glue's least; a second line at its pitch (14.35) does not fit, so the heading still steps its size there. Today's reader
-  sets that second line 9.08 over the next paragraph's baseline, nearer than TeX: whether that look is wanted is not this
-  change's to decide.
+- **A heading borrows only what TeX's glue gives** (the coordinator's ruling of 2026-11-15, on F12's own case: 2608.16117v1 p4
+  ord 12, elsarticle). The fact is stated as TeX has it: under that heading TeX's separation, its after-skip 9 pt, the body's
+  `\baselineskip` 14.5 pt and its `\parskip` 0 pt, is 23.41 PDF units, and the next ink's baseline stands 23.43 under the
+  heading's: 0.02 of room, 2.96 at the glue's least (its shrink), where a second line at the heading's pitch needs 14.35. So that
+  heading keeps stepping its size, as the rebuilt reader draws it. A `sep` of the after-skip alone is not built: it would set the
+  next line's ascenders against the heading's descenders, which TeX never does. Production's two full-size lines stand its second
+  line 9.08 over the next paragraph's baseline, nearer than TeX sets it, and that look is not copied. How many headings do gain
+  room is read at the compile move's corpus compile.
 - **Not built** (the owner's review of 2d, 2026-11-13): `spread` in the paragraph-end hook, `Style.box`, the equal-clear-space
   floor.
 
