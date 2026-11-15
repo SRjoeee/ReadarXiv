@@ -229,8 +229,16 @@ type EnvDef =
   | { listing: true; typeset?: true; begin?: undefined; end?: undefined }
 /** what urlPercents reads a file by: the paper's conditionals, its environments read by lines, the commands it defines, its code
  *  environments the walk skips */
-/** the parameters a macro body sets (paramUse): as prose, otherwise, typeset where it stands, stored by a definition in it */
-type ParamUse = { text: Set<number>; other: Set<number>; typeset: Set<number>; stored: Set<number> }
+/** the parameters a macro body sets (paramUse): as prose, otherwise, typeset where it stands, stored by a definition in it; and
+ *  what it puts into a box register (`boxes`, each register's content's use) and the registers it shows in text (`shown`) */
+type ParamUse = {
+  text: Set<number>
+  other: Set<number>
+  typeset: Set<number>
+  stored: Set<number>
+  boxes: { reg: string; inner: ParamUse }[]
+  shown: Set<string>
+}
 /** where a macro keeps a parameter (resolveKeeps): in a macro by its name, or in the one another of its parameters names */
 type KeepTarget = { lit: string; param?: undefined } | { param: number; lit?: undefined }
 /** a set of names asked of a control word that may be none (tailOf's word before a body's last): such a word is in none */
@@ -1976,16 +1984,96 @@ function mathEnd(s: string, i: number) {
   return -1
 }
 
+/** the commands that show a box register where they stand (TeX's \\box, \\copy, \\unhbox, \\unhcopy, \\unvbox, \\unvcopy; LaTeX's
+ *  \\usebox, `\\leavevmode\\copy#1`) */
+const BOX_SHOWS = new Set(['usebox', 'box', 'copy', 'unhbox', 'unhcopy', 'unvbox', 'unvcopy'])
+/** a box register named at s[i] (white space before it skipped): a control word (`\\fitbox`, `\\@tempboxa`), a number, or either
+ *  in a group (`{\\fitbox}`), by its name; with where it ends, or null */
+function registerAt(s: string, i: number, to: number): { reg: string; end: number } | null {
+  const k = skipSpaces(s, i)
+  if (s[k] === '{') {
+    const e = matchGroup(s, k)
+    const inner = e > 0 && e <= to ? /^\s*(\\[A-Za-z@]+|\d+)\s*$/.exec(s.slice(k + 1, e - 1)) : null
+    return inner ? { reg: inner[1]!, end: e } : null
+  }
+  const m = /^(?:\\[A-Za-z@]+|\d+)/.exec(s.slice(k, Math.min(to, k + 80)))
+  return m ? { reg: m[0], end: k + m[0].length } : null
+}
+/**
+ * A box register set at s[i] (`name` the command at i, `end` past it), as TeX and LaTeX set one: LaTeX's \\sbox{reg}{content}
+ * (`\\setbox#1\\hbox{…#2…}`), \\savebox{reg}[width][pos]{content}, TeX's \\setbox reg=\\hbox{content} (\\vbox, \\vtop, a `to` or
+ * `spread` before the group); by the register, its content's range (inside its braces) and where the call ends; null for any
+ * other form (\\setbox0\\copy1: no content of its own)
+ */
+function boxSetAt(
+  s: string,
+  end: number,
+  name: string,
+  to: number,
+): { reg: string; from: number; to: number; end: number } | null {
+  if (name !== 'sbox' && name !== 'savebox' && name !== 'setbox') return null
+  const r = registerAt(s, end, to)
+  if (!r) return null
+  let k = skipSpaces(s, r.end)
+  if (name === 'savebox')
+    for (let n = 0; n < 2 && s[k] === '['; n++) {
+      const e = matchGroup(s, k, '[', ']')
+      if (e < 0 || e > to) return null
+      k = skipSpaces(s, e)
+    }
+  if (name === 'setbox') {
+    if (s[k] === '=') k = skipSpaces(s, k + 1)
+    const box = /^\\(?:hbox|vbox|vtop)(?![A-Za-z@])(?:\s*(?:to|spread)\s*[^{}\\]*(?:\\[A-Za-z@]+)?[^{}\\]*)?/.exec(
+      s.slice(k, Math.min(to, k + 80)),
+    )
+    if (!box) return null
+    k += box[0].length
+  }
+  if (s[k] !== '{') return null
+  const e = matchGroup(s, k)
+  return e > 0 && e <= to ? { reg: r.reg, from: k + 1, to: e - 1, end: e } : null
+}
+/** a body's parameters, none read yet (paramUse) */
+const freshUse = (): ParamUse => ({
+  text: new Set(),
+  other: new Set(),
+  typeset: new Set(),
+  stored: new Set(),
+  boxes: [],
+  shown: new Set(),
+})
+/** a register's content's use kept by its register, what the content itself puts into a register or shows with it */
+function inRegister(use: ParamUse, reg: string, inner: ParamUse) {
+  use.boxes.push({ reg, inner }, ...inner.boxes)
+  for (const r of inner.shown) use.shown.add(r)
+}
+/**
+ * A parameter a body puts into a box register (`boxes`, boxSetAt and lrbox, each register with the use of its content) is set
+ * where the body shows that register (`shown`, BOX_SHOWS, in text or a box's content): there it is that box's content, as
+ * its own use in the register's content reads it; a register the body never shows (only measured: \\wd, \\ht) sets nothing of
+ * it, and its parameters are no text. 2610.37668v1's `\\fittabular[<pad>]{<columns>}{<tabular>}`, its #3 set into a register
+ * twice by \\sbox and shown once by \\usebox inside \\resizebox or \\makebox: read as an unknown command's argument, #3 was no
+ * text and every table in the command none of the reader's (F18, PDF-READER §18.80)
+ */
+function throughBoxes(use: ParamUse): ParamUse {
+  for (const { reg, inner } of use.boxes) {
+    if (use.shown.has(reg)) {
+      for (const k of ['text', 'other', 'typeset', 'stored'] as const) for (const n of inner[k]) use[k].add(n)
+    } else for (const n of [...inner.text, ...inner.other]) use.other.add(n)
+  }
+  return use
+}
 /**
  * Where a macro body sets its parameters: `text` those it typesets as prose — bare, in a group, in \\textbf and the
- * like, in the content of a box — and `other` those it hands to anything else: \\label, \\ref, a width, math
+ * like, in the content of a box — and `other` those it hands to anything else: \\label, \\ref, a width, math. What it puts
+ * into a box register is kept apart by register (`boxes`), and the registers it shows in text (`shown`): throughBoxes reads them
  */
 function paramUse(
   s: string,
   from: number,
   to: number,
   textual = true,
-  use: ParamUse = { text: new Set(), other: new Set(), typeset: new Set(), stored: new Set() },
+  use: ParamUse = freshUse(),
   storing = false,
 ): ParamUse {
   let i = from
@@ -2035,9 +2123,34 @@ function paramUse(
       i = end
       continue
     }
+    // (a box register set: its content's use kept by register, a register shown in text noted; throughBoxes reads the two)
+    const set = boxSetAt(s, end, name, to)
+    if (set) {
+      inRegister(use, set.reg, paramUse(s, set.from, set.to, textual, freshUse(), storing))
+      i = set.end
+      continue
+    }
+    if (BOX_SHOWS.has(name)) {
+      const r = registerAt(s, end, to)
+      if (r) {
+        if (textual) use.shown.add(r.reg)
+        i = r.end
+        continue
+      }
+    }
     // a math environment's body is math (2608.23517's \def\al#1{\begin{align}#1\end{align}}: its displays went out as
     // prose, and TeX stopped at "Double subscript")
     const env = name === 'begin' && /^\s*\{([^}]+)\}/.exec(s.slice(end, end + 100))
+    // (LaTeX's lrbox: its body set into the register its argument names, as \\sbox sets its content)
+    if (env && env[1]!.trim() === 'lrbox') {
+      const r = registerAt(s, end + env[0].length, to)
+      if (r) {
+        const [bodyEnd, afterEnd] = endOfEnv(s, end + env[0].length, 'lrbox')
+        inRegister(use, r.reg, paramUse(s, r.end, Math.min(bodyEnd, to), textual, freshUse(), storing))
+        i = Math.min(afterEnd, to)
+        continue
+      }
+    }
     if (env && MATH_ENVS.test(env[1]!.trim())) {
       const [bodyEnd, afterEnd] = endOfEnv(s, end + env[0].length, env[1]!.trim())
       paramUse(s, end + env[0].length, Math.min(bodyEnd, to), false, use, storing)
@@ -2139,7 +2252,7 @@ function paperMacros(files: readonly { file: string; text: string }[]) {
         out.delete(name)
         continue
       }
-      const use = paramUse(t, k + 1, e - 1)
+      const use = throughBoxes(paramUse(t, k + 1, e - 1))
       const prose = [...use.text].filter((n) => n <= params && !use.other.has(n) && !(opt && n === 1))
       // one that only stores its prose (\\def\\@copyrightclause{#1}: ceurart's, set on the first page and in the PDF's
       // metadata) has it set elsewhere, perhaps more than once: a front unit, with no mark (2608.12096's \\conference,

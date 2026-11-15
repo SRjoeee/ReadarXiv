@@ -5445,10 +5445,8 @@ toggle, its nine lines the ledger's float lines of a table with no cell (§18.45
   box after it as inline, and text right after the box, with no blank line between, as the same unit, where TeX begins a
   paragraph after the box. No such call in the 88. A paper's own wrapper around a tabular (2610.37668v1's
   `\newcommand{\fittabular}[3][\maxdimen]{…}`, whose body sets its third argument into a box register twice with `\sbox` and
-  shows it once with `\usebox` inside `\resizebox` or `\makebox`) is no line box: the front end reads the paper's definitions
-  (`paperMacros`: each parameter's use by the role table, `paramUse`), but follows no parameter through a box register, so the
-  argument is no text and the call one placeholder. Reading it needs a definition reading of box registers (a parameter set into a
-  register the body then shows is content, set where the register is shown), a lane of its own.
+  shows it once with `\usebox` inside `\resizebox` or `\makebox`) is no line box: its argument is read through the box register
+  (§18.80).
 - **Over the 88** (the front end over every source, with the walk's every line-box call logged): 7 calls met, 6 of them
   2010.11929v2's author block rows (read before, unchanged: 362 units, the same texts and places) and 1 2608.06701v1's table;
   0 `\leftline` or `\rightline`; the other 39 `\centerline`s of the sources are in class and style definitions, a template no
@@ -7203,6 +7201,33 @@ the next entry's text (2402.10294v1 p14, references [1] to [6]: [1] drawn over i
   a made `.bbl`, no start mark), 2608.18887v1's one (IEEEtran, its start mark before "WHO", the year before it). No unit's pieces
   move (the marks are not pieces): their marked compiles do. REVTeX's empty `\bibfield {number} {  }` heads (2610.20716v1's six)
   stay with no start mark (a mark there set the entry 7 pt right): no number.
+
+### 18.80 What a paper's command sets into a box register it shows is that box's content (F18, 2026-11-15)
+
+2610.37668v1 sets every table through its own `\fittabular[<pad>]{<columns>}{<tabular>}` (papermacros.sty): the body sets #3
+into a box register with `\sbox` twice (to measure it at no column separation, then at the separation that fills the line) and
+shows it once, `\usebox` inside `\resizebox` or `\makebox`. The source reader reads a paper's command through its definition
+(`paperMacros`: each parameter's use by the role table, `paramUse`, the reading by which a command's argument is prose, a
+block, or none), and `\sbox` is no command the role table knows: #3 was no text, each call one placeholder, the 19 tables no
+cell and no unit (317 of the ledger's float lines, `nocells`, §18.45), whatever the tables toggle.
+
+- **The rule** (`source/latex-front.ts` `boxSetAt`, `registerAt`, `throughBoxes`). A box register is set by LaTeX's `\sbox{reg}{…}`
+  (`\setbox#1\hbox{…#2…}`) and `\savebox{reg}[width][pos]{…}`, TeX's `\setbox reg=\hbox{…}` (`\vbox`, `\vtop`, with `to` or
+  `spread`), and LaTeX's `lrbox` environment; it is shown by TeX's `\box`, `\copy`, `\unhbox`, `\unhcopy`, `\unvbox`, `\unvcopy` and
+  LaTeX's `\usebox` (`\leavevmode\copy#1`). A parameter the body puts into a register has, where the body shows that register in
+  text or in a box's content, the use its place in the register's content gives it (text there is text, a width a width): TeX
+  sets it there, as that box's content. One the body only measures (`\wd`, `\ht`: a register never shown) sets nothing of it,
+  and its parameters are no text. The call is then read as any command's whose argument is prose (§18.73): an argument that
+  holds a table is a block of its own, the table read as written in place.
+- **What stays.** Every other reading of a definition. A `\setbox` and an `lrbox` were read before as their box's content, shown
+  or not (`\hbox`'s content, an environment's body read on): now as content where the register is shown.
+- **The reach, read by the source reader alone over the 89 papers and 2611.03953v2, the holdout's 36 and the third set's 119:**
+  the one paper command among them that sets a parameter into a register and shows it is `\fittabular`; the rest are a class's
+  or a package's internals (captions, author blocks, running heads) that no paper text calls. 2610.37668v1's 19 tables are read,
+  the only table environments in the three sets held by a paper's command and read by no cell: 382 units to 960, 578 cells
+  gained, 5 units the same but for their pairs' numbers (a pair's id is its place among its file's pairs), none lost; no other
+  paper's units move. `\centerline{tabular}`
+  (2608.06701v1's Table 4) is §18.46's, read since: no table in the three sets is held by a line box and read by no cell.
 
 ## 19. The engine's contract
 
