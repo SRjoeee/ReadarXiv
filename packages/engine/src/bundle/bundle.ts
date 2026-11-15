@@ -498,6 +498,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     ...(refused.length ? { refused: refused.sort((x, y) => x[0] - y[0]) } : {}),
     ...(outline.length ? { outline } : {}),
     ...(input.recovered?.length ? { recovered: input.recovered } : {}),
+    ...(input.ins.made.reduced ? { reduced: true as const } : {}),
   }
   const { bytes, digest } = write('head', head)
   yield { kind: 'head', bytes, digest, head }

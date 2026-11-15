@@ -123,7 +123,7 @@ element of the unit back exactly once), the translator that gave it, and its sen
 
 Two more values cross a seam and are not shapes of the paper. **The instrument** (`packages/engine/src/instrument.ts`) is what
 the front half hands the back half: B's pages read, each glyph's and box's owner, the units, TeX's statements; it is stored as
-four objects (`b.pdf`, `log`, `plan`, `definitions`: `StoredInstrument`, `packages/engine/src/plan.ts`) so that a prepare of
+five objects (`b.pdf`, `log`, `probe.log`, `plan`, `definitions`: `StoredInstrument`, `packages/engine/src/plan.ts`) so that a prepare of
 the same original runs no TeX. **The paper's document** (`PaperDoc`, `packages/format/src/doc.ts`) is what our server tells a
 reader of a paper: the prepare's run and stage, the source's units as soon as they are read, the layer that serves (its
 catalog, the head), and the asked target's run and its rows objects. A reader keeps the newest of two (`fold`); a word that
@@ -148,7 +148,7 @@ translation (`POST /api/v2/open`; the follow never starts work: `packages/reader
 serves, the reader shows A, and the paper's document tells the prepare's stage.
 
 **The prepare** runs on our server and, through the same door, in the lab. The host takes the inputs once (the source's files,
-A, and the four stored objects of an instrument made with the same original) and calls `prepare(take, host)`
+A, and the five stored objects of an instrument made with the same original) and calls `prepare(take, host)`
 (`packages/engine/src/prepare.ts`); the lab's runner, `lab/pdf/prepare-back/run.mjs`, calls it as the box does, from cached
 compiles. What the host owns enters as `host`: the compile, PDF.js and its options, zlib, pdf-lib, the TeX engines and trees
 it serves, where each object goes.

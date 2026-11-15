@@ -258,8 +258,9 @@ export interface Instrument {
   }
   /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
   recovered?: Recovered
-  /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity) */
-  made: { compiler: string; tree: string; front: string }
+  /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity); `reduced` where
+   *  its marked compile left the optional classes of points out (design-performance Q2: front.ts prepareFront, the head's) */
+  made: { compiler: string; tree: string; front: string; reduced?: true }
 }
 
 /** a page's text frame as TeX set it, in PDF units on its page: the text block and its columns (one: the block itself); and

@@ -1978,6 +1978,11 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
 ]
 /** the points' TeX, every class's (LAYOUT_TEX's last part) */
 export const POINTS_TEX = POINTS.map(([, tex]) => tex).join('')
+/** the points' TeX of every class that is not optional (POINT_CLASSES), the shared parts with it: a reduced marked compile's
+ *  (design-performance Q2; live.ts originalFiles `reduced`) */
+export const POINTS_TEX_REDUCED = POINTS.filter(([c]) => c === null || !POINT_CLASSES[c].optional)
+  .map(([, tex]) => tex)
+  .join('')
 
 /**
  * The names (LAYOUT_TEX's, before its points): \axtnma{<key>} before a babel name's own text and \axtnmb{<key>} after it,
@@ -2223,6 +2228,9 @@ export const LAYOUT_TEX = [
   POINTS_TEX,
   '\\makeatother',
 ].join('')
+/** LAYOUT_TEX with the reduced points (POINTS_TEX_REDUCED in POINTS_TEX's one place): a reduced marked compile's, on the one
+ *  line LAYOUT_TEX is, so that no line of the paper moves */
+export const LAYOUT_TEX_REDUCED = LAYOUT_TEX.split(POINTS_TEX).join(POINTS_TEX_REDUCED)
 
 /**
  * The separations the rebuilt prepare's marked compile states (the compile move's B1: the display design's F12, 2d's glues, F40's
@@ -2291,9 +2299,9 @@ export const BREAKS_TEX = [
   String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\axt@gnl{#1}}\fi}\fi`,
   String.raw`\makeatother`,
 ].join('')
-/** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (its option, after
- *  LAYOUT_TEX: the compile move's lane B), each slice's in turn: the separations (GAPS_TEX), each paragraph's measure
- *  (MEASURE_TEX) and the forced breaks' points (BREAKS_TEX) */
+/** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (live.ts originalFiles
+ *  `statements`, which compiledOf sets: after LAYOUT_TEX on its line, and left out of a reduced compile), each slice's in turn:
+ *  the separations (GAPS_TEX), each paragraph's measure (MEASURE_TEX) and the forced breaks' points (BREAKS_TEX) */
 export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX
 
 // ---------------------------------------------------------------- a reference's item and its name

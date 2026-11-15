@@ -22,7 +22,7 @@ import {
   unitsObjects,
 } from '../src/front.ts'
 import { classesOf, instrumentOf } from '../src/instrument/instrument.ts'
-import { markedOfPaper } from '../src/compile/paper.ts'
+import { madeBibliography, markedOfPaper } from '../src/compile/paper.ts'
 import { openPaper } from '../src/compile/live.ts'
 import { type Instrument, ownersOf, ROLE } from '../src/instrument.ts'
 import type { OriginalFacts, StoredInstrument } from '../src/plan.ts'
@@ -277,9 +277,13 @@ describe('a stored instrument is taken only for the original it was made with, a
       expect(retry.given.options[k], k).toStrictEqual(fresh.given.options[k])
     expect(retry.given.options.texts).toStrictEqual(OPTIONS.texts)
   })
-  test("the mark probe's own log reaches the instrument where the probe ran (what the back half reads of it: marks.ts probeFactsOf)", async () => {
+  test("the mark probe's log handed to instrumentOf (`probeLog`, which its readers of the probe's log take): the compile's, and the stored one's when the instrument is made again from the stored objects", async () => {
     const fresh = await run(null)
-    expect(fresh.given.probeLog).toBe('the probe log')
+    expect((fresh.given as { probeLog?: unknown }).probeLog).toBe('the probe log')
+    if (!fresh.r.ok || !fresh.r.made) throw new Error('the fresh run kept no plan')
+    const retry = await run(fresh.r.made)
+    expect([retry.compiles, retry.marked]).toEqual([0, 0])
+    expect((retry.given as { probeLog?: unknown }).probeLog).toBe('the probe log')
   })
   test('.bbl kept as the plan has always stored it (base64, padded), and the paper opened again with it on a retry', async () => {
     const fresh = await run(null)
@@ -399,6 +403,53 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
     expect(vi.mocked(markedOfPaper).mock.calls.length).toBe(calls + 1)
     expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ converge: true, filesBound: bound })
   })
+  test("option (i): the files the bibliography's pass wrote are carried into the marked compile's pass 1", async () => {
+    const wrote = new Map([['main.aux', enc.encode('\\relax \n\\citation{a}\n')]])
+    vi.mocked(madeBibliography).mockImplementationOnce(async (paper) => ({ paper, made: BBL, files: wrote, ms: 1 }))
+    const r = await prepareFront({
+      files: files({ 'main.tex': PAPER }),
+      tree: '2025',
+      original: { pages: 1, day: DAY, banner: '2025' },
+      stored: null,
+      compile: async () => ({ ok: false }),
+      units: async () => {},
+      stage: () => {},
+      note: () => {},
+      engines: ['pdflatex'],
+      pdfjs,
+      documentOptions: {},
+    })
+    expect(r.ok).toBe(true)
+    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ carried: wrote })
+  })
+  test("Q2: a reduced marked compile's instrument says so in its `made`; one not reduced says nothing", async () => {
+    const input = (): FrontInput => ({
+      files: files({ 'main.tex': PAPER }),
+      tree: '2025',
+      original: { pages: 1, day: DAY, banner: '2025' },
+      stored: null,
+      compile: async () => ({ ok: false }),
+      units: async () => {},
+      stage: () => {},
+      note: () => {},
+      engines: ['pdflatex'],
+      pdfjs,
+      documentOptions: {},
+    })
+    const plain = await prepareFront(input())
+    expect(plain.ok && plain.instrument.made?.reduced).toBeFalsy()
+    vi.mocked(markedOfPaper).mockResolvedValueOnce({
+      pdf: new Uint8Array([1]),
+      log: 'the marked log',
+      options: structuredClone(OPTIONS) as never,
+      ms: { probe: 0, compile: 0 },
+      base: { pdf: new Uint8Array([37, 80, 68, 70]), log: '' },
+      probeLog: 'the probe log',
+      guard: { extra: 0, unmarked: [], names: true, failed: [], reduced: true },
+    })
+    const r = await prepareFront(input())
+    expect(r.ok && r.instrument.made.reduced).toBe(true)
+  })
   test("a paper of another tree is answered with it before the front half runs; the source's own refusal and an unreadable A are reasons", async () => {
     const A = await pdfOf(1, null)
     const notes: [string, unknown][] = []
@@ -434,6 +485,7 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
       const made = {
         'b.pdf': new Uint8Array(SIZE),
         log: new Uint8Array(8),
+        'probe.log': new Uint8Array(8),
         plan: new Uint8Array(8),
         definitions: new Uint8Array(8),
       }
@@ -491,7 +543,7 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
     }
     const A = await pdfOf(1, null)
     const fresh = await run(A, null)
-    expect([...fresh.handed.keys()]).toEqual(['b.pdf', 'log', 'plan', 'definitions'])
+    expect([...fresh.handed.keys()]).toEqual(['b.pdf', 'log', 'probe.log', 'plan', 'definitions'])
     const made = Object.fromEntries(fresh.handed) as StoredInstrument
     // (the stored objects taken: no TeX, nothing handed out)
     const reused = await run(A, made)
