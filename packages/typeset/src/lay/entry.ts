@@ -515,6 +515,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       },
       ...(shared.has(m.ord) ? { shared: shared.get(m.ord)! } : {}),
       ...(rowLines.has(m.ord) ? { line: rowLines.get(m.ord)! } : {}),
+      to: rules.target,
     })
     if ('stop' in got) {
       state.set(m.ord, 'kind')

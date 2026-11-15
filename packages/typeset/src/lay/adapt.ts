@@ -10,6 +10,7 @@
 // runner finds is a fact of the setting's. A member the stage does not set says why (`stop`), never silently.
 import type { Placed } from '@readarxiv/format'
 import { classifyFont } from '../breaker/font-names.ts'
+import { wordSegmenter, wordsOf } from '../breaker/words.ts'
 import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
 import type { Row, RowLine, RunRow } from '../shared/row-start.ts'
@@ -81,6 +82,9 @@ export type AdaptInput = {
   shared?: readonly [number, number]
   /** the line of TeX's it shares whole with the members beside it, set centred, flush right or flush left (rowLinesOf) */
   line?: Omit<RowLine, 'left' | 'right'>
+  /** the target's language (Rules.target), whose words a merged cell the lay fills is broken between (breaker/words.ts); absent,
+   *  such a cell is filled as before */
+  to?: string
 }
 type Adapted = { member: FlowMember } | { stop: string }
 
@@ -613,7 +617,24 @@ export function adapt(i: AdaptInput): Adapted {
     heading: decor.heading,
     numbered: decor.numbered,
   })
-  const P = { ...(R as object), ...up.P, measure: i.measure, patterns: i.patterns } as FitParams
+  // (a merged cell the lay fills (docs/PDF-READER.md §18.75, the owner's decision of 2026-11-15): a cell of several lines TeX
+  // ended every one of but its last at a forced break of its text (El.ends of a break, El.brk: its lines its text's rows, none
+  // wrapped by TeX, as a paragraph cell's are), whose reading takes none of its forced breaks (U.breaks statedBreaks: a reply
+  // that sets its break at its start or its end, or drops it, opens no line: breakAt and joinAt empty), so that the breaker
+  // fills its lines itself, in its column's room or in their own. They end only between words of the target's text, by the
+  // platform's own segmentation (breaker/words.ts: Intl.Segmenter of the target, where the platform has one): the same rooms,
+  // the one size, the same search for it, the size falling only where no break between words fits. A reply that keeps a break
+  // between its lines is laid as before, the break where it states it)
+  const ended = new Set((m.els ?? []).flatMap(([, e]) => (e.brk && e.ends ? [e.ends[0]] : [])))
+  const rows = m.kind === 'cell' && lines.length > 1 && lines.slice(0, -1).every((_, j) => ended.has(j))
+  const seg = rows && read && !read.breakAt.size && !read.joinAt.size && i.to !== undefined ? wordSegmenter(i.to) : null
+  const P = {
+    ...(R as object),
+    ...up.P,
+    measure: i.measure,
+    patterns: i.patterns,
+    ...(seg ? { words: true } : {}),
+  } as FitParams
   const numberCropOf: NumberCrop | null =
     decor.numbered && label ? numberCrop(label.chars, label.text, blocks[0]!) : null
   // (the row it starts on, shared with the member before: that member's last line, TeX's separation before its text)
@@ -660,7 +681,7 @@ export function adapt(i: AdaptInput): Adapted {
   const fl = after?.lines[0]
   // (a label carried to its first line's start: its own ink's crop before the unit's own tokens, the line's own glyphs'
   // baselines its own: RUN:2225-2238)
-  let tokens = i.reading.tokens
+  let tokens = seg ? wordsOf(i.reading.tokens, seg) : i.reading.tokens
   if (i.reading.own && decor.carried && label && blocks[0]) {
     const own = lines
       .filter((l) => l[0] === blocks[0]!.page)

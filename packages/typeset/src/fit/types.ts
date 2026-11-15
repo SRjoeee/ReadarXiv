@@ -101,6 +101,9 @@ export type FitParams = {
   measure: FitMeasure
   /** each language's hyphenation patterns (hyphenationOf), the run's */
   patterns?: Readonly<Record<string, Patterns | null>>
+  /** a merged table cell the lay fills (lay/adapt.ts, docs/PDF-READER.md §18.75): its lines end only between words of the
+   *  target's text, the tokens' `midWord` and `wordEnds` (breaker/words.ts); a word no line holds fails the state */
+  words?: boolean
   [more: string]: unknown
 }
 /** a laid item: its token, width, place and what the placing set on it */
