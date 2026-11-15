@@ -7359,9 +7359,19 @@ it; `\par`, `\\`, `\newline` and a keywords environment's `\unskip\par` answered
 them, where a horizontal box alone read `\par` and the keywords' `\unskip\par` inkless in all eight runs and `\\` and
 `\newline` inkless under latex). LuaTeX lists a paragraph's line with a node of its own first
 (`\localpar` and the values below it), read as no ink in an ask's vertical box alone: the probe's boxes read as before.
-Before the loop carried them, the asks rode the bibliography's pass (B4, which only a paper whose bibliography BibTeX makes
-has); the six papers' marking moves measured there: 2608.25210v2 `\vldbauthors`, 2610.21313v1 `\tnote{a}`, `{b}`, `{d}` and
-2610.20848v1 `\sep` inked where used; 2610.19159v1 `\trajectoryMark{}` inkless where used.
+Measured on 56 papers (the six of B4 and 50 of the 89 whose bibliography is shipped), each prepared three times in the
+pinned image with the box's answers (the asks off; made and read but never taken; on): all 168 whole. With the asks made and
+not taken, every paper's settled B, its log, the probe's log, the plan, the definitions and every bundle object are byte for
+byte the asks-off ones, and no paper pays a pass more (2610.37818v1's pass 2 alone is asked other files: hyperref's
+`\phantomsection`, asked, steps `\Hy@linkcounter`, a count no checkpoint holds, and pass 1's `.aux` names its later anchors one
+on; settled at the same pass, the same B). 1,102 asks in 48 papers (8 asked nothing), 1,050 answered. On, 49 papers are byte
+for byte the asks-off ones and 7 differ, each by an answer that moved the marking and by nothing else: inked where used,
+2608.25210v2 `\vldbauthors`, 2610.21313v1 `\tnote{a}`, `{b}`, `{d}`, 2610.20848v1 `\sep` (elsarticle's `\unskip, `),
+2111.09276v1 `\medbreak`, 2610.30769v1 and 2610.35877v1 `\FloatBarrier` (each ends its paragraph where used); inkless where
+used, 2610.19159v1 `\trajectoryMark{}`. Against the bibliography's pass's box (B4): 2610.21084v1's `\sep` (cas-sc's `\par`)
+no longer reads inkless. The run found four defects of the first build, each fixed with its gate case: the marks' own nodes in
+an ask's box (OWN_NODE), a sample reading past its source (`ink-eaten`), a sample spanning lines (not asked), a destination
+beside the line taken for material (SPACE_NODE).
 
 ## 19. The engine's contract
 
