@@ -2943,7 +2943,6 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `order` | script | fit | an ordering of track, borrow, lead, shrink | The order in which the fit turns its knobs when a translation does not fit: tracking, borrowing free space below, the leading, the size. |
 | `leadBase` | script | fit | 0.8 to 2, step 0.05 | The translation's line pitch, × the original's line pitch. |
 | `leadFloor` | script | fit | 0.8 to 2, step 0.05 | The tightest line pitch the fit falls back to, × the original's. |
-| `leadEm` | script | fit | none, or a pitch in em | A class's line pitch in ems of a block's own size (jlreq's 1.7 for Japanese, §18.82): where set, the fit starts from it over the original's pitch, never under it, in place of `leadBase`. |
 | `trackMin` | script | fit | -0.3 to 0, step 0.005 | The tightest letter spacing the fit uses, in em (zero or less). |
 | `compressMax` | script | fit | `0`, `1`, `2` | How far full-width punctuation is compressed: 0 not at all, 1 at a line's start and between two marks, 2 every mark. |
 | `centredPunct` | script | fit | yes or no | Whether punctuation is centred in its em box (Traditional Chinese): no mark is then compressed or hung. |
@@ -7430,8 +7429,9 @@ His words (the export of 2026-11-15T17:10:35Z): 「改用 jlreq」, 「改用 xe
 
 - **Japanese**, one rule at every size: a block's pitch is jlreq's body pitch, 1.7 times its own size (`jlreq.cls:411`,
   `baselineskip={17zw/10}`, TeX Live 2025), so its base is 1.7 × its size over its original pitch (a block with no pitch of its
-  own: over the 1.2 × size the lay takes for it), never under 1: a loose original keeps its own pitch. The rule set's `leadEm`,
-  1.7. jlreq states each smaller and larger size a pitch of its own, as a multiple of that size: footnotesize 1.4375 (`:1319`),
+  own: over the 1.2 × size the lay takes for it), never under 1: a loose original keeps its own pitch. The package's rule data
+  holds it as a script field, `leadEm`, 1.7 (`packages/typeset/src/data/rules/scripts.ts`; today's rule set, §18.5, has no such
+  field). jlreq states each smaller and larger size a pitch of its own, as a multiple of that size: footnotesize 1.4375 (`:1319`),
   small 1.444 (`:1328`), scriptsize 1.143 (`:1342`), tiny 1.2 (`:1343`), large 1.417 (`:1344`), Large 1.5 (`:1345`), LARGE 1.471
   (`:1346`), huge 1.4 (`:1347`), Huge 1.32 (`:1348`): the one rule stands 18 % wider than jlreq at footnotesize and small. The
   rule by size needs the document's body size, which no part states (a fact the compile would state); it is not built.
