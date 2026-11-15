@@ -16,7 +16,9 @@
 // answered; a command that ends the paragraph or the line where it is used (`\par`, `\\`, `\newline`, a keywords
 // environment's `\unskip\par`, as cas-sc's `\sep`) is never inkless; a macro that begins a paragraph between paragraphs
 // (`\leavevmode`) is inkless, the paragraph's point of ours in its indent box read as no ink; a macro that reads past its own
-// source (an argument the front end does not know it takes) has no answer, never one measured on the ask's own tokens. Each sample asked at most once; a row's rule at a row's
+// source (an argument the front end does not know it takes) has no answer, never one measured on the ask's own tokens; hyperref's
+// anchor between paragraphs, a destination in the vertical list, is no separator (inkless where the driver writes a \pdfdest).
+// Each sample asked at most once; a row's rule at a row's
 // start not asked (no \noalign misplaced); a paragraph's own \begingroup and \endgroup never asked; two macros of 35 errors
 // each in one paragraph asked and the pass run through (the count starts again after each ask). Exit 1 on a failure.
 //   pnpm exec tsx lab/pdf/spikes/ask-cases.mjs [--years=2023,2025] [--engines=pdflatex,xelatex,lualatex,latex] [--out=<dir>]
@@ -58,6 +60,7 @@ const MAIN = String.raw`\documentclass{article}
 \newcommand\lead{\leavevmode}
 \expandafter\def\csname takeone\endcsname#1{}
 \newcommand\twol[1]{}
+\newcommand\anchor{\phantomsection}
 \newcommand\noisyA{\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA}
 \newcommand\noisyB{\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB}
 \begin{document}
@@ -81,6 +84,9 @@ Words that \mypar{} end here, a line \mycr{} cut, another \mynl{} too.
 
 \lead{} A paragraph a macro begins, and a word \takeone x taken, and \twol{one
 two} lines.
+
+\anchor{}
+A paragraph after an anchor.
 
 \begin{figure}\caption{A caption \capt}\label{f1}\end{figure}
 \renewcommand\later{Late}Then \later{} again.
@@ -122,6 +128,9 @@ const WANT = {
   '\\takeone': undefined,
   // (a sample whose source spans lines: not asked, so that no line moves)
   '\\twol{one\ntwo}': undefined,
+  // (hyperref's anchor between paragraphs: its destination in the vertical list, which takes no place: under pdfTeX and LuaTeX
+  // a \\pdfdest, inkless; under XeTeX's and dvipdfmx's drivers a \\special, which the reading does not know: answered)
+  '\\anchor{}': { pdflatex: 'inkless', lualatex: 'inkless', xelatex: 'answered', latex: 'answered' },
 }
 
 const files = new Map([
@@ -178,9 +187,11 @@ for (const year of YEARS) {
     if (!/^AXT-END$/m.test(log) || !/^AXT-END$/m.test(baseLog)) faults.push('a pass did not run through')
     const uses = MARKS.useAnswersOf(log, asked.asked)
     const got = Object.fromEntries([...uses.inkless.map((s) => [s, 'inkless']), ...uses.inked.map((s) => [s, 'inked'])])
-    for (const [s, want] of Object.entries(WANT))
+    for (const [s, wanted] of Object.entries(WANT)) {
+      const want = wanted && typeof wanted === 'object' ? wanted[e] : wanted
       if (want === 'answered' ? got[s] === undefined : want === 'kept' ? got[s] !== 'inked' : got[s] !== want)
         faults.push(`${s}: ${got[s] ?? 'no answer'}, not ${want ?? 'no answer'}`)
+    }
     // (a piece that opens or closes the paragraph's own group is never asked: marks.ts askable)
     for (const s of ['\\begingroup', '\\endgroup']) if (asked.asked.includes(s)) faults.push(`${s} asked`)
     // (no line of any file moved by the asks)

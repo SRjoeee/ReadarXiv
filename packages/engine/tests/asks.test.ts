@@ -76,10 +76,12 @@ describe('the asks’ answers, read from the pass’s log', () => {
       ]),
       // (\\vspace there: its glue after the line, which the line's \\vadjust put there)
       listing(3, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\glue 10.0']),
-      // (a mark that leaves the line: material beside it)
-      listing(4, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\mark{x}']),
+      // (a box a \\vadjust of the line put after it: material beside it; a mark that left the line is none)
+      listing(4, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\mark{x}', '.\\hbox(5.0+0.0)x10.0']),
       // (between paragraphs, \\par: nothing at all)
       listing(5, '\\vbox(0.0+0.0)x0.0', []),
+      // (between paragraphs, hyperref's \\phantomsection: its destination and a penalty, no line, no material)
+      listing(7, '\\vbox(0.0+0.0)x0.0', ['.\\pdfdest name{section*.27} xyz', '.\\penalty 10000']),
       // (LuaTeX's line: its paragraph's node first, as TeX Live 2023's and 2025's LuaLaTeX list it)
       listing(6, '\\vbox(0.0+0.0)x345.0, direction TLT', [
         '.\\hbox(0.0+0.0)x345.0, glue set 345.0fil, direction TLT',
@@ -93,9 +95,9 @@ describe('the asks’ answers, read from the pass’s log', () => {
         ...ENDS,
       ]),
     ].join('\n')
-    const asked = ['\\nada{}', '\\mypar{}', '\\mycr{}', '\\vsp{}', '\\mk{}', '\\mypar', '\\lua{}']
+    const asked = ['\\nada{}', '\\mypar{}', '\\mycr{}', '\\vsp{}', '\\mk{}', '\\mypar', '\\lua{}', '\\phantomsection']
     expect(useAnswersOf(log, asked)).toEqual({
-      inkless: ['\\nada{}', '\\vsp{}', '\\mypar', '\\lua{}'],
+      inkless: ['\\nada{}', '\\vsp{}', '\\mypar', '\\phantomsection', '\\lua{}'],
       inked: ['\\mypar{}', '\\mycr{}', '\\mk{}'],
     })
     // (in a horizontal box, the probe's, LuaTeX's paragraph node read as before: not known)

@@ -736,8 +736,11 @@ function eatenOf(log: string | null | undefined): Set<number> {
   }
   return out
 }
-/** a node of a vertical list that is neither a line nor material of its own: glue, a kern, a penalty */
-const SPACE_NODE = /^\.\\(?:glue|kern|penalty)/
+/** a node of a vertical list that is neither a line nor material of its own: glue, a kern, a penalty, and a node that sets
+ *  nothing and takes no place (a mark, a write, a destination, a colour or matrix of the driver's): hyperref's
+ *  `\\phantomsection` between paragraphs leaves its destination there (2610.37818v1), no separator */
+const SPACE_NODE =
+  /^\.\\(?:glue|kern|penalty|mark|write|openout|closeout|pdfdest|pdfcolorstack|pdfsave|pdfrestore|pdfsetmatrix)/
 /** LuaTeX's node at a paragraph's start and the values it lists below it (none of them a box: `\\localleftbox=null`), in a
  *  paragraph's line: read in an ask's vertical box alone (the probe's boxes are horizontal, and their reading as it was) */
 const LOCAL_PAR_NODE = /^\.+\\(?:localpar|local(?:interline|broken)penalty=-?\d+|local(?:left|right)box=null)$/
@@ -753,7 +756,8 @@ const OWN_NODE =
  * that set nothing — no character, no rule both wide and high (TeX ships no rule of no width or height: a strut), no
  * literal, special, insertion or node it lists otherwise — with no error between its rows but the listing's own `! OK.`.
  * An ask's sample set where the document uses it in a paragraph, or between paragraphs, is listed in a vertical box (ASK_TEX):
- * there it set no ink only where that box holds at most one line, and beside it nothing but glue, kerns and penalties. A sample
+ * there it set no ink only where that box holds at most one line, and beside it nothing but space and nodes that take no place
+ * (SPACE_NODE: a destination, a write, a mark). A sample
  * that ends the paragraph or the line where it is used (`\\par`, `\\\\`, `\\newline`, cas-sc's `\\sep`, which its keywords
  * environment makes `\\par`) leaves two lines there, or a line and a box: it parts what stands before it from what stands
  * after, and is never inkless. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
@@ -814,7 +818,7 @@ export function readInkProbe(
       continue
     }
     // (in a vertical box, what stands in it: one line, and beside it no material but space)
-    if (vertical && /^\.(?!\.)/.test(line) && !SPACE_NODE.test(line))
+    if (vertical && /^\.(?!\.)/.test(line) && !SPACE_NODE.test(line) && !(ask && OWN_NODE.test(line)))
       if (!/^\.\\hbox\(/.test(line) || ++lines > 1) parted = true
     if (NO_INK_NODE.test(line) || (vertical && LOCAL_PAR_NODE.test(line)) || (ask && OWN_NODE.test(line))) {
       nodes.push(line)

@@ -7333,7 +7333,9 @@ today's request.
   it stands; in a horizontal box (a table's cell), in a horizontal box; in a formula, in math in a horizontal box. A command that ends the paragraph or
   the line where it is used (`\par`, `\\`, `\newline`, a class's `\sep` defined `\unskip\par`, as cas-sc's keywords
   environment defines it: `cas-common.sty` 1612 to 1617) leaves two lines there, or a line and a box: it parts what stands
-  before it from what stands after, and readInkProbe never reads it inkless (an element, as `\authorcr` is). Set in a
+  before it from what stands after, and readInkProbe never reads it inkless (an element, as `\authorcr` is). A node that takes
+  no place beside the line (a destination, a write, a mark: hyperref's `\phantomsection` between paragraphs, 2610.37818v1)
+  parts nothing. Set in a
   horizontal box alone, the same `\par` sets nothing (TeX ignores it in restricted horizontal mode). Pass 1 is the marked
   files, so an ask's box can hold the marks' own nodes (a paragraph's point in its indent box, a forced break's, a unit's
   destination): read as no ink there alone (`marks.ts` OWN_NODE), never in the probe's reading, whose document holds no mark.
