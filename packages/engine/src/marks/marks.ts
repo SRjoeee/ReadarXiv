@@ -1991,6 +1991,45 @@ export const LAYOUT_TEX = [
   '\\makeatother',
 ].join('')
 
+/**
+ * The separations the rebuilt prepare's marked compile states (the compile move's B1: the display design's F12, 2d's glues, F40's
+ * form 1): messages to the log alone, by macros that set nothing, so that every glyph, box and point stays where it was (the TeX
+ * gate's cases, lab/pdf/spikes/gap-cases.mjs). After LAYOUT_TEX, whose heading mark and float bracket it reads, and only where
+ * its option asks (STATEMENTS_TEX): today's reader's marked TeX stays the bytes it was. Read by marks/channels.ts readHeads and
+ * readGlues; \parskip's shrink needs no TeX (LINES_TEX prints \parskip whole: readSkips).
+ * - **A heading's skips** (`AXT-SECT h<i>s b <before>`, `a <after>`, `l <\baselineskip>`, `p <\parskip>`, each as TeX prints
+ *   it). Once the document begins, LaTeX's \@startsection hands each heading's style, its sixth argument, which TeX executes right
+ *   before the title in every path the kernel's \@sect, \@ssect and a run-in title's \@svsechd take, a macro first: it assigns
+ *   the before-skip (#4) and the after-skip (#5) to skip registers as \@startsection and \@sect assign them, in the font around
+ *   the heading (the style's own switches follow it), with \baselineskip and \parskip there, in the group TeX sets the title in;
+ *   the heading's first mark TeX sets (\axt@hm, in horizontal mode, its start `h<i>s`) writes them and spends them. The sign is
+ *   the class's: a negative before-skip TeX adds negated (and indents no first paragraph), a negative after-skip sets the title in
+ *   the line, its negation the horizontal skip after it. A class that makes its headings with no \@startsection (KOMA-Script's
+ *   \scr@startsection, titlesec's own, a chapter's \@makechapterhead) states none; a heading of \@startsection's with no mark
+ *   (a class's own \section*{\refname}) spends nothing, its group gone with its title.
+ * - **The paper's separations** (`AXT-GLUE <at> <name> <glue>`): LaTeX's float separations (\textfloatsep, \floatsep,
+ *   \intextsep and the two-column \dbltextfloatsep, \dblfloatsep; a float page's \@fpsep, \@dblfpsep), its caption's skips
+ *   (\abovecaptionskip, \belowcaptionskip, where the class defines them), the footnotes' (\skip\footins, \footnotesep), once
+ *   the document begins (`at` 0) and again at each float (`at` the float's serial, its `fs<n>`) for each that changed since it
+ *   was last written: a caption's skips as the float's box holds them at its end, inside it (\@endfloatbox's first act closes the
+ *   box's group, and a caption skip a float sets is set in that group: the serial its bracket is about to be given), the
+ *   separations once the box is closed (after the bracket's wrap: one a float sets inside its box no output routine sees)
+ */
+export const GAPS_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\protected\def\axt@sgset#1#2{\begingroup\skip@#1\relax\@tempskipb#2\relax\xdef\axt@sgt{{\the\skip@}{\the\@tempskipb}{\the\baselineskip}{\the\parskip}}\endgroup\let\axt@sg\axt@sgt}`,
+  String.raw`\def\axt@sgw#1#2#3#4#5{\message{^^JAXT-SECT #5 b #1^^JAXT-SECT #5 a #2^^JAXT-SECT #5 l #3^^JAXT-SECT #5 p #4^^J}}`,
+  String.raw`\def\axt@sgtell#1{\ifdefined\axt@sg\expandafter\axt@sgw\axt@sg{#1}\global\let\axt@sg\@undefined\fi}`,
+  String.raw`\def\axt@glv#1#2#3{\edef\axt@glx{\the#3}\expandafter\ifx\csname axt@gl@#2\endcsname\axt@glx\else\expandafter\global\expandafter\let\csname axt@gl@#2\endcsname\axt@glx\message{^^JAXT-GLUE #1 #2 \axt@glx^^J}\fi}`,
+  String.raw`\def\axt@glflt#1{\axt@glv{#1}{textfloatsep}\textfloatsep\axt@glv{#1}{floatsep}\floatsep\axt@glv{#1}{intextsep}\intextsep\axt@glv{#1}{dbltextfloatsep}\dbltextfloatsep\axt@glv{#1}{dblfloatsep}\dblfloatsep\axt@glv{#1}{fpsep}\@fpsep\axt@glv{#1}{dblfpsep}\@dblfpsep\axt@glv{#1}{footins}{\skip\footins}\axt@glv{#1}{footnotesep}\footnotesep}`,
+  String.raw`\def\axt@glcap#1{\ifdefined\abovecaptionskip\axt@glv{#1}{abovecaptionskip}\abovecaptionskip\fi\ifdefined\belowcaptionskip\axt@glv{#1}{belowcaptionskip}\belowcaptionskip\fi}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@startsection\let\axt@sst\@startsection\def\@startsection#1#2#3#4#5#6{\axt@sst{#1}{#2}{#3}{#4}{#5}{\axt@sgset{#4}{#5}#6}}\fi\let\axt@sghm\axt@hm\protected\def\axt@hm#1{\ifaxt@off\else\ifhmode\axt@sgtell{#1}\fi\fi\axt@sghm{#1}}\axt@glflt{0}\axt@glcap{0}\ifdefined\@endfloatbox\let\axt@glfb\@endfloatbox\def\@endfloatbox{\axt@glcap{\the\numexpr\axt@bn+1\relax}\axt@glfb\ifvoid\@currbox\else\axt@glflt{\axt@bn}\fi}\fi}\fi`,
+  String.raw`\makeatother`,
+].join('')
+/** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (its option, after
+ *  LAYOUT_TEX: the compile move's lane B), each slice's in turn: the separations (GAPS_TEX) */
+export const STATEMENTS_TEX = GAPS_TEX
+
 // ---------------------------------------------------------------- a reference's item and its name
 /** a reference to a page, not to an item (\pageref): no item's name for it */
 const PAGE_REF = /^\\pageref(?![A-Za-z@])/

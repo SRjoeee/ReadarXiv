@@ -20,6 +20,8 @@ import {
   readAlign,
   readBoxAlign,
   readCellBoxes,
+  readGlues,
+  readHeads,
   readRefNames,
   readSkips,
 } from '../marks/channels.ts'
@@ -2276,11 +2278,17 @@ export async function instrumentOf({
   // (each page's text frame as TeX shipped it: the bodies' statements in the log, LAYOUT_TEX's AXT-BODY, at their points)
   const frames = framesOf(pages, lastTexLog(log))
   // (each unit's \baselineskip and \parskip where its paragraph ends, LINES_TEX's AXT-LINES: TeX's paragraph separation there)
-  const skips = [...readSkips(lastTexLog(log))].map(([unit, [baselineskip, parskip]]) => ({
+  // (and \parskip's shrink where it is of points: TeX's least separation there)
+  const skips = [...readSkips(lastTexLog(log))].map(([unit, [baselineskip, parskip, parskipShrink]]) => ({
     unit,
     baselineskip,
     parskip,
+    ...(parskipShrink !== undefined ? { parskipShrink } : {}),
   }))
+  // (each heading's \@startsection skips and the paper's float, caption and footnote separations, where the marked compile states
+  // them: STATEMENTS_TEX's AXT-SECT and AXT-GLUE)
+  const heads = [...readHeads(lastTexLog(log))].map(([unit, h]) => ({ unit, ...h }))
+  const glues = readGlues(lastTexLog(log))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
@@ -2307,6 +2315,8 @@ export async function instrumentOf({
         paragraphEnds,
         ...(frames.some(Boolean) ? { frames } : {}),
         ...(skips.length ? { skips } : {}),
+        ...(heads.length ? { heads } : {}),
+        ...(glues.length ? { glues } : {}),
       },
       made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' },
     },

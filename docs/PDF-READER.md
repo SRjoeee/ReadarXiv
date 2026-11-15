@@ -7155,6 +7155,60 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   "a new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread") keeps FORMAT 1, a typesetter
   of before laying the lines in their own rooms as it did.
 
+### 18.76 The separations by class, as TeX holds them (the compile move's B1, 2026-11-15)
+
+The display design's F12 (a heading drawn a step smaller where today's keeps its size on two lines: no heading stated a
+separation, so none could borrow), its 2d's rule 2 facts (each gap's glue by class, natural and shrink: what F28's lay will read
+once the owner has seen it) and F40's form 1 (the skip TeX sets after a run-in title) are one mechanism: the marked compile states
+the glue TeX sets at each kind of gap, and the part names, under each member, the class of the gap TeX set there.
+
+- **What the compile states** (`packages/engine/src/marks/marks.ts` GAPS_TEX, read by `marks/channels.ts`). Messages to the log
+  alone, by macros that set nothing; after LAYOUT_TEX, and only where the rebuilt prepare's option asks (STATEMENTS_TEX):
+  today's reader's marked TeX is the bytes it was.
+  - Each heading's `\@startsection` skips (`AXT-SECT h<i>s b|a|l|p <glue>`, readHeads): once the document begins, `\@startsection`
+    hands each heading's style (its sixth argument, which TeX executes right before the title in every path: `\@sect`, `\@ssect`,
+    a run-in title's `\@svsechd`) a macro first, which assigns the before-skip and the after-skip to skip registers as
+    `\@startsection` and `\@sect` do, in the font around the heading, with `\baselineskip` and `\parskip`; the heading's first
+    mark writes them. A class that makes its headings without `\@startsection` states none: KOMA-Script (`\scr@startsection`),
+    titlesec (it reads the class's `\@startsection` arguments and sets its own), a chapter (`\@makechapterhead`). REVTeX 4.2,
+    acmart, IEEEtran, amsart and llncs define their own `\@startsection` or `\@sect` of the kernel's shape and are stated.
+  - The paper's separations (`AXT-GLUE <at> <name> <glue>`, readGlues): `\textfloatsep`, `\floatsep`, `\intextsep`,
+    `\dbltextfloatsep`, `\dblfloatsep`, a float page's `\@fpsep` and `\@dblfpsep`, `\abovecaptionskip` and `\belowcaptionskip`
+    where the class defines them, `\skip\footins` and `\footnotesep`: once the document begins, and again at each float where
+    one changed (its serial, B's `fs<n>`): a caption's skips inside the float's box, where a float sets them (the box's group
+    closes first thing in `\@endfloatbox`), the separations once the box is closed (one a float sets inside its box no output
+    routine reads).
+  - `\parskip`'s shrink: LINES_TEX already printed `\parskip` whole; readSkips reads its shrink.
+- **What the part states** (`locate/gaps.ts`, phase 10; `Room.gap`, an optional field: FORMAT stays 1). Under each member's last
+  line, the class of the gap TeX set there and that glue's natural size and shrink, by what stands under it (the next member's
+  line, the float each is of by B's brackets): a heading's `afterskip` (`runin` after a title set in the line, the after-skip
+  negated: F40's form 1); over a heading its `beforeskip` as TeX adds it; a float's last member its float's separation by TeX's
+  own case read from the page (2c's F-last and F-sep: `textfloatsep` under a top float, `intextsep` round a float set here,
+  `floatsep` over another float, the two-column pair across both columns, `fpsep` on a page of floats alone), and body text over
+  a float's first member the same; in a float `abovecaptionskip` over its caption and `belowcaptionskip` under it;
+  `footins` over the footnotes and `footnotesep` between two; `parskip` over a paragraph (the next one's). None where nothing of
+  the paper's own text follows, where ink no unit owns stands between (but the footnote rule and a float's own ink over its
+  caption), or where the glue is not stated. `sep` keeps its meaning; a heading set on lines of its own gains one: its
+  after-skip and the `\baselineskip` and `\parskip` around it, natural, TeX's normal separation from its last baseline to the
+  next paragraph's first. The borrow reads `sep` as before (§18.11): that is this change's only drawing change. Nothing reads
+  `Room.gap` to lay a page yet.
+- **Held** (`lab/pdf/spikes/gap-cases.mjs`, 2026-11-15): one document of every kind of heading, floats that set a separation
+  and a caption skip, a footnote, under eleven classes, both pinned years, pdfLaTeX, XeLaTeX, LuaLaTeX and latex with dvipdfmx:
+  88 of 88 compiles with the statements are the PDF without them byte for byte (acmart under XeLaTeX but for its XMP packet's
+  clock time, every glyph, box and point the same), and every statement is TeX's own reading in the document. The reach,
+  counted on the lab's stored marked logs of 245 papers (not yet TeX's own count, which the compile move's corpus compile
+  makes): of 8,811 headings set with their marks (each paper's title among them), about 6,700 are made through
+  `\@startsection` (198 papers, 11 classes, and 3 papers of classes built on article's), 1,117 through titlesec (23 papers) and
+  KOMA-Script (2), 18 by mnras and 756 by classes the papers ship (18 papers), which TeX will tell. Of the 124 papers of the 88
+  and the holdout, 3 set a float or footnote separation in the body and 3 a caption skip or `\footnotesep` inside a float.
+- **What it does not give** (2608.16117v1 p4 ord 12, the case F12 names, elsarticle): TeX's separation under the heading, its
+  after-skip 9 pt and the body's 14.5 pt `\baselineskip`, leaves the heading 0.02 of room over its next paragraph, and 2.96 at
+  the glue's least; a second line at its pitch (14.35) does not fit, so the heading still steps its size there. Today's reader
+  sets that second line 9.08 over the next paragraph's baseline, nearer than TeX: whether that look is wanted is not this
+  change's to decide.
+- **Not built** (the owner's review of 2d, 2026-11-13): `spread` in the paragraph-end hook, `Style.box`, the equal-clear-space
+  floor.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

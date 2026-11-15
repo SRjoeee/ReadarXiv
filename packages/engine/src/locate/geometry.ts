@@ -32,6 +32,7 @@ import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import type { Owned } from './ownership.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from '../own/stream.ts'
+import { gapsOf } from './gaps.ts'
 import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
@@ -744,9 +745,13 @@ export function rooms(w: Work): void {
   const ink = inkIndex(inkA)
   // (TeX's paragraph separation where each unit's paragraph ends: its \baselineskip and \parskip, LINES_TEX's AXT-LINES)
   const texSep = new Map((ins.tex.skips ?? []).map((k) => [k.unit, r2(k.baselineskip + k.parskip)]))
+  // (the separation TeX set under each member by its class, and a heading's paragraph separation: gaps.ts, from the marked
+  // compile's statements, STATEMENTS_TEX's)
+  const gaps = gapsOf(w, ink.under)
   for (const mem of members)
-    if (mem.lines.length)
-      mem.room = roomOf(mem, inkA, m.offA, ink, {
+    if (mem.lines.length) {
+      const g = gaps.get(mem)
+      const room = roomOf(mem, inkA, m.offA, ink, {
         frames: framesA,
         // (a table's cell keeps its own room, a figure text, an ink figure and a name theirs: no run's room is theirs to borrow)
         runs: !(
@@ -755,8 +760,10 @@ export function rooms(w: Work): void {
           mem.kind === 'name' ||
           (mem.unit >= 0 && units[mem.unit]?.cell)
         ),
-        sep: mem.unit >= 0 && mem.name === undefined ? texSep.get(mem.unit) : undefined,
+        sep: mem.unit >= 0 && mem.name === undefined ? (texSep.get(mem.unit) ?? g?.sep) : undefined,
       })
+      mem.room = g?.gap ? { ...room, gap: g.gap } : room
+    }
 }
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
