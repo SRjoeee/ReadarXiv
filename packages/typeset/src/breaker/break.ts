@@ -826,7 +826,8 @@ function breakLines(
         continue
       }
       // the unit's end mark (Token.endMark, lay/adapt.ts; docs/PDF-READER.md §18.52): at the end of the line the text ends on, its
-      // rectangle as far from the line's right edge as TeX set it (`pad`), where the text ends the keep-off distance before its ink
+      // rectangle as far from the line's right edge as TeX set it (`pad`, at the original's size: at the fit's scale, as its crop is
+      // drawn, §18.80), where the text ends the keep-off distance before its ink
       // (TeX's own distance and half an em at most, B.slots' rule for ink that stays: `gap`), the line's spaces shrunk as `fits`
       // takes them and a closing mark at its end hung; else on a line of its own (amsthm's \penalty9999 before it: a break only
       // where it does not fit). placeItems sets it there. A line it cannot open (no slot left) leaves the state unset, the fit's
@@ -834,7 +835,8 @@ function breakLines(
         const t = tokens[i]!
         trim(line)
         const w = tokW(t, f, st, scale)
-        const room = line.x1 - line.x0 - (t.endMark as EndMark).pad - w - Math.min(half, (t.endMark as EndMark).gap)
+        const room =
+          line.x1 - line.x0 - (t.endMark as EndMark).pad * scale - w - Math.min(half, (t.endMark as EndMark).gap)
         const hang = hangOf(line.items.at(-1), st.compress) * f
         if (!line.items.length || line.x - line.spaces * (1 - P.spaceMin) - hang <= room + 0.01) {
           line.items.push({ t, w, shift: 0, asp: 0 })

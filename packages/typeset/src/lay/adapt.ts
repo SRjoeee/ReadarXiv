@@ -755,7 +755,9 @@ export function adapt(i: AdaptInput): Adapted {
       const k = b.rects.findIndex((r) => lineOfRect(r as Rect) === j)
       const right = measureOf(b, l[4], k)[1]
       const box = cropOfBox({ x0, x1, bottom: y0, top: y1, baseline: l[4] })
-      // (TeX's own distance from the line's text to it, where its line's extent leaves it out; else none stated: the bound)
+      // (TeX's own distance from the line's text to it, where its line's extent leaves it out; else none stated: the bound. `pad`
+      // from the line's right edge to its rectangle's, at the original's size: the breaker and the placement set it at the fit's
+      // scale, as the crop is drawn, so that its ink stands where TeX set it, scaled: §18.80)
       const endMark = { pad: right - box.crop[2], gap: x0 > l[3] ? x0 - l[3] : Number.POSITIVE_INFINITY }
       const piece = Number(endEl[0])
       if (Number.isInteger(piece)) {

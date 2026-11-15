@@ -7373,6 +7373,18 @@ rows alone). The display gate, both modes and the added pairs: no page newly wor
 (`packages/typeset/tests/unit/crop-extent.test.ts`) lays a mark 11 pt over a 10 pt line within 1 pt of the line above: the pair is opened to
 TeX's 14 pt, a trail's and an end mark's alike, and a mark inside its line's room opens nothing.
 
+### 18.80 An end mark drawn smaller stands where TeX set it, scaled (2026-11-16)
+
+A unit's end mark (§18.52) is a crop, drawn at the fit's scale: its width the crop's times the scale. Its distance from its line's
+right edge (`pad`, `packages/typeset/src/lay/adapt.ts`: from the line's right edge to the crop rectangle's, which stands 0.4 pt of
+antialiasing margin past the ink) was set unscaled, by the breaker's room for it (`breaker/break.ts`) and by the placement
+(`breaker/place.ts` placeItems), so a unit laid smaller drew the mark's ink that margin times one less the scale past where TeX set
+it. 2610.30034v1-zh p10 unit 204, laid a step smaller since §18.79 (0.975): its QED box 0.01 pt past its measure's end, the reader
+gate's I5 "past the slot with spaces to shrink". The pad is now taken at the fit's scale, as the crop it measures to is drawn: the
+ink stands TeX's distance from the line's end, scaled (TeX's box flush right: on the end). Test: `packages/typeset/tests/unit/
+end-mark.test.ts` ("stands where TeX set it at the size the fit draws it"). The two other lines I5 lists, 2610.20285v1-zh unit 258
+(0.30 pt) and 2610.21106v1-zh unit 42 or 2610.21085v1-zh unit 64 (0.04 and 0.01 pt), are of other causes, not traced here.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
