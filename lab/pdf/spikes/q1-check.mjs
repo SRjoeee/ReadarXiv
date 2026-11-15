@@ -25,8 +25,9 @@
 // lacks into a full TeX Live of the same year, NATIVE_TEXMFVAR its font maps (cm-check's header); not the Docker image's
 // package versions: what is compared is two orders of work in one TeX.
 //   NATIVE_TEXMFLOCAL=<tree> [NATIVE_TEXMFVAR=<var>] node --max-old-space-size=6144 --import tsx lab/pdf/spikes/q1-check.mjs \
-//     --list=<tsv of id and folder> --out=<folder> [--only=<id>,…] [--from=<id>] [--variants=qp1,bib,unmarked|none]
-// Writes <out>/<id>.json (the row), <out>/<id>.<side>.pdf where B differs, and prints one line a paper and a tally. Exit 1
+//     --list=<tsv of id and folder> --out=<folder> [--only=<id>,…] [--from=<id>] [--variants=qp1,bib,unmarked|none] [--keep]
+// Writes <out>/<id>.json (the row), <out>/<id>.<side>.pdf where B differs (with --keep, also each side's instrument as
+// <out>/<id>.<side>.instrument.json and B where an instrument or a bundle differs), and prints one line a paper and a tally. Exit 1
 // where a paper's B or any reading differs between today and Q1, or either side refused alone. No network, no Docker. Stops
 // below 12 GiB free on the Mac or 8 GiB on the output's volume.
 import { createHash } from 'node:crypto'
@@ -54,6 +55,14 @@ const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.leng
 const OUT = resolve(argOf('out') ?? join(ROOT, 'lab/pdf/out/q1-check'))
 const LIST = argOf('list'), ONLY = argOf('only')?.split(',') ?? null, FROM = argOf('from')
 const VARIANTS = (argOf('variants') ?? 'qp1,bib,unmarked').split(',').filter(v => v && v !== 'none')
+const KEEP = process.argv.includes('--keep')
+/** with --keep, a side's B and instrument written for a look at where two sides part */
+const keepSide = (id, name, s, i) => {
+  if (!KEEP) return
+  mkdirSync(OUT, { recursive: true })
+  if (s.base) writeFileSync(join(OUT, `${id}.${name}.pdf`), s.base.pdf)
+  if (i?.text) writeFileSync(join(OUT, `${id}.${name}.instrument.json`), i.text)
+}
 const MAC_MIN = 12 * 2 ** 30, OUT_MIN = 8 * 2 ** 30
 const TIMEOUT_MS = 600_000
 const NM = join(ROOT, 'node_modules/pdfjs-dist/')
@@ -64,9 +73,9 @@ globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () =
 const PINS = JSON.parse(readFileSync(join(ROOT, 'lab/pdf/compile-images.json'), 'utf8'))
 const SERVED = Object.keys(PINS.images)
 const HOST_ENGINES = ['pdflatex', 'xelatex', 'lualatex', 'latex']
-/** the box's bound on the files one compile gives back (the web's COMPILE_ANSWER: 256 files, 8 MiB), and on what one ask may
- *  carry (ASK_OVERRIDES: 5,000 files and 24 MiB of the paper's own, and one answer's more) */
-const FILES_BOUND = { count: 256, bytes: 8 * 2 ** 20 }, ASK_BOUND = { count: 5_256, bytes: 32 * 2 ** 20 }
+/** the box's bound on the files one compile gives back (the web's COMPILE_ANSWER: 256 files, 8 MiB); what one ask may carry
+ *  (ASK_OVERRIDES: 5,000 files and 24 MiB of the paper's own, and one answer's more) is held against each compile's `asked` */
+const FILES_BOUND = { count: 256, bytes: 8 * 2 ** 20 }
 const sha = b => createHash('sha256').update(b).digest('hex')
 
 // ---------------------------------------------------------------- the native TeX (cm-check.mjs's host)
@@ -384,6 +393,8 @@ for (const { id, dir } of papers) {
         }
         mkdirSync(OUT, { recursive: true })
         if (!eq.b) { writeFileSync(join(OUT, `${id}.today.pdf`), T.base.pdf); writeFileSync(join(OUT, `${id}.q1.pdf`), Q.base.pdf) }
+        keepSide(id, 'today', T, iT)
+        keepSide(id, 'q1', Q, iQ)
       }
       // ---- the variants, each against Q1's side
       row.variants = {}
@@ -405,6 +416,11 @@ for (const { id, dir } of papers) {
             if (!r.bundle && Array.isArray(iV.bundle) && Array.isArray(iQ.bundle)) r.bundleDiff = { onlyQ1: iQ.bundle.filter(x => !iV.bundle.includes(x)).length, onlyQp1: iV.bundle.filter(x => !iQ.bundle.includes(x)).length, kinds: [...new Set(iV.bundle.filter(x => !iQ.bundle.includes(x)).map(x => x.split(':')[0]))] }
             r.links = await linksOf(V.base.pdf)
             r.linksQ1 = await linksOf(Q.base.pdf)
+            if (!r.instrument || !r.bundle) {
+              r.instrumentDiff = r.instrument ? null : whereDiffers(iQ.text, iV.text)
+              keepSide(id, 'q1', Q, iQ)
+              keepSide(id, 'qp1', V, iV)
+            }
           } else if (!r.b) r.file = firstFileDiffering(Q.maker?.request, V.maker?.request)
         }
         row.variants[v] = r
