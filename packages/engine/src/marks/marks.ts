@@ -1745,6 +1745,11 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
 ]
 /** the points' TeX, every class's (LAYOUT_TEX's last part) */
 export const POINTS_TEX = POINTS.map(([, tex]) => tex).join('')
+/** the points' TeX of every class that is not optional (POINT_CLASSES), the shared parts with it: a reduced marked compile's
+ *  (design-performance Q2; live.ts originalFiles `reduced`) */
+export const POINTS_TEX_REDUCED = POINTS.filter(([c]) => c === null || !POINT_CLASSES[c].optional)
+  .map(([, tex]) => tex)
+  .join('')
 
 /**
  * The names (LAYOUT_TEX's, before its points): \axtnma{<key>} before a babel name's own text and \axtnmb{<key>} after it,
@@ -1990,6 +1995,12 @@ export const LAYOUT_TEX = [
   POINTS_TEX,
   '\\makeatother',
 ].join('')
+/** LAYOUT_TEX with the reduced points (POINTS_TEX_REDUCED in POINTS_TEX's one place): a reduced marked compile's, on the one
+ *  line LAYOUT_TEX is, so that no line of the paper moves */
+export const LAYOUT_TEX_REDUCED = LAYOUT_TEX.split(POINTS_TEX).join(POINTS_TEX_REDUCED)
+/** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (live.ts originalFiles
+ *  `statements`, after LAYOUT_TEX): lane cm-b's constant, which replaces this empty placeholder where the two lanes meet */
+export const STATEMENTS_TEX = ''
 
 // ---------------------------------------------------------------- a reference's item and its name
 /** a reference to a page, not to an item (\pageref): no item's name for it */

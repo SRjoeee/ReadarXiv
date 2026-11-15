@@ -7,7 +7,8 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { DRIVER_OUTPUT_MARK } from '../src/compile/base.ts'
 import { type Compiled, type CompileRequest, DRAFT_OPTION, NO_DRIVER_GROUP, openPaper } from '../src/compile/live.ts'
-import { type Marked, type MarkedCompileOptions, markedOfPaper } from '../src/compile/paper.ts'
+import { madeBibliography, type Marked, type MarkedCompileOptions, markedOfPaper } from '../src/compile/paper.ts'
+import { POINTS_TEX, POINTS_TEX_REDUCED } from '../src/marks/marks.ts'
 import { lastTexLog } from '../src/source/latex-front.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -588,3 +589,175 @@ const GOLDEN_AT_BASE: Record<string, unknown> = {
     },
   },
 }
+
+// ---------------------------------------------------------------- Q2: `reduce`, a marked request that dies asked once more
+/** pdfTeX dying in a pass (2610.30769v1's shipout): TeX ran, no error of TeX's, no host limit, the log cut short of AXT-END */
+const DIED = `${TEX}LAYOUT-PROBE pages so far\n[1] [2`
+const died = (files_: Record<string, string> | null = { 'main.aux': AUX }): Compiled => ({
+  ok: false,
+  pdf: null,
+  log: DIED,
+  ...(files_ ? { files: files(files_) } : {}),
+})
+/** whether a request's main file carries the paragraph ends' TeX (the optional class) */
+const paraEnds = (q: CompileRequest | undefined) => dec(q?.overrides.get('main.tex')).includes('para/end')
+/** a request's files, its main file's paragraph ends left out: what its reduced request must be */
+const reducedOf = (q: CompileRequest) =>
+  sorted(q).map(([p, t]) => [p, p === 'main.tex' ? t!.split(POINTS_TEX).join(POINTS_TEX_REDUCED) : t])
+
+describe('Q2 (reduce): a marked request that died is asked once more without the optional classes, and every one after it', () => {
+  it("off (today's reader): a death is not asked again", async () => {
+    const { asked, made } = await q1(paperOf(), [died(), todayOf(), finalOf()])
+    expect(asked).toHaveLength(4)
+    expect(asked.every((q, i) => i === 0 || paraEnds(q))).toBe(true)
+    expect(pdfOf(made).cm).toMatchObject({ fallback: 'draft-failed' })
+    expect(pdfOf(made).guard).toBeUndefined()
+  })
+
+  it('pass 1 dies: asked again reduced over the same files, then every pass reduced; B the settled reduced pass, said so', async () => {
+    const { asked, made } = await q1(paperOf(), [died(), draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX })], {
+      reduce: true,
+    })
+    expect(asked).toHaveLength(4)
+    expect(paraEnds(asked[1])).toBe(true)
+    // (the same request, its main file's paragraph ends left out, nothing else)
+    expect(shape(asked[2])).toEqual(shape(asked[1]))
+    expect(sorted(asked[2])).toEqual(reducedOf(asked[1]!))
+    expect(paraEnds(asked[2])).toBe(false)
+    expect(paraEnds(asked[3])).toBe(false)
+    expect(dec(asked[3]!.overrides.get('main.tex')).split('\n')[0]).toBe(NO_DRIVER_GROUP)
+    const m = pdfOf(made)
+    expect(m.pdf).toBe(P2)
+    expect(m.base).toEqual({ pdf: P2, log: lastTexLog(logOf(LINES)) })
+    expect(m.guard).toEqual({ extra: 0, unmarked: [], names: true, failed: [], reduced: true })
+    expect(m.cm).toEqual({ drafts: 1, marked: 1, settled: true })
+  })
+
+  it('a full pass dies: asked again reduced over the files carried to it, the passes after it reduced', async () => {
+    const { asked, made } = await q1(
+      paperOf(),
+      [draftOf({ 'main.aux': AUX }), died(), fullOf({ 'main.aux': AUX2 }), fullOf({ 'main.aux': AUX2 }, P3)],
+      { reduce: true },
+    )
+    expect(asked).toHaveLength(5)
+    expect(sorted(asked[3])).toEqual(reducedOf(asked[2]!))
+    expect(dec(asked[3]!.overrides.get('main.aux'))).toBe(AUX)
+    expect(paraEnds(asked[4])).toBe(false)
+    expect(pdfOf(made)).toMatchObject({ pdf: P3, guard: { reduced: true }, cm: { settled: true } })
+  })
+
+  it("is asked once: a reduced request that dies is the loop's and the guard's as today", async () => {
+    const { asked, made } = await q1(paperOf(), [died(), died(), todayOf(), finalOf()], { reduce: true })
+    // (the death, its reduced request, then today's request, reduced too, and its final pass)
+    expect(asked).toHaveLength(5)
+    expect([2, 3, 4].map((i) => paraEnds(asked[i]))).toEqual([false, false, false])
+    expect(shape(asked[3])).toMatchObject({ rerun: true })
+    expect(pdfOf(made)).toMatchObject({
+      pdf: TODAY,
+      base: { pdf: FINAL },
+      cm: { fallback: 'draft-failed' },
+      guard: { reduced: true },
+    })
+  })
+
+  it("is not asked where TeX said why: a TeX error, a host's limit, TeX that never ran", async () => {
+    const cases: [string, Compiled][] = [
+      ['an error of TeX', { ok: false, pdf: null, log: `${TEX}! Undefined control sequence.\nl.4 \\foo\n` }],
+      ["the host's limit", { ok: false, pdf: null, log: DIED, limit: 'cpu' } as Compiled],
+      ['a timeout', { ok: false, pdf: null, log: DIED, error: 'Compilation timeout' }],
+      ['no TeX', { ok: false, pdf: null, log: 'the jail could not start' }],
+    ]
+    for (const [why, answer] of cases) {
+      const { asked } = await q1(paperOf(), [answer, todayOf(), finalOf()], { reduce: true })
+      expect(asked, why).toHaveLength(4)
+      expect(paraEnds(asked[2]), why).toBe(true)
+    }
+  })
+
+  it("without the loop: today's compile that dies is asked again reduced, and its final pass is the reduced one's", async () => {
+    const { asked, made } = await run(paperOf(), [died(), todayOf(), finalOf()], { reduce: true })
+    expect(asked).toHaveLength(4)
+    expect(shape(asked[2])).toEqual(shape(asked[1]))
+    expect(sorted(asked[2])).toEqual(reducedOf(asked[1]!))
+    expect(paraEnds(asked[3])).toBe(false)
+    expect(pdfOf(made)).toMatchObject({ pdf: TODAY, base: { pdf: FINAL }, guard: { reduced: true } })
+  })
+
+  it("the guard's remedy and the final pass that die are asked again reduced", async () => {
+    // (a mark printed: the guard's remedy, today's request, dies and is asked again reduced)
+    const textOf = async (pdf: Uint8Array) =>
+      dec(pdf) === dec(P2) ? ['We use the method of \\axtmark{0s}', 'Another'] : ['We use the method of', 'Another']
+    const g = await q1(
+      paperOf(),
+      [draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX }), died(), todayOf(), finalOf()],
+      {
+        reduce: true,
+        textOf,
+      },
+    )
+    expect(g.asked).toHaveLength(6)
+    expect(sorted(g.asked[4])).toEqual(reducedOf(g.asked[3]!))
+    expect(pdfOf(g.made)).toMatchObject({
+      pdf: TODAY,
+      base: { pdf: FINAL },
+      guard: { extra: 1, failed: ['text'], reduced: true },
+    })
+    // (the final pass after five passes dies: asked again reduced over the same files)
+    const moving = (n: number) => fullOf({ 'main.aux': `\\relax \n\\newlabel{s}{{1}{${n}}}\n` })
+    const f = await q1(
+      paperOf(),
+      [draftOf({ 'main.aux': AUX }), moving(2), moving(3), moving(4), moving(5), died(null), finalOf()],
+      {
+        reduce: true,
+      },
+    )
+    expect(f.asked).toHaveLength(8)
+    expect(sorted(f.asked[7])).toEqual(reducedOf(f.asked[6]!))
+    expect(pdfOf(f.made)).toMatchObject({ base: { pdf: FINAL }, guard: { reduced: true } })
+  })
+})
+
+// ---------------------------------------------------------------- option (i): the bibliography pass's files carried into pass 1
+describe("the bibliography pass's files, carried into the loop's pass 1 (`carried`)", () => {
+  const BIBSRC =
+    '\\documentclass{article}\n\\begin{document}\nWe use the method of \\cite{a} here.\n\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n'
+  const BBL =
+    '\\begin{thebibliography}{1}\n\n\\bibitem{a}\nA.~Author.\n\\newblock A title of a paper.\n\\newblock 2020.\n\n\\end{thebibliography}\n'
+  const BIBAUX = '\\relax \n\\citation{a}\n\\bibstyle{plain}\n\\bibdata{refs}\n'
+  it('madeBibliography gives the files its pass wrote beside the .bbl it made', async () => {
+    const paper = openPaper(
+      new Map([
+        ['main.tex', enc(BIBSRC)],
+        ['refs.bib', enc('@article{a}')],
+      ]),
+    )
+    const wrote = files({ 'main.aux': BIBAUX, 'main.bbl': BBL })
+    const c = compiler([{ ok: true, pdf: null, log: logOf(), files: wrote }])
+    const r = await madeBibliography(paper, { compile: c.compile })
+    if (!('paper' in r)) throw new Error(`kept: ${r.kept}`)
+    expect(r.files).toBe(wrote)
+    expect(dec(r.made.bytes)).toBe(BBL)
+  })
+  it('with converge: pass 1 is given them beside its own, every later pass those no pass wrote again; without, no request carries them', async () => {
+    const carried = files({ 'main.aux': BIBAUX, 'main.out': 'from the bibliography pass\n' })
+    const { asked, made } = await q1(paperOf(), [draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX })], {
+      carried,
+    })
+    expect(dec(asked[1]!.overrides.get('main.aux'))).toBe(BIBAUX)
+    expect(dec(asked[1]!.overrides.get('main.out'))).toBe('from the bibliography pass\n')
+    // (pass 1 wrote main.aux again; main.out it did not: carried on as it was)
+    expect(dec(asked[2]!.overrides.get('main.aux'))).toBe(AUX)
+    expect(dec(asked[2]!.overrides.get('main.out'))).toBe('from the bibliography pass\n')
+    // (the marked files are the pass's own, never a carried copy's)
+    expect(dec(asked[1]!.overrides.get('main.tex'))).toContain(DRAFT_OPTION)
+    expect(pdfOf(made).cm).toEqual({ drafts: 1, marked: 1, settled: true })
+    const off = await today(paperOf(), [todayOf(), finalOf()], { carried })
+    expect(off.asked.every((q) => !q.overrides.has('main.out'))).toBe(true)
+    // (and held to the host's bound with the rest)
+    const bound = await q1(paperOf(), [draftOf({ 'main.aux': AUX }), todayOf(), finalOf()], {
+      carried,
+      filesBound: { count: 1, bytes: 1e6 },
+    })
+    expect(pdfOf(bound.made).cm).toMatchObject({ fallback: 'files-bound' })
+  })
+})

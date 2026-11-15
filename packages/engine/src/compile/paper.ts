@@ -30,6 +30,7 @@ import {
   originalFiles,
   probeFiles,
   ranThrough,
+  reducedFiles,
   stoppedShort,
 } from './live.ts'
 import { completeLog } from './tex.ts'
@@ -91,6 +92,8 @@ export interface GuardRecord {
   names: boolean
   failed: GuardCheck[]
   judged?: string
+  /** a marked request died and every marked request from it on was reduced (`reduce`, design-performance Q2) */
+  reduced?: true
 }
 /** the unmarked original's verdict (ownVerdict): what a host's handover to another TeX Live tree is decided by */
 export interface OwnVerdict {
@@ -129,6 +132,17 @@ export interface MarkedCompileOptions {
   /** the marked compile as the pass loop (Q1, convergeThenMark): its first settled full pass is B and the log. The rebuilt
    *  prepare's (compiled.ts compiledOf); today's reader never sets it */
   converge?: boolean
+  /** a marked request that died (it did not run through, TeX ran, no host limit stopped it, its log states no error of TeX's)
+   *  asked once more without the optional classes' points (Q2), every marked request from then on with them left out, the
+   *  guard's record saying so (`reduced`). The rebuilt prepare's (compiled.ts compiledOf); today's reader never sets it */
+  reduce?: boolean
+  /** with `converge`: the files a compile of the paper before the marked one wrote (the bibliography's pass, madeBibliography
+   *  `files`), carried into the loop's pass 1 as a pass's files are carried to the next (design-performance Q1's option (i):
+   *  its aux and lists a pass less to settle where they hold the bibliography's); without `converge`, not read */
+  carried?: ReadonlyMap<string, Uint8Array> | null
+  /** the statements the rebuilt prepare's marked compile makes and today's does not (live.ts originalFiles `statements`,
+   *  marks.ts STATEMENTS_TEX), in every marked request. The rebuilt prepare's (compiled.ts compiledOf) */
+  statements?: boolean
   compileBudgetMs?: number | null
   filesBound?: { count: number; bytes: number } | null
   OPS?: Record<string, number>
@@ -257,13 +271,15 @@ const BIBITEM_LINE = /^[ \t]*\\bibitem(?![A-Za-z@])/m
  * .bcf), `no-bbl` (no thebibliography, or one of no \\bibitem), `moved` (another unit changed with it), `entries` (an entry the
  * paper opened again reads past its end, over another \\bibitem: 2610.21770v1's entry whose \\href holds a URL's `%3F`, which the
  * front end read as a comment and TeX does not, ran over the 18 entries after it, and marked so their citations were undefined). `compilerOf`, as
- * markedOfPaper's: asked before the pass, and the paper opened again keeps what it said. Never throws but a failed allocation
+ * markedOfPaper's: asked before the pass, and the paper opened again keeps what it said. `files`, beside the .bbl, every file the
+ * pass wrote, which the marked compile's pass loop carries into its pass 1 (markedOfPaper `carried`). Never throws but a failed allocation
  */
 export async function madeBibliography(
   paper: Paper,
   { compile, compilerOf = null, engines = null }: Host,
 ): Promise<
-  { paper: Paper; made: { path: string; bytes: Uint8Array }; ms: number } | { kept: BibliographyKept; ms: number }
+  | { paper: Paper; made: { path: string; bytes: Uint8Array }; files: Map<string, Uint8Array>; ms: number }
+  | { kept: BibliographyKept; ms: number }
 > {
   const t0 = performance.now()
   const done = <R extends object>(r: R) => ({ ...r, ms: Math.round(performance.now() - t0) })
@@ -340,7 +356,7 @@ export async function madeBibliography(
     compilerGuessed: paper.meta.compilerGuessed,
     ...(paper.meta.compilerFrom ? { compilerFrom: paper.meta.compilerFrom } : {}),
   })
-  return done({ paper: again, made: { path, bytes } })
+  return done({ paper: again, made: { path, bytes }, files: c!.files })
 }
 
 /**
@@ -407,6 +423,9 @@ export async function markedOfPaper(
   {
     compile,
     converge = false,
+    reduce = false,
+    carried = null,
+    statements = false,
     compileBudgetMs = null,
     filesBound = null,
     pages = null,
@@ -542,7 +561,10 @@ export async function markedOfPaper(
   const job = jobName(main),
     count = paper.units.length,
     bibtex = paper.meta.bbl ? false : null
-  /** the marked original's files, the units of `unmarked` as the paper's own and the babel names marked or not */
+  /** whether a marked request died and the paper's marked requests are reduced from it on (`reduce`: markedAsk) */
+  let reduced = false
+  /** the marked original's files, the units of `unmarked` as the paper's own and the babel names marked or not; reduced (no
+   *  optional class's points) once a marked request died */
   const filesOf = (unmarked: ReadonlySet<number>, named: boolean, spans: Spans) =>
     originalFiles(paper, {
       lines: true,
@@ -553,6 +575,8 @@ export async function markedOfPaper(
       apart,
       ...(unmarked.size ? { unmarked } : {}),
       ...(named ? {} : { names: false }),
+      ...(reduced ? { reduced: true } : {}),
+      ...(statements ? { statements: true } : {}),
       spans,
     })
   // (before the compile: the units the probe's preamble blamed (`preamble`); each unit's writing against its source's braces; our
@@ -590,20 +614,42 @@ export async function markedOfPaper(
     spans = {}
     files = null
   }
+  /** whether a compile is the engine's own death: it did not run through, TeX ran, no host's limit stopped it, and its log
+   *  states no error of TeX's (errorCount 0: 2610.30769v1's pdfTeX at a shipout, with more of our points in its lists) */
+  const died = (c: Compiled | null) => !!c && !ranThrough(c) && texRan(c.log) && !limitOf(c) && errorCount(c.log) === 0
+  /**
+   * A marked request (the loop's passes, its fallback, today's compile, the guard's remedies, the final pass), asked. With
+   * `reduce`, one that died is asked once more with its files reduced (live.ts reducedFiles: the optional classes' points left
+   * out, the files carried with it as they were), where the budget holds one; from then on every marked request of the paper is
+   * reduced (filesOf), the marked original's files made again so (what the guard reads them by). Once: a reduced request that
+   * dies is judged as today's. Without `reduce`, `asked` as it is
+   */
+  const markedAsk = async (req: CompileRequest): Promise<Compiled> => {
+    const c = await asked(req)
+    if (!reduce || reduced || !died(c) || !budgetLeft()) return c
+    reduced = true
+    if (files) {
+      const sp: Spans = {}
+      files = filesOf(g.unmarked, g.names, sp)
+      spans = sp
+    }
+    return asked({ ...req, overrides: reducedFiles(req.overrides, main) })
+  }
   const marked = await stage('compile', async () => {
     files ??= filesOf(g.unmarked, g.names, spans)
     if (cm)
-      return convergeThenMark(paper, asked, files, cm, {
+      return convergeThenMark(paper, markedAsk, () => files!, cm, {
         wall,
         budget: compileBudgetMs,
         bound: filesBound,
         keep: wantFinal,
         settled,
+        seed: carried,
       })
     // (every pass, the bibliography's step as the paper needs it; one that did not run through (ranThrough) is no marked
     // original, whatever PDF it left — 2610.20713's, TL2025's 7 pages of 15 before its hundredth error; with the files it wrote,
     // which the final pass is made over)
-    return asked({ main, engine, rerun: true, bibtex, overrides: files, ...(wantFinal ? { files: true } : {}) })
+    return markedAsk({ main, engine, rerun: true, bibtex, overrides: files, ...(wantFinal ? { files: true } : {}) })
   })
   // (`decorated`, the texts TeX set beside a decoration of their own (readInkDecorated): the instrument's alone, no marks file's)
   const options: MarkedOptions = {
@@ -624,8 +670,9 @@ export async function markedOfPaper(
     names: g.names,
     failed: g.failed,
     ...(g.judged ? { judged: g.judged } : {}),
+    ...(reduced ? { reduced: true as const } : {}),
   })
-  const guarded = (r: Marked): Marked => result(g.failed.length ? { ...r, guard: record() } : r)
+  const guarded = (r: Marked): Marked => result(g.failed.length || reduced ? { ...r, guard: record() } : r)
   if (!marked)
     return guarded({
       refused: 'compile',
@@ -673,7 +720,10 @@ export async function markedOfPaper(
       )
     }
   })()
-  return 'pdf' in made && wantFinal ? { ...made, base: await finalPass(accepted) } : made
+  if (!('pdf' in made) || !wantFinal) return made
+  // (the final pass may be the request that died: the guard's record then says the paper is reduced)
+  const base = await finalPass(accepted)
+  return reduced && !made.guard?.reduced ? { ...made, guard: record(), base } : { ...made, base }
 
   /**
    * The final pass (design §3.1): the files of the compile that stands with graphicx's draft option's line made NO_DRIVER_GROUP's
@@ -712,7 +762,14 @@ export async function markedOfPaper(
     over.set(main, head)
     let c: Compiled | null = null
     try {
-      c = await asked({ main, engine, rerun: false, bibtex: false, overrides: over })
+      // (over a compile made before the paper's marked requests were reduced, reduced as every one after it)
+      c = await markedAsk({
+        main,
+        engine,
+        rerun: false,
+        bibtex: false,
+        overrides: reduced ? reducedFiles(over, main) : over,
+      })
     } catch (x) {
       if (isMemoryError(x)) throw x
       return no(`the final pass threw: ${(x as { message?: unknown } | null)?.message ?? x}`)
@@ -848,12 +905,18 @@ export async function markedOfPaper(
     /** the marked original again, `unmarked` left the paper's own and the names marked or not: its evidence */
     const attempt = async (unmarked: Set<number>, named: boolean): Promise<Attempt> => {
       g.extra++
-      const sp: Spans = {},
+      let sp: Spans = {},
         f = filesOf(unmarked, named, sp)
       let c: Compiled | null = null
       // (a failed allocation is the run's, never the paper's refusal)
       try {
-        c = await asked({ main, engine, rerun: true, bibtex, overrides: f, ...(wantFinal ? { files: true } : {}) })
+        const was = reduced
+        c = await markedAsk({ main, engine, rerun: true, bibtex, overrides: f, ...(wantFinal ? { files: true } : {}) })
+        // (asked again reduced: read by the reduced files, which are those it was given)
+        if (reduced && !was) {
+          sp = {}
+          f = filesOf(unmarked, named, sp)
+        }
       } catch (e) {
         if (isMemoryError(e)) throw e
       }
@@ -1185,7 +1248,8 @@ const finalMainOf = (bytes: Uint8Array | null | undefined): Uint8Array | null =>
 
 /**
  * The marked compile as the pass loop (Q1, design-performance 2026-11-13; markedOfPaper `converge`): the marked original
- * (`marked`, the files today's compile is given) compiled one pass at a time in the files the passes before it wrote, until
+ * (`markedNow()`, the files today's compile is given, reduced once a marked request died: Q2, `compile` the request that asks
+ * a death again reduced) compiled one pass at a time in the files the passes before it wrote, until
  * a pass writes back the files it was given; that pass is the marks' PDF and log and the base page at once, so that the pass
  * today's compile ends on (latexmk's last, which only witnesses that nothing changed) and the final pass are one pass. Each
  * pass is given the files today's pass of the same number is given, so it writes the files that pass writes, and the settled
@@ -1219,7 +1283,7 @@ const finalMainOf = (bytes: Uint8Array | null | undefined): Uint8Array | null =>
 async function convergeThenMark(
   paper: Paper,
   compile: (req: CompileRequest) => Promise<Compiled>,
-  marked: Map<string, Uint8Array>,
+  markedNow: () => Map<string, Uint8Array>,
   cm: ConvergeRecord,
   {
     wall,
@@ -1227,18 +1291,21 @@ async function convergeThenMark(
     bound,
     keep = false,
     settled,
+    seed = null,
   }: {
     wall: { spent: number; longest: number }
     budget: number | null | undefined
     bound: { count: number; bytes: number } | null | undefined
     keep?: boolean
     settled: WeakSet<Compiled>
+    seed?: ReadonlyMap<string, Uint8Array> | null
   },
 ): Promise<Compiled | null> {
   const { main } = paper.project,
     engine = paper.meta.compiler!,
     shipped = !!paper.meta.bbl
-  const carried = new Map<string, Uint8Array>()
+  // (the files a pass before the loop wrote, the bibliography's: carried into pass 1 as a pass's are to the next)
+  const carried = new Map<string, Uint8Array>(seed ?? [])
   let passes = 0,
     bibSeen: string | null = null
   /** whether the budget leaves room for one more pass as long as the longest compile so far, the probe's included */
@@ -1246,20 +1313,34 @@ async function convergeThenMark(
   /** the bytes a pass given `own` had at a path: its own file, else the latest carried, else the paper's */
   const givenAt = (own: ReadonlyMap<string, Uint8Array>, p: string) =>
     own.get(p) ?? carried.get(p) ?? paper.fsys.read(p)
-  const pass = async (own: ReadonlyMap<string, Uint8Array>, draft: boolean, bibtex: boolean | null) => {
+  /** the files of every pass after the first, the final pass's (finalMainOf), of the marked files as they are now (reduced
+   *  once a marked request died: markedOfPaper's markedAsk); null where the main file has no draft line */
+  let made: [Map<string, Uint8Array>, Map<string, Uint8Array> | null] | null = null
+  const fullNow = () => {
+    const m = markedNow()
+    if (made?.[0] !== m) {
+      const head = finalMainOf(m.get(main))
+      made = [m, head ? new Map(m).set(main, head) : null]
+    }
+    return made[1]
+  }
+  /** a pass (the first a draft of the marked files, every later one the final pass's files in full) and the files it was given
+   *  as its own: those it was asked with, or their reduced copies where it died and was asked again so */
+  const pass = async (draft: boolean, bibtex: boolean | null) => {
     passes++
     if (draft) cm.drafts++
     else cm.marked++
+    const ownNow = () => (draft ? markedNow() : fullNow()!)
     const c = await compile({
       main,
       engine,
       rerun: false,
       bibtex,
-      overrides: new Map([...carried, ...own]),
+      overrides: new Map([...carried, ...ownNow()]),
       draft,
       files: true,
     })
-    return c ?? null
+    return { c: c ?? null, own: ownNow() }
   }
   /** a pass's files carried to the next, and the bibliography step's input where it ran */
   const take = (c: Compiled, bibtex: boolean | null) => {
@@ -1291,35 +1372,32 @@ async function convergeThenMark(
       engine,
       rerun: true,
       bibtex: shipped ? false : null,
-      overrides: marked,
+      overrides: markedNow(),
       ...(keep ? { files: true } : {}),
     })
   }
-  const head = finalMainOf(marked.get(main))
-  if (!head) return fallback('no-draft-line')
-  /** the files of every pass after the first: the final pass's */
-  const full = new Map(marked).set(main, head)
-  const first = await pass(marked, true, !shipped)
+  if (!fullNow()) return fallback('no-draft-line')
+  const { c: first } = await pass(true, !shipped)
   if (!ranThrough(first)) return fallback('draft-failed')
   if (!first.files) return fallback('no-files')
   if (!shipped && otherBibJobs(first.files, main)) return fallback('aux-jobs')
   if (!shipped && bibMissing(first.files, paper.fsys)) return fallback('bib-missing')
-  if (!fits(first, full)) return fallback('files-bound')
+  if (!fits(first, fullNow()!)) return fallback('files-bound')
   take(first, !shipped)
   let last: Compiled | null = null
   while (passes < PASSES && (!last || affordable())) {
     const bibtex = bibtexNext()
-    const c = await pass(full, false, bibtex)
+    const { c, own } = await pass(false, bibtex)
     if (!ranThrough(c) || !c.pdf?.length) return fallback('pass-failed')
     if (!c.files) return fallback('no-files')
     last = c
-    cm.settled = [...c.files].every(([p, b]) => sameFile(p, b, givenAt(full, p)))
+    cm.settled = [...c.files].every(([p, b]) => sameFile(p, b, givenAt(own, p)))
     if (cm.settled) {
       take(c, bibtex)
       settled.add(c)
       break
     }
-    if (passes < PASSES && affordable() && !fits(c, full)) return fallback('files-bound')
+    if (passes < PASSES && affordable() && !fits(c, own)) return fallback('files-bound')
     take(c, bibtex)
   }
   return last

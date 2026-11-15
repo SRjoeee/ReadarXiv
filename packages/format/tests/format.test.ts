@@ -220,6 +220,23 @@ describe('read and write', () => {
       expect(read(kind, bytes, digest)).toEqual(value)
     }
   })
+  it('a head says a reduced prepare (`reduced`, design-performance Q2) as `true` or not at all', () => {
+    const head: Head = {
+      format: 1,
+      paper: { id: '2501.00001', version: 1, pages: 3 },
+      made: 'test',
+      original: { bytes: 10, sha256: '0'.repeat(64), chunk: 65536, chunks: chunkDigests(new Uint8Array(10)) },
+      addOn: null,
+      units: [],
+      parts: [null],
+      reduced: true,
+    }
+    const { bytes, digest } = write('head', head)
+    expect(read('head', bytes, digest)).toEqual(head)
+    const { reduced: _, ...plain } = head
+    expect(fromUtf8(write('head', plain).bytes)).not.toContain('reduced')
+    expect(() => read('head', utf8(JSON.stringify({ ...head, reduced: false })))).toThrow(FormatError)
+  })
   it('writes canonical bytes: keys sorted, -0 as 0, the same for the same value however built', () => {
     expect(canonical({ b: 1, a: [-0, 1.5], c: undefined })).toBe('{"a":[0,1.5],"b":1}')
     const p = part()

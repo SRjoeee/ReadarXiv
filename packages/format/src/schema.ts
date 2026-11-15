@@ -488,6 +488,10 @@ export const Head = z.object({
   // [document, site, count, its first reason] (the engine's warnings.ts RECOVER_SITES): the page or the font read as PDF.js
   // answered it. None where nothing was (the corpus's every paper)
   recovered: z.array(z.tuple([z.enum(['A', 'B']), z.string().max(32), int.min(1), z.string().max(200)])).optional(),
+  // the prepare's marked compile left the optional classes of points out (the engine's POINT_CLASSES; design-performance Q2): a
+  // marked request died where TeX said no error, and every one from it on was asked without them, so that the paragraph ends
+  // and alignment those points state were read off the page. Absent: every class (the corpus's every paper but such a one)
+  reduced: z.literal(true).optional(),
 })
 
 // ---------------------------------------------------------------- a translation (packages/translate's Result, by unit id)

@@ -11,11 +11,12 @@
 //     the guard's record; and the bundle the back half (prepare.ts) makes of each instrument and arXiv's PDF, object by object;
 //   - each side's TeX passes (the probe's among them) and TeX seconds (u+s of the process tree, real beside it), the
 //     bibliography's pass apart (one, shared), and the files and bytes each compile is asked with and gives back.
-// In the same run, each against Q1's own side: `qp1` (hyperref's draft option on line 1 beside graphicx's, every marked
-// request: adopted only where every bundle object is the same and B holds no link annotation), `bib` (the bibliography pass's
-// files carried into pass 1 and on, papers whose bibliography TeX makes) and `unmarked` (pass 1 the unmarked files, CM as it
-// was built): the design's two open options, each built only where B and every reading are the same on every paper and the
-// TeX seconds fewer.
+// The loop's side is asked as compiledOf asks it: `converge`, `reduce` (Q2), the box's `filesBound` and the bibliography
+// pass's files carried into pass 1 (`carried`, Q1's option (i), built 2026-11-15). Q2's count, no TeX: the loop's B read a
+// second time with the points of every optional class (POINT_CLASSES) hidden from each piece of its pages' operator lists, as
+// a reduced compile's B would be read, its instrument and bundle against the loop's, and what moves, member by member. With
+// --variants, each against the loop's side: `qp1` (hyperref's draft option on line 1 beside graphicx's: not adopted,
+// 2026-11-15) and `unmarked` (pass 1 the unmarked files, CM as it was built: not built).
 //
 // The native host is lab/pdf/spikes/cm-check.mjs's (the reference host of `draft` and `files`, as the web's container sandbox
 // answers them), with two things the box does that cm-check's does not need: SOURCE_DATE_EPOCH is the request's
@@ -25,7 +26,7 @@
 // lacks into a full TeX Live of the same year, NATIVE_TEXMFVAR its font maps (cm-check's header); not the Docker image's
 // package versions: what is compared is two orders of work in one TeX.
 //   NATIVE_TEXMFLOCAL=<tree> [NATIVE_TEXMFVAR=<var>] node --max-old-space-size=6144 --import tsx lab/pdf/spikes/q1-check.mjs \
-//     --list=<tsv of id and folder> --out=<folder> [--only=<id>,…] [--from=<id>] [--variants=qp1,bib,unmarked|none] [--keep]
+//     --list=<tsv of id and folder> --out=<folder> [--only=<id>,…] [--from=<id>] [--variants=qp1,unmarked] [--keep]
 // Writes <out>/<id>.json (the row), <out>/<id>.<side>.pdf where B differs (with --keep, also each side's instrument as
 // <out>/<id>.<side>.instrument.json and B where an instrument or a bundle differs), and prints one line a paper and a tally. Exit 1
 // where a paper's B or any reading differs between today and Q1, or either side refused alone. No network, no Docker. Stops
@@ -36,6 +37,7 @@ import { dirname, join, resolve } from 'node:path'
 import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import { spawnSync } from 'node:child_process'
 import * as PL from '@cantoo/pdf-lib'
+import { read } from '@readarxiv/format'
 import { bibliographyKept, instrumentOf, isMemoryError, madeBibliography, markedOfPaper, originalFactsOf, prepare, treeOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { DRIVER_OUTPUT_MARK, textOfPdf } from '../../../packages/engine/src/compile/base.ts'
@@ -43,7 +45,7 @@ import { DRAFT_OPTION, NO_DRIVER_GROUP, originalFiles } from '../../../packages/
 import { readLines } from '../../../packages/engine/src/compile/tex.ts'
 import { sourceUnitsOf, unitsObjects } from '../../../packages/engine/src/front.ts'
 import { readAlign, readBoxAlign, readCellBoxes, readRefNames, readSkips } from '../../../packages/engine/src/marks/channels.ts'
-import { readColours, readSkipProbe } from '../../../packages/engine/src/marks/marks.ts'
+import { POINT_CLASSES, pointClassOf, readColours, readSkipProbe } from '../../../packages/engine/src/marks/marks.ts'
 import { opened, storedInstrumentOf, withBbl } from '../../../packages/engine/src/plan.ts'
 import { jobName, lastTexLog, latin1, latin1Bytes } from '../../../packages/engine/src/source/latex-front.ts'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
@@ -54,7 +56,7 @@ const ROOT = new URL('../../..', import.meta.url).pathname
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const OUT = resolve(argOf('out') ?? join(ROOT, 'lab/pdf/out/q1-check'))
 const LIST = argOf('list'), ONLY = argOf('only')?.split(',') ?? null, FROM = argOf('from')
-const VARIANTS = (argOf('variants') ?? 'qp1,bib,unmarked').split(',').filter(v => v && v !== 'none')
+const VARIANTS = (argOf('variants') ?? '').split(',').filter(v => v && v !== 'none')
 const KEEP = process.argv.includes('--keep')
 /** with --keep, a side's B and instrument written for a look at where two sides part */
 const keepSide = (id, name, s, i) => {
@@ -207,13 +209,13 @@ async function pagesTextOf(pdf) {
   try { return await textOfPdf(await task.promise) } catch (e) { if (isMemoryError(e)) throw e; return null } finally { await task.destroy().catch(() => {}) }
 }
 /** one side: markedOfPaper asked as compiledOf asks it, `converge` or not, through `rewrite` where a variant writes its requests */
-async function side(host, paperOf, facts, { converge, rewrite = null }) {
+async function side(host, paperOf, facts, { converge, rewrite = null, carried = null }) {
   const records = []
   const paper = paperOf()
   const t0 = performance.now()
   const made = await markedOfPaper(paper, {
     compile: host(records, rewrite),
-    ...(converge ? { converge: true, filesBound: FILES_BOUND } : {}),
+    ...(converge ? { converge: true, reduce: true, filesBound: FILES_BOUND, ...(carried ? { carried } : {}) } : {}),
     compileBudgetMs: null,
     engines: HOST_ENGINES,
     pages: async () => facts.pages,
@@ -267,22 +269,73 @@ function firstFileDiffering(qa, qb) {
   }
   return null
 }
-/** the instrument over a side's B, log and options, as prepareFront states it; and the back half's bundle of it with A */
-async function instrumentAndBundle(s, facts, arxiv, ref, tree, withBundle) {
+/** PDF.js as instrumentOf reads B, but each point of an optional class (POINT_CLASSES: `/axt-<name> ri`) hidden from every
+ *  piece of a page's operator list (the engine's readOps takes a page's list through its _renderPageChunk, which a page here
+ *  wraps as it is set): B read as a reduced compile's would be, with no TeX (Q2's count) */
+const intentOf = args => (typeof args?.[0] === 'string' ? args[0] : typeof args?.[0]?.name === 'string' ? args[0].name : null)
+const optionalPoint = (fn, args) => {
+  const name = fn === OPS.setRenderingIntent ? intentOf(args) : null
+  return !!name && name.startsWith('axt-') && POINT_CLASSES[pointClassOf(name.slice(4))].optional
+}
+function hidingOptional(base) {
+  const shown = piece => {
+    const fnArray = [], argsArray = []
+    for (let i = 0; i < piece.length; i++) if (!optionalPoint(piece.fnArray[i], piece.argsArray[i])) { fnArray.push(piece.fnArray[i]); argsArray.push(piece.argsArray[i]) }
+    return { ...piece, fnArray, argsArray, length: fnArray.length }
+  }
+  const bound = (t, k) => { const v = t[k]; return typeof v === 'function' ? v.bind(t) : v }
+  const pageOf = page => new Proxy(page, {
+    get: (t, k) => (k === '_renderPageChunk' ? t[k] : bound(t, k)),
+    set(t, k, v) { t[k] = k === '_renderPageChunk' && typeof v === 'function' ? function (piece, s) { return v.call(this, shown(piece), s) } : v; return true },
+  })
+  return {
+    ...base,
+    getDocument(src) {
+      const task = base.getDocument(src)
+      return { promise: task.promise.then(doc => new Proxy(doc, { get: (t, k) => (k === 'getPage' ? async n => pageOf(await t.getPage(n)) : bound(t, k)) })), destroy: () => task.destroy() }
+    },
+  }
+}
+const pdfjsHiding = hidingOptional(pdfjs)
+/** the instrument over a side's B, log and options, as prepareFront states it (B read through `reader`); and the back half's
+ *  bundle of it with A, its objects and each page's part */
+async function instrumentAndBundle(s, facts, arxiv, ref, tree, withBundle, reader = pdfjs) {
   if (!s.base) return null
-  const r = await instrumentOf({ paper: s.paper, finalPdf: s.base.pdf, options: s.made.options, log: s.made.log, pdfjs, documentOptions, made: { compiler: s.paper.meta.compiler ?? 'pdflatex', tree, front: 'today' } })
+  const r = await instrumentOf({ paper: s.paper, finalPdf: s.base.pdf, options: s.made.options, log: s.made.log, pdfjs: reader, documentOptions, made: { compiler: s.paper.meta.compiler ?? 'pdflatex', tree, front: 'today' } })
   const out = { instrument: sha(canon(r.instrument)), text: canon(r.instrument) }
   if (!withBundle) return out
-  const objects = []
+  const objects = [], parts = new Map()
   const front = async input => { await input.units(unitsObjects(sourceUnitsOf(s.paper))); return { ok: true, instrument: r.instrument, made: null } }
   const deflate = b => new Uint8Array(deflateSync(b))
   const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE' || isMemoryError(e)) throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
   const end = await prepare(() => ({ files: new Map([['main.tex', new Uint8Array()]]), original: arxiv, stored: null }), {
     paper: ref, made: 'q1-check', tree: { year: tree, served: SERVED, fallback: PINS.default }, engines: HOST_ENGINES, pdfjs, documentOptions, PL, deflate, inflate,
     compile: async () => { throw new Error('the back half compiles nothing') }, stage: () => {}, units: async () => {}, instrument: async () => {},
-    object: async x => { objects.push(`${x.kind}:${x.digest}`) }, note: () => {}, now: () => performance.now(),
+    object: async x => { objects.push(`${x.kind}:${x.digest}`); if (x.kind === 'part') parts.set(x.page, x) }, note: () => {}, now: () => performance.now(),
   }, front)
   out.bundle = end.ok ? objects : { refused: end.detail ?? end.wrongTree ?? 'refused' }
+  out.parts = parts
+  return out
+}
+/** what moves between two bundles' parts: the pages whose part differs, and over their members (the flows' in order), how
+ *  many differ and in which of their fields */
+function partsMoved(a, b) {
+  const pages = [...new Set([...a.parts.keys(), ...b.parts.keys()])].sort((x, y) => x - y)
+  const out = { pages: [], members: 0, of: 0, fields: {} }
+  for (const pg of pages) {
+    const x = a.parts.get(pg), y = b.parts.get(pg)
+    if (x?.digest === y?.digest) continue
+    out.pages.push(pg)
+    if (!x || !y) continue
+    const ma = read('part', x.bytes, x.digest).flows.flat(), mb = read('part', y.bytes, y.digest).flows.flat()
+    out.of += Math.max(ma.length, mb.length)
+    for (let i = 0; i < Math.max(ma.length, mb.length); i++) {
+      const p = ma[i] ?? {}, q = mb[i] ?? {}
+      if (JSON.stringify(p) === JSON.stringify(q)) continue
+      out.members++
+      for (const k of new Set([...Object.keys(p), ...Object.keys(q)])) if (JSON.stringify(p[k]) !== JSON.stringify(q[k])) out.fields[k] = (out.fields[k] ?? 0) + 1
+    }
+  }
   return out
 }
 /** B's link annotations, every page's (PDF.js's annotations of subtype Link) */
@@ -308,13 +361,6 @@ const qp1Rewrite = req => {
 }
 /** option (ii): pass 1, the loop's draft, of the unmarked files (originalFiles with `lines`, the paper's own bytes: CM's drafts) */
 const unmarkedRewrite = paper => req => (req.draft && !req.rerun ? { ...req, overrides: originalFiles(paper, { lines: true, transcode: false }) } : req)
-/** option (i): the bibliography pass's files carried into every pass of the loop where the request carries none of that path */
-const bibRewrite = bibFiles => req => {
-  if (req.rerun || !req.files) return req
-  const over = new Map(req.overrides)
-  for (const [p, b] of bibFiles) if (!over.has(p)) over.set(p, b)
-  return { ...req, overrides: over }
-}
 
 // ---------------------------------------------------------------- the papers
 if (!LIST) throw new Error('--list=<tsv of id and folder> is required')
@@ -341,16 +387,14 @@ for (const { id, dir } of papers) {
     let bbl = null, bibFiles = null, kept = null
     const first = opened(source)
     if (bibliographyKept(first) === null) {
-      const capture = []
-      const bibCompile = async req => { const a = await host(bibRecords)(req); capture.push(a); return a }
-      const r = await madeBibliography(first, { compile: bibCompile, engines: HOST_ENGINES })
-      if ('paper' in r) { bbl = r.made; bibFiles = capture.at(-1)?.files ?? null } else kept = r.kept
+      const r = await madeBibliography(first, { compile: host(bibRecords), engines: HOST_ENGINES })
+      if ('paper' in r) { bbl = r.made; bibFiles = r.files ?? null } else kept = r.kept
     } else kept = bibliographyKept(first)
     const paperOf = () => (bbl ? withBbl(opened(source), bbl) : opened(source))
     row = { id, engine: first.meta.compiler, tree, pages: facts.pages, bibliography: bbl ? 'made' : kept, bib: { passes: passesOf(bibRecords), ...secondsOf(bibRecords) } }
     // ---- today's and Q1's
     const T = await side(host, paperOf, facts, { converge: false })
-    const Q = await side(host, paperOf, facts, { converge: true })
+    const Q = await side(host, paperOf, facts, { converge: true, carried: bibFiles })
     const summary = s => ({
       refused: 'refused' in s.made ? `${s.made.refused}${s.made.why ? `: ${s.made.why.slice(0, 160)}` : ''}` : s.base ? null : `base: ${s.made.base?.why?.slice(0, 160) ?? 'none'}`,
       b: s.base ? sha(s.base.pdf) : null, bBytes: s.base?.pdf.length ?? null, cm: s.made.cm ?? null, guard: s.made.guard ?? null,
@@ -380,6 +424,15 @@ for (const { id, dir } of papers) {
       eq.instrument = iT.instrument === iQ.instrument
       eq.bundle = canon(iT.bundle) === canon(iQ.bundle)
       row.eq = eq
+      // ---- Q2's count: the loop's B read with the optional classes' points hidden, what moves
+      const iR = await instrumentAndBundle(Q, facts, arxiv, ref, tree, true, pdfjsHiding)
+      const moved = Array.isArray(iR.bundle) && Array.isArray(iQ.bundle) ? partsMoved(iQ, iR) : { refused: iR.bundle }
+      row.reduced = {
+        instrument: iR.instrument === iQ.instrument,
+        bundle: canon(iR.bundle) === canon(iQ.bundle),
+        kinds: Array.isArray(iR.bundle) && Array.isArray(iQ.bundle) ? [...new Set(iR.bundle.filter(x => !iQ.bundle.includes(x)).map(x => x.split(':')[0]))] : null,
+        moved,
+      }
       const same = eq.b && Object.values(eq.readings).every(Boolean) && eq.plan && eq.options && eq.guard && eq.instrument && eq.bundle
       row.verdict = same ? 'identical' : 'DIFFERS'
       if (same) tally.same++
@@ -399,9 +452,8 @@ for (const { id, dir } of papers) {
       // ---- the variants, each against Q1's side
       row.variants = {}
       for (const v of VARIANTS) {
-        if (v === 'bib' && !bibFiles) { row.variants.bib = { skipped: bbl ? 'the bibliography pass returned no files' : 'no bibliography made' }; continue }
-        const rewrite = v === 'qp1' ? qp1Rewrite : v === 'unmarked' ? unmarkedRewrite(paperOf()) : bibRewrite(bibFiles)
-        const V = await side(host, paperOf, facts, { converge: true, rewrite })
+        const rewrite = v === 'qp1' ? qp1Rewrite : unmarkedRewrite(paperOf())
+        const V = await side(host, paperOf, facts, { converge: true, rewrite, carried: bibFiles })
         const s = summary(V)
         const r = { refused: s.refused, cm: s.cm, passes: s.passes, us: s.us, real: s.real, compiles: s.compiles }
         if (V.base) {
@@ -428,7 +480,8 @@ for (const { id, dir } of papers) {
     }
     const fmt = s => `${s.passes} passes ${s.us} s`
     const vs = Object.entries(row.variants ?? {}).map(([k, r]) => `${k} ${r.skipped ? '-' : r.refused ? `refused` : k === 'qp1' ? `bundle ${r.bundle ? '=' : '≠'} links ${r.links}` : `B ${r.b ? '=' : '≠'}${r.readings?.length ? ` readings≠${r.readings.join('/')}` : ''}`}${r.passes !== undefined ? ` (${fmt(r)})` : ''}`).join('; ')
-    console.log(`${row.verdict === 'identical' ? 'ok  ' : row.verdict === 'refused alike' ? 'both' : 'FAIL'} ${id} (${row.engine}, bib ${row.bibliography}): ${row.verdict}${row.first ? ` [first: ${row.first.what}; ${row.first.file ?? 'no file differs'}]` : ''}; today ${fmt(row.today)}, q1 ${fmt(row.q1)} cm ${canon(row.q1.cm)}${row.today.refused ? `; today refused ${row.today.refused}` : ''}${row.q1.refused ? `; q1 refused ${row.q1.refused}` : ''}${vs ? `; ${vs}` : ''}`)
+    const q2 = row.reduced ? `; reduced reading: ${row.reduced.bundle ? 'bundle =' : `${row.reduced.moved.pages?.length ?? '?'} parts, ${row.reduced.moved.members ?? '?'} members move (${Object.entries(row.reduced.moved.fields ?? {}).map(([k, n]) => `${k} ${n}`).join(', ')})`}` : ''
+    console.log(`${row.verdict === 'identical' ? 'ok  ' : row.verdict === 'refused alike' ? 'both' : 'FAIL'} ${id} (${row.engine}, bib ${row.bibliography}): ${row.verdict}${row.first ? ` [first: ${row.first.what}; ${row.first.file ?? 'no file differs'}]` : ''}; today ${fmt(row.today)}, q1 ${fmt(row.q1)} cm ${canon(row.q1.cm)}${row.q1.guard?.reduced ? ' REDUCED' : ''}${row.today.refused ? `; today refused ${row.today.refused}` : ''}${row.q1.refused ? `; q1 refused ${row.q1.refused}` : ''}${q2}${vs ? `; ${vs}` : ''}`)
   } catch (e) {
     failed++; tally.failed++
     row = { ...row, error: String(e?.stack ?? e).slice(0, 800) }

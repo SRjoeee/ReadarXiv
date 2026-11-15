@@ -13,11 +13,15 @@ import {
   inkSamples,
   LAYOUT_CLASSES,
   LAYOUT_TEX,
+  LAYOUT_TEX_REDUCED,
   layoutMarking,
   leadSamples,
   literalNames,
   markProbeTex,
+  POINTS_TEX,
+  POINTS_TEX_REDUCED,
   probeSamples,
+  STATEMENTS_TEX,
   refKeysOf,
   refsTex,
   regionsTex,
@@ -91,6 +95,8 @@ export type OriginalOptions = {
   names?: boolean
   pastBegin?: boolean
   transcode?: boolean
+  reduced?: boolean
+  statements?: boolean
 }
 
 /** Whether a compile's last TeX pass stopped short of the document's end: TeX's fatal errors — an emergency stop (a
@@ -462,7 +468,11 @@ export function markedPreamble(
  *  as every other file is. On, patch writes it as UTF-8, which only a translation of the source could have (this switches no
  *  inputenc option): 2610.20581's latin1 source, transcoded under its own inputenc, set each é as Ã© and each no-break
  *  space in math as a \\^ error, 74 errors and a page more than arXiv's. On by default without `layout`, as the bytes were
- *  before */
+ *  before. `reduced` (with `layout`: a reduced marked compile, design-performance Q2): no TeX of an optional class of points
+ *  (marks.mjs POINT_CLASSES, LAYOUT_TEX_REDUCED), on the one line it stands on, so that no line moves; without `layout` the
+ *  bytes as before. `statements` (with `layout`: the rebuilt prepare's marked compile, compiled.ts compiledOf): the statements
+ *  today's reader's compile does not make (marks.ts STATEMENTS_TEX), right after the layout marks on their line; off, the bytes
+ *  as before */
 export function originalFiles(
   { fsys, project: read, meta }: Paper,
   {
@@ -477,6 +487,8 @@ export function originalFiles(
     names = true,
     pastBegin = !!layout,
     transcode = !layout,
+    reduced = false,
+    statements = false,
   }: OriginalOptions = {},
 ): Map<string, Uint8Array> {
   // (the paper's own bytes: patch transcodes no file)
@@ -536,7 +548,8 @@ export function originalFiles(
     MARK_DEF +
     (dvi ? DVI_MARK_DEF : '') +
     (layout
-      ? LAYOUT_TEX +
+      ? (reduced ? LAYOUT_TEX_REDUCED : LAYOUT_TEX) +
+        (statements ? STATEMENTS_TEX : '') +
         (dvi ? DVI_LAYOUT_TEX : '') +
         (called ? CALL_TEX : '') +
         (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) +
@@ -552,6 +565,15 @@ export function originalFiles(
     spans.skip = head.length
     spans.lines = () => (found ??= unitLines(raw!, patched!, out, project.main, head.length))
   }
+  return out
+}
+/** a marked request's files reduced (design-performance Q2; compile/paper.ts markedOfPaper `reduce`): its main file's points'
+ *  TeX without the optional classes' (POINTS_TEX_REDUCED in POINTS_TEX's place: the bytes originalFiles `reduced` writes), every
+ *  other file, the carried ones among them, as it is; a main file of no layout marks as it is */
+export function reducedFiles(files: ReadonlyMap<string, Uint8Array>, main: string): Map<string, Uint8Array> {
+  const out = new Map(files),
+    bytes = files.get(main)
+  if (bytes) out.set(main, latin1Bytes(latin1(bytes).split(POINTS_TEX).join(POINTS_TEX_REDUCED)))
   return out
 }
 /** the babel names' marks off (originalFiles `names` false): NAMES_TEX's wrapper (\axt@nmall, which begindocument/end and

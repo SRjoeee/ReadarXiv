@@ -17,10 +17,11 @@ export interface OriginalFacts {
   banner: string | null
 }
 
-/** the instrument's four objects, in the order a prepare hands them out: B, its log, the plan (what the instrument is made of
- *  beside them) and the definitions */
-export const INSTRUMENT_OBJECTS = ['b.pdf', 'log', 'plan', 'definitions'] as const
-/** the instrument's four objects as a prepare makes them, and as a later prepare of the paper is given them back */
+/** the instrument's five objects, in the order a prepare hands them out: B, its log, the mark probe's raw log (the one its
+ *  answers were read from, so that a later reading of them needs no TeX), the plan (what the instrument is made of beside
+ *  them) and the definitions */
+export const INSTRUMENT_OBJECTS = ['b.pdf', 'log', 'probe.log', 'plan', 'definitions'] as const
+/** the instrument's five objects as a prepare makes them, and as a later prepare of the paper is given them back */
 export type StoredInstrument = Record<(typeof INSTRUMENT_OBJECTS)[number], Uint8Array>
 
 /** the paper's own reasons a prepare ends with (the server's words, `@readarxiv/format`'s FAILURE_REASONS) */
@@ -117,11 +118,14 @@ interface Plan {
   inkless: Kept
   lineskip?: Kept
   decorated?: Kept
+  /** the marked compile left the optional classes of points out (design-performance Q2), so a prepare from the stored objects
+   *  states it as the compile's did */
+  reduced?: true
   /** the .bbl's bytes as base64 */
   bbl: { path: string; bytes: string } | null
   facts: OriginalFacts
 }
-/** the instrument's four objects as a prepare stores them, of what the marked compile gave (B, its log, the options instrumentOf
+/** the instrument's five objects as a prepare stores them, of what the marked compile gave (B, its log, the probe's, the options instrumentOf
  *  reads), the job's .bbl the paper was opened with and the facts of the original it was compiled for: B as it is, the log and
  *  the plan as UTF-8 (the plan's JSON in this order of its keys), the definitions; null where the options do not read back as
  *  they are, so that no plan is stored that would not make the same instrument */
@@ -131,12 +135,17 @@ const storedInstrumentOf = ({
   options,
   bbl,
   facts: f,
+  reduced = false,
+  probeLog,
 }: {
   finalPdf: Uint8Array
   log: string
+  /** the mark probe's raw log, the one its answers were read from (markedOfPaper `probeLog`) */
+  probeLog: string
   options: Record<string, unknown>
   bbl: { path: string; bytes: Uint8Array } | null
   facts: OriginalFacts
+  reduced?: boolean
 }): StoredInstrument | null => {
   const texts = keeps(options.texts)
   const inkless = keeps(options.inkless)
@@ -150,12 +159,14 @@ const storedInstrumentOf = ({
       inkless,
       ...(lineskip ? { lineskip } : {}),
       ...(decorated ? { decorated } : {}),
+      ...(reduced ? { reduced: true as const } : {}),
       bbl: bbl ? { path: bbl.path, bytes: toBase64(bbl.bytes) } : null,
       facts: { pages: f.pages, day: f.day, banner: f.banner },
     }
     return {
       'b.pdf': finalPdf,
       log: UTF8.encode(log),
+      'probe.log': UTF8.encode(probeLog),
       plan: UTF8.encode(JSON.stringify(p)),
       definitions: UTF8.encode('{"front":"today","definitions":null}'),
     }
@@ -180,6 +191,8 @@ const planOf = (stored: StoredInstrument): ReadPlan | null => {
   const lineskip = 'lineskip' in p ? keptOf(p.lineskip) : null
   const decorated = 'decorated' in p ? keptOf(p.decorated) : null
   if (texts === undefined || inkless === undefined || lineskip === undefined || decorated === undefined) return null
+  if ('reduced' in p && p.reduced !== true) return null
+  const reduced = 'reduced' in p
   const f = p.facts
   if (typeof f !== 'object' || f === null || !('pages' in f) || !('day' in f) || !('banner' in f)) return null
   const { pages, day, banner } = f
@@ -201,6 +214,7 @@ const planOf = (stored: StoredInstrument): ReadPlan | null => {
     inkless,
     ...(lineskip ? { lineskip } : {}),
     ...(decorated ? { decorated } : {}),
+    ...(reduced ? { reduced: true as const } : {}),
     bbl,
     facts: { pages, day, banner },
   }

@@ -5,14 +5,16 @@
 // 7d8fad7c4, before the table.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { openPaper, originalFiles } from '../../src/compile/live.ts'
+import { openPaper, originalFiles, reducedFiles } from '../../src/compile/live.ts'
 import {
   DVI_LAYOUT_TEX,
   LAYOUT_CLASSES,
   LAYOUT_TEX,
+  LAYOUT_TEX_REDUCED,
   POINT_CLASSES,
   POINTS,
   POINTS_TEX,
+  POINTS_TEX_REDUCED,
   pointClassOf,
 } from '../../src/marks/marks.ts'
 
@@ -140,5 +142,40 @@ describe("the points' classes", () => {
       ['g2t', 'mark'],
     ]
     for (const [name, c] of cases) expect(pointClassOf(name), name).toBe(c)
+  })
+})
+
+describe('the reduced marked source (Q2): no TeX of an optional class, nothing else moved', () => {
+  const dec = (b: Uint8Array | undefined) => new TextDecoder().decode(b)
+  it("the points' TeX without the paragraph ends', the layout marks' with it, one line still", () => {
+    expect(POINTS_TEX_REDUCED).toBe(
+      POINTS.filter(([c]) => c !== 'para-end')
+        .map(([, tex]) => tex)
+        .join(''),
+    )
+    expect(POINTS_TEX_REDUCED).not.toContain('para/end')
+    expect(LAYOUT_TEX.split(POINTS_TEX)).toHaveLength(2)
+    expect(LAYOUT_TEX_REDUCED).toBe(LAYOUT_TEX.split(POINTS_TEX).join(POINTS_TEX_REDUCED))
+    expect(LAYOUT_TEX_REDUCED).not.toMatch(/\n/)
+  })
+  it("originalFiles' `reduced`: the main file's layout marks reduced, its lines and every other file as they were; reducedFiles the same of any request's files", () => {
+    for (const make of [papers.pdflatex, papers.latex]) {
+      const full = originalFiles(make(), { lines: true, layout: LAYOUT_CLASSES })
+      const reduced = originalFiles(make(), { lines: true, layout: LAYOUT_CLASSES, reduced: true })
+      expect([...reduced.keys()]).toEqual([...full.keys()])
+      const a = dec(full.get('main.tex')),
+        b = dec(reduced.get('main.tex'))
+      expect(b).toBe(a.split(POINTS_TEX).join(POINTS_TEX_REDUCED))
+      expect(b.split('\n')).toHaveLength(a.split('\n').length)
+      // (a request's files: its own, the carried beside them, a final pass's main file: the main file's points reduced)
+      const carried = new Map([...full, ['main.aux', new TextEncoder().encode('\\relax\n')]])
+      expect([...reducedFiles(carried, 'main.tex')].map(([p, x]) => [p, dec(x)])).toEqual(
+        [...reduced, ['main.aux', new TextEncoder().encode('\\relax\n')]].map(([p, x]) => [p, dec(x as Uint8Array)]),
+      )
+    }
+    // (without `reduced`, or without layout marks, the bytes as they were)
+    expect(dec(originalFiles(papers.pdflatex(), { lines: true, reduced: true }).get('main.tex'))).toBe(
+      dec(originalFiles(papers.pdflatex(), { lines: true }).get('main.tex')),
+    )
   })
 })

@@ -1052,7 +1052,7 @@ only how it meets the rest of the extension.
   **One entry, typed** (`packages/engine/src/prepare.ts`, the front half `packages/engine/src/front.ts`). `prepare(take,
   host)` runs the two in order and is what both callers run: the box, and the lab's runner
   (`lab/pdf/prepare-back/run.mjs`), so that the lab makes a paper through the product's door. It takes the inputs once
-  (`take`: the source's files, arXiv's PDF and, where a compile of the same original made them, the instrument's four
+  (`take`: the source's files, arXiv's PDF and, where a compile of the same original made them, the instrument's five
   stored objects), reads what arXiv's PDF says (`originalFactsOf`: its page count, its day, its
   banner's TeX Live year), decides the tree (`treeOf`: the paper's declaration, else the banner's year, else the default)
   and answers a paper of another tree before anything is compiled, runs the front half (`prepareFront`: the
@@ -1082,8 +1082,19 @@ only how it meets the rest of the extension.
   as after today's compile. Today's request, judged by the guard as today's, then its final pass, is asked where pass 1 did
   not run through, a pass returned no files, pass 1 wrote another bibliography job or names a missing .bib, the files to
   carry pass the host's bound (`filesBound`, the box's one answer's, 256 files and 8 MiB), or a full pass did not run
-  through. `markedOfPaper` also returns the mark probe's log its answers were read from (`probeLog`, `CompiledResult`'s),
-  for a host to store beside the instrument.
+  through. The files the bibliography's pass wrote (`madeBibliography`'s `files`) are carried into pass 1 as a pass's are
+  to the next (`carried`, Q1's option (i)). Its tail, stated: a paper of n passes to its fixed point costs today n draft
+  passes and one full one, the loop one draft and n - 1 full ones, so a paper of three passes whose full pass costs over
+  about twice a draft pass costs more (PDF-READER §19.7's six papers); which pass settles is not known before it runs, and
+  no predictor is used. **A marked request that dies is asked once more, reduced** (Q2; `compiledOf` sets `reduce`): one
+  that did not run through where TeX ran, no host's limit stopped it and its log states no error of TeX's (the engine's
+  own death: 2610.30769v1's pdfTeX at a shipout with more of our points in its node lists) is asked again without the
+  optional classes of points (`marks.ts` `POINT_CLASSES`: the paragraph ends alone; `live.ts` `reducedFiles`, over the
+  same carried files), every marked request after it so (`originalFiles` `reduced`), within the budget, once. The stored
+  plan (`reduced`), the instrument's `made`, the guard's record and the head (`reduced`, optional: FORMAT 1) say so; the
+  paragraph ends and the alignment those points state are then read off the page. The stored instrument is five objects:
+  `b.pdf`, `log`, `probe.log` (the mark probe's raw log its answers were read from, so that a later reading of them needs
+  no TeX), `plan`, `definitions` (`plan.ts` `INSTRUMENT_OBJECTS`), handed out by `prepare` and read back with the rest.
   **One front half, today's** (2026-11-09). A rebuilt front half (a typed source reader under TeX's definitions, a marks
   writer and a drafts-only compile plan, in `packages/engine/src/{source,marks,compile}/`) was run beside today's over
   the 87 corpus papers and deleted (its last state is the tag `f2-final-2026-11-09`): it stated none of the element
