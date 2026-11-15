@@ -7451,6 +7451,18 @@ the tracking and room knobs before the leading (2610.40645v1-ja, tracking states
 almost none of them: they surely fail (§18.81's bound), or take the floor's lines (tracking laid 9.3 to 6.3, the leading 0 to
 14.8 of 50.6 tried, the lays outside the walk 127.2 to 93.4). Tests: `packages/typeset/tests/unit/script-pitch.test.ts`.
 
+The gates (2026-11-16). The reader gate lays its entry with today's recorded rule set (`gate-l1.ts`, the tap's), so it shows no
+change to the rule data; laid instead with the package's own (a lab hook, the bases off and on), over the Japanese pairs and the
+pack's Korean ones on the door's rows and the Japanese pairs on Google's: I3, I4 and I5 none before and after, I10 no fault, I11
+every box painted whole; lines past their slot by a closing mark's blank half 193 to 33 (door) and 181 to 26 (Google). Members
+laid otherwise on the door's rows: 1,511 of the Japanese pairs' 2,648 and 616 of the Korean pairs' 648, most by their leading
+alone; their median line gap, in ems of their size, 1.10-1.44 to 1.16-1.58 (Japanese) and 1.15-1.26 to 1.39-1.47 (Korean). The
+display gate, the three Japanese pairs it holds, against the same at today's bases: pages worse 0 to 9 (the default) and 1 to 10
+(every option on), the readings newly worse of two kinds, the same in both modes: a paragraph's line count off the original's,
+farther than today's (8: the looser pitch holds fewer lines in the original's height; 2610.40645v1-ja p14 t93 eight lines, today
+seven, now five; one a line more, 2602.23285v2-ja p19 t180), and a first line off the original's (1: 2609.20976v1-ja p8 t41,
+3.1 pt); pages covered by the owner's rulings 21 to 33 (L1 13, L2 9, Fm 3, TRS 3) and 22 to 36.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
