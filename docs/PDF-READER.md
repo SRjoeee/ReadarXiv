@@ -7206,6 +7206,48 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   (today 6.43), 2611.03953v2 p8 "Time to \\ target" at 7.17 pt (today 8.97; its column's box not stated, laid in its lines' own
   rooms, 27.8 and 20.3 pt wide) and "Recovery \\ at budget" at its size.
 
+### 18.76 A title set in the line with no mark after it is kept apart from its sentence (the owner's ruling A of 2026-11-13; the display design's F40; the coordinator's variant C of 2026-11-16)
+
+The owner, shown `\noindent\textbf{Global Matching} We leverage …` drawn in Chinese with the title flush against its text
+(2111.09276v1 pp5-6, about twenty titles: 「全局匹配我们利用…」): one character's width after the title, by the method that is
+right in the long run (「用长期最正确的方法做就行」). A heading the class sets in the line (`\paragraph`: a heading unit of its own,
+drawn with the original's gap) and a title that ends with a stop or a colon are right already and are not touched.
+
+- **No translator is told.** The wire is the one of before and a reply is read as before: no digest moves, no row is asked
+  again. A first form cut the title off as a sentence of its own on the tags wire and joined the two sentences back with an
+  ideographic space; Google, given the title alone, translated 15 of 26 titles worse than within their sentence ("Howto100M" as
+  "how to reach 100 million", "Global Matching" as worldwide matching; the base wire asked again the same day: no drift). A cut
+  of ours that makes the translator's answer worse is not the method that is right in the long run: withdrawn.
+- **The engine states the fact** (`packages/engine` bundle/run-in.ts `runInsOf`, once per unit over the paragraphs every member
+  of it states TeX opened at its groups, written by bundle.ts on each member's spans: the part's `SpanAt.runin`; optional, not in
+  the unit's id, FORMAT stays 1). A group of a unit a translator cuts into sentences (Unit.sentences, no entry) is stated where
+  it (a) opens a paragraph of its unit (no text of the unit before it, or SpanAt.opens; the outermost group there), (b) sets a
+  face (bold, italic, small capitals, a code face, a face read off its glyphs: not a colour, a link, an underline or a group of
+  no style), (c) is followed in the source by plain white space (a text that begins with it, or a tie, past what sets nothing),
+  and (d) then by what begins a sentence by the cutter's own reading (`@readarxiv/text` `opensAfter`: a stop set at the group's
+  close, what follows no continuation), with only white space, ties, citations and notes' marks between; its text ends with no
+  closing mark (Terminal_Punctuation or a dash, past closing brackets and quotes) and it states no `stop`. A spacing element of
+  the paper's own after it (`\quad`, `\hspace`, `\vspace`), a forced break or any other element first is the paper's own
+  separation, drawn as it is: nothing is added. A formula that opens the sentence is a miss of the rule.
+- **The lay draws it** (`packages/typeset` breaker/tokens.ts, the one place; lay/read.ts carries the statement onto the group's
+  open piece). In a script that writes no spaces between its words (Chinese, Japanese: not Korean, `keepAll`), after the close of
+  a group so stated, before the first thing drawn after it past a tie, a citation or a note's mark (its sentence's text, or an
+  element the row begins that sentence with): a gap of one em of the line's size, a CJK character's advance, set as the paper's
+  own `\quad` is (a kern on what precedes it: no stretch of a justified line's, dropped where a line ends there); the white
+  space the row set there is its place. None where the row holds a closing mark there (the
+  title's text ends with one, or the text after it begins with one: "Oracle" and a full-width colon, the reply's own
+  separation), where a break stands, or where the title no longer opens a sentence in the row (text before it that ends no
+  sentence: Google folded 2111.09276v1's "\textbf{wikiHow} We treat wikiHow as …" into one sentence, the group its object).
+  In a script that writes spaces the reply's own space is there: nothing is added.
+- **Over the 92 pairs** (the built statement over the integration's units and parts, lane f40-runin): 34 groups stated, 29
+  titles and 5 labels ("(a)", "(b)"), none that is no title; 2 titles missed (2111.09276v1's "Textual Similarity" and "Visual
+  Similarity": a formula opens their sentence). Not stated, separated by their source: 7 (`\hspace{0.2em}` once, `\quad` three
+  times, `\vspace` once, a forced break twice); not stated by their face: 2 titles that end with their own stop and the ink
+  units' coloured labels. On Google's stored rows the lay sets 32 gaps in Chinese, none after "Oracle" (its colon), none
+  after the moved "wikiHow", and nothing in the one Spanish row.
+- **Versions**: PIPELINE moves (the parts state `runin`: prepared again); LAYOUT moves (a line holding such a title is laid
+  otherwise); the translators' digests and the rows' keys stay.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader in Chinese and Japanese, a title an author sets at the start of a paragraph with no full stop after it, such as "**Global Matching** We leverage …", is kept apart from the sentence after it by one character's width. It had run flush into it. The translation is asked for as before.
 - Changed: with Google translating, each formula, citation or reference of a passage is sent to Google in a shorter form that Google keeps as whole as before, so a paper is asked of Google in about a sixth fewer characters and fewer requests.
 - Fixed: with Google translating, a sentence keeps its full stop where the paper sets something that prints nothing right after it, such as a label, a conditional of its own or an empty mark, and the sentence after it is translated as a sentence of its own. Google had dropped the stop and run the two sentences together.
 - Fixed: in the PDF reader, letters the paper sets right against a highlighted word or an accented letter, such as the "s" of a highlighted "guitar" or the letters of a name written with an accent command, stay as printed beside it. They had been sent to the translation service as a word of their own, and the "s" of "guitars" could come back as the word for seconds. A possessive such as "'s" after a highlighted name is translated with the sentence, and a number beside such a word is sent whole, as before.
