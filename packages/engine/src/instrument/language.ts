@@ -88,9 +88,10 @@ export const holdsNoWord = (content: readonly Piece[]): boolean =>
  *  the author block */
 export const RUNNING = new Set(['para', 'abstract', 'theorem', 'caption', 'footnote'])
 
-/** what an element reads as to the sentence cutter (@readarxiv/text sentenceCuts): packages/translate's standInOf (wire/text.ts),
- *  the same table: a note's mark the sentence before it's, a citation where it stands, a reference a number, a formula a word,
- *  a break or a space a space; any other element a word */
+/** what an element reads as to the sentence cutter (@readarxiv/text sentenceCuts), by its kind alone: packages/translate's
+ *  standInOf (wire/text.ts), the same table: a note's mark the sentence before it's, a citation where it stands, a reference a
+ *  number, a formula a word, a break or a space a space; any other element a word. An element stated `silent` is read so too,
+ *  by its kind, never left out of the projection: this reading reads no `silent` */
 function standInOf(kind: string): string | undefined {
   if (kind === 'cite') return 'citation'
   if (kind === 'note-mark' || kind === 'footnote') return 'annotation'
@@ -120,8 +121,9 @@ const WORD = /\p{L}+/gu
 /**
  * R2: the paper's own names: each title-case word (a capital, then lower-case letters) its running text (RUNNING) writes
  * capitalised mid-sentence at least once and never in lower case. Mid-sentence: not the first word of its sentence, the
- * sentences being the shared cutter's (@readarxiv/text sentenceCuts over each unit's plain projection, its elements read as
- * the translators' wires read them); a sentence's first word is the first run of letters at or after its start. Never in lower
+ * sentences being the shared cutter's (@readarxiv/text sentenceCuts over each unit's plain projection, every element in it one
+ * U+FFFC read by its kind alone, standInOf, a `silent` one too); a sentence's first word is the first run of letters at or
+ * after its start. Never in lower
  * case: no run of letters of the running text, wherever it stands, is the word in lower case. A word is a run of letters
  * (\p{L}+): "Gemini-2.5" holds "Gemini"; "MiniMax" and "GPT" are no title-case word (R1 reads them)
  */

@@ -77,6 +77,14 @@ source reader states, and by `packages/engine/src/locate/ink.ts` for the texts r
 `of` the block its source ties it to where that is not its kind's (a `\thanks` written in `\author{…}`, acmart's
 `\authornote`: `of: 'author'`); `of` is in no id and reaches no translator. The kind a reading option decides by is
 `toggleKind(x)`, `x.of ?? x.kind` (`packages/format/src/schema.ts`), and every site that decides one calls it.
+`entry` says the unit is a bibliography's entry, the source reader's `\bibitem` (stated by `entryOf` in
+`packages/engine/src/instrument/instrument.ts`, carried onto its form with the block's names by
+`packages/engine/src/bundle/names.ts`), its parts its blocks, each begun by an element stated `newblock` (LaTeX's `\newblock`,
+a skip, never `silent`). An element's `silent` is the instrument's (TeX's tables, `isInkless`), and its `text`, the text TeX set
+for it on its line's baseline at its text's size, the bundle's (`packages/engine/src/bundle/bundle.ts`): stated where every
+placement of the unit in a part agrees, read off locate's reading of each element's glyphs against its line, for every class
+(`Member.onBase`, `packages/engine/src/locate/geometry.ts`). None of these is in an id; the gate of `silent`
+(`lab/pdf/prepare-back/silent-gate.mjs`, the chain's exit 5) holds that no part states ink or text for a silent element.
 
 **Located: where each unit stands on A.** The back half reads B's ownership of every glyph (which unit, which role, which
 piece: a piece's ink is what TeX set between its two points, and a table cell's piece TeX gives no closing point ends at its
@@ -236,6 +244,8 @@ a gate is named by its id there. The rows after them are this repository's own.
 | The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
 | Each behaviour digest is the hash of its case table's outcomes | `packages/translate/tests/digests.test.ts`, `packages/translate/tests/chain-digest.test.ts`, `tests/providers/prompt.test.ts`; `pnpm digests` | |
 | A translator is sent no field of identity (`src`, `keys`, `open`, `close`, `depth`, `of`) | `packages/translate/tests/bundle.test.ts` | |
+| No element a unit states `silent` has ink or a text TeX set in any placement of a part | the chain's runner (`lab/pdf/prepare-back/run.mjs`, exit 5, by `silent-gate.mjs`), so the release check's `prepare`; `tests/lab/silent-gate.test.ts` | |
+| An element's `text` is stated only where every placement of its unit in a part agrees: on its line's baseline, at its text's size, no mark | `packages/engine/tests/wire-facts.test.ts` | |
 | Every site that decides a reading option reads `toggleKind` | `tests/pdf-reader/toggle-kind.test.ts` | |
 | The layer's units are those its head names, each read once | `packages/reader/tests/session.test.ts`; the harness (`packages/reader/e2e/run.mjs`) | |
 | The page stack puts a page view in place only once it has drawn at the scale it stands at, and draws again one a new scale resets while it draws | `packages/reader/tests/stack.test.ts` (over a stand-in of PDF.js 6.3.289's page view); the harness (`packages/reader/e2e/run.mjs`: a display alone, then side by side, under a host's sheet that takes a pane out at no width) | the stand-in is PDF.js 6.3.289's page view as the stack meets it, read again at a PDF.js update |

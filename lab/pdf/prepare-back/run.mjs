@@ -15,9 +15,11 @@
 //   kind, each with its page, glyph, member, unit and role, and the table's owner (`rows`);
 //   stdout one summary line (the ownership's two counts in it). Exit 3: a compile no cache holds (the paper missing). Exit 4: a
 //   paragraph TeX opened where a group the instrument wrote as its content stood (Located.stats.opensLost: the gate of
-//   instrument/instrument.ts passThroughOf), outputs written. A paper the prepare refuses is written with its refusal's
-//   detail (the dump's `refused`), as the box states it; one whose source is a PDF (arXiv's e-print of a submission made as a
-//   PDF) is answered `no-source` before the engine is called, as the box answers it: the summary line alone, nothing written.
+//   instrument/instrument.ts passThroughOf), outputs written. Exit 5: an element a unit states `silent` whose placement in a
+//   part states ink or a text TeX set for it (silent-gate.mjs, the summary's `silentInk`), outputs written. A paper the prepare
+//   refuses is written with its refusal's detail (the dump's `refused`), as the box states it; one whose source is a PDF
+//   (arXiv's e-print of a submission made as a PDF) is answered `no-source` before the engine is called, as the box answers
+//   it: the summary line alone, nothing written.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -28,6 +30,7 @@ import * as PL from '@cantoo/pdf-lib'
 import { analyze, inMemory, isMemoryError, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { flatOf, pieceKOf } from './pieces.mjs'
+import { silentInkOf } from './silent-gate.mjs'
 import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
 
 const argOf = n => process.argv.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
@@ -102,6 +105,8 @@ mkdirSync(bundleDir, { recursive: true })
 let ins = null, tally = null, head = null, refusal = null, finalPdf = null
 const parts = []
 let unitsBytes = 0
+// (the units and parts as written, which the gate of `silent` reads: silent-gate.mjs)
+const written = { units: [], parts: [] }
 const madeId = sha(Buffer.concat([Buffer.from(sha(sourceBytes)), Buffer.from(sha(arxivBytes)), Buffer.from(IMAGE)]))
 // (the box's way, what is read let go once located, but where a step after reads the instrument's ink and A's pages: the claims
 // and the review; the proofs read A's pages again, as the back half read them)
@@ -127,7 +132,11 @@ const end = await prepare(() => ({ files: source, original: arxivBytes, stored: 
   object: async (x) => {
     writeFileSync(join(bundleDir, `${x.digest}.${x.kind}`), x.bytes)
     if (x.kind === 'part') parts.push({ page: x.page, digest: x.digest, bytes: x.bytes.length, flows: x.flows, members: x.members })
-    if (x.kind === 'units') unitsBytes += x.bytes.length
+    if (x.kind === 'units') {
+      unitsBytes += x.bytes.length
+      written.units.push(...JSON.parse(Buffer.from(x.bytes).toString('utf8')).units)
+    }
+    if (x.kind === 'part') written.parts.push(JSON.parse(Buffer.from(x.bytes).toString('utf8')))
     if (x.kind === 'head') { head = x.head; writeFileSync(join(bundleDir, 'head.json'), `${JSON.stringify(head)}\n`) }
   },
   note: () => {},
@@ -296,6 +305,8 @@ for (let p = 1; p <= N; p++) {
 }
 // (paragraphs TeX opened where a group the instrument wrote as its content stood: none stated, and none may be: the gate below)
 const opensLost = tally?.located?.opensLost ?? 0
+// (elements stated `silent` that a part states ink or a text TeX set for: none may be, the gate below)
+const silentInk = silentInkOf(written.units, written.parts)
 // (paragraph ends of B inside a unit that state no point (facts-pass.ts): where an open or an element stands where the next
 // paragraph begins in the source (anchored) and where plain text does (plain))
 const opensUnstated = tally?.located?.opensUnstated ?? null
@@ -329,9 +340,12 @@ if (located) {
   mkdirSync(join(OUT, 'ownership'), { recursive: true })
   writeFileSync(join(OUT, 'ownership', `${id}.json`), `${JSON.stringify({ id, ...ownership, byKind, rows: { found: disagreements.filter((d) => !d.carried).map(row), carried: disagreements.filter((d) => d.carried).map(row) } })}\n`)
 }
-console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ownership, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
+console.log(JSON.stringify({ id, refused: refusal, units: units.length, ...states, located: tally?.located.located ?? 0, unlocated: tally?.located.unlocated ?? {}, born: tally?.located.born ?? 0, made: tally?.located.made ?? null, wrap: tally?.wrap ?? null, ownership, silentInk: silentInk.count, ...(proofs ? { proofs: { a: proofs.glyphs.a.failed, c: proofs.glyphs.c.failed, ...(proofs.pixels ? { on: proofs.pixels.onFailed?.length, offOutside: proofs.pixels.offOutside ? Object.fromEntries(Object.entries(proofs.pixels.offOutside).map(([k, v]) => [k, v.length])) : proofs.pixels.refused } : {}) } } : {}), ms: Math.round(performance.now() - t0) }))
 for (const t of tasks) await t.destroy().catch(() => {})
 // (the gate of a group written as its content (pipeline/instrument.mjs passThroughOf, decided before TeX's paragraph ends are read):
 // a paragraph TeX opened at one has nothing to state it on, so the paper fails, exit 4, its outputs written)
 if (opensLost) { console.error(`${id}: ${opensLost} paragraph(s) TeX opened where a group the instrument wrote as its content stood`); process.exit(4) }
+// (the gate of `silent`: an element that goes on no wire and comes back at its group's front or end sets nothing where it stands,
+// which no placement of it may contradict, so the paper fails, exit 5, its outputs written)
+if (silentInk.count) { console.error(`${id}: ${silentInk.count} element(s) stated silent with ink or text in a part: ${JSON.stringify(silentInk.rows.slice(0, 10))}`); process.exit(5) }
 process.exit(0)

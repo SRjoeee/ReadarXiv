@@ -58,6 +58,10 @@ export interface Member {
   /** the share an element's faked small capitals are set at, by its id, where its text is in TeX's case for them (facts.ts
    *  elementCase): its style states it (facts-pass, El.style.sc) */
   smallCaps?: Map<string, number>
+  /** the elements (by piece id) whose glyphs TeX set on the baseline of the lines they stand on, one baseline a line and no rule or
+   *  image among their ink, read for every class (geometry.ts, `level`'s reading for a class of text): what the bundle states an
+   *  element's text on its line by (format's el `text`, F10); no part carries it */
+  onBase?: Set<string>
   labelAt?: Label
   /** where its label stands on none of its lines: TeX's measure for the label's own line (columnsAndMeasures), what its alignment
    *  is read against (facts-pass.ts, Label.align) */

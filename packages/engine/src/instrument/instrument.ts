@@ -187,11 +187,22 @@ const styleOf = (src: string | undefined): string =>
  *  `\noindent`, `\-`, a table's row rule; never a space, a break, a fill or a skip), which no translator needs: a marker for
  *  it is a hard boundary to Microsoft (2610.19159's `\bfseries` before every coloured word, 13,000 markers and word salad,
  *  TRANSLATE_VERSION 3 and 10) */
-const wireFacts = (p: PhPiece): { after?: string; stop?: string; silent?: 1 } => {
+const wireFacts = (p: PhPiece): { after?: string; stop?: string; silent?: 1; newblock?: 1 } => {
   if (p.src === BACKREF_LIST) return { after: BACKREF_GAP }
+  if (NEWBLOCK.test(unicodeOf(p.src))) return { newblock: 1 }
   const stop = displayStop(p.src)
   return { ...(stop ? { stop } : {}), ...(isInkless(p) ? { silent: 1 } : {}) }
 }
+/** LaTeX's `\\newblock`, where a new block of a bibliography entry begins (BibTeX's styles write it between an entry's authors,
+ *  title and venue; the source reader makes it a placeholder of its own): stated `newblock` (format's el). Its classes define it
+ *  as a skip (natbib's, article's and IEEEtran's `\\hskip .11em plus .33em minus .07em`, revtex's `\\ `, amsart's and acmart's
+ *  `{}`), so it is never `silent`, which no list of the kernel's names it as either (mt.ts isInkless) */
+const NEWBLOCK = /^\\newblock(?![A-Za-z@])\s*$/
+/** the kind of the units the source reader makes of a bibliography's `\\bibitem`s (latex-front.ts BIB_KINDS: one unit an entry,
+ *  its later paragraphs TeX's other entries) */
+const ENTRY_KIND = 'reference'
+/** whether a unit is a bibliography's entry, the source reader's `\\bibitem` (format's Unit.entry: its parts are its blocks) */
+export const entryOf = (u: { readonly kind: string }): boolean => u.kind === ENTRY_KIND
 /** backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST: the piece the front end ends the entry's first
  *  paragraph in, no byte of the source, its ink between the marks LAYOUT_TEX's hook sets around the list): TeX sets it after the
  *  entry's text and is no word of it — backref.sty's parscan reads the entry to its paragraph's end (`\BR@@bibitem#1#2\par`),
@@ -2142,6 +2153,7 @@ export async function instrumentOf({
       ...(Number.isInteger(u.depth) ? { depth: u.depth } : {}),
       ...(u.title ? { title: true } : {}),
       ...(u.front ? { front: true } : {}),
+      ...(entryOf(u) ? { entry: true } : {}),
       ...(u.of ? { of: u.of } : {}),
       ...(u.held && (u.kind === 'author' || u.kind === 'affiliation') ? { stored: true } : {}),
       ...(facts.kept.has(i) ? { kept: true, [facts.why.get(i)!]: true } : {}),
