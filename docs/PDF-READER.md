@@ -7336,6 +7336,9 @@ today's request.
   horizontal box alone, the same `\par` sets nothing (TeX ignores it in restricted horizontal mode). Pass 1 is the marked
   files, so an ask's box can hold the marks' own nodes (a paragraph's point in its indent box, a forced break's, a unit's
   destination): read as no ink there alone (`marks.ts` OWN_NODE), never in the probe's reading, whose document holds no mark.
+  Right after the sample stands a token of the ask's that says it was reached: a sample that takes it as its argument read
+  past its own source (an argument the front end does not know it takes: url's `\urldef`, which reads the name and the
+  command after it, 2402.10294v1) and has no answer, never one measured on the ask's own tokens (`ink-eaten`).
 - **Writes nothing** (ASK_TEX): it expands to nothing where `\protect` is not `\@typeset@protect` and between an alignment's
   rows (an align group in vertical mode: a token of ours there would begin a cell before `\hline`, colortbl's `\rowcolor` or
   longtable's `\endhead`); every counter is given back after it (`\cl@@ckpt`, as `\include` does); its group writes no file

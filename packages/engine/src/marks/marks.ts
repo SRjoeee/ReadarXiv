@@ -624,7 +624,9 @@ export function inkSection(samples: readonly string[], from = 0): string {
  * force (\hsize, \parshape, the skips as they stand), between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`), so that a
  * sample that ends the paragraph or the line there leaves two lines, or a line and a box, which readInkProbe never reads as
  * inkless; between paragraphs, in a vertical box as it stands; in a horizontal box (a table's cell, an \mbox) and in a formula,
- * in a horizontal box, in math for the formula. The mode is read and its conditional closed before the sample runs.
+ * in a horizontal box, in math for the formula. The mode is read and its conditional closed before the sample runs. Right after
+ * the sample stands \axt@aseen, which says it was reached: a sample that took it as its argument read past its own source, and
+ * the ask writes `ink-eaten <i>` (eatenOf: no answer).
  * It changes nothing the pass writes or sets: where \protect is
  * not \@typeset@protect (a moving argument written to the .aux, a .toc, a mark) it expands to nothing; in an alignment between
  * its rows (an align group, \currentgrouptype 6, in vertical mode: where TeX looks for \noalign or \omit, and a token of ours
@@ -646,14 +648,16 @@ export const ASK_TEX = [
   ASK_UNWIND,
   '\\def\\axtask{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@askable\\else\\expandafter\\@gobbletwo\\fi}',
   '\\def\\axt@askable{\\ifnum\\currentgrouptype=6 \\ifvmode\\expandafter\\expandafter\\expandafter\\@gobbletwo\\else\\expandafter\\expandafter\\expandafter\\axt@ask\\fi\\else\\expandafter\\axt@ask\\fi}',
-  // (the box each mode sets its sample in, and which one: read where the ask stands, its conditional closed before the sample)
-  '\\long\\def\\axt@aset@p#1{\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\hbox{}#1\\hbox{}\\@@par}}',
-  '\\long\\def\\axt@aset@v#1{\\setbox\\axt@abox\\vbox{\\everypar{}#1}}',
-  '\\long\\def\\axt@aset@h#1{\\setbox\\axt@abox\\hbox{#1}}',
-  '\\long\\def\\axt@aset@m#1{\\setbox\\axt@abox\\hbox{$#1$}}',
+  // (the box each mode sets its sample in, and which one: read where the ask stands, its conditional closed before the sample;
+  // right after the sample, a token that says it was reached: a sample that took it as its argument read past its own source)
+  '\\def\\axt@aseen{\\global\\let\\axt@aseenok\\relax}',
+  '\\long\\def\\axt@aset@p#1{\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\hbox{}#1\\axt@aseen\\hbox{}\\@@par}}',
+  '\\long\\def\\axt@aset@v#1{\\setbox\\axt@abox\\vbox{\\everypar{}#1\\axt@aseen}}',
+  '\\long\\def\\axt@aset@h#1{\\setbox\\axt@abox\\hbox{#1\\axt@aseen}}',
+  '\\long\\def\\axt@aset@m#1{\\setbox\\axt@abox\\hbox{$#1\\axt@aseen$}}',
   '\\def\\axt@amode{\\ifmmode\\let\\axt@aset\\axt@aset@m\\else\\ifvmode\\let\\axt@aset\\axt@aset@v\\else\\ifinner\\let\\axt@aset\\axt@aset@h\\else\\let\\axt@aset\\axt@aset@p\\fi\\fi\\fi}',
   '\\protected\\long\\def\\axt@ask#1#2{\\ifcsname axt@asked@#1\\endcsname\\expandafter\\@gobbletwo\\else\\expandafter\\axt@asknow\\fi{#1}{#2}}',
-  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\axt@amode\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\axt@aset{#2}\\axt@aunwind\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}}`,
+  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\axt@amode\\global\\let\\axt@aseenok\\@undefined\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\axt@aset{#2}\\axt@aunwind\\ifx\\axt@aseenok\\relax\\else${probeRow('ink-eaten', '#1')}\\fi\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}}`,
   '\\makeatother',
 ].join('')
 /** one ask (ASK_TEX): sample `i` of the asked, its source as the piece writes it */
@@ -720,6 +724,18 @@ const NO_INK_NODE =
   /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\(|mark|pdfcolorstack|write|openout|closeout|pdfdest|pdfsave|pdfrestore|pdfsetmatrix|vadjust|discretionary|leaders|cleaders|xleaders)/
 /** a rule TeX lists: its height, depth and width (`*` running) */
 const RULE_NODE = /^\.+\\rule\(([-\d.*]+)\+([-\d.*]+)\)x([-\d.*]+)$/
+/** the asks whose sample took the token set right after it as its argument (ASK_TEX's `ink-eaten <i>` row): it read past its own
+ *  source, into the ask's tokens, which its use never gives it (url's `\\urldef`, which reads the name and the command after it:
+ *  2402.10294v1). No answer: the probe's stands. The probe writes no such row */
+function eatenOf(log: string | null | undefined): Set<number> {
+  const out = new Set<number>()
+  for (const line of (log ?? '').split('\n')) {
+    if (!line.startsWith('LAYOUT-PROBE 1 ink-eaten ')) continue
+    const [r] = readProbe(line)
+    if (r?.tag === 'ink-eaten' && r.fields.length === 1) out.add(Number(r.fields[0]))
+  }
+  return out
+}
 /** a node of a vertical list that is neither a line nor material of its own: glue, a kern, a penalty */
 const SPACE_NODE = /^\.\\(?:glue|kern|penalty)/
 /** LuaTeX's node at a paragraph's start and the values it lists below it (none of them a box: `\\localleftbox=null`), in a
@@ -749,6 +765,7 @@ export function readInkProbe(
   samples: readonly string[],
   { ask = false }: { ask?: boolean } = {},
 ): string[] {
+  const eaten = eatenOf(log)
   const out: string[] = []
   let at: number | null = null,
     nodes: string[] | null = null,
@@ -771,7 +788,7 @@ export function readInkProbe(
         lines = 0
         continue
       }
-      if (at === i && nodes && !bad && !parted && samples[i] !== undefined) out.push(samples[i])
+      if (at === i && nodes && !bad && !parted && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
       at = null
       continue
     }
@@ -822,6 +839,7 @@ export function readInkProbe(
  *  (`! OK.`), and no error between its rows but that end; inkless or not (a vertical box's of two lines answered: readInkProbe).
  *  A sample with no listing or an error is no answer */
 export function readInkAnswered(log: string | null | undefined, samples: readonly string[]): string[] {
+  const eaten = eatenOf(log)
   const out: string[] = []
   let at: number | null = null,
     listed = false,
@@ -836,7 +854,7 @@ export function readInkAnswered(log: string | null | undefined, samples: readonl
         listed = ok = bad = false
         continue
       }
-      if (at === i && listed && ok && !bad && samples[i] !== undefined) out.push(samples[i])
+      if (at === i && listed && ok && !bad && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
       at = null
       continue
     }

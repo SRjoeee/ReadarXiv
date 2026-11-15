@@ -15,7 +15,8 @@
 // in a table's cell asked there; a macro that leaves math open (`$a`) asked, its math closed after it; a skip of no ink
 // answered; a command that ends the paragraph or the line where it is used (`\par`, `\\`, `\newline`, a keywords
 // environment's `\unskip\par`, as cas-sc's `\sep`) is never inkless; a macro that begins a paragraph between paragraphs
-// (`\leavevmode`) is inkless, the paragraph's point of ours in its indent box read as no ink. Each sample asked at most once; a row's rule at a row's
+// (`\leavevmode`) is inkless, the paragraph's point of ours in its indent box read as no ink; a macro that reads past its own
+// source (an argument the front end does not know it takes) has no answer, never one measured on the ask's own tokens. Each sample asked at most once; a row's rule at a row's
 // start not asked (no \noalign misplaced); a paragraph's own \begingroup and \endgroup never asked; two macros of 35 errors
 // each in one paragraph asked and the pass run through (the count starts again after each ask). Exit 1 on a failure.
 //   pnpm exec tsx lab/pdf/spikes/ask-cases.mjs [--years=2023,2025] [--engines=pdflatex,xelatex,lualatex,latex] [--out=<dir>]
@@ -55,6 +56,7 @@ const MAIN = String.raw`\documentclass{article}
 \newcommand\mynl{\newline}
 \newenvironment{kws}{\par\def\ksep{\unskip\par}}{\par}
 \newcommand\lead{\leavevmode}
+\expandafter\def\csname takeone\endcsname#1{}
 \newcommand\noisyA{\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA}
 \newcommand\noisyB{\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB}
 \begin{document}
@@ -76,7 +78,7 @@ Words that \mypar{} end here, a line \mycr{} cut, another \mynl{} too.
 
 \begin{kws}alpha \ksep beta \ksep gamma\end{kws}
 
-\lead{} A paragraph a macro begins.
+\lead{} A paragraph a macro begins, and a word \takeone x taken.
 
 \begin{figure}\caption{A caption \capt}\label{f1}\end{figure}
 \renewcommand\later{Late}Then \later{} again.
@@ -113,6 +115,9 @@ const WANT = {
   '\\ksep': 'kept',
   // (a paragraph's start where it is used, between paragraphs: a line of no ink, our own point in its indent box)
   '\\lead{}': 'inkless',
+  // (a macro that reads past its own source, which the front end does not know takes an argument: what it sets at its use
+  // is not measured on the ask's own tokens; no answer)
+  '\\takeone': undefined,
 }
 
 const files = new Map([

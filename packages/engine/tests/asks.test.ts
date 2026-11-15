@@ -126,6 +126,12 @@ describe('the asks’ answers, read from the pass’s log', () => {
     expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\a{}', '\\b{}', '\\c{}'], inked: ['\\d{}'] })
     expect(readInkProbe(log, asked)).toEqual([])
   })
+  it('gives no answer for a sample that took the token after it as its argument: it read past its own source', () => {
+    // (the row ASK_TEX writes before the listing where the token after the sample was never reached)
+    const eaten = (i: number) => listing(i, NONE, [], [`LAYOUT-PROBE 1 ink-eaten ${i}`])
+    const log = [listing(0, NONE, []), eaten(1), listing(2, '\\hbox(4.3+0.0)x5.8', INKED)].join('\n')
+    expect(useAnswersOf(log, ['\\nada{}', '\\urldef', '\\kw'])).toEqual({ inkless: ['\\nada{}'], inked: ['\\kw'] })
+  })
   it('takes each answered source’s answer over the probe’s, the probe’s where the use gave none', () => {
     const probe = ['\\kw', '\\tnote{b}', '\\undef']
     expect(mergeUses(probe, { inkless: ['\\nada'], inked: ['\\kw', '\\tnote{b}'] })).toEqual(['\\undef', '\\nada'])
