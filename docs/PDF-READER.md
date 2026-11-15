@@ -7326,6 +7326,41 @@ that no ink of A was given to it, not what TeX set at its use. Where the probe's
 times in 4 papers, threeparttable's `\tnote{b}` (a superscript inside its table) once (2610.21313v1). The probe asked where
 the document uses a macro (the compile move's B4) answers both.
 
+### 18.80 The ink probe asked where the document uses a macro (the compile move's B4, the display design's F15, 2026-11-16)
+
+The mark probe sets each of a paper's macros in a box of its own after the paper's preamble (§18.78), so a macro an environment
+defines otherwise, or one the body defines later, is read where the document does not use it: elsarticle's `\sep`, empty
+outside `keyword` and `\unskip, ` in it; threeparttable's `\tnote`, a superscript inside its table alone; a VLDB paper's
+`\vldbauthors`, filled by `\maketitle`. The marking gives an inkless answer no mark (§18.79's limit), so the use's answer is
+asked where the paper already compiles its own document before the marking: the bibliography's pass (`compile/paper.ts`
+madeBibliography with `asks`, an option `compiledOf` sets; today's reader asks nothing), no pass added.
+
+- **Where**: each ink sample of the paper as the pass opens it (no `.bbl` yet: an entry's macros keep the probe's answers) is
+  asked once, right before its first use in running text (`compile/live.ts` askedFiles, `\axtask{<i>}{<its source>}`): at the
+  token, since a paragraph's start lies before `\begin{keyword}`, where `\sep` is still empty. Not in a heading's title or a
+  caption (LaTeX copies their argument as written into the `.aux`, the `.toc` and hyperref's nameref title), nor in an
+  algorithm float's body (the front end's `pseudocode`), nor a sample whose own groups do not close (`marks.ts` askable: a
+  paragraph's `\begingroup` piece).
+- **How** (`marks.ts` ASK_TEX): the ink section's own test of one sample, its source tokenized at the place. It changes
+  nothing the pass writes or sets: it expands to nothing where `\protect` is not `\@typeset@protect` and between an
+  alignment's rows (an align group in vertical mode: a token of ours there would begin a cell before `\hline`, colortbl's
+  `\rowcolor` or longtable's `\endhead`); every counter is given back after it (`\cl@@ckpt`, as `\include` does); its group
+  writes no file (`\@fileswfalse`); every group the sample left open is closed after it, math by `$`; and it ends with a
+  paragraph of its own in a box, whose end starts TeX's error count again (a paragraph's asks never add up to the hundred
+  errors that stop TeX). A pass with asks that does not run through is asked again as today's.
+- **Read** (`marks.ts` useAnswersOf, mergeUses): an answered use's answer, inkless or not, replaces the probe's for that source
+  before the marking reads `inkless`; the probe's stands where the use gave none. Rule 3's measured half reads `nothing` within
+  that `inkless` (§18.79).
+
+Held by the TeX gate's cases (`lab/pdf/spikes/ask-cases.mjs`, both years, the four engines: the `.bbl`, the `.aux` and the
+`.toc` byte for byte today's, as many errors outside the asks, each answer as the use sets it) and on six papers' own passes
+in Docker (72 s): the `.bbl` and the `.aux` byte for byte today's, no TeX error but the base's; the marking's inkless loses
+2608.25210v2's `\vldbauthors`, 2610.21313v1's `\tnote{a}`, `{b}`, `{d}` and 2610.20848v1's `\sep` (inked where used), and gains
+2610.19159v1's `\trajectoryMark{}` and 2610.21084v1's `\sep` (inkless where used: its `keywords` environment leaves `\sep` empty).
+F15's census over the 89's stored logs (asks at a paragraph's start, the 39 papers with the pass): 4 inkless answers turn inked,
+2 unanswered inkless, 1 unanswered inked, 10 inked unanswered. A paper whose bibliography's pass is asked is compiled anew: no
+stored compile answers the pass with its asks.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

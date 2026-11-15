@@ -614,6 +614,49 @@ export function inkSection(samples: readonly string[], from = 0): string {
   )
   return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
+/**
+ * The ink probe's asks where the document uses a macro (the compile move's B4, the display design's F15): the TeX the
+ * bibliography's pass (compile/paper.ts madeBibliography with `asks`) writes on its main file's first line, and `\axtask{<i>}{<the
+ * piece's source>}` right before a sample's first use (compile/live.ts askedFiles). An ask is the ink section's own test of one
+ * sample (inkSection: its rows, its box, \showbox, the group levels it unwinds), its source tokenized where the document uses it,
+ * read by readInkProbe and readInkAnswered over the asked samples, every group the sample left open closed after it (ASK_UNWIND).
+ * It changes nothing the pass writes or sets: where \protect is
+ * not \@typeset@protect (a moving argument written to the .aux, a .toc, a mark) it expands to nothing; in an alignment between
+ * its rows (an align group, \currentgrouptype 6, in vertical mode: where TeX looks for \noalign or \omit, and a token of ours
+ * would begin a cell before a \hline, colortbl's \rowcolor or longtable's \endhead) it expands to nothing; an index is asked once
+ * (a caption measured, then set); its conditional is closed before the sample runs (a paper's `\fi`); every counter is given back
+ * after it as \include's checkpoint gives them (\cl@@ckpt); its group writes no file (\@fileswfalse: a \cite or a \label inside
+ * writes no line to the .aux, so the .bbl BibTeX makes of it is the same); and it ends with a paragraph of its own in a box
+ * (\everypar empty), whose end starts TeX's error count again, as the ink section's empty paragraph after each sample does: the
+ * errors of a paragraph's asks never add up to the hundred that stop TeX. "! OK." counts no error of TeX's
+ */
+/** the groups an ask closes after its sample, down to the level it began at (ASK_TEX, the probe's PROBE_UNWIND with every group
+ *  TeX can be left in inside a box): a semi-simple group by \\endgroup, a math shift group by `$`, a math left group by \\right.,
+ *  every other but an alignment's by \\egroup (a sample that leaves `$x` open must leave no math after the ask) */
+const ASK_UNWIND =
+  '\\gdef\\axt@aue{\\global\\let\\axt@unwound\\axt@aunwind\\egroup}\\gdef\\axt@aunwind{\\global\\let\\axt@unwound\\relax\\ifnum\\currentgrouplevel>\\axt@level\\relax\\ifcase\\currentgrouptype\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\axt@aue\\or\\global\\let\\axt@unwound\\axt@aunwind\\endgroup\\or\\global\\let\\axt@unwound\\axt@aunwind$\\or\\global\\let\\axt@unwound\\axt@aunwind\\right.\\fi\\fi\\axt@unwound}'
+export const ASK_TEX = [
+  '\\makeatletter',
+  '\\newbox\\axt@abox',
+  ASK_UNWIND,
+  '\\def\\axtask{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@askable\\else\\expandafter\\@gobbletwo\\fi}',
+  '\\def\\axt@askable{\\ifnum\\currentgrouptype=6 \\ifvmode\\expandafter\\expandafter\\expandafter\\@gobbletwo\\else\\expandafter\\expandafter\\expandafter\\axt@ask\\fi\\else\\expandafter\\axt@ask\\fi}',
+  '\\protected\\long\\def\\axt@ask#1#2{\\ifcsname axt@asked@#1\\endcsname\\expandafter\\@gobbletwo\\else\\expandafter\\axt@asknow\\fi{#1}{#2}}',
+  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\setbox\\axt@abox\\hbox{#2}\\axt@aunwind\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}}`,
+  '\\makeatother',
+].join('')
+/** one ask (ASK_TEX): sample `i` of the asked, its source as the piece writes it */
+export const askOf = (i: number, src: string): string => `\\axtask{${i}}{${src}}`
+/** whether a sample can be asked where the document uses it: its own groups close in it (as many \\begingroup as \\endgroup, \\bgroup
+ *  as \\egroup; its braces balance, inkSamples' boxable). One that opens or closes a group of the paragraph around it (a paper's
+ *  `\\begingroup` piece, its `\\endgroup` further on) would take that paragraph's groups apart there */
+export const askable = (src: string): boolean => {
+  const n = (re: RegExp) => (src.match(re) ?? []).length
+  return (
+    n(/\\begingroup(?![A-Za-z@])/g) === n(/\\endgroup(?![A-Za-z@])/g) &&
+    n(/\\bgroup(?![A-Za-z@])/g) === n(/\\egroup(?![A-Za-z@])/g)
+  )
+}
 /** the probe document of the layout marks: its punctuation section, then its ink section, its name section, its skip section,
  *  the punctuation section of the paper's own macros (probeSamples' `own`, numbered on from the asked ones), and last the ink
  *  section of the leads (leadSamples, numbered on from `ink`): a call of one of the paper's macros runs whatever its body does,
@@ -712,6 +755,35 @@ export function readInkProbe(log: string | null | undefined, samples: readonly s
     }
     if (line === '') continue
     bad = true
+  }
+  return out
+}
+
+/** the samples TeX answered in the ink section's form (inkSection, ASK_TEX): its box listed (`> \box…=`), the listing's own end
+ *  (`! OK.`), and no error between its rows but that end; inkless or not. A sample with no listing or an error is no answer */
+export function readInkAnswered(log: string | null | undefined, samples: readonly string[]): string[] {
+  const out: string[] = []
+  let at: number | null = null,
+    listed = false,
+    ok = false,
+    bad = false
+  for (const line of (log ?? '').split('\n')) {
+    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
+    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+      const i = Number(r.fields[0])
+      if (r.tag === 'ink-at') {
+        at = i
+        listed = ok = bad = false
+        continue
+      }
+      if (at === i && listed && ok && !bad && samples[i] !== undefined) out.push(samples[i])
+      at = null
+      continue
+    }
+    if (at === null) continue
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) ok = listed
+    else if (TEX_ERROR.test(line)) bad = true
+    else if (/^> \\box\d+=/.test(line)) listed = true
   }
   return out
 }
@@ -1206,15 +1278,36 @@ function nothingOf(log: string | null | undefined, units: readonly Unit[], asked
 export function probeFactsOf(
   log: string | null | undefined,
   units: readonly Unit[],
+  inkless: readonly string[] | null = null,
 ): { texts: [string, string][]; decorated: [string, string][]; ends: string[]; nothing: string[] } {
   const ink = inkSamples(units),
     leads = leadSamples(units, ink)
+  // (where the marking's answers are given, `nothing` within its inkless: the use's answer where TeX was asked where the
+  // document uses the macro, B4, mergeUses)
+  const marked = inkless ? new Set(inkless) : null
   return {
     texts: readInkTexts(log, [...ink, ...leads], { quotes: true }),
     decorated: readInkDecorated(log, [...ink, ...leads], { quotes: true }),
     ends: readInkEnds(log, ink),
-    nothing: nothingOf(log, units, [...ink, ...leads]),
+    nothing: nothingOf(log, units, [...ink, ...leads]).filter((s) => !marked || marked.has(s)),
   }
+}
+/** what TeX answered where the document uses a macro (the bibliography's pass's asks, ASK_TEX), by source: those it said set no
+ *  ink (readInkProbe) and those it answered otherwise (readInkAnswered) */
+export type UseAnswers = { inkless: string[]; inked: string[] }
+/** the asks' answers from the bibliography's pass's log, the asked samples by their ask's index */
+export function useAnswersOf(log: string | null | undefined, asked: readonly string[]): UseAnswers {
+  const inkless = readInkProbe(log, asked),
+    none = new Set(inkless)
+  return { inkless, inked: readInkAnswered(log, asked).filter((s) => !none.has(s)) }
+}
+/** the marking's inkless with the use's answers (B4): a source TeX answered where the document uses it takes that answer, set no
+ *  ink or set some; one it did not answer there keeps the probe's. In the probe's order, the use's added after */
+export function mergeUses(inkless: readonly string[], uses: UseAnswers | null | undefined): string[] {
+  if (!uses) return [...inkless]
+  const inked = new Set(uses.inked),
+    had = new Set(inkless)
+  return [...inkless.filter((s) => !inked.has(s)), ...uses.inkless.filter((s) => !had.has(s))]
 }
 
 // ---- babel's names: what each one's own text is, TeX asked

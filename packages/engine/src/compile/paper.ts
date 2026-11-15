@@ -23,6 +23,7 @@
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.ts'
 import {
+  askedFiles,
   DRAFT_OPTION,
   markedPreamble,
   NO_DRIVER_GROUP,
@@ -58,16 +59,19 @@ import {
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, markTextOf } from './base.ts'
 import {
   completeCalled,
+  inkSamples,
   LAYOUT_CLASSES,
+  mergeUses,
   probeSamples,
   readInkAnswers,
   readMarkProbe,
   readNameProbe,
   readSkipProbe,
   NAME_MARK_FILE,
+  useAnswersOf,
   withoutNameMarks,
 } from '../marks/marks.ts'
-import type { Complete, MarkClass, Switches } from '../marks/marks.ts'
+import type { Complete, MarkClass, Switches, UseAnswers } from '../marks/marks.ts'
 import type { NameKey } from '../marks/names.ts'
 import type { Fsys } from '../source/latex-front.ts'
 import type { Compiled, CompileRequest, Paper, Spans } from './live.ts'
@@ -143,6 +147,9 @@ export interface MarkedCompileOptions {
   /** the statements the rebuilt prepare's marked compile makes and today's does not (live.ts originalFiles `statements`,
    *  marks.ts STATEMENTS_TEX), in every marked request. The rebuilt prepare's (compiled.ts compiledOf) */
   statements?: boolean
+  /** what TeX answered where the document uses a macro (madeBibliography `asks`, its `uses`: B4, F15), taken over the probe's
+   *  answer for that macro (marks.ts mergeUses) before the marking reads its inkless. The rebuilt prepare's (compiled.ts) */
+  uses?: UseAnswers | null
   compileBudgetMs?: number | null
   filesBound?: { count: number; bytes: number } | null
   OPS?: Record<string, number>
@@ -276,13 +283,16 @@ const BIBITEM_LINE = /^[ \t]*\\bibitem(?![A-Za-z@])/m
  */
 export async function madeBibliography(
   paper: Paper,
-  { compile, compilerOf = null, engines = null }: Host,
+  { compile, compilerOf = null, engines = null, asks = false }: Host & { asks?: boolean },
 ): Promise<
-  | { paper: Paper; made: { path: string; bytes: Uint8Array }; files: Map<string, Uint8Array>; ms: number }
-  | { kept: BibliographyKept; ms: number }
+  (
+    | { paper: Paper; made: { path: string; bytes: Uint8Array }; files: Map<string, Uint8Array>; ms: number }
+    | { kept: BibliographyKept; ms: number }
+  ) & { uses?: UseAnswers }
 > {
   const t0 = performance.now()
-  const done = <R extends object>(r: R) => ({ ...r, ms: Math.round(performance.now() - t0) })
+  let uses: UseAnswers | null = null
+  const done = <R extends object>(r: R) => ({ ...r, ...(uses ? { uses } : {}), ms: Math.round(performance.now() - t0) })
   const { main } = paper.project,
     job = jobName(main)
   const before = bibliographyKept(paper)
@@ -291,18 +301,21 @@ export async function madeBibliography(
   const engine = paper.meta.compiler!
   if (Array.isArray(engines) && !engines.includes(engine)) return done({ kept: 'engine' })
   let c: Compiled | null = null
-  try {
-    c = await compile({
-      main,
-      engine,
-      rerun: false,
-      bibtex: true,
-      overrides: unmarkedFiles(paper),
-      draft: true,
-      files: true,
-    })
-  } catch (e) {
-    if (isMemoryError(e)) throw e
+  const pass = async (overrides: Map<string, Uint8Array>) => {
+    try {
+      return await compile({ main, engine, rerun: false, bibtex: true, overrides, draft: true, files: true })
+    } catch (e) {
+      if (isMemoryError(e)) throw e
+      return null
+    }
+  }
+  // (with `asks`, the ink probe asks each of the paper's macros where the document first uses it, inside this pass: B4, F15.
+  // A pass with asks that does not run through is asked again as today's, so that the asks cost the bibliography nothing)
+  const ask = asks ? askedFiles(paper, inkSamples(paper.units)) : null
+  c = await pass(ask?.files ?? unmarkedFiles(paper))
+  if (ask?.asked.length) {
+    if (ranThrough(c)) uses = useAnswersOf(c!.log, ask.asked)
+    else c = await pass(unmarkedFiles(paper))
   }
   if (!ranThrough(c)) return done({ kept: 'compile' })
   if (!c!.files) return done({ kept: 'no-files' })
@@ -426,6 +439,7 @@ export async function markedOfPaper(
     reduce = false,
     carried = null,
     statements = false,
+    uses = null,
     compileBudgetMs = null,
     filesBound = null,
     pages = null,
@@ -531,7 +545,8 @@ export async function markedOfPaper(
     const { inkless, texts, decorated, apart } = readInkAnswers(log, paper.units)
     return {
       switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)),
-      inkless,
+      // (where TeX was asked where the document uses a macro, that answer: B4)
+      inkless: mergeUses(inkless, uses),
       texts,
       decorated,
       names: readNameProbe(log),

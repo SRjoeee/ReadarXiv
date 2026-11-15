@@ -639,9 +639,7 @@ export function contextUnits(
  *  set no other place) and END_TEX (AXT-END, by which a compile ran through: live.mjs ranThrough) on one line before its
  *  first, nothing else of ours */
 export const unmarkedFiles = (paper: GuardPaper): Map<string, Uint8Array> =>
-  new Map([
-    [
-      paper.project.main,
-      latin1Bytes(`\\PassOptionsToPackage{draft}{graphicx}${END_TEX}${latin1(paper.fsys.read(paper.project.main)!)}`),
-    ],
-  ])
+  new Map([[paper.project.main, latin1Bytes(`${UNMARKED_HEAD}${latin1(paper.fsys.read(paper.project.main)!)}`)]])
+/** the unmarked original's head: graphicx's draft and END_TEX, on the main file's first line before its own (unmarkedFiles; the
+ *  bibliography's pass with its asks, live.ts askedFiles) */
+export const UNMARKED_HEAD = `\\PassOptionsToPackage{draft}{graphicx}${END_TEX}`

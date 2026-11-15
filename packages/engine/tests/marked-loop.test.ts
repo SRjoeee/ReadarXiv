@@ -509,6 +509,15 @@ describe("the probe's raw log, returned beside the answers read from it", () => 
     }
   })
 })
+describe("the answers TeX gave where the document uses a macro (B4's `uses`), taken over the probe's", () => {
+  it("the marking's inkless with them: a source answered there takes that answer, the probe's stand elsewhere", async () => {
+    const answers = () => [draftOf({ 'main.aux': AUX }), fullOf({ 'main.aux': AUX })]
+    const plain = await run(paperOf(), answers(), { converge: true })
+    const asked = await run(paperOf(), answers(), { converge: true, uses: { inkless: ['\\nada'], inked: [] } })
+    expect([...(pdfOf(plain.made).options.inkless as Iterable<string>)]).toEqual([])
+    expect([...(pdfOf(asked.made).options.inkless as Iterable<string>)]).toEqual(['\\nada'])
+  })
+})
 /** what the engine asked and made at d5673d033 (this file's cases run there, before Q1), each request and result as digests */
 const GOLDEN_AT_BASE: Record<string, unknown> = {
   'a paper: the probe, every pass, the final pass': {
