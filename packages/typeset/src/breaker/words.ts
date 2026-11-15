@@ -1,8 +1,9 @@
 // B.words: where the words of the target's text end, by the platform's own word segmentation (Unicode's word boundaries,
 // UAX #29, as the runtime's ICU gives them: Intl.Segmenter of the target's language, granularity 'word'), for a table cell set
 // on several lines whose text the lay wraps over the cell's lines itself (lay/adapt.ts; docs/PDF-READER.md §18.75, the owner's
-// decision of 2026-11-15): its lines break between words, never inside one, and the fit's size falls only where no break
-// between words fits. No list of words, characters or languages of ours, no threshold: the breaker's own break opportunities
+// decision of 2026-11-15): its lines break between words, never inside one, at each size where a break between words fits;
+// the size never gives way to whole words (his answer of 2026-11-16, fit/walk.ts triesOf: where none fits at a size, the lay as
+// before at that size). No list of words, characters or languages of ours, no threshold: the breaker's own break opportunities
 // that fall where the platform ends a word. The segments are the runtime's ICU data's, so two runtimes may differ on a rare word.
 import type { Token } from './tokens.ts'
 
