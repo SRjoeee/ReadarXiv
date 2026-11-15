@@ -106,6 +106,12 @@ export type Token = {
   of?: Token
   /** a word's head cut at a hyphenation point, its hyphen set (B.break) */
   hyphenated?: true
+  /** its start stands inside a word of the target's text, by the platform's segmentation (breaker/words.ts): a merged cell's
+   *  fill ends no line before it (FitParams.words) */
+  midWord?: true
+  /** where a word of the target's text ends inside it (breaker/words.ts, UTF-16 offsets into `s`): the only places a merged
+   *  cell's fill cuts it (FitParams.words); absent on an element's text, a label's and a control token */
+  wordEnds?: readonly number[]
 }
 /** a resolution as the tokens read it (U.elements' with the later rules' fields) */
 export type TRes = {

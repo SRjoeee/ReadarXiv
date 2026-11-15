@@ -273,6 +273,28 @@ function breakLines(
   // (a word wider than its line cut by its characters, each a grapheme, what a reader sees as one character: a letter and the
   // marks over it, a flag's two regional indicators; never before a mark no line opens with, nor inside a pair UAX 14 keeps)
   const cutBarred = (chars: readonly string[], k: number) => barredChar(chars[k]!) || keptPair(chars[k - 1], chars[k])
+  // (a merged table cell the lay fills (P.words; docs/PDF-READER.md §18.75, the owner's decision of 2026-11-15): a line of it
+  // ends only where the breaker lets it end AND a word of the target's text ends there, by the platform's segmentation
+  // (breaker/words.ts). A token whose start stands inside a word (`midWord`), a space too, is held to the one before it as a
+  // glued one is; a cut of a word longer than its line, or at a hyphenation point, is taken only where a word ends inside it
+  // (`wordEnds`): none, and the state fails, the fit stepping down its sizes. An element's text and a label state no words:
+  // cut as before)
+  const words = !!P.words
+  /** a token held to the one before it in a group: glued (a space never), and in such a fill any whose start stands inside a
+   *  word, a space too */
+  const holds = (t: BreakToken) => (t.space ? words && !!t.midWord : !!t.glue || (words && !!t.midWord))
+  /** whether a cut of token `t` after its first `k` graphemes `chars` ends a word there: one of its stated word ends */
+  const endsWord = (t: BreakToken, chars: readonly string[], k: number) =>
+    !!t.wordEnds?.includes(chars.slice(0, k).join('').length)
+  /** a token's word facts once its first `n` code units are cut off (its word ends from the cut on; inside a word at its start
+   *  where none ends at the cut) */
+  const wordsAfter = (t: BreakToken, n: number): Pick<BreakToken, 'wordEnds' | 'midWord'> =>
+    t.wordEnds
+      ? {
+          wordEnds: t.wordEnds.filter((e) => e > n).map((e) => e - n),
+          midWord: t.wordEnds.includes(n) ? undefined : true,
+        }
+      : {}
   // (the line in hand: null until the first open(); every read is inside a closure that runs after it, `settle` reading it with `?.`)
   let line = null as unknown as Line
   // (`past`: how many of the unit's kept regions the text has passed before the line's first item, the walk's own count
@@ -825,7 +847,7 @@ function breakLines(
       // a token and those glued to it; a space is a group of its own (what is glued after it is the next group's: the
       // footnote marks iteration 1 lost were skipped here with the space before them)
       let j = i + 1
-      if (!tokens[i]!.space) while (j < tokens.length && tokens[j]!.glue && !tokens[j]!.space) j++
+      if (!tokens[i]!.space) while (j < tokens.length && holds(tokens[j]!)) j++
       // (and a mark no line opens with, `barred`, joins the group before it, past the spaces between them too: a translation's
       // space before its comma or its bracket, a formula drawn as the page's characters with its spaces, a mark after a crop
       // that no rule glues. The line breaks before the group, never before the mark: kinsoku's push-out, the word or the
@@ -840,13 +862,13 @@ function breakLines(
           let q = j
           if (q + 1 < tokens.length && tokens[q]!.tie && !tokens[q + 1]!.space) {
             j = q + 2
-            while (j < tokens.length && tokens[j]!.glue && !tokens[j]!.space) j++
+            while (j < tokens.length && holds(tokens[j]!)) j++
             continue
           }
           while (q < tokens.length && tokens[q]!.space) q++
           if (q >= tokens.length || !barred(tokens[q]!)) break
           j = q + 1
-          while (j < tokens.length && tokens[j]!.glue && !tokens[j]!.space) j++
+          while (j < tokens.length && holds(tokens[j]!)) j++
         }
       const t0 = tokens[i]!
       if (t0.space) {
@@ -887,7 +909,12 @@ function breakLines(
             used += tw
           }
           if (q === m) {
-            // (the word whole on the line: what is glued after it goes on, as the group's first token alone does below)
+            // (the word whole on the line: what is glued after it goes on, as the group's first token alone does below; in a
+            // merged cell's fill only where a word ends after it, P.words, else the state fails)
+            if (words && tokens[m]?.midWord) {
+              stop = true
+              continue
+            }
             if (tokens[m]) setToken(m, { ...tokens[m]!, glue: false })
           } else {
             const t = tokens[q]!,
@@ -896,13 +923,25 @@ function breakLines(
             let k = 0,
               head = 0
             while (k < chars.length && used + head + per[k]! <= cap) head += per[k++]!
-            if (q === i) {
+            if (q === i && !(words && t.wordEnds)) {
               k = Math.max(1, k)
               head = per.slice(0, k).reduce((a, b) => a + b, 0)
             }
             while (k > 1 && k < chars.length && cutBarred(chars, k)) {
               k--
               head -= per[k]!
+            }
+            // (in a merged cell's fill, P.words: back to a word's end inside it, or its start where a word ends there; none, and
+            // the state fails)
+            if (words && t.wordEnds) {
+              while (k > 0 && ((k < chars.length && cutBarred(chars, k)) || !endsWord(t, chars, k))) {
+                k--
+                head -= per[k]!
+              }
+              if (k === 0 && (q === i || t.midWord)) {
+                stop = true
+                continue
+              }
             }
             if (k > 0) {
               line.items.push({ t: headOfCut(t, { s: chars.slice(0, k).join('') }), w: head, shift: 0, asp: 0 })
@@ -915,6 +954,7 @@ function breakLines(
                 glue: false,
                 cont: false,
                 asp: false,
+                ...wordsAfter(t, chars.slice(0, k).join('').length),
               })
             } else setToken(q, { ...t, glue: false, cont: false })
           }
@@ -926,6 +966,14 @@ function breakLines(
             used = 0
           const per = chars.map((c) => (P.measure.w100(c, t0.face as Face) * (t0.sc ?? 1) * f) / 100)
           while (k < chars.length && used + per[k]! <= cap) used += per[k++]!
+          // (in a merged cell's fill, P.words: only where a word ends inside it, the last that fits; none, and the state fails)
+          if (words && t0.wordEnds) {
+            while (k > 0 && ((k < chars.length && cutBarred(chars, k)) || !endsWord(t0, chars, k))) k--
+            if (k === 0) {
+              stop = true
+              continue
+            }
+          }
           k = Math.max(1, k)
           // (the part left never opens with a mark no line starts with, nor parts a pair UAX 14 keeps: the cut moves back before it)
           while (k > 1 && k < chars.length && cutBarred(chars, k)) k--
@@ -942,6 +990,7 @@ function breakLines(
             w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1),
             glue: false,
             asp: false,
+            ...wordsAfter(t0, chars.slice(0, k).join('').length),
           })
         } else if (t0.crop?.breaks?.length && tokW(t0, f, st, scale) > cap && urlCut(t0, cap, scale, true)) {
           // (a URL longer than the line by itself: cut at the last of its break points that fits, else at its first)
@@ -954,7 +1003,12 @@ function breakLines(
           // its first word: never alone at the line's end (2610.21098v1 p2's "(2)", the end of the line before its item's text).
           // The line is left as a sliver is (slotsAt), and the unit opens on its next)
         } else {
-          // the group's first token alone (the rest goes on): a glued group never runs past the line
+          // the group's first token alone (the rest goes on): a glued group never runs past the line; in a merged cell's fill
+          // only where a word ends after it (P.words), else the state fails
+          if (words && tokens[i + 1]?.midWord) {
+            stop = true
+            continue
+          }
           line.items.push(items[0]!)
           line.x += items[0]!.w + (items[0]!.asp ?? 0)
           if (tokens[i + 1]) setToken(i + 1, { ...tokens[i + 1]!, glue: false })
@@ -984,6 +1038,8 @@ function breakLines(
         const room = cap + shrink - line.x - asp
         let cut = null
         for (let q = pts.length - 1; q >= 0; q--) {
+          // (in a merged cell's fill, P.words: a point only where a word ends there)
+          if (words && t0.wordEnds && !t0.wordEnds.includes(pts[q]!)) continue
           const head = `${word.slice(0, pts[q])}-`
           const hw =
             (P.measure.w100(head, t0.face as Face) * f) / 100 + (st.trackLatin ? st.trackLatin * f * head.length : 0)
@@ -1002,6 +1058,7 @@ function breakLines(
             w100: P.measure.w100(tail, t0.face as Face) * (t0.sc ?? 1),
             glue: false,
             asp: false,
+            ...wordsAfter(t0, cut.at!),
           })
         }
       }

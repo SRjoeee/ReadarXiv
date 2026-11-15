@@ -7139,7 +7139,7 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   the table's papers ran their lines together, 2608.06701v1's "Trigger \\ Rate (%)" drawn with the first character of its
   second line's translation on its first line). It replaces, for these
   cells, each line in its own width widened half way to its neighbour where clipped at the floor. A reply that sets the break at its start or end takes none (U.breaks), and the breaker
-  fills the cell's lines, each in the room. A paragraph cell (a p, m, b or X column, a `\parbox`: no column box), a cell with a held
+  fills the cell's lines, each in the room, between words (the next bullet). A paragraph cell (a p, m, b or X column, a `\parbox`: no column box), a cell with a held
   line or lines on two pages, and one whose side stops short of the box are laid in their own rooms as before.
   `Placed.inner` is read by the facts pass (`locate/columns.ts` innerOf, in `facts-pass.ts` readColumns), for a cell whose lines
   are the rows of a box it holds, a line each: it holds a forced break and its rows (each stretch of its text between two forced
@@ -7154,6 +7154,32 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   the rule reaches the merged cells alone. `Placed.inner` is an optional field: the schema's rule (`packages/format/src/schema.ts`:
   "a new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread") keeps FORMAT 1, a typesetter
   of before laying the lines in their own rooms as it did.
+- **A cell the lay fills is broken between words** (the owner's decision of 2026-11-15, shown the fills on staging of three cells
+  whose reply set the break at its end, 2611.03953v2 p8 and 1512.03385v1 p12, a word split by our breaker; of four options he chose
+  「按建议（甲：不拆词）」, the page's words: 「甲：折行时不拆词。用浏览器自带的分词找出词的边界（不是我们自己的词表，各种语言通用），在词和词之间折行，实在折不开再缩小字号。」).
+  A merged cell (`lay/adapt.ts`: a cell of several lines TeX ended every one of but its last at a forced break of its text,
+  `El.ends` of a break, so that its lines are its text's rows and none is wrapped by TeX, as a paragraph cell's are) whose
+  reading takes none of its breaks (`unit/breaks.ts` statedBreaks: a reply that sets its break at its start or its end, or
+  drops it; U.breaks' maps open no line) is filled by the breaker itself, in its column's room or, where the part states none,
+  in its lines' own. A line of it then ends only where the breaker lets it end AND a word of the target's text ends there, by
+  the platform's own word segmentation (`breaker/words.ts`: `Intl.Segmenter` of the target's language, granularity `word`,
+  Unicode's word boundaries, UAX #29, as the runtime's ICU gives them; no list of words, characters or languages of ours, no
+  threshold, no case for a script). A token whose start stands inside a word is held to the one before it, a space inside one
+  too; a cut of a word longer than its line, or a hyphenation point, is taken only where a word ends inside it (so for a
+  language written with spaces the rule takes a hyphenation point inside a word away: the same words); the text between two
+  elements, a styled group's edge or the label is segmented as text, and a break at an element's edge is the tokens' own as
+  before (`breaker/break.ts`, `FitParams.words`). Nothing else of the lay changes: the lines' rooms, the one size and the search
+  for it, so the size falls only where no break between words fits; a cell no state of its fit sets so, not even below its
+  floor, is laid as before, a word cut where a line must end (`lay/member.ts`: never left the original's where today's lay
+  draws it). A reply that keeps its break between its lines is laid as before, the break where it states it; a paragraph cell,
+  body text and captions are no such cell. Where the platform has no `Intl.Segmenter` the cell is filled as before (runtime
+  feature detection; every host's floor requires one, `packages/reader/src/pdfjs/builds.ts` legacyRuns, and the breaker makes
+  a grapheme segmenter at load). The segments are the platform's: two runtimes' ICU data may differ on a rare word; the gates
+  run on Node's (22, ICU 78.2, Unicode 17), the reader on its browser's. Over Google's rows of the round-3 close's 92 pairs
+  (the door's rows hold no merged cell's): 8 merged cells filled in 4 papers, 3 of them laid otherwise and nothing else, each
+  today with a line ending inside a word and now with its words whole: 1512.03385v1 p12 "LOC error \\ on GT CLS" at 6.25 pt
+  (today 6.43), 2611.03953v2 p8 "Time to \\ target" at 7.17 pt (today 8.97; its column's box not stated, laid in its lines' own
+  rooms, 27.8 and 20.3 pt wide) and "Recovery \\ at budget" at its size.
 
 ## 19. The engine's contract
 
