@@ -500,6 +500,8 @@ export function lineGeometry(w: Work, owned: Owned): void {
         } else ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), r2(y0)])
       })
       const el: El = { kind: p.kind, ink }
+      // (TeX sets it as its unit's end mark: a fill pushed it to its line's end, its own box's or the source's (F14))
+      if (classOf.get(id)?.end) el.end = 1
       if (rowsKept(id) || outside.has(id)) el.keep = 1
       // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
       // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two

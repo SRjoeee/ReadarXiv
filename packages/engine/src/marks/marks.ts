@@ -759,8 +759,9 @@ const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
 export function readInkTexts(
   log: string | null | undefined,
   samples: readonly string[],
+  { quotes = false }: { quotes?: boolean } = {},
 ): [source: string, text: string][] {
-  return inkTextsOf(log, samples, false)
+  return inkTextsOf(log, samples, false, quotes)
 }
 /** a box TeX lists of no width, at a depth of the sample's box (its dots): what it holds moves no character of the line */
 const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
@@ -782,15 +783,26 @@ const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
 export function readInkDecorated(
   log: string | null | undefined,
   samples: readonly string[],
+  { quotes = false }: { quotes?: boolean } = {},
 ): [source: string, text: string][] {
-  return inkTextsOf(log, samples, true)
+  return inkTextsOf(log, samples, true, quotes)
 }
+/** TeX's quotation marks as a text font (OT1, T1, LY1) sets them, read with `quotes` (readInkTexts): ' at 0x27 the right quote,
+ *  ` at 0x60 the left; the ligatures '' and `` the double ones, whatever slot each encoding gives them */
+const QUOTE: Readonly<Record<string, string>> = Object.freeze({ "'": '\u2019', '`': '\u2018' })
+const QUOTE_LIG: Readonly<Record<string, string>> = Object.freeze({ "''": '\u201D', '``': '\u201C' })
+/** a quotation mark of XeTeX's word (TU), which TeX's ligature mapping already made U+2018 to U+201D, as the log holds it: its
+ *  UTF-8 bytes read one character a byte */
+const TU_QUOTE = /\xe2\x80([\x98\x99\x9c\x9d])/g
 /** readInkTexts' reading, and with `decorated` readInkDecorated's: the decoration TeX painted with the characters passed over, and
- *  only a sample that has one given */
+ *  only a sample that has one given; with `quotes` (the compile move's F16, the back half's reading of the probe's own log),
+ *  TeX's quotation marks read as the glyphs a text font sets for them, which without it are no answer: `it's` read as “it’s”,
+ *  ``quality'' as “quality” (2610.21376v1's \new{…}, 2610.40576v1's highlighted cells, 7 answers in 4 papers of B15's probes) */
 function inkTextsOf(
   log: string | null | undefined,
   samples: readonly string[],
   decorated: boolean,
+  quotes = false,
 ): [source: string, text: string][] {
   const out: [source: string, text: string][] = []
   let at: number | null = null,
@@ -894,6 +906,12 @@ function inkTextsOf(
     if (c) {
       const [, enc, ch, lig] = c,
         punct = enc === 'T1' || enc === 'TU' ? PUNCT_WIDE : PUNCT_ALL
+      // (a quotation mark of a text font, read as its glyph where asked)
+      const q = quotes && TEXT_ENCODING.has(enc) && enc !== 'TU' ? (lig ? QUOTE_LIG[lig] : QUOTE[ch!]) : undefined
+      if (q) {
+        text += q
+        continue
+      }
       if (
         TEXT_ENCODING.has(enc) &&
         (lig ? /^[A-Za-z0-9]+$/.test(lig) : /^[A-Za-z0-9]$/.test(ch!) || (ch!.length === 1 && punct.includes(ch!)))
@@ -907,7 +925,11 @@ function inkTextsOf(
     // (XeTeX's word, outside a formula: its characters, each one a character node's would be)
     const w = math === 0 ? WORD_NODE.exec(line) : null
     if (w) {
-      if ([...w[1]!].every((ch) => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch))) text += w[1]
+      const word = quotes
+        ? w[1]!.replace(TU_QUOTE, (_, b: string) => String.fromCharCode(0x1f80 + b.charCodeAt(0)))
+        : w[1]!
+      if ([...word].every((ch) => /^[A-Za-z0-9]$/.test(ch) || PUNCT_WIDE.includes(ch) || (quotes && /[‘’“”]/.test(ch))))
+        text += word
       else bad = true
       continue
     }
@@ -986,6 +1008,129 @@ export function readInkApart(log: string | null | undefined, samples: readonly s
     if (listed && first === null && /^\.(?!\.)/.test(line)) first = line
   }
   return out
+}
+
+/** a glue of infinite stretch in a box's outer list as TeX lists it (`.\glue 0.0 plus 1.0fill`, a named one's `\glue(\name)`):
+ *  a fil, fill or filll, which pushes what follows it to its line's end */
+const FIL_GLUE = /^\.\\glue(?:\(\\[A-Za-z@]+\))? -?[\d.]+ plus [\d.]*[1-9][\d.]*fil{1,3}(?: |$)/
+/**
+ * The samples TeX ends with ink a glue of infinite stretch pushed (the compile move's F14), from the probe's own log
+ * (inkSection): each sample whose box TeX listed in full with no error between its rows, its outer list holding a fil, fill or
+ * filll glue (FIL_GLUE) before its last ink, a node of that list that sets some: a character, a rule both wide and high (or
+ * running), a box holding one. amsthm's \qed (`\hfill\quad` and the box of its square's rules), an author's own (`\hfill` and a
+ * symbol), LLNCS's (a fil, a penalty, a skip, a fil again and its square): set at a paragraph's end, TeX pushes it to its
+ * line's end, the unit's end mark (El.end). A fill after the last ink, or one inside a box only, pushes none; a listing not read
+ * whole is no answer. 27 of the 33 end marks the probes of B15 hold (lanes/probes-facts.md, F14)
+ */
+export function readInkEnds(log: string | null | undefined, samples: readonly string[]): string[] {
+  const out: string[] = []
+  let at: number | null = null,
+    listed = false,
+    bad = false,
+    done = false
+  // (the outer list's nodes so far: whether a fill stood before the last ink; the outer node being read and whether it sets ink)
+  let fill = false,
+    pushed = false,
+    current: 'ink' | 'box' | 'none' | null = null,
+    boxInk = false
+  const close = () => {
+    if (current === 'box' && boxInk) current = 'ink'
+    if (current === 'ink') pushed = fill
+    current = null
+    boxInk = false
+  }
+  for (const line of (log ?? '').split('\n')) {
+    const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
+    if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
+      const i = Number(r.fields[0])
+      if (r.tag === 'ink-at') {
+        at = i
+        listed = bad = done = fill = pushed = boxInk = false
+        current = null
+        continue
+      }
+      if (at === i && done && !bad && pushed && samples[i] !== undefined) out.push(samples[i])
+      at = null
+      continue
+    }
+    if (at === null || done) continue
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) {
+      close()
+      done = listed
+      if (!done) bad = true
+      continue
+    }
+    if (TEX_ERROR.test(line)) {
+      bad = true
+      continue
+    }
+    if (/^> \\box\d+=/.test(line)) {
+      listed = true
+      continue
+    }
+    if (!listed || line === '' || /^\\[hv]box\(/.test(line)) continue
+    const outer = /^\.(?!\.)/.test(line)
+    const rule = RULE_NODE.exec(line)
+    const inked =
+      CHAR_NODE.test(line) ||
+      WORD_NODE.test(line) ||
+      (!!rule &&
+        (rule[3] === '*' || Number(rule[3]) > 0) &&
+        (rule[1] === '*' || rule[2] === '*' || Number(rule[1]) + Number(rule[2]) > 0))
+    if (!outer) {
+      // (a node inside an outer box: ink of that box's)
+      if (current === 'box' && inked) boxInk = true
+      continue
+    }
+    close()
+    if (FIL_GLUE.test(line)) fill = true
+    if (inked) current = 'ink'
+    else if (/^\.\\[hv]box\(/.test(line)) current = 'box'
+    else if (NO_INK_NODE.test(line) || rule) current = 'none'
+    else bad = true
+    if (current === 'ink' || current === 'box') pushed = false
+  }
+  return out
+}
+/** a source that is a glue of infinite stretch, TeX's own: \hfil, \hfill, LaTeX's \hspace{\fill} (its \fill, 0pt plus 1fill) */
+const FILL_SOURCE = /^\\(?:hfill?(?![A-Za-z@])|hspace\*?\s*\{\s*\\fill\s*\})\s*$/
+/**
+ * The pieces a unit ends with that TeX sets as its end mark (the compile move's F14, El.end on the piece's element), by their
+ * index in the unit's pieces: its last piece that sets ink (white space, groups' edges and placeholders that set none after it),
+ * a placeholder, where the probe says TeX ends its own box with ink a fill pushed (readInkEnds: amsthm's or an author's \qed
+ * written in the text), or where the source pushes it with a fill right before it, white space and groups' edges between
+ * (`\hfill $\square$`: 2610.40394v1's six). None where the unit's last ink is text, or no fill pushes it
+ */
+export function endPiecesOf(pieces: readonly PieceLike[], ends: ReadonlySet<string>): number[] {
+  const blank = (p: PieceLike) =>
+    (p.t === 'text' && !/\S/.test((p as { s?: string }).s ?? '')) || p.t === 'open' || p.t === 'close'
+  let k = pieces.length - 1
+  while (k >= 0 && (blank(pieces[k]!) || (pieces[k]!.t === 'ph' && classOf(pieces[k]) === null))) k--
+  const last = pieces[k]
+  if (last?.t !== 'ph') return []
+  if (ends.has(last.src ?? '')) return [k]
+  let j = k - 1
+  while (j >= 0 && blank(pieces[j]!)) j--
+  const before = pieces[j]
+  return before?.t === 'ph' && FILL_SOURCE.test(before.src ?? '') ? [k] : []
+}
+/**
+ * What the back half reads of the mark probe's own log (the compile move's B3, by the brief's ruling 6: the log the box stores
+ * beside the instrument, no field of the stored plan): the texts the ink section showed the samples and leads set, and those set
+ * beside a decoration, TeX's quotation marks read (F16: readInkTexts' and readInkDecorated's `quotes`); and the samples TeX ends
+ * with ink a fill pushed (F14: readInkEnds). The samples are readInkAnswers' own, the units' (inkSamples, leadSamples)
+ */
+export function probeFactsOf(
+  log: string | null | undefined,
+  units: readonly Unit[],
+): { texts: [string, string][]; decorated: [string, string][]; ends: string[] } {
+  const ink = inkSamples(units),
+    leads = leadSamples(units, ink)
+  return {
+    texts: readInkTexts(log, [...ink, ...leads], { quotes: true }),
+    decorated: readInkDecorated(log, [...ink, ...leads], { quotes: true }),
+    ends: readInkEnds(log, ink),
+  }
 }
 
 // ---- babel's names: what each one's own text is, TeX asked

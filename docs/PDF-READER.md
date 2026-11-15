@@ -7253,6 +7253,32 @@ bytes it was.
   left edge to its right, to 0.02 pt); each forced break's point stands right after the word before its `\\`, none in a centred
   block or a table's row.
 
+### 18.78 What the probe's own log tells the back half (the compile move's B3, 2026-11-15)
+
+The display design's F14 (an author's own `\qed` or `\hfill $\square$` drawn glued after the last word) and F16 (a highlighted
+cell, a macro's text, left untranslated where TeX's quotation marks stood in it) are two readings of the mark probe's own log,
+which the box stores beside the instrument (the brief's ruling 6): no TeX moves, and no field of the stored plan. The
+instrument's builder reads it where it is handed over (`instrumentOf`'s `probeLog`; `marks.ts` probeFactsOf), the samples the
+compile's own reading takes (readInkAnswers', the units').
+
+- **F16, the quotation marks** (`marks.ts` readInkTexts and readInkDecorated with `quotes`): a character of a text font (OT1, T1,
+  LY1) that TeX sets as a quotation mark is read as the glyph the font sets there (`'` the right quote, `` ` `` the left, the
+  ligatures `''` and ``` `` ``` the double ones, whatever slot the encoding gives them; in XeTeX's word, the marks TeX's
+  ligature mapping already made). Without it such a sample is no answer; with it, only answers are added (the stored reading's
+  texts stand, a source it gave none takes the new one): the ownership finds those macros' ink by their text, and a cell a
+  decorated text holds is held (§18.61). On the lab's 217 stored probes: 10 texts and 2 decorated texts in 6 papers (the
+  probe-facts lane's 7 in 4 papers, and 2604.14228v3's 3, 2608.15761v1's 2).
+- **F14, the end mark the source writes** (`marks.ts` readInkEnds and endPiecesOf; `PieceClass.end`; `El.end` on the piece's
+  element, `locate/geometry.ts`): a unit's last ink (white space, groups' edges and placeholders that set nothing after it) is
+  its end mark where TeX ends that piece's own box with ink a glue of infinite stretch pushed (the probe's listing: a fil, fill
+  or filll in its outer list before its last ink; amsthm's `\qed` written in the text, an author's, LLNCS's), or where the
+  source pushes it with a fill right before it (`\hfil`, `\hfill`, `\hspace{\fill}`: 2610.40394v1's six `\hfill
+  $\square$`, the only ones of the 89). The typesetter sets such an element as an end mark where the translation ends with it
+  (El.end, §18.52). On the 217 stored probes: 6 samples so ended in 6 papers (the five the probe-facts lane named, and
+  2608.06007v1's macro, a fill, a formula and words, which TeX pushes to its line's end the same).
+- **To connect** (lane cm-a's `front.ts`): `prepareFront` hands `compiledOf`'s `probeLog` to `instrumentOf`. Until it does, the
+  probe's two readings read nothing and the source's six are stated.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

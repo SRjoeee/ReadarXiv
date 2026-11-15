@@ -374,3 +374,36 @@ describe('a unit’s end mark is the unit’s, wherever its translation ends (El
     expect(L.members[0]!.elements.map(([id]) => id)).toEqual(['1'])
   })
 })
+
+describe('an end mark the source writes, a piece of the unit’s (the compile move’s F14: PieceClass.end, marks.ts endPiecesOf)', () => {
+  it('states El.end on the element whose class says TeX sets it as the unit’s end mark, and on no other', () => {
+    // (a paragraph whose last piece is an author's \qed, its glyph at the line's end; the instrument's class `end`)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'so it holds', y: 700 },
+          { text: '#', x: 400, y: 700 },
+        ],
+      },
+    ])
+    const content: Piece[] = [text('so it holds '), { t: 'el', id: '1', kind: 'macro', src: '\\qed' }]
+    const endOf = (end: boolean) => {
+      const u = unitOf('para', content, [['1', { cls: 'macro', ...(end ? { end: true as const } : {}) }]])
+      const M = locate(
+        ownedBy(
+          B,
+          [u],
+          [
+            [0, T, -1],
+            [0, E, 1],
+          ],
+        ),
+        B,
+        align(B, B),
+      ).members[0]!
+      return M.elements.find(([id]) => id === '1')?.[1].end
+    }
+    expect(endOf(true)).toBe(1)
+    expect(endOf(false)).toBeUndefined()
+  })
+})
