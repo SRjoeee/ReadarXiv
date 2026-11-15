@@ -2970,6 +2970,36 @@ const joinSkips = <Q extends SourcePiece<WalkFile>>(a: TextPiece, b: TextPiece, 
   if (r.length) SKIPPED.set(q, r)
   return q
 }
+/**
+ * Whether a text symbol (textCharacter, its character `char`) is a character of the unit's text where it stands, after the unit's
+ * pieces `before` (text pieces in their Latin-1 view of UTF-8, as the walk holds them): the walk reads it so (in its two branches
+ * of a symbol), and the lab's differential reads the same (lab/pdf/prepare-back/stated.mjs). An ASCII character always: one a
+ * paper types as text, whatever name LaTeX gives it for its fonts' sake (`\\#`, `\\textbar`, `\\textquotesingle`, `\\textunderscore`).
+ * A sign beyond ASCII, set as a mark (•, §, †, …), where the unit's first word has come, as the start mark reads it (a text piece,
+ * or a placeholder that is a first word, firstWordPiece): before it the sign is the unit's edge, as everything the unit opens with
+ * is (startOf passes it over, its ink the original's: 2610.19159v1's 44 items of a hand-made list, `\\textbullet The …`); but a
+ * note's mark (NOTE_MARKS) right after a word with no space (past the groups closed after it and the marks before it: a run of
+ * marks), an element of the text as its call in a superscript is (`Beren Millidge\\textdagger`: as text the dagger was glued to
+ * the name, the person no longer the one its references name; the coordinator's ruling of 2026-11-11). Elsewhere a note's sign is
+ * text (`(\\S\\ref{…})`, `in \\S 3`). The coordinator's statement of 2026-11-16 (B): the characters a paper types as text are the
+ * text's in every position; only a sign set as a mark is the edge before the first word
+ */
+export function textSymbolHere(char: string, before: readonly PieceLike[]): boolean {
+  if (char.charCodeAt(0) < 0x80) return true
+  const begun = before.some(
+    (p) => (p.t === 'text' && /\S/.test(p.s ?? '')) || (p.t === 'ph' && firstWordPiece(p.src ?? '')),
+  )
+  if (!begun) return false
+  if (!NOTE_MARKS.has(char)) return true
+  for (let k = before.length - 1; k >= 0; k--) {
+    const p = before[k]!
+    if (p.t === 'close' || (p.t === 'ph' && NOTE_MARKS.has(symbolText(p.src) ?? ''))) continue
+    return !(p.t === 'text' && /[\p{L}\p{N}]$/u.test(UTF8_LAX.decode(latin1Bytes(p.s ?? ''))))
+  }
+  return true
+}
+/** a piece as textSymbolHere reads one: its kind, its text, its source */
+type PieceLike = { t: string; s?: string; src?: string }
 class Builder<F extends WalkFile = WalkFile> {
   declare file: F
   declare units: SourceUnit<F>[]
@@ -3048,34 +3078,6 @@ class Builder<F extends WalkFile = WalkFile> {
       this.cur.pieces.push({ t: 'close', id, src })
       this.cur.end = end
     }
-  }
-  /** whether the unit's first word has come, as the start mark reads it (headStartOf): a text piece that is more than white space,
-   *  or a placeholder that is a first word (firstWordPiece: `$\\leq 5$\\%`'s formula) */
-  inText(): boolean {
-    return !!this.cur?.pieces.some((p) => (p.t === 'text' && /\S/.test(p.s)) || (p.t === 'ph' && firstWordPiece(p.src)))
-  }
-  /** whether what the walk sets next stands right after a word, no space between: the unit's last text ends in a letter or a
-   *  digit, past the groups closed after it and the note's marks set there as placeholders (a run of marks, `\\dag\\ddag`) */
-  afterWord(): boolean {
-    const ps = this.cur?.pieces ?? []
-    for (let k = ps.length - 1; k >= 0; k--) {
-      const p = ps[k]!
-      if (p.t === 'close' || (p.t === 'ph' && NOTE_MARKS.has(symbolText(p.src) ?? ''))) continue
-      return p.t === 'text' && /[\p{L}\p{N}]$/u.test(UTF8_LAX.decode(latin1Bytes(p.s)))
-    }
-    return false
-  }
-  /**
-   * Whether a text symbol (textCharacter, its character `char`) is a character of the unit's text where the walk meets it: inside
-   * the unit's text, but before the unit's first word, where everything the unit opens with is its edge (startOf passes it over,
-   * its ink the original's: 2610.19159v1's 44 items of a list typed by hand, `\\textbullet The …`, which as text would open the
-   * sentence on the wire), and but a note's mark (NOTE_MARKS) right after a word with no space, which is the mark of a note: an
-   * element of the text, as its call in a superscript is (`Beren Millidge\\textdagger`: as text the dagger was glued to the name,
-   * the person no longer the one its references name; the coordinator's ruling of 2026-11-11). Elsewhere a note's symbol is text
-   * (`(\\S\\ref{…})`, `in \\S 3`). Read after the text before it is the unit's (endText)
-   */
-  charHere(char: string): boolean {
-    return this.inText() && !(NOTE_MARKS.has(char) && this.afterWord())
   }
   /** a letter an accent made (accentLetter): text, its UTF-8 bytes read as the source's are, and `src` the accent as
    *  the source writes it — what is set wherever the unit is set untranslated (patch). Joined with its word at flush */
@@ -4554,7 +4556,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         i = e
         continue
       }
-      // (and around a text symbol alone, {\\%}: its character, textCharacter, where it is one of the unit's text, Builder.charHere)
+      // (and around a text symbol alone, {\\%}: its character, textCharacter, where it is one of the unit's text, textSymbolHere)
       const character =
         !letter &&
         !kernelLetter &&
@@ -4562,7 +4564,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         k === i + 1 &&
         ctx.letters !== false &&
         textCharacter(s, k, accent.name, e - 1, ctx.ownLetters)
-      if (character && character.end === e - 1 && (endText(), b.charHere(character.letter))) {
+      if (character && character.end === e - 1 && (endText(), textSymbolHere(character.letter, b.cur?.pieces ?? []))) {
         b.pairId += pairsOf(s, i, e, b, ctx)
         b.letter(character.letter, s.slice(i, e), i, e, true)
         i = e
@@ -5435,9 +5437,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       i = kernelLetter.end
       continue
     }
-    // a text symbol, \\S 3, don\\textquotesingle t: its character, where it is one of the unit's text (Builder.charHere)
+    // a text symbol, \\S 3, don\\textquotesingle t: its character, where it is one of the unit's text (textSymbolHere)
     const character = ctx.letters !== false && textCharacter(s, i, name, to, ctx.ownLetters)
-    if (character && (endText(), b.charHere(character.letter))) {
+    if (character && (endText(), textSymbolHere(character.letter, b.cur?.pieces ?? []))) {
       b.pairId += pairsOf(s, i, character.end, b, ctx)
       b.letter(character.letter, s.slice(i, character.end), i, character.end, true)
       i = character.end

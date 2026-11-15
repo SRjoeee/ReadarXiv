@@ -7239,7 +7239,7 @@ cell and no unit (317 of the ledger's float lines, `nocells`, §18.45), whatever
   paper's units move. `\centerline{tabular}`
   (2608.06701v1's Table 4) is §18.46's, read since: no table in the three sets is held by a line box and read by no cell.
 
-### 18.81 LaTeX's text symbols are characters of the unit's text, but at its edge and as a note's mark (F9 (d), 2026-11-15)
+### 18.81 LaTeX's text symbols are characters of the unit's text, but a sign at its edge and a note's mark (F9 (d), 2026-11-15)
 
 §18.30 made eleven of the front end's text symbols characters of the text; the rest of its own table (`source/text-symbols.ts`
 TEXT_SYMBOLS: `\S`, `\textquotesingle`, `\textbullet`, `\dots`, `\textdegree`, `\textendash`, `\slash`, `\textdagger`, …) stayed
@@ -7252,12 +7252,17 @@ where it stands as a mark.
 - **The table, whole** (`source/latex-front.ts` TEXT_CHARACTERS, textCharacter): every symbol of TEXT_SYMBOLS is its character,
   its source beside it, as §18.30's eleven are, but `\_` (the identifier rule's, §18.25) and the kernel's letters (letters of
   their word, letterCommand). One list: a test holds TEXT_CHARACTERS to the table.
-- **Where it is the unit's text** (`Builder.charHere`). Before the unit's first word, as the start mark reads it (a text piece,
-  or an inline formula, a citation, an identifier, a kept number: `firstWordPiece`, headStartOf's), a symbol stays the
-  placeholder it was before: the unit's edge, which startOf passes over and whose ink stays the original's, as everything a
-  unit opens with is (2610.19159v1's 44 items of a hand-made list, each `\textbullet The …`). This holds for every symbol of the
-  table, §18.30's eleven with them: a cell that opens with `\#`, `\$`, `\%` or `\textbar` (`\# layers`, `\$/1M tokens`) has it at
-  its edge now, the cell's text its words.
+- **Where it is the unit's text** (`textSymbolHere`: the walk's reading, and the lab differential's, `prepare-back/stated.mjs`;
+  the coordinator's statement (B) of 2026-11-16). An ASCII character of the table is text in every position: a character a
+  paper types as text, whatever name LaTeX gives it for its fonts' sake (§18.30's eleven, and `\textquotesingle`,
+  `\textasciicircum`, `\textunderscore`, `\textdollar`, `\textbraceleft`, `\textbraceright`): a cell `\# layers` and a paragraph
+  `\textbar{} Variant …` go out whole, as before F9 (d). A sign beyond ASCII, one set as a mark (`\textbullet`, `\S`,
+  `\textdagger`, …), before the unit's first word as the start mark reads it (a text piece, or an inline formula, a citation, an
+  identifier, a kept number: `firstWordPiece`, headStartOf's) stays the placeholder it was: the unit's edge, which startOf
+  passes over and whose ink stays the original's, as everything a unit opens with is (2610.19159v1's 44 items of a hand-made
+  list, each `\textbullet The …`). A first reading made every symbol of the table the edge there, §18.30's eleven with them, and
+  moved 72 units in 24 papers whose cell or paragraph opens with `\#`, `\%`, `\$` or `\textbar` ("# layers", "$/1M tokens"),
+  each a unit sent whole before, to an edge and a shorter text: the statement put them back.
 - **A note's mark.** The table's symbols LaTeX's footnote symbols set (latex.ltx's `\@fnsymbol`: `\textdagger`, `\textdaggerdbl`,
   `\textsection`, `\textparagraph`, and `\dag`, `\ddag`, `\S`, `\P` which set them) are a note's mark where they stand right after
   a word with no space between (past the groups closed after it and the marks before them: `Doe\textdagger`,
@@ -7273,11 +7278,11 @@ where it stands as a mark.
   separator by that source. No unit whose pieces stay has another wire (a text piece's source of its own was none of a run's
   before): TRANSLATE stays.
 - **The reach, read by the source reader alone over the three sets** (against §18.80's tree; every paper's unit count the same):
-  631 units in 69 papers move, by their pieces: 558 units in 50 papers whose symbols are characters now (the 89: 38 in 13; the
-  holdout 56 in 8; the third set 464 in 29: `\S` 458 placeholders in 21 papers, `\textquotesingle` 315 in 2), 72 units in 24
-  papers whose head symbol of §18.30's eleven is their edge now (the 89 23 in 9, the holdout 12 in 2, the third set 37 in 13:
-  "# layers", "#Params", "$/1M tokens", "## Root Goal"), and one paragraph through its nested unit; 2610.42112v1's author block
-  unchanged. The marked compile of each moves (a symbol that is text has no mark of its own, and an edge moves the start mark).
+  559 units in 50 papers move, by their pieces: 558 whose symbols are characters now (the 89: 38 in 13; the holdout 56 in 8;
+  the third set 464 in 29; of the base's placeholders `\S` 458 in 21 papers, `\textquotesingle` 315 in 2, `\textasciicircum` 2
+  in 2, after a word; no `\textunderscore`, `\textdollar`, `\textbraceleft` or `\textbraceright` is a placeholder in the three
+  sets), and one paragraph through its nested unit; no unit moves by §18.30's eleven; 2610.42112v1's author block unchanged.
+  The marked compile of each moves (a symbol that is text has no mark of its own).
 
 ### 18.82 A bare group is a group only where it scopes a declaration (F9 (c), the coordinator's order of 2026-11-16)
 

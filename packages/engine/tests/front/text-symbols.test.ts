@@ -5,9 +5,10 @@ import { TEXT_SYMBOLS } from '../../src/source/text-symbols.ts'
 
 // LaTeX's text symbols are characters of the unit's text (F9 (d)): the front end's whole table of them (TEXT_SYMBOLS), not the
 // eleven it read so before, so that a symbol inside a word or a phrase is no marker that cuts it ("don\textquotesingle t",
-// "hole\textendash{}galaxy", "(\S\ref{…})"). Two places stay as they were, by TeX's reading of where the symbol stands: before the
-// unit's first word, where everything the unit opens with is its edge (a typed bullet that opens a hand-made list's item), and a
-// note's mark — the symbols LaTeX's \@fnsymbol sets, †, ‡, § and ¶ — right after a word with no space, or alone in a
+// "hole\textendash{}galaxy", "(\S\ref{…})"). An ASCII character of the table is text in every position (the coordinator's
+// statement B: "\# layers" goes out whole). Two places stay as they were for a sign beyond ASCII, by TeX's reading of where it
+// stands: before the unit's first word, where everything the unit opens with is its edge (a typed bullet that opens a hand-made
+// list's item), and a note's mark — the symbols LaTeX's \@fnsymbol sets, †, ‡, § and ¶ — right after a word with no space, or alone in a
 // superscript (the coordinator's ruling of 2026-11-11): "Beren Millidge\textdagger" keeps its person and its mark apart. A
 // unit's letters are counted on its decoded text: a symbol's UTF-8 bytes are no letter
 
@@ -52,23 +53,34 @@ describe("the front end's whole table of text symbols is text inside a unit (F9 
   })
 })
 
-describe("before the unit's first word a symbol is the unit's edge, as everything it opens with is", () => {
-  it('a typed bullet opening an item of a hand-made list', () => {
+describe("an ASCII character of the table is text in every position; a sign beyond ASCII before the unit's first word is its edge (the coordinator's statement B)", () => {
+  it('a typed bullet opening an item of a hand-made list: the edge', () => {
     const u = one('\\textbullet The driver mapping holds every field.')
     expect(phs(u)).toEqual(['\\textbullet'])
     expect(said(u)).toBe('The driver mapping holds every field.')
   })
-  it('after a formula that opens the unit, the first word as the start mark reads it, a symbol is text', () => {
-    const u = one('$\\leq 5$\\% of the rated load at any time.')
-    expect(phs(u)).toEqual(['$\\leq 5$'])
-    expect(said(u)).toBe('% of the rated load at any time.')
+  it('a section sign opening a unit: the edge', () => {
+    const u = one('\\S 3 shows the bound on every case.')
+    expect(phs(u)).toEqual(['\\S'])
+    expect(said(u)).toBe('3 shows the bound on every case.')
   })
-  it('one of the escaped characters at a cell\'s head likewise: `\\#` before its word', () => {
+  it('after a formula that opens the unit, the first word as the start mark reads it, a sign is text', () => {
+    const u = one('$x$\\textdegree{} of the rated angle at any time.')
+    expect(phs(u)).toEqual(['$x$'])
+    expect(said(u)).toBe('° of the rated angle at any time.')
+  })
+  it("`\\#` at a cell's head and `\\textbar` at a paragraph's head: text, the unit sent whole as today", () => {
     const cells = unitsOf('\\begin{tabular}{ll}\n\\# layers & Model size \\\\\n\\end{tabular}').filter((u) => u.kind === 'cell')
     expect(cells.map((c) => [phs(c), said(c)])).toEqual([
-      [['\\#'], 'layers'],
+      [[], '# layers'],
       [[], 'Model size'],
     ])
+    const u = one('\\textbar{} Variant on all benchmarks and both topologies.')
+    expect([phs(u), said(u)]).toEqual([[], '| Variant on all benchmarks and both topologies.'])
+  })
+  it("a quotation mark at a unit's head is the text's", () => {
+    const u = one("\\textquotesingle value\\textquotesingle{} is the key the parser reads.")
+    expect([phs(u), said(u)]).toEqual([[], "'value' is the key the parser reads."])
   })
 })
 
