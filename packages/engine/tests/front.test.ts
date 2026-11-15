@@ -167,6 +167,30 @@ describe("the source's units, before any compile", () => {
       ]),
     )
   })
+  test("a paper's row-ending macro inside a grid cell: its element a break and its class a forced break's, as `\\\\` beside it", () => {
+    // (\br's body ends a row, rowEndsOf's; inside the \makecell the cell holds it ends a line of the box: the forced break of
+    // the cell's text, §18.75. Its class the one `\\` has (no ink), not a paper macro's)
+    const tex =
+      '\\documentclass{article}\n\\usepackage{makecell}\n\\newcommand{\\br}{\\\\}\n\\begin{document}\nSome prose words here.\n\n\\begin{tabular}{c|c}\n\\makecell{Error rate \\br on test set} & \\makecell{Error rate \\\\ on test set} \\\\\n1.5 & 2.5\n\\end{tabular}\n\\end{document}\n'
+    const paper = openPaper(files({ 'main.tex': tex }))
+    const flat = (c: readonly Unit['content'][number][]): Unit['content'][number][] =>
+      c.flatMap((p) => (p.t === 'span' ? flat(p.content) : [p]))
+    const kinds = sourceUnitsOf(paper)
+      .filter((u) => u.kind === 'cell')
+      .map((u) => flat(u.content).flatMap((p) => (p.t === 'el' ? [[p.src, p.kind]] : [])))
+    expect(kinds).toEqual([[['\\br', 'break']], [['\\\\', 'break']]])
+    const facts = (paper.units as { kind: string; pieces: { t: string; src?: string }[] }[])
+      .filter((u) => u.kind === 'cell')
+      .map((u) => {
+        const k = u.pieces.findIndex((p) => p.t === 'ph')
+        const c = new Map(classesOf(u.pieces as never)).get(String(k)) as { cls: string; brk?: true; unknown?: true }
+        return { cls: c.cls, brk: !!c.brk, unknown: !!c.unknown }
+      })
+    expect(facts).toEqual([
+      { cls: 'space', brk: true, unknown: false },
+      { cls: 'space', brk: true, unknown: false },
+    ])
+  })
   test('cut into windows under the Units bound, every unit once and in order', () => {
     const big = (i: number): Unit => ({
       id: i.toString(16).padStart(64, '0'),

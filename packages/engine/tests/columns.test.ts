@@ -524,6 +524,7 @@ describe('locate states how the lines of a cell of several lines stand in its bo
     lines: [string, number][],
     paragraph = false,
     breaks?: number[],
+    breakSrc?: string,
   ) => {
     const B = docOf([{ lines: lines.map(([text, x], k) => ({ text, x, y: 712 - 12 * k })) }])
     // (`breaks`: the lines a forced break follows, where they are not every one: a paragraph's \\newline among its wrapped lines)
@@ -536,15 +537,15 @@ describe('locate states how the lines of a cell of several lines stand in its bo
                 {
                   t: 'el' as const,
                   id: String(k),
-                  kind: 'other' as const,
-                  src: k % 2 ? '\\\\' : '\\newline',
+                  kind: 'break' as const,
+                  src: breakSrc ?? (k % 2 ? '\\\\' : '\\newline'),
                   brk: true as const,
                 },
               ]
             : []),
           { t: 'text' as const, s: t },
           ...(k === lines.length - 1 && after.has(lines.length)
-            ? [{ t: 'el' as const, id: 'z', kind: 'other' as const, src: '\\\\', brk: true as const }]
+            ? [{ t: 'el' as const, id: 'z', kind: 'break' as const, src: '\\\\', brk: true as const }]
             : []),
         ])
     const units: InstrumentUnit[] = [
@@ -593,6 +594,20 @@ describe('locate states how the lines of a cell of several lines stand in its bo
         ['ontestset', 100],
       ]),
     ).toEqual({ lines: 2, inner: 'r' })
+  })
+  it("reads a box whose rows a paper's row-ending macro ends (\\br, stated a forced break: its element's kind), as `\\\\`", () => {
+    expect(
+      innerOf(
+        'l',
+        [
+          ['Errorx', 109],
+          ['ontestset', 100],
+        ],
+        false,
+        undefined,
+        '\\br',
+      ),
+    ).toEqual({ lines: 2, inner: 'c' })
   })
   it('takes the cell’s class where lines of one width line up all three ways', () => {
     expect(
