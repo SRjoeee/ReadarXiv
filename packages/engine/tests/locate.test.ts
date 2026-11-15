@@ -2766,6 +2766,16 @@ describe('a paragraph TeX opened inside a unit, stated by its first word (design
     expect(L.stats.opensUnstated).toEqual({ anchored: 0, plain: 1 })
     expect(L.stats.opensPlain).toEqual([[0, 1, 0]])
   })
+  it('counts no end that stands before the member’s first word: no point inside its text (2a, case i)', () => {
+    // (a bibliography entry whose first glyph the instrument owns is the entry before it's last stop, set on that entry's line,
+    // then TeX's paragraph end, then its label as text (no piece of the projection), then its first word: 2610.20716v1's five)
+    const B = docOf([{ lines: [{ text: '.', x: 300 }, '[8]M. Ishak and L. Medina'] }])
+    const u = para([text('  M. Ishak and L. Medina')], { kind: 'reference' })
+    const { L, flows } = partOf(owned(B, [{ ...u, id: unitId('reference', u.content) }], [[0, 0]], [], [1]), B)
+    expect(flows[0]!.paras).toBeUndefined()
+    expect(L.stats.opensUnstated).toBeUndefined()
+    expect(L.stats.opensPlain).toBeUndefined()
+  })
   it('keeps the words of a member that states a first word on every part that holds it; strips them elsewhere as before', () => {
     // (page 1: the member of two paragraphs, then a member that runs on to page 2; page 2's part holds page 1's flows (a member
     // of it has its first line there), the first member's copy among them with no ink on page 2)

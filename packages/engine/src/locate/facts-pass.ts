@@ -707,7 +707,8 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
   // group's open ends B's before the end, and the text the group's content begins with (inside it, as today's paragraphBreaks
   // asks: the group closed after it) begins B's after it. TeX opened the paragraph at the group so met on both sides, one group
   // alone (SpanAt.opens: the outermost of those opened together), else at the element B's next glyph opens, where its side
-  // before is met too (El.opens). An end inside a piece's own glyphs opened none at it. One at no group's open and no element is
+  // before is met too (El.opens). An end inside a piece's own glyphs opened none at it. One at no group's open and no element,
+  // before the member's first placed word, is none inside its text (2a's case i). Else it is
   // stated by what else holds its place (design-display 2a's order): a forced break that ended the line before (El.ends); a
   // region (a display ends the paragraph before, or the line before or its own is held: a block of its own already); its first
   // word alone. Every point but a region's states its first word too where the member places it on the paragraph's line
@@ -816,6 +817,12 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
       }
       return undefined
     }
+    // (the member's first placed word on B: an end before it is no point inside its text (design-display 2a, case i): the glyphs
+    // before it are no word of the unit's source, a stop of the entry before that the unit's marks hold, its label set as text)
+    let wordB = -1
+    if (mem.wordAt)
+      for (let c = mem.bFirst; c <= mem.bLast && wordB < 0; c++)
+        if ((unitB[c] as number) === mem.unit && mem.wordAt.has(m.bToA[c] as number)) wordB = c
     const st = { span: 0, el: 0, break: 0, region: 0, text: 0, words: 0 }
     const paras = new Map<number, number>()
     const stateWord = (o: number | undefined, j: number) => {
@@ -867,6 +874,8 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
           mem.opensLost = (mem.opensLost ?? 0) + 1
           continue
         }
+        // (an end before the member's first word: none of its text before it)
+        if (e <= wordB) continue
         // (a forced break TeX ended the line before at (El.ends, the line its last glyph before the end stands on): in centred
         // and ragged text LaTeX's `\\` is `\par`; the break states the point, its first word too)
         let pb = e - 1

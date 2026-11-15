@@ -6703,8 +6703,10 @@ kept (the coordinator's ruling of 2026-11-13, in place of the design's "stated o
 states it from the compile move (its C1, 2026-11-15); a part made before holds none.
 
 - **The engine** (`locate/facts-pass.ts` `readOpens`, after the members' words, `locate/sentences.ts`). For every paragraph end
-  of B's inside a member's text (its glyph before the end the unit's, its next paragraph's first line not its first), what
-  states the point, in design-display 2a's order: a group's open (`SpanAt.opens`), an element (`El.opens`), a forced break TeX
+  of B's inside a member's text (its glyph before the end the unit's, its next paragraph's first line not its first; and, at
+  no group's open and no element, not before the member's first placed word: 2610.20716v1's five references, whose first
+  glyphs the instrument owns are the entry before it's last stop and the label set as text), what states the point, in
+  design-display 2a's order: a group's open (`SpanAt.opens`), an element (`El.opens`), a forced break TeX
   ended the line before at (`El.ends`; in centred and ragged text LaTeX's `\\` is `\par`), a region (the paragraph before
   ends with a display, or the line before or its own is held: a block of its own already), else its first word alone. The first
   word is the first of the member's placed words (`Placed.words`; a word by its first glyph on A, the opening marks set against
