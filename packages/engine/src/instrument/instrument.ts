@@ -899,6 +899,10 @@ function urlsShown(pieces: readonly PieceIn[]): Map<number, number> {
 
 /** the classes of a placeholder that draws no ink: a space's (`\\\\`'s among them), one of no width's (\\newline's) */
 const INKLESS_CLASSES = new Set(['space', 'zero'])
+/** whether a piece classesOf reads is a forced break, as it is stated: the source reader's statement on a source unit's piece
+ *  (forcedBreak), or, on an ink unit's piece made of a unit's content (locate/ink.ts flatOf, ink-units.ts's copies for an echo),
+ *  its element's kind, `break`, the instrument's reading of that statement */
+const statedBreak = (p: PieceIn): boolean => forcedBreak(p) || (p as { kind?: unknown }).kind === 'break'
 export function classesOf(
   pieces: readonly PieceIn[],
   colours: ReadonlyMap<number, number> | null = null,
@@ -923,7 +927,7 @@ export function classesOf(
     // (a forced break sets no ink: one whose source reads as a class that draws, a paper's row-ending macro the reader states a
     // break inside a grid cell (read as the paper's macro, umacro), is read as `\\\\` is; one whose source reads as none (`\\\\`
     // space, \\newline zero) as its source)
-    const as = forcedBreak(p) && !INKLESS_CLASSES.has(phClassProven(src).cls) ? '\\\\' : src
+    const as = statedBreak(p) && !INKLESS_CLASSES.has(phClassProven(src).cls) ? '\\\\' : src
     const c = phClassProven(as),
       copy = copyOf(as) || ''
     const x: PieceClass = { cls: c.cls, ...(c.unknown ? { unknown: true } : {}), ...(copy ? { copy } : {}) }
@@ -946,7 +950,7 @@ export function classesOf(
     // its rendering by among the unit's characters where the macro's glyphs are the unit's text (no points of its own))
     const t = (c.cls === 'macro' || c.cls === 'umacro') && texts ? (texts.get(p.src) ?? texts.get(src)) : undefined
     if (typeof t === 'string' && /\S/.test(t)) x.text = t
-    Object.assign(x, sourceFactsOf(src, k, first, colours, forcedBreak(p)))
+    Object.assign(x, sourceFactsOf(src, k, first, colours, statedBreak(p)))
     // (a piece that sets a URL \urldef stored: the \url piece's class and copy, a text piece, a URL)
     if (shown.has(k)) {
       const u = unicodeOf(pieces[shown.get(k)!]!.src),
