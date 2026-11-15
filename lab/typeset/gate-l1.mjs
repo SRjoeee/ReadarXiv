@@ -43,7 +43,7 @@ const LIST = process.env.AXT_GATE_LIST
 // (the added pairs, lab/typeset/added.mjs: walked after the set's in a run of their own, `--apart`, their numbers printed apart under
 // its heading, their dumps under <dir>/added/; a run asked for added pairs alone is that run)
 const { pairs, later, apart } = apartOf(named.length ? named : readdirSync(join(TAP, 'ledgers')).map(f => f.replace(/\.ledger\.json\.gz$/, '')).sort(), { named: named.length > 0 })
-if (!pairs.length && later.length) process.exit(runApart(import.meta.filename, later, { dirs: { out: OUT } }))
+if (!pairs.length && later.length) process.exit(await runApart(import.meta.filename, later, { dirs: { out: OUT } }))
 if (apart) console.log(`${ADDED_HEADING} ${pairs.join(', ')}`)
 // (the bundles served, named in the log; a pair named here that a named folder lacks is an error, bundles.ts; of the tap's every
 // ledger, those the folder lacks are said and stopped as before, "no L1 bundle of the paper")
@@ -345,6 +345,6 @@ if (selfDiffer.length) console.log(`laid otherwise from another page's part: ${s
 if (threw.length) console.log(`threw (${threw.length}): ${threw.slice(0, 8).join(' | ')}`)
 console.log(`dumps: ${join(OUT, 'reader')}`)
 if (later.length) {
-  const status = runApart(import.meta.filename, later, { dirs: { out: OUT } })
+  const status = await runApart(import.meta.filename, later, { dirs: { out: OUT } })
   if (status) process.exitCode = Math.max(Number(process.exitCode ?? 0), status)
 }
