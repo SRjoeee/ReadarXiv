@@ -96,6 +96,8 @@ export interface InstrumentUnit {
   /** the paper's title, a unit of its front matter (the front end's) */
   title?: true
   front?: true
+  /** a bibliography's entry, the source reader's `\bibitem` (instrument.ts entryOf): format's Unit.entry, its parts its blocks */
+  entry?: true
   /** the author block a note is tied to by its source (latex-front.mjs tieNotes: written inside an author command's argument,
    *  or on its own where the paper's bindings attach it to an author): its toggle the block's (format's Unit.of) */
   of?: 'author'

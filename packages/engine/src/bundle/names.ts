@@ -20,7 +20,9 @@
 //   "Zhiqiang Shen (", the translator's own bracket kept); any other unit holding one has a **variant**, a unit of kind `named`:
 //   its content with each occurrence's text an element of kind `person` (its `src` the name as the unit writes it), its other
 //   pieces and their ids as they are, written right after it, so that a translator is asked for it with the unit and its row is
-//   its own (its own id and wire: nothing is keyed by the toggle). An original module (no port statement).
+//   its own (its own id and wire: nothing is keyed by the toggle); lit by sentence where its unit is, and a bibliography's entry
+//   where its unit is one (Unit.entry: a wire cuts it at its blocks as it cuts the entry). An original module (no port
+//   statement).
 import { type Named, type Person, type Piece, type Split, toggleKind, type Unit, unitId } from '@readarxiv/format'
 import type { PieceClass } from '../instrument.ts'
 
@@ -248,11 +250,13 @@ export function namesOf(
         return parts
       })
     const content = rewrite(u.content)
+    // (its unit's form: lit by sentence as its unit is, an entry where its unit is one, so that a wire cuts it at its blocks)
     const v: Unit = {
       id: unitId(NAMED_KIND, content),
       kind: NAMED_KIND,
       content,
       ...(u.sentences ? { sentences: true as const } : {}),
+      ...(u.entry ? { entry: true as const } : {}),
     }
     out.variants.set(u.id, v)
     out.named.set(u.id, [u.id, v.id, at])
