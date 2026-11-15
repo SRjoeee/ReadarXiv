@@ -41,13 +41,20 @@ export type Piece =
        *  its kind decides (a formula a word, a reference a number, a note's mark an annotation, a citation one too but
        *  where it opens a sentence after a stop: `… expensive. \citet{x} proposes`) */
       reads?: string | undefined
-      /** it sets nothing where it stands, no character and no space (the PDF's source reader, from TeX's tables: a
-       *  declaration, a key written to a file, a penalty, `\noindent`, `\-`, a table's row rule; never a space, a break, a
-       *  fill or a skip): no translator needs it. The markers wire and the runs floor send it on no wire (each marker a hard
+      /** it sets nothing where it stands, no character and no space (the PDF's engine: by TeX's tables, a declaration, a key
+       *  written to a file, a penalty, `\noindent`, `\-`, a table's row rule; or a command's or a declaration's element the
+       *  marked compile measured empty at every occurrence of its unit and arXiv's page confirms set nothing at every
+       *  placement, a conditional's `\fi`, a `\natexlab{}`; never a space, a tie, a forced break, glue, an alignment tab,
+       *  TeX's glue or penalty primitives, the kernel's skip and break commands, nor an element that stands for content set
+       *  elsewhere): no translator needs it. The markers wire and the runs floor send it on no wire (each marker a hard
        *  boundary to Microsoft, each runs' edge a cut), beside an element that sets something in that one's marker; read
        *  back, it stands at the front of its innermost kept group (the unit, a `must` span) where nothing of the group went
        *  out before it, else at the group's end. The tags wire sends it as any element */
       silent?: boolean | 1 | undefined
+      /** LaTeX's `\newblock` (the PDF's source reader), where a new block of a bibliography entry (UnitIn.entry) begins:
+       *  BibTeX's styles write it between an entry's authors, title and venue; a skip by its classes' definitions, never
+       *  `silent`. The tags wire reads it: an entry's parts are its blocks */
+      newblock?: boolean | 1 | undefined
       /** TeX sets it after the unit's text, no word of its sentences (the PDF's source reader: backref's list of the pages that
        *  cite a bibliography entry, set after the entry), and the white space that stands for the gap before it. No translator
        *  is given it: the chain asks for the unit without it (each marker a word to Microsoft, which read this one as a page
@@ -62,6 +69,11 @@ export type Piece =
        *  declared. The name
        *  is sent only where this is SOURCE's language, or none is declared */
       nameLang?: string | undefined
+      /** the text TeX set for it where it stands, on its line's baseline at its text's size (the PDF's engine, read on arXiv's
+       *  page: `\hl{guitar}`'s "guitar", `\k{a}`'s "ą"); absent for a raised or lowered one, one set at another size, one
+       *  that sets nothing. Letters glued to it that make one word with this text (UAX #29) are that word's: the chain sends
+       *  none of them as a word of its own (words.ts) */
+      text?: string | undefined
     }
   | {
       t: 'span'
@@ -83,6 +95,10 @@ export interface UnitIn {
   kind?: string | undefined
   content: readonly Piece[]
   sentences?: boolean | undefined
+  /** the unit is a bibliography's entry (the PDF's source reader: `\bibitem`; its form with the author block's names
+   *  too): its parts are its blocks, each begun by a `newblock` element, one part where it states none. The tags wire
+   *  reads it */
+  entry?: boolean | undefined
   /** a reply is taken only where each element's placeholder came back whole: one a reading would have to repair by
    *  guessing where the element stands (Microsoft's marker without its `#`) refuses it, to the next translator. The HTML
    *  page states it: over 87 live Microsoft replies taken only so, an element stood glued inside a word, jammed against
