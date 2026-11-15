@@ -97,7 +97,8 @@ describe('a declaration that takes no argument takes no value: the digits after 
     expect(texts(doc('\\noindent = 40 by the count.'))).toEqual(['= 40 by the count.'])
   })
   it('nor a command the table knows to take no parameter: \\S4 in (2608.15334); one it does not know may be a register, and keeps it', () => {
-    expect(texts(doc('As in \\S4 in the paper, and \\S6.1 in the appendix.'))).toEqual(['As in 4 in the paper, and 6.1 in the appendix.'])
+    // (the section sign is its character in the text since F9 (d), latex-front.ts TEXT_CHARACTERS: the text's Latin-1 view decoded)
+    expect(texts(doc('As in \\S4 in the paper, and \\S6.1 in the appendix.')).map(t => new TextDecoder().decode(Uint8Array.from([...t].map(c => c.charCodeAt(0)))))).toEqual(['As in §4 in the paper, and §6.1 in the appendix.'])
     expect(paper(doc('\\mylength 2pt Words of the paragraph.')).units.map(u => (u as unknown as Unit).pieces[0])).toEqual([{ t: 'ph', src: '\\mylength 2pt' }])
   })
   it('a register or a primitive that reads a value keeps it', () => {

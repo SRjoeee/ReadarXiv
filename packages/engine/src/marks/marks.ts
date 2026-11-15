@@ -16,6 +16,7 @@
 import {
   BACKREF_LIST,
   calledAt,
+  firstWordPiece,
   forcedBreak,
   frontMarks,
   identifierSource,
@@ -2540,9 +2541,6 @@ const COLOUR_OPEN = /^\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{$/,
 export const colourPieceOf = (p: PieceLike | null | undefined): boolean =>
   (p?.t === 'open' && COLOUR_OPEN.test(p.src ?? '')) || (p?.t === 'ph' && COLOUR_SWITCH.test(p.src ?? ''))
 
-/** patch's own test of the pieces that are always set on the line, where a unit's start mark goes before one that opens
- *  the unit (latex-front.mjs INLINE: kept equal, which layout-marks.test.ts holds against patch itself) */
-const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
 const WORD_END = /[\p{L}\p{N}]$/u
 /**
  * Whether a placeholder is a call of one of the paper's macros that reads nothing past its own arguments (`complete`, name →
@@ -2644,9 +2642,10 @@ export function headEnd(pieces: readonly Piece[], from = 0): number {
       return w[0].length === 0 && prev?.t === 'ph' && /\\[A-Za-z@]+\*?$/.test(prev.src) ? k - 1 : k
     }
     if (p.t === 'open') continue
-    // (an inline formula, and an identifier, text TeX sets as written (identifierPiece): the head's first word)
+    // (a placeholder the start mark takes for the head's first word, the source reader's own reading (latex-front.ts
+    // firstWordPiece): an inline formula or citation, an identifier, a number an entry keeps (F29: an entry's year))
     if (p.t === 'ph') {
-      if (INLINE.test(p.src) || identifierPiece(p.src)) return k
+      if (firstWordPiece(p.src)) return k
       continue
     }
     return k + 1

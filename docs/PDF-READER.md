@@ -4672,7 +4672,8 @@ term, 140 markers fewer.
 
 - **The kernel's control symbols `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's `\textasciitilde`, `\textbar`,
   `\textless`, `\textgreater`, `\textbackslash` are the character they set, in its word** (`latex-front.mjs` textCharacter, the
-  letter commands' path): its source beside it, written back byte for byte; a control word's skipped spaces and an empty group
+  letter commands' path; since §18.81 the whole table of text symbols, the unit's edge before its first word, a note's mark
+  after a word an element): its source beside it, written back byte for byte; a control word's skipped spaces and an empty group
   with it (`\textless 5` is "<5"), none after a control symbol (`5\% of` is "5% of"); a group around one alone spends its pair's
   id; a paper's own definition of the command keeps it a placeholder. `\_` stays the identifier rule's (§18.25): an identifier or
   an address read with such a character as TeX sets it is one placeholder as the paper writes it, as before (`keepRead`).
@@ -4707,7 +4708,8 @@ tag pair, a `must` bare group was a marker pair on Microsoft's, and placement an
 - **The rule** (`pipeline/instrument.mjs` passThroughOf, in piecesOf and spansOf): a group is a pair only if it changes how its
   content is set or the reader needs its extent; decided from the front end's own facts, carried through the instrument. A pair the
   front end read as setting its argument alone (latex-front.mjs identityPair, the open piece's `sets` 0) and a bare group holding no
-  declaration of its own (no placeholder that sets nothing directly inside it, `mt.mjs` isInkless: a switch it would scope), both of
+  declaration of its own (none directly inside it of the declarations a group scopes, §18.82; until then any placeholder that sets
+  nothing, `mt.mjs` isInkless), both of
   its ends in the unit, are their content, their text joined with the text on either side. A group the front end says nothing of
   stays one: a paper's macro that sets more (`\multicolumn`, `\rotatebox`, `\fbox`), a group around a declaration (`{\em …}`);
   a command that prints its argument between marks is those marks as text and its argument (§18.32).
@@ -5445,10 +5447,8 @@ toggle, its nine lines the ledger's float lines of a table with no cell (§18.45
   box after it as inline, and text right after the box, with no blank line between, as the same unit, where TeX begins a
   paragraph after the box. No such call in the 88. A paper's own wrapper around a tabular (2610.37668v1's
   `\newcommand{\fittabular}[3][\maxdimen]{…}`, whose body sets its third argument into a box register twice with `\sbox` and
-  shows it once with `\usebox` inside `\resizebox` or `\makebox`) is no line box: the front end reads the paper's definitions
-  (`paperMacros`: each parameter's use by the role table, `paramUse`), but follows no parameter through a box register, so the
-  argument is no text and the call one placeholder. Reading it needs a definition reading of box registers (a parameter set into a
-  register the body then shows is content, set where the register is shown), a lane of its own.
+  shows it once with `\usebox` inside `\resizebox` or `\makebox`) is no line box: its argument is read through the box register
+  (§18.80).
 - **Over the 88** (the front end over every source, with the walk's every line-box call logged): 7 calls met, 6 of them
   2010.11929v2's author block rows (read before, unchanged: 362 units, the same texts and places) and 1 2608.06701v1's table;
   0 `\leftline` or `\rightline`; the other 39 `\centerline`s of the sources are in class and style definitions, a template no
@@ -7445,6 +7445,136 @@ used, 2610.19159v1 `\trajectoryMark{}`. Against the bibliography's pass's box (B
 no longer reads inkless. The run found four defects of the first build, each fixed with its gate case: the marks' own nodes in
 an ask's box (OWN_NODE), a sample reading past its source (`ink-eaten`), a sample spanning lines (not asked), a destination
 beside the line taken for material (SPACE_NODE).
+
+### 18.79 An entry whose first ink is a number it keeps: its start mark before the number, as before a formula (F29, 2026-11-15)
+
+A bibliography entry with no author opens with its year: ACM-Reference-Format's software and web pages
+(`\bibinfo{year}{2023}\natexlab{}.` then the title), IEEEtran's `\BIBentryALTinterwordspacing (2024) {WHO} …`. The year is a
+number the entry keeps as the original's ink (`keepNumbers`), one placeholder, and the start mark (`source/latex-front.ts` startOf,
+`headStartOf`) passed over it as over any placeholder at a unit's head. So the year stood before the entry's start point, and
+where it was the first thing in a field's group, the group's close followed by `\natexlab{}`, the search ended with no start mark
+at all: the entry's ink was bounded only by the next entry's points, its year, its address and the next entry's label read as
+the next entry's text (2402.10294v1 p14, references [1] to [6]: [1] drawn over its label, [2] to [6] unlocated).
+
+- **The rule.** A placeholder of a number an entry keeps (`KEPT_NUMBER`: a token of keepNumbers' classes, characters TeX sets as
+  written, none of its special characters, the class the marking gives both its marks, marks.ts NUMBER) is the entry's first
+  word where it comes first, as an inline formula, a citation or an identifier is: the start mark goes before it, inside the
+  field's group (`\bibinfo{year}{\leavevmode\axtmark{207s}2023}`). The label, which `\bibitem` set when the paragraph began, stands
+  before the start point; TeX's own paragraph end (the paragraph-end point after the entry's last piece, B15's `qe`) confirms the
+  bound before the next label. A number after the entry's first word, and every other head, as before.
+- **The marking reads the same head** (`marks/marks.ts` headEnd). The marking passes over the pieces before a unit's start mark
+  (no layout mark: in vertical mode one would wait for the start mark), and read the head's first word by a copy of its own
+  (`INLINE`, an identifier), which F29's number was not in: the year was passed over, got no mark, and its glyphs were no ink of
+  its element (drawn from its copy text). headEnd now reads the source reader's own `firstWordPiece`, the copy gone: the year has
+  its marks (a number's two) and its ink. The two readings stay two functions for their reasons: headEnd reads from any piece
+  (after each forced break and alignment tab), states the pieces passed over where no first word comes, and passes a letter group
+  or a cell's box over where the start mark stands before it. Over the three sets this moves the 9 heads above and no other
+  (from a unit's start or after a break or a tab).
+- **The reach, read by the source reader alone over the 89 papers and 2611.03953v2, the holdout's 36 and the third set's 119**
+  (with the bibliographies BibTeX made, read from the lab's stored compiles): 9 entries in 3 papers, and no other unit of any kind
+  has a placeholder TeX sets as written before its first text: 2402.10294v1's six (ACM, no start mark), 2608.14557v1's two (ACM,
+  a made `.bbl`, no start mark), 2608.18887v1's one (IEEEtran, its start mark before "WHO", the year before it). No unit's pieces
+  move (the marks are not pieces): their marked compiles do. REVTeX's empty `\bibfield {number} {  }` heads (2610.20716v1's six)
+  stay with no start mark (a mark there set the entry 7 pt right): no number.
+
+### 18.80 What a paper's command sets into a box register it shows is that box's content (F18, 2026-11-15)
+
+2610.37668v1 sets every table through its own `\fittabular[<pad>]{<columns>}{<tabular>}` (papermacros.sty): the body sets #3
+into a box register with `\sbox` twice (to measure it at no column separation, then at the separation that fills the line) and
+shows it once, `\usebox` inside `\resizebox` or `\makebox`. The source reader reads a paper's command through its definition
+(`paperMacros`: each parameter's use by the role table, `paramUse`, the reading by which a command's argument is prose, a
+block, or none), and `\sbox` is no command the role table knows: #3 was no text, each call one placeholder, the 19 tables no
+cell and no unit (317 of the ledger's float lines, `nocells`, §18.45), whatever the tables toggle.
+
+- **The rule** (`source/latex-front.ts` `boxSetAt`, `registerAt`, `throughBoxes`). A box register is set by LaTeX's `\sbox{reg}{…}`
+  (`\setbox#1\hbox{…#2…}`) and `\savebox{reg}[width][pos]{…}`, TeX's `\setbox reg=\hbox{…}` (`\vbox`, `\vtop`, with `to` or
+  `spread`), and LaTeX's `lrbox` environment; it is shown by TeX's `\box`, `\copy`, `\unhbox`, `\unhcopy`, `\unvbox`, `\unvcopy` and
+  LaTeX's `\usebox` (`\leavevmode\copy#1`). A parameter the body puts into a register has, where the body shows that register in
+  text or in a box's content, the use its place in the register's content gives it (text there is text, a width a width): TeX
+  sets it there, as that box's content. One the body only measures (`\wd`, `\ht`: a register never shown) sets nothing of it,
+  and its parameters are no text. The call is then read as any command's whose argument is prose (§18.73): an argument that
+  holds a table is a block of its own, the table read as written in place.
+- **What stays.** Every other reading of a definition. A `\setbox` and an `lrbox` were read before as their box's content, shown
+  or not (`\hbox`'s content, an environment's body read on): now as content where the register is shown.
+- **The reach, read by the source reader alone over the 89 papers and 2611.03953v2, the holdout's 36 and the third set's 119:**
+  the one paper command among them that sets a parameter into a register and shows it is `\fittabular`; the rest are a class's
+  or a package's internals (captions, author blocks, running heads) that no paper text calls. 2610.37668v1's 19 tables are read,
+  the only table environments in the three sets held by a paper's command and read by no cell: 382 units to 960, 578 cells
+  gained, 5 units the same but for their pairs' numbers (a pair's id is its place among its file's pairs), none lost; no other
+  paper's units move. `\centerline{tabular}`
+  (2608.06701v1's Table 4) is §18.46's, read since: no table in the three sets is held by a line box and read by no cell.
+
+### 18.81 LaTeX's text symbols are characters of the unit's text, but a sign at its edge and a note's mark (F9 (d), 2026-11-15)
+
+§18.30 made eleven of the front end's text symbols characters of the text; the rest of its own table (`source/text-symbols.ts`
+TEXT_SYMBOLS: `\S`, `\textquotesingle`, `\textbullet`, `\dots`, `\textdegree`, `\textendash`, `\slash`, `\textdagger`, …) stayed
+placeholders, each a marker on the wire that cut the word or the phrase it stood in ("don\textquotesingle t", "black
+hole\textendash{}galaxy", "(\S\ref{…})", 2609.20976v1's "hole" left English). Lane style-wire's B built the whole table as text
+and stopped on one regression: as text, the dagger of `Beren Millidge\textdagger` was glued to the name, the author block's person
+no longer the one its references name (2610.42112v1). The coordinator's ruling of 2026-11-11: a note's mark stays an element
+where it stands as a mark.
+
+- **The table, whole** (`source/latex-front.ts` TEXT_CHARACTERS, textCharacter): every symbol of TEXT_SYMBOLS is its character,
+  its source beside it, as §18.30's eleven are, but `\_` (the identifier rule's, §18.25) and the kernel's letters (letters of
+  their word, letterCommand). One list: a test holds TEXT_CHARACTERS to the table.
+- **Where it is the unit's text** (`textSymbolHere`: the walk's reading, and the lab differential's, `prepare-back/stated.mjs`;
+  the coordinator's statement (B) of 2026-11-16). An ASCII character of the table is text in every position: a character a
+  paper types as text, whatever name LaTeX gives it for its fonts' sake (§18.30's eleven, and `\textquotesingle`,
+  `\textquotedbl`, `\slash`, `\textasciicircum`, `\textunderscore`, `\textdollar`, `\textbraceleft`, `\textbraceright`): a cell
+  `\# layers` and a paragraph
+  `\textbar{} Variant …` go out whole, as before F9 (d). A sign beyond ASCII, one set as a mark (`\textbullet`, `\S`,
+  `\textdagger`, …), before the unit's first word as the start mark reads it (a text piece, or an inline formula, a citation, an
+  identifier, a kept number: `firstWordPiece`, headStartOf's) stays the placeholder it was: the unit's edge, which startOf
+  passes over and whose ink stays the original's, as everything a unit opens with is (2610.19159v1's 44 items of a hand-made
+  list, each `\textbullet The …`). A first reading made every symbol of the table the edge there, §18.30's eleven with them, and
+  moved 72 units in 24 papers whose cell or paragraph opens with `\#`, `\%`, `\$` or `\textbar` ("# layers", "$/1M tokens"),
+  each a unit sent whole before, to an edge and a shorter text: the statement put them back.
+- **The lab's differential reads the same** (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`): today's TeX of a
+  unit as the candidate writes it, each symbol a character where `textSymbolHere` reads it so over the pieces before it, from
+  TEXT_CHARACTERS; it held a copy of §18.30's eleven, which stated a unit with another symbol of the table by a weaker reading or
+  not at all. Restated over the 89's dumps as F9 (c)'s commit made them, 36 units of 14 papers once "held whole by another
+  unit" are the same unit as the candidate writes it (2609.20976v1's "black hole\textendash{}galaxy" entry), and one lost is
+  stated (2610.40576v1's cell of `\dots`, kept as the original by its group of one pitch); no statement turns to a loss.
+- **A note's mark.** The table's symbols LaTeX's footnote symbols set (latex.ltx's `\@fnsymbol`: `\textdagger`, `\textdaggerdbl`,
+  `\textsection`, `\textparagraph`, and `\dag`, `\ddag`, `\S`, `\P` which set them) are a note's mark where they stand right after
+  a word with no space between (past the groups closed after it and the marks before them: `Doe\textdagger`,
+  `\textbf{result}\dag\ddag`): an element, as before. Alone in a superscript a mark is the superscript's element, as it was
+  (`\textsuperscript` takes an untyped argument: the call is one placeholder). Elsewhere it is text: `(\S\ref{…})`, `in \S 3`,
+  `\textdagger Corresponding author` after a stop and a space.
+- **A unit's letters are counted on its decoded text** (Builder.flush): a text piece holds UTF-8 bytes in their Latin-1 view,
+  and an ellipsis's `â`, a section sign's `Â` are no letters. Counted on the view, a cell of one letter and `\dots` made a unit
+  (2610.40576v1's `3\enspace+0.6k \hlg{…} [\dots] …`, which split its figure's ink unit in B).
+- **Today's wire reads an ellipsis between a run's formulas as before** (`src/pdf-reader/engine/translate/mt.mjs` formulaRuns,
+  RUN_SOURCE): a split formula's parts and what stands between them go out as one marker; `$\{a$, \ldots, $b\}$`'s `\ldots` was a
+  placeholder of the run (RUN_SPACE) and is now its character in a text piece whose source is its command, read as the run's
+  separator by that source. No unit whose pieces stay has another wire (a text piece's source of its own was none of a run's
+  before): TRANSLATE stays.
+- **The reach, read by the source reader alone over the three sets** (against §18.80's tree; every paper's unit count the same):
+  559 units in 50 papers move, by their pieces: 558 whose symbols are characters now (the 89: 38 in 13; the holdout 56 in 8;
+  the third set 464 in 29; of the base's placeholders `\S` 458 in 21 papers, `\textquotesingle` 315 in 2, `\textasciicircum` 2
+  in 2, after a word; no `\textunderscore`, `\textdollar`, `\textbraceleft` or `\textbraceright` is a placeholder in the three
+  sets), and one paragraph through its nested unit; no unit moves by §18.30's eleven; 2610.42112v1's author block unchanged.
+  The marked compile of each moves (a symbol that is text has no mark of its own).
+
+### 18.82 A bare group is a group only where it scopes a declaration (F9 (c), the coordinator's order of 2026-11-16)
+
+§18.31 wrote a bare group `{…}` as its content unless a placeholder that sets nothing (`mt.ts` isInkless) stood directly inside
+it: a switch the group would scope. That list holds more than declarations: `\relax`, `\nobreak`, `\protect`, `\-`, `\noindent`, a
+penalty, a key written to a file, set where they stand and lasting nothing past it. A group around them carries nothing, and kept,
+it cut its words on the wire: 2610.21377v1's 176 bibliography initials `{.\nobreak\kern0.3333em}`, `{\relax DLMF}`, `{\relax Ch}`,
+`{Bu\-ce\-ta}`.
+
+- **The rule** (`instrument/instrument.ts` passThroughOf, SCOPED). A bare group is kept where a declaration a group scopes
+  stands directly inside it: one of LaTeX's declarations of a font, a size, a paragraph's shape or its line breaking (tex-kernel's
+  DECLARATION_WORDS, as the source reader's `declares` reads them), alone or ended by an empty group, or `\color{…}`. Otherwise it
+  is its content, as a bare group with no placeholder of the kind already was. A face switch first in a group stays the group's
+  face (§18.56); a pair the front end read as setting its argument alone is unchanged.
+- **Where it acts.** After TeX, in the instrument: `instrument/instrument.ts` is outside the compiled side's closure (compiledOf
+  imports it nowhere), so no paper compiles again; the units the rule changes get new ids and are asked again.
+- **The lab's differential reads the same** (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`, a bare group the
+  candidate writes as its content): passThroughOf itself, read off today's pieces, its copy of §18.31's rule deleted. The copy
+  stated every unit of 2610.21377v1 all the same: a group it did not read as bare fell to its next reading, a command's pair
+  the candidate does not write, which drops it as well.
 
 ## 19. The engine's contract
 
