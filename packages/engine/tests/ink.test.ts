@@ -187,6 +187,41 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(off.entry.text).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
   })
 
+  it('opens a link group round the glyphs a link annotation holds of an ink unit’s text, its source naming the target (F32)', () => {
+    // (a running foot's "page N of M", biblatex's back-references, a reference in a list of figures' caption copy: an ink unit is
+    // A's glyphs alone, so the annotation's glyph points say which of its characters the link holds; a group whose source names
+    // the target is what the typesetter pairs a link with (SpanAt.to). Here "14" of "See page 14 here", glyphs 9 and 10)
+    const run = (an: Record<string, unknown>) => {
+      const { B, A } = pair({
+        lines: ['See page 14 here', 'Body text here'],
+        points: [
+          ['bs1', 16],
+          ['be1', 30],
+        ],
+      })
+      const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+      return locate(ins, A, align(B, A), { pages: rawOf(A), annotations: [[{ annotationType: 2, ...an }]] })
+    }
+    const L = run({ rect: [125, 697, 139, 709], dest: 'page.14' })
+    const head = L.units.at(-1)!
+    expect(head.content).toEqual([
+      text('See page '),
+      { t: 'span', id: '1', style: 'link', must: 1, open: '\\hyperlink{page.14}{', content: [text('14')], close: '}' },
+      text(' here'),
+    ])
+    expect(head.spans).toEqual([['1', { cmd: 'hyperlink', to: { dest: '"page.14"' } }]])
+    expect(L.links.get(1)![0]!.to).toEqual({ dest: '"page.14"' })
+    // (an address: `\href`, TeX's specials escaped, read back as the annotation's)
+    const url = run({ rect: [125, 697, 139, 709], url: 'https://example.org/a_b#c' }).units.at(-1)!
+    expect(url.spans).toEqual([['1', { cmd: 'href', to: { url: 'https://example.org/a_b#c' } }]])
+    // (one that holds every glyph of the unit is its whole link (Link.whole), drawn over its whole: no group; nor for a
+    // destination no source names (an explicit one, an array))
+    const whole = run({ rect: [71, 697, 170, 709], dest: 'page.14' }).units.at(-1)!
+    expect(whole.content).toEqual([text('See page 14 here')])
+    const explicit = run({ rect: [125, 697, 139, 709], dest: [{ num: 3, gen: 0 }, { name: 'XYZ' }] }).units.at(-1)!
+    expect(explicit.content).toEqual([text('See page 14 here')])
+  })
+
   it('states each of an ink unit’s placeholders its own kept run’s ink, as today’s file draws each by its own segments', () => {
     // (the maker cuts each run of a math or typewriter face its own placeholder, and knows its glyphs: today's file draws each by
     // them, rows.ph. All of them stated as the first's, it drew every run at the first's place and none at the others', where a

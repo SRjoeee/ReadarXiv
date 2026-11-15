@@ -1,12 +1,13 @@
 // COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, nothing else but eleven changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
+// marked COPY, nothing else but twelve changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
 // head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
 // placeholder stated, `glyphs.runs`; an e-mail address or an identifier a kept run of its own, addressed, and a group of local parts before their
 // domain one over its words and lines, groupedAddresses; a formula's TeX specials written as TeX sets
 // them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
 // leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
 // a paragraph TeX ended between two lines parts them; a display TeX set one kept block, its number with it, keptUnitsOf; rule 8 by
-// the source's ties, no share; a leader dot set against a contents line's text on the leaders' grid the leaders', leaderOf): run
+// the source's ties, no share; a leader dot set against a contents line's text on the leaders' grid the leaders', leaderOf;
+// a link annotation over part of a unit's text a link group round the glyphs it holds, linkGroupsOf): run
 // by locate over arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file stays the production prepare's until the cut-over.
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
@@ -370,6 +371,55 @@ const baseStyleOf = (lines: readonly Seg[], pages: readonly InkPage[], faces: Ma
     ),
     faces,
   )
+/** a page's link annotation as the ink units read it (inkUnitsOf `links`): the open of the group whose source names its target
+ *  (`\href{…}{`, `\hyperlink{…}{`: the part reads it back as the annotation's, ink.ts linkTargetOf), and the glyphs (their indices
+ *  on the page) it holds by glyph point (links.ts pointsOf) */
+export interface InkLink {
+  src: string
+  pts: ReadonlySet<number>
+}
+/**
+ * CHANGED (F32): the glyphs of an ink unit a link holds where it holds part of the unit, by `page|glyph`, each its group's open
+ * (InkLink.src). An ink unit is A's glyphs alone, so an annotation's glyph points, the rule locate owns links by, say exactly
+ * which of its characters the link holds ("2," holds it on "2" alone): biblatex's back-references "(cit. on pp. 2, 8)", a running
+ * foot's "page N of 14", a reference inside a list of figures' caption copy, a proof title's theorem number, a DOI printed as text
+ * (the compile move's F32, design-display §7: 192 links over an ink unit's own text were dropped, no group to pair them with).
+ * The unit's own glyphs on a page are its words' there, white space and its label's aside (Link.whole reads its text's and its
+ * elements'); a target holding every one of them is the unit's whole link there (a contents entry's), drawn over its whole by
+ * the whole tier: no group. Of two targets holding one glyph, the one holding fewer, the inner (a citation in an entry)
+ */
+function linkGroupsOf(
+  lines: readonly { page: number; words: readonly Word[] }[],
+  links: readonly (readonly InkLink[] | null | undefined)[] | null,
+  pages: readonly InkPage[],
+): Map<string, string> {
+  const out = new Map<string, string>()
+  if (!links?.length) return out
+  const own = new Map<number, Set<number>>()
+  lines.forEach((l, li) => {
+    const G = pages[l.page - 1]?.glyphs ?? []
+    let label = li === 0 ? labelLength(G, l.words) : 0
+    for (const w of l.words)
+      for (const g of w.gs) {
+        if (label > 0) {
+          label--
+          continue
+        }
+        if (!/\S/u.test(G[g]?.u ?? '')) continue
+        const s = own.get(l.page) ?? new Set<number>()
+        own.set(l.page, s.add(g))
+      }
+  })
+  for (const [p, mine] of own) {
+    const held = new Map<string, Set<number>>()
+    for (const an of links[p - 1] ?? [])
+      for (const g of mine) if (an.pts.has(g)) held.set(an.src, (held.get(an.src) ?? new Set<number>()).add(g))
+    const partial = [...held].filter(([, gs]) => gs.size < mine.size).sort((a, b) => b[1].size - a[1].size)
+    for (const [src, gs] of partial) for (const g of gs) out.set(`${p}|${g}`, src)
+  }
+  return out
+}
+
 /** a style as a run tells it: a fill not told is the unit's */
 const styleKey = (st: Style, base: Style) => `${st.bold ? 1 : 0}${st.italic ? 1 : 0}${st.fill ?? base.fill}`
 /** the groups a run of words opens where its style is not the unit's, outermost first: its colour (xcolor's \textcolor, the
@@ -865,6 +915,7 @@ export function inkUnitsOf(
     from = null,
     unplaced = null,
     stored = null,
+    links = null,
   }: {
     units?: readonly TodayUnit[] | null
     from?: number | null
@@ -872,6 +923,9 @@ export function inkUnitsOf(
      *  8's source ties */
     unplaced?: readonly TodayUnit[] | null
     stored?: readonly TodayUnit[] | null
+    /** each page's link annotations (by page index): the open of the group whose source names its target (`\href{…}{`,
+     *  `\hyperlink{…}{`) and the glyphs it holds (linkGroupsOf) */
+    links?: readonly (readonly InkLink[] | null | undefined)[] | null
   } = {},
 ): TodayInkUnit[] {
   const fams = new Map<string | undefined, Family>(),
@@ -1103,7 +1157,25 @@ export function inkUnitsOf(
       open: number[] = []
     let runKey = styleKey(style0, style0),
       pairs = 0
+    // (CHANGED, F32: a link annotation over part of its text, linkGroupsOf: a group whose source names its target round the
+    // glyphs it holds, inside the run's style groups, closed where its glyphs end, at a style's change and before a kept run)
+    const linkAt = linkGroupsOf(lines, links, pages)
+    let link: string | null = null,
+      linkId = 0
+    const closeLink = () => {
+      if (link === null) return
+      flushText()
+      pieces.push({ t: 'close', id: linkId, src: '}' })
+      link = null
+    }
+    const openLink = (src: string) => {
+      flushText()
+      linkId = ++pairs
+      pieces.push({ t: 'open', id: linkId, src })
+      link = src
+    }
     const closeRun = () => {
+      closeLink()
       while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' })
     }
     lines.forEach((l, li) => {
@@ -1114,7 +1186,8 @@ export function inkUnitsOf(
         first = 0
       if (label > 0) l.words = labelAsText(l.words, label)
       l.words.forEach((w, wi) => {
-        let said = w.text
+        let said = w.text,
+          from = 0
         if (label > 0) {
           const k = Math.min(label, w.gs.length)
           label -= k
@@ -1124,6 +1197,7 @@ export function inkUnitsOf(
             return
           }
           said = w.ts.slice(k).join('')
+          from = k
         }
         // (a space between two words of a line where a word's gap stands between them: none where the face alone cuts them, a
         // formula's stop or its "-axis" set against it)
@@ -1137,6 +1211,10 @@ export function inkUnitsOf(
           // of each command that sets what the word holds and the unit does not opened)
           const st = wordStyle(pages[l.page - 1]!.glyphs!, w.gs, faces),
             k = styleKey(st, style0)
+          // (each of its glyphs' link group, where a link holds part of the unit: the open one goes on into it where its first
+          // glyph is that link's in the same style, the space before it inside)
+          const keys = linkAt.size ? w.gs.map((g) => linkAt.get(`${l.page}|${g}`) ?? null) : null
+          if (link !== null && (k !== runKey || keys?.[from] !== link)) closeLink()
           if (k === runKey) text += sep
           else {
             const styled = open.length > 0
@@ -1152,8 +1230,18 @@ export function inkUnitsOf(
             }
             runKey = k
           }
-          text += said
+          if (!keys) text += said
+          else
+            for (let i = from; i < w.gs.length; i++) {
+              const s = keys[i] ?? null
+              if (s !== link) {
+                closeLink()
+                if (s !== null) openLink(s)
+              }
+              text += w.ts[i]!
+            }
         } else {
+          closeLink()
           const lastPh = phs.at(-1)
           // (a run of one face over a gap or a line: one placeholder, its source the run's characters whole — the piece's too, which
           // kept the first word's alone. Never over a line where a script stands at the break: TeX sets a script on its line after

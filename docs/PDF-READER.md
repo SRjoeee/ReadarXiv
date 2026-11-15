@@ -9324,7 +9324,17 @@ joins a unit of prose, and 2610.19159v1's transcripts, code its regions keep, ho
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular
-note, a reference's italic title, a coloured term, all drawn in the unit's one style). Its text is its glyphs' characters, a spacing
+note, a reference's italic title, a coloured term, all drawn in the unit's one style); and the glyphs a link annotation holds of
+it, where it holds part of the unit on a page, a group whose source names its target, `\href{…}{` or `\hyperlink{…}{` (inside
+the run's style groups, `ink-units.ts` linkGroupsOf; the annotation's glyph points, the rule locate owns links by, so "2," holds
+the link on "2" alone; only where the part reads that source back as the annotation's target, `ink.ts` inkLinksOf: an explicit
+destination, no name, none), which the typesetter pairs by target as a source unit's `\href`: biblatex's back-references "(cit.
+on pp. 2, 8)", a running foot's "page N of 14", a citation, an equation's or a section's number in a list of figures' caption
+copy, a proof title's theorem, a DOI printed as text, each dropped before (the compile move's F32, design-display §7, N4's first
+class: 192 of the reader gate's 201 unmatched links at B15). One that holds every glyph of the unit there is its whole link, laid
+over its whole drawing by the whole tier, which reads each target alone (`lay/links.ts`: it gives way to a drawn group that could
+be its target's, none naming it and no bare one, never to a group of another target inside it: 2307.16209v1's entries kept
+theirs once their citations' groups were drawn). Its text is its glyphs' characters, a spacing
 accent TeX's `\accent` set over its letter joined to it (`layout/accents.mjs`, the reader's table, `joinAccents`: the accent and its
 letter next in the stream, in one font, the accent's advance centred on the letter's, its baseline the letter's or above it by at
 most the letter's height; only the move back over the accent puts it there, never an apostrophe's or a quote's advance, nor a
