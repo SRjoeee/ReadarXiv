@@ -4708,7 +4708,8 @@ tag pair, a `must` bare group was a marker pair on Microsoft's, and placement an
 - **The rule** (`pipeline/instrument.mjs` passThroughOf, in piecesOf and spansOf): a group is a pair only if it changes how its
   content is set or the reader needs its extent; decided from the front end's own facts, carried through the instrument. A pair the
   front end read as setting its argument alone (latex-front.mjs identityPair, the open piece's `sets` 0) and a bare group holding no
-  declaration of its own (no placeholder that sets nothing directly inside it, `mt.mjs` isInkless: a switch it would scope), both of
+  declaration of its own (none directly inside it of the declarations a group scopes, §18.82; until then any placeholder that sets
+  nothing, `mt.mjs` isInkless), both of
   its ends in the unit, are their content, their text joined with the text on either side. A group the front end says nothing of
   stays one: a paper's macro that sets more (`\multicolumn`, `\rotatebox`, `\fbox`), a group around a declaration (`{\em …}`);
   a command that prints its argument between marks is those marks as text and its argument (§18.32).
@@ -7269,6 +7270,22 @@ where it stands as a mark.
   papers whose head symbol of §18.30's eleven is their edge now (the 89 23 in 9, the holdout 12 in 2, the third set 37 in 13:
   "# layers", "#Params", "$/1M tokens", "## Root Goal"), and one paragraph through its nested unit; 2610.42112v1's author block
   unchanged. The marked compile of each moves (a symbol that is text has no mark of its own, and an edge moves the start mark).
+
+### 18.82 A bare group is a group only where it scopes a declaration (F9 (c), the coordinator's order of 2026-11-16)
+
+§18.31 wrote a bare group `{…}` as its content unless a placeholder that sets nothing (`mt.ts` isInkless) stood directly inside
+it: a switch the group would scope. That list holds more than declarations: `\relax`, `\nobreak`, `\protect`, `\-`, `\noindent`, a
+penalty, a key written to a file, set where they stand and lasting nothing past it. A group around them carries nothing, and kept,
+it cut its words on the wire: 2610.21377v1's 176 bibliography initials `{.\nobreak\kern0.3333em}`, `{\relax DLMF}`, `{\relax Ch}`,
+`{Bu\-ce\-ta}`.
+
+- **The rule** (`instrument/instrument.ts` passThroughOf, SCOPED). A bare group is kept where a declaration a group scopes
+  stands directly inside it: one of LaTeX's declarations of a font, a size, a paragraph's shape or its line breaking (tex-kernel's
+  DECLARATION_WORDS, as the source reader's `declares` reads them), alone or ended by an empty group, or `\color{…}`. Otherwise it
+  is its content, as a bare group with no placeholder of the kind already was. A face switch first in a group stays the group's
+  face (§18.56); a pair the front end read as setting its argument alone is unchanged.
+- **Where it acts.** After TeX, in the instrument: `instrument/instrument.ts` is outside the compiled side's closure (compiledOf
+  imports it nowhere), so no paper compiles again; the units the rule changes get new ids and are asked again.
 
 ## 19. The engine's contract
 

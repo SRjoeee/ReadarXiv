@@ -48,6 +48,7 @@ import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.ts'
 import { textPieceOf } from '../source/text-piece.ts'
 import { symbolText } from '../source/text-symbols.ts'
+import { DECLARATION_WORDS } from '../source/tex-kernel.ts'
 import { displayStop, isInkless } from './mt.ts'
 import { keptAsWritten, namesOfBlocks, paperNamesOf, RUNNING } from './language.ts'
 import type { Piece } from '@readarxiv/format'
@@ -213,11 +214,19 @@ const BACKREF_GAP = '\u2002'
 /** today's flat pieces ([open … close] pairs) as nested ones, and its run-in labels `must` (runIns); a source unit's are stated
  *  once TeX's glyphs are read (piecesOf, marksOf) */
 export const contentOf = (pieces: readonly SrcPiece[], o: PiecesOptions = {}): Piece[] => runIns(piecesOf(pieces, o))
+/** a declaration a group scopes, as a placeholder's whole source: one of LaTeX's declarations of a font, a size, a paragraph's
+ *  shape or its line breaking (rules/tex-kernel.mjs DECLARATION_WORDS, the source reader's `declares` reads the same), alone or
+ *  ended by an empty group, or `\\color{…}`; what it declares lasts to its group's end, so a bare group around it carries it */
+const SCOPED = new RegExp(
+  String.raw`^\\(?:${DECLARATION_WORDS.join('|')})(?![A-Za-z@])(?:\s*\{\})?\s*$|^\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*$`,
+)
 /**
  * The pieces of a unit's groups that carry nothing, by index, each open with its close: a pair the front end read as setting its
  * argument alone (latex-front.mjs identityPair, the open piece's `sets` 0: RevTeX's `\\bibinfo{title}{…}` and name fonts, a
- * `.bbl`'s `\\showarticletitle`, a paper's `\\newcommand{\\x}[1]{#1}`), or a bare group `{…}` that holds no declaration of its own
- * (no placeholder that sets nothing at its own level, mt.mjs isInkless: a switch it would scope), both of its ends in the unit.
+ * `.bbl`'s `\\showarticletitle`, a paper's `\\newcommand{\\x}[1]{#1}`), or a bare group `{…}` that scopes no declaration of its own
+ * (none at its own level of the declarations a group scopes, SCOPED: a placeholder that sets nothing and scopes nothing, a
+ * `\\relax`, a `\\nobreak`, a `\\protect`, a `\\-`, gives it nothing to carry: 2610.21377v1's 176 `{.\\nobreak\\kern0.3333em}`, F9 (c)),
+ * both of its ends in the unit.
  * Such a group sets no face, no fill, no link and no paragraph of its own (TeX sets its content as it would with no group), and
  * a span of it has nothing to carry but costs a tag pair on the tags wire: it is its content (lane style-wire C, the coordinator's
  * ruling of 2026-11-11). Over the 88 papers' bundles, 20,172 pairs and 2,943 bare groups, every fill on one also its link's around
@@ -235,7 +244,7 @@ export function passThroughOf(pieces: readonly SrcPiece[]): Set<number> {
         if (depth--) continue
         out.add(k).add(j)
         return
-      } else if (!depth && p.sets !== 0 && q.t === 'ph' && isInkless(q)) return
+      } else if (!depth && p.sets !== 0 && q.t === 'ph' && SCOPED.test(q.src ?? '')) return
     }
   })
   return out
