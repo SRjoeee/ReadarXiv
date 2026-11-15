@@ -58,8 +58,21 @@ export type Prepared = {
 /** a member's lay: laid, with what the fill takes of it, or left the original's and why */
 export type MemberLay = { state: 'laid'; lay: FillLaid; over: boolean } | { state: Unlaid }
 
-/** layFlow's F2-F8 and L9 for one member: its lay, each step written to `trace` */
+/**
+ * layFlow's F2-F8 and L9 for one member: its lay, each step written to `trace`. A merged cell the lay fills, its lines broken
+ * between words alone (FitParams.words, lay/adapt.ts; docs/PDF-READER.md §18.75), that no state of its fit sets so, not even
+ * below its floor, is laid as before, its words cut where a line must end: the rule never leaves a cell the original's that
+ * today's lay draws
+ */
 export function layMember(p: Prepared, R: RuleParams, trace: Trace | null = null): MemberLay {
+  const n = trace?.slots.length ?? 0
+  const lay = layOnce(p, R, trace)
+  if (lay.state !== 'unfit' || !p.P.words) return lay
+  if (trace) trace.slots.length = n
+  const { words: _, ...P } = p.P
+  return layOnce({ ...p, P: P as FitParams }, R, trace)
+}
+function layOnce(p: Prepared, R: RuleParams, trace: Trace | null): MemberLay {
   const put = (step: Parameters<Trace['put']>[0], by: Parameters<Trace['put']>[1], v: Json) => trace?.put(step, by, v)
   const P = p.P
   const tokens0 = p.tokens
