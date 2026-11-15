@@ -3,6 +3,7 @@
 // Met 2026-09-04: the content side imported @/cache/index by mistake and bundled Dexie, which uses "￿" as a key-range upper bound.
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { basename, join, relative, sep } from 'node:path'
 import { contentScriptsRunningOn } from './site-isolation.mjs'
 
@@ -100,8 +101,12 @@ for (const path of filesUnder(OUT)) {
 // The style sheets are made from the product's own files alone: a utility class that no file under `src/` or
 // `packages/<name>/src/` names came from text that is not the product's — a test, a document, a lab file, a model's
 // bytes — which Tailwind's scan read (it brought `.top-1` from a test and `.m-2` from another, `.z-8` from a model).
-// The classes of PDF.js's own sheet, which the reader's page carries, are PDF.js's, named by no file of ours. A class
-// is named when a product file holds it as a whole token (the escapes of a selector undone) or a product sheet defines it
+// The classes PDF.js's own sheet defines are PDF.js's, named by no file of ours. Every build carries that sheet in its own
+// way: the reader's page bundles it into the page's sheet (src/entrypoints/pdf-reader/main.tsx), and a build of the reader
+// package also carries a copy at `pdfjs/<version>/` (packages/reader/src/vite.ts). So they are read from the package's
+// sheet itself, resolved from the repository as the product resolves it (`pdfjs-dist/web/pdf_viewer.css`), and nothing a
+// build holds excuses a class; where the package's sheet is not found, no class is PDF.js's. A class is named when a
+// product file holds it as a whole token (the escapes of a selector undone) or a product sheet defines it
 const productFiles = []
 for (const root of ['src', ...(existsSync('packages') ? readdirSync('packages').map(name => join('packages', name, 'src')) : [])]) {
   if (existsSync(root)) productFiles.push(...filesUnder(root).filter(path => !/(^|[\\/])node_modules[\\/]/.test(path)))
@@ -121,7 +126,14 @@ const classesOf = css => {
 }
 const cssIn = dir => (existsSync(dir) ? filesUnder(dir).filter(path => path.endsWith('.css')) : [])
 const definedByProduct = new Set(productFiles.filter(path => path.endsWith('.css')).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))]))
-const pdfjsClasses = new Set(cssIn(join(OUT, 'pdfjs')).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))]))
+const pdfjsSheet = (() => {
+  try {
+    return createRequire(join(process.cwd(), 'package.json')).resolve('pdfjs-dist/web/pdf_viewer.css')
+  } catch {
+    return undefined
+  }
+})()
+const pdfjsClasses = pdfjsSheet ? classesOf(readFileSync(pdfjsSheet, 'utf8')) : new Set()
 const namedByProduct = name => new RegExp(`(?<![A-Za-z0-9_-])${name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?![A-Za-z0-9_-])`).test(productText)
 const unnamedClasses = cssIn(OUT).flatMap(path => [...classesOf(readFileSync(path, 'utf8'))].filter(name => !pdfjsClasses.has(name) && !definedByProduct.has(name) && !namedByProduct(name)).map(name => `${name} in ${relative(OUT, path)}`))
 const war = manifest.web_accessible_resources ?? []
@@ -142,7 +154,7 @@ for (const [what, ok] of [
   // the dev pages (wxt.config.ts DEV_PAGES) are for development builds: a release holding one would ship a debug page
   [`${OUT} holds no dev page`, ['gallery.html', 'controls.html', 'capsule.html'].every(page => !existsSync(join(OUT, page)))],
   [`${OUT} names no loopback TeX page${loopbackNamed.length > 0 ? ` (${loopbackNamed.join(', ')})` : ''}`, loopbackNamed.length === 0],
-  [`${OUT} holds no class that no product file names (the style sheets are made from the product's own files)${unnamedClasses.length > 0 ? ` (${unnamedClasses.join(', ')})` : ''}`, unnamedClasses.length === 0],
+  [`${OUT} holds no class that no product file names (the style sheets are made from the product's own files)${pdfjsSheet ? '' : ` (PDF.js's sheet, pdfjs-dist/web/pdf_viewer.css, is not found from ${process.cwd()})`}${unnamedClasses.length > 0 ? ` (${unnamedClasses.join(', ')})` : ''}`, unnamedClasses.length === 0],
   [`${OUT} holds no BusyTeX or texlyre file${compilerNamed.length > 0 ? ` (${compilerNamed.join(', ')})` : ''}`, compilerNamed.length === 0],
   // (a build of the reader package, AXT_READER=v2: wxt.config.ts, holds none of today's reading view: the package is its reader)
   ...(V2 ? [[`${OUT} holds the reader package's, not today's reading view${viewNamed.length > 0 ? ` (${viewNamed.join(', ')})` : ''}`, viewNamed.length === 0]] : [[`${OUT} holds the reading view, the reader${viewNamed.length > 0 ? ` (${viewNamed.join(', ')})` : ''}`, viewNamed.length > 0]]),
