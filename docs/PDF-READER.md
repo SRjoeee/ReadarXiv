@@ -7319,8 +7319,13 @@ the trail's last line on its page, the end mark's text line), as every other cro
 
 Reach over the 92 pairs' parts (round 3's last chain): 370 such crops, 247 end marks (246 QED boxes of theorems, one a
 paragraph's) and 123 trails (109 on author lines, 9 references, 3 affiliations, 2 headings); 34 of the QED boxes stand over
-their line's tallest glyph by 0.4 pt at most, no trail over its line's box. A translation's line sets a pitch of the size times
-the script's leading, so no such mark comes within `\lineskiplimit` of the line above it on the stored rows. The test
+their line's tallest glyph by 0.4 pt at most, no trail over its line's box: the marks themselves stand under a translated line's
+own text. But the NaN of a mark's box made its whole line's extent NaN, so a formula's crop on that line was never read either.
+Read now, on the stored rows of the 92 pairs (the reader gate against round 3's dumps): TeX's rule opens the pair over a
+theorem's last line where a tall formula shares it with the QED box (2610.21377v1-zh p17 ord 136, 2.86 pt; 2610.40645v1-ja p31
+ord 264, 1.80 pt), and where the line so opened falls past its block's foot at the original's size the fit steps the size
+(2610.30034v1-zh p10 ord 204, 0.975, where today's reader steps it too; 2610.20266v1-zh's ord 143 on its second page, Google's
+rows alone). The display gate, both modes and the added pairs: no page newly worse. The test
 (`packages/typeset/tests/unit/crop-extent.test.ts`) lays a mark 11 pt over a 10 pt line within 1 pt of the line above: the pair is opened to
 TeX's 14 pt, a trail's and an end mark's alike, and a mark inside its line's room opens nothing.
 
