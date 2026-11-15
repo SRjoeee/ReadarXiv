@@ -34,8 +34,28 @@ export type Fsys = { list(): string[]; read(path: string): Uint8Array | null }
  *  differ (an accent's letter, a file transcoded); `bared`, where an indent TeX skips stood before it (patch); `opens`, the
  *  layout compile's opening mark before it (layout/marks.mjs) */
 export type TextPiece = { t: 'text'; s: string; src?: string; tr?: boolean; bared?: boolean; opens?: boolean }
-/** what the unit keeps as the source writes it: a command, a formula, a group's edge */
-export type PhPiece = { t: 'ph'; src: string; s?: undefined; bared?: boolean; opens?: boolean }
+/** what the unit keeps as the source writes it: a command, a formula, a group's edge. `brk`: a forced break of the unit's text,
+ *  stated where the piece is made (phPiece) and read wherever a forced break is asked of it (forcedBreak); not enumerable, as an
+ *  open piece's `sets` is, so that the unit's JSON, its hash and its marks are as they were */
+export type PhPiece = { t: 'ph'; src: string; s?: undefined; bared?: boolean; opens?: boolean; readonly brk?: true }
+/** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84) */
+export const BREAK_SOURCE = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a placeholder of the source `src`, stating whether it is a forced break of its unit's text (`brk`, §18.75): where its source
+ *  is one (BREAK_SOURCE), and where the walk states it (`brk` true: a paper's row-ending macro inside a grid cell, which ends a
+ *  line of the box the cell holds as `\\\\` does there). Every placeholder the reader makes is made here */
+export function phPiece(src: string, brk = BREAK_SOURCE.test(src)): PhPiece {
+  const p: PhPiece = { t: 'ph', src }
+  if (brk) Object.defineProperty(p, 'brk', { value: true })
+  return p
+}
+/** whether a piece is a forced break of its unit's text, as the reader stated it where it made the piece (phPiece) */
+export const forcedBreak = (p: { t?: string } | null | undefined): boolean =>
+  p?.t === 'ph' && (p as { brk?: unknown }).brk === true
+/** a copy of a piece (an object spread takes no property that is not enumerable), stating what the piece states */
+function restated<P extends object>(copy: P, of: { t?: string }): P {
+  if (forcedBreak(of)) Object.defineProperty(copy, 'brk', { value: true })
+  return copy
+}
 /** a pair's open (`sets` 0: its command sets its argument and nothing else, identityPair; not enumerable) and its close, by id */
 export type OpenPiece = {
   t: 'open'
@@ -2880,10 +2900,10 @@ class Builder<F extends WalkFile = WalkFile> {
     this.cur.pieces.push(p)
     this.cur.end = end
   }
-  /** `display`: a formula set on lines of its own (displayOutside) */
-  ph(src: string, start: number, end: number, display = false) {
+  /** `display`: a formula set on lines of its own (displayOutside); `brk`, a forced break the walk states (phPiece) */
+  ph(src: string, start: number, end: number, display = false, brk?: true) {
     if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }
-    const p: PhPiece = { t: 'ph', src }
+    const p = brk ? phPiece(src, true) : phPiece(src)
     if (display) this.displays.add(p)
     this.cur.pieces.push(p)
     this.cur.end = end
@@ -3043,16 +3063,16 @@ function escapedLocals<F extends WalkFile>(pieces: readonly SourcePiece<F>[]) {
           out.push(
             sliceSkips(before, { ...before, s: before.s.slice(0, -head.length) }, 0, before.s.length - head.length),
           )
-        out.push({
-          t: 'ph',
-          src:
+        out.push(
+          phPiece(
             head +
-            pieces
-              .slice(k, j + 1)
-              .map((x) => x.src ?? x.s)
-              .join('') +
-            rest,
-        })
+              pieces
+                .slice(k, j + 1)
+                .map((x) => x.src ?? x.s)
+                .join('') +
+              rest,
+          ),
+        )
         if ((tail as TextPiece).s.length > rest.length)
           out.push(
             sliceSkips(
@@ -3134,7 +3154,7 @@ function keepRead<F extends WalkFile>(
         pieces[j]!.t === 'text' && !CHARACTERS.has(pieces[j]!)
           ? pieces[j]!.s!.slice(j === ka ? oa : 0, j === kb ? b : undefined)
           : pieces[j]!.src
-    out.push({ t: 'ph', src })
+    out.push(phPiece(src))
     if (pieces[kb]!.t === 'text' && b < pieces[kb]!.s!.length) {
       k = kb
       off = b
@@ -3247,7 +3267,7 @@ function keepAddresses<F extends WalkFile>(pieces: readonly SourcePiece<F>[]) {
       let at = 0
       for (const m of p.s.matchAll(EMAIL)) {
         if (m.index > at) out.push(sliceSkips(p, { ...p, s: p.s.slice(at, m.index) }, at, m.index))
-        out.push({ t: 'ph', src: m[0] })
+        out.push(phPiece(m[0]))
         at = m.index + m[0].length
       }
       if (at < p.s.length) out.push(sliceSkips(p, { ...p, s: p.s.slice(at) }, at))
@@ -3463,7 +3483,7 @@ function probeBranch(s: string, from: number, to: number, b: Builder, ctx: Ctx):
     kind: b.kind ?? 'para',
     start: from,
     end: from,
-    pieces: [{ t: 'ph', src: '' }],
+    pieces: [phPiece('')],
   }
   sb.kind = b.kind
   sb.cellMode = b.cellMode
@@ -4904,7 +4924,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           parent.pieces.push({ t: 'nested', pre: s.slice(i, inner.start), unit: inner, post: s.slice(inner.end, e) })
           parent.end = e
         } else if (parent && made === 0) {
-          parent.pieces.push({ t: 'ph', src: s.slice(i, e) })
+          parent.pieces.push(phPiece(s.slice(i, e)))
           parent.end = e
         } else if (parent) b.flush() // a footnote of several paragraphs: the paragraph ends before it
         i = e
@@ -5052,14 +5072,17 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
     }
-    // a macro of the paper's whose body ends a table's row, in a cell (\\newcommand{\\tightrow}{\\\\[-4pt]}: rowEndsOf): the row's end,
-    // as `\\\\` is there, an empty group after it with it. Read as a placeholder, the next row's first cell ran on in the cell it
-    // ends (2610.21924v1's 30 cells)
-    if (b.cellMode && ctx.rowEnds?.has(name) && !inGridCell(b, s, i)) {
+    // a macro of the paper's whose body ends a table's row, in a cell (\\newcommand{\\tightrow}{\\\\[-4pt]}: rowEndsOf), an empty
+    // group after it with it: where the grid ends the cell, the row's end, as `\\\\` is there (read as a placeholder, the next
+    // row's first cell ran on in the cell it ends: 2610.21924v1's 30 cells); inside a grid cell, in a box the cell holds, a line's
+    // end, the forced break `\\\\` is there, stated on its piece (read as a paper's macro, the cell's lines were laid as one text)
+    if (b.cellMode && ctx.rowEnds?.has(name)) {
       endText()
-      b.flush()
-      const k = skipSpaces(s, end)
-      i = s.startsWith('{}', k) && k + 2 <= to ? k + 2 : end
+      const k = skipSpaces(s, end),
+        e = s.startsWith('{}', k) && k + 2 <= to ? k + 2 : end
+      if (inGridCell(b, s, i)) b.ph(s.slice(i, e), i, e, false, true)
+      else b.flush()
+      i = e
       continue
     }
     // (an accent the paper defines anew as a macro of no argument stays the accent's placeholder with its letter, below)
@@ -5930,7 +5953,7 @@ function bibliography(s: string, from: number, to: number, b: Builder, ctx: Ctx)
       const ends = (u: SourceUnit<WalkFile>, next: SourceUnit<WalkFile> | undefined) =>
         PARAGRAPH_END.test(uncommented(s.slice(u.end, next ? next.start : z)))
       const first = made.find((u, j) => ends(u, made[j + 1])) ?? made.at(-1)
-      first?.pieces.push({ t: 'ph', src: BACKREF_LIST })
+      first?.pieces.push(phPiece(BACKREF_LIST))
     }
   })
   b.kind = saved
@@ -6241,7 +6264,7 @@ function keepNumbers<F extends WalkFile>(pieces: readonly SourcePiece<F>[]) {
         right = end < n ? /\s/.test(p.s[end]!) : APART(pieces[k + 1])
       if (!left || !right || at(m.index) < 0 || at(end) < 0 || src.slice(at(m.index), at(end)) !== m.text) continue
       if (m.index > last) out.push(part(last, m.index))
-      out.push({ t: 'ph', src: m.text })
+      out.push(phPiece(m.text))
       last = end
     }
     if (!out.length) return [p]
@@ -7024,12 +7047,11 @@ export function startOf(pieces: readonly SourcePiece<WalkFile>[], cell = false):
   return box >= 0 ? [box, -1] : [at, cut]
 }
 
-/** a cell's forced break (the instrument's FORCED_BREAK: `\\\\`, its star, its optional argument; \\newline) */
-const CELL_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
 /** a \\multicolumn's open piece: its content is the entry's own (its \\omit replaced the template), no group of a box */
 const MULTICOLUMN = /^\\multicolumn(?![A-Za-z@])/
 /** the open piece a cell's start mark goes before, by index, where the head's start (`at`) stands inside the box that holds the
- *  cell's lines: the innermost group of its pieces that holds every forced break of it, a \\multicolumn's passed through, where
+ *  cell's lines: the innermost group of its pieces that holds every forced break of it (forcedBreak: `\\\\`, and a paper's row-ending
+ *  macro the walk states one), a \\multicolumn's passed through, where
  *  the start stands inside that group; where no group holds them all (each in a box of its own) and none stands outside every
  *  group, the outermost group the start stands in. -1 where the start stays: no break, a break outside every group, or the
  *  start outside the box (its first word before it) */
@@ -7042,7 +7064,7 @@ function cellBox(pieces: readonly SourcePiece<WalkFile>[], at: number): number {
     if (k === at) enclosing = [...open]
     if (p.t === 'open') open.push(MULTICOLUMN.test(p.src) ? -1 : k)
     else if (p.t === 'close') open.pop()
-    else if (p.t === 'ph' && CELL_BREAK.test(p.src)) {
+    else if (forcedBreak(p)) {
       const groups = open.filter((o) => o >= 0)
       if (!groups.length) return -1
       // (the groups open at every break so far: the common head of their stacks)
@@ -7150,7 +7172,7 @@ export function patch(
       const q = p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p,
         r = p.t === 'text' && !p.tr ? SKIPPED.get(p) : null
       if (!r) {
-        pieces.push(bare ? { ...q, bared: true } : q)
+        pieces.push(bare ? restated({ ...q, bared: true }, q) : q)
         bare = false
         continue
       }

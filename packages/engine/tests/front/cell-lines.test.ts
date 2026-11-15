@@ -6,8 +6,8 @@
 // public reading (loadProject) and the front half's facts (unitFactsOf: R1, R2), on sources of our own.
 import { describe, expect, it } from 'vitest'
 import { openPaper } from '../../src/compile/live.ts'
-import { unitFactsOf } from '../../src/instrument/instrument.ts'
-import { inMemory, loadProject } from '../../src/source/latex-front.ts'
+import { elementKindOf, unitFactsOf } from '../../src/instrument/instrument.ts'
+import { inMemory, loadProject, startOf } from '../../src/source/latex-front.ts'
 
 type Piece = { t: string; s?: string; src?: string }
 type Unit = { kind: string; pieces: Piece[]; cell?: { row: number; col: number } }
@@ -100,4 +100,67 @@ describe('the names rules read a cell of several lines as one text (R1, R2: inst
     expect(judged('\\makecell{0.824 \\\\ (reference)}')).toEqual([['0.824 (reference)', null]]))
   it('numbers and identifiers on every line are kept whole (R1)', () =>
     expect(judged('\\makecell{EER: 0.072 \\\\ ROC AUC: 0.960}')).toEqual([['EER: 0.072 ROC AUC: 0.960', 'words']]))
+})
+
+// (a paper's own row-ending macro, rowEndsOf's: a macro of no parameter whose body ends a row, `\newcommand{\br}{\\}`, one for each
+// form of such a body; inside a grid cell, in a box the cell holds, it ends a line of the box as `\\` does there: the forced break
+// of the cell's text, stated on its piece where the walk makes it, and read as such: its element a `break` (the instrument's
+// kind) and the cell's start mark before the box that holds every forced break (startOf, the marking's))
+const MACROS = '\\newcommand{\\br}{\\\\}\n\\newcommand{\\brs}{\\\\[2pt]}\n\\newcommand{\\brt}{\\tabularnewline}\n\\newcommand{\\brh}{\\\\\\hline}'
+const BOXES: [string, (x: string) => string][] = [
+  ['\\shortstack', (x) => `\\shortstack{${x}}`],
+  ['\\makecell', (x) => `\\makecell{${x}}`],
+  ['\\parbox', (x) => `\\parbox{3cm}{${x}}`],
+  ['a nested one-column tabular', (x) => `\\begin{tabular}[c]{@{}c@{}}${x}\\end{tabular}`],
+]
+/** the cell at row 0, column 0: its words, its elements' kinds by source, and whether its start mark stands before its box (the
+ *  unit's first open piece) */
+const stated = (head: string) => {
+  const c = at(unitsOf(MACROS, table(head)), 0, 0)
+  const ps = c[0]?.pieces ?? []
+  return {
+    units: c.length,
+    words: c[0] ? words(c[0]) : '',
+    kinds: ps.flatMap((p) => (p.t === 'ph' && p.src !== '\\hline' ? [[p.src, elementKindOf(p)]] : [])),
+    beforeBox: startOf(ps as never, true)[0] === ps.findIndex((p) => p.t === 'open'),
+  }
+}
+describe("a paper's row-ending macro inside a grid cell is a forced break of the cell, as `\\\\` is there (§18.75)", () => {
+  it("the reviewer's example: \\newcommand{\\br}{\\\\} in a \\shortstack", () =>
+    expect(stated('\\shortstack{Error rate \\br on test set}')).toEqual({
+      units: 1,
+      words: 'Error rate on test set',
+      kinds: [['\\br', 'break']],
+      beforeBox: true,
+    }))
+  for (const [name, box] of BOXES)
+    for (const body of ['\\br', '\\brs', '\\brt', '\\brh'])
+      it(`${name}, the macro ${body}: one unit, its element a break, the start mark before the box`, () =>
+        expect(stated(box(`Error rate ${body} on test set`))).toEqual({
+          units: 1,
+          words: 'Error rate on test set',
+          kinds: [[body, 'break']],
+          beforeBox: true,
+        }))
+  it('a cell mixing `\\\\` and the macro: one unit, both breaks', () => {
+    expect(stated('\\makecell{Error rate \\\\ on test \\br set}')).toEqual({
+      units: 1,
+      words: 'Error rate on test set',
+      kinds: [
+        ['\\\\', 'break'],
+        ['\\br', 'break'],
+      ],
+      beforeBox: true,
+    })
+    expect(stated('\\shortstack{Error rate \\br on test \\\\ set}').kinds).toEqual([
+      ['\\br', 'break'],
+      ['\\\\', 'break'],
+    ])
+  })
+  it('the empty group after the call is the break’s, as the row’s end takes it', () =>
+    expect(stated('\\makecell{Error rate \\br{} on test set}').kinds).toEqual([['\\br{}', 'break']]))
+  it('the macro at the grid’s row end ends the row, as before', () => {
+    const us = unitsOf(MACROS, '\\begin{tabular}{c|c}\n\\hline\nError rate & testing \\br\n\\hline\non test set & 2.5 \\brh\n\\end{tabular}')
+    expect([at(us, 0, 0).map(words), at(us, 1, 0).map(words)]).toEqual([['Error rate'], ['on test set']])
+  })
 })

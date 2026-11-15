@@ -37,12 +37,12 @@ describe('the run-in labels of a unit, stated must', () => {
       t('We evaluate two objectives as before:\n'),
       el('\\vspace{0.3cm}'),
       t('\n'),
-      el('\\\\'),
+      el('\\\\', 'break'),
       t('\n'),
       el('\\noindent'),
       bf('No NSP'),
       t(': A bidirectional model trained without the NSP task.'),
-      el('\\\\'),
+      el('\\\\', 'break'),
       t('\n'),
       el('\\noindent'),
       bf([t('LTR '), el('\\&', 'macro'), t(' No NSP')]),
@@ -116,8 +116,8 @@ describe('the run-in labels of a unit, stated must', () => {
   // across the forced break's marker, and came back without its term; the second, after "task.", began a sentence and
   // kept it. Microsoft cut its sentence at a line break written after the break's marker and gave the label back whole)
   it('the forced break a label follows, no sentence ending before it, states the line it ends (its stop a line end)', () => {
-    const first = el('\\\\')
-    const second = el('\\\\')
+    const first = el('\\\\', 'break')
+    const second = el('\\\\', 'break')
     const content = [
       t('We compare two settings as follows:\n'),
       el('\\vspace{0.3cm}'),
@@ -138,12 +138,19 @@ describe('the run-in labels of a unit, stated must', () => {
     // (after a full stop the endpoint's sentence ends already: the break states nothing)
     expect(second).not.toHaveProperty('stop')
   })
+  it("a paper's row-ending macro stated a forced break (its element's kind, §18.75) a label follows states the line it ends", () => {
+    const brk = el('\\br', 'break')
+    expect(
+      kept([t('We compare two settings'), brk, t('\n'), bf('No XYZ'), t(': A model trained without it.')]),
+    ).toEqual(['No XYZ'])
+    expect(brk).toMatchObject({ stop: '\n' })
+  })
   it('no line end for a break no label follows: a title broken over lines, a group kept by the boundary rule', () => {
-    const title = el('\\\\')
+    const title = el('\\\\', 'break')
     kept([t('Deep Bidirectional Transformers for '), title, t(' Language Understanding')])
     expect(title).not.toHaveProperty('stop')
     // (an affiliation's lines, each group kept by the boundary rule: a phrase broken over lines, no sentence's end)
-    const line = el('\\\\')
+    const line = el('\\\\', 'break')
     const content = [t('College of Information Science'), line, em('and Electronic Engineering,')]
     expect(kept(content)).toEqual(['and Electronic Engineering,'])
     expect(line).not.toHaveProperty('stop')
@@ -154,7 +161,7 @@ describe('the run-in labels of a unit, stated must', () => {
   it('a label after a forced break with only elements between, as one right after it: the line begins there', () => {
     const content = [
       t('The model keeps both properties.'),
-      el('\\\\'),
+      el('\\\\', 'break'),
       t('\n'),
       el('$(ii)$', 'math'),
       t(' '),
@@ -163,14 +170,22 @@ describe('the run-in labels of a unit, stated must', () => {
     ]
     expect(kept(content)).toEqual(['Accurate trajectory modeling.'])
     // (a colon label so placed: the break states the line it ends, as for one right after it)
-    const brk = el('\\\\')
+    const brk = el('\\\\', 'break')
     expect(
       kept([t('We compare two settings'), brk, el('$\\bullet$', 'math'), t(' '), bf('No XYZ'), t(': A model.')]),
     ).toEqual(['No XYZ'])
     expect(brk).toMatchObject({ stop: '\n' })
     // (a word between the break and the group: its line began before it)
     expect(
-      kept([t('Done.'), el('\\\\'), t(' see '), el('\\cite{x}', 'cite'), t(' '), bf('Next item.'), t(' And more.')]),
+      kept([
+        t('Done.'),
+        el('\\\\', 'break'),
+        t(' see '),
+        el('\\cite{x}', 'cite'),
+        t(' '),
+        bf('Next item.'),
+        t(' And more.'),
+      ]),
     ).toEqual([])
   })
   // (2608.25210v2 p2 on staging, 2026-11-09: `\topic{Current approaches to infer provenance are not reliable}`, the paper's

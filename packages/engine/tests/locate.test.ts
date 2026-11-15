@@ -2535,7 +2535,7 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
         style: 'other',
         open: '\\texorpdfstring{',
         close: '}',
-        content: [{ t: 'el' as const, id: '2', kind: 'other', src: '\\\\' }],
+        content: [{ t: 'el' as const, id: '2', kind: 'break', src: '\\\\' }],
       },
       text('\ntheory and constraints'),
     ]

@@ -67,3 +67,38 @@ describe('the start marks that stay where they were', () => {
     )
   })
 })
+
+// (a paper's row-ending macro inside a cell's box is the forced break `\\` is there (§18.75): the cell is marked as its control
+// written with `\\` is, the macro in the break's place: its start mark before the box, no mark of the macro's own, and a mark that
+// follows it moved before it as before `\\`)
+describe("a cell whose lines a paper's row-ending macro ends is marked as its control written with `\\\\`", () => {
+  const MACROS = '\\newcommand{\\br}{\\\\}\n\\newcommand{\\brs}{\\\\[2pt]}\n\\newcommand{\\brh}{\\\\\\hline}'
+  const markedWith = (row: string): string => {
+    const tex = `\\documentclass{article}\n${PRE}\n${MACROS}\n\\begin{document}\nSome prose words here.\n\n\\begin{tabular}{l|c|r}\n\\hline\n${row} \\\\\n\\hline\n1.5 & 2.5 & 3.5 \\\\\n\\end{tabular}\n\\end{document}\n`
+    const out = new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(tex)]])), { lines: true, layout: MARK_CLASSES }).get('main.tex')!)
+    return out.slice(out.indexOf('\\begin{tabular}{l|c|r}'), out.indexOf('\\end{document}'))
+  }
+  const boxes: [string, (x: string) => string][] = [
+    ['\\shortstack', (x) => `\\shortstack{${x}}`],
+    ['\\makecell', (x) => `\\makecell{${x}}`],
+    ['\\parbox', (x) => `\\parbox{3cm}{${x}}`],
+    ['a nested one-column tabular', (x) => `\\begin{tabular}[c]{@{}c@{}}${x}\\end{tabular}`],
+  ]
+  for (const [name, box] of boxes)
+    for (const [macro, literal] of [
+      ['\\br', '\\\\'],
+      ['\\brs', '\\\\[2pt]'],
+    ] as const)
+      it(`${name}, ${macro} for ${literal}: a formula after the break`, () => {
+        const row = (b: string) => `x & ${box(`Error rate ${b} $x$ on test set`)} & y`
+        expect(markedWith(row(macro))).toBe(markedWith(row(literal)).replace(literal, macro))
+      })
+  it('a cell mixing `\\\\` and the macro', () =>
+    expect(markedWith('x & \\makecell{Error rate \\\\ on test \\br set} & y')).toBe(
+      markedWith('x & \\makecell{Error rate \\\\ on test \\\\ set} & y').replace(/\\\\ set/, '\\br set'),
+    ))
+  it('a body that draws a rule after the row’s end, in a nested one-column tabular, as `\\\\ \\hline`', () =>
+    expect(markedWith('x & \\begin{tabular}[c]{@{}c@{}}Top \\brh Bottom\\end{tabular} & y')).toMatch(
+      new RegExp(`& ${S}\\\\begin\\{tabular\\}\\[c\\]\\{@\\{\\}c@\\{\\}\\}Top \\\\brh Bottom\\\\axtend\\{t\\d+e\\}\\\\end\\{tabular\\}`),
+    ))
+})

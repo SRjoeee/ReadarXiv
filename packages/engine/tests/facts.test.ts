@@ -751,7 +751,7 @@ describe('locate states the facts on arXiv’s page', () => {
     const B = docOf(pages)
     const content: Piece[] = [
       text('one line'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
       text('two lines three end'),
     ]
     const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
@@ -805,7 +805,7 @@ describe('a forced break with no point on B', () => {
     const B = docOf([{ lines: ['a long first line of it here', 'short', 'a long third line of it here', 'end'] }])
     const content: Piece[] = [
       text('a long first line of it here short'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
       text('a long third line of it here end'),
     ]
     const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
@@ -816,6 +816,22 @@ describe('a forced break with no point on B', () => {
     ).members[0]!
     expect(M.elements.find(([id]) => id === '1')?.[1].ends).toEqual([1, 0])
     expect(M.read).toContain('breaks')
+  })
+  it("reads a paper's row-ending macro stated a forced break (its element's kind) as `\\\\` is read: its line", () => {
+    // (\br, whose body is `\\`, inside a cell's box: the source reader states it a forced break, its element a `break`, §18.75)
+    const B = docOf([{ lines: ['a long first line of it here', 'short', 'a long third line of it here', 'end'] }])
+    const content: Piece[] = [
+      text('a long first line of it here short'),
+      { t: 'el', id: '1', kind: 'break', src: '\\br' },
+      text('a long third line of it here end'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const M = locate(
+      instrument(B, [u], () => [0, ROLE.text, -1]),
+      B,
+      align(B, B),
+    ).members[0]!
+    expect(M.elements.find(([id]) => id === '1')?.[1].ends).toEqual([1, 0])
   })
 })
 
@@ -858,8 +874,8 @@ describe('forced breaks with no point on B, set one after the other', () => {
     ])
     const content: Piece[] = [
       text('a long first line of it here short'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
-      { t: 'el', id: '2', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
+      { t: 'el', id: '2', kind: 'break', src: '\\\\' },
       text('\na long third line of it here end'),
     ]
     const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
@@ -892,13 +908,13 @@ describe('forced breaks with no point on B, placed by TeX’s points around them
     ])
     const content: Piece[] = [
       text('a long first line of it here short'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
-      { t: 'el', id: '2', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
+      { t: 'el', id: '2', kind: 'break', src: '\\\\' },
       text('\n'),
       { t: 'el', id: '3', kind: 'math', src: '$\\textbf{Notation}$' },
       text(' and a third line ok end'),
-      { t: 'el', id: '4', kind: 'other', src: '\\\\' },
-      { t: 'el', id: '5', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '4', kind: 'break', src: '\\\\' },
+      { t: 'el', id: '5', kind: 'break', src: '\\\\' },
     ]
     const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
     const ins: Instrument = {
@@ -928,7 +944,7 @@ describe('forced breaks with no point on B, placed by TeX’s points around them
     ])
     const content: Piece[] = [
       text('a long first line of it here a long second one fills it x'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
       { t: 'el', id: '2', kind: 'math', src: '$xy$' },
       text(' and more text of the unit end'),
     ]
@@ -949,7 +965,7 @@ describe('forced breaks with no point on B, placed by TeX’s points around them
     const B = docOf([{ lines: ['A Much Longer First Title Line', { text: 'Second', x: 144 }] }])
     const content: Piece[] = [
       text('A Much Longer First Title Line'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
       text('Second'),
     ]
     const u: InstrumentUnit = { id: unitId('heading', content), kind: 'heading', content }
@@ -967,7 +983,7 @@ describe('forced breaks with no point on B, placed by TeX’s points around them
     const B = docOf([{ lines: ['A Much Longer First Title Line', { text: 'Second', x: 144 }] }])
     const content: Piece[] = [
       text('A Much Longer First Title Line'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
       text('Second'),
     ]
     const u: InstrumentUnit = { id: unitId('heading', content), kind: 'heading', content }
@@ -990,7 +1006,7 @@ describe('forced breaks with no point on B, placed by TeX’s points around them
     ])
     const content: Piece[] = [
       text('Receiver Specific Valuation of Semantic Atoms for'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
       text('\nBudget Constrained Multi Agent Talk'),
     ]
     const unit = (align?: 'c'): InstrumentUnit => ({
@@ -1014,11 +1030,11 @@ describe('forced breaks with no point on B, placed by TeX’s points around them
     const B = docOf([{ lines: ['a long first line of it here', 'short', 'ab xy a long third line of i', 'end'] }])
     const content: Piece[] = [
       text('a long first line of it here short'),
-      { t: 'el', id: '1', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '1', kind: 'break', src: '\\\\' },
       text('ab '),
       { t: 'el', id: '2', kind: 'math', src: '$xy$' },
       text(' a long third line of i end'),
-      { t: 'el', id: '3', kind: 'other', src: '\\\\' },
+      { t: 'el', id: '3', kind: 'break', src: '\\\\' },
     ]
     const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
     const ins: Instrument = {

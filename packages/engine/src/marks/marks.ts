@@ -16,6 +16,7 @@
 import {
   BACKREF_LIST,
   calledAt,
+  forcedBreak,
   frontMarks,
   identifierSource,
   lastTexLog,
@@ -168,7 +169,9 @@ export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   if (piece?.t === 'nested') return 'footnote'
   if (piece?.t !== 'ph') return null
   const src = piece.src ?? ''
-  if (INVISIBLE.test(src) || STRUCTURE.test(src)) return null
+  // (a forced break sets no ink, and a mark there would move a line: as the source reader states it (forcedBreak, `\\\\` and a
+  // paper's row-ending macro inside a grid cell, §18.75), among what INVISIBLE reads)
+  if (forcedBreak(piece) || INVISIBLE.test(src) || STRUCTURE.test(src)) return null
   // a placeholder that can set no letters is no text rendering: never ink, never LOST — one of the commands the role
   // table proves so (arg-roles.mjs textless: rules, space, a length's or a counter's setting, a definition, a register's
   // assignment; a strut's \\rule{0pt}{2.2ex}, \\specialrule{1pt}{-1pt}{0pt}, \\addlinespace[2pt]), its arguments all there.
@@ -2107,8 +2110,13 @@ export function headEnd(pieces: readonly Piece[], from = 0): number {
   }
   return pieces.length
 }
-/** a forced break, which in a table the scanner does not read as one ends a row: what follows begins the next row */
+/** a forced break, which in a table the scanner does not read as one ends a row: what follows begins the next row (`\\\\` with
+ *  its star, its room and the spaces before it, \\cr, \\crcr, \\tabularnewline: \\newline ends no row) */
 const BREAK = /^\\(?:\\|(?:cr|crcr|tabularnewline)(?![A-Za-z@]))/
+/** whether a piece is such a break: by its source (BREAK), or as the source reader states it a forced break (forcedBreak), a
+ *  paper's row-ending macro inside a grid cell, whose body ends a row as `\\\\` does (§18.75); not \\newline, stated one too */
+const breaks = (p: Piece | undefined): boolean =>
+  p?.t === 'ph' && (BREAK.test(p.src ?? '') || (forcedBreak(p) && !/^\\newline$/.test(p.src ?? '')))
 /** the pieces passed over, by index: at the unit's head (headEnd), and the same way after each forced break and each
  *  alignment tab, where a table's row or cell may begin in a table the scanner read as prose (aastex's deluxetable:
  *  \enddata after the last row's \\; tabularray's \SetCell, which must open its cell) */
@@ -2119,7 +2127,7 @@ function passedOver(pieces: readonly Piece[]): Set<number> {
   }
   skip(0)
   pieces.forEach((p, k) => {
-    if (p.t === 'ph' && (BREAK.test(p.src ?? '') || p.src === '&')) skip(k + 1)
+    if (breaks(p) || (p.t === 'ph' && p.src === '&')) skip(k + 1)
   })
   return out
 }
@@ -2397,13 +2405,13 @@ export function layoutMarking(
       const blank = (r: Piece): boolean => r.t === 'text' && !/[^ \t\r\n]/.test(r.s)
       for (let k = 0; k < u.pieces.length; k++) {
         const p = u.pieces[k]!
-        if (p.t !== 'ph' || !BREAK.test(p.src ?? '') || out[k]!.length !== 1 || out[k]![0] !== u.pieces[k]) continue
+        if (!breaks(p) || out[k]!.length !== 1 || out[k]![0] !== u.pieces[k]) continue
         let j = k + 1
         while (j < u.pieces.length && blank(u.pieces[j]!)) j++
         const q = u.pieces[j]
         if (
           q?.t !== 'ph' ||
-          BREAK.test(q.src ?? '') ||
+          breaks(q) ||
           q.src === '&' ||
           !passed?.has(j) ||
           out[j]!.length !== 1 ||
@@ -2416,7 +2424,7 @@ export function layoutMarking(
         for (let b = k - 1; b >= 0; b--) {
           const r = u.pieces[b]!
           if (blank(r)) continue
-          if (r.t === 'ph' && BREAK.test(r.src ?? '') && out[b]!.length === 1) {
+          if (breaks(r) && out[b]!.length === 1) {
             f = b
             continue
           }
