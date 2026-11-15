@@ -648,15 +648,31 @@ export const ASK_TEX = [
 /** one ask (ASK_TEX): sample `i` of the asked, its source as the piece writes it */
 export const askOf = (i: number, src: string): string => `\\axtask{${i}}{${src}}`
 /** whether a sample can be asked where the document uses it: its own groups close in it (as many \\begingroup as \\endgroup, \\bgroup
- *  as \\egroup; its braces balance, inkSamples' boxable). One that opens or closes a group of the paragraph around it (a paper's
- *  `\\begingroup` piece, its `\\endgroup` further on) would take that paragraph's groups apart there */
+ *  as \\egroup; its braces balance, inkSamples' boxable), and so do its conditionals (each \\if… closed by its \\fi, no \\else or
+ *  \\or outside one). One that opens or closes a group of the paragraph around it (a paper's `\\begingroup` piece, its `\\endgroup`
+ *  further on) would take that paragraph's groups apart there; one that holds a conditional's end, copied into a branch TeX skips
+ *  (a paper's `\\fi` inside its own `\\iffalse`), would end that conditional early: TeX counts a skipped branch's \\if… and \\fi
+ *  whatever braces stand around them (2610.21312v1's `\\fi`) */
 export const askable = (src: string): boolean => {
   const n = (re: RegExp) => (src.match(re) ?? []).length
-  return (
-    n(/\\begingroup(?![A-Za-z@])/g) === n(/\\endgroup(?![A-Za-z@])/g) &&
-    n(/\\bgroup(?![A-Za-z@])/g) === n(/\\egroup(?![A-Za-z@])/g)
+  if (
+    n(/\\begingroup(?![A-Za-z@])/g) !== n(/\\endgroup(?![A-Za-z@])/g) ||
+    n(/\\bgroup(?![A-Za-z@])/g) !== n(/\\egroup(?![A-Za-z@])/g)
   )
+    return false
+  let depth = 0
+  for (const m of src.matchAll(/\\(if[A-Za-z@]*|fi|else|or)(?![A-Za-z@])/g)) {
+    const w = m[1]!
+    if (w.startsWith('if')) depth++
+    else if (w === 'fi') {
+      if (--depth < 0) return false
+    } else if (depth === 0) return false
+  }
+  return depth === 0
 }
+/** whether a piece may read what follows it as its own (marks' LOOKS_AHEAD: a paper's macro, a footnote's call, a prefix): no ask
+ *  right after one, which it would take as its argument (`\\urldef\\tempurl\\url{…}`: `\\urldef` reads the next two tokens) */
+export const looksAhead = (p: PieceLike | null | undefined): boolean => LOOKS_AHEAD(p)
 /** the probe document of the layout marks: its punctuation section, then its ink section, its name section, its skip section,
  *  the punctuation section of the paper's own macros (probeSamples' `own`, numbered on from the asked ones), and last the ink
  *  section of the leads (leadSamples, numbered on from `ink`): a call of one of the paper's macros runs whatever its body does,

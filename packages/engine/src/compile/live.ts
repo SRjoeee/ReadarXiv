@@ -10,6 +10,7 @@ import {
   ASK_TEX,
   askable,
   askOf,
+  looksAhead,
   CALL_TEX,
   classNamesTex,
   DVI_LAYOUT_TEX,
@@ -111,6 +112,10 @@ export function askedFiles(
     if (u.nested || !u.file || COPIED.has(u.kind) || code.has(u)) continue
     u.pieces.forEach((p, k) => {
       if (p.t !== 'ph' || !want.has(p.src) || !askable(p.src)) return
+      // (not right after a piece that may read it as its argument, past white space: that use is passed over, a later one asked)
+      let j = k - 1
+      while (j >= 0 && u.pieces[j]!.t === 'text' && !/\S/.test(u.pieces[j]!.s ?? '')) j--
+      if (j >= 0 && looksAhead(u.pieces[j])) return
       want.delete(p.src)
       const m = at.get(u) ?? at.set(u, new Map()).get(u)!
       m.set(k, askOf(asked.length, p.src))

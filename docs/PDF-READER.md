@@ -7334,8 +7334,10 @@ madeBibliography with `asks`, an option `compiledOf` sets; today's reader asks n
   asked once, right before its first use in running text (`compile/live.ts` askedFiles, `\axtask{<i>}{<its source>}`): at the
   token, since a paragraph's start lies before `\begin{keyword}`, where `\sep` is still empty. Not in a heading's title or a
   caption (LaTeX copies their argument as written into the `.aux`, the `.toc` and hyperref's nameref title), nor in an
-  algorithm float's body (the front end's `pseudocode`), nor a sample whose own groups do not close (`marks.ts` askable: a
-  paragraph's `\begingroup` piece).
+  algorithm float's body (the front end's `pseudocode`), nor a sample whose own groups or conditionals do not close (`marks.ts`
+  askable: a paragraph's `\begingroup` piece; a paper's `\fi`, which copied into a branch TeX skips would end its conditional
+  early, 2610.21312v1), nor right after a piece that may read it as its argument (`marks.ts` looksAhead: `\urldef\tempurl`,
+  2402.10294v1); a later use is asked then.
 - **How** (`marks.ts` ASK_TEX): the ink section's own test of one sample, its source tokenized at the place. It changes
   nothing the pass writes or sets: it expands to nothing where `\protect` is not `\@typeset@protect` and between an
   alignment's rows (an align group in vertical mode: a token of ours there would begin a cell before `\hline`, colortbl's

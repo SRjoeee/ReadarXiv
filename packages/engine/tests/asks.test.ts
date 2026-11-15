@@ -79,6 +79,11 @@ describe('the asks’ answers, read from the pass’s log', () => {
     expect(askable('\\begingroup')).toBe(false)
     expect(askable('\\endgroup{}')).toBe(false)
     expect(askable('\\bgroup x\\egroup')).toBe(true)
+    // (nor one whose conditionals do not close in it: copied into a branch TeX skips, its \\fi would end that conditional)
+    expect(askable('\\fi')).toBe(false)
+    expect(askable('\\ifgeer')).toBe(false)
+    expect(askable('\\else x')).toBe(false)
+    expect(askable('\\ifx\\a\\b y\\else z\\fi')).toBe(true)
   })
 })
 
@@ -125,6 +130,22 @@ describe('the bibliography’s pass’s files with the asks (askedFiles)', () =>
     expect(main.startsWith(`${UNMARKED_HEAD}${ASK_TEX}\\documentclass{article}\n`)).toBe(true)
     expect(ASK_TEX).not.toContain('\n')
     expect(main.split('\n').length).toBe(dec(unmarkedFiles(paper).get('main.tex')).split('\n').length)
+  })
+  it('asks no use right after a piece that may read it as its argument: a later use is asked', () => {
+    const p = openPaper(
+      new Map([
+        [
+          'main.tex',
+          enc(
+            '\\documentclass{article}\n\\newcommand\\kw{}\n\\begin{document}\nA \\urldef\\kw{} b.\n\nC \\kw{} d.\n\\end{document}\n',
+          ),
+        ],
+      ]),
+    )
+    const { files, asked } = askedFiles(p, ['\\kw{}'])
+    expect(asked).toEqual(['\\kw{}'])
+    expect(dec(files.get('main.tex'))).toContain('A \\urldef\\kw{} b.')
+    expect(dec(files.get('main.tex'))).toContain('C \\axtask{0}{\\kw{}}\\kw{} d.')
   })
   it('gives the unmarked original where no sample is asked, and holds no file it asks nothing in', () => {
     const paper = paperOf()
