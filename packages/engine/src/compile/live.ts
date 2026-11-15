@@ -100,8 +100,9 @@ export type AskPlan = {
  * first pass, compile/paper.ts markedOfPaper `asks`): right before its first use in a unit of the paper's own, in the order the
  * units stand, that is safe to ask at. Not in a unit nested in another (it is written inside its outer one, whose use is asked),
  * a heading's or a caption's argument (COPIED), an algorithm float's body (the front end's `pseudocode`); not a sample whose own
- * groups or conditionals do not close in it (marks.ts askable); not right after a piece that may read it as its argument, past
- * white space (marks.ts looksAhead: `\\urldef\\tempurl`), a later use asked then
+ * groups or conditionals do not close in it (marks.ts askable), nor one whose source spans lines (its copy would move every line
+ * after it); not right after a piece that may read it as its argument, past white space (marks.ts looksAhead:
+ * `\\urldef\\tempurl`), a later use asked then
  */
 export function askPlan(project: Paper['project'], samples: readonly string[]): AskPlan {
   const want = new Set(samples)
@@ -114,7 +115,9 @@ export function askPlan(project: Paper['project'], samples: readonly string[]): 
       if (p.t !== 'ph') return
       const nth = seen.get(p.src) ?? 0
       seen.set(p.src, nth + 1)
-      if (!want.has(p.src) || !askable(p.src)) return
+      // (nor one whose source spans lines: its copy in the ask would move every line after it, and TeX's \inputlineno with them,
+      // which the marks write to the .aux, 2501.14787v1's `\axt@dpseen`: a pass more)
+      if (!want.has(p.src) || !askable(p.src) || p.src.includes('\n')) return
       let j = k - 1
       while (j >= 0 && u.pieces[j]!.t === 'text' && !/\S/.test(u.pieces[j]!.s ?? '')) j--
       if (j >= 0 && looksAhead(u.pieces[j])) return

@@ -57,6 +57,7 @@ const MAIN = String.raw`\documentclass{article}
 \newenvironment{kws}{\par\def\ksep{\unskip\par}}{\par}
 \newcommand\lead{\leavevmode}
 \expandafter\def\csname takeone\endcsname#1{}
+\newcommand\twol[1]{}
 \newcommand\noisyA{\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA}
 \newcommand\noisyB{\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB}
 \begin{document}
@@ -78,7 +79,8 @@ Words that \mypar{} end here, a line \mycr{} cut, another \mynl{} too.
 
 \begin{kws}alpha \ksep beta \ksep gamma\end{kws}
 
-\lead{} A paragraph a macro begins, and a word \takeone x taken.
+\lead{} A paragraph a macro begins, and a word \takeone x taken, and \twol{one
+two} lines.
 
 \begin{figure}\caption{A caption \capt}\label{f1}\end{figure}
 \renewcommand\later{Late}Then \later{} again.
@@ -118,6 +120,8 @@ const WANT = {
   // (a macro that reads past its own source, which the front end does not know takes an argument: what it sets at its use
   // is not measured on the ask's own tokens; no answer)
   '\\takeone': undefined,
+  // (a sample whose source spans lines: not asked, so that no line moves)
+  '\\twol{one\ntwo}': undefined,
 }
 
 const files = new Map([
@@ -179,6 +183,10 @@ for (const year of YEARS) {
         faults.push(`${s}: ${got[s] ?? 'no answer'}, not ${want ?? 'no answer'}`)
     // (a piece that opens or closes the paragraph's own group is never asked: marks.ts askable)
     for (const s of ['\\begingroup', '\\endgroup']) if (asked.asked.includes(s)) faults.push(`${s} asked`)
+    // (no line of any file moved by the asks)
+    for (const [path, b] of sides.asks)
+      if (new TextDecoder('latin1').decode(b).split('\n').length !== new TextDecoder('latin1').decode(sides.base.get(path)).split('\n').length)
+        faults.push(`${path}: the asks moved its lines`)
     const once = asked.asked.map((_, i) => (log.match(new RegExp(`^LAYOUT-PROBE 1 ink-at ${i}$`, 'gm')) ?? []).length)
     // (at most once each: a sample TeX passes over where it stands, between an alignment's rows, is not asked there)
     if (once.some((n) => n > 1)) faults.push(`asked more than once: ${JSON.stringify(once)}`)

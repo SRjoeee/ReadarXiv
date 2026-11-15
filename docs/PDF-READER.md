@@ -7325,8 +7325,9 @@ today's request.
   `\begin{keyword}`, where `\sep` is still empty. Not in a heading's title or a caption (LaTeX copies their argument as written
   into the `.aux`, the `.toc` and hyperref's nameref title), nor in an algorithm float's body (the front end's `pseudocode`),
   nor a sample whose own groups or conditionals do not close (`marks.ts` askable: a paragraph's `\begingroup` piece; a paper's
-  `\fi`, which copied into a branch TeX skips would end its conditional early, 2610.21312v1), nor right after a piece that may
-  read it as its argument (`marks.ts` looksAhead: `\urldef\tempurl`, 2402.10294v1); a later use is asked then.
+  `\fi`, which copied into a branch TeX skips would end its conditional early, 2610.21312v1), nor a sample whose source spans
+  lines (its copy in the ask would move every line after it, and `\inputlineno` with them, which the marks write to the
+  `.aux`: 2501.14787v1 paid a pass more), nor right after a piece that may read it as its argument (`marks.ts` looksAhead: `\urldef\tempurl`, 2402.10294v1); a later use is asked then.
 - **In the mode of its use** (`marks.ts` ASK_TEX): a sample used in a paragraph is set as a paragraph, in a vertical box at the
   measure in force, between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`); between paragraphs, in a vertical box as
   it stands; in a horizontal box (a table's cell), in a horizontal box; in a formula, in math in a horizontal box. A command that ends the paragraph or

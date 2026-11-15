@@ -213,6 +213,24 @@ describe('where the asks stand (askPlan), and the marked files that carry them (
     for (const asks of [null, { at: new Map(), asked: [] }])
       expect([...files(paper, asks)].map(([p, b]) => [p, dec(b)])).toEqual([...plain].map(([p, b]) => [p, dec(b)]))
   })
+  it('asks no sample whose source spans lines: its copy in the ask would move every line after it', () => {
+    const p = openPaper(
+      new Map([
+        [
+          'main.tex',
+          enc(
+            '\\documentclass{article}\n\\newcommand\\two[1]{}\n\\newcommand\\kw{}\n\\begin{document}\nA \\two{b\nc} d \\kw{} e.\n\\end{document}\n',
+          ),
+        ],
+      ]),
+    )
+    const samples = inkSamples(p.units)
+    expect(samples.some((s) => s.includes('\n'))).toBe(true)
+    const plan = askPlan(p.project, samples)
+    expect(plan.asked).toEqual(['\\kw{}'])
+    const main = (asks: ReturnType<typeof askPlan> | null) => dec(files(p, asks).get('main.tex'))
+    expect(main(plan).split('\n').length).toBe(main(null).split('\n').length)
+  })
   it('asks no use right after a piece that may read it as its argument: a later use is asked', () => {
     const p = openPaper(
       new Map([
