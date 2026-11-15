@@ -990,14 +990,21 @@ function letterCommand(
   if (s.startsWith('{}', e)) e += 2
   return e <= to ? { letter, end: e } : null
 }
-/** the text symbols TeX sets as one character of the text (TEXT_SYMBOLS): the kernel's control symbols `\\%`, `\\&`, `\\#`, `\\$`, `\\{`,
- *  `\\}` and textcomp's \\textasciitilde, \\textbar, \\textless, \\textgreater, \\textbackslash. Not `\\_`, which the identifier rule
- *  reads (keepIdentifiers) */
-const TEXT_CHARACTERS = new Map(
-  ['%', '&', '#', '$', '{', '}', 'textasciitilde', 'textbar', 'textless', 'textgreater', 'textbackslash'].map((n) => [
-    n,
-    TEXT_SYMBOLS[`\\${n}`],
-  ]),
+/** the text symbols TeX sets as one character of the text, by name, its character: the front end's own table of them
+ *  (text-symbols.ts TEXT_SYMBOLS: the kernel's and textcomp's, each the one character it sets in every encoding), taken whole,
+ *  so that no list of ours grows apart from it (eleven of its symbols were read so, the rest left placeholders: markers that cut
+ *  "don\\textquotesingle t", "hole\\textendash{}galaxy", F9 (d)); but `\\_`, which the identifier rule reads (keepIdentifiers), and
+ *  the kernel's letters, letters of their word (LETTER_COMMANDS) */
+export const TEXT_CHARACTERS: ReadonlyMap<string, string> = new Map(
+  Object.keys(TEXT_SYMBOLS)
+    .filter((k) => k !== '\\_' && !LETTER_COMMANDS.has(k.slice(1)))
+    .map((k) => [k.slice(1), TEXT_SYMBOLS[k]!]),
+)
+/** the characters LaTeX's footnote symbols set in text, as the table holds them (latex.ltx's \\@fnsymbol: \\textasteriskcentered,
+ *  \\textdagger, \\textdaggerdbl, \\textsection, \\textparagraph, \\textbardbl; the table's four): a note's mark where it stands as
+ *  one (noteMark) */
+const NOTE_MARKS: ReadonlySet<string> = new Set(
+  ['\\textdagger', '\\textdaggerdbl', '\\textsection', '\\textparagraph'].map((k) => TEXT_SYMBOLS[k]!),
 )
 /**
  * The character a text symbol at s[i] sets (`name`, read from s[i]), as TeX sets it: a control word's skipped spaces and an empty
@@ -3042,6 +3049,34 @@ class Builder<F extends WalkFile = WalkFile> {
       this.cur.end = end
     }
   }
+  /** whether the unit's first word has come, as the start mark reads it (headStartOf): a text piece that is more than white space,
+   *  or a placeholder that is a first word (firstWordPiece: `$\\leq 5$\\%`'s formula) */
+  inText(): boolean {
+    return !!this.cur?.pieces.some((p) => (p.t === 'text' && /\S/.test(p.s)) || (p.t === 'ph' && firstWordPiece(p.src)))
+  }
+  /** whether what the walk sets next stands right after a word, no space between: the unit's last text ends in a letter or a
+   *  digit, past the groups closed after it and the note's marks set there as placeholders (a run of marks, `\\dag\\ddag`) */
+  afterWord(): boolean {
+    const ps = this.cur?.pieces ?? []
+    for (let k = ps.length - 1; k >= 0; k--) {
+      const p = ps[k]!
+      if (p.t === 'close' || (p.t === 'ph' && NOTE_MARKS.has(symbolText(p.src) ?? ''))) continue
+      return p.t === 'text' && /[\p{L}\p{N}]$/u.test(UTF8_LAX.decode(latin1Bytes(p.s)))
+    }
+    return false
+  }
+  /**
+   * Whether a text symbol (textCharacter, its character `char`) is a character of the unit's text where the walk meets it: inside
+   * the unit's text, but before the unit's first word, where everything the unit opens with is its edge (startOf passes it over,
+   * its ink the original's: 2610.19159v1's 44 items of a list typed by hand, `\\textbullet The …`, which as text would open the
+   * sentence on the wire), and but a note's mark (NOTE_MARKS) right after a word with no space, which is the mark of a note: an
+   * element of the text, as its call in a superscript is (`Beren Millidge\\textdagger`: as text the dagger was glued to the name,
+   * the person no longer the one its references name; the coordinator's ruling of 2026-11-11). Elsewhere a note's symbol is text
+   * (`(\\S\\ref{…})`, `in \\S 3`). Read after the text before it is the unit's (endText)
+   */
+  charHere(char: string): boolean {
+    return this.inText() && !(NOTE_MARKS.has(char) && this.afterWord())
+  }
   /** a letter an accent made (accentLetter): text, its UTF-8 bytes read as the source's are, and `src` the accent as
    *  the source writes it — what is set wherever the unit is set untranslated (patch). Joined with its word at flush */
   letter(letter: string, src: string, start: number, end: number, character = false) {
@@ -3065,10 +3100,16 @@ class Builder<F extends WalkFile = WalkFile> {
     })
     u.pieces = joinLetters(BIB_KINDS.has(u.kind) ? keepNumbers(read) : read)
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
-    const letters = u.pieces
-      .filter((p) => p.t === 'text')
-      .map((p) => p.s)
-      .join('')
+    // (its letters counted on its text decoded: a text piece holds UTF-8 bytes in their Latin-1 view, and an ellipsis's `â`, a
+    // section sign's `Â`, are no letters: a cell of one letter and `\\dots` was a unit of two)
+    const letters = UTF8_LAX.decode(
+      latin1Bytes(
+        u.pieces
+          .filter((p) => p.t === 'text')
+          .map((p) => p.s)
+          .join(''),
+      ),
+    )
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
       // a display standing alone between blank lines is read with the paragraph it follows, nothing but white space
       // and comments between them
@@ -4513,7 +4554,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         i = e
         continue
       }
-      // (and around a text symbol alone, {\\%}: its character, textCharacter)
+      // (and around a text symbol alone, {\\%}: its character, textCharacter, where it is one of the unit's text, Builder.charHere)
       const character =
         !letter &&
         !kernelLetter &&
@@ -4521,8 +4562,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         k === i + 1 &&
         ctx.letters !== false &&
         textCharacter(s, k, accent.name, e - 1, ctx.ownLetters)
-      if (character && character.end === e - 1) {
-        endText()
+      if (character && character.end === e - 1 && (endText(), b.charHere(character.letter))) {
         b.pairId += pairsOf(s, i, e, b, ctx)
         b.letter(character.letter, s.slice(i, e), i, e, true)
         i = e
@@ -5395,9 +5435,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       i = kernelLetter.end
       continue
     }
+    // a text symbol, \\S 3, don\\textquotesingle t: its character, where it is one of the unit's text (Builder.charHere)
     const character = ctx.letters !== false && textCharacter(s, i, name, to, ctx.ownLetters)
-    if (character) {
-      endText()
+    if (character && (endText(), b.charHere(character.letter))) {
       b.pairId += pairsOf(s, i, character.end, b, ctx)
       b.letter(character.letter, s.slice(i, character.end), i, character.end, true)
       i = character.end
@@ -7197,6 +7237,9 @@ function cellBox(pieces: readonly SourcePiece<WalkFile>[], at: number): number {
   return inside[0] ?? -1
 }
 
+/** a placeholder that is a unit's first word where it comes first (headStartOf): an inline formula or citation, an identifier, a
+ *  number an entry keeps — text TeX sets as written, or set on the line */
+const firstWordPiece = (src: string): boolean => INLINE.test(src) || identifierSource(src) || KEPT_NUMBER.test(src)
 /** startOf's reading of a unit's head, a cell's box aside */
 function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number] {
   let startAt = -1,
@@ -7248,7 +7291,7 @@ function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number]
     // (an inline formula or citation, an identifier, and a number an entry keeps, text TeX sets as written (identifierSource,
     // KEPT_NUMBER): the first word. An entry with no author, ACM's `\\bibinfo{year}{2023}\\natexlab{}.`, IEEEtran's `(2024) {WHO} …`:
     // passed over, its year stood before the start mark, and where the year opened a group the entry had none (F29))
-    if (p.t === 'ph' && (INLINE.test(p.src) || identifierSource(p.src) || KEPT_NUMBER.test(p.src))) {
+    if (p.t === 'ph' && firstWordPiece(p.src)) {
       startAt = k
       startCut = -1
       break

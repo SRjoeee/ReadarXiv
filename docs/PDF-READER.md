@@ -4672,7 +4672,8 @@ term, 140 markers fewer.
 
 - **The kernel's control symbols `\%`, `\&`, `\#`, `\$`, `\{`, `\}` and textcomp's `\textasciitilde`, `\textbar`,
   `\textless`, `\textgreater`, `\textbackslash` are the character they set, in its word** (`latex-front.mjs` textCharacter, the
-  letter commands' path): its source beside it, written back byte for byte; a control word's skipped spaces and an empty group
+  letter commands' path; since §18.81 the whole table of text symbols, the unit's edge before its first word, a note's mark
+  after a word an element): its source beside it, written back byte for byte; a control word's skipped spaces and an empty group
   with it (`\textless 5` is "<5"), none after a control symbol (`5\% of` is "5% of"); a group around one alone spends its pair's
   id; a paper's own definition of the command keeps it a placeholder. `\_` stays the identifier rule's (§18.25): an identifier or
   an address read with such a character as TeX sets it is one placeholder as the paper writes it, as before (`keepRead`).
@@ -7228,6 +7229,46 @@ cell and no unit (317 of the ledger's float lines, `nocells`, §18.45), whatever
   gained, 5 units the same but for their pairs' numbers (a pair's id is its place among its file's pairs), none lost; no other
   paper's units move. `\centerline{tabular}`
   (2608.06701v1's Table 4) is §18.46's, read since: no table in the three sets is held by a line box and read by no cell.
+
+### 18.81 LaTeX's text symbols are characters of the unit's text, but at its edge and as a note's mark (F9 (d), 2026-11-15)
+
+§18.30 made eleven of the front end's text symbols characters of the text; the rest of its own table (`source/text-symbols.ts`
+TEXT_SYMBOLS: `\S`, `\textquotesingle`, `\textbullet`, `\dots`, `\textdegree`, `\textendash`, `\slash`, `\textdagger`, …) stayed
+placeholders, each a marker on the wire that cut the word or the phrase it stood in ("don\textquotesingle t", "black
+hole\textendash{}galaxy", "(\S\ref{…})", 2609.20976v1's "hole" left English). Lane style-wire's B built the whole table as text
+and stopped on one regression: as text, the dagger of `Beren Millidge\textdagger` was glued to the name, the author block's person
+no longer the one its references name (2610.42112v1). The coordinator's ruling of 2026-11-11: a note's mark stays an element
+where it stands as a mark.
+
+- **The table, whole** (`source/latex-front.ts` TEXT_CHARACTERS, textCharacter): every symbol of TEXT_SYMBOLS is its character,
+  its source beside it, as §18.30's eleven are, but `\_` (the identifier rule's, §18.25) and the kernel's letters (letters of
+  their word, letterCommand). One list: a test holds TEXT_CHARACTERS to the table.
+- **Where it is the unit's text** (`Builder.charHere`). Before the unit's first word, as the start mark reads it (a text piece,
+  or an inline formula, a citation, an identifier, a kept number: `firstWordPiece`, headStartOf's), a symbol stays the
+  placeholder it was before: the unit's edge, which startOf passes over and whose ink stays the original's, as everything a
+  unit opens with is (2610.19159v1's 44 items of a hand-made list, each `\textbullet The …`). This holds for every symbol of the
+  table, §18.30's eleven with them: a cell that opens with `\#`, `\$`, `\%` or `\textbar` (`\# layers`, `\$/1M tokens`) has it at
+  its edge now, the cell's text its words.
+- **A note's mark.** The table's symbols LaTeX's footnote symbols set (latex.ltx's `\@fnsymbol`: `\textdagger`, `\textdaggerdbl`,
+  `\textsection`, `\textparagraph`, and `\dag`, `\ddag`, `\S`, `\P` which set them) are a note's mark where they stand right after
+  a word with no space between (past the groups closed after it and the marks before them: `Doe\textdagger`,
+  `\textbf{result}\dag\ddag`): an element, as before. Alone in a superscript a mark is the superscript's element, as it was
+  (`\textsuperscript` takes an untyped argument: the call is one placeholder). Elsewhere it is text: `(\S\ref{…})`, `in \S 3`,
+  `\textdagger Corresponding author` after a stop and a space.
+- **A unit's letters are counted on its decoded text** (Builder.flush): a text piece holds UTF-8 bytes in their Latin-1 view,
+  and an ellipsis's `â`, a section sign's `Â` are no letters. Counted on the view, a cell of one letter and `\dots` made a unit
+  (2610.40576v1's `3\enspace+0.6k \hlg{…} [\dots] …`, which split its figure's ink unit in B).
+- **Today's wire reads an ellipsis between a run's formulas as before** (`src/pdf-reader/engine/translate/mt.mjs` formulaRuns,
+  RUN_SOURCE): a split formula's parts and what stands between them go out as one marker; `$\{a$, \ldots, $b\}$`'s `\ldots` was a
+  placeholder of the run (RUN_SPACE) and is now its character in a text piece whose source is its command, read as the run's
+  separator by that source. No unit whose pieces stay has another wire (a text piece's source of its own was none of a run's
+  before): TRANSLATE stays.
+- **The reach, read by the source reader alone over the three sets** (against §18.80's tree; every paper's unit count the same):
+  631 units in 69 papers move, by their pieces: 558 units in 50 papers whose symbols are characters now (the 89: 38 in 13; the
+  holdout 56 in 8; the third set 464 in 29: `\S` 458 placeholders in 21 papers, `\textquotesingle` 315 in 2), 72 units in 24
+  papers whose head symbol of §18.30's eleven is their edge now (the 89 23 in 9, the holdout 12 in 2, the third set 37 in 13:
+  "# layers", "#Params", "$/1M tokens", "## Root Goal"), and one paragraph through its nested unit; 2610.42112v1's author block
+  unchanged. The marked compile of each moves (a symbol that is text has no mark of its own, and an edge moves the start mark).
 
 ## 19. The engine's contract
 

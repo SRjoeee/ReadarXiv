@@ -92,6 +92,10 @@ const inlineTex = src => (typeof src !== 'string' ? null : /^\$(?!\$)[\s\S]*\$$/
 /** a placeholder that is space or an ellipsis, as what stands between a run's formulas may be: one of TeX's spaces (rules/tex-kernel.mjs
  *  spaceSource: a tie, a control space, `\,`, \quad, \hspace{…}), \ldots */
 const RUN_SPACE = new RegExp(String.raw`^(?:${spaceSource()}|\\(?:l?dots|textellipsis)(?![A-Za-z@])(?:\{\})?)\s*$`)
+/** the source of a text piece that stands between a run's formulas, where it has one of its own: white space, commas, semicolons
+ *  and an ellipsis's command, which the front end reads as its character inside a unit's text (latex-front.ts TEXT_CHARACTERS,
+ *  F9 (d): `$\{a$, \ldots, $b\}$`, whose `\ldots` was RUN_SPACE's placeholder) */
+const RUN_SOURCE = /^(?:[\s,;]|\.\.\.|\\(?:l?dots|textellipsis)(?![A-Za-z@])(?:\{\})?)*$/
 /**
  * A formula the author split across inline formulas — `$\{\Phi_0$, $\Phi_1$, $\Phi_2\}$`, a set whose brace the first
  * opens and the last closes — goes out as one placeholder: the formulas of a run whose delimiters balance across them
@@ -106,7 +110,7 @@ const RUN_SPACE = new RegExp(String.raw`^(?:${spaceSource()}|\\(?:l?dots|textell
 export function formulaRuns(pieces) {
   const items = pieces.map(p => {
     if (p.t === 'ph') { const tex = inlineTex(p.src); return tex !== null ? { tex } : RUN_SPACE.test(p.src ?? '') ? 'between' : null }
-    return p.t === 'text' && p.src === undefined && RUN_SEPARATOR.test(utf8(p.s)) ? 'between' : null
+    return p.t === 'text' && (p.src === undefined || RUN_SOURCE.test(p.src)) && RUN_SEPARATOR.test(utf8(p.s)) ? 'between' : null
   })
   return new Map(balancedRuns(items))
 }

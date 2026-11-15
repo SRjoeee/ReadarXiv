@@ -216,8 +216,8 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     expect(answers(clean)).toEqual({ text: 'BERT', inkless: false, pair: '2', marks: ['ab', 'a', ''] })
     expect(answers(broken)).toEqual(answers(clean))
   }, 900_000)
-  it('a complete macro glued to the placeholder after it (\\rate{}\\S{}): its closing mark where TeX answered so for that follower; glued to a character of the text (2610.21098\'s \\HarnessLimitShare{}\\%, the percent a character of the text since 2026-11-11), none, as before a word', async () => {
-    const r = await compare(doc('\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('of \\share{}\\% each')}\n\n${lines('of \\rate{}\\S{} each')}`))
+  it('a complete macro glued to the placeholder after it (\\rate{}\\_{}): its closing mark where TeX answered so for that follower; glued to a character of the text (2610.21098\'s \\HarnessLimitShare{}\\%, the percent a character of the text since 2026-11-11; \\S one since F9 (d), the identifier rule\'s \\_ still a placeholder), none, as before a word', async () => {
+    const r = await compare(doc('\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('of \\share{}\\% each')}\n\n${lines('of \\rate{}\\_{} each')}`))
     expect(r.marked).toEqual(r.own)
     // (\\share{}'s ink ends where the text after it begins, the layout's `want`, as for any macro a word follows)
     expect([r.switches['\\share'], r.marksOf('\\share{}'), r.marksOf('\\rate{}')]).toEqual(['00000000', 'a', 'ab'])
