@@ -6700,8 +6700,22 @@ word: its offset in the unit's source projection (what `Row.sentences.src` count
 `paras`. A paragraph point is a fact of the source, and a group or an element is one carrier of it that a reply can drop: the
 part states the first word of EVERY point, whatever stronger anchor it also has, and the lay reads the strongest carrier the row
 kept (the coordinator's ruling of 2026-11-13, in place of the design's "stated once, by the strongest fact"). The engine's half
-states it, in a later round; until then no part holds it and nothing drawn moves.
+states it from the compile move (its C1, 2026-11-15); a part made before holds none.
 
+- **The engine** (`locate/facts-pass.ts` `readOpens`, after the members' words, `locate/sentences.ts`). For every paragraph end
+  of B's inside a member's text (its glyph before the end the unit's, its next paragraph's first line not its first), what
+  states the point, in design-display 2a's order: a group's open (`SpanAt.opens`), an element (`El.opens`), a forced break TeX
+  ended the line before at (`El.ends`; in centred and ragged text LaTeX's `\\` is `\par`), a region (the paragraph before
+  ends with a display, or the line before or its own is held: a block of its own already), else its first word alone. The first
+  word is the first of the member's placed words (`Placed.words`; a word by its first glyph on A, the opening marks set against
+  it included, an element's word by any glyph of its) that TeX set from the end on, past the unit's glyphs of no letter or digit
+  and its label's, on the paragraph's line. Every point but a region's states it where it is found (`Placed.paras`, `[offset,
+  line]`, ascending: an entry of `words` on that line, what the lay pairs); a point none of these states is counted
+  (`Located.stats.opensUnstated`, anchored or plain) and listed (`opensPlain`: the member, the line, anchored), and the stated
+  ones by what states them (`opensStated`: span, el, break, region, text, and `words` for those whose first word is stated). A
+  unit lit whole (a heading, a cell, a figure text) places no words, so none of its points states a first word: its lay reads
+  no sentences to pair with. A member that states `paras` keeps its `words` in every part that holds it (`bundle.ts`): the
+  page that lays it for another page's sake pairs as its own page does, or the two lays differ (I6).
 - **The lay** (`unit/breaks.ts` `paraPieces`, `pairing`). A point on a line no stronger fact the row holds opens (a group's open
   or an element between the row's texts, a forced break: `statedBreaks`; one opening a line) is paired with the row's
   sentence whose start on A is that word: the row's cuts each holding a word of A (`lay/lit.ts` `worded`), the first of
@@ -6730,9 +6744,9 @@ states it, in a later round; until then no part holds it and nothing drawn moves
   In the lab the first word of a point stated at a group or an element is read from the unit's source, so the gate holds today's
   group points to the fallback the part will state. Of several facts that state one line, the point is the first in the source
   (2609.36054v2's author block states each line at its name's group and at its affiliation's after it). The release check's
-  `sentence-cover` reads the counts and fails on a point run on once `PARAS_HELD` (`lab/release-check/gates.mjs`) is on: the
-  engine half's lane turns it on in the round it lands in; until then a point a reply's dropped group leaves has no first word
-  to fall back to.
+  `sentence-cover` reads the counts and fails on a point run on: `PARAS_HELD` (`lab/release-check/gates.mjs`) is on from the
+  engine half's round (before it a point a reply's dropped group left had no first word to fall back to, and was reported); a
+  run that prints no points line holds none.
 - **Measured** (the base c331582c6 against this lay, round B15's parts, no part stating a first word): the reader's own lay
   (`lab/typeset/parity/v2.mjs`) over the 90 pairs and the two added ones (2111.09276v1-zh, 2611.03953v2-zh), on the door rows
   and on the lab's Google store, default and every switch on: 368 of 368 files identical. The reader gate at this lay: every

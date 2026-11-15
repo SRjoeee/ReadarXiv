@@ -189,6 +189,8 @@ function placedOf(mem: Member, units: readonly InstrumentUnit[], st: MemberState
   if (mem.tail?.length) p.tail = mem.tail
   if (mem.read.length) p.read = [...new Set(mem.read)]
   if (mem.words) p.words = mem.words
+  // (the paragraphs TeX opened inside its text, each by its first word: locate's facts pass, design-display 2a)
+  if (mem.paras?.length) p.paras = mem.paras
   return p
 }
 
@@ -352,10 +354,12 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
       },
       // (a member's words where it has ink on the page, a line, an element's or its label's: one carried for another page's sake,
       // in a flow or a tie it shares, lights there, not here)
+      // (but a member that states a paragraph's first word (Placed.paras) keeps them in every part: the page that lays it for
+      // another page's sake pairs that word with a sentence start as its own page does, or the two pages' lays differ)
       flows: take.map((i) =>
         located.flows[i]!.map((o) => {
           const x = placed[o]!
-          if (!x.words || inkOn(x, p)) return x
+          if (!x.words || x.paras || inkOn(x, p)) return x
           const { words: _, ...rest } = x
           return rest
         }),
