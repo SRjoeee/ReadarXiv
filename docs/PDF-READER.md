@@ -7463,6 +7463,16 @@ farther than today's (8: the looser pitch holds fewer lines in the original's he
 seven, now five; one a line more, 2602.23285v2-ja p19 t180), and a first line off the original's (1: 2609.20976v1-ja p8 t41,
 3.1 pt); pages covered by the owner's rulings 21 to 33 (L1 13, L2 9, Fm 3, TRS 3) and 22 to 36.
 
+What the bases cost by the page fill's evening (§18.57, the owner's ruling of 2026-11-12: a paragraph tighter than its page's band
+takes the fit's own knobs again, one size step at most). A page's band follows its paragraphs' leadings, which the bases raise,
+so a paragraph that fits at full size at the original's pitch stands under it and is evened by the step: with the bases, Japanese
+members laid one step smaller (0.975 of their size), 8 on the door's rows (2602.23285v2-ja t83; 2610.19159v1-ja t385, t391, t523,
+t577; 2610.40645v1-ja t44, t60, t197) and 9 on Google's (2609.20976v1-ja t7, t46; 2610.19159v1-ja t523, t833, t929, t977, t983;
+2610.40645v1-ja t44, t83), and two a step larger (door: 2610.19159v1-ja t273, 2610.40645v1-ja t3). The walk steps no size: with
+the evening's size step taken out, no member is laid smaller than without the bases. 2610.40645v1-ja p7 t44: 10.91 pt, leading 1,
+six lines without the bases; 10.64 pt, 1.199, five lines with them. The coordinator's ruling of 2026-11-16: that ruling's effect,
+accepted; it goes to the owner with this page, and if he prefers the size, the evening's size step is what changes.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
