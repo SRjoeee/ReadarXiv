@@ -81,9 +81,10 @@ export function google(o: GoogleOptions): Translator {
     wire: 'tags',
     limits: { ...GOOGLE_LIMITS, ...o.limits },
     supports: async () => true,
-    // (each element a word of its sentence and each styled group the words it holds, in HTML's own inline element: as an
-    // empty element or one HTML does not know Google translates the texts on either side of it apart, each closed with a
-    // full stop of its own, and a group's words apart from their sentence; wire/tags.ts TagSpelling)
+    // (each element a word of its sentence, `<b translate=no>` holding its token, and each styled group the words it holds, a
+    // `<span>`, in HTML's own inline elements: as an empty element or one HTML does not know Google translates the texts on
+    // either side of it apart, each closed with a full stop of its own, and a group's words apart from their sentence;
+    // wire/tags.ts TagSpelling. The wire's name stays: its bytes are in every store key)
     write: (unit) => planTags(unit, 'html').wire,
     read: readTagged,
     async *send(wires, call, signal) {

@@ -5522,6 +5522,28 @@ words; the translator translated what it was given.
   changes (not `PIPELINE_VERSION`), and the engine's own wire is not touched (not `TRANSLATE_VERSION`).
 - **Not this rule's.** Production's wire (`translate/mt.mjs` classOf) keeps every pair with text on its tags wire, so Google
   behind production would cut the same words; Microsoft, production's first, sends such a pair on no wire (`flat`).
+- **Letters glued to an element are its word's** (the display design's F10, lane wire-c, 2026-11-15, as the coordinator's
+  two rulings of that day narrowed it): the prepare states on a command's element the text TeX set for it on its line's
+  baseline at its text's size (`text`, contract.ts). Where that text begins or ends with a letter, a combining mark or a
+  digit (Unicode's general categories L, M, N), the run of letters and combining marks (L, M) of the unit's text that touches
+  it on that side, as far as it goes, is offered to no translator, and the row has it back beside the element, literally:
+  after the element it follows (a run between two elements is the first's), else before the one it precedes, outside the
+  groups that hold the element but not the run; the row's sentences in the unit's projection and past the letters put back.
+  What it exists for is a word's letters sent alone and read as a word of their own: 2111.09276v1's Table 1 on staging,
+  Google, `\hlyellow{guitar}s.` went out as the element and "s.", and "s" came back as the word for seconds. A name written
+  with an accent command (`M\k{a}dry`, `Y\i ld\i r\i m`) keeps its letters with it, and a panel's letter after "Figure 2"
+  is held. A digit is never held: a number goes through a translator as written, and held back it would be cut at its
+  decimal point or its comma (`0.2\pp` leaving "0." on the wire, an identifier cut before a doi's prefix); "s2" after an
+  element holds back the "s" alone. Nothing is held across any other character: a possessive after a system's name
+  ("TensorCast's") is a word of the sentence, which the translator translates beside the element as it does today (held
+  back, it would stand as written in the translation). The text decides by its characters' categories, never the kind and
+  never a list; an element stating no text (a raised mark, `\textsuperscript{1}Carnegie`) holds nothing back, nor one TeX
+  sets after the unit's text (`after`, a backref's pages). Over the lab's four sets as lane wire-e's restricted writer states
+  them (its chain e3 at e26e27053: 245 papers, 76,831 units the chain sends, 8,031 elements stating a text), 70 sides are
+  held back in 42 units of 17 papers: letters of names around an accent command (`\i` 15, `\k` 14, `\^` 8, `\=` 4), panel
+  letters after `\figref` 8, a size's unit after `\OlCrossTok` and its kin 8, plurals after `\oursfull` 6, the
+  highlighted words' "s" 2. `CHAIN_DIGEST` moves (the chain's case table gains `glued`, a case only this rule decides: a held
+  letter, the digit after it and a possessive offered).
 
 ### 18.48 A full-width mark's blank half is its face's, and the drawing is what the layout measured (2026-11-12)
 
@@ -6752,9 +6774,12 @@ A tie after a stop is TeX's own statement that the space there is a word space a
 `\penalty10000\ `, and no end-of-sentence space is ever set at it. So where the source ties a word or a number to a stop, the tags
 wire (Google's, Chrome's built-in translator's, the LLM services') marks no sentence end there: no boundary marker, no cut of the
 row's sentences (`wire/tags.ts` planTags `tied`). A word or a number is text that begins with a letter or a digit, or an element
-the sentence cutter reads as one (a number, a reference, a formula, a paper's macro); a tie and then a mark, which annotates the
-sentence before it (a note's mark, a footnote's call, a citation), keeps the end, the mark glued to the sentence that ended
-(2111.09276v1's `search.~\footnote{…}`). No word list and no language's case decide it: the tie is the source's.
+the sentence cutter reads as one (a number, a reference, a formula, a paper's macro), read from the tie past what sets no
+character (an element of kind `other`, a skip or a switch; one the cutter reads as white space, a space or a forced break; one
+stated `silent`, which goes on no wire: lane wire-w, 2026-11-15); a tie and then a mark, which annotates the sentence before it
+(a note's mark, a footnote's call, a citation), keeps the end, the mark glued to the sentence that ended (2111.09276v1's
+`search.~\footnote{…}`). No word list and no language's case decide it: the tie is the source's. A bibliography entry the
+source reader states (`entry`) is cut at its blocks alone, each `\newblock`, its cutter asked nothing (DESIGN §6.2).
 
 Why: on round B15's wire the boundary marker stands right after a sentence's stop, before the elements the source glues after it
 (DESIGN §6.2), and the cutter ended sentences at abbreviations' dots a tie follows. After "vol." Google then completed the
