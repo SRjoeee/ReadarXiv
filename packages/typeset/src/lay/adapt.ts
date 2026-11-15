@@ -711,7 +711,7 @@ export function adapt(i: AdaptInput): Adapted {
       text: trail[1].copy ?? '',
       k: TRAIL_K,
       // (its segment's box on the baseline the crop is set by: B.break's cropExtent reads its extent over and under it, which
-      // TeX's \lineskip rule reads; a box with no baseline gave the line no extent at all, and the rule never opened it: §18.79)
+      // TeX's \lineskip rule reads; a box with no baseline gave the line no extent at all, and the rule never opened it: §18.86)
       gap: { box: { x0, x1, bottom: y0, top: y1, baseline: box.baseline } },
     }
     // (one TeX set past a word's gap (El.sep, §18.59: an author's mark after `\hspace` or `\,`, a postal code after a space)
@@ -757,7 +757,7 @@ export function adapt(i: AdaptInput): Adapted {
       const box = cropOfBox({ x0, x1, bottom: y0, top: y1, baseline: l[4] })
       // (TeX's own distance from the line's text to it, where its line's extent leaves it out; else none stated: the bound. `pad`
       // from the line's right edge to its rectangle's, at the original's size: the breaker and the placement set it at the fit's
-      // scale, as the crop is drawn, so that its ink stands where TeX set it, scaled: §18.80)
+      // scale, as the crop is drawn, so that its ink stands where TeX set it, scaled: §18.87)
       const endMark = { pad: right - box.crop[2], gap: x0 > l[3] ? x0 - l[3] : Number.POSITIVE_INFINITY }
       const piece = Number(endEl[0])
       if (Number.isInteger(piece)) {
@@ -776,7 +776,7 @@ export function adapt(i: AdaptInput): Adapted {
           ...box,
           text: endEl[1].copy ?? '',
           k: END_K,
-          // (on its line's baseline, as the trail's: §18.79)
+          // (on its line's baseline, as the trail's: §18.86)
           gap: { box: { x0, x1, bottom: y0, top: y1, baseline: box.baseline } },
         }
         tokens = Object.assign(

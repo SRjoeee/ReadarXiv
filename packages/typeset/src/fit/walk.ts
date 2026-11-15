@@ -200,7 +200,7 @@ const ROOM_ALL = 99
 type Lay = { st: FitState; S: Slot[]; r: Broken; f: number }
 /**
  * The walk lays no state that surely fails, and re-breaks nothing where the breaks cannot change (the coordinator's rulings of
- * 2026-11-16, docs/PDF-READER.md §18.81). A state's lay, `at`:
+ * 2026-11-16, docs/PDF-READER.md §18.88). A state's lay, `at`:
  * - The bound (outfills): where the text, packed as tight as B.break packs it, outfills the state's slots, the state fails as
  *   surely as laid; it is passed, unlaid. Any knob's state, the first of a size step's too.
  * - The floor: what B.break sets on each line is a function of the text, the size, the tracking, the word rule and each line's

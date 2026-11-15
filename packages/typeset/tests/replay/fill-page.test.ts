@@ -23,7 +23,7 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)('S.fill.page: repl
   // (a unit whose walk measures a text today's never measured, which the tap's table therefore lacks: named among the chain's
   // differences and laid by no lay, so that its passes read "not replayed" and the pair's other passes replay; it threw out of
   // laysOf and ended the corpus replay at its pair since round 8 B5 (literal-fixes, 1a01e7206). 2610.21477v1-zh's "Veri-";
-  // 2608.25210v2-zh's "Comput-" was one until the walk passed unlaid the state that measured it, which surely fails, §18.81)
+  // 2608.25210v2-zh's "Comput-" was one until the walk passed unlaid the state that measured it, which surely fails, §18.88)
   it('names a unit whose walk measures a text the tap lacks and replays the rest (2610.21477v1-zh)', {
     timeout: 120_000,
   }, () => {

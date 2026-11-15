@@ -858,7 +858,7 @@ export const RULINGS = [
     title: "a Japanese or Korean paragraph at its script's pitch, fewer lines filling the height the original's take",
     verdict: "the owner's choice",
     date: '2026-11-16',
-    seen: "whole pages laid at each class's pitch (staging/check-list-spacing2: jarticle, jsarticle, jlreq; xetexko, oblivoir), his choice exported 2026-11-15T17:10:35Z; the rule as built: PDF-READER §18.82 (rebuild/cm-d 737d765c2); the class the coordinator ruled the pitch's own effect (2026-11-16, the display gate's nine pages)",
+    seen: "whole pages laid at each class's pitch (staging/check-list-spacing2: jarticle, jsarticle, jlreq; xetexko, oblivoir), his choice exported 2026-11-15T17:10:35Z; the rule as built: PDF-READER §18.89 (rebuild/cm-d 737d765c2); the class the coordinator ruled the pitch's own effect (2026-11-16, the display gate's nine pages)",
     words: '改用 jlreq / 改用 xetexko / 改了之后，确实看起来挺均匀的。只要理论上不影响性能，我们就改吧',
     example:
       "2610.40645v1-ja p14 t93: 5 lines at the original's 10.91 pt and jlreq's pitch (1.369 x 13.55) against today's 7 and the original's 8, its last line 4.64 pt over the original's last; 2602.23285v2-ja p7 t74: 11 lines against 12 and 13, its last line under the original's",
@@ -880,7 +880,7 @@ export const RULINGS = [
     },
   },
 ]
-/** JK: the scripts whose pitch the owner's choice of 2026-11-16 set (PDF-READER §18.82): Japanese (jlreq), Korean (xetexko) */
+/** JK: the scripts whose pitch the owner's choice of 2026-11-16 set (PDF-READER §18.89): Japanese (jlreq), Korean (xetexko) */
 const PITCHED = new Set(['Jpan', 'Kore'])
 /** the upper median of the gaps between rows (baselines, top first), as U.blocks reads a block's pitch; none for one row */
 function upperMedianGap(rows) {

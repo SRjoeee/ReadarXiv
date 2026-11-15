@@ -3043,7 +3043,7 @@ line or a `\vadjust` among them, and with no `\lineskip` told nothing is closed.
 paragraph's start stays), every line under a closed gap moves up by it, none stands lower than the original's own, and what
 the closed gaps free stays at the block's foot. TeX's rule reopens a pair where the translation's own line is tall
 (breakLines' `settle`, on the drawn ink, which stands in for TeX's boxes: its text's and each crop's segment box on its own
-baseline, a trail's and an end mark's among them, §18.79). Where the pair holds a formula TeX set in the
+baseline, a trail's and an end mark's among them, §18.86). Where the pair holds a formula TeX set in the
 original, TeX measured that formula's room itself: the distance it set between the formula's line and the next (the formula
 on the upper line) or the one before (on the lower), `texRoomOf`; where that distance already keeps the two lines' ink
 `\lineskiplimit` apart, TeX's rule holds at it, and the pair is set no farther apart. So a formula that stays on its line
@@ -7629,7 +7629,7 @@ drawn with the original's gap) and a title that ends with a stop or a colon are 
 - **Versions**: PIPELINE moves (the parts state `runin`: prepared again); LAYOUT moves (a line holding such a title is laid
   otherwise); the translators' digests and the rows' keys stay.
 
-### 18.79 A trail's and an end mark's crop has an extent (2026-11-15)
+### 18.86 A trail's and an end mark's crop has an extent (2026-11-15)
 
 The display design's F42 (found by the typing lane T3). A member's trail (`El.trail`, §18.16, §18.59: a class's marks after a name,
 a `\thanks` mark) and its end mark (`El.end`, §18.52: amsthm's QED box) are drawn as crops of their ink, glued after the
@@ -7652,19 +7652,19 @@ rows alone). The display gate, both modes and the added pairs: no page newly wor
 (`packages/typeset/tests/unit/crop-extent.test.ts`) lays a mark 11 pt over a 10 pt line within 1 pt of the line above: the pair is opened to
 TeX's 14 pt, a trail's and an end mark's alike, and a mark inside its line's room opens nothing.
 
-### 18.80 An end mark drawn smaller stands where TeX set it, scaled (2026-11-16)
+### 18.87 An end mark drawn smaller stands where TeX set it, scaled (2026-11-16)
 
 A unit's end mark (§18.52) is a crop, drawn at the fit's scale: its width the crop's times the scale. Its distance from its line's
 right edge (`pad`, `packages/typeset/src/lay/adapt.ts`: from the line's right edge to the crop rectangle's, which stands 0.4 pt of
 antialiasing margin past the ink) was set unscaled, by the breaker's room for it (`breaker/break.ts`) and by the placement
 (`breaker/place.ts` placeItems), so a unit laid smaller drew the mark's ink that margin times one less the scale past where TeX set
-it. 2610.30034v1-zh p10 unit 204, laid a step smaller since §18.79 (0.975): its QED box 0.01 pt past its measure's end, the reader
+it. 2610.30034v1-zh p10 unit 204, laid a step smaller since §18.86 (0.975): its QED box 0.01 pt past its measure's end, the reader
 gate's I5 "past the slot with spaces to shrink". The pad is now taken at the fit's scale, as the crop it measures to is drawn: the
 ink stands TeX's distance from the line's end, scaled (TeX's box flush right: on the end). Test: `packages/typeset/tests/unit/
 end-mark.test.ts` ("stands where TeX set it at the size the fit draws it"). The two other lines I5 lists, 2610.20285v1-zh unit 258
 (0.30 pt) and 2610.21106v1-zh unit 42 or 2610.21085v1-zh unit 64 (0.04 and 0.01 pt), are of other causes, not traced here.
 
-### 18.81 The walk lays no state that surely fails, and re-breaks nothing where the breaks cannot change (the coordinator's rulings of 2026-11-16)
+### 18.88 The walk lays no state that surely fails, and re-breaks nothing where the breaks cannot change (the coordinator's rulings of 2026-11-16)
 
 The fit's walk (`fit/walk.ts` statesOf: the tracking, then the room under the last line, then the leading, then the size; the
 order the owner reviewed for body text, unchanged) paid a full lay of the breaker for every state it tried. A state is now laid,
@@ -7698,7 +7698,7 @@ each passed state and each taken one laid all the same and compared (`lanes/cm-d
 whole lay equal; and the reader gate's dumps on both stores byte for byte as before, every summary line equal. The count (the
 breaker's lays a page, every page of the 92 pairs, Google's rows w1): 253.5 to 235.3 (-7.2 %; 249.7 with the floor of the leading alone, its first form): German -35.4 %, Spanish -37.8 %, Polish -17.3 %, Japanese -7.4 %, Chinese -6.7 %; one pair pays 0.1 % more (2610.21827v1-zh, 135.0 to 135.2: a floor laid that the next state did not need). The states a fit, 2.41, are the walk's as before.
 
-### 18.82 Japanese at jlreq's pitch, Korean at xetexko's (the owner's choice of 2026-11-15)
+### 18.89 Japanese at jlreq's pitch, Korean at xetexko's (the owner's choice of 2026-11-15)
 
 The line pitch a translation starts from (the fit's leading base over the original's own pitch, U.params `leadOf`) was each
 script's: Chinese ctex's spread of 1.3 on a solid-set original's pitch, never wider than 1.3 times the original's own; Japanese
@@ -7723,11 +7723,11 @@ The versions: none moves by its own rule. The rule set's VERSION was deleted as 
 page when it is read, and nothing stored is keyed by the leading; the units (PIPELINE), what a translator is sent (TRANSLATE)
 and the cache keys are untouched.
 
-The condition, measured (the breaker's lays a page, every page, Google's rows w1, against the walk before §18.81): 2602.23285v2-ja
+The condition, measured (the breaker's lays a page, every page, Google's rows w1, against the walk before §18.88): 2602.23285v2-ja
 180.1 to 128.4 (-28.7 %), 2609.20976v1-ja 148.1 to 116.8 (-21.1 %), 2610.19159v1-ja 231.0 to 130.6 (-43.5 %), 2610.40645v1-ja
 160.8 to 132.1 (-17.9 %), 2610.40645v1-ko's pages 4, 11 and 32 118.0 to 107.3 (-9.0 %). The looser start sends more units through
 the tracking and room knobs before the leading (2610.40645v1-ja, tracking states tried a page 9.3 to 43.9), and the walk lays
-almost none of them: they surely fail (§18.81's bound), or take the floor's lines (tracking laid 9.3 to 6.3, the leading 0 to
+almost none of them: they surely fail (§18.88's bound), or take the floor's lines (tracking laid 9.3 to 6.3, the leading 0 to
 14.8 of 50.6 tried, the lays outside the walk 127.2 to 93.4). Tests: `packages/typeset/tests/unit/script-pitch.test.ts`.
 
 The gates (2026-11-16). The reader gate lays its entry with today's recorded rule set (`gate-l1.ts`, the tap's), so it shows no

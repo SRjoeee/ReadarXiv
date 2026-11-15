@@ -68,7 +68,7 @@ const UNPITCHED = 1.2
 /** the unit's leading relative to the original's own pitch (L2:3073 leadOf): the script's spread of a solid-set original's pitch
  *  (`leadBase`: ctex's 1.3 for Chinese, xetexko's 1.38889 for Korean), never wider than that spread on the original's own pitch;
  *  or, where the script's class states its pitch in ems of the block's own size (`leadEm`: jlreq's 1.7 for Japanese,
- *  docs/PDF-READER.md §18.82), that pitch over the original's (over the pitch the lay takes, where the block states none). Never
+ *  docs/PDF-READER.md §18.89), that pitch over the original's (over the pitch the lay takes, where the block states none). Never
  *  closer than the original's own pitch: a loose original keeps it */
 export function leadOf(
   blocks: readonly Pick<Block, 'pitch0'>[],

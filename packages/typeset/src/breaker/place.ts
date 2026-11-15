@@ -20,7 +20,7 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams, scale: number): 
   const last = lines.at(-1)
   for (const line of lines) {
     // (the unit's end mark at the end of its line, Token.endMark (breakLines): set at its place, as far from the line's right edge as
-    // TeX set it, at the fit's scale as its crop is drawn (its rectangle's margin past the ink with it: §18.80); the text before it
+    // TeX set it, at the fit's scale as its crop is drawn (its rectangle's margin past the ink with it: §18.87); the text before it
     // in the room it leaves, the keep-off distance before its ink)
     const mark = line.items.at(-1)?.t.endMark ? line.items.pop() : null
     const pad = mark ? (mark.t.endMark as EndMark).pad * scale : 0

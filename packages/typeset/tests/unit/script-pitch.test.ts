@@ -1,4 +1,4 @@
-// The line pitch a Japanese and a Korean translation start from (docs/PDF-READER.md §18.82; the owner's choice of 2026-11-15, on
+// The line pitch a Japanese and a Korean translation start from (docs/PDF-READER.md §18.89; the owner's choice of 2026-11-15, on
 // whole pages drawn at each class's pitch): Japanese at jlreq's, 1.7 times the block's own size (jlreq.cls:411,
 // `baselineskip={17zw/10}`), over the original's own pitch and never under it; Korean at xetexko's `\linespread{1.38889}`
 // (xetexko.sty:2596-2601) on the block's own pitch; Chinese as before (ctex's 1.3). U.params on blocks of our own: a body block

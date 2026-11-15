@@ -1,4 +1,4 @@
-// A trail's and an end mark's crop has an extent the breaker reads (docs/PDF-READER.md §18.79; the display design's F42): lay/adapt.ts
+// A trail's and an end mark's crop has an extent the breaker reads (docs/PDF-READER.md §18.86; the display design's F42): lay/adapt.ts
 // builds each crop's segment box on the crop's own baseline, and B.break's lineExtent (cropExtent) reads its extent over and under
 // that baseline, so TeX's \lineskip rule opens a pair of lines whose boxes come nearer than \lineskiplimit, a tall mark's too. Before,
 // the box stated no baseline: the extent was NaN, the line had none, and the rule never opened its pair. Parts made by hand: a
@@ -88,7 +88,7 @@ const cropOf = (m: Placed, k: number) => {
   return t
 }
 
-describe('B.break: a trail mark’s and an end mark’s crop has an extent (§18.79)', () => {
+describe('B.break: a trail mark’s and an end mark’s crop has an extent (§18.86)', () => {
   it('B.break reads the extent of the crops lay/adapt.ts builds for an end mark and a trail, a mark taller than its line', () => {
     for (const [m, k] of [
       [member([endMark]), -2],
