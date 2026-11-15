@@ -621,10 +621,11 @@ export function adapt(i: AdaptInput): Adapted {
   // ended every one of but its last at a forced break of its text (El.ends of a break, El.brk: its lines its text's rows, none
   // wrapped by TeX, as a paragraph cell's are), whose reading takes none of its forced breaks (U.breaks statedBreaks: a reply
   // that sets its break at its start or its end, or drops it, opens no line: breakAt and joinAt empty), so that the breaker
-  // fills its lines itself, in its column's room or in their own. They end only between words of the target's text, by the
-  // platform's own segmentation (breaker/words.ts: Intl.Segmenter of the target, where the platform has one): the same rooms,
-  // the one size, the same search for it, the size falling only where no break between words fits. A reply that keeps a break
-  // between its lines is laid as before, the break where it states it)
+  // fills its lines itself, in its column's room or in their own. They end between words of the target's text, by the
+  // platform's own segmentation (breaker/words.ts: Intl.Segmenter of the target, where the platform has one), where a size
+  // sets them so: the same rooms, the one size, the same search for it, each size's states between words first and then as
+  // before (fit/walk.ts triesOf; the owner's answer of 2026-11-16: the size never gives way to whole words). A reply that keeps
+  // a break between its lines is laid as before, the break where it states it)
   const ended = new Set((m.els ?? []).flatMap(([, e]) => (e.brk && e.ends ? [e.ends[0]] : [])))
   const rows = m.kind === 'cell' && lines.length > 1 && lines.slice(0, -1).every((_, j) => ended.has(j))
   const seg = rows && read && !read.breakAt.size && !read.joinAt.size && i.to !== undefined ? wordSegmenter(i.to) : null

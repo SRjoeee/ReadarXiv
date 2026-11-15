@@ -7189,25 +7189,44 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   `El.ends` of a break, so that its lines are its text's rows and none is wrapped by TeX, as a paragraph cell's are) whose
   reading takes none of its breaks (`unit/breaks.ts` statedBreaks: a reply that sets its break at its start or its end, or
   drops it; U.breaks' maps open no line) is filled by the breaker itself, in its column's room or, where the part states none,
-  in its lines' own. A line of it then ends only where the breaker lets it end AND a word of the target's text ends there, by
-  the platform's own word segmentation (`breaker/words.ts`: `Intl.Segmenter` of the target's language, granularity `word`,
+  in its lines' own. A line of it then ends, at each size a break between words fits (below), only where the breaker lets it
+  end AND a word of the target's text ends there, by the platform's own word segmentation (`breaker/words.ts`:
+  `Intl.Segmenter` of the target's language, granularity `word`,
   Unicode's word boundaries, UAX #29, as the runtime's ICU gives them; no list of words, characters or languages of ours, no
   threshold, no case for a script). A token whose start stands inside a word is held to the one before it, a space inside one
   too; a cut of a word longer than its line, or a hyphenation point, is taken only where a word ends inside it (so for a
   language written with spaces the rule takes a hyphenation point inside a word away: the same words); the text between two
   elements, a styled group's edge or the label is segmented as text, and a break at an element's edge is the tokens' own as
   before (`breaker/break.ts`, `FitParams.words`). Nothing else of the lay changes: the lines' rooms, the one size and the search
-  for it, so the size falls only where no break between words fits; a cell no state of its fit sets so, not even below its
-  floor, is laid as before, a word cut where a line must end (`lay/member.ts`: never left the original's where today's lay
-  draws it). A reply that keeps its break between its lines is laid as before, the break where it states it; a paragraph cell,
+  for it. **The size never gives way to whole words** (the owner's answer of 2026-11-16, his export of 2026-11-15T15:31:34Z
+  from staging's pictures of the two cells the rule of 2026-11-15 set smaller; on 2611.03953v2 p8's 「宁可拆词也不要变小」, on
+  1512.03385v1 p12's 「可以」, of both 「效果都能接受。如果可以不缩小文字，保持原位原样的话，是更好的。整体上都行。按照简洁不影响性能的方法来」;
+  the coordinator's ruling from his words, one rule and no number of ours, so the second cell returns to its size too: a rule
+  that allowed it a small step would need a threshold): at each size the fit tries for such a cell, every state of that size
+  (its tracking, borrowing and leading at that scale) is laid between words first; where none sets the cell so, the same
+  states are laid as before, a word cut where a line must end (`FitState.split`), at that same size; the size steps down only
+  where neither sets it. The order is one place, `fit/walk.ts` triesOf, which both of the walk's loops take; the mark rides on
+  the fitted state, so a later lay of the cell at a state made from it (the page fill's leadings and tracking, a cut at a
+  frame) breaks it as its fit did. So no such cell is smaller than before the rule, and one whose words fit whole at its size
+  keeps them. A size's states, not one state at a time: a break between words that fits at the size only at a closer tracking
+  is kept (`packages/typeset/tests/unit/cell-words.test.ts`, a cell of three lines). A cell its fit leaves unfit even so, not
+  even below its floor, is laid again without the rule (`lay/member.ts`: never left the original's where today's lay draws
+  it). A reply that keeps its break between its lines is laid as before, the break where it states it; a paragraph cell,
   body text and captions are no such cell. Where the platform has no `Intl.Segmenter` the cell is filled as before (runtime
   feature detection; every host's floor requires one, `packages/reader/src/pdfjs/builds.ts` legacyRuns, and the breaker makes
   a grapheme segmenter at load). The segments are the platform's: two runtimes' ICU data may differ on a rare word; the gates
   run on Node's (22, ICU 78.2, Unicode 17), the reader on its browser's. Over Google's rows of the round-3 close's 92 pairs
-  (the door's rows hold no merged cell's): 8 merged cells filled in 4 papers, 3 of them laid otherwise and nothing else, each
-  today with a line ending inside a word and now with its words whole: 1512.03385v1 p12 "LOC error \\ on GT CLS" at 6.25 pt
-  (today 6.43), 2611.03953v2 p8 "Time to \\ target" at 7.17 pt (today 8.97; its column's box not stated, laid in its lines' own
-  rooms, 27.8 and 20.3 pt wide) and "Recovery \\ at budget" at its size.
+  (the door's rows hold no merged cell's), the rule of 2026-11-15 alone: 8 merged cells filled in 4 papers, 3 of them laid
+  otherwise and nothing else, each with a line that had ended inside a word now with its words whole: 1512.03385v1 p12 "LOC
+  error \\ on GT CLS" at 6.25 pt (6.43 before), 2611.03953v2 p8 "Time to \\ target" at 7.17 pt (8.97 before; its column's box
+  not stated, laid in its lines' own rooms, 27.8 and 20.3 pt wide) and "Recovery \\ at budget" at its size. With the size
+  never giving way (lane cell-size, over the round-4b integration's refilled Google rows of the 92 pairs, c787b8ea0; the
+  door's rows hold none): 7 merged cells filled in 4 papers, none smaller than before the rule; the two the rule had set
+  smaller laid as before it, at 6.43 and 8.97 pt, a word cut ("GT CLS 出 | 现 LOC 错误", 「达到目 | 标时间」); "Recovery \\ at budget"
+  keeps its words whole at its size (「预算内 | 恢复」); the other four as before and as under the rule; no other member of any
+  kind laid otherwise. The cost: the pages that hold such a cell lay 121 more times than before the rule (6,667 to 6,788
+  breaker lays over 7 pages; 0 on the other 2,588 pages): a size's states laid again as before where no break between words
+  fits at it, for the cells that step down past such sizes (2610.21098v1 p16's, laid at 0.725 below the floor, 42 a page).
 
 ## 19. The engine's contract
 

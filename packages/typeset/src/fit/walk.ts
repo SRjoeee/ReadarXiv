@@ -101,6 +101,26 @@ function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Genera
     }
   }
 }
+/**
+ * The walk's tries, from its `skip`th state on: each state of statesOf as it comes. For a merged table cell the lay fills
+ * (P.words, docs/PDF-READER.md §18.75) the size never gives way to whole words (the owner's answer of 2026-11-16): each size's
+ * states (a run of statesOf's at one scale) are laid between words first, then the same states as before, `split` (a word cut
+ * where a line must end), before the next size's; the size steps down only where neither sets it
+ */
+function* triesOf(P: FitParams, blocks: readonly FitBlock[], s: number, skip: number): Generator<FitState> {
+  let size: FitState[] = []
+  let n = 0
+  for (const st of statesOf(P, blocks, s)) {
+    if (n++ < skip) continue
+    if (P.words && size.length && size[0]!.scale !== st.scale) {
+      for (const q of size) yield { ...q, split: true }
+      size = []
+    }
+    yield st
+    if (P.words) size.push(st)
+  }
+  for (const q of size) yield { ...q, split: true }
+}
 /** how far under its block's text block bottom the lowest of `lines` stands (§18.37), to the hundredth, up; 0 where none does
  *  (the Page member states it, lay/page.ts) */
 export function depthUnder(lines: readonly { block: number; baseline: number }[], blocks: readonly FitBlock[]): number {
@@ -153,9 +173,7 @@ export function layoutUnit2(
   let last: Laid | null = null,
     tried = 0
   const skip = failed ? sharedStates(P, failed, blocks, s) : 0
-  let n = 0
-  for (const st of statesOf(P, blocks, s)) {
-    if (n++ < skip) continue
+  for (const st of triesOf(P, blocks, s, skip)) {
     tried++
     const f = s * st.scale
     const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, true, blocks)
@@ -173,10 +191,8 @@ export function layoutUnit2(
   // 2608.16117, German page 10: units 28 and 35 at 0.8 and 0.85 of the original's size). Where it fits at none, the last
   // state's, as far as it goes
   if (last.r.rest < last.r.total && tokens.some((t) => t.blockTo !== undefined)) {
-    let past: Laid | null = null,
-      m = 0
-    for (const st of statesOf(P, blocks, s)) {
-      if (m++ < skip) continue
+    let past: Laid | null = null
+    for (const st of triesOf(P, blocks, s, skip)) {
       tried++
       const f = s * st.scale
       past = { r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, false, blocks), st, f }
