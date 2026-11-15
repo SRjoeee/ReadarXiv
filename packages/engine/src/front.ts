@@ -176,13 +176,15 @@ export async function prepareFront(input: FrontInput): Promise<FrontResult> {
     filesBound: input.filesBound ?? null,
   })
   if (!c.ok) return c
-  const { paper, finalPdf, log, options, made } = c
+  const { paper, finalPdf, log, options, made, probeLog } = c
   input.stage('units')
   const r = await instrumentOf({
     paper,
     finalPdf,
     options,
     log,
+    // (the mark probe's own log, where the probe ran: what the back half reads of it, marks.ts probeFactsOf)
+    probeLog,
     pdfjs: input.pdfjs,
     documentOptions: input.documentOptions,
     made: { compiler: paper.meta.compiler ?? 'pdflatex', tree: input.tree, front: 'today' },
