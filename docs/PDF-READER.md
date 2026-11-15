@@ -3955,7 +3955,11 @@ read every class but `other` as the page's text, its text in the target's face a
 star's text is U+2217, which a text face draws small on the math axis, where TeX set CMSY7's star at 6.97 pt. A mark is a glyph
 TeX set raised in its own font at its script size: a footnote's or a `\thanks` mark (`El.mark`) and a symbol set as a
 superscript (`El.sym`'s second) are now drawn as their ink on one line, a crop on their line's baseline, as an `other` element;
-a symbol set on the line stays text, and a mark's link goes with its crop. Its crop is glued to what precedes it, as its text
+a symbol set on the line stays text, and a mark's link goes with its crop. A footnote's mark nested in its unit (`\footnote`
+inside the text) has for its crop's copy text, what a selection of it reads, the glyphs TeX set for it (`locate/geometry.ts`): the
+instrument reads `\footnotemark` from no source of the mark's and stated "?", whatever the class set (the compile move's F21: 179
+marks of 37 of the 89 papers, 32 of the holdout's, 77 of the third set's, each "1" to "12" or "∗" on the page); one TeX set no
+glyph for keeps the instrument's. Its crop is glued to what precedes it, as its text
 was a superscript's: TeX sets no glue between a word and its mark, and a crop after a CJK character, free to break as between
 two, began a line of its own (1810.04805v2 p7's footnote 12 after its sentence's full stop). Where the source sets a tie before
 it (`word.~\footnote{…}`), the tie is glue TeX sets and never breaks at: `~` is `\nobreakspace`, `\penalty10000` and its

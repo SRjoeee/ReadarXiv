@@ -596,6 +596,10 @@ export function lineGeometry(w: Work, owned: Owned): void {
         !gl.some((a) => gA(a).nu)
       )
         el.copy = textOf(gl.map(gA), lineEnds)
+      // (a nested unit's mark, a footnote's: its copy text the glyphs TeX set for it, what its crop shows (a mark is drawn as its
+      // crop, El.mark). The instrument reads `\footnotemark` from no source of the mark's and states "?", whatever the class sets:
+      // "1", "∗" (the compile move's F21: 179 marks of 37 of the 89 papers). One TeX set no glyph for keeps the instrument's)
+      if (p0.t === 'unit' && gl.length && !gl.some((a) => gA(a).nu)) el.copy = textOf(gl.map(gA), lineEnds)
       // (a URL's copy text, its crop's: its glyphs' text as the page sets it (urlCopyOf), what the crop shows: no space at a line's end
       // inside it, which TeX's url package breaks without one, #633 review. The instrument's copy is the source's reading
       // (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro prints (a DOI's, an eprint's): 30

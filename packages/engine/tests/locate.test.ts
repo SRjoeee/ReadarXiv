@@ -4276,3 +4276,45 @@ describe('a block name a unit holds elsewhere (docs/PDF-READER.md §19.15)', () 
     expect(o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : [])).length).toBe(3)
   })
 })
+
+describe('a footnote mark’s copy text is the glyph TeX set for it (F21)', () => {
+  // (the instrument reads a nested unit's mark from its source, `\footnotemark`'s "¹"; the page shows what the class sets, a star
+  // here: the crop's selection reads what it shows)
+  const content: Piece[] = [
+    text('A sentence ends'),
+    { t: 'unit' as const, id: '5', unit: '0'.repeat(64), pre: '\\footnote{', post: '}' },
+    text(' and goes on'),
+  ]
+  const unit = (): InstrumentUnit => ({
+    id: unitId('para', content),
+    kind: 'para',
+    content,
+    classes: [['5', { cls: 'num', copy: '¹', mark: true, nested: true }]],
+  })
+  const elOf = (B: Doc, els: number[]) => {
+    const ins = instrumentOf(B, [unit()], [[0]])
+    for (const g of els) {
+      ins.glyphs[0]!.role[g] = ROLE.element
+      ins.glyphs[0]!.piece[g] = 5
+    }
+    const L = locate(ins, B, align(B, B))
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 't',
+      }),
+    ]
+    const part = objects.find((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>
+    return new Map(read('part', part.bytes).flows.flat()[0]!.els ?? []).get('5')
+  }
+  it('states the mark’s copy text as its glyph on the page, not the source’s reading', () => {
+    expect(elOf(docOf([{ lines: ['A sentence ends* and goes on'] }]), [15])?.copy).toBe('*')
+  })
+  it('keeps the source’s reading where TeX set no glyph for the mark in the unit (its mark set elsewhere)', () => {
+    expect(elOf(docOf([{ lines: ['A sentence ends and goes on'] }]), [])?.copy).toBe('¹')
+  })
+})
