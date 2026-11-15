@@ -89,7 +89,7 @@ export const KEY_VERSION = 't1'
  *  (its `text`) offered to no translator, put back beside it in the row: words.ts. A change to them that changes an outcome moves
  *  it, and every row with it
  *  (identityOf); a change that changes none leaves it */
-export const CHAIN_DIGEST = '543eba3d1576a1eb00d3aa3e96386a19cca39aba0fcf274ad45c68911be26fa6'
+export const CHAIN_DIGEST = '438c1e1bdeb23628f9bb08255ff2bc50365854a8951cdfb68922245557e6c7b9'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
