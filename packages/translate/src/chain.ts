@@ -86,8 +86,8 @@ export const KEY_VERSION = 't1'
  *  translator refuses handed on whole, halved only where its endpoint said it is too large (#636: a 400 read as every unit's
  *  refusal kept the next translator's answers as rows); a group that is not `must` with an edge inside a word offered to no
  *  translator, its words whole and plain: words.ts; the letters and marks that touch the text TeX set for an element
- *  (its `text`) offered to no translator, put back beside it in the row: words.ts. A change to them that changes an outcome moves
- *  it, and every row with it
+ *  (its `text`), in no group that does not hold it, offered to no translator, put back beside it in the row, the row's
+ *  sentences in the unit's projection: words.ts. A change to them that changes an outcome moves it, and every row with it
  *  (identityOf); a change that changes none leaves it */
 export const CHAIN_DIGEST = '438c1e1bdeb23628f9bb08255ff2bc50365854a8951cdfb68922245557e6c7b9'
 
