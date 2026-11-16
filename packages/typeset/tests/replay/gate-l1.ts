@@ -33,7 +33,7 @@ import {
 import { fontString } from '../../src/breaker/measure.ts'
 import { MissingMeasure } from '../../src/metrics/table.ts'
 import { rulesFor } from '../../src/rules-for.ts'
-import type { V0Piece } from '../../src/unit/breaks.ts'
+import { paraPieces, type V0Piece } from '../../src/unit/breaks.ts'
 import { type DoorRow, doorRows, doorSentences } from './rows.ts'
 import { layPagePrepared, type PageMember, type UnitLay } from '../../src/lay/page.ts'
 import { type CrossLay, crossLayOf } from './cross-lay.ts'
@@ -902,8 +902,10 @@ export function gateL1Pair(
       }
       const source = sourcePieces(src.content)
       // (the door's row as the translation package's Result would hold it (its text, the source's elements and groups by id):
-      // the reading takes the pieces from it and the member's facts alone, rowPieces; AXT_GATE_SOURCE=1 the unit's own pieces
-      // as before, to hold the two equal); a unit whose kept runs v2 holds as elements, today's row said in v2's unit
+      // the reading takes the pieces from it and the member's facts alone, rowPieces, its paragraph points cut in where a
+      // sentence start of the row the entry is given (rowOf's sentences; a joined member's none) pairs with them, as the entry's
+      // (entry.ts paraPieces); AXT_GATE_SOURCE=1 the unit's own pieces as before, to hold the two equal); a unit whose kept runs
+      // v2 holds as elements, today's row said in v2's unit
       const content = jr
         ? jr.content
         : keptOf.has(ord)
@@ -918,7 +920,7 @@ export function gateL1Pair(
           ? (row[1].map((q) =>
               typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
             ) as V0Piece[])
-          : rowPieces(mm, content)
+          : paraPieces(mm, rowPieces(mm, content), jr ? undefined : rowOf(ord, row!, src)?.sentences).pieces
       const tr = performance.now()
       let rd: ReturnType<typeof readMember>
       try {
