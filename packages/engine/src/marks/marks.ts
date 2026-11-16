@@ -1045,6 +1045,8 @@ function inkTextsOf(
     }
     if (text === null) continue
     if (/^\\hbox\(/.test(line) && !text) continue
+    // (an ask's box, the paragraph's (ASK_TEX: the sample set in a paragraph of its own in a vertical box), its lines boxes below)
+    if (strict && /^\\vbox\(/.test(line) && !text) continue
     if (decorated) {
       const depth = /^\.*/.exec(line)![0].length
       // (TeX breaks a log line at max_print_line, PRINT_LINE: a node's line that long goes on on the next line, which holds no
@@ -1125,6 +1127,8 @@ function inkTextsOf(
       continue
     }
     if (TEXT_PASS.test(line) || line === '') continue
+    // (LuaTeX's paragraph node, first in an ask's paragraph's line (LOCAL_PAR_NODE): no ink)
+    if (strict && LOCAL_PAR_NODE.test(line)) continue
     bad = true
   }
   return out

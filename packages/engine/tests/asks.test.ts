@@ -16,6 +16,7 @@ import {
   readInkAnswered,
   readInkProbe,
   readAskTexts,
+  readInkTexts,
   useAnswersOf,
 } from '../src/marks/marks.ts'
 
@@ -64,12 +65,28 @@ describe('the asks’ answers, read from the pass’s log', () => {
         '.\\kern0.5',
         '.\\OT1/cmr/m/n/10 R',
       ]),
+      // (an ask set in a paragraph of its own, its vertical box: 2610.20848v1's `\sep` in its keywords as pass 1 lists it; a
+      // LuaTeX paragraph node first in its line)
+      listing(6, '\\vbox(1.01+1.40999)x522.0', [
+        '.\\hbox(1.01+1.40999)x522.0, glue set 258.5fil',
+        '..\\localpar',
+        '..\\hbox(0.0+0.0)x0.0',
+        '..\\T1/ntxtlf/m/n/10 ,',
+        '..\\glue 2.5 plus 2.49995 minus 0.80005',
+        '..\\hbox(0.0+0.0)x0.0',
+        '..\\penalty 10000',
+        '..\\glue(\\parfillskip) 0.0 plus 1.0fil',
+        '..\\glue(\\rightskip) 0.0 plus 1.0fil',
+      ]),
     ].join('\n')
-    const asked = ['\\sep', '\\ruled', '\\fi{}', '\\x{}', '\\dagger{}', '\\ber{}']
+    const asked = ['\\sep', '\\ruled', '\\fi{}', '\\x{}', '\\dagger{}', '\\ber{}', '\\esep']
     expect(readAskTexts(log, asked)).toEqual([
       ['\\sep', ','],
       ['\\ber{}', 'BER'],
+      ['\\esep', ','],
     ])
+    // (the probe's reading as before: a paragraph's box is no answer of its)
+    expect(readInkTexts(log, asked).map(([x]) => x)).not.toContain('\\esep')
   })
   it('reads a sample set in a paragraph from its vertical box: inkless where no node at any depth sets ink, whatever lines it holds', () => {
     const LINE = '.\\hbox(6.9+1.9)x345.0, glue set 300.0fil'
@@ -165,6 +182,7 @@ describe('the asks’ answers, read from the pass’s log', () => {
     expect(useAnswersOf(log, asked)).toEqual({
       inkless: ['\\nada{}', '\\mypar{}', '\\mycr{}', '\\vsp{}', '\\mk{}', '\\mypar', '\\phantomsection', '\\lua{}'],
       inked: ['\\myitem{(B)}', '\\parrule{}'],
+      texts: [['\\myitem{(B)}', '(B)']],
     })
     // (in a horizontal box, the probe's, LuaTeX's paragraph node read as before: not known)
     const probe = listing(0, NONE, ['.\\vbox(0.0+0.0)x10.0', '..\\hbox(0.0+0.0)x10.0', '...\\localpar'])
