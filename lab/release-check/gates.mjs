@@ -780,8 +780,10 @@ export const GATES = [
     tier: 'full',
     stage: 'pipeline',
     holds: [],
-    needs: ctx => [exists("today's readers' replies, captured", lab(ctx, 'lanes/L6/capture.jsonl'))],
-    steps: ctx => [{ cmd: ['pnpm', 'exec', 'tsx', 'lab/translate/equivalence.ts', lab(ctx, 'lanes/L6/capture.jsonl'), join(ctx.work, 'equivalence')], fresh: join(ctx.work, 'equivalence') }],
+    // (each record's unit typed as today's engine reads it, frozen once over the capture by lab/translate/today-typed.ts: the
+    // gate loads nothing of today's engine)
+    needs: ctx => [exists("today's readers' replies, captured", lab(ctx, 'lanes/L6/capture.jsonl')), exists("today's typing of the capture, frozen", lab(ctx, 'lanes/L6/capture-today.json'))],
+    steps: ctx => [{ cmd: ['pnpm', 'exec', 'tsx', 'lab/translate/equivalence.ts', lab(ctx, 'lanes/L6/capture.jsonl'), join(ctx.work, 'equivalence'), lab(ctx, 'lanes/L6/capture-today.json')], fresh: join(ctx.work, 'equivalence') }],
     // (its rows in either shape of the tool: before its accepted classes every difference is `disagree`; with them, a
     // difference of a class the package's owners chose is `accepted`, compared and counted apart, and the tool exits 1 on any
     // other disagreement or a class's count moved)

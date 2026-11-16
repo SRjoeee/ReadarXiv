@@ -82,7 +82,7 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
   fills new compiles into a directory of its own, and the list must name it, or every paper is "missing a compile" (exit 3;
   at `75602aecb` all 87, the list predating the rounds' chain; at `cee3bd8f9` the list is round B14's, so the full tier is
   run with the round's `flags.txt`); `lanes/L3/replay/`: the typesetter's derived inputs; `lanes/L6/capture.jsonl`: today's
-  readers' replies; `lanes/cjk-punct/blast/pairs.txt`: the 90 pairs of the stored rows the rounds' reader gate walks;
+  readers' replies, and `lanes/L6/capture-today.json`: today's typing of them, frozen (`lab/translate/today-typed.ts`); `lanes/cjk-punct/blast/pairs.txt`: the 90 pairs of the stored rows the rounds' reader gate walks;
   `google-rows/ef6989debed1` and `lanes/converge-7/tools-b15/{google-rows.mts,rows-register.mjs}`: the lab's Google store
   and the rounds' tools that read it through the tree's chain and lay the reader gate over it; `baseline/corpora/papers.json`:
   the harness's corpus papers, opened from this run's bundles with this run's rows of them, `reader-parts`' Google rows);
