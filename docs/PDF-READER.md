@@ -7288,16 +7288,9 @@ the glue TeX sets at each kind of gap, and the part names, under each member, th
   line, the class of the gap TeX set there and that glue's natural size and shrink, by what stands under it (the next member's
   line, the float each is of by B's brackets): a heading's `afterskip` (`runin` after a title set in the line, the after-skip
   negated: F40's form 1); over a heading its `beforeskip` as TeX adds it; a float's last member its float's separation by TeX's
-  own case (2c's F-last and F-sep: `textfloatsep` under a top float, `intextsep` round a float set here, `floatsep` over another
-  float, the two-column pair across both columns, `fpsep` on a page of floats alone), and body text over a float's first member
-  the same. Top or here is where TeX placed the float, as B's brackets state it: POINTS' `\@makecol` hook brackets each column's
-  main list as the page builder broke it (`bs<n>` .. `be<n>`), and `\@makecol` then sets the top list over it and the bottom list
-  under it, so a float whose bracket (`fs<n>`) opens inside a body's was set here and one outside every body's is a top or a
-  bottom float; body text is what stands inside a body's bracket. Not body text over the float in its column on the page: a
-  two-column title block (`\twocolumn[…]`, ICML's, set over both columns and in no body) stood over a top float and its
-  `textfloatsep` was stated `intextsep` (2611.03953v2 p1, the measured gap 32.88 = 3 + 20 + 10 under its figure), and the block
-  itself a float's separation; it states none now, and nor does a page that states no body. In a float `abovecaptionskip` over
-  its caption and `belowcaptionskip` under it;
+  own case read from the page (2c's F-last and F-sep: `textfloatsep` under a top float, `intextsep` round a float set here,
+  `floatsep` over another float, the two-column pair across both columns, `fpsep` on a page of floats alone), and body text over
+  a float's first member the same; in a float `abovecaptionskip` over its caption and `belowcaptionskip` under it;
   `footins` over the footnotes and `footnotesep` between two; `parskip` over a paragraph (the next one's). None where nothing of
   the paper's own text follows, where ink no unit owns stands between (but the footnote rule and a float's own ink over its
   caption), or where the glue is not stated. `sep` keeps its meaning; a heading set on lines of its own gains one: its
