@@ -154,6 +154,9 @@ type Reading = {
 /** the rule set's fields the tokens read (rules/layout.mjs resolveRules' params) */
 export type TokenRules = {
   keepAll: boolean
+  /** whether the script writes a space between its words (ScriptRules.spaced): read with keepAll, so that a rule set recorded
+   *  before the field (the tap's) reads every target as it did */
+  spaced: boolean
   cjkQuotes: boolean
   latinPatterns: string
   cyrillicPatterns: string
@@ -715,9 +718,9 @@ export function tokens(i: TokensInput): Tokens {
     if (!g.brk) noBreakNext = true
     if (afterRunin) runinOwn += 100 * em
   }
-  // (a script that writes no spaces between its words: Chinese and Japanese, never Korean (keepAll), nor a source that writes
-  // its CJK with spaces between (spacedSource))
-  const spaceless = !keepAll && !i.spacedSource
+  // (a script that writes no spaces between its words: Chinese and Japanese, never Korean, which breaks between its characters
+  // and writes them (`spaced`), nor the alphabets (keepAll), nor a source that writes its CJK with spaces between (spacedSource))
+  const spaceless = !keepAll && !P.spaced && !i.spacedSource
   // (a title its source sets in the line at a paragraph's opening with no mark after it, the part's SpanAt.runin (the display
   // design's F40, docs/PDF-READER.md §18.85): in a script that writes no spaces between its words, the separation between two
   // sentences after it, one character's width (an em of the line's size: a CJK character's advance), a kern on what the title
@@ -903,7 +906,11 @@ export function tokens(i: TokensInput): Tokens {
     }
     if (r.mode === 'crop') {
       const pv = tokens.at(-1)
-      const ecglue = !keepAll && pv?.cls === 'cjk' && !pv.leadEnd && !pv.kernW && !(pv.s && kinsoku.ends(pv.s))
+      // (after a CJK character a line may end before the crop where the script writes no spaces between its words, as xeCJK's
+      // \CJKecglue allows; Korean, which writes them, holds a crop set against a syllable to it: xetexko sets no glue there,
+      // docs/PDF-READER.md §18.91)
+      const ecglue =
+        !keepAll && !P.spaced && pv?.cls === 'cjk' && !pv.leadEnd && !pv.kernW && !(pv.s && kinsoku.ends(pv.s))
       for (const [n, q] of cropPartsOf(r).entries()) {
         if (n) pushText(' ', style())
         // (a mark's crop glued to what precedes it, as its text was a superscript's: TeX sets no glue between a word and its

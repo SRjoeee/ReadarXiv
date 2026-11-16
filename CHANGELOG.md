@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Changed: in the PDF reader in Korean, a line may end between two syllables of a word, as Korean typesetting does, and every line of a paragraph but its last reaches the column's edge. A Korean line had ended only at a space, and a line whose next word did not fit had been left short, about one line in three in a narrow column.
 - Fixed: in the PDF reader in Chinese and Japanese, a title an author sets at the start of a paragraph with no full stop after it, such as "**Global Matching** We leverage …", is kept apart from the sentence after it by one character's width. It had run flush into it. The translation is asked for as before.
 - Changed: with Google translating, each formula, citation or reference of a passage is sent to Google in a shorter form that Google keeps as whole as before, so a paper is asked of Google in about a sixth fewer characters and fewer requests.
 - Fixed: with Google translating, a sentence keeps its full stop where the paper sets something that prints nothing right after it, such as a label, a conditional of its own or an empty mark, and the sentence after it is translated as a sentence of its own. Google had dropped the stop and run the two sentences together.

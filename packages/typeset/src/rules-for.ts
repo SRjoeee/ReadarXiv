@@ -51,6 +51,7 @@ const SCRIPT_KEYS = [
   'fillLead',
   'fillLeadRel',
   'keepAll',
+  'spaced',
   'cjkQuotes',
   'noStart',
   'noEnd',

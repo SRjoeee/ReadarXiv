@@ -173,14 +173,24 @@ export function servedMetrics() {
   }
 }
 
-/** a Metrics that answers from `first` and, where it throws MissingMeasure, from `then` (the table, then the measurer) */
+/** a Metrics that answers from `first` and, where it throws MissingMeasure, from `then` (the table, then the measurer). A text
+ *  `first` lacked is remembered, by measure, font and text (the table's miss is the same at every size: it keys its measures by
+ *  font and text, metrics/table.ts), and asked of `then` alone from then on, as the reader's measurer remembers a measure
+ *  (packages/reader/src/compose/served.ts): an error built and thrown on every call had cost the gate's timing of a page more than
+ *  its lay (lane ko-break: Korean syllables, which today's tables never measured alone, 2.36 million throws over four papers) */
 export function layered(first, then) {
-  const or = (f, g) => (...a) => {
-    try {
-      return f(...a)
-    } catch (e) {
-      if (e?.name !== 'MissingMeasure') throw e
-      return g(...a)
+  const or = (f, g) => {
+    const lacked = new Set()
+    return (face, size, text) => {
+      const key = `${face}\u0000${text}`
+      if (lacked.has(key)) return g(face, size, text)
+      try {
+        return f(face, size, text)
+      } catch (e) {
+        if (e?.name !== 'MissingMeasure') throw e
+        lacked.add(key)
+        return g(face, size, text)
+      }
     }
   }
   return {
