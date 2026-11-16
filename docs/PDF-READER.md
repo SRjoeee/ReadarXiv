@@ -7856,15 +7856,20 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   at most the original's count, at the original's size, whole, laid no looser than its rule-1 pitch, on the original's first line
   and ending no lower than the original's last. Its example, the one page the rule made newly worse: 2610.30034v1-zh p11 t218,
   2 lines against today's 3 (letter-spaced, 0.08 em) and the original's 4.
-- **Reach of the rule as first built, notes held too** (the reader gate over the 92 pairs, the added ones apart, the compile
-  move's bundles and Google's refilled rows and the door's, at 5f835110b against 9410a0ca9; lanes/f28-lay in the lab): drawn
-  otherwise, door rows 1,045 captions and 153 notes, Google's 1,037 and 148 (zh and, under the recorded rule set, 14 ja), of them 599 and 592 captions and 72 and 69 notes changing
-  height on a page; with the product's rule set the Japanese pairs 38 and 36 members, the Korean packs 37. No body member is
-  drawn otherwise on either store; the fill leading of 54 (door) and 32 (Google) units of one line (cells, headings, two
-  paragraphs) moved with their page's target where a caption's vote moved, nothing drawn. No member of the Spanish, German and
-  Polish pairs moved. The four lines read 0 on both stores. Lays a page (B.break's calls) 229.9 to 228.3 over the 92 pairs'
-  2,595 pages (-0.7 %), no pair paying more than +0.2 %; the walk's exactness check (every state passed unlaid and every state
-  taken from the floor laid as well): 64,999 passed and 7,043 taken, none differing.
+- **Reach** (the reader gate over the 92 pairs, the added ones apart, the compile move's bundles and Google's refilled rows and
+  the door's; the Japanese pairs and the Korean packs again under the product's rule set; at 8366cf04e against today's lay,
+  9410a0ca9, and the rule as first built, 178ee81b6, notes held too; lanes/f28-lay and lanes/f28-notes in the lab): every note
+  laid exactly as today, its dump byte for byte today's on both stores and both rule sets (213 notes on the door's rows, 214 on
+  Google's: 153 and 148 of them the first build drew otherwise); every caption's dump the first build's (none differs), so
+  drawn otherwise against today, door rows 1,045 captions, Google's 1,037 (zh and, under the recorded rule set, 14 ja), of them
+  599 and 592 changing height on a page; with the product's rule set the Japanese pairs and the Korean packs 66 captions (door)
+  and 32 (Google), no note. No body member is drawn otherwise on either store, and every body member's dump is the first
+  build's: the fill leading of 54 (door) and 32 (Google) units of one line (cells, headings, two paragraphs, a running head)
+  moved with their page's target where a caption's vote moved, nothing drawn. No member of the Spanish, German and Polish pairs
+  moved. The four lines read 0 on both stores and both rule sets. Measured on the first build (the class's knob order then
+  named the notes too): lays a page (B.break's calls) 229.9 to 228.3 over the 92 pairs' 2,595 pages (-0.7 %), no pair paying
+  more than +0.2 %; the walk's exactness check (every state passed unlaid and every state taken from the floor laid as well):
+  64,999 passed and 7,043 taken, none differing.
 
 ## 19. The engine's contract
 
