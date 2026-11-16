@@ -75,9 +75,10 @@ const SHOW = (at) =>
 /** the document's own readings in its preamble: the glue \@startsection hands \addvspace (a heading's before-skip as TeX adds
  *  it), written each time */
 const PRE = String.raw`\makeatletter\let\axt@chkav\addvspace\def\addvspace#1{\message{^^JAXT-SHOW - addv \the\glueexpr#1\relax^^J}\axt@chkav{#1}}\makeatother` +
-  // (where TeX put each float, its own lists when \@makecol makes a column: the top list, the bottom list, the floats set here; and
-  // each output: a code of a label of the gate's own, so that it runs before the head's top-level code)
-  String.raw`\makeatletter\ifdefined\AddToHook\AddToHook{cmd/@makecol/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - top \number#1^^J}}\@toplist\def\@elt#1{\message{^^JAXT-SHOW - bot \number#1^^J}}\@botlist\def\@elt#1{\message{^^JAXT-SHOW - here \number#1^^J}}\@midlist\message{^^JAXT-SHOW - makecol 0^^J}\endgroup}\AddToHook{cmd/@outputpage/before}[axt-gate]{\message{^^JAXT-SHOW - outputpage 0^^J}}\fi\makeatother`
+  // (where TeX put each float, its own lists when \@makecol makes a column: the top list, the bottom list, the floats set here; the
+  // floats \@makefcolumn sets in a column of floats (\@vtryfc, its list \@flsucceed); and each output: a code of a label of the
+  // gate's own, so that it runs before the head's top-level code)
+  String.raw`\makeatletter\ifdefined\AddToHook\AddToHook{cmd/@makecol/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - top \number#1^^J}}\@toplist\def\@elt#1{\message{^^JAXT-SHOW - bot \number#1^^J}}\@botlist\def\@elt#1{\message{^^JAXT-SHOW - here \number#1^^J}}\@midlist\message{^^JAXT-SHOW - makecol 0^^J}\endgroup}\AddToHook{cmd/@outputpage/before}[axt-gate]{\message{^^JAXT-SHOW - outputpage 0^^J}}\AddToHook{cmd/@vtryfc/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - fcol \number#1^^J}}\@flsucceed\endgroup}\fi\makeatother`
 /** a float of environment `env` with its caption unit `i`, `inside` set first in it, and the float's own reading of the
  *  separations at its end */
 const F = (env, place, i, inside = '') =>
@@ -189,15 +190,20 @@ async function placesHeld(file, log) {
   let made = false
   let wholeSince = false
   let outputs = 0
-  for (const m of log.matchAll(/^AXT-SHOW - (fser|top|bot|here|makecol|outputpage) (\d+)(?: (\d+))?$|^AXT-WHOLE (\d+)$/gm)) {
+  let fcol = []
+  for (const m of log.matchAll(/^AXT-SHOW - (fser|top|bot|here|fcol|makecol|outputpage) (\d+)(?: (\d+))?$|^AXT-WHOLE (\d+)$/gm)) {
     if (m[4] !== undefined) {
       wholeSince = true
       continue
     }
     if (m[1] === 'fser') boxOf.set(m[3], Number(m[2]))
     else if (m[1] === 'makecol') made = true
+    else if (m[1] === 'fcol') fcol.push(boxOf.get(m[2]))
     else if (m[1] === 'outputpage') {
       outputs++
+      // (a column of floats beside a column \@makecol made: outside its page's body; on a page no \@makecol made: its page whole)
+      for (const f of fcol) if (f !== undefined) tex.set(f, made ? 'fcol' : 'fcol-whole')
+      fcol = []
       if (made === wholeSince) out.push(`output ${outputs}: ${made ? 'a \\@makecol ran and AXT-WHOLE stated' : 'no \\@makecol ran and no AXT-WHOLE'}`)
       made = false
       wholeSince = false
@@ -211,7 +217,7 @@ async function placesHeld(file, log) {
     if (b.e < 0) continue
     const want = tex.get(f)
     const got = placed.get(f)
-    const fine = want === 'here' ? got === 'here' : want === 'top' || want === 'bot' ? got === 'out' : got === undefined
+    const fine = want === 'here' ? got === 'here' : want === 'top' || want === 'bot' || want === 'fcol' ? got === 'out' : got === undefined
     if (!fine) out.push(`fs${f}: TeX ${want ?? 'no list (its page bracketed whole or a page of floats)'}, read ${got ?? 'none'}`)
     else n++
   }
