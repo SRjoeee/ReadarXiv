@@ -7826,6 +7826,27 @@ formula red, green with `spaced`). The versions: none moves by its own rule. The
 (TRANSLATE), the chain and its digests, the cache keys and today's layout file (LAYOUT) are untouched; the reader lays a page
 when it is read, and nothing stored is keyed by its lines.
 
+Measured (2026-11-16, 2dd3fcaef against its base 9410a0ca9, the integration's view c1-gates). The reader gate lays its entry
+with the tap's recorded rule set, which keeps Korean whole; laid instead with the package's own (a lab hook), on the door's rows
+of the 92 pairs and the gate pack's four Korean pairs and on Google's rows of the 92: every pair but the four Korean ones
+byte-identical to the base on both stores; the four Korean pairs' members laid otherwise 166 of 184 (1512.03385v1), 71 of 150
+(1706.03762v7), 99 of 152 (1810.04805v2) and 129 of 162 (2608.04322v1), their lines 2,169 to 2,120; I3, I4 and I5 none before
+and after, I10 no fault. Lines not a paragraph's last more than 1 em short (lane cm-d's count): 419 of 1,313 to 7 of 1,265
+(1512.03385v1 140 to 0, 1706.03762v7 17 to 0, 1810.04805v2 142 to 6, 2608.04322v1 120 to 1); 2610.40645v1-ko's pages 4, 11 and
+32, 5 of 52 to 3 of 52, the three the lines a display formula ends (TeX's own break: set short as before). The seven: three
+Korean lines under half of whose items are CJK, so set as Latin text (`latinishOf`), their spaces past `spaceMax`; a run of
+citations set as Latin text; two pieces of a URL (a URL's break points take no glue); a syllable tied by the source's `~` to a
+formula nearly a line wide. The owner's three pages drawn at 2dd3fcaef are byte for byte the candidate he chose from (a lab hook
+on `keepAll` alone): on the four papers that hook and the build differ in one member, 1810.04805v2-ko t48, a title set in the line
+(its paper's "Pre-training data"), which the hook gave an em and the build leaves its row's space. The breaker's lays, the four papers: 42,694 to
+41,105. A page's lay in Node (the gate's own timing over the 56 pages, the served faces' measurer, which caches each text's
+measure as the reader's does): p50 9.7 to 19.7 ms, p90 24.0 to 50.4, p99 44.1 to 74.3; the same pages in Chinese 18.6, 39.5,
+146.5 and in Japanese 24.2, 57.6, 81.2: a syllable a token costs a page what a character a token costs those two. The gate's
+own tenfold rise (8.9 to 90 ms, lane cm-d) was its measuring table's, which holds today's whole Korean words and throws for every
+syllable it lacks, on every call (`metrics/table.ts` MissingMeasure, caught by the lab's `layered`); the reader measures a
+syllable once a visit (`packages/reader/src/compose/served.ts`, its measures by font and text). The time in a browser is to be
+measured.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
