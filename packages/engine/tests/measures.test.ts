@@ -338,6 +338,35 @@ describe('a paragraph’s measure as TeX sets its lines (F13)', () => {
     )
     expect(para).toEqual([[72, 540]])
   })
+  it('reads a paragraph TeX ended before others that B shows first: REVTeX’s abstract, boxed before the title’s paragraphs', () => {
+    // (2610.10492v1 p1: the abstract's paragraph ends first (serial 1), then the title's and the authors' (2, 3), which B shows
+    // before the abstract's lines; the abstract's measure is TeX's, its own end after its lines)
+    const [title, author, abstract] = measuredOf(
+      [
+        ['A Title', 0],
+        ['An Author', 1],
+        ['the abstract one', 2],
+        ['the abstract two', 2],
+      ],
+      [
+        [2, 0],
+        [3, 1],
+        [1, 3],
+      ],
+      [{ para: 1, ...plain, shape: [[36, 396]] }],
+      [
+        [0, 2],
+        [1, 3],
+        [2, 1],
+      ],
+    )
+    expect(title).toEqual([[72, 540]])
+    expect(author).toEqual([[72, 540]])
+    expect(abstract).toEqual([
+      [108, 504],
+      [108, 504],
+    ])
+  })
   it('takes \\leftskip’s and \\rightskip’s natural sizes off the line’s box', () => {
     expect(measuresOf([{ para: 1, ...plain, leftskip: 10, rightskip: 5 }])[0]![0]).toEqual([82, 535])
   })

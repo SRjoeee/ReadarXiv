@@ -7366,8 +7366,10 @@ bytes it was.
   after the line, and its serial comes after the end B shows before the line and no later than the first end B shows after it
   (B's order is not TeX's: a note's or a float's paragraph TeX ended earlier stands later on B; 2501.14787v1 p75's line after a
   display took the heading's `\hangindent` from p74); any other line the paragraph whose end B shows next after it, the
-  unit's own, only where that end's serial is the one directly after the end B shows before the line (none ended after a box can
-  stand between); every other line, and a unit TeX ended in an `\hbox` (a one-line caption) or stated nothing for, none: its
+  unit's own, only where that end's serial is the one directly after the end B shows before the line, or the paragraph TeX ended
+  before it stands on B before the line or there is none (none ended after a box can stand between; REVTeX sets its abstract's
+  paragraphs in a box before `\maketitle`'s, and B shows the title's ends between: under the first condition alone the abstract
+  of six papers of the corpus lost TeX's measure to the frame's); every other line, and a unit TeX ended in an `\hbox` (a one-line caption) or stated nothing for, none: its
   frame's. The pairing alone is not the unit's paragraph in two ways the whole corpus showed (the chain against c2: 1136 lines
   newly outside their measure, 535 of them traced in 8 papers): a paragraph a display ends (TeX breaks the lines before `$$` with
   no `\par`, so no `AXT-MEASURE`, and the empty paragraph after the display states none) pairs its unit with the paragraph before

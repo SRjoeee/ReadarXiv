@@ -36,23 +36,26 @@ export function lineShape(s: ParaMeasure, k: number): [indent: number, length: n
  * where B shows it, stands after the line (B's order is not TeX's: a note's or a float's paragraph TeX ended earlier stands later
  * on B, 2501.14787v1 p75's line after a display took the heading's \hangindent on p74); (ii) any other line takes the paragraph
  * whose end B shows next after it, the unit's own (B's glyph before the end the unit's), only where that end's serial is the one
- * directly after the end B shows before the line (no paragraph without a point, one TeX ended after a box, can stand between
- * them); (iii) every other line, and a unit TeX ended in an \hbox or stated nothing for, takes none (its frame's, as before F13).
- * B's "first end after the line" alone took the next paragraph's measure for a paragraph that ends in a box (amsthm's QED box)
- * and counted its lines as the next one's: 2610.40645v1 p19's proof read as the next section heading's \hangindent. The pairing
- * alone took a paragraph that is not the line's in two ways, which (i)'s bounds turn away: a unit whose paragraph a display ended
- * (TeX breaks the lines before `$$` with no \par, so no AXT-MEASURE, and the empty paragraph after the display states none) is
- * paired with the paragraph before it, a heading's \hangindent read into its lines (2010.11929v2 p13, 2307.16209v1 p25); a unit
- * whose paragraph ended inside a group its mark stands outside of has its statement written where that group closes, and is
- * paired with the group's last paragraph (2111.09276v1's conclusion, ended by the bibliography's heading inside `{\small …}`:
- * paired with the last reference, 62 ends after its lines). The paragraph's lines are taken in B's order, a row two members share
- * one line (a run-in title and its paragraph), so that the k-th is TeX's line k. Its measure stands at the left edge of its
- * frame's column whose width is the paragraph's \hsize (a paragraph of the column's main list, a footnote, a float's text), or of
- * the text block where the block's is (a float across both columns); a paragraph of another \hsize (a minipage's, a \parbox's, a
- * p column's) states none, where TeX's statement does not say where its box stands. From that edge, the line's indent, and
- * \leftskip's natural size, to its length, less \rightskip's. A display TeX set inside the paragraph counts as three lines to its
- * shape (TeX's \prevgraf after it): where the shape varies by line (several lines of a \parshape, a \hangindent), its lines after
- * a held row of the paragraph state none. A table cell, a figure text and a name keep the measure they have
+ * directly after the end B shows before the line, or the paragraph TeX ended before it (its serial one less) stands on B before
+ * the line or there is none (no paragraph without a point, one TeX ended after a box, can stand between them; B's order is not
+ * TeX's where a class sets paragraphs in a box before others: REVTeX's abstract, set before \maketitle's title and authors and
+ * shown after them, lost its measure to the frame's in six papers of the corpus under the first condition alone); (iii) every
+ * other line, and a unit TeX ended in an \hbox or stated nothing for, takes none (its frame's, as before F13). B's "first end
+ * after the line" alone took the next paragraph's measure for a paragraph that ends in a box (amsthm's QED box) and counted its
+ * lines as the next one's: 2610.40645v1 p19's proof read as the next section heading's \hangindent. The pairing alone took a
+ * paragraph that is not the line's in two ways, which (i)'s bounds turn away: a unit whose paragraph a display ended (TeX breaks
+ * the lines before `$$` with no \par, so no AXT-MEASURE, and the empty paragraph after the display states none) is paired with
+ * the paragraph before it, a heading's \hangindent read into its lines (2010.11929v2 p13, 2307.16209v1 p25); a unit whose
+ * paragraph ended inside a group its mark stands outside of has its statement written where that group closes, and is paired with
+ * the group's last paragraph (2111.09276v1's conclusion, ended by the bibliography's heading inside `{\small …}`: paired with the
+ * last reference, 62 ends after its lines). The paragraph's lines are taken in B's order, a row two members share one line (a
+ * run-in title and its paragraph), so that the k-th is TeX's line k. Its measure stands at the left edge of its frame's column
+ * whose width is the paragraph's \hsize (a paragraph of the column's main list, a footnote, a float's text), or of the text block
+ * where the block's is (a float across both columns); a paragraph of another \hsize (a minipage's, a \parbox's, a p column's)
+ * states none, where TeX's statement does not say where its box stands. From that edge, the line's indent, and \leftskip's
+ * natural size, to its length, less \rightskip's. A display TeX set inside the paragraph counts as three lines to its shape
+ * (TeX's \prevgraf after it): where the shape varies by line (several lines of a \parshape, a \hangindent), its lines after a
+ * held row of the paragraph state none. A table cell, a figure text and a name keep the measure they have
  */
 export function paragraphMeasures(w: Work): void {
   const { ins, m, framesA, unitB } = w.ix
@@ -90,6 +93,10 @@ export function paragraphMeasures(w: Work): void {
     const i = at(b)
     const prev = i > 0 ? ends[i - 1]![1] : 0
     if (c === prev + 1) return c
+    // ((ii) where B's order is not TeX's: the unit's own end, where the paragraph TeX ended before it (its serial one less)
+    // stands on B before the line, or there is none: REVTeX sets the abstract's paragraphs in a box before \maketitle's, and
+    // B shows the title's ends between)
+    if (after && (c === 1 || (endAt.get(c - 1) ?? b + 1) <= b)) return c
     // ((i): the paired paragraph, no end of the unit's own before the line, where it ends after the end B shows before the line
     // and no later than the first B shows after it)
     if (c !== P || P <= prev || mine.some((e) => e[0] <= b)) return undefined
