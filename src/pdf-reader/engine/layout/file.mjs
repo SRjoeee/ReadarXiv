@@ -220,8 +220,12 @@ export { LayoutRefusal } from './json.mjs'
  *  ends and the stream's reading stops at (stream.mjs ownedOf), so that a piece of a cell with its opening point alone owns what
  *  TeX set in its cell and no later, where a file of 40 holds its ink run to the next unit's start (the row's other entries, the
  *  rules between the columns and under the row): another maker's for a paper with such a cell, 45 pieces of 11 papers over the
- *  round's 89, the holdout and the third set (2406.06525v1, 2610.20716v1, 2610.21176v1, 2610.40576v1 …) */
-export const LAYOUT = '41'
+ *  round's 89, the holdout and the third set (2406.06525v1, 2610.20716v1, 2610.21176v1, 2610.40576v1 …); 42 (with PIPELINE 104):
+ *  the source reader's cut, which this maker reads through @readarxiv/engine/today, takes LaTeX's text symbols as characters of the
+ *  text (F9 (d), PDF-READER §18.83), an entry's start mark before a number it keeps (F29, §18.81) and a box register's tables
+ *  (F18, §18.82), so that a file of 41 holds such a symbol's placeholder row or its paper's units as cut before: the gate pack's
+ *  2609.26457v1-zh, its `\ldots{}` text now, one placeholder row fewer */
+export const LAYOUT = '42'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
