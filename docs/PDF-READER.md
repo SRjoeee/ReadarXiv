@@ -7827,9 +7827,10 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   whose target there is 1.50; the owner's words on it, 「如果“现在”版本是正文统一的行距 有可能是更好的」: today's is the page's
   uniform leading, and it stands. §18.57 is laid as it is; no body member's order changes.
 - **The gate** (the reader gate, `packages/typeset/tests/replay/spacing-gate.ts`, the `F28` lines of `lab/typeset/gate-l1.mjs`;
-  each 0, a member on any fails the run): (i) a float's member or a note laid above its rule-1 pitch (U.params leadOf over its
-  own blocks), room taken or none; (ii) a body member the fill lays above its page's target and band, an invariant of the fill
-  (beside it, a member the fill lays not, its fitted state not set again, `fillLead` null, kept at its fit: one on today's lay,
+  each 0, a member on any fails the run): (i) a float's member laid above its rule-1 pitch (U.params leadOf over its own blocks),
+  room taken or none, the unit's own kind read (`unit/params.ts` floatMember: `caption`, no list of ours); (ii) a body member the
+  fill lays above its page's target and band, an invariant of the fill, a note read here as every member of a column's run of
+  sibling blocks (the coordinator's ruling of 2026-11-17; `packages/typeset/tests/unit/spacing-gate.test.ts`) (beside it, a member the fill lays not, its fitted state not set again, `fillLead` null, kept at its fit: one on today's lay,
   2610.40645v1-ja p22 ord 166 at 1.319 on a target of 1.179); (iii) a member closer than its script's floor (`leadFloor`); (iv) a
   member a step under its size that one lay at its size, every knob its order takes before the size at its bound, sets whole,
   whose step neither the page's evening states (`Laid.evened` naming `size`) nor a size tie (`Laid.tie`). A tie's own origin

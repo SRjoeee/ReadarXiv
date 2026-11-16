@@ -1,14 +1,15 @@
 // The spacing rule's gate (the display design's 2d as the owner amended it on 2026-11-13, the coordinator's rulings of
 // 2026-11-16, docs/PDF-READER.md §18.90): four lines over the runner's laid members, each member read once, on the page of its
 // first line, each line 0 to pass.
-// (i) a float's member or a note (a caption, a note: floatOrNote) laid above its pitch by rule 1 (U.params leadOf over its own
-//     blocks: the script's factor on its own pitch), with room taken or none: nothing spreads it (TeX builds a float's box and a
-//     note once, at its natural size: the slack stays under it). Those of them holding room they took are counted beside.
-// (ii) a body member (one the page fill fills: every member but a float's and a note) laid above its page's target and band (the
-//     fill's own target of the page it begins on, PreparedPage.passes, and the script's adaptiveFill.band): the fill's own
-//     promise, held to every member it lays (shared/fill-page.ts leadOf, `top`), with room taken or none: an invariant of the fill,
-//     which the rule does not touch. A member the fill lays not (its fitted state does not set it again: FillLaid.fillLead null,
-//     the fill's `no fill leading`) keeps its fit's leading, the walk's: counted beside, as the fill states it.
+// (i) a float's member (the unit's own kind, a caption: U.params floatMember) laid above its pitch by rule 1 (U.params leadOf over
+//     its own blocks: the script's factor on its own pitch), with room taken or none: nothing spreads it (TeX builds a float's box
+//     once, at its natural size: the slack stays under it). Those of them holding room they took are counted beside.
+// (ii) a body member (one the page fill fills: every member but a float's, a note too: a run of sibling blocks in a column shares
+//     its page's rhythm, the coordinator's ruling of 2026-11-17) laid above its page's target and band (the fill's own target of
+//     the page it begins on, PreparedPage.passes, and the script's adaptiveFill.band): the fill's own promise, held to every member
+//     it lays (shared/fill-page.ts leadOf, `top`), with room taken or none: an invariant of the fill, which the rule does not
+//     touch. A member the fill lays not (its fitted state does not set it again: FillLaid.fillLead null, the fill's `no fill
+//     leading`) keeps its fit's leading, the walk's: counted beside, as the fill states it.
 // (iii) a member laid closer than its script's floor (leadFloor: the block's own original pitch for the scripts set by a factor,
 //     a share of it for the alphabets, whose floor and order the rule does not touch).
 // (iv) a member laid under its original size (1, or a cell's band cap) though one more lay there, with every knob its order
@@ -24,10 +25,10 @@ import { layoutAt } from '../../src/fit/at.ts'
 import type { FitParams, FitState } from '../../src/fit/types.ts'
 import type { PageMember } from '../../src/lay/page.ts'
 import type { RuleParams } from '../../src/types.ts'
-import { floatOrNote, leadOf } from '../../src/unit/params.ts'
+import { floatMember, leadOf } from '../../src/unit/params.ts'
 
 export type SpacingGate = {
-  /** the members read (each once), by class (`float` a caption or a note, `body` every other) */
+  /** the members read (each once), by class (`float` a float's member, `body` every other, a note too) */
   read: Map<string, number>
   /** the four lines: each failing member as `p<page> ord <ord> <kind>: <numbers>` */
   floatSpread: string[]
@@ -84,7 +85,7 @@ export function spacingGate(
     const L = u?.layout
     if (pm.state !== 'laid' || !u || !L || L.lines[0]?.page !== page) continue
     const kind = u.unit.kind
-    const cls = floatOrNote(kind) ? 'float' : 'body'
+    const cls = floatMember(kind) ? 'float' : 'body'
     add(out.read, cls)
     const st = L.state as FitState & { glue?: boolean }
     const leads = [st.lead, ...(st.leads ?? []).filter((v): v is number => v !== undefined)]

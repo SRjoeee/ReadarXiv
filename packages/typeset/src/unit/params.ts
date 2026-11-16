@@ -35,6 +35,13 @@ const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
  */
 export const floatOrNote = (kind: string): boolean => kind === 'caption' || kind === 'footnote'
 /**
+ * A float's member (docs/PDF-READER.md §18.90): a unit of the format's own kind `caption` (a float's caption and a subfigure's:
+ * every member whose label is a float's, Label.float, is one). TeX builds a float's box once, at its natural size, and no page
+ * rhythm binds it. A note is none: a run of sibling blocks in a column (body paragraphs, notes, list items, references) shares
+ * its page's rhythm, each filling its frame within the page's band (the coordinator's ruling of 2026-11-17 on the owner's choice)
+ */
+export const floatMember = (kind: string): boolean => kind === 'caption'
+/**
  * The order of the fit's knobs for a float's member or a note (docs/PDF-READER.md §18.90; the owner's review of 2026-11-13: the
  * leading gives way before the separation does, for the class, and the size last): the script's order, its room knob two knobs,
  * the gap's free part (`free`: the shrink TeX's glue states under it, Room.gap) where the script's order has the room, the rest
