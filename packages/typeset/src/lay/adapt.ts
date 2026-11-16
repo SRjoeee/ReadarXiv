@@ -29,7 +29,7 @@ import {
   widen,
 } from '../unit/decor.ts'
 import { cropOfBox } from '../unit/crops.ts'
-import { floatOrNote, params, unitSizeOf } from '../unit/params.ts'
+import { floatMember, params, unitSizeOf } from '../unit/params.ts'
 import { type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
 import type { FlowMember } from './flow.ts'
 
@@ -461,12 +461,12 @@ export function adapt(i: AdaptInput): Adapted {
   // clearance and no reading of the page's pixels stand in for TeX's)
   const runs = m.room.runs
   const sep = m.room.sep
-  // (a float's member or a note: the free part of its room, the shrink TeX's glue states in the gap under it (Room.gap[2]), which
+  // (a float's member: the free part of its room, the shrink TeX's glue states in the gap under it (Room.gap[2]), which
   // its fit takes before its leading closes (docs/PDF-READER.md §18.90, U.params floatOrder): never past the least where the part
   // states one (Room.sep: within `free`), else never past TeX's text block bottom; none from a gap that states no shrink, and none
   // from the skip after a title set in the line (`runin`: no separation under its block, the horizontal skip beside it)
   const gap = m.room.gap
-  const shrink = floatOrNote(kind) && gap && gap[0] !== 'runin' ? gap[2] : 0
+  const shrink = floatMember(kind) && gap && gap[0] !== 'runin' ? gap[2] : 0
   if (runs && kind !== 'cell' && (sep !== undefined || shrink > 0))
     for (const b of blocks) {
       const r = b.rects.at(-1) as Rect

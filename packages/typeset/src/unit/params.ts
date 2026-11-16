@@ -28,21 +28,16 @@ const SOLID = 1.25
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
 /**
- * A float's member or a note (docs/PDF-READER.md §18.90): a caption (every member whose label is a float's is one, Label.float)
- * or a footnote. TeX builds a float's box and a note once, at its natural size, and no page rhythm binds them: the page fill
- * never spreads them (lay/page.ts, shared/fill-pass.ts), and their fit takes the leading before the room down to the least
- * (floatOrder). A class of the unit's kind, read where a unit's kind is read: the rule file is by script
- */
-export const floatOrNote = (kind: string): boolean => kind === 'caption' || kind === 'footnote'
-/**
  * A float's member (docs/PDF-READER.md §18.90): a unit of the format's own kind `caption` (a float's caption and a subfigure's:
  * every member whose label is a float's, Label.float, is one). TeX builds a float's box once, at its natural size, and no page
- * rhythm binds it. A note is none: a run of sibling blocks in a column (body paragraphs, notes, list items, references) shares
- * its page's rhythm, each filling its frame within the page's band (the coordinator's ruling of 2026-11-17 on the owner's choice)
+ * rhythm binds it: the page fill never spreads it (lay/page.ts, shared/fill-pass.ts), and its fit takes the leading before the
+ * room down to the least (floatOrder). A class of the unit's own kind, read where a unit's kind is read: the rule file is by
+ * script. A note is none: a run of sibling blocks in a column (body paragraphs, notes, list items, references) shares its page's
+ * rhythm, each filling its frame within the page's band (the coordinator's ruling of 2026-11-17 on the owner's choice)
  */
 export const floatMember = (kind: string): boolean => kind === 'caption'
 /**
- * The order of the fit's knobs for a float's member or a note (docs/PDF-READER.md §18.90; the owner's review of 2026-11-13: the
+ * The order of the fit's knobs for a float's member (docs/PDF-READER.md §18.90; the owner's review of 2026-11-13: the
  * leading gives way before the separation does, for the class, and the size last): the script's order, its room knob two knobs,
  * the gap's free part (`free`: the shrink TeX's glue states under it, Room.gap) where the script's order has the room, the rest
  * of the room down to the least (`borrow`) directly before the size (`shrink`), at the end of an order with no size step. The
@@ -217,8 +212,8 @@ export function params(i: ParamsInput): Params {
     lineskip: i.lineskip,
     halfLead,
     lastLines: i.heading && !i.numbered,
-    // (a float's member or a note: the class's order, §18.90)
-    ...(floatOrNote(i.kind) && Array.isArray(i.P.order) ? { order: floatOrder(i.P.order as readonly string[]) } : {}),
+    // (a float's member: the class's order, §18.90)
+    ...(floatMember(i.kind) && Array.isArray(i.P.order) ? { order: floatOrder(i.P.order as readonly string[]) } : {}),
     // (a line of the page's head or foot keeps its size: no step of the fit or past it shrinks it; where its free row does not
     // hold it at its size it is left the original's)
     ...(HEAD_FOOT.has(i.kind) && i.blocks.length === 1 && i.blocks[0]!.rects.length === 1

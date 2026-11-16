@@ -57,7 +57,7 @@ function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Genera
         yield { ...st, knob }
       }
     } else if (knob === 'free') {
-      // (a float's member or a note, docs/PDF-READER.md §18.90 (U.params floatOrder): the room's first part, the gap's free part,
+      // (a float's member, docs/PDF-READER.md §18.90 (U.params floatOrder): the room's first part, the gap's free part,
       // the shrink TeX's glue states under its blocks (Block.glue), taken whole, once, where its order has the room)
       if (!P.borrow || st.glue || !blocks.some((b) => (b.glue ?? 0) > 0)) continue
       st.glue = true

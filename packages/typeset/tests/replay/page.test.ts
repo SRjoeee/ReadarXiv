@@ -3,12 +3,12 @@
 // and each member on two pages laid alike from each page's part (risk 1 of the page decision); but one whose frames the port
 // fills each at its own leading or holds TeX's share (pass.ts framed), one on a page where today's held a paragraph's gap to the
 // next one's leading (tap.ts flooredIn: the gap ruling of 2026-11-08), one on a page of a unit whose fill leadings option (i)
-// moves (pass.ts laysOf `lead`: the owner's of 2026-11-10), and a float's member or a note today's fill spread (§18.90: at its
-// fit's leading, its text and size today's). The corpus: lab/typeset/gate.mjs.
+// moves (pass.ts laysOf `lead`: the owner's of 2026-11-10), and a float's member today's fill spread (§18.90: at its fit's
+// leading, its text and size today's; a note is laid as today's). The corpus: lab/typeset/gate.mjs.
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { type MeasureTable, MissingMeasure, tableMetrics } from '../../src/metrics/table.ts'
-import { floatOrNote } from '../../src/unit/params.ts'
+import { floatMember } from '../../src/unit/params.ts'
 import type { Metrics } from '../../src/types.ts'
 import { readerDump } from './display.ts'
 import { framed, laysOf, trackedCells } from './pass.ts'
@@ -51,11 +51,11 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
                     { size: u.size, leading: u.leading, lines: u.lines, elements: u.elements ?? [] },
                     `ord ${u.ord}`,
                   )
-            // (a float's member or a note today's fill spread, which the port leaves at its fit's leading (docs/PDF-READER.md
-            // §18.90): its size and its lines' text today's, its lines where its fit set them)
+            // (a float's member today's fill spread, which the port leaves at its fit's leading (docs/PDF-READER.md §18.90): its
+            // size and its lines' text today's, its lines where its fit set them; a note is held to today's dump as any member)
             const held =
               !!m &&
-              floatOrNote(u.kind) &&
+              floatMember(u.kind) &&
               !firstDifference(
                 { size: m.size, texts: m.lines.map((l) => l.text) },
                 { size: u.size, texts: u.lines.map((l) => l.text) },

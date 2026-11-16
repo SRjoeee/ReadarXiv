@@ -29,7 +29,7 @@ export type FitBlock = DecorBlock & {
    *  borrow past the bottom reads apart (§18.37, B.slots roomOf) */
   toFoot?: number
   toInk?: number
-  /** a float's member's or a note's free part of the room under the block (lay/adapt.ts, docs/PDF-READER.md §18.90): the shrink
+  /** a float's member's free part of the room under the block (lay/adapt.ts, docs/PDF-READER.md §18.90): the shrink
    *  TeX's glue states in the gap under it (Room.gap), within its room down to the least (`free`) where a least is stated, else
    *  within TeX's text block bottom; the walk's `free` knob takes it (FitState.glue) before the leading closes */
   glue?: number

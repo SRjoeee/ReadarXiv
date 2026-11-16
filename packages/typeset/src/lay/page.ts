@@ -9,7 +9,7 @@ import { fillPass, type PassUnit } from '../shared/fill-pass.ts'
 import type { FillTarget } from '../shared/fill-target.ts'
 import { tableSettle } from '../shared/table-settle.ts'
 import { depthUnder } from '../fit/walk.ts'
-import { floatOrNote } from '../unit/params.ts'
+import { floatMember } from '../unit/params.ts'
 import type { FitBlock, FitState, Layout } from '../fit/types.ts'
 import type { EvenKnob, LedgerSlot, RuleParams, Unlaid } from '../types.ts'
 import { type FlowMember, layFlowPrepared } from './flow.ts'
@@ -366,13 +366,13 @@ function layPageOnce(
     }
     for (const [i, got] of laidFlow.entries()) {
       const m = flow[i]!
-      // (a float's member or a note votes in its page's fill as before and is never spread by it: set at its fit's pitch from
-      // its first line, the slack under it, docs/PDF-READER.md §18.90)
+      // (a float's member votes in its page's fill as before and is never spread by it: set at its fit's pitch from its first
+      // line, the slack under it, docs/PDF-READER.md §18.90)
       const unit =
         got.lay.state === 'laid'
           ? (Object.assign(got.lay.lay, {
               fillable: !!R.adaptiveFill,
-              held: floatOrNote(m.kind),
+              held: floatMember(m.kind),
               pages: m.pages,
             }) as PassUnit)
           : undefined

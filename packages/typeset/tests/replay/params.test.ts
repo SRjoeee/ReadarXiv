@@ -1,15 +1,15 @@
 // U.params replayed on the tap: on its sample, the unit's blocks, size, the target's rules and the label as today's run held
 // them, the rules near its lines and the pages' characters (U.params:in), its edges read from those characters as today
 // reads them (room.ts edgesOf), the CJK body face's size by B.faces' port, heading and numbered as U.decor decided them, TeX's
-// \lineskip as the run held it; against the unit's P (a float's member's or a note's order the class's, §18.90), its cell bands
-// and the ledger's slot. And on every sampled reading
+// \lineskip as the run held it; against the unit's P (a float's member's order the class's, §18.90; a note's today's), its cell
+// bands and the ledger's slot. And on every sampled reading
 // (U.elements:in and :out, any rule's sample): the size the unit is laid at against the ledger's U.params slot of that round
 // (its `s`).
 import { describe, expect, it } from 'vitest'
 import { faceOf } from '../../src/breaker/faces.ts'
 import type { TokensInput } from '../../src/breaker/tokens.ts'
 import type { Block } from '../../src/unit/blocks.ts'
-import { floatOrNote, floatOrder, type Original, type ParamsRules, params, sizeOf } from '../../src/unit/params.ts'
+import { floatMember, floatOrder, type Original, type ParamsRules, params, sizeOf } from '../../src/unit/params.ts'
 import type { Rect } from '../../src/util.ts'
 import { edgesOf, type PageChar } from './room.ts'
 import { firstDifference, hasTap, ledger, ledgerRound, pagesOf, readings, roundsOf, sample, slotOf } from './tap.ts'
@@ -97,9 +97,9 @@ describe.skipIf(!hasTap)('U.params: replayed on the tap', () => {
         if (got.P.lastLines) count.lastLines++
         if (got.clear) count.bands++
         if (got.P.capScale !== undefined) count.capScale++
-        // (the run's \lineskip is an array of TeX's log; the slot prints it as numbers. A float's member's or a note's order is
-        // the class's, from today's script order: docs/PDF-READER.md §18.90)
-        const wantP = floatOrNote(a.kind) ? { ...want.P, order: floatOrder(want.P.order as string[]) } : want.P
+        // (the run's \lineskip is an array of TeX's log; the slot prints it as numbers. A float's member's order is the class's,
+        // from today's script order: docs/PDF-READER.md §18.90; a note's is today's)
+        const wantP = floatMember(a.kind) ? { ...want.P, order: floatOrder(want.P.order as string[]) } : want.P
         const d =
           firstDifference({ ...got.P, lineskip: undefined }, { ...wantP, lineskip: undefined }, 'P') ??
           firstDifference(got.clear, want.clear, 'clear') ??

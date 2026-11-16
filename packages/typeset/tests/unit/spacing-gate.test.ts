@@ -53,7 +53,13 @@ const part: Part = {
   paper: { faces: { fonts: [['NimbusRomNo9L-Regu', 100]] }, lineskip: [1, 0] },
   flows: [[member(0, 'caption', CAPTION, 700)], [member(1, 'footnote', NOTE, 400)]],
 }
-const row = (id: string): Row => ({ id, ok: true, by: 'test', content: [{ t: 'text', s: '汉'.repeat(80) }] })
+/** 80 characters of Chinese text (U+6C49), two lines of 45 at the original's size */
+const row = (id: string): Row => ({
+  id,
+  ok: true,
+  by: 'test',
+  content: [{ t: 'text', s: String.fromCodePoint(0x6c49).repeat(80) }],
+})
 const rows: Rows = { get: (k) => (k === CAPTION ? row(CAPTION) : k === NOTE ? row(NOTE) : undefined), done: true }
 
 /** the page laid by the entry, and the gate's lines over its members; `target` in place of the page fill's own where given */

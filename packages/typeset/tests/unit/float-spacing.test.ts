@@ -1,9 +1,10 @@
-// A float's members and the notes (docs/PDF-READER.md §18.90; the display design's 2d after the owner's review of 2026-11-13,
-// the coordinator's rulings of 2026-11-16): the page fill never spreads them (TeX builds a float's box and a note once, at its
-// natural size: they stand at the script's pitch from their first line, the slack under them); and one order of the fit's knobs
-// when a translation needs more height, whatever the part states of the gap under them: the tracking, the gap's free part (the
-// shrink TeX's glue states there, Room.gap; none where none is stated), the leading closing to the block's own original pitch,
-// the room down to the least (Room.sep), the size. A body member is laid as before, and so are the alphabets.
+// A float's members (docs/PDF-READER.md §18.90; the display design's 2d after the owner's review of 2026-11-13, the coordinator's
+// rulings of 2026-11-16 and 2026-11-17): the page fill never spreads them (TeX builds a float's box once, at its natural size:
+// they stand at the script's pitch from their first line, the slack under them); and one order of the fit's knobs when a
+// translation needs more height, whatever the part states of the gap under them: the tracking, the gap's free part (the shrink
+// TeX's glue states there, Room.gap; none where none is stated), the leading closing to the block's own original pitch, the room
+// down to the least (Room.sep), the size. A body member is laid as before, and so are a note (one of a run of sibling blocks in
+// a column, sharing its page's rhythm: the owner's choice of 2026-11-17) and the alphabets.
 // Parts made by hand, a Chinese target (its pitch 1.3 of the original's, its fill on): lines at 10 pt on a pitch of 12 (p0), a
 // measure of 228 pt (72-300), a character half a size wide (45 a line; 48 at the tracking's bound).
 import type { Part, Placed, Row } from '@readarxiv/format'
@@ -51,24 +52,33 @@ const ys = (l: Laid) => l.lines.map((x) => Math.round(x[0] * 1000) / 1000)
 /** the gap TeX's \textfloatsep sets under a top float: 20 pt, 4 pt of it its shrink */
 const floatGap: Placed['room']['gap'] = ['textfloatsep', 20, 4]
 
-describe('a float’s member and a note are never spread by the page fill (§18.90, rule 4)', () => {
+describe('a float’s member is never spread by the page fill (§18.90, rule 4)', () => {
   it('a caption shorter than its original stands at its pitch from its first line, the slack under it', () => {
     // (two lines in a frame of three: at 1.3 of 12, 700 and 684.4; the fill spread them over the frame)
     const l = lay(member({ room: { below: 0, next: 30, runs: [[2, 30, 200]], sep: 12, gap: floatGap } }), 80)
     expect(ys(l)).toEqual([700, 684.4])
     expect(l.fit?.lead).toBe(1.3)
   })
-  it('a note the same', () => {
-    expect(ys(lay(member({ kind: 'footnote' }), 80))).toEqual([700, 684.4])
-  })
   it('a body paragraph is spread by the fill as before', () => {
     const l = lay(member({ kind: 'para' }), 80)
     expect(l.lines).toHaveLength(2)
     expect(l.fit!.lead).toBeGreaterThan(1.3)
   })
+  it('a note is the page fill’s as a body member: spread and tracked as the paragraph is, as before', () => {
+    // (its size its own: the page's one size grows the body text's kinds, fill-page.ts BODY_KINDS, never a note's, as before)
+    const note = lay(member({ kind: 'footnote' }), 80)
+    const para = lay(member({ kind: 'para' }), 80)
+    expect(note.fit!.lead).toBeGreaterThan(1.3)
+    expect([ys(note), note.fit?.lead, note.fit?.track, note.fit?.size]).toEqual([
+      ys(para),
+      para.fit?.lead,
+      para.fit?.track,
+      10,
+    ])
+  })
 })
 
-describe('one order for a float’s member and a note: the free part, the leading, then the room down to the least (§18.90)', () => {
+describe('one order for a float’s member: the free part, the leading, then the room down to the least (§18.90)', () => {
   it('needing more height: the gap’s free shrink, then the leading closes, no room to the least taken, its size kept', () => {
     // (three lines: at 1.3 the third at 668.8, under the frame's 676 and the free part's 672; at 1.15, 672.4: inside it)
     const l = lay(member({ room: { below: 0, next: 30, runs: [[2, 30, 200]], sep: 12, gap: floatGap } }), 130)
@@ -87,10 +97,6 @@ describe('one order for a float’s member and a note: the free part, the leadin
   })
   it('a part that states no gap under it: the same order, no free part', () => {
     const l = lay(member({}), 130)
-    expect([l.fit?.size, l.fit?.lead, l.fit?.borrowed]).toEqual([10, 1, 0])
-  })
-  it('a note the same', () => {
-    const l = lay(member({ kind: 'footnote' }), 130)
     expect([l.fit?.size, l.fit?.lead, l.fit?.borrowed]).toEqual([10, 1, 0])
   })
   it('a line more than its original at the original pitch: the room down to the least, at its size', () => {
@@ -120,7 +126,7 @@ describe('one order for a float’s member and a note: the free part, the leadin
   })
 })
 
-describe('the body’s order and the alphabets’ are as before (§18.90)', () => {
+describe('the body’s order, a note’s and the alphabets’ are as before (§18.90)', () => {
   it('a body paragraph takes the room before its leading closes', () => {
     const l = lay(
       member({ kind: 'para', room: { below: 0, next: 30, runs: [[2, 30, 200]], sep: 12, gap: floatGap } }),
@@ -128,6 +134,17 @@ describe('the body’s order and the alphabets’ are as before (§18.90)', () =
     )
     expect(l.fit!.borrowed).toBeGreaterThan(0)
     expect(l.fit?.lead).toBeGreaterThanOrEqual(1.3)
+  })
+  it('a note the same, whatever the gap under it states: the paragraph’s lay, no free part', () => {
+    const room: Placed['room'] = { below: 0, next: 30, runs: [[2, 30, 200]], sep: 12 }
+    for (const gap of [floatGap, ['footnotesep', 7.67, 0] as Placed['room']['gap'], undefined]) {
+      const at = { ...room, ...(gap ? { gap } : {}) }
+      const note = lay(member({ kind: 'footnote', room: at }), 130)
+      const para = lay(member({ kind: 'para', room: at }), 130)
+      expect(note.fit!.borrowed).toBeGreaterThan(0)
+      expect(note.fit?.lead).toBeGreaterThanOrEqual(1.3)
+      expect([ys(note), note.fit]).toEqual([ys(para), para.fit])
+    }
   })
   it('a Spanish caption: the room before the size, the size before the leading, as the script orders them', () => {
     // (Latin: 45 characters of two half-size letters... a caption of 4 lines' text in 3: the room holds the fourth at the
