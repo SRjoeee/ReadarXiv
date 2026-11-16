@@ -56,18 +56,29 @@ function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Genera
         else st.trackLatin = t
         yield { ...st, knob }
       }
+    } else if (knob === 'free') {
+      // (a float's member or a note, docs/PDF-READER.md §18.90 (U.params floatOrder): the room's first part, the gap's free part,
+      // the shrink TeX's glue states under its blocks (Block.glue), taken whole, once, where its order has the room)
+      if (!P.borrow || st.glue || !blocks.some((b) => (b.glue ?? 0) > 0)) continue
+      st.glue = true
+      yield { ...st, knob }
     } else if (knob === 'borrow') {
       if (!P.borrow) continue
       // (the lines its room holds at the original's pitch: one at a time to six, then all of the room. A room under a whole line
       // is offered too: a line TeX's \lineskip rule sets lower than its slot (a tall formula over it) takes a fraction of a
       // line, which the room holds (2602.23285v2 p5 t32: 1.25 pt of 10.82, a pitch 10.96); offered in whole lines alone it was
-      // never offered, and the paragraph shrank where TeX's room held it)
+      // never offered, and the paragraph shrank where TeX's room held it. Where the free part is taken already, a state that
+      // gives no block more room than it is not offered: it is the state before it)
+      const given = (b: FitBlock) => (st.glue ? (b.glue ?? 0) : 0)
+      const adds = (n: number) =>
+        !st.glue || blocks.some((b) => Math.min(b.free as number, n * (b.pitch0 ?? 1.2 * s)) > given(b) + 1e-6)
       const most = Math.max(0, ...blocks.map((b) => Math.floor((b.free as number) / (b.pitch0 ?? 1.2 * s) + 1e-6)))
       for (let n = 1; n <= Math.min(most, 6); n++) {
+        if (!adds(n)) continue
         st.borrow = n
         yield { ...st, knob }
       }
-      if (blocks.some((b) => (b.free as number) > 0)) {
+      if (blocks.some((b) => (b.free as number) > given(b) + (st.glue ? 1e-6 : 0))) {
         st.borrow = 99
         yield { ...st, knob }
       }
@@ -142,6 +153,7 @@ const sameState = (x: FitState, y: FitState) =>
   x.trackLatin === y.trackLatin &&
   x.compress === y.compress &&
   x.borrow === y.borrow &&
+  x.glue === y.glue &&
   x.scale === y.scale &&
   x.knob === y.knob
 /** how many first states the fits of P and of `failed` share (statesOf), on the same blocks and size */
@@ -155,7 +167,8 @@ function sharedStates(P: FitParams, failed: FitParams, blocks: readonly FitBlock
   }
 }
 /** two of the fit's states alike but in what only moves or adds slots (slotsAt): the leading and the room taken under the last
- *  line (`borrow`), and the knob that set them: what B.break reads of a state but the slots */
+ *  line (`borrow`, and the gap's free part, `glue`: B.slots lowOf alone reads them), and the knob that set them: what B.break
+ *  reads of a state but the slots */
 const butSlots = (x: FitState, y: FitState) =>
   x.track === y.track &&
   x.trackLatin === y.trackLatin &&
@@ -204,10 +217,12 @@ type Lay = { st: FitState; S: Slot[]; r: Broken; f: number }
  * - The bound (outfills): where the text, packed as tight as B.break packs it, outfills the state's slots, the state fails as
  *   surely as laid; it is passed, unlaid. Any knob's state, the first of a size step's too.
  * - The floor: what B.break sets on each line is a function of the text, the size, the tracking, the word rule and each line's
- *   measure and frame (sameAcross); the leading and the room taken under the last line (`borrow`) say only how many slots there
- *   are and where they stand, which B.break reads in TeX's \lineskip rule (settle, pushDown) and in overLast alone. Once a state
- *   failed, the room and leading knobs' later states of it are laid by its floor's lay (the floor's leading, `leadFloor`, the
- *   room taken whole: the most slots), where a state's slots are the floor's first ones, measure for measure and frame for frame,
+ *   measure and frame (sameAcross); the leading and the room taken under the last line (`borrow`, and the gap's free part,
+ *   `glue`, §18.90) say only how many slots there are and where they stand, which B.break reads in TeX's \lineskip rule
+ *   (settle, pushDown) and in overLast alone. Once a state failed, the room knobs' (its free part's too) and the leading knob's
+ *   later states of it are laid by its floor's lay (the floor's leading, `leadFloor`, the room taken whole: the most slots; a
+ *   state is served the floor's own lay only where its leading, its room and its free part are the floor's), where a state's
+ *   slots are the floor's first ones, measure for measure and frame for frame,
  *   no slot over an earlier one of its column, and TeX's rule opens no line of the floor's where the state's slots stand: a state
  *   that lacks a slot a line of the floor's stands on fails as surely (passed, unlaid); one that holds them all, and the next
  *   slot as the floor does (B.break looks at it: a boundary, a URL kept whole, a label alone), is laid as the floor's lines on its
@@ -361,9 +376,15 @@ function fitLays(tokens: readonly Token[], blocks: readonly FitBlock[], s: numbe
       misses.push(st)
       return null
     }
-    if (free && (st.knob === 'lead' || st.knob === 'borrow')) {
+    if (free && (st.knob === 'lead' || st.knob === 'borrow' || st.knob === 'free')) {
       const was = floor?.lay
-      if (was && st.lead === was.st.lead && st.borrow === was.st.borrow && butSlots(was.st, st))
+      if (
+        was &&
+        st.lead === was.st.lead &&
+        st.borrow === was.st.borrow &&
+        st.glue === was.st.glue &&
+        butSlots(was.st, st)
+      )
         return was.at ? moved(was, st, S) : was
       if (misses.some((x) => butSlots(x, st))) {
         const F = floorOf(st)

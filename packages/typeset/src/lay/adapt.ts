@@ -29,7 +29,7 @@ import {
   widen,
 } from '../unit/decor.ts'
 import { cropOfBox } from '../unit/crops.ts'
-import { params, unitSizeOf } from '../unit/params.ts'
+import { floatOrNote, params, unitSizeOf } from '../unit/params.ts'
 import { type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
 import type { FlowMember } from './flow.ts'
 
@@ -461,16 +461,25 @@ export function adapt(i: AdaptInput): Adapted {
   // clearance and no reading of the page's pixels stand in for TeX's)
   const runs = m.room.runs
   const sep = m.room.sep
-  if (runs && sep !== undefined && kind !== 'cell')
+  // (a float's member or a note: the free part of its room, the shrink TeX's glue states in the gap under it (Room.gap[2]), which
+  // its fit takes before its leading closes (docs/PDF-READER.md §18.90, U.params floatOrder): never past the least where the part
+  // states one (Room.sep: within `free`), else never past TeX's text block bottom; none from a gap that states no shrink, and none
+  // from the skip after a title set in the line (`runin`: no separation under its block, the horizontal skip beside it)
+  const gap = m.room.gap
+  const shrink = floatOrNote(kind) && gap && gap[0] !== 'runin' ? gap[2] : 0
+  if (runs && kind !== 'cell' && (sep !== undefined || shrink > 0))
     for (const b of blocks) {
       const r = b.rects.at(-1) as Rect
       const j = (lineInfo.get(rectKey(r)) ?? lineInfo.get(rectKeyNoX0(r)))?.j
       const e = j === undefined ? undefined : runs.find((x) => x[0] === j)
       if (!e) continue
-      b.free = r2(Math.max(0, Math.min(e[2], e[1] - sep)))
-      // (and the two depths apart, which the borrow past TeX's bottom reads before a step down the sizes: §18.37)
-      b.toFoot = r2(e[2])
-      b.toInk = r2(e[1] - sep)
+      if (sep !== undefined) {
+        b.free = r2(Math.max(0, Math.min(e[2], e[1] - sep)))
+        // (and the two depths apart, which the borrow past TeX's bottom reads before a step down the sizes: §18.37)
+        b.toFoot = r2(e[2])
+        b.toInk = r2(e[1] - sep)
+      }
+      if (shrink > 0) b.glue = r2(Math.max(0, Math.min(shrink, sep !== undefined ? (b.free as number) : e[2])))
     }
   // (the ink that stays beside its lines, no member's (Room.stays: a mark TeX set after a space, a frame's rule; a QED box in a
   // part made before its end mark was stated, El.end): on the block that holds

@@ -193,7 +193,10 @@ export function fillPage(
     const most = heldOf(p) ? q.layout.state.lead : Number.POSITIVE_INFINITY
     const top = Math.min(r3(target + band), most),
       leads = (sh ? sh.leads : q.fillLeads)?.map((v) => (v === undefined ? v : Math.min(v, top))),
-      lead = Math.min(sh ? Math.min(sh.last, top) : q.lastLead !== undefined ? Math.min(q.lastLead, top) : leadOf(q), most)
+      lead = Math.min(
+        sh ? Math.min(sh.last, top) : q.lastLead !== undefined ? Math.min(q.lastLead, top) : leadOf(q),
+        most,
+      )
     // footFloorOf reads box by truthiness; 1 keeps the original true state within FitState's numeric type.
     let st: FitState = {
       ...q.layout.state,

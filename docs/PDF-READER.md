@@ -7782,7 +7782,7 @@ the evening's size step taken out, no member is laid smaller than without the ba
 six lines without the bases; 10.64 pt, 1.199, five lines with them. The coordinator's ruling of 2026-11-16: that ruling's effect,
 accepted; it goes to the owner with this page, and if he prefers the size, the evening's size step is what changes.
 
-### 18.90 A float's members and the notes: never spread by the page fill (the owner's review of 2026-11-13; the coordinator's rulings of 2026-11-16)
+### 18.90 A float's members and the notes: never spread by the page fill, the leading before the room (the owner's review of 2026-11-13; the coordinator's rulings of 2026-11-16)
 
 The display design's 2d, spacing by the original's own logic, as the owner amended it on his review of its eleven pictures (his
 export of 2026-11-13, 13:59 JST). His rule: the original's size comes first; spacing gives way before size does, while it stays
@@ -7797,6 +7797,24 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   fit's, and gives it no tracking). The fill may still lay one closer where the gap under it would be tighter than its own lines
   (footFloorAt, §18.11), as it lays any unit. It votes in its page's target as before, by the fill leading its lay finds, so
   that no page's target and no body member moves by it. `packages/typeset/tests/unit/float-spacing.test.ts`.
+- **One order for the class.** When a float's member's or a note's translation needs more height, its fit turns its knobs in one
+  order, whatever the part states of the gap under it: the tracking; the gap's free part, the shrink TeX's glue states there
+  (Room.gap's third number: what TeX's own glue may shrink at that gap, so that the page could have been set so by TeX), never
+  past the least where the part states one (Room.sep, §18.11) and never past TeX's text block bottom where it states none; the
+  leading, closing to the block's own original pitch; the room down to the least; the size. A gap that states no shrink gives no
+  free part, and a gap not stated none either: that is all a missing fact changes (two orders by the presence of a fact would
+  split the class by no reason a reader could see). The owner's words on the pictures where the earlier principle stepped the
+  size: 「不缩字 只是减少一点点行距就解决问题了」: the leading gives way before the separation does, for the class.
+- **Where the order lives.** The class is a unit's kind and the rule file is by script, so the class's order is stated where a
+  unit's kind is read (`unit/params.ts` floatOrder, set by U.params): the script's own order, its room knob made two knobs, the
+  free part (`free`) where the script's order has the room and the rest (`borrow`) directly before the size. A script whose order
+  already has the room directly before the size, the alphabets' (track, borrow, shrink, lead), keeps its order by construction,
+  the free part first in its room. A body member's order is the script's, as before.
+- **How it is laid.** The free part (`Block.glue`, `lay/adapt.ts`; none from a gap after a title set in the line, `runin`, which
+  is no separation under its block) is taken whole, once (`fit/walk.ts` statesOf, the `free` knob), and holds through the knobs
+  after it (`FitState.glue`; B.slots lowOf: the room taken is the larger of it and the borrow's); a state of the room's that would
+  give no block more than it is not offered. Like the leading and the room it only moves or adds slots: the walk's floor
+  (§18.88) reads it so, and serves a state the floor's own lay only where its leading, its room and its free part are the floor's.
 
 ## 19. The engine's contract
 

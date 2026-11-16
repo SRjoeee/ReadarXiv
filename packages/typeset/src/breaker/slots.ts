@@ -33,9 +33,11 @@ type Flowing = { flow?: unknown; readonly [k: string]: unknown }
  *  a flow of its own) */
 const inFlow = (a: Flowing, b: Flowing): boolean => a.flow === b.flow
 /** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows (its room TeX's facts
- *  leave, Block.free: the owner's ruling of 2026-11-08) */
+ *  leave, Block.free: the owner's ruling of 2026-11-08), or less the gap's free part where the state took it and it is more
+ *  (Block.glue, FitState.glue: a float's member or a note, docs/PDF-READER.md §18.90) */
 const lowOf = (b: FitBlock, st: FitState, s: number): number =>
-  (b.B.at(-1) as number) - Math.min(roomOf(b, st), st.borrow * (b.pitch0 ?? 1.2 * s))
+  (b.B.at(-1) as number) -
+  Math.max(st.glue ? (b.glue ?? 0) : 0, Math.min(roomOf(b, st), st.borrow * (b.pitch0 ?? 1.2 * s)))
 /** the room under a block's last baseline at a state: Block.free; at a state that borrows past TeX's text block bottom
  *  (FitState.over, docs/PDF-READER.md §18.37), the bottom's depth that much deeper, the next ink's bound as it is */
 function roomOf(b: FitBlock, st: FitState): number {
