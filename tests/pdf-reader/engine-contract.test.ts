@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 import { closureOf, portedInClosure, trackedFiles } from '../../scripts/check-boundary.mjs'

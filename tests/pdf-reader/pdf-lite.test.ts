@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { LINK_TEXT_PIXELS, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from '../../packages/engine/src/compile/pdf-lite.ts'
