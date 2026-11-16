@@ -895,6 +895,29 @@ describe('locate: a single line’s alignment is its TeX line’s, the row it sh
     expect(L.flows).toContainEqual([1, 2])
     expect(L.members[1]!.align).toBe('j')
   })
+  it('reads a single line TeX told justified by its row: a run-in head before its words, the words alone centred, justified', () => {
+    // (2610.40645v1 p19: "Proof of Corollary 3.8." then the proof's one line, its words alone about the measure's middle; a line
+    // is centred by glue of its own only where its row's ink is inset on both sides. Between two full lines, which give the
+    // column its measure)
+    const words = 'w'.repeat(44)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: 'Proof of it.', x: 72, y: 688 },
+      { text: words, x: 174, y: 688 },
+      { text: 'y'.repeat(78), x: 72, y: 664 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('heading', 'Proof of it.'),
+      unitOf('theorem', words, { align: 'j' }),
+      unitOf('para', 'y'.repeat(78)),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3]]), B, align(B, B))
+    // (its words 174..438 about the column's middle 306: alone they read centred)
+    expect(L.members[2]!.lines[0]![2]).toBe(174)
+    expect(L.members[2]!.align).toBe('j')
+  })
   it('states a caption’s label that stands on a line of its own with no line and that line’s own alignment (IEEEtran’s TABLE I)', () => {
     // (IEEEtran sets a table's \\fnum@table centred on a line of its own above its caption's text, the marked compile's label
     // point telling it the caption's (own.mjs MR 5). The part states it on none of the caption's lines (no `line`) and how its

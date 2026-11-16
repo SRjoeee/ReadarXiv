@@ -31,6 +31,7 @@ import {
   tailOf,
 } from './facts.ts'
 import { type ColumnCell, columnBoxes, type FreeWord, innerOf } from './columns.ts'
+import { ON_BASE } from './geometry.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
 import { spellOf } from '../own/stream.ts'
@@ -1122,6 +1123,30 @@ function readDirection(_fx: FactsIndex, r: MemberReading): void {
   if (unit && rightToLeft(unit.content)) for (const l of mem.lines) l[9] |= LINE_FLAG.RTL
 }
 
+/** a single line's row: the line with its extent widened to everything TeX set on it within its measure (the member's own ink,
+ *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure) */
+function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined): Line {
+  const [m0, m1] = fx.blockOf(l)
+  let x0 = labelX0 !== undefined ? Math.min(l[2], labelX0) : l[2]
+  let x1 = l[3]
+  const end = mem.elements.find(([id]) => id === '~$')?.[1]
+  for (const k of end?.ink ?? [])
+    if (k[0] === l[0] && Math.abs(k[5] - l[4]) <= ON_BASE) {
+      x0 = Math.min(x0, k[1])
+      x1 = Math.max(x1, k[3])
+    }
+  for (const k of fx.linesOn.get(l[0]) ?? [])
+    if (k !== l && !(k[9] & LINE_FLAG.KEPT) && Math.abs(k[4] - l[4]) <= ON_BASE && k[3] > m0 && k[2] < m1) {
+      x0 = Math.min(x0, k[2])
+      x1 = Math.max(x1, k[3])
+    }
+  if (x0 === l[2] && x1 === l[3]) return l
+  const row = [...l] as Line
+  row[2] = x0
+  row[3] = x1
+  return row
+}
+
 /** its alignment, where TeX did not state it */
 function readAlign(fx: FactsIndex, r: MemberReading): void {
   const { blockOf, column, linesOn } = fx
@@ -1130,8 +1155,16 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
   // readAlign): the maker's reading (MAKE:2121-2135); a single-line cell by its column
   if (unit && unit.align !== 'c' && unit.align !== 'l' && unit.align !== 'r') {
     const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
+    // (a single line is read by its row, everything TeX set on that line within its measure: the member's own ink, its label,
+    // the end mark a fill pushed (its `~$` element), another member's line on its baseline (a run-in head before it); a line
+    // centred by glue of its own only where that row's ink is inset on both sides (the coordinator's ruling of 2026-11-16, lane
+    // cm-fix: 2610.40645v1 p19's proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its words alone read
+    // centred under F13's measure))
+    const rowLines = own.length === 1 && !unit.cell ? [rowOf(fx, mem, own[0]![0], labelX0)] : mem.lines
     // (a cell is read by its column's cells alone, never by the page's column: today's centredFlag RUN:2102)
-    let a = unit.cell ? (unit.align ?? 'j') : alignOf(mem.lines, sizeOf, blockOf, unit.align, labelX0)
+    let a = unit.cell
+      ? (unit.align ?? 'j')
+      : alignOf(rowLines, sizeOf, blockOf, unit.align, own.length === 1 ? undefined : labelX0)
     if (unit.cell && own.length === 1) {
       const l0 = own[0]![0]
       const c = unit.cell

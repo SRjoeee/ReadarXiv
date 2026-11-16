@@ -7375,7 +7375,10 @@ bytes it was.
   - What moves: every line of a list item, a quotation, a bibliography entry (lists: `\parshape 1 \@totalleftmargin
     \linewidth`), a wrapped paragraph, a hung or skipped one, gains TeX's measure where it had its column's; with it a single
     line's room to widen into (the typesetter's `sideOf`, a name's), the alignment read of a one-line item (facts.ts alignOf reads
-    the line's measure: an item no longer inset from it reads justified, traces-b's item 5), and a member's room below its last
+    the line's measure: an item no longer inset from it reads justified, traces-b's item 5; a single line TeX told justified is
+    read centred by glue of its own only where its row's ink is inset on both sides of the measure, the row everything TeX set on
+    that line: the member's ink, its label, the end mark a fill pushed, another member's line on its baseline such as a run-in
+    head, facts-pass.ts rowOf, lane cm-fix 2026-11-16), and a member's room below its last
     block. The paragraph's lay (`packages/typeset/src/unit/blocks.ts` measuresOf, which guesses a change of measure from the lines'
     edges) is not changed here: the lay lane deletes that guessing and reads `Line[7..8]` (rebuild/google-lay stays unmerged).
 - **The forced break's line** (`marks.ts` BREAKS_TEX; the point class `forced-break`, optional; `ink.ts` FORCED_BREAK, kept apart
