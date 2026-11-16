@@ -4,7 +4,7 @@ import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { classOf, LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { classesOn, shownTranslated, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
-import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
+import { plainSource } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // The content classes' stage 4 (docs/route/orphan-text.md §5, "References" and "Names"; the owner's rulings of 2026-10-25 and
 // 2026-10-28): a bibliography's entries are units of their own, read from the bibliography's TeX the compile reads (the paper's

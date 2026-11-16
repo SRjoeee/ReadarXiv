@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { sourceUnitsOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { unitStands } from '@/pdf-reader/engine/layer-proto/units.mjs'
-import { sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { selectsArgument } from '@/pdf-reader/engine/rules/tex-kernel.mjs'
 import { rehydrate, rehydrateTags, serialize, serializeTags } from '@/pdf-reader/engine/translate/mt.mjs'
+import { sourceHash } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // A pair whose command sets its argument and nothing else — revtex's and ACM's bibliography fields (`\bibinfo{journal}{…}`,
 // `\bibnamefont{…}`), defined by the .bbl that writes them as `\providecommand \bibinfo [0]{\@secondoftwo}`, or a paper's

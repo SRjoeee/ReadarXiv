@@ -3,11 +3,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
-import { sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { unpackSource } from '@/pdf-reader/engine/source/tar.mjs'
-import { unitText } from '@/pdf-reader/engine/translate/mt.mjs'
+import { sourceHash, unitText } from '../../packages/engine/tests/helpers/unit-harness.ts'
 import { LAB } from './helpers/lab-data'
 
 // The units written inside a float (`inFloat`, the front end's: their indices in `units`, beside them): TeX sets a float away from

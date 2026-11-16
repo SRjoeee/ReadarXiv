@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch, urlPercents } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
-import { seedFrom, sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
-import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
+import { plainSource, seedFrom, sourceHash } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // The front end's round of 2026-10-06: every piece of typeset body text a unit, no TeX argument drawn as text (the
 // missing-units research: ResNet's appendix C, 37 of 117 papers missing some text)
