@@ -913,8 +913,10 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     // frame's own fill leading, four lines over its five as the gap under it allows, 1.25; page 2's paragraph spreads to its
     // own, 1.42. The paragraph is filled where it begins, at page 1's band: page 1's lay holds none of page 2's paragraphs, and
     // a unit is laid alike by every page's lay (I6), so its frame on page 2 cannot read page 2's band; four lines 12.6 apart,
-    // the last 10.2 over its original's)
-    const ja = rulesFor('ja')
+    // the last 10.2 over its original's. Laid from the original's pitch, as before jlreq's (§18.89): the rule held here is the
+    // frames' whatever the leading the fit starts from)
+    const ja0 = rulesFor('ja')
+    const ja = { ...ja0, set: { ...ja0.set, leadEm: null } }
     const lineAt = (page: number, y: number): Placed['lines'][number] => [
       page,
       0,

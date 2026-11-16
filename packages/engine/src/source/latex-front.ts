@@ -38,8 +38,10 @@ export type TextPiece = { t: 'text'; s: string; src?: string; tr?: boolean; bare
  *  stated where the piece is made (phPiece) and read wherever a forced break is asked of it (forcedBreak); not enumerable, as an
  *  open piece's `sets` is, so that the unit's JSON, its hash and its marks are as they were */
 export type PhPiece = { t: 'ph'; src: string; s?: undefined; bared?: boolean; opens?: boolean; readonly brk?: true }
-/** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84) */
-export const BREAK_SOURCE = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84); LaTeX's
+ *  `\\break`, which ends the line it stands in in a paragraph (the coordinator's ruling 4 of 2026-11-16: the marked compile
+ *  states where, BREAKS_TEX's point; amsart's `\\hfill\\break\\indent` in 2608.03841v2's addresses) */
+export const BREAK_SOURCE = /^\\\\\*?(?:\[[^\]]*\])?$|^\\(?:newline|break)$/
 /** a placeholder of the source `src`, stating whether it is a forced break of its unit's text (`brk`, §18.75): where its source
  *  is one (BREAK_SOURCE), and where the walk states it (`brk` true: a paper's row-ending macro inside a grid cell, which ends a
  *  line of the box the cell holds as `\\\\` does there). Every placeholder the reader makes is made here */
@@ -229,8 +231,16 @@ type EnvDef =
   | { listing: true; typeset?: true; begin?: undefined; end?: undefined }
 /** what urlPercents reads a file by: the paper's conditionals, its environments read by lines, the commands it defines, its code
  *  environments the walk skips */
-/** the parameters a macro body sets (paramUse): as prose, otherwise, typeset where it stands, stored by a definition in it */
-type ParamUse = { text: Set<number>; other: Set<number>; typeset: Set<number>; stored: Set<number> }
+/** the parameters a macro body sets (paramUse): as prose, otherwise, typeset where it stands, stored by a definition in it; and
+ *  what it puts into a box register (`boxes`, each register's content's use) and the registers it shows in text (`shown`) */
+type ParamUse = {
+  text: Set<number>
+  other: Set<number>
+  typeset: Set<number>
+  stored: Set<number>
+  boxes: { reg: string; inner: ParamUse }[]
+  shown: Set<string>
+}
 /** where a macro keeps a parameter (resolveKeeps): in a macro by its name, or in the one another of its parameters names */
 type KeepTarget = { lit: string; param?: undefined } | { param: number; lit?: undefined }
 /** a set of names asked of a control word that may be none (tailOf's word before a body's last): such a word is in none */
@@ -982,14 +992,21 @@ function letterCommand(
   if (s.startsWith('{}', e)) e += 2
   return e <= to ? { letter, end: e } : null
 }
-/** the text symbols TeX sets as one character of the text (TEXT_SYMBOLS): the kernel's control symbols `\\%`, `\\&`, `\\#`, `\\$`, `\\{`,
- *  `\\}` and textcomp's \\textasciitilde, \\textbar, \\textless, \\textgreater, \\textbackslash. Not `\\_`, which the identifier rule
- *  reads (keepIdentifiers) */
-const TEXT_CHARACTERS = new Map(
-  ['%', '&', '#', '$', '{', '}', 'textasciitilde', 'textbar', 'textless', 'textgreater', 'textbackslash'].map((n) => [
-    n,
-    TEXT_SYMBOLS[`\\${n}`],
-  ]),
+/** the text symbols TeX sets as one character of the text, by name, its character: the front end's own table of them
+ *  (text-symbols.ts TEXT_SYMBOLS: the kernel's and textcomp's, each the one character it sets in every encoding), taken whole,
+ *  so that no list of ours grows apart from it (eleven of its symbols were read so, the rest left placeholders: markers that cut
+ *  "don\\textquotesingle t", "hole\\textendash{}galaxy", F9 (d)); but `\\_`, which the identifier rule reads (keepIdentifiers), and
+ *  the kernel's letters, letters of their word (LETTER_COMMANDS) */
+export const TEXT_CHARACTERS: ReadonlyMap<string, string> = new Map(
+  Object.keys(TEXT_SYMBOLS)
+    .filter((k) => k !== '\\_' && !LETTER_COMMANDS.has(k.slice(1)))
+    .map((k) => [k.slice(1), TEXT_SYMBOLS[k]!]),
+)
+/** the characters LaTeX's footnote symbols set in text, as the table holds them (latex.ltx's \\@fnsymbol: \\textasteriskcentered,
+ *  \\textdagger, \\textdaggerdbl, \\textsection, \\textparagraph, \\textbardbl; the table's four): a note's mark where it stands as
+ *  one (noteMark) */
+const NOTE_MARKS: ReadonlySet<string> = new Set(
+  ['\\textdagger', '\\textdaggerdbl', '\\textsection', '\\textparagraph'].map((k) => TEXT_SYMBOLS[k]!),
 )
 /**
  * The character a text symbol at s[i] sets (`name`, read from s[i]), as TeX sets it: a control word's skipped spaces and an empty
@@ -1976,16 +1993,96 @@ function mathEnd(s: string, i: number) {
   return -1
 }
 
+/** the commands that show a box register where they stand (TeX's \\box, \\copy, \\unhbox, \\unhcopy, \\unvbox, \\unvcopy; LaTeX's
+ *  \\usebox, `\\leavevmode\\copy#1`) */
+const BOX_SHOWS = new Set(['usebox', 'box', 'copy', 'unhbox', 'unhcopy', 'unvbox', 'unvcopy'])
+/** a box register named at s[i] (white space before it skipped): a control word (`\\fitbox`, `\\@tempboxa`), a number, or either
+ *  in a group (`{\\fitbox}`), by its name; with where it ends, or null */
+function registerAt(s: string, i: number, to: number): { reg: string; end: number } | null {
+  const k = skipSpaces(s, i)
+  if (s[k] === '{') {
+    const e = matchGroup(s, k)
+    const inner = e > 0 && e <= to ? /^\s*(\\[A-Za-z@]+|\d+)\s*$/.exec(s.slice(k + 1, e - 1)) : null
+    return inner ? { reg: inner[1]!, end: e } : null
+  }
+  const m = /^(?:\\[A-Za-z@]+|\d+)/.exec(s.slice(k, Math.min(to, k + 80)))
+  return m ? { reg: m[0], end: k + m[0].length } : null
+}
+/**
+ * A box register set at s[i] (`name` the command at i, `end` past it), as TeX and LaTeX set one: LaTeX's \\sbox{reg}{content}
+ * (`\\setbox#1\\hbox{…#2…}`), \\savebox{reg}[width][pos]{content}, TeX's \\setbox reg=\\hbox{content} (\\vbox, \\vtop, a `to` or
+ * `spread` before the group); by the register, its content's range (inside its braces) and where the call ends; null for any
+ * other form (\\setbox0\\copy1: no content of its own)
+ */
+function boxSetAt(
+  s: string,
+  end: number,
+  name: string,
+  to: number,
+): { reg: string; from: number; to: number; end: number } | null {
+  if (name !== 'sbox' && name !== 'savebox' && name !== 'setbox') return null
+  const r = registerAt(s, end, to)
+  if (!r) return null
+  let k = skipSpaces(s, r.end)
+  if (name === 'savebox')
+    for (let n = 0; n < 2 && s[k] === '['; n++) {
+      const e = matchGroup(s, k, '[', ']')
+      if (e < 0 || e > to) return null
+      k = skipSpaces(s, e)
+    }
+  if (name === 'setbox') {
+    if (s[k] === '=') k = skipSpaces(s, k + 1)
+    const box = /^\\(?:hbox|vbox|vtop)(?![A-Za-z@])(?:\s*(?:to|spread)\s*[^{}\\]*(?:\\[A-Za-z@]+)?[^{}\\]*)?/.exec(
+      s.slice(k, Math.min(to, k + 80)),
+    )
+    if (!box) return null
+    k += box[0].length
+  }
+  if (s[k] !== '{') return null
+  const e = matchGroup(s, k)
+  return e > 0 && e <= to ? { reg: r.reg, from: k + 1, to: e - 1, end: e } : null
+}
+/** a body's parameters, none read yet (paramUse) */
+const freshUse = (): ParamUse => ({
+  text: new Set(),
+  other: new Set(),
+  typeset: new Set(),
+  stored: new Set(),
+  boxes: [],
+  shown: new Set(),
+})
+/** a register's content's use kept by its register, what the content itself puts into a register or shows with it */
+function inRegister(use: ParamUse, reg: string, inner: ParamUse) {
+  use.boxes.push({ reg, inner }, ...inner.boxes)
+  for (const r of inner.shown) use.shown.add(r)
+}
+/**
+ * A parameter a body puts into a box register (`boxes`, boxSetAt and lrbox, each register with the use of its content) is set
+ * where the body shows that register (`shown`, BOX_SHOWS, in text or a box's content): there it is that box's content, as
+ * its own use in the register's content reads it; a register the body never shows (only measured: \\wd, \\ht) sets nothing of
+ * it, and its parameters are no text. 2610.37668v1's `\\fittabular[<pad>]{<columns>}{<tabular>}`, its #3 set into a register
+ * twice by \\sbox and shown once by \\usebox inside \\resizebox or \\makebox: read as an unknown command's argument, #3 was no
+ * text and every table in the command none of the reader's (F18, PDF-READER §18.82)
+ */
+function throughBoxes(use: ParamUse): ParamUse {
+  for (const { reg, inner } of use.boxes) {
+    if (use.shown.has(reg)) {
+      for (const k of ['text', 'other', 'typeset', 'stored'] as const) for (const n of inner[k]) use[k].add(n)
+    } else for (const n of [...inner.text, ...inner.other]) use.other.add(n)
+  }
+  return use
+}
 /**
  * Where a macro body sets its parameters: `text` those it typesets as prose — bare, in a group, in \\textbf and the
- * like, in the content of a box — and `other` those it hands to anything else: \\label, \\ref, a width, math
+ * like, in the content of a box — and `other` those it hands to anything else: \\label, \\ref, a width, math. What it puts
+ * into a box register is kept apart by register (`boxes`), and the registers it shows in text (`shown`): throughBoxes reads them
  */
 function paramUse(
   s: string,
   from: number,
   to: number,
   textual = true,
-  use: ParamUse = { text: new Set(), other: new Set(), typeset: new Set(), stored: new Set() },
+  use: ParamUse = freshUse(),
   storing = false,
 ): ParamUse {
   let i = from
@@ -2035,9 +2132,34 @@ function paramUse(
       i = end
       continue
     }
+    // (a box register set: its content's use kept by register, a register shown in text noted; throughBoxes reads the two)
+    const set = boxSetAt(s, end, name, to)
+    if (set) {
+      inRegister(use, set.reg, paramUse(s, set.from, set.to, textual, freshUse(), storing))
+      i = set.end
+      continue
+    }
+    if (BOX_SHOWS.has(name)) {
+      const r = registerAt(s, end, to)
+      if (r) {
+        if (textual) use.shown.add(r.reg)
+        i = r.end
+        continue
+      }
+    }
     // a math environment's body is math (2608.23517's \def\al#1{\begin{align}#1\end{align}}: its displays went out as
     // prose, and TeX stopped at "Double subscript")
     const env = name === 'begin' && /^\s*\{([^}]+)\}/.exec(s.slice(end, end + 100))
+    // (LaTeX's lrbox: its body set into the register its argument names, as \\sbox sets its content)
+    if (env && env[1]!.trim() === 'lrbox') {
+      const r = registerAt(s, end + env[0].length, to)
+      if (r) {
+        const [bodyEnd, afterEnd] = endOfEnv(s, end + env[0].length, 'lrbox')
+        inRegister(use, r.reg, paramUse(s, r.end, Math.min(bodyEnd, to), textual, freshUse(), storing))
+        i = Math.min(afterEnd, to)
+        continue
+      }
+    }
     if (env && MATH_ENVS.test(env[1]!.trim())) {
       const [bodyEnd, afterEnd] = endOfEnv(s, end + env[0].length, env[1]!.trim())
       paramUse(s, end + env[0].length, Math.min(bodyEnd, to), false, use, storing)
@@ -2139,7 +2261,7 @@ function paperMacros(files: readonly { file: string; text: string }[]) {
         out.delete(name)
         continue
       }
-      const use = paramUse(t, k + 1, e - 1)
+      const use = throughBoxes(paramUse(t, k + 1, e - 1))
       const prose = [...use.text].filter((n) => n <= params && !use.other.has(n) && !(opt && n === 1))
       // one that only stores its prose (\\def\\@copyrightclause{#1}: ceurart's, set on the first page and in the PDF's
       // metadata) has it set elsewhere, perhaps more than once: a front unit, with no mark (2608.12096's \\conference,
@@ -2850,6 +2972,36 @@ const joinSkips = <Q extends SourcePiece<WalkFile>>(a: TextPiece, b: TextPiece, 
   if (r.length) SKIPPED.set(q, r)
   return q
 }
+/**
+ * Whether a text symbol (textCharacter, its character `char`) is a character of the unit's text where it stands, after the unit's
+ * pieces `before` (text pieces in their Latin-1 view of UTF-8, as the walk holds them): the walk reads it so (in its two branches
+ * of a symbol), and the lab's differential reads the same (lab/pdf/prepare-back/stated.mjs). An ASCII character always: one a
+ * paper types as text, whatever name LaTeX gives it for its fonts' sake (`\\#`, `\\textbar`, `\\textquotesingle`, `\\textunderscore`).
+ * A sign beyond ASCII, set as a mark (•, §, †, …), where the unit's first word has come, as the start mark reads it (a text piece,
+ * or a placeholder that is a first word, firstWordPiece): before it the sign is the unit's edge, as everything the unit opens with
+ * is (startOf passes it over, its ink the original's: 2610.19159v1's 44 items of a hand-made list, `\\textbullet The …`); but a
+ * note's mark (NOTE_MARKS) right after a word with no space (past the groups closed after it and the marks before it: a run of
+ * marks), an element of the text as its call in a superscript is (`Beren Millidge\\textdagger`: as text the dagger was glued to
+ * the name, the person no longer the one its references name; the coordinator's ruling of 2026-11-11). Elsewhere a note's sign is
+ * text (`(\\S\\ref{…})`, `in \\S 3`). The coordinator's statement of 2026-11-16 (B): the characters a paper types as text are the
+ * text's in every position; only a sign set as a mark is the edge before the first word
+ */
+export function textSymbolHere(char: string, before: readonly PieceLike[]): boolean {
+  if (char.charCodeAt(0) < 0x80) return true
+  const begun = before.some(
+    (p) => (p.t === 'text' && /\S/.test(p.s ?? '')) || (p.t === 'ph' && firstWordPiece(p.src ?? '')),
+  )
+  if (!begun) return false
+  if (!NOTE_MARKS.has(char)) return true
+  for (let k = before.length - 1; k >= 0; k--) {
+    const p = before[k]!
+    if (p.t === 'close' || (p.t === 'ph' && NOTE_MARKS.has(symbolText(p.src) ?? ''))) continue
+    return !(p.t === 'text' && /[\p{L}\p{N}]$/u.test(UTF8_LAX.decode(latin1Bytes(p.s ?? ''))))
+  }
+  return true
+}
+/** a piece as textSymbolHere reads one: its kind, its text, its source */
+type PieceLike = { t: string; s?: string; src?: string }
 class Builder<F extends WalkFile = WalkFile> {
   declare file: F
   declare units: SourceUnit<F>[]
@@ -2952,10 +3104,16 @@ class Builder<F extends WalkFile = WalkFile> {
     })
     u.pieces = joinLetters(BIB_KINDS.has(u.kind) ? keepNumbers(read) : read)
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
-    const letters = u.pieces
-      .filter((p) => p.t === 'text')
-      .map((p) => p.s)
-      .join('')
+    // (its letters counted on its text decoded: a text piece holds UTF-8 bytes in their Latin-1 view, and an ellipsis's `â`, a
+    // section sign's `Â`, are no letters: a cell of one letter and `\\dots` was a unit of two)
+    const letters = UTF8_LAX.decode(
+      latin1Bytes(
+        u.pieces
+          .filter((p) => p.t === 'text')
+          .map((p) => p.s)
+          .join(''),
+      ),
+    )
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
       // a display standing alone between blank lines is read with the paragraph it follows, nothing but white space
       // and comments between them
@@ -4400,7 +4558,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         i = e
         continue
       }
-      // (and around a text symbol alone, {\\%}: its character, textCharacter)
+      // (and around a text symbol alone, {\\%}: its character, textCharacter, where it is one of the unit's text, textSymbolHere)
       const character =
         !letter &&
         !kernelLetter &&
@@ -4408,8 +4566,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         k === i + 1 &&
         ctx.letters !== false &&
         textCharacter(s, k, accent.name, e - 1, ctx.ownLetters)
-      if (character && character.end === e - 1) {
-        endText()
+      if (character && character.end === e - 1 && (endText(), textSymbolHere(character.letter, b.cur?.pieces ?? []))) {
         b.pairId += pairsOf(s, i, e, b, ctx)
         b.letter(character.letter, s.slice(i, e), i, e, true)
         i = e
@@ -5282,9 +5439,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       i = kernelLetter.end
       continue
     }
+    // a text symbol, \\S 3, don\\textquotesingle t: its character, where it is one of the unit's text (textSymbolHere)
     const character = ctx.letters !== false && textCharacter(s, i, name, to, ctx.ownLetters)
-    if (character) {
-      endText()
+    if (character && (endText(), textSymbolHere(character.letter, b.cur?.pieces ?? []))) {
       b.pairId += pairsOf(s, i, character.end, b, ctx)
       b.letter(character.letter, s.slice(i, character.end), i, character.end, true)
       i = character.end
@@ -6211,6 +6368,10 @@ const BACKREF_WORD = /(?<![A-Za-z@\\])(?:page)?backref(?![A-Za-z@]|\s*=\s*false\
  *  letters and all ("10.1007/s00125-020-05190-9."), whose left may be any character but a letter or a digit ("doi:10.…") */
 const NUMBER_TOKEN = /[^\s\p{L}]*\d[^\s\p{L}]*/gu
 const DOI_TOKEN = /10\.\d{4,9}\/\S+/gu
+/** a placeholder keepNumbers makes of either: a token of one, characters TeX sets as written (none of its special characters,
+ *  so no command, group or formula: the marks' class of a number, marks.ts NUMBER) — the entry's first ink where it comes first
+ *  (headStartOf) */
+const KEPT_NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/[^\s\\{}$%#&^_~]+)$/u
 /** a text's tokens of either, in order: its DOIs, then its numbers outside them */
 function numberTokens(s: string) {
   const dois = [...s.matchAll(DOI_TOKEN)].map((m) => ({ index: m.index, text: m[0], doi: true }))
@@ -7023,7 +7184,8 @@ export function pseudoTranslate<F extends WalkFile>(
  * leading white space; -1, before the piece), or [-1, 0], none (the unit's head passed over, below). The adapter reads it
  * too: a piece before it TeX set before the unit's start point (pipeline/instrument.mjs).
  * Before the first word, inside any font command's group (nothing precedes it there to kern with); before an inline
- * formula or citation that comes first; before the macro when the word is glued to one (\\name's: between the two the
+ * formula, a citation, an identifier or a number a bibliography entry keeps (KEPT_NUMBER: a year, an entry with no author's
+ * first ink) that comes first; before the macro when the word is glued to one (\\name's: between the two the
  * mark would cost the kern, and a macro that looks ahead, as \\xspace does, would see the mark). Any other command at
  * the head of the paragraph is passed over — \\noindent, \\vspace, a run-in heading macro — since \\leavevmode ahead of
  * it would start the paragraph early and indent or move it. A text piece is cut after its leading space, which is
@@ -7079,6 +7241,11 @@ function cellBox(pieces: readonly SourcePiece<WalkFile>[], at: number): number {
   return inside[0] ?? -1
 }
 
+/** a placeholder that is a unit's first word where it comes first (headStartOf): an inline formula or citation, an identifier, a
+ *  number an entry keeps — text TeX sets as written, or set on the line. The marking reads a head by it too (marks.ts headEnd),
+ *  so that what the start mark stands before is never passed over there */
+export const firstWordPiece = (src: string): boolean =>
+  INLINE.test(src) || identifierSource(src) || KEPT_NUMBER.test(src)
 /** startOf's reading of a unit's head, a cell's box aside */
 function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number] {
   let startAt = -1,
@@ -7127,8 +7294,10 @@ function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number]
       }
       break
     }
-    // (an inline formula or citation, and an identifier, text TeX sets as written (identifierSource): the first word)
-    if (p.t === 'ph' && (INLINE.test(p.src) || identifierSource(p.src))) {
+    // (an inline formula or citation, an identifier, and a number an entry keeps, text TeX sets as written (identifierSource,
+    // KEPT_NUMBER): the first word. An entry with no author, ACM's `\\bibinfo{year}{2023}\\natexlab{}.`, IEEEtran's `(2024) {WHO} …`:
+    // passed over, its year stood before the start mark, and where the year opened a group the entry had none (F29))
+    if (p.t === 'ph' && firstWordPiece(p.src)) {
       startAt = k
       startCut = -1
       break

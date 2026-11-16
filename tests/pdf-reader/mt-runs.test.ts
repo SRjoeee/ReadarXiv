@@ -72,7 +72,8 @@ describe('a reply that does not hold the run\'s marker once is refused whole, ne
 describe('what may stand between the parts', () => {
   const runOf = (body: string) => { const u = unitOf(body); return { parts: phs(u.pieces).length, markers: markers(serialize(u).wire).length } }
   it('a comma, a thin space, a quad, a control space, an ellipsis, a tie, a comment', () => {
-    for (const between of [', ', '\\,', '\\quad ', '\\ ', ', \\ldots, ', '~', ',%\n']) expect(runOf(`The set $\\{a$${between}$b\\}$ is given here.`), between).toEqual({ parts: 2 + (/\\(?:,|quad|ldots| )|~/.test(between) ? 1 : 0), markers: 1 })
+    // (an ellipsis's command is its character inside the unit's text, no placeholder of its own: latex-front.ts TEXT_CHARACTERS, F9 (d))
+    for (const between of [', ', '\\,', '\\quad ', '\\ ', ', \\ldots, ', ', \\dots{}, ', '~', ',%\n']) expect(runOf(`The set $\\{a$${between}$b\\}$ is given here.`), between).toEqual({ parts: 2 + (/\\(?:,|quad| )|~/.test(between) ? 1 : 0), markers: 1 })
   })
   it('not a display, a citation or a word: no run crosses one (formulaRuns), but placeholders side by side are one marker all the same, a display the last of its stretch (its own stop after it)', () => {
     expect([...formulaRuns(unitOf('The set $\\{a$ $$x$$ $b\\}$ is given here.').pieces)]).toEqual([])

@@ -11,6 +11,10 @@ export type ScriptRules = {
   order: readonly ('track' | 'borrow' | 'lead' | 'shrink')[]
   leadBase: number
   leadFloor: number
+  /** a script whose class states its line pitch in ems of a block's own size (jlreq's 1.7 for Japanese): the leading the fit starts
+   *  from is that pitch over the block's original pitch, never closer than the original's (U.params leadOf, docs/PDF-READER.md
+   *  §18.89); none, the script's spread of a solid-set original, `leadBase` */
+  leadEm: number | null
   trackMin: number
   compressMax: 0 | 1 | 2
   /** the set's (schema 10) and today's engine's; read by no part of the typesetter: a mark's blank half is the measure of the

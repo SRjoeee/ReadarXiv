@@ -1,9 +1,9 @@
 // The prepare's front half (DESIGN §16, "The prepare's two halves"), which the package's one entry (prepare.ts `prepare`) runs
 // before the back half: the paper opened, its bibliography made where TeX must make it, the source's units handed out before
 // any compile of the marks, the marked compile with its final pass (B), and the instrument stated over B
-// (instrument/instrument.ts instrumentOf); or, given the instrument's four stored objects of a compile of the same original,
+// (instrument/instrument.ts instrumentOf); or, given the instrument's five stored objects of a compile of the same original,
 // the instrument made again from them with no TeX. With what it is given: arXiv's PDF's facts (originalFactsOf) and the TeX
-// tree (treeOf). What decides the four objects a prepare stores is compiled.ts's compiledOf (the paper opened, a stored
+// tree (treeOf). What decides the five objects a prepare stores is compiled.ts's compiledOf (the paper opened, a stored
 // instrument taken or not, the bibliography, the marked compile with every argument it is given) and plan.ts's (the plan
 // written and read back): a host that keys the stored instrument by the code its compile side runs names them there, never
 // prepareFront, whose readers of what is stored (instrumentOf, the units, which compiledOf is handed as a function) stay out
@@ -44,8 +44,10 @@ export interface FrontInput {
   engines: readonly string[]
   pdfjs: PreparePdfJs
   documentOptions: Record<string, unknown>
+  /** the host's bound on the files one compile is given back to carry (compiled.ts CompiledInput `filesBound`) */
+  filesBound?: { count: number; bytes: number } | null
 }
-/** the front half's end: the instrument, with its four objects where TeX made them; or why there is none */
+/** the front half's end: the instrument, with its five objects where TeX made them; or why there is none */
 export type FrontResult =
   | { ok: true; instrument: Instrument; made: StoredInstrument | null }
   | ({ ok: false } & Refusal)
@@ -161,7 +163,7 @@ export function sourceUnitsOf(paper: Paper): Unit[] {
 
 /** The front half: the paper opened, its bibliography made where TeX must make it (or the .bbl the plan kept), the source's
  *  units handed out, the marked compile and its final pass (B) with arXiv's day and page count, and the instrument stated over
- *  B, with its four objects where TeX made them. A stored instrument is taken only for the original it was made with: the
+ *  B, with its five objects where TeX made them. A stored instrument is taken only for the original it was made with: the
  *  facts of A the marked compile read (its page count, its day, its banner) the same, else the paper is compiled anew */
 export async function prepareFront(input: FrontInput): Promise<FrontResult> {
   const c = await compiledOf({
@@ -175,18 +177,26 @@ export async function prepareFront(input: FrontInput): Promise<FrontResult> {
     stage: (s) => input.stage(s),
     note: (n, d) => input.note(n, d),
     units: (paper) => input.units(unitsObjects(sourceUnitsOf(paper))),
+    filesBound: input.filesBound ?? null,
   })
   if (!c.ok) return c
-  const { paper, finalPdf, log, options, made } = c
+  const { paper, finalPdf, log, options, made, reduced, probeLog } = c
   input.stage('units')
-  const r = await instrumentOf({
+  // (the mark probe's log, the compile's or the stored one's, handed to its readers in the instrument: `probeLog`)
+  const given = {
     paper,
     finalPdf,
     options,
     log,
+    ...(probeLog !== null ? { probeLog } : {}),
     pdfjs: input.pdfjs,
     documentOptions: input.documentOptions,
     made: { compiler: paper.meta.compiler ?? 'pdflatex', tree: input.tree, front: 'today' },
-  })
-  return { ok: true, instrument: r.instrument, made }
+  }
+  const r = await instrumentOf(given)
+  // (a reduced marked compile's B holds no optional class's points: said in the instrument's `made`, which the head states)
+  const instrument = reduced
+    ? { ...r.instrument, made: { ...r.instrument.made, reduced: true as const } }
+    : r.instrument
+  return { ok: true, instrument, made }
 }

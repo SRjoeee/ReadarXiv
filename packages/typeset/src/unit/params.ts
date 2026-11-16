@@ -31,6 +31,7 @@ const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 export type ParamsRules = {
   cjk?: boolean
   leadBase: number
+  leadEm?: number | null
   cellClear?: number
   cellCapMin?: number
   adaptiveFill?: unknown
@@ -61,13 +62,29 @@ export const sizeOf = (
   rects: readonly Rect[],
 ) => unitSizeOf(prep, P, unit) ?? median(rects.map((r) => r[4] - r[2])) / 0.894
 
-/** the unit's leading relative to the original's own pitch (L2:3073 leadOf) */
-export function leadOf(blocks: readonly Pick<Block, 'pitch0'>[], s: number, P: Pick<ParamsRules, 'leadBase'>): number {
-  if (!(P.leadBase > 1) || !(s > 0)) return P.leadBase
+/** the pitch the lay takes for a block that states none of its own (B.slots and the walk: `pitch0 ?? 1.2 * s`), × its size */
+const UNPITCHED = 1.2
+
+/** the unit's leading relative to the original's own pitch (L2:3073 leadOf): the script's spread of a solid-set original's pitch
+ *  (`leadBase`: ctex's 1.3 for Chinese, xetexko's 1.38889 for Korean), never wider than that spread on the original's own pitch;
+ *  or, where the script's class states its pitch in ems of the block's own size (`leadEm`: jlreq's 1.7 for Japanese,
+ *  docs/PDF-READER.md §18.89), that pitch over the original's (over the pitch the lay takes, where the block states none). Never
+ *  closer than the original's own pitch: a loose original keeps it */
+export function leadOf(
+  blocks: readonly Pick<Block, 'pitch0'>[],
+  s: number,
+  P: Pick<ParamsRules, 'leadBase' | 'leadEm'>,
+): number {
+  const em = P.leadEm ?? null
+  if (!(s > 0) || (em === null && !(P.leadBase > 1))) return P.leadBase
   const pitches = blocks
     .map((b) => b.pitch0)
     .filter((v): v is number => v! > 0)
     .sort((a, b) => a - b)
+  if (em !== null) {
+    const p0 = pitches.length ? pitches[pitches.length >> 1]! : UNPITCHED * s
+    return Math.max(1, Math.round((1000 * em * s) / p0) / 1000)
+  }
   if (!pitches.length) return P.leadBase
   const p0 = pitches[pitches.length >> 1]!
   return Math.min(P.leadBase, Math.max(1, Math.round((1000 * P.leadBase * SOLID * s) / p0) / 1000))

@@ -108,6 +108,34 @@ describe('the reader gate’s paragraph points (tests/replay/paras-gate.ts): wha
   })
 })
 
+describe('a point paired with the element it stands after (Placed.parasAfter): the gate anchors it there, where the lay does', () => {
+  // (the row carries no sentences; the part names `\sep` 5, which ended the paragraph before, beside the point)
+  const els: Placed['els'] = [['5', { kind: 'umacro', ink: [], text: '', cmd: 'sep', bare: 1, unknown: 1 }]]
+  const withSep = (a: string): OutPiece[] => [
+    { t: 'text', s: FIRST_DE },
+    { t: 'el', id: a },
+    { t: 'text', s: SECOND_DE },
+  ]
+  const gateOf = (content: OutPiece[]) => {
+    const g = newParasGate()
+    const m = member({ els, paras: [[SECOND, 2]], parasAfter: ['5'] })
+    const r = rowsOf(row(content))
+    parasGate(g, 'test-de', 1, layPage(part(m), r, rules, metrics), part(m), r, new Map())
+    return g
+  }
+  it('anchors it after its element and passes it opened on TeX’s line', () => {
+    const g = gateOf(withSep('5'))
+    expect([...g.anchor]).toEqual([['after its element', 1]])
+    expect([g.opened, g.onTexLine]).toEqual([1, 1])
+    expect(g.off).toEqual([])
+  })
+  it('counts it apart, no anchor, where the row does not return its element exactly once', () => {
+    const g = gateOf([...withSep('5'), { t: 'el', id: '5' }])
+    expect([...g.anchor]).toEqual([['none: its element not returned once', 1]])
+    expect(g.off).toEqual([])
+  })
+})
+
 describe('the gate’s pass: the point’s first word starts a line of the member (the coordinator’s ruling of 2026-11-13)', () => {
   // (a page drawn by hand: the member laid at its own pitch, the second paragraph on a line of its own one point under TeX's
   // baseline; then the same paragraph run on after the first)

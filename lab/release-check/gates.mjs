@@ -343,10 +343,10 @@ export function typesetOf(text) {
 }
 
 /** whether the release check's sentence-cover fails on a paragraph point its row anchors and the page runs on (paras-gate.ts):
- *  from the round in which the engine half states every point's first word (Placed.paras: design-display 2a, the coordinator's
- *  ruling of 2026-11-13), whose lane turns this on. Until then a point stated at a group the reply dropped has no first word to
- *  fall back to, and its count is reported, not held */
-export const PARAS_HELD = false
+ *  on from the round in which the engine half states every point's first word (Placed.paras: design-display 2a, the
+ *  coordinator's ruling of 2026-11-13; the compile move's C1), so that a point stated at a group the reply dropped falls back to
+ *  its first word. Before it, such a point had no first word to fall back to, and its count was reported, not held */
+export const PARAS_HELD = true
 
 /**
  * One run of the reader gate's runner with --entry (lab/typeset/gate-l1.mjs): its numbers, the added pairs' apart (`a`), and
@@ -362,7 +362,8 @@ export function entryRunOf(step, parasHeld = PARAS_HELD) {
   const both = [t, a].filter(Boolean)
   const stated = both.some(x => x.parasOff > 0 || x.I6other > 0 || x.readsOutside > 0)
   const whole = (step?.exit === 0 || (step?.exit === 1 && stated)) && t.I10pieces > 0 && (!a || a.I10pieces > 0)
-  const held = whole && both.every(x => x.I6other === 0 && !(x.readsOutside > 0) && (!parasHeld || x.parasOff === 0))
+  // (a count the run does not print, its gate's line absent, is none, the paragraph points' as the reads': `> 0` fails)
+  const held = whole && both.every(x => x.I6other === 0 && !(x.readsOutside > 0) && !(parasHeld && x.parasOff > 0))
   return { t, a, whole, held }
 }
 

@@ -31,6 +31,7 @@ import {
   tailOf,
 } from './facts.ts'
 import { type ColumnCell, columnBoxes, type FreeWord, innerOf } from './columns.ts'
+import { ON_BASE } from './geometry.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
 import { spellOf } from '../own/stream.ts'
@@ -62,7 +63,8 @@ function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
   return out
 }
 import type { Owned } from './ownership.ts'
-import type { Member } from './work.ts'
+import { type Member, travellingInk } from './work.ts'
+import { pieceBefore } from './words.ts'
 
 interface FactsInput {
   ins: Instrument
@@ -132,6 +134,9 @@ interface FactsIndex {
   blockOf: (l: Line) => [number, number]
   /** B's paragraph ends, global, each glyph position once */
   ends: number[]
+  /** where TeX ended a line at a forced break (B's `kb<n>` points, DocMarks.breaks: STATEMENTS_TEX's BREAKS_TEX), global, in
+   *  stream order: the glyph before which it stands */
+  forced: number[]
   /** each element's opening and end point on B, by unit and piece */
   placeAt: Map<string, number>
   placeEnd: Map<string, number>
@@ -246,6 +251,10 @@ function open({
   const ends = [
     ...new Set((ins.tex.paragraphEnds ?? []).flatMap((l, p) => l.map((g) => (m.offB[p] as number) + g))),
   ].sort((x, y) => x - y)
+  // (where TeX ended a line at a forced break, globally: B's `kb<n>` points)
+  const forced = ins.ink.pages
+    .flatMap((pg, p) => (pg.marks?.breaks ?? []).map((x) => (m.offB[p] as number) + x.glyph))
+    .sort((x, y) => x - y)
   // (each element's opening point on B, by unit and piece: the glyph before which it begins, global; and its end point, the
   // glyph before which what follows it begins)
   const placeAt = new Map<string, number>()
@@ -286,6 +295,7 @@ function open({
     linesOn,
     blockOf,
     ends,
+    forced,
     placeAt,
     placeEnd,
     column,
@@ -461,7 +471,7 @@ function memberFacts(fx: FactsIndex, mem: Member): void {
 
 /** its elements' facts: style, brackets, the mark after a display or on a held line, a forced break's line and room */
 function readElements(fx: FactsIndex, r: MemberReading): void {
-  const { ins, m, unitB, gA, pageA, placeAt, placeEnd, ends } = fx
+  const { ins, m, unitB, gA, pageA, placeAt, placeEnd, ends, forced } = fx
   const { mem, unit, lineOf, sizeOf, own } = r
   // (the line TeX ended at a point of B's stream: that of the unit's last glyph before it, carried to A)
   const lineBefore = (point: number) => {
@@ -479,7 +489,8 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated; where
     // that text is in TeX's case for its faked small capitals (locate's mem.smallCaps, facts.ts elementCase), their share, and no
     // case change)
-    if (fill !== undefined || el.text !== undefined) {
+    // (an element stated by the text TeX set where its macro is used has no glyph to read a style off: none)
+    if (fill !== undefined || (el.text !== undefined && !(gs.length === 0 && mem.told?.has(id)))) {
       const sc = mem.smallCaps?.get(id)
       const { upper, ...read } = styleOf(gs)
       el.style = {
@@ -546,7 +557,11 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
   // - where nothing that sets ink stands between the group and one of them, that point is the group's (no glyph of B between
   //   them), and its line the one TeX ended there, as a placed break's: at the unit's end its last line, which has no line
   //   after it to state;
-  // - else it lies in the window of B's stream between the two, with each group of the window. Every forced break ends a line
+  // - else it lies in the window of B's stream between the two, with each group of the window. Where the marked compile set its
+  //   points where TeX ended a line at a forced break (`kb<n>`, STATEMENTS_TEX's BREAKS_TEX: after \@gnewline's \unskip, past the
+  //   line's last glyph) and the window holds as many as breaks, each break's line is the one of the unit's last glyph before its
+  //   point, in order (the compile move's F35: 2608.25210v2 t196, a break at the end of a full line after a line TeX wrapped,
+  //   which no count of line ends tells); else, as before the point: every forced break ends a line
   //   and a group one of its own, so where the window's lines end there as often as it holds groups, TeX ended each at one of
   //   them, in order (a paragraph's end TeX states there among them: in a centred or ragged block LaTeX's `\\` is
   //   \@centercr, which ends a paragraph, 2610.30034v1's title, 2608.25210v2 t8); else, in a unit TeX states it set centred
@@ -633,6 +648,20 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
           if (j !== undefined && j !== closed.at(-1)) closed.push(j)
         }
       }
+      // (TeX's own: the points it set where it ended a line at a forced break, inside the window, as many as its breaks: the k-th
+      // break's line the one of the unit's last glyph before the k-th point, a break after a break the same line, the empty one
+      // TeX set after it no line of the page's)
+      const kb = forced.filter((b) => b > w.lo && b <= w.hi)
+      const flat = w.groups.flat()
+      if (kb.length && kb.length === flat.length) {
+        const at = kb.map((b) => lineBefore(b))
+        if (at.every((j) => j !== undefined && !((mem.lines[j] as Line)[9] & 1))) {
+          flat.forEach((el, q) => {
+            breaks.push([el, at[q] as number])
+          })
+          continue
+        }
+      }
       let lines: number[] | null = null
       if (lineEnds.length === w.groups.length && lineEnds.every(textual)) lines = lineEnds
       else if (
@@ -666,9 +695,9 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
   }
 }
 
-/** the paragraphs TeX opened inside it: where each one's point is stated, or why none is */
+/** the paragraphs TeX opened inside it: where each one's point is stated, its first word, or why none is */
 function readOpens(fx: FactsIndex, r: MemberReading): void {
-  const { ins, m, unitB, roleB, pieceB, ends } = fx
+  const { ins, m, unitB, roleB, pieceB, ends, gA } = fx
   const { mem, unit, lineOf } = r
   // (a paragraph TeX opened inside the unit (C13, C15): a paragraph end of B's between its glyphs, its first line on A the line
   // of the unit's next glyph. The source side and B's side of the end are read by the same facts. What bounds a window is a
@@ -681,9 +710,14 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
   // group's open ends B's before the end, and the text the group's content begins with (inside it, as today's paragraphBreaks
   // asks: the group closed after it) begins B's after it. TeX opened the paragraph at the group so met on both sides, one group
   // alone (SpanAt.opens: the outermost of those opened together), else at the element B's next glyph opens, where its side
-  // before is met too (El.opens). An end inside a piece's own glyphs opened none at it; one at no group's open and no element,
-  // none either: counted (`opensUnstated`), apart as an open or an element stands where the next paragraph begins in the source
-  // (the class of 2111.09276v1 p5's run-in titles, which must be none) or plain text does (no anchor exists for it))
+  // before is met too (El.opens). An end inside a piece's own glyphs opened none at it. One at no group's open and no element,
+  // before the member's first placed word, is none inside its text (2a's case i). Else it is
+  // stated by what else holds its place (design-display 2a's order): a forced break that ended the line before (El.ends); a
+  // region (a display ends the paragraph before, or the line before or its own is held: a block of its own already); its first
+  // word alone. Every point but a region's states its first word too where the member places it on the paragraph's line
+  // (Placed.paras: a group or an element is a carrier a translator's reply can drop, the coordinator's ruling of 2026-11-13).
+  // One stated by none of these is counted (`opensUnstated`) and listed, apart as an open or an element stands where the next
+  // paragraph begins in the source (which must be none) or plain text does)
   if (mem.bFirst >= 0 && unit) {
     const seq = flatOf(unit.content)
     // (each piece's first and last glyph on B, the unit's, of an element's role)
@@ -766,6 +800,62 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
         s = step > 0 ? s + at[k]!.s : at[k]!.s + s
       return step > 0 ? spellOf(s).slice(0, WANT) : spellOf(s).slice(-WANT)
     }
+    // (a held line: a display's row, its block, a held line of the unit's (KEPT))
+    const held = (k: number) => k >= 0 && k < mem.lines.length && !!((mem.lines[k] as Line)[9] & 1)
+    // (lines k and k + 1 consecutive lines of one run, as geometry.ts's Room.runs reads a run: on one page, the lower under the
+    // upper and across its column, the first ink under the upper the lower's own (no ink TeX set between them across their hull,
+    // a float's or another's, a glyph's top or a box's, its hundredth aside; the member's own travelling ink, travellingInk, is
+    // its lines': an underline under the upper, 2608.18502v1 p9))
+    let own: ReturnType<typeof travellingInk> | undefined
+    const oneRun = (k: number) => {
+      const u = mem.lines[k] as Line
+      const l = mem.lines[k + 1] as Line
+      if (u[0] !== l[0] || u[4] <= l[4]) return false
+      if (Math.max(u[8], u[3]) <= Math.min(l[7], l[2]) || Math.min(u[7], u[2]) >= Math.max(l[8], l[3])) return false
+      const h0 = Math.min(u[2], l[2])
+      const h1 = Math.max(u[3], l[3])
+      const between = (top: number, x0: number, x1: number) =>
+        top > l[5] + 0.005 && top < u[6] - 0.5 && x1 > h0 && x0 < h1
+      own ??= travellingInk(mem)
+      for (const g of fx.bandOn(u[0], l[6], u[6]))
+        if (!gA(g.a).unseen && !own.glyphs.has(g.a) && between(gA(g.a).top, g.x0, g.x1)) return false
+      for (const b of fx.boxes(u[0])) if (!own.boxes.has(`${u[0]}|${b.j}`) && between(b.y1, b.x0, b.x1)) return false
+      return true
+    }
+    // (the paragraph's first word (design-display 2a, F1): the first of the member's placed words (Placed.words, sentences.ts
+    // wordAt: a word by its first glyph on A, the opening marks set against it included; an element's by any glyph of its) that
+    // TeX set from glyph `from` of B's stream on, past the unit's glyphs of no letter or digit and its label's, on the line TeX
+    // opened the paragraph on; none where a glyph of the unit's spelling a letter or digit comes first that begins no placed word
+    // (a word whose letters the page does not set as the source writes them, a display's own), nor where that line or the one
+    // before it is held: what the lay opens no block at)
+    const firstWord = (from: number, j: number): number | undefined => {
+      if (!mem.wordAt || held(j - 1) || held(j)) return undefined
+      for (let c = from; c <= mem.bLast; c++) {
+        if ((unitB[c] as number) !== mem.unit || roleB[c] === ROLE.label) continue
+        const a = m.bToA[c] as number
+        if (a < 0) continue
+        const w = mem.wordAt.get(a)
+        if (w) return w[1] === j ? w[0] : undefined
+        if (spellOf(gA(a).u)) return undefined
+      }
+      return undefined
+    }
+    // (the member's first placed word on B: an end before it is no point inside its text (design-display 2a, case i): the glyphs
+    // before it are no word of the unit's source, a stop of the entry before that the unit's marks hold, its label set as text)
+    let wordB = -1
+    if (mem.wordAt)
+      for (let c = mem.bFirst; c <= mem.bLast && wordB < 0; c++)
+        if ((unitB[c] as number) === mem.unit && mem.wordAt.has(m.bToA[c] as number)) wordB = c
+    const st = { span: 0, el: 0, break: 0, region: 0, text: 0, words: 0 }
+    const paras = new Map<number, number>()
+    // (each stated word's paragraph end on B: what the element it stands after is read against, Placed.parasAfter)
+    const endOf = new Map<number, number>()
+    const stateWord = (o: number | undefined, j: number, e: number) => {
+      if (o === undefined || paras.has(o)) return
+      paras.set(o, j)
+      endOf.set(o, e)
+      st.words++
+    }
     for (const e of ends) {
       // (the paragraph that ended is its own: its glyph before the end is the unit's, not a float's or a footnote's that TeX's
       // output routine put between two of its lines)
@@ -780,6 +870,7 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
       // (an end inside a piece's own glyphs: the piece began before it, or goes on after it)
       if (after && 'piece' in after && (firstOf.get(Number(after.piece)) as number) < e) continue
       if (before && 'piece' in before && (lastOf.get(Number(before.piece)) as number) >= e) continue
+      const word = firstWord(b, j)
       let at: { el: string } | { group: string } | null = null
       const met = seq.flatMap((x, q) =>
         x.t === 'open' && meets(sideOf(q - 1, -1), before, -1) && meets(sideOf(q + 1, 1, x.id), after, 1)
@@ -809,14 +900,47 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
           mem.opensLost = (mem.opensLost ?? 0) + 1
           continue
         }
+        // (an end before the member's first word: none of its text before it)
+        if (e <= wordB) continue
+        // (a forced break TeX ended the line before at (El.ends, the line its last glyph before the end stands on): in centred
+        // and ragged text LaTeX's `\\` is `\par`; the break states the point, its first word too)
+        let pb = e - 1
+        while (pb >= mem.bFirst && ((unitB[pb] as number) !== mem.unit || (m.bToA[pb] as number) < 0)) pb--
+        const jBefore = pb >= mem.bFirst ? lineOf.get(m.bToA[pb] as number) : undefined
+        if (jBefore === j - 1 && mem.elements.some(([, el]) => el.ends?.[0] === j - 1)) {
+          st.break++
+          stateWord(word, j, e)
+          continue
+        }
+        // (a region: the paragraph before ends with a display (B's glyph before the end a display's), the line before or its own
+        // is held, or the two are not consecutive lines of one run (a float TeX set between them, another column, another page:
+        // an end there may be another paragraph's, the float's): a block of its own already, the runs state it; no first word)
+        const display =
+          !!before && 'piece' in before && mem.elements.some(([id, el]) => id === before.piece && el.kind === 'display')
+        if (display || held(j - 1) || held(j) || !oneRun(j - 1)) {
+          st.region++
+          continue
+        }
+        // (else its first word alone states it)
+        if (word !== undefined) {
+          st.text++
+          stateWord(word, j, e)
+          continue
+        }
         // (no point stated: an open or an element stands where the next paragraph begins in the source (its side after met by
-        // a group's open, or B's next glyph an element's), or plain text does)
+        // a group's open, or B's next glyph an element's), or plain text does; listed)
         const anchored =
           (!!after && 'piece' in after) || seq.some((x, q) => x.t === 'open' && meets(sideOf(q + 1, 1, x.id), after, 1))
         mem.opensUnstated ??= [0, 0]
         mem.opensUnstated[anchored ? 0 : 1]++
+        mem.opensPlain ??= []
+        mem.opensPlain.push([j, anchored ? 1 : 0])
         continue
       }
+      // (a group's open or an element states it; its first word too, the carrier a reply cannot drop)
+      if ('el' in at) st.el++
+      else st.span++
+      stateWord(word, j, e)
       if ('el' in at) {
         const el = mem.elements.find(([id]) => id === at.el)?.[1]
         if (el && el.opens === undefined) el.opens = j
@@ -825,6 +949,22 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
         if (!mem.spanOpens.has(at.group)) mem.spanOpens.set(at.group, j)
       }
     }
+    if (paras.size) {
+      mem.paras = [...paras].sort((x, y) => x[0] - y[0])
+      // (beside each point, the element its first word stands directly after in the source, white space alone between, and
+      // TeX set before the paragraph's end: no glyph of it on B at or after the end (an element set after it opens the line;
+      // one that sets no ink, `\sep`, which is `\par`, ended the paragraph where the source puts it; one whose glyph B gives
+      // to no piece is read by the source alone, 2610.39520v1's raised star after a caption's forced break): the one that
+      // ended the paragraph before, which a reply returns in its place; stated where a point names one, Placed.parasAfter)
+      const before = pieceBefore(unit.content)
+      const named = mem.paras.map(([o]) => {
+        const id = before(o)
+        const last = id === null ? undefined : lastOf.get(Number(id))
+        return last !== undefined && last >= (endOf.get(o) as number) ? null : id
+      })
+      if (named.some((x) => x !== null)) mem.parasAfter = named
+    }
+    if (Object.values(st).some((n) => n > 0)) mem.opensStated = st
   }
 }
 
@@ -1002,6 +1142,30 @@ function readDirection(_fx: FactsIndex, r: MemberReading): void {
   if (unit && rightToLeft(unit.content)) for (const l of mem.lines) l[9] |= LINE_FLAG.RTL
 }
 
+/** a single line's row: the line with its extent widened to everything TeX set on it within its measure (the member's own ink,
+ *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure) */
+function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined): Line {
+  const [m0, m1] = fx.blockOf(l)
+  let x0 = labelX0 !== undefined ? Math.min(l[2], labelX0) : l[2]
+  let x1 = l[3]
+  const end = mem.elements.find(([id]) => id === '~$')?.[1]
+  for (const k of end?.ink ?? [])
+    if (k[0] === l[0] && Math.abs(k[5] - l[4]) <= ON_BASE) {
+      x0 = Math.min(x0, k[1])
+      x1 = Math.max(x1, k[3])
+    }
+  for (const k of fx.linesOn.get(l[0]) ?? [])
+    if (k !== l && !(k[9] & LINE_FLAG.KEPT) && Math.abs(k[4] - l[4]) <= ON_BASE && k[3] > m0 && k[2] < m1) {
+      x0 = Math.min(x0, k[2])
+      x1 = Math.max(x1, k[3])
+    }
+  if (x0 === l[2] && x1 === l[3]) return l
+  const row = [...l] as Line
+  row[2] = x0
+  row[3] = x1
+  return row
+}
+
 /** its alignment, where TeX did not state it */
 function readAlign(fx: FactsIndex, r: MemberReading): void {
   const { blockOf, column, linesOn } = fx
@@ -1012,6 +1176,16 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
     const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
     // (a cell is read by its column's cells alone, never by the page's column: today's centredFlag RUN:2102)
     let a = unit.cell ? (unit.align ?? 'j') : alignOf(mem.lines, sizeOf, blockOf, unit.align, labelX0)
+    // (a single line TeX told justified that its own ink reads centred keeps TeX's word where its row is not centred: the row is
+    // everything TeX set on that line within its measure, the member's own ink, its label, the end mark a fill pushed (its `~$`
+    // element), another member's line on its baseline (a run-in head before it); the coordinator's ruling of 2026-11-16, lane
+    // cm-fix: 2610.40645v1 p19's proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its words alone read
+    // centred under F13's measure. The row only keeps TeX's word: a row of other members' ink whose hull happens to stand about
+    // the middle is no centring (a theorem's head beside its first line, 2608.11084v1 p13; a list item's label and its last line,
+    // 2608.27210v1 p2). A line nothing told is read by its own ink as before: a running head's title beside its page number on
+    // one baseline is two members, not one row)
+    if (a === 'c' && unit.align === 'j' && own.length === 1 && !unit.cell)
+      if (alignOf([rowOf(fx, mem, own[0]![0], labelX0)], sizeOf, blockOf, unit.align, undefined) !== 'c') a = 'j'
     if (unit.cell && own.length === 1) {
       const l0 = own[0]![0]
       const c = unit.cell

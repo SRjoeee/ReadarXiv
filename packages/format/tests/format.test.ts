@@ -220,6 +220,51 @@ describe('read and write', () => {
       expect(read(kind, bytes, digest)).toEqual(value)
     }
   })
+  it('a head says a reduced prepare (`reduced`, design-performance Q2) as `true` or not at all', () => {
+    const head: Head = {
+      format: 1,
+      paper: { id: '2501.00001', version: 1, pages: 3 },
+      made: 'test',
+      original: { bytes: 10, sha256: '0'.repeat(64), chunk: 65536, chunks: chunkDigests(new Uint8Array(10)) },
+      addOn: null,
+      units: [],
+      parts: [null],
+      reduced: true,
+    }
+    const { bytes, digest } = write('head', head)
+    expect(read('head', bytes, digest)).toEqual(head)
+    const { reduced: _, ...plain } = head
+    expect(fromUtf8(write('head', plain).bytes)).not.toContain('reduced')
+    expect(() => read('head', utf8(JSON.stringify({ ...head, reduced: false })))).toThrow(FormatError)
+  })
+  it('a member names beside its paragraph points the element each stands after (`parasAfter`, an id or null a point), or not at all', () => {
+    const p = part()
+    const m = p.flows[0]![0]!
+    const named: Part = {
+      ...p,
+      flows: [
+        [
+          {
+            ...m,
+            paras: [
+              [3, 1],
+              [9, 2],
+            ],
+            parasAfter: ['1', null],
+          },
+        ],
+      ],
+    }
+    const { bytes, digest } = write('part', named)
+    expect(read('part', bytes, digest)).toEqual(named)
+    const plain: Part = { ...p, flows: [[{ ...m, paras: [[3, 1]] }]] }
+    expect(read('part', write('part', plain).bytes)).toEqual(plain)
+    expect(fromUtf8(write('part', plain).bytes)).not.toContain('parasAfter')
+    // (a field of its own: a third member of `paras`' tuples is refused, by this schema and by every one before it)
+    expect(() => read('part', utf8(JSON.stringify({ ...p, flows: [[{ ...m, paras: [[3, 1, 1]] }]] })))).toThrow(
+      FormatError,
+    )
+  })
   it('writes canonical bytes: keys sorted, -0 as 0, the same for the same value however built', () => {
     expect(canonical({ b: 1, a: [-0, 1.5], c: undefined })).toBe('{"a":[0,1.5],"b":1}')
     const p = part()

@@ -111,6 +111,21 @@ describe('a unit’s end mark is laid at the end of its translation (El.end)', (
     expect(mark.end!).toBeLessThan(150)
   })
 
+  it('stands where TeX set it at the size the fit draws it: its rectangle’s margin past the ink scaled with it', () => {
+    // (2610.30034v1-zh p10 t204: laid a step smaller, at 0.975, its QED crop's right edge stood as far from the line's end as at
+    // TeX's size, 0.4 pt past the ink, drawn 0.39: the ink 0.01 past the measure's end. A paragraph with no room under its last
+    // line: the translation two lines at a smaller size, the box at the end of the second)
+    const tight = member({ els: [claimed], room: { below: 0, next: 0, runs: [], sep: 12 } })
+    const laid = lay(tight, [{ t: 'text', s: words(19) }])
+    expect(laid.state).toBe('laid')
+    expect(laid.lines.map(([y]) => y)).toEqual([700, 688])
+    const mark = markOf(laid)
+    const scale = mark.crop!.w / 7.8
+    expect(scale).toBeLessThan(1)
+    // (the box's ink, 0.4 into the crop, ends at the measure's end, 300, as TeX set it)
+    expect(mark.crop!.x + (300 - 292.6) * scale).toBeCloseTo(300, 9)
+  })
+
   it('lays a part that states no end mark exactly as before: the box a stay its lines keep off, the trail glued', () => {
     // (a part made before 2026-11-12 states amsthm's box as Room.stays and its trail with no `end`; a typesetter of before reads
     // a no-piece element with `trail` as a trail. The same part laid by this typesetter: every line and item as 35cf17994 laid it)

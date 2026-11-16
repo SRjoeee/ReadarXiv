@@ -1,6 +1,6 @@
 // Phase 7 of locate (locate.ts): where a sentence may begin on A, for a unit lit by sentence (words.ts).
 // Reads: the index; the record's `members` (their lines and elements, phase 6's), `units`, `born` (phase 5's).
-// Writes: the members' words.
+// Writes: the members' words, and each word's first glyph on A (Member.wordAt, read by the facts pass's paragraph points).
 import { sourceText } from './facts.ts'
 import { bySentence, elementsOf, wordsOn } from './words.ts'
 import { field, standsOn, type Work } from './work.ts'
@@ -22,7 +22,20 @@ export function sentenceStarts(w: Work): void {
       for (const a of gs) lineOf.set(a, j)
     })
     const text = [...mem.text].sort((x, y) => x - y)
-    const words = wordsOn(content, text.map(gA), (i) => lineOf.get(text[i] as number) ?? -1, sourceText(content))
+    const firsts: number[] = []
+    const words = wordsOn(
+      content,
+      text.map(gA),
+      (i) => lineOf.get(text[i] as number) ?? -1,
+      sourceText(content),
+      firsts,
+    )
+    // (each placed word by its first glyph on A, an element's word by every glyph of its: where a paragraph TeX opened inside the
+    // unit is found to begin, facts-pass.ts readOpens)
+    const wordAt = new Map<number, readonly [number, number]>()
+    words.forEach(([o, j], k) => {
+      if (j >= 0) wordAt.set(text[firsts[k] as number] as number, [o, j])
+    })
     // (an element a sentence may begin with, where a row's start falls on it (its translator set it first in its sentence:
     // "\method{} trains …", "\citet{x} proposes …"), placed at its ink's first box on A, its line and x0, as a word is; never a
     // display (a block of its own) nor an element TeX set outside the unit's text (kept where it stands). Words alone, the left
@@ -33,9 +46,12 @@ export function sentenceStarts(w: Work): void {
       const k = el?.ink[0]
       if (!el || !k || el.kind === 'display' || el.keep) continue
       const j = standsOn(mem.lines, k[0], k[2], k[4], k[5])
-      if (j >= 0) words.push([o, j, k[1]])
+      if (j < 0) continue
+      words.push([o, j, k[1]])
+      for (const a of mem.els.get(id) ?? []) wordAt.set(a, [o, j])
     }
     words.sort((a, b) => a[0] - b[0])
     if (words.length) mem.words = words
+    if (wordAt.size) mem.wordAt = wordAt
   }
 }

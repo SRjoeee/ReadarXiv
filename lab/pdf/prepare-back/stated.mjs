@@ -15,10 +15,10 @@
 import { readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../../packages/typeset/tests/replay/l1.ts'
 import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
 import { unitClass } from '../../../packages/engine/src/locate/content-classes.ts'
+import { TEXT_CHARACTERS, textSymbolHere } from '../../../packages/engine/src/source/latex-front.ts'
 import { symbolText } from '../../../src/pdf-reader/engine/rules/text-symbols.mjs'
 import { identifiersIn, inMemory, loadProject } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { isInkless } from '../../../src/pdf-reader/engine/translate/mt.mjs'
-import { switchesOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { passThroughOf, switchesOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
 
 /** how a unit made on arXiv's page reads where it stands for one of the baseline's */
 export const CAUSE = Object.freeze({
@@ -45,9 +45,10 @@ export const CAUSE = Object.freeze({
   // its label's), of any class, today's glyph text an in-order part of that unit's: accepted)
   held: 'held whole by another unit',
   // ((o), the coordinator's rulings of 2026-11-11 on lane style-wire: a source unit of today's the candidate writes as today's
-  // TeX with each kernel or textcomp text symbol that is a character of its text now (latex-front.mjs textCharacter: `\%`, `\&`,
-  // `\#`, `\$`, `\{`, `\}`, \textasciitilde, \textbar, \textless, \textgreater, \textbackslash) its character, and each group
-  // that carries nothing its content (instrument.mjs passThroughOf), and the marks a command prints around its argument text
+  // TeX with each kernel or textcomp text symbol that is a character of its text now its character (the source reader's own
+  // reading, latex-front.ts TEXT_CHARACTERS and textSymbolHere: an ASCII one anywhere, a sign beyond it after the unit's first word
+  // but a note's mark right after a word), and each group that carries nothing its content (the instrument's own,
+  // instrument.ts passThroughOf), and the marks a command prints around its argument text
   // (latex-front.mjs wrapOf: \\enquote's quotation marks), and a face switch first in a bare group the group's face, no element
   // (instrument.mjs switchesOf: `{\\em …}` stated as `\\emph{…}` is): the same unit, its id moved with its pieces, wherever
   // either lays it (its holder the candidate's unit))
@@ -235,43 +236,59 @@ const FORMULA_MARK = '\ufffc'
 const UNREAD = '\u2400'
 /** how near two boxes' edges are one edge (PDF units: lines and boxes are stated to a hundredth) */
 const ON = 0.05
-/** how many groups opened after `from` are open at `at` (a piece directly in a group whose content begins at `from`: 0) */
-const depthAt = (ps, from, at) => {
-  let d = 0
-  for (let k = from; k < at; k++) d += ps[k].kind === 'open' ? 1 : ps[k].kind === 'close' ? -1 : 0
-  return d
-}
-/** today's TeX of a unit as v2 writes it: each text symbol that is a character of v2's text its character (a control word's
- *  skipped spaces and a group around it alone with it, as TeX reads them), the pieces of `drop` (the ends of the groups v2
- *  writes as their content) out, white space as one space; null where no piece is either */
+/** a text as the source reader's walk holds one: its UTF-8 bytes, each a character (the Latin-1 view) */
+const walkView = (s) => Array.from(new TextEncoder().encode(s ?? ''), (b) => String.fromCharCode(b)).join('')
+/** today's TeX of a unit as v2 writes it: each text symbol that is a character of v2's text where it stands its character (the
+ *  source reader's own reading, textSymbolHere, of v2's pieces before it; a control word's skipped spaces and a group around it
+ *  alone with it, as TeX reads them), the pieces of `drop` (the ends of the groups v2 writes as their content) out, white space
+ *  as one space; null where no piece is either */
 function writtenAs(ps, drop, marked = new Set(), verbatim = new Set()) {
   // (literal stretches, and where a command's pair stood that v2 writes as the marks it prints: those marks or nothing)
   const parts = ['']
   let changed = drop.size > 0 || verbatim.size > 0
+  // (the unit's pieces as v2 holds them before the one at hand, a symbol it reads as a character a text piece of it)
+  const before = []
+  const hold = (q) => before.push(q.kind === 'text' ? { t: 'text', s: walkView(q.s) } : { t: q.kind, src: q.src })
+  /** a placeholder's source as v2 reads it where it stands: its character where it is a character of v2's text there, else null */
+  const characterAt = (src) => {
+    const c = symbolOf(src)
+    return c !== null && textSymbolHere(c, before) ? c : null
+  }
   for (let k = 0; k < ps.length; k++) {
     const p = ps[k]
     // (a group v2 writes as one placeholder of the same TeX: as it is written, its symbols the source's)
     if (verbatim.has(k)) {
       parts[parts.length - 1] += p.kind === 'text' ? p.s : (p.src ?? '')
+      hold(p)
       continue
     }
     if (drop.has(k)) {
       if (marked.has(k)) parts.push(null, '')
+      hold(p)
       continue
     }
-    const sym = p.kind === 'ph' ? characterOf(p.src) : null
-    const group = p.kind === 'open' && p.src === '{' && ps[k + 1]?.kind === 'ph' && characterOf(ps[k + 1].src) !== null && ps[k + 2]?.kind === 'close'
+    const sym = p.kind === 'ph' ? characterAt(p.src) : null
+    const group = p.kind === 'open' && p.src === '{' && ps[k + 1]?.kind === 'ph' && ps[k + 2]?.kind === 'close' ? characterAt(ps[k + 1].src) : null
     let add = ''
-    if (group) {
-      add = characterOf(ps[k + 1].src)
+    if (group !== null) {
+      add = group
       changed = true
+      hold({ kind: 'text', s: group })
       k += 2
     } else if (sym !== null) {
       add = sym
       changed = true
+      hold({ kind: 'text', s: sym })
       // (TeX skips the spaces after a control word, not after the empty group that ends one)
-      if (/^\\[A-Za-z]/.test(p.src) && !/\{\}$/.test(p.src) && ps[k + 1]?.kind === 'text') add += ps[++k].s.replace(/^[ \t]+/, '')
-    } else add = p.kind === 'text' ? p.s : (p.src ?? '')
+      if (/^\\[A-Za-z]/.test(p.src) && !/\{\}$/.test(p.src) && ps[k + 1]?.kind === 'text') {
+        const rest = ps[++k].s.replace(/^[ \t]+/, '')
+        add += rest
+        hold({ kind: 'text', s: rest })
+      }
+    } else {
+      add = p.kind === 'text' ? p.s : (p.src ?? '')
+      hold(p)
+    }
     parts[parts.length - 1] += add
   }
   if (!changed) return null
@@ -317,12 +334,12 @@ function entryPiecesOf(src) {
 }
 /** a dump unit's TeX: its text and each other piece's source, white space as one space */
 const texOf = (x) => (x.pieces ?? []).map((p) => (p.kind === 'text' ? p.s : (p.src ?? ''))).join('').replace(/\s+/g, ' ').trim()
-/** the text symbols that are characters of v2's text (latex-front.mjs TEXT_CHARACTERS) */
-const TEXT_CHARACTERS = new Set(['\\%', '\\&', '\\#', '\\$', '\\{', '\\}', '\\textasciitilde', '\\textbar', '\\textless', '\\textgreater', '\\textbackslash'])
-/** a placeholder's source as that character (alone or before `{}`, its control word's trailing spaces aside), else null */
-const characterOf = (src) => {
-  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?[ \t]*$/.exec(src ?? '')
-  return m && TEXT_CHARACTERS.has(m[1]) ? symbolText(m[1]) : null
+/** a placeholder's source as a symbol of the source reader's table that is a character of its text (latex-front.ts
+ *  TEXT_CHARACTERS: alone or before `{}`, its control word's trailing spaces aside): its character, else null; where it is one,
+ *  textSymbolHere reads */
+const symbolOf = (src) => {
+  const m = /^\\([A-Za-z]+|[^A-Za-z\s])(?:\{\})?[ \t]*$/.exec(src ?? '')
+  return (m && TEXT_CHARACTERS.get(m[1])) ?? null
 }
 /** an e-mail address as a line of addresses writes it: one local part, or several in braces before one domain, at a domain of
  *  two labels or more (RFC 5322's dot-atom, its letters any script's) */
@@ -893,10 +910,12 @@ export function statedOf(base, units, { trails = [], labels = new Map(), glyphs 
   const wroteVerbatim = new Set()
   /** the candidate's unit writing today's unit `u` with pieces `ps` (o), or null */
   const writtenWith = (u, ps) => {
-    // (a bare group holding no declaration of its own, the instrument's rule read off today's pieces; then a command's pair the
-    // candidate does not write, read off its groups, each command's pairs all kept or all dropped by the front end's reading)
+    // (a bare group that scopes no declaration of its own, the instrument's own rule, passThroughOf, read off today's pieces; then
+    // a command's pair the candidate does not write, read off its groups, each command's pairs all kept or all dropped by the
+    // front end's reading)
     const groups = groupsIn(ps)
-    const bare = (g) => g.src === '{' && g.close >= 0 && !ps.slice(g.open + 1, g.close).some((q, j) => q.kind === 'ph' && isInkless({ t: 'ph', src: q.src }) && depthAt(ps, g.open + 1, g.open + 1 + j) === 0)
+    const passed = passThroughOf(ps.map((q) => ({ ...q, t: q.kind })))
+    const bare = (g) => g.src === '{' && passed.has(g.open)
     // (a face switch first in a bare group: the group's face, no element of v2's text, instrument.mjs switchesOf)
     const switched = new Set([...switchesOf(ps.map((q) => ({ ...q, t: q.kind }))).values()].map((x) => x.at))
     const L = u.lines?.[0]

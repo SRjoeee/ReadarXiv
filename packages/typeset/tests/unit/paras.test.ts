@@ -136,6 +136,92 @@ describe('a paragraph opened at its first word (Placed.paras), paired with the r
   })
 })
 
+describe('a paragraph opened directly after the element that ended the one before (Placed.parasAfter)', () => {
+  // (cas-sc's keywords, `Latent Twins \sep Stochastic Solution Operators \sep Wasserstein Approximation`, one a line: each
+  // `\sep` is `\par` and sets nothing; the part names it beside each point, the row returns it in its place and carries no
+  // sentences)
+  const KW = 'Latent Twins \u0000 Stochastic Solution Operators \u0000 Wasserstein Approximation'
+  const kwWords: NonNullable<Placed['words']> = [...KW.matchAll(/[A-Za-z]+/g)].map((w) => [
+    w.index,
+    w.index < 15 ? 0 : w.index < 47 ? 1 : 2,
+    72,
+  ])
+  const sepEl: NonNullable<Placed['els']>[number][1] = {
+    kind: 'umacro',
+    ink: [],
+    text: '',
+    cmd: 'sep',
+    bare: 1,
+    unknown: 1,
+  }
+  const keywords = (o: Partial<Placed> = {}): Placed =>
+    member({
+      lines: [lineAt(700, 150), lineAt(688, 200), lineAt(676, 200)],
+      words: kwWords,
+      paras: [
+        [15, 1],
+        [47, 2],
+      ],
+      parasAfter: ['1', '3'],
+      els: [
+        ['1', sepEl],
+        ['3', sepEl],
+      ],
+      ...o,
+    })
+  const kwRow = (a: string, b: string): Row =>
+    row([
+      { t: 'text', s: 'Latente Zwillinge' },
+      { t: 'el', id: a },
+      { t: 'text', s: ' Stochastische Lösungsoperatoren' },
+      { t: 'el', id: b },
+      { t: 'text', s: ' Wasserstein-Näherung' },
+    ])
+  it('sets one keyword a line, each on the line TeX opened it on, where no sentence start pairs the point', () => {
+    const laid = lay(keywords(), kwRow('1', '3'))
+    expect(laid.state).toBe('laid')
+    expect(laid.lines.map((l) => [l[0], textOf(l)])).toEqual([
+      [700, 'Latente Zwillinge'],
+      [688, 'Stochastische Lösungsoperatoren'],
+      [676, 'Wasserstein-Näherung'],
+    ])
+    expect(laid.lines.every((l) => l[1] === 72)).toBe(true)
+    // (opened, none for want of a start or of sentences; opened by their element, none not returned once)
+    expect(laid.paras).toEqual([2, 0, 0, 2, 0])
+    // (the same row with no element named: the keywords run on, as before)
+    const before = lay(keywords({ parasAfter: undefined }), kwRow('1', '3'))
+    expect(before.lines.some((l) => textOf(l).startsWith('Stochastische'))).toBe(false)
+    expect(before.paras).toEqual([0, 0, 2])
+  })
+  it('opens none at an element the translation does not return exactly once, nor at one two points name, and counts them', () => {
+    // (the reply returns `\sep` 1 twice and 3 never)
+    const twice = lay(keywords(), kwRow('1', '1'))
+    expect(twice.state).toBe('laid')
+    expect(twice.lines.some((l) => l[0] === 688 && textOf(l).startsWith('Stochastische'))).toBe(false)
+    expect(twice.paras).toEqual([0, 0, 0, 0, 2])
+    // (two points naming one element: neither opened)
+    const shared = lay(keywords({ parasAfter: ['1', '1'] }), kwRow('1', '3'))
+    expect(shared.lines.some((l) => textOf(l).startsWith('Wasserstein'))).toBe(false)
+    expect(shared.paras).toEqual([0, 0, 0, 0, 2])
+  })
+  it('leaves a point a sentence start pairs as the sentence opens it (after `\\medbreak`, an element of no ink)', () => {
+    const els: Placed['els'] = [['9', { kind: 'umacro', ink: [], text: '', cmd: 'medbreak', bare: 1, unknown: 1 }]]
+    const content: OutPiece[] = [
+      { t: 'text', s: FIRST_DE },
+      { t: 'el', id: '9' },
+      { t: 'text', s: SECOND_DE },
+    ]
+    // (the sentence's start at its first letter, past the element: the translation's offset 30)
+    const sentences = { src: [SECOND], tr: [FIRST_DE.length + 1] }
+    const named = lay(member({ els, paras: [[SECOND, 2]], parasAfter: ['9'] }), row(content, sentences))
+    const unnamed = lay(member({ els, paras: [[SECOND, 2]] }), row(content, sentences))
+    expect(named.lines).toEqual(unnamed.lines)
+    expect(named.lines.find((l) => textOf(l).startsWith('Der zweite'))?.[0]).toBe(676)
+    expect(named.paras).toEqual([1, 0, 0, 0, 0])
+    expect(unnamed.paras).toEqual([1, 0, 0])
+  })
+})
+
 describe('paraPieces: the row cut where its paired sentence begins, its projection unchanged', () => {
   const proj = (ps: readonly V0Piece[]) =>
     ps.map((p) => (p.t === 'text' ? p.s : p.t === 'ph' || p.t === 'nested' ? '￼' : '')).join('')

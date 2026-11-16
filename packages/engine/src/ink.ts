@@ -103,6 +103,8 @@ export type PageInk = {
   paraEnds?: (InkPoint & { point: number; para: number })[]
   /** where TeX begins a front matter environment no author's (`fm<n>`, FRONT_POINT): the author block's end */
   fronts?: InkPoint[]
+  /** where TeX ends a line at a forced break (`kb<n>`, FORCED_BREAK) */
+  breaks?: InkPoint[]
   regions: InkRegion[]
   paths?: number[]
   shows?: number
@@ -746,6 +748,10 @@ export const PARA_END = /^qe\d+[cjlr]$/
  *  that begins it): kept apart (`fronts`), no mark of any unit's, so that no reader of the marks meets it among their points (an
  *  opening alone read to the next point, own.mjs MR 3); the author block's end (locate/author-block.ts) */
 export const FRONT_POINT = /^fm\d+$/
+/** where TeX ends a line at a forced break (marks.ts STATEMENTS_TEX's BREAKS_TEX: `kb<n>` after \@gnewline's \unskip): kept
+ *  apart (`breaks`), no mark of any unit's, so that no reader of the marks meets it among their points; the line TeX ended at a
+ *  break the marking gives no mark (locate/facts-pass.ts) */
+export const FORCED_BREAK = /^kb\d+$/
 
 /**
  * A page's ink: { glyphs, boxes, points, boxAt, capped, timedOut, degraded, mergedAt, rotated }. `glyphs`: each glyph
@@ -870,6 +876,7 @@ export function inkReader(
     paras: InkPoint[] = [],
     paraEnds: (InkPoint & { point: number; para: number })[] = [],
     fronts: InkPoint[] = [],
+    breaks: InkPoint[] = [],
     turnedOut: TurnedGlyph[] = [],
     pictures: InkPoint[] = [],
     regionPoints: { name: string; glyph: number }[] = []
@@ -1957,6 +1964,8 @@ export function inkReader(
           else if (point && REGION_POINT.test(point)) regionPoints.push({ name: point, glyph: glyphs.length })
           else if (point && FRONT_POINT.test(point))
             fronts.push({ name: point, glyph: glyphs.length, box: boxes.length / 4 })
+          else if (point && FORCED_BREAK.test(point))
+            breaks.push({ name: point, glyph: glyphs.length, box: boxes.length / 4 })
           else if (point && PARA_END.test(point))
             paraEnds.push({
               name: point,
@@ -1997,6 +2006,7 @@ export function inkReader(
       paras,
       paraEnds,
       fronts,
+      ...(breaks.length ? { breaks } : {}),
       regions: regionsOfPoints(regionPoints, glyphs.length),
       ...(indices ? { paths, shows: showAt + 1 } : {}),
       ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}),

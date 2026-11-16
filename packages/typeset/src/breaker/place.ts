@@ -14,18 +14,19 @@ type EndMark = NonNullable<Token['endMark']>
 /** each line's items placed: justified where the slack is within the caps (CJK per gap, but none inside a word: gapsOf,
  *  spaces per space), else left aligned; the unit's last line left aligned, and so a line TeX's own break ends (breakLines' `ends`: the part of a
  *  paragraph before a display, which TeX ends with \parfillskip, and a forced break, \\'s \hfil\break), its spacing the
- *  fit's state (its tracking), never spread to the edge; a centred block centred */
-function placeItems(lines: LaidLine[], f: number, P: FitParams): void {
+ *  fit's state (its tracking), never spread to the edge; a centred block centred. `scale`: the fit's, the size drawn over the
+ *  original's */
+function placeItems(lines: LaidLine[], f: number, P: FitParams, scale: number): void {
   const last = lines.at(-1)
   for (const line of lines) {
     // (the unit's end mark at the end of its line, Token.endMark (breakLines): set at its place, as far from the line's right edge as
-    // TeX set it; the text before it in the room it leaves, the keep-off distance before its ink)
+    // TeX set it, at the fit's scale as its crop is drawn (its rectangle's margin past the ink with it: §18.87); the text before it
+    // in the room it leaves, the keep-off distance before its ink)
     const mark = line.items.at(-1)?.t.endMark ? line.items.pop() : null
+    const pad = mark ? (mark.t.endMark as EndMark).pad * scale : 0
     const full = line.x1 - line.x0
     const cap =
-      mark && line.items.length
-        ? full - (mark.t.endMark as EndMark).pad - mark.w - Math.min(0.5 * f, (mark.t.endMark as EndMark).gap)
-        : full
+      mark && line.items.length ? full - pad - mark.w - Math.min(0.5 * f, (mark.t.endMark as EndMark).gap) : full
     const natural = line.items.reduce((s, it) => s + it.w + (it.asp ?? 0) + (it.kern ?? 0), 0)
     // a closing mark at the line's end may stand in the margin by its blank half (hangOf)
     const end = line.items.at(-1)
@@ -89,7 +90,7 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams): void {
     line.used = x - line.x0
     line.cap = cap
     if (mark) {
-      mark.x = line.x1 - (mark.t.endMark as EndMark).pad - mark.w
+      mark.x = line.x1 - pad - mark.w
       line.items.push(mark)
       line.used = mark.x + mark.w - line.x0
       line.cap = full
@@ -136,7 +137,7 @@ function laidOut(
   P._compress = st.compress
   if (P.lastLines && !clipped)
     toLastLines(r.lines, blocks, P.halfLead?.below, f, () => slotsAt(blocks, { ...st, lead: 1, box: undefined }, P, s))
-  placeItems(r.lines, f, P)
+  placeItems(r.lines, f, P, st.scale)
   boxLines(r.lines, blocks, f, P)
   const count = (t: Token) => (t.s ? [...t.s].length : t.crop ? 1 : 0)
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)

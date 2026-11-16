@@ -30,7 +30,7 @@ const gate = arg('gate') ? [`--gate=${arg('gate')}`] : []
 // under <out>/added and <work>/added, its verdict printed after the set's under its heading, its exit joined to the set's; a run
 // asked for added pairs alone is that run)
 const { pairs, later, apart } = apartOf(asked.length ? asked : PAIRS, { named: asked.length > 0 })
-if (!pairs.length && later.length) process.exit(runApart(import.meta.filename, later, { dirs: { out: OUT, work: WORK } }))
+if (!pairs.length && later.length) process.exit(await runApart(import.meta.filename, later, { dirs: { out: OUT, work: WORK } }))
 if (apart) console.log(`${ADDED_HEADING} ${pairs.join(', ')}`)
 // (the bundles every step serves, named once here and by each step; a set AXT_L1_BUNDLES that is no bundles folder, or lacks a pair
 // asked, stops the run before any step: bundles.ts, as l1.ts resolves it)
@@ -46,4 +46,4 @@ const step = (slot, script, ...a) => {
 if (step('test', 'v2.mjs', `--out=${join(WORK, 'v2')}`, ...toggles, ...fresh, ...pairs)) process.exit(2)
 if (step('e2e', 'render.mjs', `--work=${WORK}`, `--out=${OUT}`, ...pages, ...pairs)) process.exit(2)
 const status = step(null, 'measure.mjs', `--work=${WORK}`, `--out=${OUT}`, ...gate, ...pairs)
-process.exit(Math.max(status, runApart(import.meta.filename, later, { dirs: { out: OUT, work: WORK } })))
+process.exit(Math.max(status, await runApart(import.meta.filename, later, { dirs: { out: OUT, work: WORK } })))

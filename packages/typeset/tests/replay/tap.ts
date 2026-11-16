@@ -21,12 +21,16 @@ export const hasDerived = (name: string) => existsSync(join(DERIVED, `${name}.js
 
 export const readGz = (file: string): unknown => JSON.parse(gunzipSync(readFileSync(file)).toString('utf8'))
 
-/** today's rule params (resolveRules') less the fields an owner's ruling removed from the port's rule set, which the
- *  package's data/rules never held: `borrowGap`, the clearance a borrowed line kept over the next ink, which TeX's paragraph
- *  separation replaces, 2026-11-08 */
-export function ruledParams<T>(params: T): T {
+/** today's rule params (resolveRules') of target `target` as the owner's rulings since have them: less the fields a ruling removed
+ *  from the port's rule set, which the package's data/rules never held (`borrowGap`, the clearance a borrowed line kept over the
+ *  next ink, which TeX's paragraph separation replaces, 2026-11-08), and with the leading a ruling set (2026-11-15, docs/
+ *  PDF-READER.md §18.89: Japanese at jlreq's pitch, `leadEm` 1.7, none for every other script; Korean at xetexko's spread,
+ *  `leadBase` 1.38889) */
+export function ruledParams<T>(params: T, target: string): T {
   const o = { ...(params as Record<string, unknown>) }
   delete o.borrowGap
+  o.leadEm = target === 'ja' ? 1.7 : null
+  if (target === 'ko') o.leadBase = 1.38889
   return o as T
 }
 /** today's blocks (the tap's walked blocks) as today's walk offered their room: its borrow knob offered a block's room only

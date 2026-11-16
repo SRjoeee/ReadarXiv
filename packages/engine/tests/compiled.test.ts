@@ -2,9 +2,10 @@
 // one it does not, and a refusal of the marked compile; and that the source's units are handed out (the caller's function,
 // awaited) before the marked compile is asked. The marked compile is a spy here: no TeX runs. The paper is made here.
 import { describe, expect, test, vi } from 'vitest'
+import { markedOfPaper } from '../src/compile/paper.ts'
 import { type CompiledInput, compiledOf } from '../src/compiled.ts'
 import type { OriginalFacts, StoredInstrument } from '../src/plan.ts'
-import { FROM_UTF8 } from '../src/plan.ts'
+import { FROM_UTF8, INSTRUMENT_OBJECTS } from '../src/plan.ts'
 
 /** what the marked compile's spy answers (null: B, its log and the options below), and the order the steps ran in */
 const marked = vi.hoisted(() => ({ answer: null as unknown, events: [] as string[] }))
@@ -28,6 +29,7 @@ vi.mock('../src/compile/paper.ts', async (real) => {
           options: structuredClone(OPTIONS),
           ms: { probe: 0, compile: 0 },
           base: { pdf: new Uint8Array([37, 80, 68, 70]), log: '' },
+          probeLog: 'the probe log',
         }
       )
     }),
@@ -39,7 +41,7 @@ const PAPER = '\\documentclass{article}\n\\begin{document}\nA paragraph with \\h
 const FACTS: OriginalFacts = { pages: 1, day: 1_700_000_000, banner: '2025' }
 
 /** the stored half of the paper, given `stored` and `original`: its end, the order its steps ran in, its notes */
-async function run(stored: StoredInstrument | null, original = FACTS) {
+async function run(stored: StoredInstrument | null, original = FACTS, more: Partial<CompiledInput> = {}) {
   marked.events = []
   const notes: [string, unknown][] = []
   const input: CompiledInput = {
@@ -57,20 +59,21 @@ async function run(stored: StoredInstrument | null, original = FACTS) {
       await new Promise((r) => setTimeout(r, 0))
       marked.events.push('units')
     },
+    ...more,
   }
   const end = await compiledOf(input)
   return { end, events: [...marked.events], notes }
 }
 
 describe('the stored half', () => {
-  test('none given: the units handed out, then the marked compile; B, its log and options, and the four objects to store', async () => {
+  test('none given: the units handed out, then the marked compile; B, its log and options, and the five objects to store', async () => {
     const { end, events } = await run(null)
     expect(events).toEqual(['units', 'marked'])
     if (!end.ok) throw new Error(end.detail)
     expect([...end.finalPdf]).toEqual([37, 80, 68, 70])
     expect(end.log).toBe('the marked log')
     expect(end.options.texts).toStrictEqual(OPTIONS.texts)
-    expect(end.made && Object.keys(end.made)).toEqual(['b.pdf', 'log', 'plan', 'definitions'])
+    expect(end.made && Object.keys(end.made)).toEqual(['b.pdf', 'log', 'probe.log', 'plan', 'definitions'])
     expect(end.paper.units.length).toBeGreaterThan(0)
   })
   test('one taken (the same facts): no compile; B, its log and the options read back from it; nothing to store', async () => {
@@ -85,13 +88,67 @@ describe('the stored half', () => {
     expect(end.options).toStrictEqual({ texts: OPTIONS.texts, inkless: OPTIONS.inkless, decorated: OPTIONS.decorated })
     expect(end.made).toBe(null)
   })
-  test('one not taken (another page count): said so, the units handed out, then the marked compile, and the four to store', async () => {
+  test('one not taken (another page count): said so, the units handed out, then the marked compile, and the five to store', async () => {
     const fresh = await run(null)
     if (!fresh.end.ok || !fresh.end.made) throw new Error('no instrument made')
     const { end, events, notes } = await run(fresh.end.made, { ...FACTS, pages: 2 })
     expect(notes).toContainEqual(['front', { stored: 'made with another original: compiled anew' }])
     expect(events).toEqual(['units', 'marked'])
-    expect(end.ok && end.made && Object.keys(end.made)).toEqual(['b.pdf', 'log', 'plan', 'definitions'])
+    expect(end.ok && end.made && Object.keys(end.made)).toEqual(['b.pdf', 'log', 'probe.log', 'plan', 'definitions'])
+  })
+  test("the probe's raw log is an object of the stored instrument, beside the log and the plan, and comes back from it", async () => {
+    expect(INSTRUMENT_OBJECTS).toEqual(['b.pdf', 'log', 'probe.log', 'plan', 'definitions'])
+    const fresh = await run(null)
+    if (!fresh.end.ok || !fresh.end.made) throw new Error('no instrument made')
+    expect(FROM_UTF8.decode(fresh.end.made['probe.log'])).toBe('the probe log')
+    const back = await run(fresh.end.made)
+    expect(back.events).toEqual(['units'])
+    expect(back.end.ok && back.end.probeLog).toBe('the probe log')
+  })
+  test("the marked compile asked as Q1 (converge), with the host's bound on a compile's files; the probe's raw log returned", async () => {
+    const bound = { count: 256, bytes: 8 * 2 ** 20 }
+    const { end } = await run(null, FACTS, { filesBound: bound })
+    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ converge: true, filesBound: bound })
+    expect(end.ok && end.probeLog).toBe('the probe log')
+    // (none given: no bound; one taken from a stored instrument: the probe's log stored with it)
+    const fresh = await run(null)
+    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({ converge: true, filesBound: null })
+    if (!fresh.end.ok || !fresh.end.made) throw new Error('no instrument made')
+    const stored = await run(fresh.end.made)
+    expect(stored.end.ok && stored.end.probeLog).toBe('the probe log')
+  })
+  test('Q2: the marked compile asked with `reduce`; a reduced one said so in the plan and the result, and read back so', async () => {
+    const fresh = await run(null)
+    expect(vi.mocked(markedOfPaper).mock.calls.at(-1)?.[1]).toMatchObject({
+      converge: true,
+      reduce: true,
+      statements: true,
+      asks: true,
+    })
+    if (!fresh.end.ok || !fresh.end.made) throw new Error('no instrument made')
+    // (not reduced: the plan as before, no `reduced` in it)
+    expect(fresh.end.reduced).toBe(false)
+    expect(new TextDecoder().decode(fresh.end.made.plan)).not.toContain('reduced')
+    marked.answer = {
+      pdf: new Uint8Array([1]),
+      log: 'the marked log',
+      options: structuredClone(OPTIONS),
+      ms: { probe: 0, compile: 0 },
+      base: { pdf: new Uint8Array([37, 80, 68, 70]), log: '' },
+      probeLog: 'the probe log',
+      guard: { extra: 0, unmarked: [], names: true, failed: [], reduced: true },
+    }
+    try {
+      const r = await run(null)
+      if (!r.end.ok || !r.end.made) throw new Error('no instrument made')
+      expect(r.end.reduced).toBe(true)
+      expect(JSON.parse(new TextDecoder().decode(r.end.made.plan))).toMatchObject({ reduced: true })
+      const back = await run(r.end.made)
+      expect(back.events).toEqual(['units'])
+      expect(back.end.ok && back.end.reduced).toBe(true)
+    } finally {
+      marked.answer = null
+    }
   })
   test('the marked compile refused: the paper cannot be typeset, its words; the units were handed out first', async () => {
     marked.answer = { refused: 'compile', why: 'TeX stopped', ms: {} }

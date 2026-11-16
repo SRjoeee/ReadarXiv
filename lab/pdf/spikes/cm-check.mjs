@@ -1,5 +1,6 @@
 // lab/pdf/spikes/cm-check.mjs
-// CM, converge then mark (layout/paper.mjs layoutMarksOfPaper `converge`), against today's layout compile (L: the marked
+// The pass loop (Q1, layout/paper.mjs layoutMarksOfPaper `converge`: the package's compile/paper.ts convergeThenMark; the
+// rebuilt prepare's identity is lab/pdf/spikes/q1-check.mjs), against today's layout compile (L: the marked
 // original with every pass, `rerun`, latexmk), both in one native TeX Live, on each paper given: the marked PDF's bytes,
 // the marks file's and the layout file's (layout/make.mjs makeLayout over the marks and arXiv's PDF, as
 // spikes/layout-make.mjs makes it), equal or every difference (the pages and lines L has that CM's PDF lost, as the
@@ -44,6 +45,7 @@ import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, st
 import { basename, dirname, join, resolve } from 'node:path'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { LITE } from './lite-pdfjs.mjs'
+import { stampsOf } from './build-stamps.mjs'
 import { latexmkEngine } from './compile-image.mjs'
 import { encodeLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
@@ -104,14 +106,7 @@ function timed(argv, out) {
   return { real, us: user + sys, killed: !!r.error || r.signal !== null }
 }
 /** every regular file (no link) under the build folder, by its path there, with its modification time (s) */
-function walk(dir = BUILD, base = '', out = new Map()) {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name), rel = base ? `${base}/${name}` : name, st = lstatSync(path)
-    if (st.isDirectory()) walk(path, rel, out)
-    else if (st.isFile()) out.set(rel, st.mtimeMs / 1000)
-  }
-  return out
-}
+const walk = () => stampsOf(BUILD)
 /** written since the seeding: newer than the marker */
 const written = (stamps, p) => stamps.has(p) && stamps.get(p) > MARKER
 

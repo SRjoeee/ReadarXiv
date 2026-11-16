@@ -116,13 +116,19 @@ export function apartOf(listed, { named, argv = process.argv.slice(2) }) {
   return { pairs: listed.filter((p) => !isAdded(p)), later: named ? listed.filter(isAdded) : [...ADDED], apart: false }
 }
 
+/** the caller's own output written out: every write to stdout and stderr before it taken by its pipe or file (an empty write's
+ *  callback runs after the writes before it). On macOS a process's stdout to a pipe is asynchronous: lines it still held came after
+ *  the lines of a child writing to the same pipe, or were lost at process.exit (lane cm-c's sentence cover, 2026-11-16: the set's
+ *  numbers after the added pairs' heading, read as none) */
+const flushed = () => Promise.all([process.stdout, process.stderr].map((s) => new Promise((done) => s.write('', done))))
+
 /**
  * The added pairs `later` walked by `script` in a run of their own: the caller's flags but its folders (`dirs`: each flag the
  * caller writes under, given as `<its value>/added`, e.g. `{ out: OUT, work: WORK }`), `--apart`, the pairs; its environment the
- * caller's with addedEnv's. Its output follows the caller's, under ADDED_HEADING (printed by the run itself). Returns its exit
- * status
+ * caller's with addedEnv's. Its output follows the caller's, under ADDED_HEADING (printed by the run itself): the caller's own output
+ * is written out first (flushed). Resolves to its exit status
  */
-export function runApart(script, later, { argv = process.argv.slice(2), dirs = {} } = {}) {
+export async function runApart(script, later, { argv = process.argv.slice(2), dirs = {} } = {}) {
   if (!later.length) return 0
   const own = Object.keys(dirs).map((k) => `--${k}=`)
   const flags = argv.filter((a) => a.startsWith('--') && a !== '--apart' && !own.some((o) => a.startsWith(o)))
@@ -131,8 +137,10 @@ export function runApart(script, later, { argv = process.argv.slice(2), dirs = {
     env = addedEnv()
   } catch (e) {
     console.log(`${ADDED_HEADING} ${later.join(', ')}: not walked: ${e?.message ?? e}`)
+    await flushed()
     return 1
   }
+  await flushed()
   const r = spawnSync(process.execPath, [...process.execArgv, script, ...flags, ...Object.entries(dirs).map(([k, v]) => `--${k}=${join(v, 'added')}`), '--apart', ...later], {
     stdio: 'inherit',
     env: { ...process.env, ...env },

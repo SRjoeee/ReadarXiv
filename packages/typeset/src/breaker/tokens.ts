@@ -93,7 +93,8 @@ export type Token = {
   room?: number
   blockTo?: number
   /** its unit's end mark (El.end, lay/adapt.ts; docs/PDF-READER.md §18.52): a crop the breaker sets at the end of the unit's last
-   *  line, `pad` the distance TeX set from its rectangle's right edge to its line's right edge (the slot's, PDF units), a break
+   *  line, `pad` the distance TeX set from its rectangle's right edge to its line's right edge (the slot's, PDF units at the
+   *  original's size; set at the fit's scale, as the crop is drawn: §18.87), a break
    *  before it, kept off the line's text by `gap` (the original line's own distance to its ink) and half an em at most */
   endMark?: { pad: number; gap: number }
   /** a frame break (B.cuts withPageBreaks: its page, the unit's block its frame begins with, a cut of the frames' share only) */
@@ -227,6 +228,18 @@ const openStyle = (p: Extract<V0Piece, { t: 'open' }>, s: TStyle, d: Designs): T
     ...(f.role !== fam ? { fam: f.role, design: d[f.role] } : {}),
   }
 }
+
+/** a mark that closes a title or opens nothing a sentence starts with (SpanAt.runin's separation): Unicode's
+ *  Terminal_Punctuation (a full stop, a colon, a comma, theirs in full width) or a dash, at a text's end past closing brackets
+ *  and quotes, or at its start */
+const CLOSING_END = /[\p{Terminal_Punctuation}\p{Pd}]$/u
+const CLOSING_START = /^[\p{Terminal_Punctuation}\p{Pd}]/u
+const CLOSERS_END = /[\p{Pe}\p{Pf}"']+$/u
+/** a sentence's end: Unicode's Sentence_Terminal (a full stop, a question or an exclamation mark, theirs in full width) */
+const SENTENCE_END = /\p{Sentence_Terminal}$/u
+/** the elements that stand between a title set in the line and its sentence, none of them its first word: a tie, a citation, a
+ *  note's mark (engine bundle/run-in.ts's BETWEEN, by the part's El.kind) */
+const BETWEEN = new Set(['space', 'cite', 'note-mark', 'footnote'])
 
 const GROUP_ITALIC = 1,
   GROUP_BOLD = 2,
@@ -500,7 +513,12 @@ export function tokens(i: TokensInput): Tokens {
    *  marks takes (the rule before a full-width mark no line opens with, below) */
   const hardSpaces = new WeakSet<Token>()
   let noBreakNext = false,
-    afterHead = false
+    afterHead = false,
+    afterRunin = false
+  /** a title set in the line (SpanAt.runin) whose group is open where it opens a sentence of the row */
+  let runinId: unknown = null
+  /** the paper's own horizontal space laid after such a title, in kernW's units (100 an em of the line's size) */
+  let runinOwn = 0
   const push = (t: Token) => {
     const prev = tokens.at(-1)
     if (noBreakNext && !t.space) t.glue = true
@@ -695,6 +713,51 @@ export function tokens(i: TokensInput): Tokens {
     t.kernW = (t.kernW ?? 0) + 100 * em
     t.kernEnd = true
     if (!g.brk) noBreakNext = true
+    if (afterRunin) runinOwn += 100 * em
+  }
+  // (a script that writes no spaces between its words: Chinese and Japanese, never Korean (keepAll), nor a source that writes
+  // its CJK with spaces between (spacedSource))
+  const spaceless = !keepAll && !i.spacedSource
+  // (a title its source sets in the line at a paragraph's opening with no mark after it, the part's SpanAt.runin (the display
+  // design's F40, docs/PDF-READER.md §18.85): in a script that writes no spaces between its words, the separation between two
+  // sentences after it, one character's width (an em of the line's size: a CJK character's advance), a kern on what the title
+  // ends with, as the paper's own `\quad` is set (kernOn): no stretch of a justified line's, dropped where a line ends after it.
+  // Set before the first thing drawn after the title past the elements between (a tie, a citation, a note's mark): its text, or
+  // an element the row begins its sentence with (a formula); the white space the row set there is its place, taken off. None
+  // where the title's drawn text ends with a closing mark or the text after it begins with one (a colon, a full stop, a dash:
+  // the reply's own separation), nor where a break stands. A script that writes spaces has the reply's own, nothing added.
+  // The paper's own horizontal space laid there (its El.glue, kernOn: `\hspace{0.2em}`, `\quad`) counts toward the em: the gap
+  // is what it leaves missing up to one em, never negative (after `\quad` nothing; the coordinator's amendment of 2026-11-16).
+  // Only where the title still opens a sentence in the row: nothing drawn before it, a break, or a sentence's end (a full stop,
+  // past closing brackets and quotes: the paragraph before a group TeX opened one at); a translation that took the title into
+  // its sentence (2111.09276v1's "\textbf{wikiHow} We treat wikiHow as …", one sentence in Chinese, the group its object) is laid
+  // as before)
+  /** the last token drawn (no space), its index */
+  const lastDrawn = (): number => {
+    let q = tokens.length - 1
+    while (q >= 0 && tokens[q]!.space) q--
+    return q
+  }
+  /** whether the last token drawn ends with a mark of `re`, past closing brackets and quotes */
+  const endsWith = (re: RegExp): boolean => {
+    const s = tokens[lastDrawn()]?.s
+    return typeof s === 'string' && re.test(s.replace(CLOSERS_END, ''))
+  }
+  const opensSentence = (): boolean => {
+    const t = tokens[lastDrawn()]
+    return !t || t.newline !== undefined || t.blockTo !== undefined || endsWith(SENTENCE_END)
+  }
+  /** the separation before `s` (the text drawn next, '' for an element): `s` past its white space where it is set */
+  const runinGap = (s: string): string => {
+    const lead = s.replace(/^\s+/, '')
+    const missing = 100 - runinOwn
+    const q = lastDrawn()
+    const t = tokens[q]
+    if (missing <= 0 || !t || t.newline !== undefined || t.blockTo !== undefined || CLOSING_START.test(lead)) return s
+    tokens.length = q + 1
+    t.kernW = (t.kernW ?? 0) + missing
+    t.kernEnd = true
+    return lead
   }
   // (two elements the source sets side by side, nothing between them there (consecutive pieces of its unit: `k`, the source's
   // index) and in the row (no token between): one word, as TeX set it, whatever their kinds. The later one's first token is glued
@@ -741,6 +804,10 @@ export function tokens(i: TokensInput): Tokens {
         s = dropMarks(s, after, marks)
         after = null
       }
+      if (afterRunin && /\S/.test(s)) {
+        afterRunin = false
+        s = runinGap(s)
+      }
       const text = s
         .replace(/\n/g, ' ')
         .replace(/---/g, '—')
@@ -772,6 +839,7 @@ export function tokens(i: TokensInput): Tokens {
       if (tokens.at(-1)?.blockTo !== opened) tokens.push({ blockTo: opened, w100: 0, brk: true })
     }
     if (p.t === 'open') {
+      if (p.runin && spaceless && opensSentence()) runinId = p.id
       const next = openStyle(p, style(), designs)
       const link = LINK_OPEN.test(p.src as string) && p.id !== undefined ? { link: p.id } : {}
       stack.push({ ...(next ?? style()), ...colourRun(k, p), ...link })
@@ -780,6 +848,11 @@ export function tokens(i: TokensInput): Tokens {
     if (p.t === 'close') {
       if (stack.length > 1) stack.pop()
       if (headId !== null && p.id === headId) afterHead = true
+      if (runinId !== null && p.id === runinId) {
+        afterRunin = !endsWith(CLOSING_END)
+        runinOwn = 0
+        runinId = null
+      }
       return
     }
     if (p.t === 'ph') {
@@ -821,6 +894,13 @@ export function tokens(i: TokensInput): Tokens {
       return
     }
     if (r.mode !== 'none' && r.text !== ' ' && !(r.mode === 'kept' && r.cls === 'display')) after = null
+    // (an element drawn first after a title set in the line, no tie, citation or note's mark: the sentence begins with it)
+    if (afterRunin && (r.mode === 'crop' || !!r.text) && r.text !== ' ' && !r.mark && p.t !== 'nested') {
+      if (!BETWEEN.has(i.cls2[k] ?? '')) {
+        afterRunin = false
+        runinGap('')
+      }
+    }
     if (r.mode === 'crop') {
       const pv = tokens.at(-1)
       const ecglue = !keepAll && pv?.cls === 'cjk' && !pv.leadEnd && !pv.kernW && !(pv.s && kinsoku.ends(pv.s))
@@ -927,7 +1007,6 @@ export function tokens(i: TokensInput): Tokens {
   // (a space is not set between two characters of a spaceless script, nor beside a full-width mark's blank side whatever
   // stands on its other side (markBlankEdge), nor before a full-width mark no line opens with whatever stands before it
   // (markBarredStart; an ordinary space alone): a space after its head (`keep`) and one in a monospaced run are the text's)
-  const spaceless = !keepAll && !i.spacedSource
   const drawnAt = (q: number, step: number) => {
     for (; q >= 0 && q < tokens.length; q += step) if (!tokens[q]!.space) return tokens[q]!
     return null

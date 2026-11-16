@@ -28,6 +28,7 @@ import { frameMeasures, lineGeometry, rooms } from './geometry.ts'
 import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
 import { linksOnA } from './links.ts'
+import { paragraphMeasures } from './measures.ts'
 import { placeUnits } from './members.ts'
 import { groupsOf, type Owned, ownershipOf } from './ownership.ts'
 import { sentenceStarts } from './sentences.ts'
@@ -62,6 +63,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   lineGeometry(w, claims) // 6: reads an ownership still open
   sentenceStarts(w) // 7
   frameMeasures(w) // 8
+  paragraphMeasures(w) // 8, after the frames' measures
   endMarks(w, claims) // 9: the last claim
   // (frozen: a write after this throws; the phases after read it)
   const owned = claims.freeze()
@@ -99,6 +101,15 @@ function close(w: Work, owned: Owned): Located {
         stats.opensUnstated ??= { anchored: 0, plain: 0 }
         stats.opensUnstated.anchored += mem.opensUnstated[0]
         stats.opensUnstated.plain += mem.opensUnstated[1]
+      }
+      for (const [j, anchored] of mem.opensPlain ?? []) {
+        stats.opensPlain ??= []
+        stats.opensPlain.push([mem.ord, j, anchored])
+      }
+      if (mem.opensStated) {
+        stats.opensStated ??= { span: 0, el: 0, break: 0, region: 0, text: 0, words: 0 }
+        const s = stats.opensStated
+        for (const k of Object.keys(s) as (keyof typeof s)[]) s[k] += mem.opensStated[k]
       }
     } else noteUnlocated(mem.cause ?? 'no ink')
   }

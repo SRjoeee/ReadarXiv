@@ -17,13 +17,52 @@ const OPTIONS = {
   decorated: [['\\hlg', 'All good.']],
 }
 
+/** the mark probe's raw log, stored beside the marked compile's */
+const PROBE_LOG = 'This is pdfTeX\nLAYOUT-PROBE 1 lineskip 1.0pt 0.0pt\n'
+
 describe('the stored plan, written and read back', () => {
-  test('the reader reads what the writer wrote: each option, the .bbl and the facts; B and the log as given', () => {
-    const stored = storedInstrumentOf({ finalPdf: B, log: LOG, options: OPTIONS, bbl: BBL, facts: FACTS })
+  test("a reduced marked compile's plan says so (Q2), and is read back so; a plan of another `reduced` is no plan", () => {
+    const stored = storedInstrumentOf({
+      finalPdf: B,
+      log: LOG,
+      probeLog: PROBE_LOG,
+      options: OPTIONS,
+      bbl: null,
+      facts: FACTS,
+      reduced: true,
+    })
     if (!stored) throw new Error('the writer kept no plan')
-    expect(Object.keys(stored)).toEqual(['b.pdf', 'log', 'plan', 'definitions'])
+    expect(JSON.parse(FROM_UTF8.decode(stored.plan))).toMatchObject({ reduced: true })
+    expect(planOf(stored)?.reduced).toBe(true)
+    const plain = storedInstrumentOf({
+      finalPdf: B,
+      log: LOG,
+      probeLog: PROBE_LOG,
+      options: OPTIONS,
+      bbl: null,
+      facts: FACTS,
+    })
+    expect(plain && planOf(plain)).not.toHaveProperty('reduced')
+    const other = {
+      ...stored,
+      plan: new TextEncoder().encode(FROM_UTF8.decode(stored.plan).replace('"reduced":true', '"reduced":false')),
+    }
+    expect(planOf(other)).toBe(null)
+  })
+  test('the reader reads what the writer wrote: each option, the .bbl and the facts; B and the log as given', () => {
+    const stored = storedInstrumentOf({
+      finalPdf: B,
+      log: LOG,
+      probeLog: PROBE_LOG,
+      options: OPTIONS,
+      bbl: BBL,
+      facts: FACTS,
+    })
+    if (!stored) throw new Error('the writer kept no plan')
+    expect(Object.keys(stored)).toEqual(['b.pdf', 'log', 'probe.log', 'plan', 'definitions'])
     expect(stored['b.pdf']).toBe(B)
     expect(FROM_UTF8.decode(stored.log)).toBe(LOG)
+    expect(FROM_UTF8.decode(stored['probe.log'])).toBe(PROBE_LOG)
     expect(FROM_UTF8.decode(stored.definitions)).toBe('{"front":"today","definitions":null}')
     const read = planOf(stored)
     if (!read) throw new Error('the reader read no plan')
@@ -40,6 +79,7 @@ describe('the stored plan, written and read back', () => {
     const stored = storedInstrumentOf({
       finalPdf: B,
       log: LOG,
+      probeLog: PROBE_LOG,
       options: { texts: null, inkless: OPTIONS.inkless },
       bbl: null,
       facts: { ...FACTS, day: null, banner: null },
@@ -50,13 +90,27 @@ describe('the stored plan, written and read back', () => {
     )
     const read = planOf(stored)
     expect(read && [read.lineskip, read.decorated, read.bbl]).toEqual([undefined, undefined, null])
-    const withBbl = storedInstrumentOf({ finalPdf: B, log: LOG, options: OPTIONS, bbl: BBL, facts: FACTS })
+    const withBbl = storedInstrumentOf({
+      finalPdf: B,
+      log: LOG,
+      probeLog: PROBE_LOG,
+      options: OPTIONS,
+      bbl: BBL,
+      facts: FACTS,
+    })
     const json = JSON.parse(FROM_UTF8.decode(withBbl?.plan ?? new Uint8Array())) as { bbl: { bytes: string } }
     expect(json.bbl.bytes).toBe(Buffer.from(BBL.bytes).toString('base64'))
   })
   test('options that would not read back as they are: no plan stored', () => {
     expect(
-      storedInstrumentOf({ finalPdf: B, log: LOG, options: { ...OPTIONS, texts: 1n }, bbl: null, facts: FACTS }),
+      storedInstrumentOf({
+        finalPdf: B,
+        log: LOG,
+        probeLog: PROBE_LOG,
+        options: { ...OPTIONS, texts: 1n },
+        bbl: null,
+        facts: FACTS,
+      }),
     ).toBe(null)
   })
 })

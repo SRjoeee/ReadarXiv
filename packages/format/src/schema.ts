@@ -84,15 +84,12 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       // or a line end where it ends its sentence and sets none (a forced break a run-in label follows: marks/run-ins.ts): a
       // translator may write it after the element so that the sentence ends there
       stop: z.string().optional(),
-      // the element sets nothing where it stands: no character and no space. By TeX's tables (instrument/mt.ts isInkless: a
-      // declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
-      // a table's row rule); or, a command's or a declaration's element (kind `macro`, `other` or `url`), where the marked
-      // compile measured it empty at every occurrence of its unit (the instrument's `empty`) and arXiv's page confirms it, every
-      // placement of it in a part stating no ink and a text of nothing (El `ink` [], `text` ''): a conditional's `\fi`, a
-      // `\natexlab{}`, a `\urldef`'s stored `\url`. Never a space, a tie, a forced break, glue, TeX's alignment tab, one of
-      // TeX's glue or penalty primitives or the kernel's skip and break commands (source/tex-kernel.ts), nor an element that
-      // stands for content set elsewhere (a display, a formula, a note, a citation): no translator needs it, so a wire may
-      // send it on no wire and put it back at its group's front or end
+      // the element sets nothing where it stands: no character and no space. By TeX's tables alone (instrument/mt.ts isInkless:
+      // a declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
+      // a table's row rule); never a space, a tie, a forced break, glue, `\newblock`, TeX's alignment tab, nor an element that
+      // stands for content set elsewhere (a display, a formula, a note, a citation). A paper's own command is never stated so: no
+      // reading of TeX's has yet stated what it sets where it stands (PDF-READER §18.79). No translator needs such an element, so
+      // a wire may send it on no wire and put it back at its group's front or end
       silent: flag.optional(),
       // LaTeX's `\newblock`, where a new block of a bibliography entry begins (BibTeX's styles write it between an entry's
       // authors, title and venue); a skip by its classes' definitions, never `silent`: an entry's parts are its blocks
@@ -270,13 +267,21 @@ export const LinkTo = z.union([z.object({ url: z.string() }), z.object({ dest: z
  *  star), the fill TeX set its run in (a colour piece's, read off the marked compile's log; any other group's, read off its
  *  text's glyphs on A where it is not the fill around it: a link's that hyperref colours); a link group's target where its source names it, as Link.to states an annotation's (an
  *  \href's address, TeX's escapes undone, a \url's text, each in the WHATWG URL parser's form; a \hyperlink's destination by
- *  its name): what the typesetter pairs the group's translation with its annotations by */
+ *  its name): what the typesetter pairs the group's translation with its annotations by; `runin` a title its author set in the
+ *  line at a paragraph's opening with no mark after it (`\noindent\textbf{Global Matching} We leverage …`: a group that opens a
+ *  paragraph of its unit, sets a face, is followed in the source by white space, alone or beside horizontal spacing of the
+ *  paper's own, and then by what begins a sentence, its text ending with no closing mark), the engine's reading of its unit's
+ *  source (bundle/run-in.ts), the same on every member of the unit: the typesetter sets the target script's separation between
+ *  two sentences after it where the translation holds no mark there, the paper's own space there counting toward it
+ *  (docs/PDF-READER.md §18.85). Absent on any other group; a part made before states none, and its titles are
+ *  laid as before */
 export const SpanAt = z.object({
   style: Style.optional(),
   opens: int.optional(),
   cmd: z.string().optional(),
   colour: int.optional(),
   to: LinkTo.optional(),
+  runin: flag.optional(),
 })
 /** a member's label: its kind, its ink (on its own baseline: a raised mark's raised), its style and parts; `line` the index of
  *  its member's text line it stands on, by an element's rule (the line whose band its ink meets, the nearest by baseline: El.ink's
@@ -310,9 +315,11 @@ export const Label = z.object({
  *  its own, over another's ink TeX set between two of its lines), each [that line's index, the depth under its baseline of the
  *  next ink across the run (from its lines' own start to their column's end: a glyph's baseline, a box's top), the depth under
  *  it of TeX's text block bottom in its column there (the foot of the box TeX shipped the column's text in)], stated where TeX
- *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural:
- *  what a translation may borrow under a run, never past that bottom nor nearer the next ink than `sep` (the owner's ruling of
- *  2026-11-08). A part made before 2026-11-08 may state the room under each run otherwise (`ends`, which nothing reads) */
+ *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural (a
+ *  heading's, under its title set on lines of its own: its \@startsection after-skip and the \baselineskip and \parskip around
+ *  it, natural, TeX's normal separation from its last baseline to the next paragraph's first): what a translation may borrow
+ *  under a run, never past that bottom nor nearer the next ink than `sep` (the owner's ruling of 2026-11-08). A part made
+ *  before 2026-11-08 may state the room under each run otherwise (`ends`, which nothing reads) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
@@ -343,6 +350,40 @@ export const Room = z.object({
   over: num.optional(),
   runs: z.array(z.tuple([int, num, num])).optional(),
   sep: num.optional(),
+  // (the separation TeX set under its last line, by its class: [the glue's name, TeX's own, its natural size, its shrink], PDF
+  // units, the glue in force there as the marked compile states it. `parskip` a paragraph over a paragraph (the next one's
+  // \parskip); `afterskip` under a heading (its \@startsection after-skip), `runin` after a heading set in the line (the
+  // horizontal skip TeX sets after its title, the after-skip negated), `beforeskip` over a heading (its before-skip as TeX adds
+  // it); under a float's last member its float's (`textfloatsep` over the text under a top float, `intextsep` round a float
+  // set here, `floatsep` over the next float, `dbltextfloatsep` and `dblfloatsep` a float across both columns, `fpsep` and
+  // `dblfpsep` between the floats of a float page), and over a float's first member from text above it (`intextsep`, or
+  // `textfloatsep` over a bottom float); in a float, over its caption `abovecaptionskip`, under it `belowcaptionskip`; over the
+  // footnotes `footins` (\skip\footins), between two `footnotesep` (TeX's strut at a note's top: no shrink). Absent where TeX's
+  // class of the gap is not stated or not known: what follows is no unit's text, ink no unit owns stands between, the class makes
+  // its headings without \@startsection, a part made before. Nothing reads it to lay a page yet (the display design's 2d, F40)
+  gap: z
+    .tuple([
+      z.enum([
+        'parskip',
+        'afterskip',
+        'runin',
+        'beforeskip',
+        'textfloatsep',
+        'floatsep',
+        'intextsep',
+        'dbltextfloatsep',
+        'dblfloatsep',
+        'fpsep',
+        'dblfpsep',
+        'abovecaptionskip',
+        'belowcaptionskip',
+        'footins',
+        'footnotesep',
+      ]),
+      num,
+      num,
+    ])
+    .optional(),
   // (the ink that stays beside its text lines: ink no member owns (a glyph no unit claims, a rule or an image no member's) on a
   // line's band within its text block, wholly before the line's start or after its end, each side's pieces as one box: [that
   // line's index, x0, y0, x1, y1]. TeX set it on the line and no translation replaces it: a translation's line laid over it,
@@ -392,6 +433,21 @@ export const Placed = z.object({
   // placed, its second or third where the first is not (docs/PDF-READER.md §17.2). Every word, not the shared cutter's starts:
   // 82 % of Microsoft's starts are among those (40,409 over the corpus's stored rows, 2026-11-08), under design-a's 90 %
   words: z.array(z.tuple([int, int, num])).optional(),
+  // the paragraphs TeX opened inside its text, each by its first word: [that word's offset in the source projection (an entry of
+  // `words`, where Row.sentences.src counts), the index in `lines` of the line TeX opened it on (that entry's line)], ascending.
+  // Every point whose first word is placed on that line, whatever else also states it (a group's open, SpanAt.opens; an element,
+  // El.opens; a forced break, El.ends): a carrier a translator's reply can drop, the word one it cannot (docs/PDF-READER.md
+  // §18.69). None after a display, nor where its line or the line before is held (KEPT). A part that states it states `words` in
+  // every part that holds the member. Absent: no such point, a unit not lit by sentence, a part made before (FORMAT stays)
+  paras: z.array(z.tuple([int, int])).optional(),
+  // beside `paras`, point by point (the same length): the element of the unit each point's first word stands directly after in
+  // the source projection, by its piece id (an element the translator is sent in its place, not `silent`, or a nested unit),
+  // nothing but white space between its character and the word's offset, and no ink of it TeX set after the paragraph's end:
+  // the element that ended the paragraph before (cas-sc's `\sep`, which is `\par`), which a reply returns in its place where it
+  // returns the element; null where none does. Absent
+  // where no point names one. A field of its own, not a third member of `paras`' tuples, which a reader of before refuses (a
+  // tuple holds its length): that one strips it, reads the points as it did, and FORMAT stays (docs/PDF-READER.md §18.69)
+  parasAfter: z.array(z.union([z.string(), z.null()])).optional(),
   fixed: int.optional(),
   // its own text, where a rule tells a translation by it: a babel name's on A, a figure text's and a table cell's as its source
   // writes them (its text pieces, an element a space): a translation that says nothing else came back as it went
@@ -510,6 +566,10 @@ export const Head = z.object({
   // [document, site, count, its first reason] (the engine's warnings.ts RECOVER_SITES): the page or the font read as PDF.js
   // answered it. None where nothing was (the corpus's every paper)
   recovered: z.array(z.tuple([z.enum(['A', 'B']), z.string().max(32), int.min(1), z.string().max(200)])).optional(),
+  // the prepare's marked compile left the optional classes of points out (the engine's POINT_CLASSES; design-performance Q2): a
+  // marked request died where TeX said no error, and every one from it on was asked without them, so that the paragraph ends
+  // and alignment those points state were read off the page. Absent: every class (the corpus's every paper but such a one)
+  reduced: z.literal(true).optional(),
 })
 
 // ---------------------------------------------------------------- a translation (packages/translate's Result, by unit id)

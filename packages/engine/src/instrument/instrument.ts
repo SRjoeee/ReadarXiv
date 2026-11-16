@@ -18,10 +18,16 @@ import {
   boxedAlignOf,
   framesOf,
   readAlign,
+  readBodies,
   readBoxAlign,
   readCellBoxes,
+  readGlues,
+  readHeads,
+  readMeasures,
+  readParas,
   readRefNames,
   readSkips,
+  readWhole,
 } from '../marks/channels.ts'
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
@@ -32,10 +38,12 @@ import { runIns } from '../marks/run-ins.ts'
 import { unitId } from '@readarxiv/format'
 import {
   classOf,
+  endPiecesOf,
   followsOf,
   headEnd,
   INK_ANY,
   leadStep,
+  probeFactsOf,
   readColours,
   readSkipProbe,
   refKeyOf,
@@ -48,6 +56,7 @@ import { bundleUnitsOf } from './units.ts'
 import { phClass, texToText } from './layer1.ts'
 import { textPieceOf } from '../source/text-piece.ts'
 import { symbolText } from '../source/text-symbols.ts'
+import { DECLARATION_WORDS } from '../source/tex-kernel.ts'
 import { displayStop, isInkless } from './mt.ts'
 import { keptAsWritten, namesOfBlocks, paperNamesOf, RUNNING } from './language.ts'
 import type { Piece } from '@readarxiv/format'
@@ -138,9 +147,14 @@ export type InstrumentInput = {
     texts?: unknown
     inkless?: readonly string[] | null
     decorated?: unknown
+    /** the asks' texts, [source, text] pairs (MarkedOptions.told) */
+    told?: unknown
     lineskip?: [number, number] | null
   }
   log?: string
+  /** the mark probe's own log, as the box stores it beside the instrument (the compile move's B3): read for TeX's quotation marks
+   *  in the samples' texts and for the samples TeX ends with ink a fill pushed (marks.ts probeFactsOf); none, as before */
+  probeLog?: string | null
   pdfjs: PdfJs
   documentOptions?: Record<string, unknown>
   made?: { compiler?: string; tree?: string; front?: string }
@@ -213,11 +227,19 @@ const BACKREF_GAP = '\u2002'
 /** today's flat pieces ([open … close] pairs) as nested ones, and its run-in labels `must` (runIns); a source unit's are stated
  *  once TeX's glyphs are read (piecesOf, marksOf) */
 export const contentOf = (pieces: readonly SrcPiece[], o: PiecesOptions = {}): Piece[] => runIns(piecesOf(pieces, o))
+/** a declaration a group scopes, as a placeholder's whole source: one of LaTeX's declarations of a font, a size, a paragraph's
+ *  shape or its line breaking (rules/tex-kernel.mjs DECLARATION_WORDS, the source reader's `declares` reads the same), alone or
+ *  ended by an empty group, or `\\color{…}`; what it declares lasts to its group's end, so a bare group around it carries it */
+const SCOPED = new RegExp(
+  String.raw`^\\(?:${DECLARATION_WORDS.join('|')})(?![A-Za-z@])(?:\s*\{\})?\s*$|^\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*$`,
+)
 /**
  * The pieces of a unit's groups that carry nothing, by index, each open with its close: a pair the front end read as setting its
  * argument alone (latex-front.mjs identityPair, the open piece's `sets` 0: RevTeX's `\\bibinfo{title}{…}` and name fonts, a
- * `.bbl`'s `\\showarticletitle`, a paper's `\\newcommand{\\x}[1]{#1}`), or a bare group `{…}` that holds no declaration of its own
- * (no placeholder that sets nothing at its own level, mt.mjs isInkless: a switch it would scope), both of its ends in the unit.
+ * `.bbl`'s `\\showarticletitle`, a paper's `\\newcommand{\\x}[1]{#1}`), or a bare group `{…}` that scopes no declaration of its own
+ * (none at its own level of the declarations a group scopes, SCOPED: a placeholder that sets nothing and scopes nothing, a
+ * `\\relax`, a `\\nobreak`, a `\\protect`, a `\\-`, gives it nothing to carry: 2610.21377v1's 176 `{.\\nobreak\\kern0.3333em}`, F9 (c)),
+ * both of its ends in the unit.
  * Such a group sets no face, no fill, no link and no paragraph of its own (TeX sets its content as it would with no group), and
  * a span of it has nothing to carry but costs a tag pair on the tags wire: it is its content (lane style-wire C, the coordinator's
  * ruling of 2026-11-11). Over the 88 papers' bundles, 20,172 pairs and 2,943 bare groups, every fill on one also its link's around
@@ -235,7 +257,7 @@ export function passThroughOf(pieces: readonly SrcPiece[]): Set<number> {
         if (depth--) continue
         out.add(k).add(j)
         return
-      } else if (!depth && p.sets !== 0 && q.t === 'ph' && isInkless(q)) return
+      } else if (!depth && p.sets !== 0 && q.t === 'ph' && SCOPED.test(q.src ?? '')) return
     }
   })
   return out
@@ -918,6 +940,7 @@ export function classesOf(
   pieces: readonly PieceIn[],
   colours: ReadonlyMap<number, number> | null = null,
   texts: ReadonlyMap<string | undefined, string> | null = null,
+  told: ReadonlyMap<string | undefined, string> | null = null,
 ): [string, PieceClass][] {
   const out: [string, PieceClass][] = []
   const first = new Map<string, string>()
@@ -961,6 +984,9 @@ export function classesOf(
     // its rendering by among the unit's characters where the macro's glyphs are the unit's text (no points of its own))
     const t = (c.cls === 'macro' || c.cls === 'umacro') && texts ? (texts.get(p.src) ?? texts.get(src)) : undefined
     if (typeof t === 'string' && /\S/.test(t)) x.text = t
+    // (the text TeX set for it where the document uses it, every glyph stated as itself: the loop's first pass's ask)
+    const said = (c.cls === 'macro' || c.cls === 'umacro') && told ? (told.get(p.src) ?? told.get(src)) : undefined
+    if (typeof said === 'string' && /\S/.test(said)) x.told = said
     Object.assign(x, sourceFactsOf(src, k, first, colours, statedBreak(p)))
     // (a piece that sets a URL \urldef stored: the \url piece's class and copy, a text piece, a URL)
     if (shown.has(k)) {
@@ -1935,6 +1961,17 @@ export function outsidePieces(
 /** the texts the marking's probe showed the paper's macros set, by source: as markedOfPaper's options hold them (readInkTexts'
  *  [source, text] pairs: what the box and the lab hand in), as the marks file's `marking.texts` (flat [source, text, …]) or a
  *  Map; null where none is given */
+/** the texts a reading gave (textsOf's), with those another reading of the same probe gives for a source the first gave none:
+ *  the back half's reading of TeX's quotation marks (probeFactsOf), which only adds answers */
+function withTexts(
+  base: Map<string, string> | null,
+  more: readonly (readonly [string, string])[] | undefined,
+): Map<string, string> | null {
+  if (!more?.length) return base
+  const out = new Map(base ?? [])
+  for (const [src, text] of more) if (!out.has(src)) out.set(src, text)
+  return out
+}
 export function textsOf(texts: unknown): Map<string, string> | null {
   if (texts instanceof Map) return texts
   if (!Array.isArray(texts)) return null
@@ -2033,6 +2070,7 @@ export async function instrumentOf({
   finalPdf,
   options = {},
   log = '',
+  probeLog = null,
   pdfjs,
   documentOptions = {},
   made = {},
@@ -2088,7 +2126,13 @@ export async function instrumentOf({
   })
   const texts = options.texts,
     inkless = options.inkless ?? null
-  const shown = textsOf(texts)
+  // (the probe's own log, where the box hands it over: TeX's quotation marks read in the samples' texts, a text the stored
+  // reading gave none taken (F16); and the samples TeX ends with ink a fill pushed (F14))
+  const probe = probeLog ? probeFactsOf(probeLog, units) : null
+  const shown = withTexts(textsOf(texts), probe?.texts)
+  // (the asks' texts: an element whose ink nothing on the page bounds is stated by them, locate/geometry.ts)
+  const told = textsOf(options.told)
+  const endSamples = new Set(probe?.ends ?? [])
   const names = new Set(pages.flatMap((pg) => pg.points.map((x) => x.name)))
   const follows = followsOf(units, names, shown, inkless)
   const own = ownOf(pages, {
@@ -2126,7 +2170,7 @@ export async function instrumentOf({
   const classesBy: Map<string, PieceClass>[] = []
   const facts = unitFactsOf(paper)
   // (the probe's decorated texts: the cells a decorated word holds whole, and the pieces of no point found by their text below)
-  const decorated = textsOf(options.decorated)
+  const decorated = withTexts(textsOf(options.decorated), probe?.decorated)
   const held = decoratedCellsOf(units, decorated, facts.kept)
   units.forEach((u, i) => {
     // (its run-in labels and what TeX set for its groups, once B's glyphs are owned: marksOf, below)
@@ -2139,8 +2183,13 @@ export async function instrumentOf({
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown),
-      spans = spansOf(u.pieces, colours.get(i) ?? null),
+    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown, told)
+    // (the piece the unit ends with that TeX sets as its end mark: El.end on its element, F14)
+    for (const k of endPiecesOf(u.pieces, endSamples)) {
+      const c = classes.find(([id]) => id === String(k))
+      if (c) c[1].end = true
+    }
+    const spans = spansOf(u.pieces, colours.get(i) ?? null),
       passed = passedOf(u.pieces)
     classesBy[i] = new Map(classes)
     out.push({
@@ -2288,11 +2337,24 @@ export async function instrumentOf({
   // (each page's text frame as TeX shipped it: the bodies' statements in the log, LAYOUT_TEX's AXT-BODY, at their points)
   const frames = framesOf(pages, lastTexLog(log))
   // (each unit's \baselineskip and \parskip where its paragraph ends, LINES_TEX's AXT-LINES: TeX's paragraph separation there)
-  const skips = [...readSkips(lastTexLog(log))].map(([unit, [baselineskip, parskip]]) => ({
+  // (and \parskip's shrink where it is of points: TeX's least separation there)
+  const skips = [...readSkips(lastTexLog(log))].map(([unit, [baselineskip, parskip, parskipShrink]]) => ({
     unit,
     baselineskip,
     parskip,
+    ...(parskipShrink !== undefined ? { parskipShrink } : {}),
   }))
+  // (each heading's \@startsection skips and the paper's float, caption and footnote separations, where the marked compile states
+  // them: STATEMENTS_TEX's AXT-SECT and AXT-GLUE)
+  const heads = [...readHeads(lastTexLog(log))].map(([unit, h]) => ({ unit, ...h }))
+  const glues = readGlues(lastTexLog(log))
+  const whole = readWhole(lastTexLog(log))
+  const bodySides = [...readBodies(lastTexLog(log))].map(([n, b]): [number, 0 | 1 | 2] => [n, b.side])
+  const paras = [...readParas(lastTexLog(log))]
+  // (each paragraph's measure as TeX breaks it, STATEMENTS_TEX's AXT-MEASURE: those that are not the full \hsize)
+  const measures = [...readMeasures(lastTexLog(log))]
+    .filter(([, x]) => x.shape || x.hangindent !== 0 || x.leftskip !== 0 || x.rightskip !== 0)
+    .map(([para, x]) => ({ para, ...x }))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
@@ -2319,6 +2381,12 @@ export async function instrumentOf({
         paragraphEnds,
         ...(frames.some(Boolean) ? { frames } : {}),
         ...(skips.length ? { skips } : {}),
+        ...(heads.length ? { heads } : {}),
+        ...(glues.length ? { glues } : {}),
+        ...(measures.length ? { measures } : {}),
+        ...(whole.length ? { whole } : {}),
+        ...(bodySides.length ? { bodySides } : {}),
+        ...(paras.length ? { paras } : {}),
       },
       made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' },
     },

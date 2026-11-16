@@ -25,10 +25,10 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import { analyze, inMemory, isMemoryError, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
+import { analyze, inMemory, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { deflate, inflate } from './codec.mjs'
 import { flatOf, pieceKOf } from './pieces.mjs'
 import { silentInkOf } from './silent-gate.mjs'
 import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
@@ -90,14 +90,17 @@ async function compile(req) {
   if (!dir) { console.log('NEEDS_COMPILE', key); process.exit(3) }
   if (!existsSync(join(dir, 'out.log'))) return { ok: false, error: 'no log' }
   const pdf = existsSync(join(dir, 'out.pdf')) ? new Uint8Array(readFileSync(join(dir, 'out.pdf'))) : null
-  const files = req.files && existsSync(join(dir, 'files')) ? new Map(filesUnder(join(dir, 'files')).map(p => [p.split(sep).join('/'), new Uint8Array(readFileSync(join(dir, 'files', p)))])) : undefined
+  // (the files a compile wrote but its outputs and the tools' logs, as the box's jail gives them: a cache an older fill made holds
+  // every file that changed, these among them, which the pass loop would carry to the next pass where the box carries none)
+  const files = req.files && existsSync(join(dir, 'files')) ? new Map(filesUnder(join(dir, 'files')).map(p => p.split(sep).join('/')).filter(p => !OUTPUTS.test(p)).map(p => [p, new Uint8Array(readFileSync(join(dir, 'files', p)))])) : undefined
   return { ok: req.draft ? true : !!pdf?.length, pdf, log: readFileSync(join(dir, 'out.log'), 'latin1'), ...(files ? { files } : {}) }
 }
 const HOST_ENGINES = ['pdflatex', 'xelatex', 'lualatex', 'latex']
-const deflate = b => new Uint8Array(deflateSync(b))
-// (the bounded inflate's refusal and a failed allocation thrown as they came: only a stream zlib refuses is read again raw. A
-// failed allocation read again raw came back as a data error the wrap took for its page's: memory.mjs)
-const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE' || isMemoryError(e)) throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
+/** what the box's jail leaves out of a compile's files (lab/pdf/spikes/cm-check.mjs's OUTPUTS): its outputs, the tools' logs */
+const OUTPUTS = /\.(?:pdf|xdv|dvi|log|blg|ilg|glg|fls|fdb_latexmk)$|\.synctex\.gz$/
+// (the box's bound on the files one compile gives back, which the marked compile's pass loop holds what it carries to: the
+// web's one answer's, 256 files and 8 MiB)
+const FILES_BOUND = { count: 256, bytes: 8 * 2 ** 20 }
 
 // ---- the prepare
 const bundleDir = join(OUT, 'bundles', id)
@@ -118,6 +121,7 @@ const end = await prepare(() => ({ files: source, original: arxivBytes, stored: 
   made: madeId,
   tree: { year, served: SERVED, fallback: PINS.default },
   engines: HOST_ENGINES,
+  filesBound: FILES_BOUND,
   pdfjs,
   documentOptions,
   PL,

@@ -169,7 +169,9 @@ export type Laid = {
   tie?: { scale: number; by: number }
   /** the paragraph points its part states by their first word (Placed.paras, design-display 2a), where it states one: how many
    *  opened a block on the line TeX opened them on, how many flowed on for want of a sentence start of its row at the point's
-   *  word, how many for want of its row's sentences (unit/breaks.ts paraPieces). A part that states none, none */
+   *  word, how many for want of its row's sentences (unit/breaks.ts paraPieces); where its part names the element a point
+   *  stands after (Placed.parasAfter), also how many opened directly after their element and how many flowed on because the
+   *  row does not return their element exactly once. A part that states none, none */
   paras?: ParasStated
   /** its laid lines on this page, baseline first (a turned line, its items' `dir`: from its origin (x0, y), x1 − x0 its length
    *  along it) */

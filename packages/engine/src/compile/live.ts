@@ -7,17 +7,25 @@
 import { analyze } from '../source/paper-meta.ts'
 import { paperNames, theoremNames } from '../source/paper-names.ts'
 import {
+  ASK_TEX,
+  askable,
+  askOf,
+  looksAhead,
   CALL_TEX,
   classNamesTex,
   DVI_LAYOUT_TEX,
   inkSamples,
   LAYOUT_CLASSES,
   LAYOUT_TEX,
+  LAYOUT_TEX_REDUCED,
   layoutMarking,
   leadSamples,
   literalNames,
   markProbeTex,
+  POINTS_TEX,
+  POINTS_TEX_REDUCED,
   probeSamples,
+  STATEMENTS_TEX,
   refKeysOf,
   refsTex,
   regionsTex,
@@ -36,6 +44,7 @@ import {
   MARK_DEF,
   markUnits,
   patch,
+  phPiece,
   texFilesOf,
   texText,
 } from '../source/latex-front.ts'
@@ -76,6 +85,70 @@ export interface CompileRequest {
 /** the paper opened (openPaper): its files, what arXiv would compile, the project read, its units and the facts beside them,
  *  its structural names and its theorem names */
 export type Paper = ReturnType<typeof openPaper>
+/** the units whose source LaTeX copies as written (the source reader's kinds): a heading's argument and a caption's, which the
+ *  .aux, the .toc and the .lof hold as text and hyperref's nameref keeps as a label's title (askPlan asks nothing there) */
+const COPIED: ReadonlySet<string> = new Set(['heading', 'caption'])
+/** where the ink probe's asks stand in a paper's units (askPlan): by unit index, each ask's piece (its index among the unit's
+ *  pieces, its source and which of the unit's placeholders of that source it is) and the ask's TeX; and the samples asked, by
+ *  their ask's index */
+export type AskPlan = {
+  at: Map<number, { k: number; src: string; nth: number; ask: string }[]>
+  asked: string[]
+}
+/**
+ * Where the ink probe asks each of `samples` where the document uses it (the compile move's F15, PDF-READER §18.80; the loop's
+ * first pass, compile/paper.ts markedOfPaper `asks`): right before its first use in a unit of the paper's own, in the order the
+ * units stand, that is safe to ask at. Not in a unit nested in another (it is written inside its outer one, whose use is asked),
+ * a heading's or a caption's argument (COPIED), an algorithm float's body (the front end's `pseudocode`); not a sample whose own
+ * groups or conditionals do not close in it (marks.ts askable), nor one whose source spans lines (its copy would move every line
+ * after it); not right after a piece that may read it as its argument, past white space (marks.ts looksAhead:
+ * `\\urldef\\tempurl`), a later use asked then
+ */
+export function askPlan(project: Paper['project'], samples: readonly string[]): AskPlan {
+  const want = new Set(samples)
+  const plan: AskPlan = { at: new Map(), asked: [] }
+  const code = new Set(project.pseudocode ?? [])
+  project.units.forEach((u, i) => {
+    if (u.nested || !u.file || COPIED.has(u.kind) || code.has(i)) return
+    const seen = new Map<string, number>()
+    u.pieces.forEach((p, k) => {
+      if (p.t !== 'ph') return
+      const nth = seen.get(p.src) ?? 0
+      seen.set(p.src, nth + 1)
+      // (nor one whose source spans lines: its copy in the ask would move every line after it, and TeX's \inputlineno with them,
+      // which the marks write to the .aux, 2501.14787v1's `\axt@dpseen`: a pass more)
+      if (!want.has(p.src) || !askable(p.src) || p.src.includes('\n')) return
+      let j = k - 1
+      while (j >= 0 && u.pieces[j]!.t === 'text' && !/\S/.test(u.pieces[j]!.s ?? '')) j--
+      if (j >= 0 && looksAhead(u.pieces[j])) return
+      want.delete(p.src)
+      const at = plan.at.get(i) ?? plan.at.set(i, []).get(i)!
+      at.push({ k, src: p.src, nth, ask: askOf(plan.asked.length, p.src) })
+      plan.asked.push(p.src)
+    })
+  })
+  return plan
+}
+/** a marked unit with its asks (originalFiles `asks`): each ask right before its piece (the `nth` placeholder of that source) and
+ *  before the marks of ours that open it (a placeholder whose source begins `\\axt`), so that no mark is parted from its piece */
+function withAsks(u: SourceUnit, asks: readonly { src: string; nth: number; ask: string }[]): SourceUnit {
+  const pieces = [...u.pieces]
+  for (const a of asks) {
+    let n = -1,
+      at = -1
+    for (let k = 0; k < pieces.length; k++) {
+      const p = pieces[k]!
+      if (p.t === 'ph' && p.src === a.src && ++n === a.nth) {
+        at = k
+        break
+      }
+    }
+    if (at < 0) continue
+    while (at > 0 && pieces[at - 1]!.t === 'ph' && /^\\axt/.test((pieces[at - 1] as { src: string }).src)) at--
+    pieces.splice(at, 0, phPiece(a.ask))
+  }
+  return { ...u, pieces }
+}
 /** what originalFiles writes into `spans`: the main file's head of ours (`skip`) and each unit's lines and bytes, when asked */
 export type Spans = { skip?: number; lines?: () => UnitLines<SourceUnit>[] }
 /** originalFiles' options */
@@ -91,6 +164,11 @@ export type OriginalOptions = {
   names?: boolean
   pastBegin?: boolean
   transcode?: boolean
+  reduced?: boolean
+  statements?: boolean
+  /** with `layout`: the ink probe's asks where the document uses each sample (askPlan; the loop's first pass, compile/paper.ts
+   *  markedOfPaper `asks`), ASK_TEX in the head; none, or none asked: the bytes as before */
+  asks?: AskPlan | null
 }
 
 /** Whether a compile's last TeX pass stopped short of the document's end: TeX's fatal errors — an emergency stop (a
@@ -105,7 +183,7 @@ export const stoppedShort = (log: string | null | undefined): boolean =>
   )
 /**
  * Whether a compile ran through, the one test of a compile's success wherever a PDF or a log of it is taken (the marked
- * original and CM's passes, layout/paper.mjs): TeX ran (`ok`), and its last pass
+ * original and the pass loop's passes, compile/paper.ts): TeX ran (`ok`), and its last pass
  * neither stopped short (stoppedShort) nor ended before the document's end — every compile carries END_TEX, and only a
  * pass that set the last page logs it (completeLog). A pass halted at a TeX error writes no such line, whatever the
  * compiler made of it: a TeX page that took a halted pass's status for a success gave 2610.02069's final as the 18 pages
@@ -457,12 +535,16 @@ export function markedPreamble(
  *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before. `pastBegin`
  *  (on with `layout`: the layout compile, our base page): a unit's line probe after an environment's \\begin goes past the
  *  spaces \\begin skips (latex-front.mjs patch), which it would set; off, the bytes as before. `transcode`
- *  (off with `layout`: the layout compile and CM's drafts, our base page): a file of a declared Latin-1 family encoding
+ *  (off with `layout`: the layout compile, its pass loop's passes, our base page): a file of a declared Latin-1 family encoding
  *  that is not UTF-8 (project.transcode) is written as the paper's own bytes, under the paper's own \\usepackage[…]{inputenc},
  *  as every other file is. On, patch writes it as UTF-8, which only a translation of the source could have (this switches no
  *  inputenc option): 2610.20581's latin1 source, transcoded under its own inputenc, set each é as Ã© and each no-break
  *  space in math as a \\^ error, 74 errors and a page more than arXiv's. On by default without `layout`, as the bytes were
- *  before (CM's unlayered drafts pass it off: layout/paper.mjs convergeThenMark) */
+ *  before. `reduced` (with `layout`: a reduced marked compile, design-performance Q2): no TeX of an optional class of points
+ *  (marks.mjs POINT_CLASSES, LAYOUT_TEX_REDUCED), on the one line it stands on, so that no line moves; without `layout` the
+ *  bytes as before. `statements` (with `layout`: the rebuilt prepare's marked compile, compiled.ts compiledOf): the statements
+ *  today's reader's compile does not make (marks.ts STATEMENTS_TEX), right after the layout marks on their line, none in a
+ *  reduced compile (they state no ownership and no text); off, the bytes as before */
 export function originalFiles(
   { fsys, project: read, meta }: Paper,
   {
@@ -477,6 +559,9 @@ export function originalFiles(
     names = true,
     pastBegin = !!layout,
     transcode = !layout,
+    reduced = false,
+    statements = false,
+    asks = null,
   }: OriginalOptions = {},
 ): Map<string, Uint8Array> {
   // (the paper's own bytes: patch transcodes no file)
@@ -488,8 +573,23 @@ export function originalFiles(
     patched: Map<string, Uint8Array> | null = null,
     called = false
   if (layout) {
-    const marked = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart }),
-      paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
+    const laid = layoutMarking(project.units, layout, { lines, switches, inkless, complete, apart })
+    // (the asks, where given, in the marked units: each before its piece and the marks that open it, the marks as they were)
+    const asked = asks?.asked.length ? asks : null
+    const of = new Map<SourceUnit, SourceUnit>()
+    const marked = asked
+      ? {
+          units: laid.units.map((u, i) => {
+            const a = asked.at.get(i)
+            if (!a) return u
+            const v = withAsks(u, a)
+            of.set(v, u)
+            return v
+          }),
+          mark: (u: SourceUnit) => laid.mark(of.get(u) ?? u),
+        }
+      : laid
+    const paperOf = new Map(marked.units.map((c, i) => [c, project.units[i]]))
     // (an author's call the source states, \axtcall: its definition in the head, CALL_TEX)
     called = marked.units.some((u) => !!marked.mark(u)?.call)
     const asSource = unmarked
@@ -536,7 +636,9 @@ export function originalFiles(
     MARK_DEF +
     (dvi ? DVI_MARK_DEF : '') +
     (layout
-      ? LAYOUT_TEX +
+      ? (reduced ? LAYOUT_TEX_REDUCED : LAYOUT_TEX) +
+        (statements && !reduced ? STATEMENTS_TEX : '') +
+        (asks?.asked.length ? ASK_TEX : '') +
         (dvi ? DVI_LAYOUT_TEX : '') +
         (called ? CALL_TEX : '') +
         (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) +
@@ -551,6 +653,21 @@ export function originalFiles(
     let found: UnitLines<SourceUnit>[] | null = null
     spans.skip = head.length
     spans.lines = () => (found ??= unitLines(raw!, patched!, out, project.main, head.length))
+  }
+  return out
+}
+/** a marked request's files reduced (design-performance Q2; compile/paper.ts markedOfPaper `reduce`): its main file's points'
+ *  TeX without the optional classes' (POINTS_TEX_REDUCED in POINTS_TEX's place) and without the statements after them (the bytes
+ *  originalFiles `reduced` writes), every
+ *  other file, the carried ones among them, as it is; a main file of no layout marks as it is */
+export function reducedFiles(files: ReadonlyMap<string, Uint8Array>, main: string): Map<string, Uint8Array> {
+  const out = new Map(files),
+    bytes = files.get(main)
+  if (bytes) {
+    const text = latin1(bytes).split(POINTS_TEX).join(POINTS_TEX_REDUCED)
+    // (and the statements after the layout marks, which state no ownership and no text: originalFiles writes none reduced)
+    const statements = LAYOUT_TEX_REDUCED + STATEMENTS_TEX
+    out.set(main, latin1Bytes(STATEMENTS_TEX ? text.split(statements).join(LAYOUT_TEX_REDUCED) : text))
   }
   return out
 }

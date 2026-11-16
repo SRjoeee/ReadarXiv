@@ -3,6 +3,7 @@
 // Reads: the index, the options' annotations; the record's `members` (their lines and elements); the ownership (a glyph's owner).
 // Writes: `links` (assigned: read by close).
 import type { LinkBorder } from '@readarxiv/format'
+import { type Annotation, annotationOf, pointsOf } from './annotations.ts'
 import { r2 } from './lines.ts'
 import type { Owned } from './ownership.ts'
 import { assign, type Located, type LocateOptions, type Member, type Work } from './work.ts'
@@ -28,33 +29,12 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
     const off = m.offA[p] as number
     // (each annotation's glyph points and the member that owns it, by its place in `out`)
     const under: { pts: number[]; mem: Member | undefined }[] = []
-    for (const an of list as {
-      annotationType?: number
-      rect?: number[]
-      quadPoints?: ArrayLike<number> | null
-      url?: string
-      unsafeUrl?: string
-      dest?: unknown
-      borderStyle?: { width?: number; style?: number }
-      borderColor?: ArrayLike<number> | null
-    }[]) {
-      if (an.annotationType !== 2 || !Array.isArray(an.rect) || an.rect.length !== 4) continue
-      const to =
-        (an.url ?? an.unsafeUrl)
-          ? { url: String(an.url ?? an.unsafeUrl) }
-          : an.dest !== undefined
-            ? { dest: JSON.stringify(an.dest) }
-            : null
-      if (!to) continue
-      const [x0, y0, x1, y1] = an.rect.map(r2) as [number, number, number, number]
-      const boxes = quadBoxesOf(an.quadPoints) ?? [
-        [Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)],
-      ]
-      const inside = (x: number, y: number) => boxes.some((b) => x > b[0] && x < b[2] && y > b[1] && y < b[3])
-      const pts: number[] = []
-      pg.glyphs.forEach((g, j) => {
-        if (/\S/.test(g.u) && inside((g.x0 + g.x1) / 2, g.y)) pts.push(off + j)
-      })
+    for (const an of list as Annotation[]) {
+      const read = annotationOf(an)
+      if (!read) continue
+      const { to } = read
+      const [x0, y0, x1, y1] = read.rect
+      const pts = pointsOf(pg.glyphs, read).map((j) => off + j)
       let owner: [number, string] | undefined
       let label = false
       let owning: Member | undefined
@@ -137,18 +117,4 @@ function borderOf(an: {
   const rgb = ((c[0]! & 255) << 16) | ((c[1]! & 255) << 8) | (c[2]! & 255)
   const style = an.borderStyle?.style
   return style === 2 ? [w, rgb, 'dashed'] : style === 5 ? [w, rgb, 'underline'] : [w, rgb]
-}
-/** an annotation's quads (PDF.js's quadPoints, eight numbers a quad) as boxes, null where it has none or they are ill formed
- *  (today's links.mjs quadBoxes) */
-function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, number, number][] | null {
-  if (!q || typeof q.length !== 'number' || !q.length) return null
-  const flat = Array.from(q)
-  if (flat.length % 8 || !flat.every(Number.isFinite)) return null
-  const out: [number, number, number, number][] = []
-  for (let i = 0; i < flat.length; i += 8) {
-    const xs = [flat[i]!, flat[i + 2]!, flat[i + 4]!, flat[i + 6]!]
-    const ys = [flat[i + 1]!, flat[i + 3]!, flat[i + 5]!, flat[i + 7]!]
-    out.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)])
-  }
-  return out
 }

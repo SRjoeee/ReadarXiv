@@ -183,6 +183,13 @@ export interface PieceClass {
   tie?: true
   /** a text macro's text as TeX sets it (the marking's probe), where its glyphs are the unit's text, no ink of its own */
   text?: string
+  /** the text TeX set for it where the document uses it, every glyph stated as itself (the loop's first pass's ask, marks.ts
+   *  readAskTexts): what the reading states of its element where nothing on the page bounds its ink (locate/geometry.ts) */
+  told?: string
+  /** TeX sets it as its unit's end mark (the compile move's F14): the unit's last ink, whose own box TeX ends with ink a glue of
+   *  infinite stretch pushed (the probe's listing: an author's \qed written in the text), or which the source pushes with a fill
+   *  right before it (`\hfill $\square$`): marks.ts endPiecesOf; its element's El.end */
+  end?: true
 }
 
 export interface Instrument {
@@ -222,13 +229,45 @@ export interface Instrument {
      *  none (no body bracketed and stated there, a two-column page whose columns TeX did not give the width of) */
     frames?: (TexFrame | null)[]
     /** each unit's \baselineskip and \parskip, natural, in PDF units, where its paragraph ends (marks/channels.ts readSkips,
-     *  LINES_TEX's AXT-LINES): TeX's normal paragraph separation there; a unit TeX set no paragraph for states none */
-    skips?: { unit: number; baselineskip: number; parskip: number }[]
+     *  LINES_TEX's AXT-LINES): TeX's normal paragraph separation there; and \parskip's shrink where it is of points (none: an
+     *  instrument made before it was read, or a shrink of an infinite order); a unit TeX set no paragraph for states none */
+    skips?: { unit: number; baselineskip: number; parskip: number; parskipShrink?: number }[]
+    /** each heading's skips as TeX evaluated them where it set its title, by unit index (marks/channels.ts readHeads,
+     *  STATEMENTS_TEX's AXT-SECT): LaTeX's \@startsection's before-skip and after-skip as the class gives them, signed (a
+     *  negative before-skip TeX adds negated; a negative after-skip sets the title in the line, its negation the skip after
+     *  it), natural and shrink, and \baselineskip and \parskip there, in PDF units; a heading TeX set through no \@startsection
+     *  (KOMA-Script's, titlesec's, a chapter's) states none */
+    heads?: {
+      unit: number
+      before: [number, number]
+      after: [number, number]
+      baselineskip: number
+      parskip: [number, number]
+    }[]
+    /** the paper's float, caption and footnote separations, natural and shrink in PDF units, by TeX's name (marks/channels.ts
+     *  readGlues, STATEMENTS_TEX's AXT-GLUE), in the order TeX wrote them: once the document begins (`at` 0), then at each
+     *  float where one changed (`at` the float's serial, B's `fs<n>`: a caption's skips as its box holds them, the separations
+     *  once it is closed): the last of a name at or before a float's serial is in force there */
+    glues?: { at: number; name: GlueName; natural: number; shrink: number }[]
+    /** each paragraph's measure as TeX breaks it into lines, where it is not the full \hsize (a \parshape, a \hangindent, a
+     *  \leftskip or \rightskip of some natural size), by its end's serial (B's `qe<n><code>`; marks/channels.ts readMeasures,
+     *  STATEMENTS_TEX's AXT-MEASURE), in PDF units */
+    measures?: ({ para: number } & ParaMeasure)[]
+    /** the body brackets (B's `bs<n>`..`be<n>`, by serial) that hold a whole page, floats inside, where no \@makecol ran for it
+     *  (marks/channels.ts readWhole, STATEMENTS_TEX's AXT-WHOLE): where TeX placed a float there no bracket says */
+    whole?: number[]
+    /** each body bracket's side as TeX states it (LAYOUT_TEX's AXT-BODY, marks/channels.ts readBodies), by serial: 1 and 2 the left
+     *  and the right column of a two-column page (\@makecol's), 0 a one-column body or a page's whole box */
+    bodySides?: [number, 0 | 1 | 2][]
+    /** each unit's paragraph as TeX's own order states it (marks/channels.ts readParas: the last AXT-MEASURE before the unit's
+     *  `AXT-ALIGN <u> p`), the paragraph its end mark ended in: [unit index, paragraph serial] */
+    paras?: [number, number][]
   }
   /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
   recovered?: Recovered
-  /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity) */
-  made: { compiler: string; tree: string; front: string }
+  /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity); `reduced` where
+   *  its marked compile left the optional classes of points out (design-performance Q2: front.ts prepareFront, the head's) */
+  made: { compiler: string; tree: string; front: string; reduced?: true }
 }
 
 /** a page's text frame as TeX set it, in PDF units on its page: the text block and its columns (one: the block itself); and
@@ -239,6 +278,35 @@ export interface TexFrame {
   columns: [number, number][]
   foot?: number
 }
+
+/** a paragraph's measure as TeX breaks it into lines (marks/channels.ts readMeasures), in PDF units: its \hsize, \hangindent
+ *  and \hangafter, \leftskip's and \rightskip's natural sizes, and its \parshape's lines ([indent, length], where it has a
+ *  shape) */
+export type ParaMeasure = {
+  hsize: number
+  hangindent: number
+  hangafter: number
+  leftskip: number
+  rightskip: number
+  shape?: [number, number][]
+}
+
+/** the separations GAPS_TEX states the paper's values of, by the names it writes them under (TeX's own: \textfloatsep … ,
+ *  \@fpsep as `fpsep`, \skip\footins as `footins`): what marks/channels.ts readGlues reads */
+export const GLUE_NAMES = Object.freeze([
+  'textfloatsep',
+  'floatsep',
+  'intextsep',
+  'dbltextfloatsep',
+  'dblfloatsep',
+  'fpsep',
+  'dblfpsep',
+  'abovecaptionskip',
+  'belowcaptionskip',
+  'footins',
+  'footnotesep',
+] as const)
+export type GlueName = (typeof GLUE_NAMES)[number]
 
 /** the empty owners of a page of n glyphs */
 export const ownersOf = (n: number): Owners => ({

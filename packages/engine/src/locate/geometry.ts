@@ -5,7 +5,7 @@
 // glyphs, pages, style, lead, read facts, elements, asInk, smallCaps, label, span fills and faces, plain text and counter.
 // Phase 8, frameMeasures: each line's column and measure (TeX's frame where it shipped the page's), a label's own line's
 // measure. Reads the index and the record's `members` and `units`; writes the members' lines' columns and measures and their
-// labels' measures.
+// labels' measures. TeX's own measure of a line where its paragraph states one is the phase's second step, measures.ts's.
 // Phase 10, rooms: each member's room under and after its lines. Reads the index and the record's `members` (their
 // travelling ink, phase 9's end marks among it) and `units`; writes the members' rooms.
 import type { El, Ink, Label, Line, Piece, Room } from '@readarxiv/format'
@@ -32,7 +32,8 @@ import { type CutLine, cutLines, isInk, lineSize, r2 } from './lines.ts'
 import type { Owned } from './ownership.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from '../own/stream.ts'
-import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, type Work } from './work.ts'
+import { gapsOf } from './gaps.ts'
+import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, travellingInk, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
 const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
@@ -64,7 +65,7 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
 }
 
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */
-const ON_BASE = 0.05
+export const ON_BASE = 0.05
 
 export function lineGeometry(w: Work, owned: Owned): void {
   const { ins, B, inkA, m, pageA, pageB, placeSpan, unitB, roleB, emptyPiece, outsidePiece, gA, atA } = w.ix
@@ -498,6 +499,8 @@ export function lineGeometry(w: Work, owned: Owned): void {
         } else ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), r2(y0)])
       })
       const el: El = { kind: p.kind, ink }
+      // (TeX sets it as its unit's end mark: a fill pushed it to its line's end, its own box's or the source's (F14))
+      if (classOf.get(id)?.end) el.end = 1
       if (rowsKept(id) || outside.has(id)) el.keep = 1
       // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
       // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
@@ -600,6 +603,10 @@ export function lineGeometry(w: Work, owned: Owned): void {
         !gl.some((a) => gA(a).nu)
       )
         el.copy = textOf(gl.map(gA), lineEnds)
+      // (a nested unit's mark, a footnote's: its copy text the glyphs TeX set for it, what its crop shows (a mark is drawn as its
+      // crop, El.mark). The instrument reads `\footnotemark` from no source of the mark's and states "?", whatever the class sets:
+      // "1", "∗" (the compile move's F21: 179 marks of 37 of the 89 papers). One TeX set no glyph for keeps the instrument's)
+      if (p0.t === 'unit' && gl.length && !gl.some((a) => gA(a).nu)) el.copy = textOf(gl.map(gA), lineEnds)
       // (a URL's copy text, its crop's: its glyphs' text as the page sets it (urlCopyOf), what the crop shows: no space at a line's end
       // inside it, which TeX's url package breaks without one, #633 review. The instrument's copy is the source's reading
       // (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro prints (a DOI's, an eprint's): 30
@@ -636,6 +643,18 @@ export function lineGeometry(w: Work, owned: Owned): void {
       if (!ink.length && el.text === undefined && INKED_CLASSES.has(stated)) {
         if (emptySpan || emptyPiece.has(`${mem.unit}|${id}`) || jointPiece.has(`${mem.unit}|${id}`)) el.text = ''
         else if (outsidePiece.has(`${mem.unit}|${id}`)) el.keep = 1
+        // (an inked macro whose ink nothing on the page bounds (no closing point, a paper's macro's; no opening point where it is
+        // glued to the word before it; or set after its unit's end point) is stated by the text TeX set for it where the document
+        // uses it, every glyph stated as itself (PieceClass.told, the loop's first pass's ask; the coordinator's ruling on the
+        // third cause, 2026-11-16, lane cm-fix): elsarticle's `\sep` set as "," in 2610.38269v1's keywords, glued to the word
+        // before it, and in 2610.20848v1's after the unit's end point. Its glyphs stay the unit's text's, as a text macro's do
+        // (\bert above); one whose text TeX did not state glyph by glyph stays not found, and one the probe states a text for
+        // (PieceClass.text) is stated by that later, as before)
+        else if ((cls === 'macro' || cls === 'umacro') && classOf.get(id)?.told && !classOf.get(id)?.text) {
+          el.text = classOf.get(id)!.told!
+          mem.told ??= new Set()
+          mem.told.add(id)
+        }
       }
       mem.elements.push([id, el])
     }
@@ -752,9 +771,13 @@ export function rooms(w: Work): void {
   const ink = inkIndex(inkA)
   // (TeX's paragraph separation where each unit's paragraph ends: its \baselineskip and \parskip, LINES_TEX's AXT-LINES)
   const texSep = new Map((ins.tex.skips ?? []).map((k) => [k.unit, r2(k.baselineskip + k.parskip)]))
+  // (the separation TeX set under each member by its class, and a heading's paragraph separation: gaps.ts, from the marked
+  // compile's statements, STATEMENTS_TEX's)
+  const gaps = gapsOf(w, ink.under)
   for (const mem of members)
-    if (mem.lines.length)
-      mem.room = roomOf(mem, inkA, m.offA, ink, {
+    if (mem.lines.length) {
+      const g = gaps.get(mem)
+      const room = roomOf(mem, inkA, m.offA, ink, {
         frames: framesA,
         // (a table's cell keeps its own room, a figure text, an ink figure and a name theirs: no run's room is theirs to borrow)
         runs: !(
@@ -763,14 +786,16 @@ export function rooms(w: Work): void {
           mem.kind === 'name' ||
           (mem.unit >= 0 && units[mem.unit]?.cell)
         ),
-        sep: mem.unit >= 0 && mem.name === undefined ? texSep.get(mem.unit) : undefined,
+        sep: mem.unit >= 0 && mem.name === undefined ? (texSep.get(mem.unit) ?? g?.sep) : undefined,
       })
+      mem.room = g?.gap ? { ...room, gap: g.gap } : room
+    }
 }
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure TeX's frame of it where TeX shipped the page's frame
- *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below; TeX's \parshape
- *  and \hangindent measures: stage 1b) */
+ *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below). TeX's own measure of
+ *  a paragraph that states one (its \parshape, \hangindent, \leftskip, \rightskip) is read after it (measures.ts) */
 function columnsAndMeasures(
   members: Member[],
   inkA: Doc,
@@ -895,27 +920,33 @@ function columnsAndMeasures(
 
 /** the first ink under a height on a page across x0..x1: the highest top under `foot` of a glyph that is ink (isInk, whatever its
  *  Unicode; something of it shown) or of a box (a page-sized one aside: a background), -Infinity for none; each page's ink sorted by its
- *  tops once, read by halving from the top down (roomOf asks it under each member's last line and each run's) */
-type InkUnder = (page: number, foot: number, x0: number, x1: number) => number
+ *  tops once, read by halving from the top down (roomOf asks it under each member's last line and each run's). `skip` passes over
+ *  the ink it names (`who`: a glyph's index on its page, a box's index complemented, ~index): a member's own between its lines */
+type InkUnder = (page: number, foot: number, x0: number, x1: number, skip?: (who: number) => boolean) => number
 /** the next ink's line under a height across x0..x1: of the ink whose top stands under `foot`, the highest baseline, a glyph's
  *  own (TeX's \baselineskip runs between baselines), a box's top (a rule, a picture: no baseline over it); -Infinity for none */
 type InkNext = InkUnder
 function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
-  const byPage = new Map<number, { top: Float64Array; base: Float64Array; x0: Float64Array; x1: Float64Array }>()
+  const byPage = new Map<
+    number,
+    { top: Float64Array; base: Float64Array; x0: Float64Array; x1: Float64Array; who: Int32Array }
+  >()
   const indexOf = (page: number) => {
     const got = byPage.get(page)
     if (got) return got
     const pg = inkA.pages[page - 1]!
     const W = pg.view[2] - pg.view[0]
     const H = pg.view[3] - pg.view[1]
-    const all: [number, number, number, number][] = []
-    for (const g of pg.glyphs) if (isInk(g) && !g.unseen) all.push([g.top, Math.min(g.y, g.top), g.x0, g.x1])
+    const all: [number, number, number, number, number][] = []
+    pg.glyphs.forEach((g, j) => {
+      if (isInk(g) && !g.unseen) all.push([g.top, Math.min(g.y, g.top), g.x0, g.x1, j])
+    })
     for (let b = 0; b < pg.kinds.length; b++) {
       const qx0 = pg.boxes[4 * b]!
       const qy0 = pg.boxes[4 * b + 1]!
       const qx1 = pg.boxes[4 * b + 2]!
       const qy1 = pg.boxes[4 * b + 3]!
-      if (!(qx1 - qx0 >= 0.9 * W && qy1 - qy0 >= 0.75 * H)) all.push([qy1, qy1, qx0, qx1])
+      if (!(qx1 - qx0 >= 0.9 * W && qy1 - qy0 >= 0.75 * H)) all.push([qy1, qy1, qx0, qx1, ~b])
     }
     all.sort((a, b) => b[0] - a[0])
     const ix = {
@@ -923,6 +954,7 @@ function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
       base: Float64Array.from(all, (a) => a[1]),
       x0: Float64Array.from(all, (a) => a[2]),
       x1: Float64Array.from(all, (a) => a[3]),
+      who: Int32Array.from(all, (a) => a[4]),
     }
     byPage.set(page, ix)
     return ix
@@ -938,10 +970,11 @@ function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
     return lo
   }
   return {
-    under: (page, foot, x0, x1) => {
+    under: (page, foot, x0, x1, skip) => {
       const ix = indexOf(page)
       for (let k = firstUnder(ix, foot); k < ix.top.length; k++)
-        if ((ix.x1[k] as number) > x0 && (ix.x0[k] as number) < x1) return ix.top[k] as number
+        if ((ix.x1[k] as number) > x0 && (ix.x0[k] as number) < x1 && !skip?.(ix.who[k] as number))
+          return ix.top[k] as number
       return Number.NEGATIVE_INFINITY
     },
     // (by tops downward: a baseline is never over its own top, so none further down is higher than the best once tops fall
@@ -1012,8 +1045,8 @@ function roomOf(
   // block, the page's glyphs under that baseline by more than three quarters of its pitch, its own travelling ink aside (its text,
   // label and elements set anew: a script of its last line) and its kept rows counted (a display that stays under it is the next
   // ink the fill meets); of the highest, those within half a size, their median baseline)
-  const travels = new Set<number>([...mem.text, ...mem.label])
-  for (const [id, l] of mem.els) if (!mem.elements.find(([k]) => k === id)?.[1].keep) for (const a of l) travels.add(a)
+  const own = travellingInk(mem)
+  const travels = own.glyphs
   const T = lastText[4] - 0.75 * (mem.lead > 0 ? mem.lead : 1.2 * mem.style.size)
   const off = offA[tp - 1] as number
   const under: DocGlyph[] = []
@@ -1033,7 +1066,8 @@ function roomOf(
   // a cell's): a member running on to the next page or column may borrow at the foot of the one it leaves, a run over a kept row
   // of its own only down to that row. A run: its lines on one page each standing above the one under it and across its column
   // (its lines' measures), with no other ink between the two (the first ink under the upper the lower's own: a float TeX set
-  // between two lines of a paragraph ends a run, as today's blocks end at its gap), to a kept row. Its room is read across it as
+  // between two lines of a paragraph ends a run, as today's blocks end at its gap; its own travelling ink there is its lines',
+  // travellingInk: a rule TeX set under its line, 2608.18502v1 p9's `\underline`, ended its run), to a kept row. Its room is read across it as
   // its lines are laid (today's block's extent, the typesetter's measure): its lines' own hull, from their start (a member's
   // first line on a row it shares starts there) to their furthest end, a line borrowed under it laid at its last line's (a
   // paragraph set beside a figure, 2602.23285v2 p5 t32: read to the column's end, the figure beside it was the ink under every
@@ -1042,6 +1076,8 @@ function roomOf(
   // (TeX's frame, Instrument.tex.frames' foot): the depth under the run's last baseline of the next ink's baseline (a glyph's;
   // a box's top), the page's bottom edge where none, and of that bottom)
   const runs: [number, number, number][] = []
+  const mine = (page: number) => (who: number) =>
+    who >= 0 ? travels.has((offA[page - 1] as number) + who) : own.boxes.has(`${page}|${~who}`)
   for (let e = mem.lines.length - 1; tex.runs && e >= 0; ) {
     const end = mem.lines[e] as Line
     if (end[9] & 1) {
@@ -1059,8 +1095,8 @@ function roomOf(
       if (l[9] & 1 || l[0] !== end[0] || l[4] <= lower[4] || Math.max(l[8], l[3]) <= mx0 || Math.min(l[7], l[2]) >= mx1)
         break
       // (another's ink between, across the two lines' hull: the first under the upper higher than the lower's own top, its
-      // hundredth aside)
-      if (inkBelow(l[0], l[6] - 0.5, Math.min(ox0, l[2]), Math.max(ox1, l[3])) > lower[5] + 0.005) break
+      // hundredth aside, the member's own travelling ink passed over)
+      if (inkBelow(l[0], l[6] - 0.5, Math.min(ox0, l[2]), Math.max(ox1, l[3]), mine(l[0])) > lower[5] + 0.005) break
       mx0 = Math.min(mx0, l[7], l[2])
       mx1 = Math.max(mx1, l[8], l[3])
       ox0 = Math.min(ox0, l[2])
