@@ -131,6 +131,9 @@ interface FactsIndex {
   linesOn: Map<number, Line[]>
   /** the lines of the members that are a table's cells */
   cellLines: ReadonlySet<Line>
+  /** each line's member's unit (-1 none), and each unit's paragraph by TeX's own order (Instrument.tex.paras) */
+  lineUnit: ReadonlyMap<Line, number>
+  paraOfUnit: ReadonlyMap<number, number>
   /** a line's block: TeX's frame where it shipped the page's, else the measure of the page's or column's lines */
   blockOf: (l: Line) => [number, number]
   /** B's paragraph ends, global, each glyph position once */
@@ -234,6 +237,9 @@ function open({
   for (const mem of members) for (const l of mem.lines) (linesOn.get(l[0]) ?? linesOn.set(l[0], []).get(l[0])!).push(l)
   const cellLines = new Set<Line>()
   for (const mem of members) if (mem.unit >= 0 && units[mem.unit]?.cell) for (const l of mem.lines) cellLines.add(l)
+  const lineUnit = new Map<Line, number>()
+  for (const mem of members) for (const l of mem.lines) lineUnit.set(l, mem.unit)
+  const paraOfUnit = new Map(ins.tex.paras ?? [])
   // (each page's and column's block: TeX's frame where it shipped the page's (framed); else its justified lines' measure where
   // it has one, else all its lines' hull)
   const hull = new Map<string, [number, number]>()
@@ -297,6 +303,8 @@ function open({
     staysOn,
     linesOn,
     cellLines,
+    lineUnit,
+    paraOfUnit,
     blockOf,
     ends,
     forced,
@@ -1129,11 +1137,19 @@ function readDirection(_fx: FactsIndex, r: MemberReading): void {
 }
 
 /** a single line's row: the line with its extent widened to everything TeX set on it within its measure (the member's own ink,
- *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure, a
- *  table's cell's aside: a table's row is no paragraph's line, and its row header beside the cells' words read centred,
- *  2610.40394v1 p14 ord 747) */
+ *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure),
+ *  but a table's cell's (a table's row is no paragraph's line: its row header beside the cells' words read centred, 2610.40394v1
+ *  p14 ord 747) and a line of another paragraph TeX states (two subcaptions side by side, each a minipage's paragraph, read as
+ *  one row about the middle: 2608.13505v1 p4 ord 22, units 22 and 23 paired with paragraphs 28 and 31). A run-in head TeX set in
+ *  a box (amsthm's \proofname, `AXT-ALIGN h… h`) states no paragraph and is the line's */
 function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined): Line {
   const [m0, m1] = fx.blockOf(l)
+  const P = fx.paraOfUnit.get(mem.unit)
+  const other = (k: Line): boolean => {
+    const v = fx.lineUnit.get(k) ?? -1
+    const Q = v >= 0 ? fx.paraOfUnit.get(v) : undefined
+    return P !== undefined && Q !== undefined && Q !== P
+  }
   let x0 = labelX0 !== undefined ? Math.min(l[2], labelX0) : l[2]
   let x1 = l[3]
   const end = mem.elements.find(([id]) => id === '~$')?.[1]
@@ -1147,6 +1163,7 @@ function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined
       k !== l &&
       !(k[9] & LINE_FLAG.KEPT) &&
       !fx.cellLines.has(k) &&
+      !other(k) &&
       Math.abs(k[4] - l[4]) <= ON_BASE &&
       k[3] > m0 &&
       k[2] < m1

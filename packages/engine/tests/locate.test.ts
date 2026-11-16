@@ -940,6 +940,33 @@ describe('locate: a single line’s alignment is its TeX line’s, the row it sh
     expect(L.members[1]!.lines[0]![2]).toBe(140)
     expect(L.members[1]!.align).toBe('j')
   })
+  it('reads no line of another paragraph into a single line’s row: two subcaptions side by side, each its minipage’s', () => {
+    // (2608.13505v1 p4: units 22 and 23, paired with paragraphs 28 and 31 of two minipages, told justified, their hull about the
+    // measure's middle; the row read the first centred, lane cm-fix 2026-11-16)
+    const one = 'a'.repeat(30)
+    const two = 'b'.repeat(30)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: one, x: 120, y: 676 },
+      { text: two, x: 312, y: 676 },
+      { text: 'y'.repeat(78), x: 72, y: 652 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('caption', one, { align: 'j' }),
+      unitOf('caption', two, { align: 'j' }),
+      unitOf('para', 'y'.repeat(78)),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2, 3]])
+    ins.tex.paras = [
+      [1, 28],
+      [2, 31],
+    ]
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[1]!.lines[0]![2]).toBe(120)
+    expect(L.members[1]!.align).toBe('j')
+  })
   it('reads a single line nothing told by its own ink, not by its row: a title centred beside another member on its baseline', () => {
     // (a running head's title and its page number on one baseline, or two names under a figure: TeX told neither, and the row
     // widened the title to the number's edge and read it justified: 2608.00812v1's heads, 2608.01890v1 p13's names, lane cm-fix
@@ -952,7 +979,12 @@ describe('locate: a single line’s alignment is its TeX line’s, the row it sh
       { text: 'y'.repeat(78), x: 72, y: 652 },
     ]
     const B = docOf([{ lines }])
-    const units = [unitOf('para', 'x'.repeat(78)), unitOf('para', title), unitOf('para', '12'), unitOf('para', 'y'.repeat(78))]
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('para', title),
+      unitOf('para', '12'),
+      unitOf('para', 'y'.repeat(78)),
+    ]
     const L = locate(instrumentOf(B, units, [[0, 1, 2, 3]]), B, align(B, B))
     expect(L.members[1]!.lines[0]![2]).toBe(174)
     expect(L.members[1]!.align).toBe('c')
