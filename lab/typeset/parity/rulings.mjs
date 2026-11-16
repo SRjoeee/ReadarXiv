@@ -879,6 +879,60 @@ export const RULINGS = [
       return `laid at ${f.lead} x the original's pitch (the script's base ${f.base}), its last line ${r2(f.over)} pt from the original's last, under one laid pitch (${r2(f.pitch)})`
     },
   },
+  {
+    id: 'JK2',
+    title: "a Japanese or Korean paragraph laid looser than the original's pitch and under its script's, a band of more than a line left under it",
+    verdict: "the owner's choice",
+    date: '2026-11-16',
+    seen: "the two orders of the walk's knobs under the Japanese and Korean pitch laid as whole pages (rebuild/cm-d c61ea642c: the page loose and its tracking taken first; 5c525defb: its leading first), with the costs the page stated of the first (two paragraphs leaving more than a line of blank under them; nine a step smaller by the page's evening, §18.57); his choice of the first exported 2026-11-16T04:15:58Z (owner-comments-decide-jk-order.json, both scripts); the rule as built: PDF-READER §18.89",
+    words: '用我选的那版（整页宽松，字距收紧）',
+    example:
+      "2609.20976v1-ja p5 t14: 10 lines at the original's 10.91 pt laid at 1.1 x its pitch (jlreq's base 1.369) where the original sets 15 and today 12, its last line 18.66 pt over the original's last, 1.25 laid pitches (14.9); p4 t13: 14 lines against the original's 20 and today's 15, 21.67 pt over, 1.6 laid pitches (13.55)",
+    condition:
+      "line-count: a member of a target whose script the ruling set a pitch for, Japanese or Korean (rules-for.ts scriptOf: Jpan, Kore), whose own base pitch (U.params leadOf over the rule set the tree holds, at the original's size and its pitch on the page, the upper median of its gaps as U.blocks reads it) stands above the original's; v2 sets it in fewer lines on the page than the original, at the original's size (within the size floor), laid above the original's pitch and under that base as the lay states it (its Page member's `fit.lead`: the page loose, the walk's leading short of the base), its last line on the page one laid pitch or more over the original's last and less than two (the least gap between its laid lines there, else its leading times the original's pitch): the blank of more than a line under it that the page he chose on stated, never two; the unit whole (WHOLE). Its tracking is not asked: the lay states t13's -0.03 and t14's +0.02. A member laid at the original's pitch or at its base, one whose last line leaves two laid pitches or more over the original's last, one of more lines than the original, or another script, is judged as before; one under a laid pitch over it is JK's",
+    holds(d, x) {
+      if (d.flag !== 'line-count' || !d.unit || d.pages) return false
+      const target = String(x.v2?.pair ?? '').split('-').at(-1)
+      if (!target || !PITCHED.has(scriptOf(target))) return false
+      if (!(Number.isFinite(d.v2?.value) && Number.isFinite(d.original) && d.v2.value < d.original)) return false
+      const u = x.unit(d)
+      if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(u.key) || !atOriginal(u.sides.v2)) return false
+      const f = pitchFacts(u, x, target)
+      return f !== null && f.lead < f.base && f.over >= f.pitch && f.over < 2 * f.pitch
+    },
+    says(d, x) {
+      const f = pitchFacts(x.unit(d), x, String(x.v2.pair).split('-').at(-1))
+      return `laid at ${f.lead} x the original's pitch, under the script's base ${f.base}, its last line ${r2(f.over)} pt over the original's last, ${r2(f.over / f.pitch)} laid pitches (${r2(f.pitch)})`
+    },
+  },
+  {
+    id: 'PO',
+    title: "a paragraph its paragraphs opened where TeX opened them, a size step smaller by the page's evening, a line fewer than today's",
+    verdict: "the owner's acceptance",
+    date: '2026-11-16',
+    seen: "2111.09276v1-zh p3 and p4, unit t60: the original, round 4a's lay and lane cm-c's (staging/check-list-paras/: its two paragraph points opened on TeX's lines on the door rows, 9.96 -> 9.71 pt by the page's evening, 10 -> 9 lines on p3), his answer of 2026-11-16; the rule as built: PDF-READER §18.69 (the compile move's C1) and §18.57",
+    words: '接受（按原文分段，这一段略小）',
+    example:
+      "2111.09276v1-zh p3 t60: 9 lines at 9.71 pt, one step under the original's 9.96 by the page's evening, where today sets 10 at 9.96 and the original 13; its two paragraph points opened on TeX's lines, its last line on p3 the first paragraph's end as the original's",
+    condition:
+      "line-count: v2's Page member states the paragraph points its part states (`paras`: how many opened a block on the line TeX opened them on, how many flowed on for want of a sentence start, for want of its row's sentences) every one opened, one at least, and the unit evened by `size` (among `evened.by`) at exactly one fit step under the original's size (to the hundredth: SIZE_STEP, the engine's grain), the unit whole (WHOLE); v2 sets it in exactly one line fewer than today on the page, both at most the original's count. A unit that flows a point on, states none, is not one step smaller by the page's evening, or differs from today by more than a line, is judged as before",
+    holds(d, x) {
+      if (d.flag !== 'line-count' || !d.unit || d.pages) return false
+      const t = d.today?.value,
+        v = d.v2?.value,
+        o = d.original
+      if (![t, v, o].every(Number.isFinite) || t - v !== 1 || v >= o || t > o) return false
+      const u = x.unit(d)
+      if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(u.key) || !oneStepOf(u.sides.v2)) return false
+      const m = x.laid(u.part)
+      const p = m?.paras
+      return m?.state === 'laid' && Array.isArray(p) && p[0] >= 1 && p[1] === 0 && p[2] === 0 && !!m.evened?.by?.includes('size')
+    },
+    says(d, x) {
+      const m = x.laid(x.unit(d).part)
+      return `${m.paras[0]} paragraph point${m.paras[0] > 1 ? 's' : ''} opened on TeX's line, evened by ${m.evened.by.join(' + ')}`
+    },
+  },
 ]
 /** JK: the scripts whose pitch the owner's choice of 2026-11-16 set (PDF-READER §18.89): Japanese (jlreq), Korean (xetexko) */
 const PITCHED = new Set(['Jpan', 'Kore'])
@@ -892,12 +946,11 @@ function upperMedianGap(rows) {
   return g.length ? g[g.length >> 1] : null
 }
 /**
- * JK's facts of a member on the page: the script's base over its original pitch (leadOf, the rule set the tree holds), the
- * leading it is laid at (its fit's), its laid pitch, and how far its last line stands over the original's last; null where its
- * base is not above the original's, it is laid at the original's pitch, or its last line leaves a laid pitch or more over the
- * original's last (a band left empty)
+ * JK's and JK2's facts of a member on the page: the script's base over its original pitch (leadOf, the rule set the tree holds),
+ * the leading it is laid at (its fit's), its laid pitch, and how far its last line stands over the original's last; null where
+ * its base is not above the original's or it is laid at the original's pitch
  */
-function pitchFill(u, x, target) {
+function pitchFacts(u, x, target) {
   const m = x.laid(u.part),
     f = x.member(u.part)
   const lead = m?.fit?.lead
@@ -910,7 +963,12 @@ function pitchFill(u, x, target) {
   const ys = m.lines.map((l) => l[0]).sort((a, b) => b - a)
   const pitch = pitchOf(ys) ?? lead * p0
   const over = ys.at(-1) - ol.at(-1)
-  return over < pitch ? { base, lead, pitch, over } : null
+  return { base, lead, pitch, over }
+}
+/** JK's: pitchFacts where its last line stands less than a laid pitch over the original's last (no band left empty), else null */
+function pitchFill(u, x, target) {
+  const f = pitchFacts(u, x, target)
+  return f && f.over < f.pitch ? f : null
 }
 /** CU: today's reasons for a cell its settle withheld with its group for a cell it could not draw (today's reader dump), and the
  *  states of a v2 member left the original's by a failure of its own drawing or row, not its group's nor for no row */
