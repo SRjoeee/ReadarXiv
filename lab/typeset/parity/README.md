@@ -21,7 +21,7 @@ glyphs as PDF.js's text content gives them, their PDF fonts) and the original's 
 today's prepare dump states them), never off v2's part where the two can differ (`fidelity.mjs`).
 
 ```
-node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [--fresh=off] [<pair>…]
+node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [--fresh=off] [--freeze-today=<dir> | --today-frozen=<dir>] [<pair>…]
 ```
 
 `--toggles=on` lays and draws both readers with every switch of "What to translate" on (figure and table text, headers and
@@ -92,7 +92,8 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   (`view/layer-side.mjs` `drawingOf`): the door's copy (render A, the drawn units' groups hidden, its crops and pastes), its
   SVG, its links, under `view/engine.css` and the text-rendering decision, its faces the web's face sources; a page the
   layer draws nothing of its own on is arXiv's (`shownOriginal`). Two choices are the baseline's, not the product's
-  (`baseline/NOTES.md` §4): no 16 ms live-fills clock, and the run kept with `records`.
+  (`baseline/NOTES.md` §4): no 16 ms live-fills clock, and the run kept with `records`. Or read from its frozen records in
+  place of drawing it (below, "Today's side frozen").
 - **v2's side**: the paper's L1 bundle (`AXT_L1_BUNDLES`, default `lanes/L7/prepare/bundles`; the release check passes its
   own prepare's), the tap's ledgers and metrics (`baseline/tap/`), the served faces (`AXT_FACE_TABLES`, `AXT_FACE_SLICES`).
   The reader is opened with no engine of the host's, so that it composes and draws with its own served faces and sheet as
@@ -531,6 +532,35 @@ only where nearer the original"; stage reader, after `prepare`, over that run's 
 the same three over the added pairs (below) with their numbers apart (`numbers.added`), judged by measure.mjs's exit codes (no
 page worse, and each run judged whole). It is a cut-over blocker: the report's cut-over verdict
 stays NO-GO until it passes (`lab/release-check/CI.md`).
+
+## Today's side frozen (`frozen.mjs`, 2026-11-16)
+
+The cut-over deletes today's engine; the design's amendment 8.3 freezes today's OUTPUTS before it, so that the gate still
+reads today's side as it was drawn and a measure corrected or added later can still be taken on it. render.mjs
+`--freeze-today=<dir>` draws today's side as always and writes into `<dir>`, once, what it drew and read of each pair;
+`--today-frozen=<dir>` reads that in place of drawing it: today's engine is neither bundled (`AXT_TODAY`, `AXT_WEB`) nor
+opened, and everything after (v2's side, the pixels, the raw files, the images, the verdict) is made as before from the same
+readings and the same shots. run.mjs hands either flag to the drawing, and to the added pairs' run with it.
+
+- `<dir>/shots/<sha256>.png`: every shot of today's context, by the digest of its bytes, stored once whatever pair, page or
+  toggles took it: arXiv's page (A, drawn by today's page with PDF.js: frozen with today's side, since nothing else draws it),
+  today's pane whole (T), its translated text alone (Tt), its drawing without its text (Tc), as the screenshot gave them.
+- `<dir>/<toggles>/<pair>.json` (`defaults` or `on`): what today's page said on opening (`opened`), each page's readings
+  (`view`, `original`: its links, runs and fonts; `today`: what today's drawing read back) and its shots' digests, its
+  sentence boxes (`litBoxes`, apart from `today`, joined to it where the drawing joins them) or the error a step met, the
+  page errors today's page raised, the inputs it was drawn from (`inputs`: the release bundle's refs and target as today's
+  page opens them, the digests of the door rows and of arXiv's PDF) and how (`drawn`: the run, its raw file, today's engine's
+  and the web tree's commits, Chromium's version, the scale). The readings are kept as the browser handed them, NaN, the
+  infinities, -0 and an undefined's key included (`lab/frozen-json.mjs`): a JSON round trip would read a NaN back as null,
+  another reading.
+
+A record is written once: a run asked to freeze a pair already frozen stops before it draws. Read, a record stands for the
+run's pair only under the same toggles and over the same inputs; otherwise the pair is not drawn (the run's `missing`, with
+the reason), and a page the record lacks, or a shot missing or not its digest's bytes, fails the page: the run is then not
+judged whole. Today's pixel readings are taken again from the frozen shots on every run, as they are on a drawn one: each is
+taken against the run's v2 facts (the units' boxes and regions, the figure texts' boxes), which move with the candidate; the
+readings of the freezing run itself stay in its raw files (`drawn.raw`). The manifest names where today's side came from
+(`today`); the raw files and the sheet are those of a drawn run.
 
 ## The added pairs (lab/typeset/added.mjs, 2026-11-13)
 

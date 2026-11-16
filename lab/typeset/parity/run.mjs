@@ -1,8 +1,9 @@
-// lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [--fresh=off|all] [--gate=<file>] [<pair>…]: the parity check whole (README.md): v2's pages laid
+// lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [--fresh=off|all] [--gate=<file>] [--freeze-today=<dir> | --today-frozen=<dir>] [<pair>…]: the parity check whole (README.md): v2's pages laid
 // (v2.mjs, the heavy slot's `test`), every page drawn three ways and read back (render.mjs, the slot's `e2e`), then measured
 // and the sheet written (measure.mjs). Defaults: lab-data's refactor-2026-11/parity/ (the sheet, parity.json) and its work/
 // (the entry's pages, the raw measures). Exits with measure.mjs's code: 1 where a page of v2's is worse than today's or the run
-// is not judged whole; measure.mjs is told the pairs, which must be the ones the drawing drew.
+// is not judged whole; measure.mjs is told the pairs, which must be the ones the drawing drew. Today's side frozen
+// (`--freeze-today`, `--today-frozen`: frozen.mjs) is the drawing's flag, handed to render.mjs.
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,7 +19,7 @@ const TOGGLES = arg('toggles') === 'on' ? 'on' : null
 const OUT = arg('out', join(LAB, 'refactor-2026-11', 'parity', ...(TOGGLES ? ['toggles-on'] : [])))
 const WORK = arg('work', join(OUT, 'work'))
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
-const pages = process.argv.slice(2).filter((a) => a.startsWith('--pages=') || a.startsWith('--toggles='))
+const pages = process.argv.slice(2).filter((a) => ['--pages=', '--toggles=', '--freeze-today=', '--today-frozen='].some((f) => a.startsWith(f)))
 const toggles = TOGGLES ? [`--toggles=${TOGGLES}`] : []
 /** --fresh=off: v2 laid without fresh rows, the sheet as before lane parity-fresh; --fresh=all: the review mode, every unit
  *  fresh (v2.mjs), with --gate=<the gate sheet's parity.json> for measure.mjs; a fill is never a run's */
