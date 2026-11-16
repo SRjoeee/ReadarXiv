@@ -440,6 +440,13 @@ export const Placed = z.object({
   // §18.69). None after a display, nor where its line or the line before is held (KEPT). A part that states it states `words` in
   // every part that holds the member. Absent: no such point, a unit not lit by sentence, a part made before (FORMAT stays)
   paras: z.array(z.tuple([int, int])).optional(),
+  // beside `paras`, point by point (the same length): the element of the unit each point's first word stands directly after in
+  // the source projection, by its piece id (an element the translator is sent in its place, not `silent`, or a nested unit),
+  // nothing but white space between its character and the word's offset: the element that ended the paragraph before (cas-sc's
+  // `\sep`, which is `\par`), which a reply returns in its place where it returns the element; null where none does. Absent
+  // where no point names one. A field of its own, not a third member of `paras`' tuples, which a reader of before refuses (a
+  // tuple holds its length): that one strips it, reads the points as it did, and FORMAT stays (docs/PDF-READER.md §18.69)
+  parasAfter: z.array(z.union([z.string(), z.null()])).optional(),
   fixed: int.optional(),
   // its own text, where a rule tells a translation by it: a babel name's on A, a figure text's and a table cell's as its source
   // writes them (its text pieces, an element a space): a translation that says nothing else came back as it went

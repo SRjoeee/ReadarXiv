@@ -1,7 +1,8 @@
 // The paragraph points' gate (design-display 2a, row F1; lane pairs-91's "the gate that is missing"): each paragraph TeX opened
 // inside a member's text that its part states (at a group's open, SpanAt.opens; at an element, El.opens; at its first word,
 // Placed.paras) and whose row carries its anchor (the group or the element between the row's texts, else the sentence start
-// paired with the point's first word: unit/breaks.ts `pairing`) is laid with its first word starting a line of the member: a
+// paired with the point's first word: unit/breaks.ts `pairing`, else the element the part names it after, Placed.parasAfter,
+// returned once) is laid with its first word starting a line of the member: a
 // laid line of the member on the page of TeX's line begins with the paragraph's first thing (its first letters and digits,
 // NFKC, either case; an element's crop by its piece; a first thing with no letter or digit, a mark, by the line's beginning as
 // drawn, white space apart). The defect a reader sees is a paragraph that starts on the last line of the one before; one
@@ -17,7 +18,7 @@ import type { Part, Placed, Unit } from '@readarxiv/format'
 import { firstWordAt, projectionOf } from '../../src/lay/lit.ts'
 import { rowPieces, sourcePieces } from '../../src/lay/read.ts'
 import type { Laid, Page, Rows } from '../../src/types.ts'
-import { pairing, parasOf, type V0Piece } from '../../src/unit/breaks.ts'
+import { pairing, parasAfterOf, parasOf, type V0Piece } from '../../src/unit/breaks.ts'
 
 export type ParasGate = {
   /** the points on the pages walked (their line's), by what states them: group, element, word */
@@ -135,7 +136,7 @@ export function parasGate(
     if (typeof m.text !== 'string') continue
     // (its points by line: a group's open, an element, a first word's offset; the offset stated of a point a group or an
     // element states is that point's)
-    const at = new Map<number, { by: string; id?: string; o?: number }>()
+    const at = new Map<number, { by: string; id?: string; o?: number; after?: string }>()
     // (of several a line is stated by, the first in the source: where the paragraph begins; 2609.36054v2's author block states
     // each line at its name's group and at its affiliation's after it)
     const first0 = (j: number, id: string) => !at.has(j) || Number(id) < Number(at.get(j)!.id)
@@ -143,10 +144,13 @@ export function parasGate(
       if (s.opens !== undefined && first0(s.opens, id)) at.set(s.opens, { by: 'group', id })
     for (const [id, e] of m.els ?? [])
       if (e.opens !== undefined && first0(e.opens, id)) at.set(e.opens, { by: 'element', id })
-    for (const [o, j] of parasOf(m)) {
+    // (and beside each first word, the element it stands after in the source where the part names one: Placed.parasAfter)
+    const named = parasAfterOf(m)
+    for (const [i, [o, j]] of parasOf(m).entries()) {
+      const after = named?.[i] ?? undefined
       const x = at.get(j)
-      if (x) x.o = o
-      else at.set(j, { by: 'word', o })
+      if (x) Object.assign(x, { o }, after !== undefined ? { after } : {})
+      else at.set(j, { by: 'word', o, ...(after !== undefined ? { after } : {}) })
     }
     if (!at.size) continue
     const row = rows.get(m.text)
@@ -181,14 +185,26 @@ export function parasGate(
         const o = pt.o ?? (pt.id !== undefined ? firstWordOf(m, units.get(m.text), pt.id, j) : undefined)
         const pair_ = pairing(m, pieces, row.sentences)
         const P = o === undefined ? 'word' : pair_ === 'sentences' ? 'sentences' : pair_(o, j)
-        if (typeof P !== 'number') {
-          const why = `none: ${P === 'word' ? 'no first word on its line' : P === 'sentences' ? 'no sentences' : 'no start at its word'}`
+        // (where no sentence start pairs it, the element the part names it after, where the row returns that element exactly
+        // once and no other point names it: the lay opens the paragraph directly after it, unit/breaks.ts paraPieces)
+        const qs =
+          typeof P === 'number' || pt.after === undefined
+            ? []
+            : pieces.flatMap((p, q) => ((p.t === 'ph' || p.t === 'nested') && p.k === Number(pt.after) ? [q] : []))
+        const once = qs.length === 1 && named!.filter((x) => x === pt.after).length === 1
+        if (typeof P !== 'number' && !once) {
+          const why = `none: ${pt.after !== undefined ? 'its element not returned once' : P === 'word' ? 'no first word on its line' : P === 'sentences' ? 'no sentences' : 'no start at its word'}`
           add(g.anchor, why)
           if (g.noneEx.length < 12) g.noneEx.push(`${name}: ${why}`)
           continue
         }
-        anchor = 'sentence'
-        first = firstFrom(m, pieces, ...atProjection(pieces, P))
+        if (typeof P === 'number') {
+          anchor = 'sentence'
+          first = firstFrom(m, pieces, ...atProjection(pieces, P))
+        } else {
+          anchor = 'after its element'
+          first = firstFrom(m, pieces, qs[0]! + 1, 0)
+        }
       }
       add(g.anchor, anchor)
       if (x?.state !== 'laid') {

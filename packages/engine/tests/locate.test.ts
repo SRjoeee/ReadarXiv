@@ -3020,6 +3020,68 @@ describe('a paragraph TeX opened inside a unit, stated by its first word (design
     expect(flows[0]!.paras).toEqual([[11, 1]])
     expect(L.stats.opensStated).toEqual({ span: 0, el: 0, break: 1, region: 0, text: 0, words: 1 })
   })
+  // (cas-sc's keywords, `Latent Twins \sep Stochastic Solution Operators \sep Wasserstein Approximation`: the class's `\sep` is
+  // `\par`, sets nothing and ends the paragraph, one keyword a line; the projection counts each `\sep` one character)
+  const sep = (id: string) => ({ t: 'el' as const, id, kind: 'macro', src: '\\sep' })
+  const sepClass = { cls: 'umacro', cmd: 'sep', bare: true as const, unknown: true as const }
+  it('names the element a point’s first word stands directly after in the source, white space alone between: Placed.parasAfter', () => {
+    const content = [
+      text('Latent Twins '),
+      sep('1'),
+      text(' Stochastic Solution Operators '),
+      sep('3'),
+      text(' Wasserstein Approximation'),
+    ]
+    const u = para(content, {
+      classes: [
+        ['1', sepClass],
+        ['3', sepClass],
+      ],
+    })
+    const B = docOf([{ lines: ['Latent Twins', 'Stochastic Solution Operators', 'Wasserstein Approximation'] }])
+    const { flows } = partOf(owned(B, [u], [[0, 0, 0]], [], [12, 41]), B)
+    // ("Stochastic" at 13 + 1 + 1 = 15, "Wasserstein" at 45 + 1 + 1 = 47; each `\sep` the point's element)
+    expect(flows[0]!.paras).toEqual([
+      [15, 1],
+      [47, 2],
+    ])
+    expect(flows[0]!.parasAfter).toEqual(['1', '3'])
+  })
+  it('names none where a point’s first word follows plain text, an element with text between, or a silent element', () => {
+    // (a paragraph that opens after plain text: the point stated, no element)
+    const plainText = para([text('A first paragraph ends. The second one runs on')])
+    const one = partOf(owned(plainB, [plainText], [[0, 0, 0]], [], [23]), plainB)
+    expect(one.flows[0]!.paras).toEqual([[24, 1]])
+    expect(one.flows[0]!.parasAfter).toBeUndefined()
+    // (an element, then a mark and a space before the word: text between, no element named)
+    const B = docOf([{ lines: ['Latent Twins', '; Stochastic Solution Operators'] }])
+    const between = para([text('Latent Twins '), sep('1'), text('; Stochastic Solution Operators')], {
+      classes: [['1', sepClass]],
+    })
+    const two = partOf(owned(B, [between], [[0, 0]], [], [12]), B)
+    expect(two.flows[0]!.paras).toEqual([[16, 1]])
+    expect(two.flows[0]!.parasAfter).toBeUndefined()
+    // (`\medbreak` then the kernel's `\noindent`, silent: a piece of the projection that is no white space, which a wire may put
+    // back elsewhere, so the `\medbreak` before it is not the word's element)
+    const silent = para(
+      [
+        text('A first paragraph ends.'),
+        { t: 'el' as const, id: '1', kind: 'macro', src: '\\medbreak' },
+        text('\n'),
+        { t: 'el' as const, id: '2', kind: 'other', src: '\\noindent', silent: 1 },
+        text('\nThe second one runs on'),
+      ],
+      {
+        classes: [
+          ['1', { cls: 'umacro', cmd: 'medbreak', bare: true, unknown: true }],
+          ['2', { cls: 'zero', cmd: 'noindent', bare: true }],
+        ],
+      },
+    )
+    const three = partOf(owned(plainB, [silent], [[0, 0, 0]], [], [23]), plainB)
+    expect(three.flows[0]!.paras).toEqual([[27, 1]])
+    expect(three.flows[0]!.parasAfter).toBeUndefined()
+  })
   it('states none after a display: the display is a block of its own (a region), counted apart', () => {
     const B = docOf([{ lines: ['Text before', 'x', 'Text after'] }])
     const content = [

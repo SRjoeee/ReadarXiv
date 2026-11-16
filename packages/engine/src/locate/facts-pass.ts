@@ -64,6 +64,7 @@ function flatOf(content: readonly Piece[], out: Flat[] = []): Flat[] {
 }
 import type { Owned } from './ownership.ts'
 import { type Member, travellingInk } from './work.ts'
+import { pieceBefore } from './words.ts'
 
 interface FactsInput {
   ins: Instrument
@@ -945,7 +946,15 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
         if (!mem.spanOpens.has(at.group)) mem.spanOpens.set(at.group, j)
       }
     }
-    if (paras.size) mem.paras = [...paras].sort((x, y) => x[0] - y[0])
+    if (paras.size) {
+      mem.paras = [...paras].sort((x, y) => x[0] - y[0])
+      // (beside each point, the element its first word stands directly after in the source, white space alone between: the
+      // one that ended the paragraph before (cas-sc's `\sep`, which is `\par`), which a reply returns in its place; stated
+      // where a point names one, Placed.parasAfter)
+      const before = pieceBefore(unit.content)
+      const named = mem.paras.map(([o]) => before(o))
+      if (named.some((x) => x !== null)) mem.parasAfter = named
+    }
     if (Object.values(st).some((n) => n > 0)) mem.opensStated = st
   }
 }

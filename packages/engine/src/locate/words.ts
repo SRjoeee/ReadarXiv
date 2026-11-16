@@ -61,6 +61,31 @@ export function elementsOf(content: readonly Piece[]): [offset: number, id: stri
   return out
 }
 
+/**
+ * The piece a unit's projection offset stands directly after (Placed.parasAfter): back from offset `o` over the projection's
+ * white space alone (the characters `\s` matches; a group's edges count none), the element or nested unit reached, where the
+ * translator is sent it in its place, so that a reply returns it there: not `silent` (a wire may send such a one on no wire and
+ * put it back at its group's front or end). None where a character that is no white space, a silent element or the unit's
+ * start comes first
+ */
+export function pieceBefore(content: readonly Piece[]): (o: number) => string | null {
+  const at: (string | { id: string; sent: boolean })[] = []
+  const walk = (ps: readonly Piece[]): void => {
+    for (const p of ps) {
+      if (p.t === 'text') for (let c = 0; c < p.s.length; c++) at.push(p.s[c] as string)
+      else if (p.t === 'span') walk(p.content)
+      else at.push({ id: p.id, sent: !(p.t === 'el' && p.silent) })
+    }
+  }
+  walk(content)
+  return (o) => {
+    let k = o - 1
+    while (k >= 0 && typeof at[k] === 'string' && /\s/.test(at[k] as string)) k--
+    const x = k >= 0 ? at[k] : undefined
+    return x !== undefined && typeof x !== 'string' && x.sent ? x.id : null
+  }
+}
+
 const LETTER = /[\p{L}\p{N}]/u
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
 /** a character's letters as both sides are compared: decomposed, marks off, lower case, its letters and digits alone */

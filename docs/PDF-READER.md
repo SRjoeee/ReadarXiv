@@ -6771,12 +6771,29 @@ states it from the compile move (its C1, 2026-11-15); a part made before holds n
   the point's word (an end inside a sentence: a float TeX set in the middle of one), no block opens and the text flows on through
   the member's lines, as before: no nearest start and no proportional place is taken, which would set half a sentence on a line
   of its own.
+- **After the element that ended the paragraph before** (the coordinator's ruling of 2026-11-17, lane r4c-close: cas-sc's
+  keywords, 2610.21084v1, whose `\sep` is `\par`: four points stated, none opened, the row of keywords holding no sentence,
+  so five keywords ran on in three lines where TeX set one a line). A paragraph point TeX states is opened where its place can
+  be found without inference. The engine names, beside each point, the element of the unit its first word stands directly
+  after in the source projection (`Placed.parasAfter`, point by point as `paras`, an id or null; absent where no point names
+  one; `locate/words.ts` `pieceBefore`): back from the word's offset over the projection's white space alone, the element or
+  nested unit reached, where the translator is sent it in its place (not `silent`, which a wire may put back at its group's
+  front or end); none where a character that is no white space, a silent element or the unit's start comes first. A field of
+  its own beside `paras`, not a third member of its tuples, which a reader of before refuses (a zod tuple holds its length):
+  that one strips the field and reads the points as it did, so FORMAT stays 1. The lay pairs a point with its sentence start
+  first, exactly as above; where none pairs it and the part names its element, it pairs it with THAT element: the `par` stands
+  directly after it in the translation (and after the groups closed right there), where the row returns the element exactly
+  once and no other point names it; else nothing opens, and it is counted. No pairing by counting words, by a position along
+  the text, or by a list of macros.
 - **Stated** (`Laid.paras`, where the part states a point and the member is laid): `[opened, noStart, noSentences]`: the points
-  opened on their line (by their own pair, or by a stronger fact the row holds there), those that flowed on for want of a start
-  the lay can open at their word, those for want of the row's sentences.
+  opened on their line (by their own pair, by their element, or by a stronger fact the row holds there), those that flowed on
+  for want of a start the lay can open at their word and of an element named, those for want of the row's sentences and of an
+  element named; where the part names an element beside its points, two more: those opened by their element, and those that
+  flowed on because the row does not return their element exactly once (or another point names it too).
 - **The gate** (the reader gate, `lab/typeset/gate-l1.mjs --entry`, `packages/typeset/tests/replay/paras-gate.ts`): each point a
   part states (a group's open, an element, a first word) whose row carries its anchor (the group or the element between the
-  row's texts, else the sentence start paired with its first word) is laid with its first word starting a line of the member: a
+  row's texts, else the sentence start paired with its first word, else the element the part names it after, returned once:
+  `after its element`) is laid with its first word starting a line of the member: a
   laid line of the member on the page of TeX's line begins with the paragraph's first thing, like with like: its first letters
   and digits against the line's, or, where the first thing holds none (a mark an element follows: the ": " before a doi's
   number), the line's own beginning as drawn, white space apart (round 4b: compared with the line's letters and digits, such a

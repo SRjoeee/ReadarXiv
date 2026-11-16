@@ -251,6 +251,8 @@ function placedOf(
   if (mem.words) p.words = mem.words
   // (the paragraphs TeX opened inside its text, each by its first word: locate's facts pass, design-display 2a)
   if (mem.paras?.length) p.paras = mem.paras
+  // (beside them, the element each point stands directly after in the source, where one does: Placed.parasAfter)
+  if (mem.paras?.length && mem.parasAfter) p.parasAfter = mem.parasAfter
   return p
 }
 
