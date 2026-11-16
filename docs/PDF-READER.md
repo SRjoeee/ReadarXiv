@@ -7312,8 +7312,14 @@ the glue TeX sets at each kind of gap, and the part names, under each member, th
   the parameter (AXT-GLUE, the value in force at the float's serial). Two floats set here one over the other are no list's: TeX
   sets `\intextsep` under the first and `\intextsep` again over the second (LaTeX's `\@addtocurcol` for `h`, float.sty's
   `\float@endH` for `[H]`: `\vskip\intextsep \box \vskip\intextsep`; 2608.04322v1 p9's Figures 7 and 8 are `[H]`, checked by
-  `\showoutput`), so the first's last member states `intextsep`, the one TeX set under it, and the gap names one glue: the
-  second stands in the words "round a float set here". On a page bracketed whole (`AXT-WHOLE`: a class whose output routine
+  `\showoutput`), so the first's last member states `intextsep` with the glue TeX set between the two members whole, both
+  natural sizes and both shrinks added, each float's value at its serial (the coordinator's ruling of 2026-11-16: the lay reads
+  the shrink as the room TeX itself could close there, and TeX could close both; no new field). No other pair of float
+  separations meets: a top list's floats are `\floatsep` apart once, two over the columns `\dblfloatsep` once, a column of
+  floats' `\@fpsep` once; a float set here at its body's head or foot has its `\intextsep` at the page's break, which TeX
+  discards. A glue of another kind in the gap (the interline glue, a caption's own skip) is not added. The gap gate's herepair
+  case reads `\showoutput`'s listing of the shipped page: `\intextsep` twice between the two boxes, the `[H]` pair and the `h`
+  pair. On a page bracketed whole (`AXT-WHOLE`: a class whose output routine
   is its own, REVTeX's ltxgrid, or a
   page of floats) no bracket says where TeX placed a float, and no float separation is stated there, nor on a page that states
   no body: no geometric guess (the coordinator's ruling). In a float `abovecaptionskip` over
@@ -7547,6 +7553,20 @@ today's request.
   request (the passes, the guard's remedies, the fallback, the final pass); the probe's stands where the use gave none. A pass
   1 with asks that does not run through is asked again without them. The stored plan holds the `inkless` the marking read.
   No element is stated `silent` by them (§18.79).
+- **Text where nothing bounds the ink** (`marks.ts` readAskTexts; `MarkedOptions.told`, `Plan.told`, `PieceClass.told`;
+  `locate/geometry.ts`; the coordinator's ruling on the third cause, 2026-11-16, option 1): an inked paper's macro whose ink
+  no point bounds — a paper's macro has no closing point; one glued to the word before it has no opening point either; one set
+  after its unit's end point stands outside the unit's span — was not found, its unit left the original's (elsarticle's `\sep`:
+  2610.38269v1's `networks\sep`, 2610.20848v1's last one before `\src`). Where the ask's listing states every glyph as itself
+  (a text font's ASCII letters, digits and punctuation, OT1, T1, LY1 or TU, nodes of no ink between: glue, kerns, penalties,
+  boxes) its text is carried in the plan, by source where every answered ask agrees, and such an element is stated by it
+  (El.text, its ink none, its glyphs the unit's text's as a text macro's are); a ligature's slot, a formula, a rule, leaders, a
+  character of another font or slot, or an error states nothing, and the element stays not found. One whose places bound its ink
+  keeps the page's reading (its crop, or its glyphs' text between its two points). The lay draws it as it draws a text macro of
+  no ink (`packages/typeset/src/lay/read.ts:279` `textOnly`: a macro class, no ink, its text not empty, drawn as that text in the
+  translation's face, where the translation's line sets it; a comma and the space after it come as the translation's text
+  places them round the element). Over the corpus (lane cm-fix's chain d10, the readers on the base's compiles): see the lane's
+  record; on the trial set, elsarticle's `\sep` els of 2610.20848v1 ord 38 and 2610.38269v1 ord 7 stated ",".
 
 Held by the TeX gate's cases (`lab/pdf/spikes/ask-cases.mjs`, both years, the four engines, on the loop's first pass: the
 `.bbl`, the `.aux` and the `.toc` byte for byte without the asks, as many errors outside the asks, each answer as the use sets
