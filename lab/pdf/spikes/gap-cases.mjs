@@ -77,7 +77,7 @@ const SHOW = (at) =>
 const PRE = String.raw`\makeatletter\let\axt@chkav\addvspace\def\addvspace#1{\message{^^JAXT-SHOW - addv \the\glueexpr#1\relax^^J}\axt@chkav{#1}}\makeatother` +
   // (where TeX put each float, its own lists when \@makecol makes a column: the top list, the bottom list, the floats set here; and
   // each output: a code of a label of the gate's own, so that it runs before the head's top-level code)
-  String.raw`\makeatletter\ifdefined\AddToHook\AddToHook{cmd/@makecol/before}[axt-gate]{\begingroup\def\@elt##1{\message{^^JAXT-SHOW - top \number##1^^J}}\@toplist\def\@elt##1{\message{^^JAXT-SHOW - bot \number##1^^J}}\@botlist\def\@elt##1{\message{^^JAXT-SHOW - here \number##1^^J}}\@midlist\message{^^JAXT-SHOW - makecol 0^^J}\endgroup}\AddToHook{cmd/@outputpage/before}[axt-gate]{\message{^^JAXT-SHOW - outputpage 0^^J}}\fi\makeatother`
+  String.raw`\makeatletter\ifdefined\AddToHook\AddToHook{cmd/@makecol/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - top \number#1^^J}}\@toplist\def\@elt#1{\message{^^JAXT-SHOW - bot \number#1^^J}}\@botlist\def\@elt#1{\message{^^JAXT-SHOW - here \number#1^^J}}\@midlist\message{^^JAXT-SHOW - makecol 0^^J}\endgroup}\AddToHook{cmd/@outputpage/before}[axt-gate]{\message{^^JAXT-SHOW - outputpage 0^^J}}\fi\makeatother`
 /** a float of environment `env` with its caption unit `i`, `inside` set first in it, and the float's own reading of the
  *  separations at its end */
 const F = (env, place, i, inside = '') =>
