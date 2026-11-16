@@ -17,42 +17,10 @@
 // v0's changes: loadHyphenation takes its URL from its host, and the prototype host's reading of a TeX pattern file
 // (serve.mjs hyphenation()) is here as patternsOfTex, so that any host serves the same patterns.
 
-/** hyph-utf8's languages the engine hyphenates with: French, Spanish and Portuguese (#121-4: those three were hyphenated with
- *  English's patterns), and the languages of the owner's ruling of 2026-10-29 */
-const HYPH_UTF8 = ['fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg']
-/** TeX's pattern files, by language, under texmf-dist: Knuth's hyphen.tex, dehyphn.tex (German, new orthography), and
- *  hyph-utf8's */
-export const TEX_PATTERN_FILES = Object.freeze({
-  en: 'tex/generic/hyphen/hyphen.tex', de: 'tex/generic/dehyph/dehyphn.tex',
-  ...Object.fromEntries(HYPH_UTF8.map(l => [l, `tex/generic/hyph-utf8/patterns/tex/hyph-${l}.tex`])),
-})
-/** how each pattern file is decoded: Latin-1 for TeX's 8-bit files (dehyphn.tex's umlauts are T1 bytes), UTF-8 for hyph-utf8's */
-export const TEX_PATTERN_ENCODINGS = Object.freeze({ en: 'latin1', de: 'latin1', ...Object.fromEntries(HYPH_UTF8.map(l => [l, 'utf8'])) })
-
-/**
- * A TeX pattern file as { patterns, exceptions } (serve.mjs's reading): `text` is the file decoded as its `encoding`
- * (TEX_PATTERN_ENCODINGS). Comments go first (dehyphn.tex names \patterns{...} in one before its own); a block runs to its
- * matching brace. A Latin-1 file is TeX's 8-bit form: \n{\u2026"a\u2026} is an umlaut (T1), \3 and 0xFF are \u00DF, and the
- * \u00DF patterns repeated for OT1 as \c{\u2026} are left out; a UTF-8 file (hyph-utf8's) holds its letters as they are, a
- * \u00FF one of them (French's)
- */
-export function patternsOfTex(text, encoding = 'latin1') {
-  const t1 = encoding === 'latin1'
-  const raw = (t1 ? text.replace(/\u00FF/g, '\u00DF') : text).split('\n').map(l => l.replace(/(^|[^\\])%.*$/, '$1')).join('\n')
-  const block = name => {
-    const at = raw.indexOf(`\\${name}{`)
-    if (at < 0) return []
-    let depth = 0, end = at + name.length + 1
-    for (; end < raw.length; end++) {
-      if (raw[end] === '{') depth++
-      else if (raw[end] === '}' && --depth === 0) break
-    }
-    const body = raw.slice(at + name.length + 2, end)
-    const read = t1 ? body.replace(/\\c\{[^}]*\}/g, ' ').replace(/\\n\{([^}]*)\}/g, '$1').replace(/\\3/g, '\u00DF').replace(/"a/g, '\u00E4').replace(/"o/g, '\u00F6').replace(/"u/g, '\u00FC') : body
-    return read.split(/\s+/).filter(t => t && !t.startsWith('\\'))
-  }
-  return { patterns: block('patterns'), exceptions: block('hyphenation') }
-}
+// (the TeX pattern files, their encodings and their reading, patternsOfTex, moved into the engine package,
+// packages/engine/src/fonts/hyph.ts, which the website builds the patterns it serves with: re-exported here for what still
+// imports them from this path; the cut-over deletes this module)
+export { TEX_PATTERN_FILES, TEX_PATTERN_ENCODINGS, patternsOfTex } from '@readarxiv/engine/fonts'
 
 const tries = new Map()
 

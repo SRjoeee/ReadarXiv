@@ -9,6 +9,8 @@ import { join, relative, resolve } from 'node:path'
 /** the import map's entries a page that loads the engine adds */
 export const PACKAGES_IMPORTS = Object.freeze({
   '@readarxiv/engine': '/packages/engine/src/index.ts',
+  // (the served faces and patterns, which today's engine's old paths re-export: packages/engine/src/fonts)
+  '@readarxiv/engine/fonts': '/packages/engine/src/fonts/index.ts',
   // (the transition paths of the front half moved into the engine package: an old path re-exports its module through one,
   // `@readarxiv/engine/today/<folder>/<file>`, a folder of the package's src/ each; deleted at the cut-over)
   '@readarxiv/engine/today/source/': '/packages/engine/src/source/',

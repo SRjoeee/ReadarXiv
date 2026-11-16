@@ -1,9 +1,9 @@
 // lab/pdf/spikes/face-identity.mjs
 // Whether the role table's TeX Live faces are the same bytes in every pinned TeX Live tree (lab/pdf/compile-images.json). The
-// reader draws every layout with the hosted faces, which are the default tree's files (font-coverage.mjs METRICS' `sha256`,
+// reader draws every layout with the hosted faces, which are the default tree's files (font-coverage.ts METRICS' `sha256`,
 // COVERAGE_SOURCE.release.texlive): a layout made on another tree is drawn safely only where its tree's file of each face is
 // those bytes too. For each year's image (local, by its pinned digest: never pulled) the file of each face whose source is
-// `texlive` (rules/font-roles.mjs FACES) is found by kpsewhich in the image and hashed there, in one container a year
+// `texlive` (font-roles.ts FACES) is found by kpsewhich in the image and hashed there, in one container a year
 // (--network none); then each face is told the same in every tree, different in some, or missing in one.
 //   node lab/pdf/spikes/face-identity.mjs [--years=2025,2023] [--json]
 // COMPILE_PLATFORM as compile-image.mjs reads it (linux/amd64 to emulate on arm64). Exits 1 where a face differs from the hosted
@@ -12,8 +12,7 @@ import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { METRICS } from '../../../src/pdf-reader/engine/rules/font-coverage.mjs'
-import { FACES } from '../../../src/pdf-reader/engine/rules/font-roles.mjs'
+import { FACES, METRICS } from '../../../packages/engine/src/fonts/index.ts'
 import { checkCompileImage, compileImageRef, platformArgs } from './compile-image.mjs'
 
 const run = promisify(execFile)
