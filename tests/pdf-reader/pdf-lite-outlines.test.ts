@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { outlineBox } from '@readarxiv/engine'
-import { float32Outlines, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
+import { float32Outlines, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from '../../packages/engine/src/compile/pdf-lite.ts'
 
 // A glyph's outline as the engine's ink reading takes it (layout/ink.mjs outlineBox) is Float32 whatever the runtime
 // (layout/pdf-lite.mjs float32Outlines): PDF.js 6.3.289 takes a Float16Array on both of its sides where the runtime has one, and

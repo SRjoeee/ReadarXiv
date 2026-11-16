@@ -5,7 +5,7 @@ import { inkUnitsOf } from '@/pdf-reader/engine/layout/ink-units.mjs'
 import { type LedgerPage, ledgerOf } from '@/pdf-reader/engine/layout/ledger.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
-import { wrapped } from './helpers/ocg-pdfs'
+import { wrapped } from './helpers/ocg-wrapped'
 
 // The unit cut is a part of what PIPELINE_VERSION names (CLAUDE.md, hard rule 4): a translation is stored and found again by an
 // output identity that names the pipeline, so that a unit cut otherwise under the same version is given a translation made for

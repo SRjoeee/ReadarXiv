@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { inMemory } from '../../packages/engine/src/source/latex-front.ts'
 import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
-import { analyze } from '@/pdf-reader/engine/source/paper-meta.mjs'
-import { untar } from '@/pdf-reader/engine/source/tar.mjs'
+import { analyze } from '../../packages/engine/src/source/paper-meta.ts'
+import { untar } from '../../packages/engine/src/source/tar.ts'
 
 // One name for one file across the PDF reader's engine: the name the source package holds it under, which is the one
 // TeX's file system has too (the TeX page writes each file at its path joined to the project's directory). Under two

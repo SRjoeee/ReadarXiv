@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { lastTexLog, MARK_DEF } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { lastTexLog, MARK_DEF } from '../../packages/engine/src/source/latex-front.ts'
 import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
-import { LINES_TEX, readLines } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
+import { LINES_TEX, readLines } from '../../packages/engine/src/compile/tex.ts'
 
 // What the marked original's line probes write into a compile and what is read back from its log (the layout marks read
 // each unit's lines: layout/marks.mjs). The typesetting rule's TeX that was tested here went with the compiled translation

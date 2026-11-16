@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { documentBounds, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { documentBounds, inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
 import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
-import { regionsTex } from '@/pdf-reader/engine/layout/marks.mjs'
+import { regionsTex } from '../../packages/engine/src/marks/marks.ts'
 
 // Code stays as the paper has it: the body of an environment a paper defines as code is never a unit, so never sent to
 // a translator (2610.19159: 832 of its 2,645 units were the lines of its appendix's agent transcripts, set in an

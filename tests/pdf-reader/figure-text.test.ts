@@ -9,7 +9,8 @@ import { POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
 import { CLASSES, FIGURE_KIND, TOGGLE_DEFAULTS, unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
 import { figureUnits } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { UNIT_FLAG_BITS } from '@/pdf-reader/engine/layer-proto/units.mjs'
-import { DOCUMENT_OPTIONS, renderPage, wrapped } from './helpers/ocg-pdfs'
+import { DOCUMENT_OPTIONS, renderPage } from './helpers/ocg-pdfs'
+import { wrapped } from './helpers/ocg-wrapped'
 
 // The text inside vector figures (docs/route/orphan-text.md stage 5, the content class `figures`): our final pass's glyphs that
 // an included PDF (a form XObject) or a TikZ or pgfplots picture (between the layout compile's points `zs` and `ze`) draws and no

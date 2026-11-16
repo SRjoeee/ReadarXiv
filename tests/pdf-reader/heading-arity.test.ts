@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { inMemory, loadProject, patch } from '../../packages/engine/src/source/latex-front.ts'
 import { plainSource } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // A command whose argument is a unit of its own takes what its definition takes and nothing after it: LaTeX's sectioning

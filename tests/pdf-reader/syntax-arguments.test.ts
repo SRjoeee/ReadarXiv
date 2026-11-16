@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
-import { LAYOUT_CLASSES, NAMES_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
+import { LAYOUT_CLASSES, NAMES_TEX } from '../../packages/engine/src/marks/marks.ts'
 import { paperParams, readArgs, textless } from '../../packages/engine/src/source/arg-roles.ts'
 
 // A unit, and a mark, are made only of text TeX typesets where it stands: an argument TeX reads as syntax — a length or

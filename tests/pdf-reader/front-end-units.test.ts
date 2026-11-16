@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch, urlPercents } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch, urlPercents } from '../../packages/engine/src/source/latex-front.ts'
 import { openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
-import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
+import { LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
 import { plainSource, seedFrom, sourceHash } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // The front end's round of 2026-10-06: every piece of typeset body text a unit, no TeX argument drawn as text (the
