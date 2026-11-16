@@ -46,8 +46,6 @@ export type Break = { next: number; room: number | null; pitch: number | null; p
 export const PH_FLAG = Object.freeze({ EMPTY: 16, LOST: 32, TEXT: 64, JOINED: 128, OUTSIDE: 256 })
 /** v0's placeholder classes that draw ink of their own (TEX:18) */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
-/** LaTeX's forced line breaks (TEX:84) */
-const FORCED_BREAK = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
 
 // ---- break-room.mjs: TeX's room after a forced break
 /** a frame's pitch: the median of its own lines' gaps, the mean of the two middles (break-room.mjs:8 pitchOf) */
@@ -177,11 +175,12 @@ type StatedFacts = {
 /**
  * U.breaks' pairing over what TeX states (design-a §1.1: El.ends, El.opens, SpanAt.opens), in the translation's order (T19,
  * T20), as today's forcedBreaks and paragraphBreaks pair the lines they read (TEX:120-199, 222-255):
- * - forced breaks: the row's breaks in groups (one after the other, nothing drawn between them), a group between two texts a
- *   break (one the translation sets at its start or its end, or next to a display, none); its line the one TeX ended at its
- *   first break (El.ends), the text after it on the next; its room TeX's (El.ends) where the next line is in the frame (the run
- *   of lines on one page and column) and the frame's pitch is known (the median of its own consecutive lines' gaps, a break's
- *   line and a kept line aside), else none (`room` null: the next line opens a block of its own, as today's break that opens
+ * - forced breaks: the row's breaks (the elements the part states forced breaks, El.brk: `\\`, \newline, LaTeX's \break, a grid
+ *   cell's row-ending macro, as the engine reads them; no source is read) in groups (one after the other, nothing drawn between
+ *   them), a group between two texts a break (one the translation sets at its start or its end, or next to a display, none);
+ *   its line the one TeX ended at its first break (El.ends), the text after it on the next; its room TeX's (El.ends) where the
+ *   next line is in the frame (the run of lines on one page and column) and the frame's pitch is known (the median of its own
+ *   consecutive lines' gaps, a break's line and a kept line aside), else none (`room` null: the next line opens a block of its own, as today's break that opens
  *   another frame or whose frame has no pitch). Where TeX's points state each break's line, the guards of today's
  *   re-derivation are void (its SHORT test, the count of short lines, one column a page). Where the lines are read by their
  *   short ends (`read`: the marked compile set no point for them, the engine paired them in the source's order), today's
@@ -216,13 +215,14 @@ export function statedBreaks(
     const g = gaps.get(frameOf[j]!) ?? gaps.set(frameOf[j]!, []).get(frameOf[j]!)!
     g.push(L[j]![4] - L[j + 1]![4])
   }
-  // forced breaks, in groups in the row's order (TEX:125-137)
+  // forced breaks, in groups in the row's order (TEX:125-137): the elements the part states forced breaks (El.brk), whatever
+  // source the piece carries
   type Group = { members: number[]; before: string | null; after: string | null }
   const groups: Group[] = []
   let group: Group | null = null,
     before: string | null = null
   for (const [i, p] of pieces.entries()) {
-    if (p.t === 'ph' && FORCED_BREAK.test(p.src ?? '')) {
+    if (elOf(p)?.brk) {
       if (!group) {
         group = { members: [], before, after: null }
         groups.push(group)

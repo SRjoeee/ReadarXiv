@@ -7429,8 +7429,10 @@ bytes it was.
   command's own macro `\break ` (`\penalty-\@M`), wrapped, in horizontal mode that is no `\hbox`'s, before its penalty, nothing
   taken (an `\hfill` before it stays the line's); none in vertical or math mode, none for `\@gnewline`'s own `\break`; a write
   of it writes as before. The corpus's uses inside a unit's text: 8, every one a line end, in one paper (2608.03841v2's amsart
-  addresses, `\hfill\break\indent`). The lay pairs a forced break by its source, `\\` and `\newline` alone
-  (`packages/typeset/src/unit/breaks.ts` FORCED_BREAK): until it reads `\break` as one, the point is stated and not drawn by.
+  addresses, `\hfill\break\indent`). The lay pairs the forced breaks the part states (`packages/typeset/src/unit/breaks.ts`
+  statedBreaks: each element of `El.brk`, at the line its `El.ends` names), no source read: a `\break` is one as `\\` is, its
+  two members laid with each line where TeX set it (lane cm-tidy; before, the pairing tested a source against `\\` and
+  `\newline`, which the lay made `\\` of every `El.brk` element, `lay/read.ts` srcOfEl, so that the same lines were laid).
 - **Held** (`lab/pdf/spikes/measure-cases.mjs`, both pinned years, four engines): no glyph, box or point of the compile without the
   statements moves; every statement read is TeX's own placement (each full line of every placed paragraph from its measure's
   left edge to its right, to 0.02 pt); each forced break's point stands right after the word before its `\\`, none in a centred
