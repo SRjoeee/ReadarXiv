@@ -73,7 +73,7 @@ describe('an early entry unit and its final twin', () => {
     const { instrument } = await instrumentOf({
       paper: p as never,
       finalPdf: await blank.save({ useObjectStreams: false }),
-      options: { engine: 'pdflatex' },
+      options: {},
       log: '',
       pdfjs: { getDocument, OPS } as never,
       documentOptions: { verbosity: 0 },
