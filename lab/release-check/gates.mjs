@@ -612,12 +612,21 @@ const bundlesDir = ctx => join(ctx.work, 'prepare', 'bundles')
 /** this run's rows of its bundles: Google's, made by reader-parts' rows step over them (`<pair>.json`), which harness-lab lays */
 const runRowsDir = ctx => join(ctx.work, 'reader-parts', 'google-rows')
 
+// Today's side of the display gates, FROZEN before the cut-over deleted today's engine (design amendment 8.3, lane c1-freeze):
+// each pair's readings and shots of today's drawing under each toggles (lab/typeset/parity/frozen.mjs) and production's row
+// path's answers (production-rows.json), read in place of drawing today's side and running today's engine. AXT_TODAY_FROZEN,
+// else SanDisk's today-frozen/frozen; the steps hand it on in their environment (render.mjs and production-rows.mjs read it
+// where no flag is given)
+const TODAY_FROZEN = process.env.AXT_TODAY_FROZEN ?? '/Volumes/SanDisk_Dev/readarxiv-lab-archive/today-frozen/frozen'
+const frozenEnv = { AXT_TODAY_FROZEN: TODAY_FROZEN }
+
 // The parity's steps over some pairs (lab/typeset/parity/: v2's lay, the drawing, the measures and the verdict), into `dir`;
 // `toggles` the reading options (`--toggles=on`: every switch of "What to translate" on), `wrap` the command's environment (the
-// added pairs' through added.mjs). The verdict's step runs whatever it finds (`all`), so that the steps after it run too
+// added pairs' through added.mjs). The verdict's step runs whatever it finds (`all`), so that the steps after it run too. The
+// drawing reads today's side from its frozen records (TODAY_FROZEN)
 const parity = (ctx, dir, pairs, { toggles = [], wrap = x => x, as = '' } = {}) => [
   { cmd: wrap(['node', 'lab/typeset/parity/v2.mjs', `--out=${join(dir, 'v2')}`, ...toggles, ...pairs]), slot: 'run', env: { AXT_L1_BUNDLES: bundlesDir(ctx) }, fresh: dir, as: `v2${as}` },
-  { cmd: wrap(['node', 'lab/typeset/parity/render.mjs', `--work=${dir}`, `--out=${join(dir, 'sheet')}`, ...toggles, ...pairs]), slot: 'e2e', env: { AXT_L1_BUNDLES: bundlesDir(ctx) }, as: `render${as}` },
+  { cmd: wrap(['node', 'lab/typeset/parity/render.mjs', `--work=${dir}`, `--out=${join(dir, 'sheet')}`, ...toggles, ...pairs]), slot: 'e2e', env: { AXT_L1_BUNDLES: bundlesDir(ctx), ...frozenEnv }, as: `render${as}` },
   { cmd: wrap(['node', 'lab/typeset/parity/measure.mjs', `--work=${dir}`, `--out=${join(dir, 'sheet')}`, ...pairs]), env: { AXT_L1_BUNDLES: bundlesDir(ctx) }, all: true, as: `measure${as}` },
 ]
 const withAdded = cmd => ['node', 'lab/typeset/added.mjs', '--', ...cmd]
@@ -626,12 +635,14 @@ const parityNeeds = ctx => [
   ...runnerNeeds(ctx),
   exists('the 87 papers', lab(ctx, 'lanes/L1-papers87.tsv')),
   exists("today's prepare dumps (the original's lines of today's units)", lab(ctx, 'baseline/prepare')),
-  exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/view/engine.css')),
+  exists("today's side frozen under the default toggles (AXT_TODAY_FROZEN)", join(TODAY_FROZEN, 'defaults')),
+  exists("production's row path's answers, frozen (AXT_TODAY_FROZEN)", join(TODAY_FROZEN, 'production-rows.json')),
 ]
 /** today's side is production's (lab/typeset/parity/production-rows.mjs): production's own row path over the stored rows gives
  *  them back, or the side drawn as production's is not; its count per pair in the gate's numbers, a pair not production's
- *  failing it. Run whatever it finds, so that the parity is measured and reported beside it */
-const productionRows = (pairs, wrap = x => x, as = 'rows') => ({ cmd: wrap(['node', 'lab/typeset/parity/production-rows.mjs', ...pairs]), all: true, as })
+ *  failing it. Run whatever it finds, so that the parity is measured and reported beside it. Its answers read from the frozen
+ *  folder (TODAY_FROZEN), for the stored rows they were recorded over */
+const productionRows = (pairs, wrap = x => x, as = 'rows') => ({ cmd: wrap(['node', 'lab/typeset/parity/production-rows.mjs', ...pairs]), env: frozenEnv, all: true, as })
 /** production-rows.mjs's totals: "production's rows: P of N pairs; R of S stored rows given back …", and the pairs that are not */
 export function productionRowsOf(text) {
   const m = /^production's rows: (\d+) of (\d+) pairs; (\d+) of (\d+) stored rows/m.exec(text)
@@ -874,7 +885,7 @@ export const GATES = [
     cutover: true,
     after: ['prepare'],
     disk: true,
-    needs: ctx => [...parityNeeds(ctx), exists("the added pairs' today's side (lab/typeset/added.mjs)", lab(ctx, 'baseline/added/pairs.txt'))],
+    needs: ctx => [...parityNeeds(ctx), exists("today's side frozen with every switch on (AXT_TODAY_FROZEN)", join(TODAY_FROZEN, 'on')), exists("the added pairs' today's side (lab/typeset/added.mjs)", lab(ctx, 'baseline/added/pairs.txt'))],
     // (today's rows of the 22 and of the added pairs checked production's (production-rows.mjs); then the 22 pairs, the added
     // pairs in steps of their own, their today's side read through added.mjs's root of links (made as the step runs), their sheet
     // beside, so that the 22's numbers stay comparable with the rounds before; then both again with every switch on)

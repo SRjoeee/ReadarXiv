@@ -87,7 +87,8 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
   and the rounds' tools that read it through the tree's chain and lay the reader gate over it; `baseline/corpora/papers.json`:
   the harness's corpus papers, opened from this run's bundles with this run's rows of them, `reader-parts`' Google rows);
   today's engine at `065c1d973` checked out beside the
-  worktree (`AXT_TODAY`); the release sweep's cache and the reader's served faces, which the typeset runners read
+  worktree (`AXT_TODAY`: no longer the display gates', which read today's side frozen, `AXT_TODAY_FROZEN`, SanDisk's
+  `readarxiv-lab-archive/today-frozen/frozen`); the release sweep's cache and the reader's served faces, which the typeset runners read
   (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`); Playwright's Chromium; for `perf-batch`, the website's tree its
   reader is built in (`PERF_WEB`, a website worktree: its HEAD with this commit as `vendor/readarxiv`) and the round's box
   image (`PERF_NEW_IMAGE`). Docker for `perf-batch` alone (a compile no cache holds is a failed paper: exit 3).
@@ -129,7 +130,8 @@ replica of production's path stood in for production's on the two added pairs un
 `layerRows`: 11 rows production keeps were translated). So each display gate first checks, pair by pair, that production's
 own row path (today's engine's `layerRows` over the release's units and the stored rows) gives every stored row back, a
 kept row by its state (`production-rows.mjs`, about a second for 92 pairs); a pair whose rows it does not give back fails
-the gate, named, and the parity is still measured beside it.
+the gate, named, and the parity is still measured beside it. Its answers are recorded once in the frozen folder
+(`production-rows.json`, by the digest of the stored rows and the release's units they were read over) and read there.
 
 **Cut-over blockers.** The maintainer's base threshold for the refactor: v2's display equal to or better than the
 production site's, and performance, complexity and debt improved. `display` (`lab/typeset/parity/`, its README) is the

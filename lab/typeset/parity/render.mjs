@@ -50,10 +50,11 @@ const PAGES = arg('pages')?.split(',').map(Number) ?? null
  *  the same (v2.mjs --toggles) */
 const TOGGLES = arg('toggles') === 'on' ? 'on' : 'defaults'
 const CLASSES_ON = { figures: true, tables: true, heads: true, references: true, names: true }
-/** today's side drawn and frozen into a folder, or read from one (frozen.mjs); neither: drawn */
+/** today's side drawn and frozen into a folder, or read from one (frozen.mjs: --today-frozen, or AXT_TODAY_FROZEN where neither
+ *  flag is given, which the release check's display gates set); neither: drawn */
 const FREEZE = arg('freeze-today') ?? null
-const FROZEN = arg('today-frozen') ?? null
-if (FREEZE && FROZEN) throw new Error('render.mjs: --freeze-today=<dir> draws and writes today\'s side, --today-frozen=<dir> reads it: one or the other')
+if (FREEZE && arg('today-frozen')) throw new Error('render.mjs: --freeze-today=<dir> draws and writes today\'s side, --today-frozen=<dir> reads it: one or the other')
+const FROZEN = arg('today-frozen') ?? (FREEZE ? null : (process.env.AXT_TODAY_FROZEN ?? null))
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const pairs = asked.length ? asked : PAIRS
 // (the bundles served, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
