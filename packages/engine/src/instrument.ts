@@ -251,6 +251,12 @@ export interface Instrument {
      *  \leftskip or \rightskip of some natural size), by its end's serial (B's `qe<n><code>`; marks/channels.ts readMeasures,
      *  STATEMENTS_TEX's AXT-MEASURE), in PDF units */
     measures?: ({ para: number } & ParaMeasure)[]
+    /** the body brackets (B's `bs<n>`..`be<n>`, by serial) that hold a whole page, floats inside, where no \@makecol ran for it
+     *  (marks/channels.ts readWhole, STATEMENTS_TEX's AXT-WHOLE): where TeX placed a float there no bracket says */
+    whole?: number[]
+    /** each body bracket's side as TeX states it (LAYOUT_TEX's AXT-BODY, marks/channels.ts readBodies), by serial: 1 and 2 the left
+     *  and the right column of a two-column page (\@makecol's), 0 a one-column body or a page's whole box */
+    bodySides?: [number, 0 | 1 | 2][]
   }
   /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
   recovered?: Recovered

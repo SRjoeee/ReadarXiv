@@ -353,6 +353,14 @@ export function readGlues(log: string): { at: number; name: GlueName; natural: n
   }
   return out
 }
+/** the body brackets that hold a whole page (STATEMENTS_TEX's WHOLE_TEX, `AXT-WHOLE <n>`): the serials of the `bs<n>`..`be<n>` that
+ *  POINTS' \@outputpage hook made where no \@makecol ran for the page (a class whose output routine is its own, a page of
+ *  floats), floats inside them; every other body bracket is a column's main list as the page builder broke it */
+export function readWhole(log: string): number[] {
+  const out = new Set<number>()
+  for (const m of log.matchAll(/^AXT-WHOLE (\d{1,9})$/gm)) out.add(Number(m[1]))
+  return [...out].sort((x, y) => x - y)
+}
 /** a body's opening point (POINTS_TEX's `bs<n>`) and a page's column mark (MARK_DEF's `c<columns>-<page>`, a point beside its
  *  destination) */
 const BODY_POINT = /^bs(\d+)$/

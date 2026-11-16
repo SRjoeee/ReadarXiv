@@ -7295,9 +7295,25 @@ the glue TeX sets at each kind of gap, and the part names, under each member, th
   line, the class of the gap TeX set there and that glue's natural size and shrink, by what stands under it (the next member's
   line, the float each is of by B's brackets): a heading's `afterskip` (`runin` after a title set in the line, the after-skip
   negated: F40's form 1); over a heading its `beforeskip` as TeX adds it; a float's last member its float's separation by TeX's
-  own case read from the page (2c's F-last and F-sep: `textfloatsep` under a top float, `intextsep` round a float set here,
-  `floatsep` over another float, the two-column pair across both columns, `fpsep` on a page of floats alone), and body text over
-  a float's first member the same; in a float `abovecaptionskip` over its caption and `belowcaptionskip` under it;
+  own case (2c's F-last and F-sep: `textfloatsep` under a top float, `intextsep` round a float set here, `floatsep` over another
+  float, the two-column pair across both columns, `fpsep` on a page of floats alone), and body text over a float's first member
+  the same. Top or here is where TeX placed the float, as B's brackets state it: POINTS' `\@makecol` hook brackets each column's
+  main list as the page builder broke it (`bs<n>` .. `be<n>`), and `\@makecol` then sets the top list over it and the bottom list
+  under it, so a float whose bracket (`fs<n>`) opens inside a body's was set here and one outside every body's is a top or a
+  bottom float; body text is what stands inside a body's bracket. Not body text over the float in its column on the page: a
+  two-column title block (`\twocolumn[…]`, ICML's, set over both columns and in no body) stood over a top float and its
+  `textfloatsep` was stated `intextsep` (2611.03953v2 p1, the measured gap 32.88 = 3 + 20 + 10 under its figure), and the block
+  itself a float's separation; it states none now. The float's list is read the same way (lane cm-fix, the coordinator's rulings
+  of 2026-11-16): the class under a float's last ink is what TeX set after the float in its list, its brackets adjacent with no
+  ink between (`floatsep` over the next float of a column's top or bottom list, though the next float's own picture stands under
+  the caption on A: 2608.04322v1 p9's Figure 7 over Figure 8, its caption once stated nothing; `dblfloatsep` between two floats
+  over both columns, `dbltextfloatsep` under the last; `fpsep` between two floats of a column of floats, the two-column page's
+  column of no body bracket, AXT-BODY's side telling the column; under the last of a bottom list or of a column of floats
+  nothing, its column's foot), each number the marked compile's own statement of the parameter (AXT-GLUE, the value in force at
+  the float's serial). On a page bracketed whole (`AXT-WHOLE`: a class whose output routine is its own, REVTeX's ltxgrid, or a
+  page of floats) no bracket says where TeX placed a float, and no float separation is stated there, nor on a page that states
+  no body: no geometric guess (the coordinator's ruling). In a float `abovecaptionskip` over
+  its caption and `belowcaptionskip` under it;
   `footins` over the footnotes and `footnotesep` between two; `parskip` over a paragraph (the next one's). None where nothing of
   the paper's own text follows, where ink no unit owns stands between (but the footnote rule and a float's own ink over its
   caption), or where the glue is not stated. `sep` keeps its meaning; a heading set on lines of its own gains one: its

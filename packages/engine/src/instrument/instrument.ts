@@ -18,6 +18,7 @@ import {
   boxedAlignOf,
   framesOf,
   readAlign,
+  readBodies,
   readBoxAlign,
   readCellBoxes,
   readGlues,
@@ -25,6 +26,7 @@ import {
   readMeasures,
   readRefNames,
   readSkips,
+  readWhole,
 } from '../marks/channels.ts'
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
@@ -2337,6 +2339,8 @@ export async function instrumentOf({
   // them: STATEMENTS_TEX's AXT-SECT and AXT-GLUE)
   const heads = [...readHeads(lastTexLog(log))].map(([unit, h]) => ({ unit, ...h }))
   const glues = readGlues(lastTexLog(log))
+  const whole = readWhole(lastTexLog(log))
+  const bodySides = [...readBodies(lastTexLog(log))].map(([n, b]): [number, 0 | 1 | 2] => [n, b.side])
   // (each paragraph's measure as TeX breaks it, STATEMENTS_TEX's AXT-MEASURE: those that are not the full \hsize)
   const measures = [...readMeasures(lastTexLog(log))]
     .filter(([, x]) => x.shape || x.hangindent !== 0 || x.leftskip !== 0 || x.rightskip !== 0)
@@ -2370,6 +2374,8 @@ export async function instrumentOf({
         ...(heads.length ? { heads } : {}),
         ...(glues.length ? { glues } : {}),
         ...(measures.length ? { measures } : {}),
+        ...(whole.length ? { whole } : {}),
+        ...(bodySides.length ? { bodySides } : {}),
       },
       made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' },
     },
