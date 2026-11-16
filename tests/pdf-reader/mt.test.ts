@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { latin1Bytes } from '../../packages/engine/src/source/latex-front.ts'
-import { plainSource, unitText } from '../../packages/engine/tests/helpers/unit-harness.ts'
-import { plainTranslated, utf8 } from '../../packages/engine/src/instrument/mt.ts'
+import { latin1Bytes } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { plainSource, plainTranslated, unitText, utf8 } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 
