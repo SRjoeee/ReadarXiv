@@ -130,15 +130,17 @@ function inForce(glues: NonNullable<Instrument['tex']['glues']>, serial: number)
  * TeX set on lines of its own (Room.sep, its \@startsection after-skip and the \baselineskip and \parskip around it). The class:
  * - a heading the compile states the skips of: under a title on lines of its own (an after-skip over zero, TeX's \@sect test)
  *   `afterskip`, and its sep; after a title set in the line `runin`, the skip TeX sets after it, the after-skip negated;
- * - a float's last ink (a member no glyph or painted box of B follows before its float's closing bracket), by where TeX placed the
- *   float and what it set after it, as B's brackets state them (POINTS' \@makecol hook brackets a column's main list, `bs<n>` ..
- *   `be<n>`, before \@makecol sets its top list over it and its bottom list under it; AXT-BODY's side, its column): a float set in
- *   the body (its bracket inside the body's) `intextsep` where the body goes on under it; on a column's top list, over the next
- *   float of that list (their brackets adjacent, no ink between: the next float's own ink stands under the member on A,
- *   2608.04322v1 p9's Figure 7 over Figure 8) `floatsep`, the last over the body `textfloatsep`; over both columns (its lines
- *   across the gutter, the page's frame) `dblfloatsep` over the next such float, `dbltextfloatsep` over the columns; in a column of
- *   floats beside another column's body (the column of no body bracket on a two-column page) `fpsep` between two; under the last
- *   of a bottom list or of a column of floats nothing (its column's foot); the float's values (Instrument.tex.glues at its serial);
+ * - a float's last ink (a member no glyph or painted box of B follows before its float's closing bracket), by where TeX placed
+ *   the float and what it set after it, as B's brackets state them (POINTS' \@makecol hook brackets a column's main list,
+ *   `bs<n>` .. `be<n>`, before \@makecol sets its top list over it and its bottom list under it; AXT-BODY's side, its column): a
+ *   float set in the body (its bracket inside the body's) `intextsep` where the body goes on under it, over the next float set
+ *   there (their brackets adjacent) the two \intextsep TeX set between them whole, natural sizes and shrinks added (2608.04322v1
+ *   p9's [H] Figures 7 and 8); on a column's top list, over the next float of that list (their brackets adjacent, no ink
+ *   between: the next float's own ink stands under the member on A) `floatsep`, the last over the body `textfloatsep`; over both
+ *   columns (its lines across the gutter, the page's frame) `dblfloatsep` over the next such float, `dbltextfloatsep` over the
+ *   columns; in a column of floats beside another column's body (the column of no body bracket on a two-column page) `fpsep`
+ *   between two; under the last of a bottom list or of a column of floats nothing (its column's foot); the float's values
+ *   (Instrument.tex.glues at its serial);
  * - body text over a float's first member: `intextsep` where TeX set the float in the body, `textfloatsep` over the first of a
  *   bottom list. Body text is what TeX set in a column's body (between its `bs<n>` and `be<n>`): a title block \twocolumn[…] sets
  *   over both columns stands in none, and states no float's separation (2611.03953v2 p1: ICML's title and authors over a top
@@ -326,9 +328,19 @@ export function gapsOf(w: Work, under: InkUnder): Map<Member, { gap?: Gap; sep?:
       } else gap = ['runin', r2(neg(a)), r2(neg(s))]
     } else if (fm !== null && fn !== fm) {
       // (its float's last ink: what TeX set under it by where it placed the float, B's brackets, whatever stands under it on A: the
-      // next float's own ink (the float over a float, 2608.04322v1 p9's Figure 7 over Figure 8), the body's)
+      // next float's own ink (a float over a float), the body's)
       const s = lastOf(mem, fm) ? underFloat(fm, page) : undefined
       if (s) gap = glue(inForce(glues, fm), s)
+      // (two floats set here one over the other: TeX set \intextsep under the first and \intextsep again over the second, the two
+      // glues between the members whole (float.sty's \float@endH, LaTeX's \@addtocurcol: `\vskip\intextsep \box \vskip
+      // \intextsep`; the coordinator's ruling of 2026-11-16, 2608.04322v1 p9's [H] Figures 7 and 8), each float's value at its
+      // serial, natural sizes and shrinks added: the room TeX itself could close there)
+      const pl = s === 'intextsep' ? placeOf(fm, page) : null
+      const below = pl?.next ?? null
+      if (gap && below !== null && placeOf(below, page)?.kind === 'here') {
+        const v = inForce(glues, below).get('intextsep')
+        if (v) gap = ['intextsep', r2(gap[1] + v[0]), r2(gap[2] + v[1])]
+      }
     } else if (next && fm !== null && fn === fm) {
       const vals = inForce(glues, fm)
       if (kindOf(next.mem) === 'caption') gap = glue(vals, 'abovecaptionskip')

@@ -143,7 +143,7 @@ const CASES = {
   herepair: [
     doc(
       '\\documentclass{article}',
-      '\\usepackage{float}',
+      '\\usepackage{float}\\showoutput',
       `${BODY}\n${F('figure', 'H', 40)}${F('figure', 'H', 41)}${P(42, prose(40))}${F('figure', 'h', 43)}${F('figure', 'h', 44)}${P(45, prose(60))}`,
     ),
     HEADS,
@@ -252,6 +252,34 @@ async function placesHeld(file, log) {
   }
   out.push(`ok floats placed as TeX listed them ${n} of ${[...brackets].filter(([, b]) => b.e >= 0).length}; outputs ${outputs}, whole ${whole.size}`)
   return out
+}
+/** how many pairs of boxes of one list \\showoutput's listing of the shipped pages holds with TeX's \\intextsep (as \\the prints
+ *  it, `said`; the listing prints it without its units) twice between them and nothing else but the interline glue and
+ *  penalties: two floats set here one over the other */
+function twiceBetween(log, said) {
+  const want = `\\glue ${said.trim().replaceAll('pt', '')}`
+  let n = 0
+  const lines = log.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(\.+)\\vbox\(/.exec(lines[i])
+    if (!m) continue
+    const dots = m[1]
+    let twice = 0
+    let other = false
+    for (let j = i + 1; j < lines.length; j++) {
+      const l = lines[j]
+      if (l.startsWith(`${dots}.`)) continue
+      if (!l.startsWith(dots)) break
+      const item = l.slice(dots.length)
+      if (/^\\vbox\(/.test(item)) {
+        if (twice === 2 && !other) n++
+        break
+      }
+      if (item === want) twice++
+      else if (!/^\\glue\((?:\\lineskip|\\baselineskip)\)/.test(item) && !/^\\penalty /.test(item)) other = true
+    }
+  }
+  return n
 }
 /** the two PDFs' pages as pageInk reads them: every glyph (its character, advance, baseline, size), box and point the same */
 async function sameInk(a, b) {
@@ -400,6 +428,14 @@ for (const year of YEARS) {
       const placing = existsSync(b) ? await placesHeld(b, log) : ['no PDF']
       faults.push(...placing.filter((x) => !x.startsWith('ok ')))
       notes.push(...placing.filter((x) => x.startsWith('ok ')).map((x) => x.slice(3)))
+      // (6) two floats set here one over the other: TeX set \intextsep twice between their boxes (\showoutput's listing of the
+      // shipped page), what the reading states whole under the upper one's last member (locate/gaps.ts)
+      if (name === 'herepair') {
+        const said = shows.find((x) => x.at === '0' && x.name === 'intextsep')?.glue
+        const n = said ? twiceBetween(log, said) : 0
+        if (n < 1) faults.push('no two floats set here with \\intextsep twice between them in the shipped page')
+        else notes.push(`\\intextsep twice between ${n} pair${n > 1 ? 's' : ''} of floats set here`)
+      }
       const restated = glues.filter((g) => g.at > 0).map((g) => `${g.name}@fs${g.at}`)
       counts[`${year} ${e}`] ??= { ok: 0, fail: 0 }
       counts[`${year} ${e}`][faults.length ? 'fail' : 'ok']++

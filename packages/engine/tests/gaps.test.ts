@@ -234,6 +234,38 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
     expect(b0!.gap).toEqual(['intextsep', 12, 2])
     expect(b2!.gap).toBeUndefined()
   })
+  it('states the two \\intextsep TeX set between two floats set here one over the other, whole: natural sizes and shrinks added', () => {
+    // (2608.04322v1 p9: float.sty's [H] Figures 7 and 8, \float@endH's `\vskip\intextsep \box \vskip\intextsep` each, the
+    // second float's picture between the captions on A; the coordinator's ruling of 2026-11-16: the gap is the glue TeX set
+    // between the two members whole, each float's own value; the second's under it, the body going on, its own one)
+    const [b0, c1, c2, b3] = roomsOf(
+      [
+        {
+          ...pageOf(
+            [
+              ['body above', 700],
+              ['cap a', 660],
+              ['cap b', 600],
+              ['body below', 560],
+            ],
+            [
+              [1, 1, 1],
+              [2, 2, 2],
+            ],
+            [[3, 0, 3]],
+          ),
+          boxes: [[5, -3, 72, 612, 200, 650]] as [number, number, number, number, number, number][],
+        },
+      ],
+      [body('body above'), cap('cap a'), cap('cap b'), body('body below')],
+      [[0, 1, 2, 3]],
+      { frames, skips: [para(0), para(3)], glues: [...glues0, { at: 2, name: 'intextsep', natural: 10, shrink: 1 }] },
+    )
+    expect(b0!.gap).toEqual(['intextsep', 12, 2])
+    expect(c1!.gap).toEqual(['intextsep', 22, 3])
+    expect(c2!.gap).toEqual(['intextsep', 10, 1])
+    expect(b3!.gap).toBeUndefined()
+  })
   it('states a bottom float’s \\textfloatsep over it, and nothing under it', () => {
     const [b0, c1] = roomsOf(
       [
@@ -254,7 +286,7 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
     expect(c1!.gap).toBeUndefined()
   })
   it('states \\floatsep between two floats of a column’s top list, the next one’s own ink between them, the values the float states', () => {
-    // (2608.04322v1 p9: Figure 7 over Figure 8 at the column's top, Figure 8's picture between the two captions on A)
+    // (two figures at the column's top, the second's picture between the two captions on A)
     const [c0, c1] = roomsOf(
       [
         {
