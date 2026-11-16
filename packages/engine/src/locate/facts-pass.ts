@@ -129,6 +129,8 @@ interface FactsIndex {
   staysOn: (p: number) => InkBox[]
   /** each page's lines, every member's */
   linesOn: Map<number, Line[]>
+  /** the lines of the members that are a table's cells */
+  cellLines: ReadonlySet<Line>
   /** a line's block: TeX's frame where it shipped the page's, else the measure of the page's or column's lines */
   blockOf: (l: Line) => [number, number]
   /** B's paragraph ends, global, each glyph position once */
@@ -230,6 +232,8 @@ function open({
   // (each page's lines, every member's: a single line's stack, centredByBlock)
   const linesOn = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (linesOn.get(l[0]) ?? linesOn.set(l[0], []).get(l[0])!).push(l)
+  const cellLines = new Set<Line>()
+  for (const mem of members) if (mem.unit >= 0 && units[mem.unit]?.cell) for (const l of mem.lines) cellLines.add(l)
   // (each page's and column's block: TeX's frame where it shipped the page's (framed); else its justified lines' measure where
   // it has one, else all its lines' hull)
   const hull = new Map<string, [number, number]>()
@@ -292,6 +296,7 @@ function open({
     boxes,
     staysOn,
     linesOn,
+    cellLines,
     blockOf,
     ends,
     forced,
@@ -1124,7 +1129,9 @@ function readDirection(_fx: FactsIndex, r: MemberReading): void {
 }
 
 /** a single line's row: the line with its extent widened to everything TeX set on it within its measure (the member's own ink,
- *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure) */
+ *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure, a
+ *  table's cell's aside: a table's row is no paragraph's line, and its row header beside the cells' words read centred,
+ *  2610.40394v1 p14 ord 747) */
 function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined): Line {
   const [m0, m1] = fx.blockOf(l)
   let x0 = labelX0 !== undefined ? Math.min(l[2], labelX0) : l[2]
@@ -1136,7 +1143,14 @@ function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined
       x1 = Math.max(x1, k[3])
     }
   for (const k of fx.linesOn.get(l[0]) ?? [])
-    if (k !== l && !(k[9] & LINE_FLAG.KEPT) && Math.abs(k[4] - l[4]) <= ON_BASE && k[3] > m0 && k[2] < m1) {
+    if (
+      k !== l &&
+      !(k[9] & LINE_FLAG.KEPT) &&
+      !fx.cellLines.has(k) &&
+      Math.abs(k[4] - l[4]) <= ON_BASE &&
+      k[3] > m0 &&
+      k[2] < m1
+    ) {
       x0 = Math.min(x0, k[2])
       x1 = Math.max(x1, k[3])
     }
