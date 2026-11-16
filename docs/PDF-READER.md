@@ -955,8 +955,9 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
     (`tests/e2e/reader-v2-layer.mjs`, the states section, both with nothing kept).
   The database is the old reader's (`axt-layer`) at version 5. **The version step** deletes the old reader's three tables
   (objects by digest, catalogs, who held what), which no address of the rebuilt reader reaches, on the first open by this
-  build. **The way back**, measured (`tests/cache/paper-store.test.ts`, Dexie 4.4): a build of version 4 meets the database
-  of version 5 and works, Dexie opening it at 5.1 with the old tables made again beside the new; its papers kept from then
+  build. **The way back**, measured (`tests/cache/paper-store.test.ts` on 0.5.2's version 4, frozen in `tests/cache/layer-v4.ts`;
+  Dexie 4.4): a build of version 4 meets the database of version 5 and works, Dexie opening it at 5.1 with the old tables
+  made again beside the new; its papers kept from then
   on are its own, and this build, back again, works on its own rows. Nothing breaks either way; what a return leaves is the
   old tables beside the new (at most the old store's 200 MB), until a later version step names them null again: the
   rollback recipe is that step in the release that comes forward after a rollback (`axt-layer` version 6, `objects`,

@@ -4,8 +4,8 @@
 import Dexie from 'dexie'
 import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
 import { describe, expect, it } from 'vitest'
-import { createLayerDb, createLayerStore } from '@/cache/layer-store'
 import { createPaperDb, createPaperStore, type Kept, PAPER_DB, SHARED } from '@/cache/paper-store'
+import { createLayerDb, createLayerStore } from './layer-v4'
 
 let n = 0
 const name = () => `axt-paper-test-${++n}`
@@ -14,8 +14,8 @@ const bytes = (s: string) => new TextEncoder().encode(s)
 const kept = (s: string, status = 200, headers: [string, string][] = [['etag', '"e"']]): Kept => ({ status, headers, bytes: bytes(s) })
 const hex = async (b: Uint8Array) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', b as Uint8Array<ArrayBuffer>))].map(x => x.toString(16).padStart(2, '0')).join('')
 
-/** a database as the old reader's store made it: `axt-layer` at version 4 (cache/layer-store.ts), holding a paper's object
- *  and catalog */
+/** a database as the old reader's store made it: `axt-layer` at version 4 (cache/layer-store.ts, frozen in ./layer-v4.ts),
+ *  holding a paper's object and catalog */
 async function oldStore(db: string): Promise<void> {
   const store = createLayerStore({ db: createLayerDb(db, options) })
   const object = bytes('an object of an old layer')
