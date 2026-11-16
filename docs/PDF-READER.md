@@ -7362,8 +7362,10 @@ bytes it was.
   cm-fix): a line of its unit's last paragraph takes the paragraph TeX pairs the unit with (`marks/channels.ts` readParas,
   `Instrument.tex.paras`: STATEMENTS_TEX's `AXT-MEASURE <n>` is written at para/end and the unit's `AXT-ALIGN <u> p` at the same
   paragraph's para/after, so the last measure before the unit's `p` line is the paragraph its end mark ended in), where no
-  paragraph end of the unit's own stands before the line on B, and only where that paragraph comes after the end B shows before
-  the line and no later than the first end B shows after it; any other line the paragraph whose end B shows next after it, the
+  paragraph end of the unit's own stands before the line on B, and only where that paragraph's end, where B shows it, stands
+  after the line, and its serial comes after the end B shows before the line and no later than the first end B shows after it
+  (B's order is not TeX's: a note's or a float's paragraph TeX ended earlier stands later on B; 2501.14787v1 p75's line after a
+  display took the heading's `\hangindent` from p74); any other line the paragraph whose end B shows next after it, the
   unit's own, only where that end's serial is the one directly after the end B shows before the line (none ended after a box can
   stand between); every other line, and a unit TeX ended in an `\hbox` (a one-line caption) or stated nothing for, none: its
   frame's. The pairing alone is not the unit's paragraph in two ways the whole corpus showed (the chain against c2: 1136 lines
@@ -7390,7 +7392,9 @@ bytes it was.
     the line's measure: an item no longer inset from it reads justified, traces-b's item 5; a single line TeX told justified is
     read centred by glue of its own only where its row's ink is inset on both sides of the measure, the row everything TeX set on
     that line: the member's ink, its label, the end mark a fill pushed, another member's line on its baseline such as a run-in
-    head, facts-pass.ts rowOf, lane cm-fix 2026-11-16), and a member's room below its last
+    head, but no table cell's and no line of another paragraph TeX states (two subcaptions side by side, each its minipage's,
+    2608.13505v1 p4; a row header beside a cell's words, 2610.40394v1 p14), facts-pass.ts rowOf, lane cm-fix 2026-11-16; a line
+    nothing told is read by its own ink as before), and a member's room below its last
     block. The paragraph's lay (`packages/typeset/src/unit/blocks.ts` measuresOf, which guesses a change of measure from the lines'
     edges) is not changed here: the lay lane deletes that guessing and reads `Line[7..8]` (rebuild/google-lay stays unmerged).
 - **The forced break's line** (`marks.ts` BREAKS_TEX; the point class `forced-break`, optional; `ink.ts` FORCED_BREAK, kept apart
