@@ -1,4 +1,5 @@
 // lab/typeset/added.mjs: the added pairs walked apart from a gate's set, and the root of links their today's side is read through
+import { spawnSync } from 'node:child_process'
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -89,5 +90,28 @@ describe('the added pairs', () => {
     dirs.push(none)
     expect(() => addedEnv(none)).toThrow(/no added pairs' today's side/)
     expect(existsSync(join(none, 'refactor-2026-11'))).toBe(false)
+  })
+
+  it('print after the set: the set\'s last lines before the added pairs\' run, whatever the caller\'s output still holds', () => {
+    // (a gate's run prints its set's numbers, then runApart walks the added pairs in a child of its own. On macOS a process's
+    // stdout to a pipe is asynchronous: lines the caller wrote and the pipe has not taken yet were written after the child's, so
+    // the release check read no set numbers before the added pairs' heading (lane cm-c's sentence cover, 2026-11-16). The caller
+    // here writes more than a pipe holds, then its last line, then runs the child)
+    const lab = labOf()
+    const env = addedEnv(lab)
+    dirs.push(env.AXT_LAB_DATA)
+    const dir = mkdtempSync(join(tmpdir(), 'added-order-'))
+    dirs.push(dir)
+    const added = join(import.meta.dirname, '../../lab/typeset/added.mjs')
+    writeFileSync(join(dir, 'child.mjs'), "console.log('THE CHILD')\n")
+    writeFileSync(
+      join(dir, 'parent.mjs'),
+      `import { runApart } from ${JSON.stringify(added)}\nprocess.stdout.write('x'.repeat(4 * 2 ** 20) + '\\n')\nconsole.log('THE SET ENDS')\nprocess.exit(await runApart(${JSON.stringify(join(dir, 'child.mjs'))}, ['b-zh'], { argv: [] }))\n`,
+    )
+    const r = spawnSync(process.execPath, [join(dir, 'parent.mjs')], { encoding: 'utf8', maxBuffer: 64 * 2 ** 20, env: { ...process.env, AXT_LAB_DATA: lab } })
+    expect(r.status).toBe(0)
+    const end = r.stdout.indexOf('THE SET ENDS')
+    expect(end).toBeGreaterThan(0)
+    expect(r.stdout.indexOf('THE CHILD')).toBeGreaterThan(end)
   })
 })

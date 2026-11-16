@@ -100,6 +100,15 @@ function close(w: Work, owned: Owned): Located {
         stats.opensUnstated.anchored += mem.opensUnstated[0]
         stats.opensUnstated.plain += mem.opensUnstated[1]
       }
+      for (const [j, anchored] of mem.opensPlain ?? []) {
+        stats.opensPlain ??= []
+        stats.opensPlain.push([mem.ord, j, anchored])
+      }
+      if (mem.opensStated) {
+        stats.opensStated ??= { span: 0, el: 0, break: 0, region: 0, text: 0, words: 0 }
+        const s = stats.opensStated
+        for (const k of Object.keys(s) as (keyof typeof s)[]) s[k] += mem.opensStated[k]
+      }
     } else noteUnlocated(mem.cause ?? 'no ink')
   }
   return { units, members, born, flows, ties, links, groups, figureGroups, stats, displays, floatLines, disagreements }

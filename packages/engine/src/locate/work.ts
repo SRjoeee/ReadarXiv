@@ -101,9 +101,22 @@ export interface Member {
   /** paragraphs TeX opened inside it where a group the instrument wrote as its content stood (InstrumentUnit.passed): none is
    *  stated, and stage 1a fails the paper (Located.stats.opensLost) */
   opensLost?: number
-  /** paragraph ends of B inside it (its glyphs on both sides) that state no point (no SpanAt.opens, no El.opens): where an open or
-   *  an element stands where the next paragraph begins in the source, and where plain text does (facts-pass.ts) */
+  /** paragraph ends of B inside it (its glyphs on both sides) that state no point (no SpanAt.opens, no El.opens, no forced break,
+   *  no first word, no region): where an open or an element stands where the next paragraph begins in the source, and where
+   *  plain text does (facts-pass.ts) */
   opensUnstated?: [anchored: number, plain: number]
+  /** those ends, each by the line its paragraph opens on and whether anchored (1) or plain (0): the stage's listing */
+  opensPlain?: [line: number, anchored: 0 | 1][]
+  /** the paragraphs TeX opened inside it, by what states each (facts-pass.ts readOpens): a group's open, an element, a forced
+   *  break, a region (a display before it: a block of its own), its first word alone; and how many of them state their first
+   *  word (Placed.paras) */
+  opensStated?: { span: number; el: number; break: number; region: number; text: number; words: number }
+  /** each paragraph TeX opened inside its text by its first word: [the word's offset in the source projection, the line TeX
+   *  opened it on] (Placed.paras), ascending */
+  paras?: [offset: number, line: number][]
+  /** each placed word's (and each element's word's) glyphs on A, global: the word as [its offset, its line] (sentences.ts, beside
+   *  `words`): what a paragraph's first glyph on A is found by (facts-pass.ts readOpens). Never stated */
+  wordAt?: Map<number, readonly [offset: number, line: number]>
   /** a figure text's runs in another face than its own, by their group's piece id: each one's style, read off its glyphs on A
    *  (ink.ts figureRuns; SpanAt.style) */
   spanStyles?: [string, Style][]
@@ -178,6 +191,11 @@ export interface Located {
     /** paragraph ends of B inside a unit that state no point, by what stands where the next paragraph begins in the source: an
      *  open or an element (`anchored`: a gate, which must count none) or plain text (`plain`: no anchor exists for it) */
     opensUnstated?: { anchored: number; plain: number }
+    /** each such end: the member's ord, the line its paragraph opens on, 1 where anchored (the stage lists them) */
+    opensPlain?: [ord: number, line: number, anchored: 0 | 1][]
+    /** the paragraphs TeX opened inside a unit that state their point, by what states each (Member.opensStated), and how many
+     *  state their first word (Placed.paras) */
+    opensStated?: { span: number; el: number; break: number; region: number; text: number; words: number }
     /** the units' end marks claimed after their end points (El.end) */
     ends?: number
   }
@@ -513,6 +531,20 @@ export const BRACKET = /^[bf][se]\d+$/
 /** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
  *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
 export const ON_ROW = 0.4
+
+/** a member's own ink that goes with its lines, set anew where its translation is laid: the glyphs (A's, global) of its text,
+ *  its label and its elements but those whose ink stays where TeX set it (El.keep), and the boxes (`page|index`, the page's
+ *  numbered from 1) of its text and those elements. Ink between two of its lines that is its own (an underline under its line,
+ *  a script reaching down) is no other's: no run of its lines ends at it (Room.runs, geometry.ts roomOf; a paragraph TeX opened
+ *  there, facts-pass.ts readOpens). Read after lineGeometry, which states its elements */
+export function travellingInk(mem: Member): { glyphs: Set<number>; boxes: Set<string> } {
+  const kept = new Set(mem.elements.filter(([, el]) => el.keep).map(([id]) => id))
+  const glyphs = new Set<number>([...mem.text, ...mem.label])
+  const boxes = new Set(mem.textBoxes.map(([p, j]) => `${p}|${j}`))
+  for (const [id, l] of mem.els) if (!kept.has(id)) for (const a of l) glyphs.add(a)
+  for (const [id, l] of mem.elBoxes) if (!kept.has(id)) for (const [p, j] of l) boxes.add(`${p}|${j}`)
+  return { glyphs, boxes }
+}
 
 /** the unit's own text line an ink stands on (the line TeX set it on: a radical's glyph origin is at its bar, a subscript's below
  *  the line, a footnote's mark raised over it): of its text lines on the ink's page whose band (its fonts' boxes, half a point

@@ -433,6 +433,13 @@ export const Placed = z.object({
   // placed, its second or third where the first is not (docs/PDF-READER.md §17.2). Every word, not the shared cutter's starts:
   // 82 % of Microsoft's starts are among those (40,409 over the corpus's stored rows, 2026-11-08), under design-a's 90 %
   words: z.array(z.tuple([int, int, num])).optional(),
+  // the paragraphs TeX opened inside its text, each by its first word: [that word's offset in the source projection (an entry of
+  // `words`, where Row.sentences.src counts), the index in `lines` of the line TeX opened it on (that entry's line)], ascending.
+  // Every point whose first word is placed on that line, whatever else also states it (a group's open, SpanAt.opens; an element,
+  // El.opens; a forced break, El.ends): a carrier a translator's reply can drop, the word one it cannot (docs/PDF-READER.md
+  // §18.69). None after a display, nor where its line or the line before is held (KEPT). A part that states it states `words` in
+  // every part that holds the member. Absent: no such point, a unit not lit by sentence, a part made before (FORMAT stays)
+  paras: z.array(z.tuple([int, int])).optional(),
   fixed: int.optional(),
   // its own text, where a rule tells a translation by it: a babel name's on A, a figure text's and a table cell's as its source
   // writes them (its text pieces, an element a space): a translation that says nothing else came back as it went

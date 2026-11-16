@@ -1657,6 +1657,38 @@ describe('locate: the room under a unit', () => {
     expect(plain.room.runs).toBeUndefined()
     expect(plain.room.sep).toBeUndefined()
   })
+  it('ends no run at the member’s own ink between two of its lines: an underline under its line (2608.18502v1 p9 ord 39)', () => {
+    // (Room.runs ends a run where ink TeX set between two lines stands there, another's: a float, a figure. The member's own ink
+    // there, a rule under its first line (`\underline`), is its text's, no other's: one run. The same rule no unit's ends it)
+    const B = docOf([
+      {
+        lines: [
+          { text: 'an underlined title', y: 700 },
+          { text: 'goes on here', y: 688 },
+          { text: 'the next unit', y: 600 },
+        ],
+        boxes: [[19, 1, 72, 696.5, 186, 697]],
+      },
+    ])
+    const units = [unitOf('para', 'an underlined title goes on here'), unitOf('para', 'the next unit')]
+    const runsOf = (own: boolean) => {
+      const ins = instrumentOf(B, units, [[0, 0, 1]])
+      if (own) {
+        ins.boxes[0]!.unit[0] = 0
+        ins.boxes[0]!.role[0] = ROLE.text
+      }
+      const framed: Instrument = {
+        ...ins,
+        tex: {
+          frames: [{ block: [72, 540], columns: [[72, 540]], foot: 500 }],
+          skips: [{ unit: 0, baselineskip: 12, parskip: 0 }],
+        },
+      }
+      return locate(framed, B, align(B, B)).members[0]!.room.runs
+    }
+    expect(runsOf(true)?.map((r) => r[0])).toEqual([1])
+    expect(runsOf(false)?.map((r) => r[0])).toEqual([0, 1])
+  })
   it('reads the room under a run of lines across their own extent, a single line’s to its column’s end', () => {
     // (2602.23285v2 p5 t32: a paragraph set beside a figure, its lines' ink ending at 315.84 of a column to 504, the figure's
     // strokes beside every line: a translation's lines are laid across its block's own lines (the typesetter's measure, their
@@ -2711,12 +2743,232 @@ describe('a paragraph TeX opened inside a unit (C13, C15: SpanAt.opens, El.opens
     const B = docOf([{ lines: ['A first paragraph ends.', 'Title The second one', 'runs on'] }])
     const stats = (units: InstrumentUnit[], ends: number[]) => locate(owned(B, units, [], ends), B, align(B, B)).stats
     expect(stats(runIn([text('A first paragraph ends.')], []), [23]).opensUnstated).toBeUndefined()
-    // (the source's text before the open is not B's before the end: the group's content is what TeX's paragraph begins with)
-    expect(stats(runIn([text('A first paragraph closes.')], []), [23]).opensUnstated).toEqual({ anchored: 1, plain: 0 })
-    // (an end inside the second paragraph's text, at no group's open and no element)
-    expect(stats(runIn([text('A first paragraph ends.')], []), [33]).opensUnstated).toEqual({ anchored: 0, plain: 1 })
+    // (the source's text before the open is not B's before the end: the group's content is what TeX's paragraph begins with;
+    // a heading places no words, so no first word states it either)
+    const heading = runIn([text('A first paragraph closes.')], []).map((u) => ({ ...u, kind: 'heading' }))
+    expect(stats(heading, [23]).opensUnstated).toEqual({ anchored: 1, plain: 0 })
+    // (an end inside the second paragraph's text, at no group's open and no element, in a heading: no word placed)
+    expect(
+      stats(
+        runIn([text('A first paragraph ends.')], []).map((u) => ({ ...u, kind: 'heading' })),
+        [33],
+      ).opensUnstated,
+    ).toEqual({ anchored: 0, plain: 1 })
   })
 })
+
+describe('a paragraph TeX opened inside a unit, stated by its first word (design-display 2a, F1: Placed.paras)', () => {
+  // (the same harness as above: B is A, each glyph a character of its line, the unit owns every line; TeX's paragraph ends given
+  // as the glyph before which each stands)
+  const partOf = (ins: Instrument, B: Doc, page = 1) => {
+    const L = locate(ins, B, align(B, B))
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, B.pages.length),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: B.pages.length },
+        made: 't',
+      }),
+    ]
+    const part = objects.find((o) => o.kind === 'part' && o.page === page) as Extract<
+      (typeof objects)[number],
+      { kind: 'part' }
+    >
+    return { L, flows: read('part', part.bytes).flows.flat() }
+  }
+  const owned = (B: Doc, units: InstrumentUnit[], own: number[][], els: [number, number][], ends: number[]) => {
+    const ins = instrumentOf(B, units, own)
+    for (const [g, piece] of els) {
+      ins.glyphs[0]!.role[g] = ROLE.element
+      ins.glyphs[0]!.piece[g] = piece
+    }
+    return { ...ins, tex: { paragraphEnds: [ends] } }
+  }
+  const para = (content: Piece[], more: Partial<InstrumentUnit> = {}): InstrumentUnit => ({
+    id: unitId('para', content),
+    kind: 'para',
+    content,
+    ...more,
+  })
+  // (`A first paragraph ends.\n\smallbreak\noindent\nThe second one runs on`: TeX's paragraph end before "The", at no group's
+  // open and no element; the projection counts each element one character: "The" at 23 + 1 + 1 + 1 + 1 + 1 = 28)
+  const plain = para(
+    [
+      text('A first paragraph ends.\n'),
+      { t: 'el' as const, id: '1', kind: 'macro', src: '\\smallbreak' },
+      text('\n'),
+      { t: 'el' as const, id: '2', kind: 'other', src: '\\noindent' },
+      text('\nThe second one runs on'),
+    ],
+    {
+      classes: [
+        ['1', { cls: 'umacro', cmd: 'smallbreak', bare: true, unknown: true }],
+        ['2', { cls: 'zero', cmd: 'noindent', bare: true }],
+      ],
+    },
+  )
+  const plainB = docOf([{ lines: ['A first paragraph ends.', 'The second one', 'runs on'] }])
+
+  it('states a paragraph that opens in plain text by its first word: its offset in the projection and its line', () => {
+    const { L, flows } = partOf(owned(plainB, [plain], [[0, 0, 0]], [], [23]), plainB)
+    expect(flows[0]!.paras).toEqual([[28, 1]])
+    // (the word is one of the member's own placed words, on that line: what the lay pairs a sentence start with)
+    expect(flows[0]!.words?.some((w) => w[0] === 28 && w[1] === 1)).toBe(true)
+    expect(L.stats.opensUnstated).toBeUndefined()
+    expect(L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 0, text: 1, words: 1 })
+  })
+  it('states the first word of a point a group or an element also states: a carrier a reply can drop', () => {
+    // (the run-in title of 2111.09276v1's class: `\textbf{Title}` after `\medbreak\noindent`; its group's open at 29)
+    const B = docOf([{ lines: ['A first paragraph ends.', 'Title The second one', 'runs on'] }])
+    const units = runInOf([text('A first paragraph ends.')])
+    const g = partOf(owned(B, units, [[0, 0, 0]], [], [23]), B)
+    expect(g.flows[0]!.spans).toEqual([['8', { cmd: 'textbf', opens: 1 }]])
+    expect(g.flows[0]!.paras).toEqual([[29, 1]])
+    expect(g.L.stats.opensStated).toEqual({ span: 1, el: 0, break: 0, region: 0, text: 0, words: 1 })
+    // (an element TeX opened the paragraph with: its own offset, 24)
+    const EB = docOf([{ lines: ['A first paragraph ends.', 'X and the second one', 'runs on'] }])
+    const content = [
+      text('A first paragraph ends. '),
+      { t: 'el' as const, id: '3', kind: 'other', src: '\\figmark' },
+      text(' and the second one runs on'),
+    ]
+    const e = partOf(
+      owned(EB, [para(content, { classes: [['3', { cls: 'other' }]] })], [[0, 0, 0]], [[23, 3]], [23]),
+      EB,
+    )
+    expect(e.flows[0]!.els?.find(([id]) => id === '3')?.[1].opens).toBe(1)
+    expect(e.flows[0]!.paras).toEqual([[24, 1]])
+    expect(e.L.stats.opensStated).toEqual({ span: 0, el: 1, break: 0, region: 0, text: 0, words: 1 })
+  })
+  it('states the first word after a forced break TeX ended a paragraph at (`\\centering a\\\\b`): the break a carrier too', () => {
+    const B = docOf([{ lines: ['First line', 'Second line'] }])
+    const content = [text('First line'), { t: 'el' as const, id: '1', kind: 'break', src: '\\\\' }, text('Second line')]
+    const u = para(content, { classes: [['1', { cls: 'space', brk: true }]], align: 'c' })
+    const { L, flows } = partOf(owned(B, [u], [[0, 0]], [], [10]), B)
+    expect(flows[0]!.els?.find(([id]) => id === '1')?.[1].ends?.[0]).toBe(0)
+    expect(flows[0]!.paras).toEqual([[11, 1]])
+    expect(L.stats.opensStated).toEqual({ span: 0, el: 0, break: 1, region: 0, text: 0, words: 1 })
+  })
+  it('states none after a display: the display is a block of its own (a region), counted apart', () => {
+    const B = docOf([{ lines: ['Text before', 'x', 'Text after'] }])
+    const content = [
+      text('Text before'),
+      { t: 'el' as const, id: '1', kind: 'display', src: '\\[x\\]' },
+      text('Text after'),
+    ]
+    const u = para(content, { classes: [['1', { cls: 'display' }]] })
+    const { L, flows } = partOf(owned(B, [u], [[0, 0, 0]], [[11, 1]], [12]), B)
+    expect(flows[0]!.paras).toBeUndefined()
+    expect(L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 1, text: 0, words: 0 })
+    expect(L.stats.opensUnstated).toBeUndefined()
+  })
+  it('states no first word where a float TeX set stands between the two lines (a region: 2a, case iii)', () => {
+    // (B's paragraph end right after the member's last glyph before a float's caption that TeX set between two of its lines, in
+    // the middle of a sentence: the lines are not consecutive lines of one run, so no first word; the same lines with nothing
+    // between them state it)
+    const B = docOf([
+      {
+        lines: [
+          'A first paragraph is cut',
+          { text: 'Figure 1. A caption', y: 650 },
+          { text: 'by a float set here', y: 600 },
+        ],
+      },
+    ])
+    const u = para([text('A first paragraph is cut by a float set here')])
+    const cap = { ...para([text('Figure 1. A caption')]), kind: 'caption' }
+    const { L, flows } = partOf(owned(B, [u, { ...cap, id: unitId('caption', cap.content) }], [[0, 1, 0]], [], [24]), B)
+    expect(flows.find((x) => x.ord === 0)!.paras).toBeUndefined()
+    expect(L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 1, text: 0, words: 0 })
+    const B2 = docOf([{ lines: ['A first paragraph is cut', 'by a float set here'] }])
+    const two = partOf(owned(B2, [u], [[0, 0]], [], [24]), B2)
+    expect(two.flows[0]!.paras).toEqual([[25, 1]])
+  })
+  it('states the first word where the ink between the two lines is the member’s own: an underline (2608.18502v1 p9 ord 39)', () => {
+    // (a rule TeX set under the line before, the unit's own text's (`\underline`): no other's ink between the two lines, so
+    // they are one run and the paragraph's first word is stated; the same rule no unit's stands between them, a region)
+    const B = docOf([
+      { lines: ['A first paragraph ends.', 'The second one', 'runs on'], boxes: [[23, 1, 72, 696.5, 210, 697]] },
+    ])
+    const ofIt = (own: boolean) => {
+      const ins = owned(B, [plain], [[0, 0, 0]], [], [23])
+      if (own) {
+        ins.boxes[0]!.unit[0] = 0
+        ins.boxes[0]!.role[0] = ROLE.text
+      }
+      return partOf(ins, B)
+    }
+    const mine = ofIt(true)
+    expect(mine.flows[0]!.paras).toEqual([[28, 1]])
+    expect(mine.L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 0, text: 1, words: 1 })
+    const other = ofIt(false)
+    expect(other.flows[0]!.paras).toBeUndefined()
+    expect(other.L.stats.opensStated).toEqual({ span: 0, el: 0, break: 0, region: 1, text: 0, words: 0 })
+  })
+  it('counts plain, and lists, a paragraph whose first word is not placed on A (letters TeX did not set in order)', () => {
+    const B = docOf([{ lines: ['A first paragraph ends.', 'Teh second one', 'runs on'] }])
+    const { L, flows } = partOf(owned(B, [plain], [[0, 0, 0]], [], [23]), B)
+    expect(flows[0]!.paras).toBeUndefined()
+    expect(L.stats.opensUnstated).toEqual({ anchored: 0, plain: 1 })
+    expect(L.stats.opensPlain).toEqual([[0, 1, 0]])
+  })
+  it('counts no end that stands before the member’s first word: no point inside its text (2a, case i)', () => {
+    // (a bibliography entry whose first glyph the instrument owns is the entry before it's last stop, set on that entry's line,
+    // then TeX's paragraph end, then its label as text (no piece of the projection), then its first word: 2610.20716v1's five)
+    const B = docOf([{ lines: [{ text: '.', x: 300 }, '[8]M. Ishak and L. Medina'] }])
+    const u = para([text('  M. Ishak and L. Medina')], { kind: 'reference' })
+    const { L, flows } = partOf(owned(B, [{ ...u, id: unitId('reference', u.content) }], [[0, 0]], [], [1]), B)
+    expect(flows[0]!.paras).toBeUndefined()
+    expect(L.stats.opensUnstated).toBeUndefined()
+    expect(L.stats.opensPlain).toBeUndefined()
+  })
+  it('keeps the words of a member that states a first word on every part that holds it; strips them elsewhere as before', () => {
+    // (page 1: the member of two paragraphs, then a member that runs on to page 2; page 2's part holds page 1's flows (a member
+    // of it has its first line there), the first member's copy among them with no ink on page 2)
+    const B = docOf([
+      { lines: ['A first paragraph ends.', 'The second one', 'runs on', 'Another unit that'] },
+      { lines: ['goes on here'] },
+    ])
+    const other = para([text('Another unit that goes on here')])
+    const at2 = (ends: number[]) =>
+      partOf(owned(B, [plain, other], [[0, 0, 0, 1], [1]], [], ends), B, 2).flows.find((x) => x.ord === 0)!
+    const kept = at2([23])
+    expect(kept.paras).toEqual([[28, 1]])
+    expect(kept.words?.length).toBeGreaterThan(0)
+    // (with no paragraph point, the copy carries no words, as before)
+    const stripped = at2([])
+    expect(stripped.paras).toBeUndefined()
+    expect(stripped.words).toBeUndefined()
+  })
+})
+
+/** a unit of two of TeX's paragraphs, the second opening at a bold run-in title after `\medbreak\noindent` */
+function runInOf(before: Piece[]): InstrumentUnit[] {
+  const content: Piece[] = [
+    ...before,
+    text(' \n'),
+    { t: 'el' as const, id: '6', kind: 'macro', src: '\\medbreak' },
+    text('\n'),
+    { t: 'el' as const, id: '7', kind: 'other', src: '\\noindent' },
+    text('\n'),
+    { t: 'span' as const, id: '8', style: 'bold', open: '\\textbf{', close: '}', content: [text('Title')] },
+    text(' The second one runs on'),
+  ]
+  return [
+    {
+      id: unitId('para', content),
+      kind: 'para',
+      content,
+      classes: [
+        ['6', { cls: 'umacro', cmd: 'medbreak', bare: true, unknown: true }],
+        ['7', { cls: 'zero', cmd: 'noindent', bare: true }],
+      ],
+      spans: [['8', { cmd: 'textbf' }]],
+    },
+  ]
+}
 
 describe('an element’s ink is what TeX set for it', () => {
   /** an instrument whose B lines each give their glyphs one owner, `lines[p][line]` its [unit, role, piece] (piece -1 none), and
@@ -4148,5 +4400,47 @@ describe('a block name a unit holds elsewhere (docs/PDF-READER.md §19.15)', () 
     const paper = read('part', part.bytes, part.digest).paper
     expect([paper.named, paper.persons, paper.splits]).toEqual([undefined, undefined, undefined])
     expect(o.flatMap((x) => (x.kind === 'units' ? read('units', x.bytes, x.digest).units : [])).length).toBe(3)
+  })
+})
+
+describe('a footnote mark’s copy text is the glyph TeX set for it (F21)', () => {
+  // (the instrument reads a nested unit's mark from its source, `\footnotemark`'s "¹"; the page shows what the class sets, a star
+  // here: the crop's selection reads what it shows)
+  const content: Piece[] = [
+    text('A sentence ends'),
+    { t: 'unit' as const, id: '5', unit: '0'.repeat(64), pre: '\\footnote{', post: '}' },
+    text(' and goes on'),
+  ]
+  const unit = (): InstrumentUnit => ({
+    id: unitId('para', content),
+    kind: 'para',
+    content,
+    classes: [['5', { cls: 'num', copy: '¹', mark: true, nested: true }]],
+  })
+  const elOf = (B: Doc, els: number[]) => {
+    const ins = instrumentOf(B, [unit()], [[0]])
+    for (const g of els) {
+      ins.glyphs[0]!.role[g] = ROLE.element
+      ins.glyphs[0]!.piece[g] = 5
+    }
+    const L = locate(ins, B, align(B, B))
+    const objects = [
+      ...bundle({
+        ins,
+        located: L,
+        addOn: addOnOf(L, 1),
+        original: new Uint8Array(10),
+        paper: { id: '2501.00001', version: 1, pages: 1 },
+        made: 't',
+      }),
+    ]
+    const part = objects.find((o) => o.kind === 'part') as Extract<(typeof objects)[number], { kind: 'part' }>
+    return new Map(read('part', part.bytes).flows.flat()[0]!.els ?? []).get('5')
+  }
+  it('states the mark’s copy text as its glyph on the page, not the source’s reading', () => {
+    expect(elOf(docOf([{ lines: ['A sentence ends* and goes on'] }]), [15])?.copy).toBe('*')
+  })
+  it('keeps the source’s reading where TeX set no glyph for the mark in the unit (its mark set elsewhere)', () => {
+    expect(elOf(docOf([{ lines: ['A sentence ends and goes on'] }]), [])?.copy).toBe('¹')
   })
 })

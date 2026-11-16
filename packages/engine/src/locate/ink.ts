@@ -33,11 +33,13 @@ import { figureGroup, figureUnitsOf, SPACE_GAP } from './figure-text.ts'
 import {
   statedClassOf as classOf,
   claimInk,
+  type InkLink,
   inkUnitsOf,
   keptUnitsOf,
   type TodayInkUnit,
   UNIT_FLAG,
 } from './ink-units.ts'
+import { type Annotation, annotationOf, pointsOf } from './links.ts'
 import { type FloatLine, inkLeft, ledgerOf, type TodayPage, type TodayPiece, type TodayUnit } from './ledger.ts'
 
 /** the owner the figure reading's input gives arXiv's ink (PDF-READER §18.27): on a page of A our compile sets, a glyph it never
@@ -95,6 +97,58 @@ export interface InkInput {
   /** the faces the document sets at one pitch (facts.ts fixedFacesOf), where Rule 1 keeps such text: a figure's run goes into
    *  or out of none of them (figure-text.mjs figureUnitsOf `fixed`, PDF-READER §18.22) */
   fixed?: ReadonlySet<string> | null | undefined
+  /** each A page's annotations as PDF.js gives them (LocateOptions.annotations): a link over part of an ink unit's text is a
+   *  group of it (inkUnitsOf `links`, F32) */
+  annotations?: readonly (readonly unknown[] | null)[] | undefined
+}
+
+/**
+ * Each page's link annotations as the ink units read them (InkLink, F32): the open of a group whose source names the
+ * annotation's target, `\href{<its address, TeX's specials escaped>}{` or `\hyperlink{<its destination's name>}{`, and the glyphs
+ * of the page (`pages`, the ink units' own) it holds by glyph point. Only where the part reads that source back as the
+ * annotation's target (linkTargetOf, compared as the typesetter compares two: an address in the WHATWG parser's form), so that the
+ * typesetter pairs the two by target: an explicit destination (an array, no name), an address with a brace or a backslash, or
+ * one that parses as no absolute URL, none
+ */
+function inkLinksOf(
+  annotations: readonly (readonly unknown[] | null)[] | undefined,
+  pages: readonly TodayPage[],
+): (InkLink[] | null)[] | null {
+  if (!annotations?.length) return null
+  return annotations.map((list, i) => {
+    // (today's page, its glyphs the ink units' own: InkPage's)
+    const G = pages[i]?.glyphs as readonly { u: string; x0: number; x1: number; y: number }[] | undefined
+    if (!list?.length || !G) return null
+    const out: InkLink[] = []
+    for (const an of list as Annotation[]) {
+      const read = annotationOf(an)
+      if (!read) continue
+      let src: string | null = null
+      if ('url' in read.to) src = `\\href{${read.to.url.replace(/[#%_&~$]/g, '\\$&')}}{`
+      else {
+        const name: unknown = JSON.parse(read.to.dest)
+        if (typeof name === 'string') src = `\\hyperlink{${name}}{`
+      }
+      if (src === null || !sameTarget(linkTargetOf([{ t: 'open', src }], 0), read.to)) continue
+      const pts = pointsOf(G, read)
+      if (pts.length) out.push({ src, pts: new Set(pts) })
+    }
+    return out.length ? out : null
+  })
+}
+/** two targets as the typesetter compares them (lay/links.ts `key`): an address in the WHATWG parser's form, a destination as
+ *  stated */
+function sameTarget(a: { url: string } | { dest: string } | undefined, b: { url: string } | { dest: string }): boolean {
+  if (!a) return false
+  if ('dest' in a || 'dest' in b) return 'dest' in a && 'dest' in b && a.dest === b.dest
+  const form = (u: string) => {
+    try {
+      return new URL(u).href
+    } catch {
+      return u
+    }
+  }
+  return form(a.url) === form(b.url)
 }
 
 export interface InkStats {
@@ -318,7 +372,13 @@ export function inkOf(o: InkInput): {
     return out
   })
   const ledger = ledgerOf(pages, { glyphs: ledgerOwn }, { units, floats: ins.units.map((u) => u.float ?? null) })
-  const ink = inkUnitsOf(pages, ledger, { units, from: base, unplaced, stored })
+  const ink = inkUnitsOf(pages, ledger, {
+    units,
+    from: base,
+    unplaced,
+    stored,
+    links: inkLinksOf(o.annotations, pages),
+  })
   const namedAt = new Set<string>()
   for (const u of ink)
     if (u.kind === 'inknames') for (const [p, g] of [...u.glyphs.text, ...u.glyphs.ph]) namedAt.add(`${p - 1}|${g}`)

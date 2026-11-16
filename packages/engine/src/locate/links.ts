@@ -28,33 +28,12 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
     const off = m.offA[p] as number
     // (each annotation's glyph points and the member that owns it, by its place in `out`)
     const under: { pts: number[]; mem: Member | undefined }[] = []
-    for (const an of list as {
-      annotationType?: number
-      rect?: number[]
-      quadPoints?: ArrayLike<number> | null
-      url?: string
-      unsafeUrl?: string
-      dest?: unknown
-      borderStyle?: { width?: number; style?: number }
-      borderColor?: ArrayLike<number> | null
-    }[]) {
-      if (an.annotationType !== 2 || !Array.isArray(an.rect) || an.rect.length !== 4) continue
-      const to =
-        (an.url ?? an.unsafeUrl)
-          ? { url: String(an.url ?? an.unsafeUrl) }
-          : an.dest !== undefined
-            ? { dest: JSON.stringify(an.dest) }
-            : null
-      if (!to) continue
-      const [x0, y0, x1, y1] = an.rect.map(r2) as [number, number, number, number]
-      const boxes = quadBoxesOf(an.quadPoints) ?? [
-        [Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)],
-      ]
-      const inside = (x: number, y: number) => boxes.some((b) => x > b[0] && x < b[2] && y > b[1] && y < b[3])
-      const pts: number[] = []
-      pg.glyphs.forEach((g, j) => {
-        if (/\S/.test(g.u) && inside((g.x0 + g.x1) / 2, g.y)) pts.push(off + j)
-      })
+    for (const an of list as Annotation[]) {
+      const read = annotationOf(an)
+      if (!read) continue
+      const { to } = read
+      const [x0, y0, x1, y1] = read.rect
+      const pts = pointsOf(pg.glyphs, read).map((j) => off + j)
       let owner: [number, string] | undefined
       let label = false
       let owning: Member | undefined
@@ -121,6 +100,50 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
     if (out.length) links.set(p + 1, out)
   })
   assign(w, 'links', links)
+}
+
+/** an annotation as PDF.js gives it (getAnnotations), what the links read of it */
+export interface Annotation {
+  annotationType?: number
+  rect?: number[]
+  quadPoints?: ArrayLike<number> | null
+  url?: string
+  unsafeUrl?: string
+  dest?: unknown
+  borderStyle?: { width?: number; style?: number }
+  borderColor?: ArrayLike<number> | null
+}
+/** a link annotation's target (its URL, else its destination as JSON: Link.to), its rectangle and the boxes its glyph points are
+ *  read in (its quads, else its rectangle); null for an annotation that is no link or names no target */
+export function annotationOf(an: Annotation): {
+  to: { url: string } | { dest: string }
+  rect: [number, number, number, number]
+  boxes: [number, number, number, number][]
+} | null {
+  if (an.annotationType !== 2 || !Array.isArray(an.rect) || an.rect.length !== 4) return null
+  const to =
+    (an.url ?? an.unsafeUrl)
+      ? { url: String(an.url ?? an.unsafeUrl) }
+      : an.dest !== undefined
+        ? { dest: JSON.stringify(an.dest) }
+        : null
+  if (!to) return null
+  const [x0, y0, x1, y1] = an.rect.map(r2) as [number, number, number, number]
+  const boxes = quadBoxesOf(an.quadPoints) ?? [[Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1)]]
+  return { to, rect: [x0, y0, x1, y1], boxes }
+}
+/** the glyphs (their indices on the page) an annotation holds: each one's glyph point, its advance centre on its baseline,
+ *  strictly inside one of its boxes (PDF.js's overlaidText rule, today's pointsOf), white space aside */
+export function pointsOf(
+  glyphs: readonly { u: string; x0: number; x1: number; y: number }[],
+  { boxes }: { boxes: readonly [number, number, number, number][] },
+): number[] {
+  const inside = (x: number, y: number) => boxes.some((b) => x > b[0] && x < b[2] && y > b[1] && y < b[3])
+  const pts: number[] = []
+  glyphs.forEach((g, j) => {
+    if (/\S/.test(g.u) && inside((g.x0 + g.x1) / 2, g.y)) pts.push(j)
+  })
+  return pts
 }
 
 /** a link annotation's border as PDF.js's annotation layer draws it (the original's pane): its width where above 0 (its /BS /W,

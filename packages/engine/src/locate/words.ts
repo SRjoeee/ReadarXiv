@@ -84,13 +84,15 @@ const opensBefore = (p: DocGlyph, g: DocGlyph) => !p.blank && OPENING.test(p.u) 
 /**
  * Each word of `content`'s projection placed on A: `glyphs` the unit's text glyphs on A in stream order, `lineOf(i)` the index in
  * the member's lines of the line glyph i stands on (-1 none), `source` its text's TeX (facts.ts lineEnd: whether a line's end
- * falls inside a word). Every word, in order; one not placed at line -1
+ * falls inside a word). Every word, in order; one not placed at line -1. `firsts`, where given, receives each word's first glyph
+ * (its index in `glyphs`, the opening marks set against it included; -1 for a word not placed), in the same order
  */
 export function wordsOn(
   content: readonly Piece[],
   glyphs: readonly DocGlyph[],
   lineOf: (i: number) => number,
   source: string,
+  firsts?: number[],
 ): Word[] {
   const projection = projectionOf(content)
   // (the projection's letters, each with its offset, its words' first letters, the breaks between them)
@@ -152,6 +154,7 @@ export function wordsOn(
     // (from the opening brackets and quotes set against it: the page's text runs them in one token with it, today's start)
     while (q > 0 && opensBefore(glyphs[q - 1]!, glyphs[q]!)) q--
     const line = q >= 0 ? lineOf(q) : -1
+    firsts?.push(line >= 0 ? q : -1)
     return line >= 0 ? [offset, line, Math.round(glyphs[q]!.x0 * 100) / 100] : [offset, -1, 0]
   })
 }

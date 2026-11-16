@@ -334,9 +334,10 @@ describe('the equivalence gates, in either shape of their tools', () => {
     // (a paragraph point the row anchors and the page runs on (paras-gate.ts): the run exits 1 and ends whole, I10 and I6 still
     // counted, the points' counts reported; held, it fails the gate, from the round the engine half lands in: PARAS_HELD)
     const points = `${said(4767634, 0)}\nthe paragraph points (paras-gate.ts): 8 stated (8 group); 6 with an anchor in their row (6 sentence; 2 no row); of those, their member laid: 4 opened (their first word starts a line of the member), 3 of them on TeX's line, 2 NOT (run on); not laid: none`
-    expect(PARAS_HELD).toBe(false)
-    expect(cover.judge!(ctx, [run(1, points)])).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasAnchored: 6, parasOpened: 4, parasOnTexLine: 3, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
-    expect(sentenceCoverJudge([run(1, points)], true).pass).toBe(false)
+    expect(PARAS_HELD).toBe(true)
+    expect(cover.judge!(ctx, [run(1, points)])).toMatchObject({ pass: false, numbers: { I10: 0, I6other: 0, parasAnchored: 6, parasOpened: 4, parasOnTexLine: 3, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
+    // (not held, as before the engine half's round: reported, the gate passing)
+    expect(sentenceCoverJudge([run(1, points)], false).pass).toBe(true)
     expect(sentenceCoverJudge([run(0, points.replace('2 NOT', '0 NOT'))], true).pass).toBe(true)
     // (nothing laid: no finding, no pass; a run that did not end whole: its count is not read)
     const none = cover.judge!(ctx, [run(1, said(0, 0))])
@@ -353,7 +354,8 @@ describe('the equivalence gates, in either shape of their tools', () => {
     // the gate, never hidden by the points' exit beside it)
     const reads = (outside: number) => `the reads gate, default (author): 9 pages laid, 90 row ids read; ${outside} read outside the page's wait set, on ${outside} pages\nthe reads gate, every option on (none left): 9 pages laid, 99 row ids read; 0 read outside the page's wait set, on 0 pages`
     expect(typesetOf(reads(3))).toMatchObject({ readsPages: 9, readsOutside: 3 })
-    expect(cover.judge!(ctx, [run(1, `${points}\n${reads(0)}`)])).toMatchObject({ pass: true, numbers: { readsOutside: 0, parasOff: 2 } })
+    expect(sentenceCoverJudge([run(1, `${points}\n${reads(0)}`)], false)).toMatchObject({ pass: true, numbers: { readsOutside: 0, parasOff: 2 } })
+    expect(cover.judge!(ctx, [run(1, `${points}\n${reads(0)}`)])).toMatchObject({ pass: false, numbers: { readsOutside: 0, parasOff: 2 } })
     expect(cover.judge!(ctx, [run(1, `${points}\n${reads(3)}`)])).toMatchObject({ pass: false, numbers: { readsOutside: 3, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
     expect(cover.judge!(ctx, [run(1, `${apart(0)}\n${reads(2)}`)])).toMatchObject({ pass: false, numbers: { added: { readsOutside: 2 } } })
   })
@@ -409,11 +411,11 @@ describe('the equivalence gates, in either shape of their tools', () => {
     // (the set clean; the added pairs walked apart after the heading, their points `off` run on, their I6 `other`)
     const added = (off: number, other = 0) => `${said(4767634, 0)}\n${points(0)}\n${ADDED_HEADING} a-zh, b-zh\n${said(5000, 0, other).replace('"pairs":123', '"pairs":2')}\n${points(off)}`
     // (1) the added pairs' points run on, not held: the run exits 1 and is whole, it passes, the numbers carry their points
-    expect(PARAS_HELD).toBe(false)
-    expect(sentenceCoverJudge([run(1, added(5))])).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasOff: 0, added: { pairs: 2, I10: 0, I6other: 0, parasAnchored: 5, parasOpened: 5, parasOnTexLine: 0, parasOff: 5 } } })
-    // (2) the same, held: it fails; with none of theirs run on it passes
-    expect(sentenceCoverJudge([run(1, added(5))], true).pass).toBe(false)
-    expect(sentenceCoverJudge([run(0, added(0))], true).pass).toBe(true)
+    expect(PARAS_HELD).toBe(true)
+    expect(sentenceCoverJudge([run(1, added(5))], false)).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasOff: 0, added: { pairs: 2, I10: 0, I6other: 0, parasAnchored: 5, parasOpened: 5, parasOnTexLine: 0, parasOff: 5 } } })
+    // (2) the same, held (the default since the engine half's round): it fails; with none of theirs run on it passes
+    expect(sentenceCoverJudge([run(1, added(5))]).pass).toBe(false)
+    expect(sentenceCoverJudge([run(0, added(0))]).pass).toBe(true)
     // (3) the set clean and the added pairs with a unit laid otherwise by another cause than the head pass's: it fails, the
     // added pairs held as the set's inside the one function
     expect(sentenceCoverJudge([run(1, added(0, 1))])).toMatchObject({ pass: false, numbers: { I6other: 0, added: { I6other: 1 } } })

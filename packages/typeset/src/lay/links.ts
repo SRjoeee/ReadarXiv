@@ -436,10 +436,13 @@ export function linksOf(
           bare.filter((id) => pairs.has(id)),
           'order',
         ) &&
-        !groupsOf.some(([id]) => pairs.has(id)) &&
+        !groupsOf.some(([id, x]) => x === null && pairs.has(id)) &&
         drawsText
       ) {
-        // (matchUnit's whole tier, where no group of the member is drawn on the page: wholeOf)
+        // (matchUnit's whole tier, read per target: where no group drawn on the page could be the whole link's, none naming its
+        // target (those annotations are not in `rest`) and no bare one, wholeOf. A group of another target drawn inside it (a
+        // citation's in a list of figures' caption copy, the ink unit's link group, F32) leaves the member's own link whole:
+        // read across every group, 2307.16209v1's entries lost theirs once their citations' groups were drawn)
         const holding = wholeOf(ours, list, m, page)
         if (holding)
           groups.push({

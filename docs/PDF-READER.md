@@ -3355,7 +3355,10 @@ borrow. The separation: each unit's line probe (`AXT-LINES`) gains `\parskip` be
 the paragraph ends (the context's own: a list's `\parsep`); their natural sum. A unit TeX sets no paragraph for (a heading,
 the front matter's, a caption measured in a box alone) states none, and borrows nothing. The engine states, under each run of
 a member's lines (to its last line on a page or in a column, over a kept row of its own, over another's ink between two of
-its lines), the depth of the next ink's baseline across the run (a glyph's; a box's top) and of the text block's bottom
+its lines: its own that goes with its lines, its text's, label's and elements' glyphs and boxes but an element's whose ink stays,
+is none, `travellingInk`, so that a rule TeX set under its line no longer parts it, the compile move's C6: 2608.18502v1 p9's
+`\underline`; such own ink alone had ended 161 runs of 106 members in 32 of the 89 papers, 28 of 21 in 8 of the holdout's, 235
+of 146 in 25 of the third set's, and one paragraph's opening point with them), the depth of the next ink's baseline across the run (a glyph's; a box's top) and of the text block's bottom
 (`Room.runs`), and the member's separation (`Room.sep`); a block may borrow down to the smaller of the bottom and the next
 ink's baseline less the separation; a run of several lines is read across its own lines, as they are laid (a paragraph set
 beside a figure meets no figure under it), a single line to its column's end. Nothing of B moves: over the corpus's 87
@@ -3957,7 +3960,11 @@ read every class but `other` as the page's text, its text in the target's face a
 star's text is U+2217, which a text face draws small on the math axis, where TeX set CMSY7's star at 6.97 pt. A mark is a glyph
 TeX set raised in its own font at its script size: a footnote's or a `\thanks` mark (`El.mark`) and a symbol set as a
 superscript (`El.sym`'s second) are now drawn as their ink on one line, a crop on their line's baseline, as an `other` element;
-a symbol set on the line stays text, and a mark's link goes with its crop. Its crop is glued to what precedes it, as its text
+a symbol set on the line stays text, and a mark's link goes with its crop. A footnote's mark nested in its unit (`\footnote`
+inside the text) has for its crop's copy text, what a selection of it reads, the glyphs TeX set for it (`locate/geometry.ts`): the
+instrument reads `\footnotemark` from no source of the mark's and stated "?", whatever the class set (the compile move's F21: 179
+marks of 37 of the 89 papers, 32 of the holdout's, 77 of the third set's, each "1" to "12" or "∗" on the page); one TeX set no
+glyph for keeps the instrument's. Its crop is glued to what precedes it, as its text
 was a superscript's: TeX sets no glue between a word and its mark, and a crop after a CJK character, free to break as between
 two, began a line of its own (1810.04805v2 p7's footnote 12 after its sentence's full stop). Where the source sets a tie before
 it (`word.~\footnote{…}`), the tie is glue TeX sets and never breaks at: `~` is `\nobreakspace`, `\penalty10000` and its
@@ -6724,8 +6731,26 @@ word: its offset in the unit's source projection (what `Row.sentences.src` count
 `paras`. A paragraph point is a fact of the source, and a group or an element is one carrier of it that a reply can drop: the
 part states the first word of EVERY point, whatever stronger anchor it also has, and the lay reads the strongest carrier the row
 kept (the coordinator's ruling of 2026-11-13, in place of the design's "stated once, by the strongest fact"). The engine's half
-states it, in a later round; until then no part holds it and nothing drawn moves.
+states it from the compile move (its C1, 2026-11-15); a part made before holds none.
 
+- **The engine** (`locate/facts-pass.ts` `readOpens`, after the members' words, `locate/sentences.ts`). For every paragraph end
+  of B's inside a member's text (its glyph before the end the unit's, its next paragraph's first line not its first; and, at
+  no group's open and no element, not before the member's first placed word: 2610.20716v1's five references, whose first
+  glyphs the instrument owns are the entry before it's last stop and the label set as text), what states the point, in
+  design-display 2a's order: a group's open (`SpanAt.opens`), an element (`El.opens`), a forced break TeX
+  ended the line before at (`El.ends`; in centred and ragged text LaTeX's `\\` is `\par`), a region (the paragraph before
+  ends with a display, the line before or its own is held, or the two are not consecutive lines of one run as `Room.runs`
+  reads one: another page, another column, another's ink TeX set between them, the member's own there its lines': an end there may be another paragraph's, a float's,
+  and is a block's edge already), else its first word alone. The first
+  word is the first of the member's placed words (`Placed.words`; a word by its first glyph on A, the opening marks set against
+  it included, an element's word by any glyph of its) that TeX set from the end on, past the unit's glyphs of no letter or digit
+  and its label's, on the paragraph's line. Every point but a region's states it where it is found (`Placed.paras`, `[offset,
+  line]`, ascending: an entry of `words` on that line, what the lay pairs); a point none of these states is counted
+  (`Located.stats.opensUnstated`, anchored or plain) and listed (`opensPlain`: the member, the line, anchored), and the stated
+  ones by what states them (`opensStated`: span, el, break, region, text, and `words` for those whose first word is stated). A
+  unit lit whole (a heading, a cell, a figure text) places no words, so none of its points states a first word: its lay reads
+  no sentences to pair with. A member that states `paras` keeps its `words` in every part that holds it (`bundle.ts`): the
+  page that lays it for another page's sake pairs as its own page does, or the two lays differ (I6).
 - **The lay** (`unit/breaks.ts` `paraPieces`, `pairing`). A point on a line no stronger fact the row holds opens (a group's open
   or an element between the row's texts, a forced break: `statedBreaks`; one opening a line) is paired with the row's
   sentence whose start on A is that word: the row's cuts each holding a word of A (`lay/lit.ts` `worded`), the first of
@@ -6757,9 +6782,9 @@ states it, in a later round; until then no part holds it and nothing drawn moves
   In the lab the first word of a point stated at a group or an element is read from the unit's source, so the gate holds today's
   group points to the fallback the part will state. Of several facts that state one line, the point is the first in the source
   (2609.36054v2's author block states each line at its name's group and at its affiliation's after it). The release check's
-  `sentence-cover` reads the counts and fails on a point run on once `PARAS_HELD` (`lab/release-check/gates.mjs`) is on: the
-  engine half's lane turns it on in the round it lands in; until then a point a reply's dropped group leaves has no first word
-  to fall back to.
+  `sentence-cover` reads the counts and fails on a point run on: `PARAS_HELD` (`lab/release-check/gates.mjs`) is on from the
+  engine half's round (before it a point a reply's dropped group left had no first word to fall back to, and was reported); a
+  run that prints no points line holds none.
 - **Measured** (the base c331582c6 against this lay, round B15's parts, no part stating a first word): the reader's own lay
   (`lab/typeset/parity/v2.mjs`) over the 90 pairs and the two added ones (2111.09276v1-zh, 2611.03953v2-zh), on the door rows
   and on the lab's Google store, default and every switch on: 368 of 368 files identical. The reader gate at this lay: every
@@ -9722,7 +9747,12 @@ most of whose letters are an author unit's words, of the names toggle as that un
 author block, an affiliation REVTeX or ACM prints from its own lists, PIPELINE 74), its numbering, leaders
 and page number left the original's ink (a leader dot a word a word's gap from the word before it, `WORD_GAP`, as
 `\@dottedtocline`'s `\mkern\@dotsep` sets it: a stop that abuts a formula, a word of its own by its face alone, is the entry's,
-PIPELINE 34, 2610.19274v1's list of figures, "… strength $C_n^2$." had its stop left beside the drawn entry; two words of its line
+PIPELINE 34, 2610.19274v1's list of figures, "… strength $C_n^2$." had its stop left beside the drawn entry; and a dot set against
+the text that stands on the leaders' grid is the leaders' however near the text ends, as `\leaders` sets a run's boxes on one grid
+a box's width apart whatever stands before the first: one of the run's own steps before its first dot, the steps read off at least
+three of its dots within their own spread, the page's rounding of TeX's places (the compile move's F33: 2610.40394v1 p13's six
+entries, whose whole link missed the dot the entry had claimed; 2307.16209v1's 23 stops of their own stand at least 0.03 pt off
+that grid); two words of its line
 are joined by a space only where a gap stands between them), its numbering and page number where a number stands apart from the line's text (`APART`, half its size: a folio, a
 section number's `\quad`, a page number after leaders) or is a running head's folio (the head's other words recur on another
 page with another number there: amsart's `\llap{\thepage}` after a title as wide as the line sets two digits nearer its last
@@ -9767,7 +9797,20 @@ joins a unit of prose, and 2610.19159v1's transcripts, code its regions keep, ho
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular
-note, a reference's italic title, a coloured term, all drawn in the unit's one style). Its text is its glyphs' characters, a spacing
+note, a reference's italic title, a coloured term, all drawn in the unit's one style); and the glyphs a link annotation holds of
+it, where it holds part of the unit on a page, a group whose source names its target, `\href{…}{` or `\hyperlink{…}{` (inside
+the run's style groups, running on over a kept run the same link holds, one group a link: 2307.16209v1 p13's entry, its caption
+copy's formulas inside its link, cut at each was seven groups of one target no order pairs; none whose edge falls between two
+letters or digits of a word, which no link TeX sets does: arXiv's margin stamp's link over the first letter of 2608.01482v1's
+"Corresponding author" and "Abstract"; `ink-units.ts` linkGroupsOf; the annotation's glyph points, the rule locate owns links by, so "2," holds
+the link on "2" alone; only where the part reads that source back as the annotation's target, `ink.ts` inkLinksOf: an explicit
+destination, no name, none), which the typesetter pairs by target as a source unit's `\href`: biblatex's back-references "(cit.
+on pp. 2, 8)", a running foot's "page N of 14", a citation, an equation's or a section's number in a list of figures' caption
+copy, a proof title's theorem, a DOI printed as text, each dropped before (the compile move's F32, design-display §7, N4's first
+class: 192 of the reader gate's 201 unmatched links at B15). One that holds every glyph of the unit there is its whole link, laid
+over its whole drawing by the whole tier, which reads each target alone (`lay/links.ts`: it gives way to a drawn group that could
+be its target's, none naming it and no bare one, never to a group of another target inside it: 2307.16209v1's entries kept
+theirs once their citations' groups were drawn). Its text is its glyphs' characters, a spacing
 accent TeX's `\accent` set over its letter joined to it (`layout/accents.mjs`, the reader's table, `joinAccents`: the accent and its
 letter next in the stream, in one font, the accent's advance centred on the letter's, its baseline the letter's or above it by at
 most the letter's height; only the move back over the accent puts it there, never an apostrophe's or a quote's advance, nor a

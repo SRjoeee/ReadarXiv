@@ -158,6 +158,101 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     expect(L.groups[0]!.glyphs[21]).not.toBe(`${entry.ord}.1.t`)
   })
 
+  it('leaves a contents entry’s leader dot set against its title the leaders’ ink where it stands on their grid (F33)', () => {
+    // (TeX's \leaders set a run's dots one box's width apart on a grid, whatever stands before the first box; a dot of the run that
+    // falls against the title's last letter is the leaders', no stop of the title's: 2610.40394v1 p13's six contents entries,
+    // whose whole link then missed the glyph the entry claimed. Here the dot after "Introduction" stands one pitch, 12, before
+    // the next dot)
+    const at = (line: string) => {
+      const { B, A } = pair({
+        lines: [line, 'Body text'],
+        points: [
+          ['bs1', 0],
+          ['n0.contents.e', 0],
+          ['be1', line.length + 9],
+        ],
+      })
+      const ins = instrumentOf(B, [unitOf('para', 'Body text')], [[-1, 0]])
+      const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+      return { L, entry: L.members.find((m) => m.kind === 'inkcontents')! }
+    }
+    const on = at('1 Introduction. . . . 3')
+    expect(on.L.units[1]!.content).toEqual([text('Introduction')])
+    expect(on.entry.text).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+    expect(on.L.groups[0]!.glyphs[14]).not.toBe(`${on.entry.ord}.1.t`)
+    // (the title's own stop, set where its text ends: off the leaders' grid (18 before the next dot, the pitch 12), it stays the
+    // title's, as 2610.19274v1's "… strength $C_n^2$.")
+    const off = at('1 Introduction.  . . . 3')
+    expect(off.L.units[1]!.content).toEqual([text('Introduction.')])
+    expect(off.entry.text).toEqual([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
+  })
+
+  it('opens a link group round the glyphs a link annotation holds of an ink unit’s text, its source naming the target (F32)', () => {
+    // (a running foot's "page N of M", biblatex's back-references, a reference in a list of figures' caption copy: an ink unit is
+    // A's glyphs alone, so the annotation's glyph points say which of its characters the link holds; a group whose source names
+    // the target is what the typesetter pairs a link with (SpanAt.to). Here "14" of "See page 14 here", glyphs 9 and 10)
+    const run = (an: Record<string, unknown>) => {
+      const { B, A } = pair({
+        lines: ['See page 14 here', 'Body text here'],
+        points: [
+          ['bs1', 16],
+          ['be1', 30],
+        ],
+      })
+      const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+      return locate(ins, A, align(B, A), { pages: rawOf(A), annotations: [[{ annotationType: 2, ...an }]] })
+    }
+    const L = run({ rect: [125, 697, 139, 709], dest: 'page.14' })
+    const head = L.units.at(-1)!
+    expect(head.content).toEqual([
+      text('See page '),
+      { t: 'span', id: '1', style: 'link', must: 1, open: '\\hyperlink{page.14}{', content: [text('14')], close: '}' },
+      text(' here'),
+    ])
+    expect(head.spans).toEqual([['1', { cmd: 'hyperlink', to: { dest: '"page.14"' } }]])
+    expect(L.links.get(1)![0]!.to).toEqual({ dest: '"page.14"' })
+    // (an address: `\href`, TeX's specials escaped, read back as the annotation's)
+    const url = run({ rect: [125, 697, 139, 709], url: 'https://example.org/a_b#c' }).units.at(-1)!
+    expect(url.spans).toEqual([['1', { cmd: 'href', to: { url: 'https://example.org/a_b#c' } }]])
+    // (one that holds every glyph of the unit is its whole link (Link.whole), drawn over its whole: no group; nor for a
+    // destination no source names (an explicit one, an array))
+    const whole = run({ rect: [71, 697, 170, 709], dest: 'page.14' }).units.at(-1)!
+    expect(whole.content).toEqual([text('See page 14 here')])
+    const explicit = run({ rect: [125, 697, 139, 709], dest: [{ num: 3, gen: 0 }, { name: 'XYZ' }] }).units.at(-1)!
+    expect(explicit.content).toEqual([text('See page 14 here')])
+    // (nor for one whose edge falls between two letters of a word, "S|ee": no link TeX sets cuts a word so; arXiv's margin
+    // stamp's link over the first letter of 2608.01482v1's "Corresponding author" was cut into a group of its own)
+    const cut = run({ rect: [71, 697, 78, 709], url: 'https://arxiv.org/abs/2501.00001v1' }).units.at(-1)!
+    expect(cut.content).toEqual([text('See page 14 here')])
+  })
+  it('keeps one link group open over a formula the same link holds: one group a link (F32)', () => {
+    // (2307.16209v1 p13's list of figures: an entry's link over its caption copy, its formulas inside it, all but the page
+    // number TeX set against the title's end; cut at each formula it was seven groups of one target, which no order pairs with
+    // its two annotations, and the caption seven tags. Here "Mode x is 0 or 1 here" with x a formula, the link over "Mode x is
+    // 0 or 1" (glyphs 0 to 15), "here" outside it)
+    const { B, A } = pair({
+      lines: ['Mode x is 0 or 1 here', 'Body text here'],
+      points: [
+        ['bs1', 21],
+        ['be1', 35],
+      ],
+    })
+    for (const D of [A, B])
+      for (const g of D.pages[0]!.glyphs)
+        if (g.n === 0 && g.u === 'x') {
+          g.font = 'ABCDEF+CMMI10'
+          g.base = 'CMMI10'
+        }
+    const ins = instrumentOf(B, [unitOf('para', 'Body text here')], [[-1, 0]])
+    const an = { annotationType: 2, rect: [71, 697, 169, 709], dest: 'figure.1' }
+    const L = locate(ins, A, align(B, A), { pages: rawOf(A), annotations: [[an]] })
+    const content = L.units.at(-1)!.content
+    expect(content.filter((p) => p.t === 'span')).toHaveLength(1)
+    expect(content[0]).toMatchObject({ t: 'span', open: '\\hyperlink{figure.1}{' })
+    expect((content[0] as { content: { t: string }[] }).content.map((p) => p.t)).toEqual(['text', 'el', 'text'])
+    expect(content.slice(1)).toEqual([text(' here')])
+  })
+
   it('states each of an ink unit’s placeholders its own kept run’s ink, as today’s file draws each by its own segments', () => {
     // (the maker cuts each run of a math or typewriter face its own placeholder, and knows its glyphs: today's file draws each by
     // them, rows.ph. All of them stated as the first's, it drew every run at the first's place and none at the others', where a

@@ -785,6 +785,33 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(f2).toEqual(['whole'])
     expect(only(p)[0][0]).toBeCloseTo(p.members[0]!.lines[0]![1], 6)
   })
+  it('lays a member’s whole link over its whole drawing where a link group of another target inside it is drawn (F32)', () => {
+    // (2307.16209v1's list of figures: an entry's link round the whole caption copy and a citation's inside it, "[2]". The ink
+    // unit opens a group for the citation's link (F32's engine half), which pairs by its target; the whole tier is read per
+    // target: the entry's own link, which no group names, is still laid over the whole, as it was before the group was drawn)
+    const entry = member({
+      kind: 'inkcontents',
+      lines: [[1, 0, 72, 300, 700, 707, 698, 72, 300, 0, 10]],
+      spans: [['1', { cmd: 'hyperlink', to: { dest: '"cite.x"' } }]],
+    })
+    const whole: Link = { box: [71, 696, 301, 709], to: { dest: '"figure.1"' }, owner: [0, ''], whole: 1 }
+    const cite: Link = { box: [200, 696, 210, 709], to: { dest: '"cite.x"' }, owner: [0, ''] }
+    const rr = row([
+      { t: 'text', s: 'Abbildung mit Masse [' },
+      { t: 'span', id: '1', content: [{ t: 'text', s: '2' }] },
+      { t: 'text', s: ']' },
+    ])
+    const fates: LinkFate[] = []
+    const p = layPage(part(entry, [whole, cite]), rowsOf([rr]), rules, metrics(), { linkFates: fates })
+    expect(fates).toEqual(['whole', 'pair'])
+    expect(p.links.map(([, to]) => to)).toHaveLength(2)
+    expect(p.links.map(([, to]) => to)).toEqual(expect.arrayContaining([whole.to, cite.to]))
+    // (a bare group, which could be the whole link's target's, drawn: the whole tier takes none, as before)
+    const bare = member({ ...entry, spans: [['1', { cmd: 'hyperref' }]] })
+    const f2: LinkFate[] = []
+    layPage(part(bare, [whole]), rowsOf([rr]), rules, metrics(), { linkFates: f2 })
+    expect(f2).not.toEqual(['whole'])
+  })
   describe('an annotation the part gives to the member’s text, of a kind its elements carry (today’s order tier)', () => {
     // (2608.25210v2-zh p13: hyperref's link round \ref's "7" takes in the comma after it, its glyph point inside the box by
     // the link's margin, so the part gives it to the text (the element owns one of its two glyphs, not more than half); the member
