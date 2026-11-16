@@ -691,17 +691,17 @@ describe('today’s ink makers in the engine package', () => {
     const today = todayAnswer<ReturnType<typeof run>>('run', 'the sequence', digestOf(pages, units))
     const kindOf = (p: unknown) => classOf(p as { t: string; src?: string }) ?? 'other'
     for (const u of today.ink) {
-      expect(P.contentOf(u.pieces)).toEqual(contentOf(u.pieces, { kindOf }))
-      expect(P.spansOf(u.pieces)).toEqual(spansOf(u.pieces))
+      expect(P.contentOf(u.pieces)).toEqual(contentOf(u.pieces as never, { kindOf }))
+      expect(P.spansOf(u.pieces)).toEqual(spansOf(u.pieces as never))
     }
     const pieces = [{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: P.latin1View('Física é') }, { t: 'close', id: 1, src: '}' }, { t: 'ph', src: '$x$' }]
-    expect(P.contentOf(pieces)).toEqual(contentOf(pieces, { kindOf }))
-    expect(P.spansOf(pieces)).toEqual(spansOf(pieces))
+    expect(P.contentOf(pieces)).toEqual(contentOf(pieces as never, { kindOf }))
+    expect(P.spansOf(pieces)).toEqual(spansOf(pieces as never))
     // (a colour group: the port states the fill its open names, as the adapter states a source unit's from TeX's log; today's
     // adapter, given no log for an ink unit, stated none)
     const coloured = [{ t: 'text', s: 'Mail ' }, { t: 'open', id: 1, src: '\\textcolor[HTML]{7A7F80}{' }, { t: 'text', s: 'a@b.org' }, { t: 'close', id: 1, src: '}' }]
-    expect(P.spansOf(coloured)).toEqual(spansOf(coloured, new Map([[1, 0x7a7f80]])))
-    expect(spansOf(coloured)).toEqual([['1', { cmd: 'textcolor' }]])
+    expect(P.spansOf(coloured)).toEqual(spansOf(coloured as never, new Map([[1, 0x7a7f80]])))
+    expect(spansOf(coloured as never)).toEqual([['1', { cmd: 'textcolor' }]])
     for (const s of ['plain', P.latin1View('Física'), 'wide \u4e2d', 3]) expect(P.unicodeOf(s)).toBe(unicodeOf(s))
   })
 })

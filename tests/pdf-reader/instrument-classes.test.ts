@@ -19,7 +19,7 @@ import {
   textsOf,
 } from '../../packages/engine/src/instrument/instrument.ts'
 import { classOf as marksClassOf } from '../../packages/engine/src/marks/marks.ts'
-import { BACKREF_LIST, phPiece } from '../../packages/engine/src/source/latex-front.ts'
+import { BACKREF_LIST, phPiece, type SourcePiece } from '../../packages/engine/src/source/latex-front.ts'
 import { todayAnswers } from './helpers/today-answers.ts'
 
 /** today's answers on this test's own sources (src/pdf-reader/engine/layer-proto/layer2.mjs phClassProven, texToText2 and
@@ -130,7 +130,7 @@ describe('the instrument adapter’s element classes', () => {
     expect(got.get('5')).toMatchObject({ cmd: 'cref*' })
     expect(got.get('6')).toMatchObject({ same: '4' })
     expect(got.get('10')).toMatchObject({ cmd: 'color', colour: 0xff0000 })
-    expect(spansOf(pieces, new Map([[7, 0x0000ff]]))).toEqual([
+    expect(spansOf(pieces as never, new Map([[7, 0x0000ff]]))).toEqual([
       ['7', { cmd: 'href', colour: 0x0000ff, to: { url: 'http://a.b/' } }],
     ])
   })
@@ -169,7 +169,7 @@ describe('the instrument adapter’s element classes', () => {
       x,
       close,
     ]
-    expect(spansOf(pieces).map(([k, c]) => [k, c.to ?? null])).toEqual([
+    expect(spansOf(pieces as never).map(([k, c]) => [k, c.to ?? null])).toEqual([
       ['0', { url: 'https://example.org/a_b#c' }],
       ['3', { url: 'mailto:a@b.org' }],
       ['6', { dest: '"intro"' }],
@@ -248,7 +248,7 @@ describe('the instrument adapter’s places', () => {
       { points: [pt('p3.0a', 0), pt('3s', 5), pt('p3.2a', 8), pt('3e', 12), pt('p4.0a', 12), pt('p4.1a', 16), pt('4s', 20)] },
       { points: [pt('5s', 0), pt('p5.1a', 3), pt('p5.1b', 4), pt('5e', 9), pt('p5.2g', 9)] },
     ]
-    const by = (u: number, k: string) => placesOf(pages, 6).filter(x => x.unit === u && x.piece === k).map(x => [x.page, x.glyph, x.end])
+    const by = (u: number, k: string) => placesOf(pages as never, 6).filter(x => x.unit === u && x.piece === k).map(x => [x.page, x.glyph, x.end])
     expect(by(3, '0')).toEqual([[1, 0, false], [1, 5, true]])
     expect(by(3, '2')).toEqual([[1, 8, false]])
     expect(by(4, '0')).toEqual([[1, 12, false], [1, 16, true]])
@@ -285,8 +285,8 @@ describe('the piece of a cell’s lead macro’s glyphs (own.mjs MR 5b’s `.p`,
   // macro sets, and its piece is the lead piece that text spells: 1810.04805v2 p7 `\bertbase (Single)`, whose element had no ink)
   const glyphs = (s: string) => [...s].map((u) => ({ u }))
   const at = (n: number, end: number) => ({ points: [{ name: 't5s', glyph: n }, { name: 't5e', glyph: end }] })
-  const cell = (...pieces: unknown[]) => {
-    const units: unknown[] = []
+  const cell = (...pieces: SourcePiece[]) => {
+    const units: { kind: string; pieces: SourcePiece[] }[] = []
     units[5] = { kind: 'cell', pieces }
     return units
   }
@@ -297,23 +297,23 @@ describe('the piece of a cell’s lead macro’s glyphs (own.mjs MR 5b’s `.p`,
   it('gives the lead piece the glyphs its text spells, nearest the start first', () => {
     const units = cell(ph('\\bertbase'), { t: 'text', s: ' (Single)' })
     const row = [...Array(8).fill('u5.p'), ...Array(8).fill('u5')]
-    const got = glyphPiecesOf({ ...at(8, 16), glyphs: glyphs('BERTBASE(Single)') }, row, { units, texts, names: new Set(['t5s', 't5e']) })
+    const got = glyphPiecesOf({ ...at(8, 16), glyphs: glyphs('BERTBASE(Single)') } as never, row, { units, texts, names: new Set(['t5s', 't5e']) })
     expect([...got]).toEqual([...Array(8).fill(0), ...Array(8).fill(-1)])
   })
   it('splits a lead of two macros by their texts, a text symbol between them the text’s', () => {
     const units = cell(ph('\\cmark'), ph('\\#'), ph('\\bertbase'), { t: 'text', s: ' x' })
     const row = ['u5.p', 'u5.p', 'u5', ...Array(8).fill('u5.p'), 'u5']
-    const got = glyphPiecesOf({ ...at(11, 12), glyphs: glyphs('OK#BERTBASEx') }, row, { units, texts, names: new Set(['t5s', 't5e']) })
+    const got = glyphPiecesOf({ ...at(11, 12), glyphs: glyphs('OK#BERTBASEx') } as never, row, { units, texts, names: new Set(['t5s', 't5e']) })
     expect([...got]).toEqual([0, 0, -1, ...Array(8).fill(2), -1])
   })
   it('reads a head piece’s glyphs against its text case aside, as today’s maker finds it (small capitals)', () => {
     // (2608.06701v1 p2: a paragraph that opens with `\\approach`, \\textsc{LivePlan}: the probe shows "LivePlan", the page's
     // small capitals read "LIVEPLAN"; make.mjs besideMarks compares both in lower case (charsOf), so its piece's ink was found
     // and drawn as the page reads it, where the probe's letters stood in for it with none)
-    const para: unknown[] = []
+    const para: { kind: string; pieces: SourcePiece[] }[] = []
     para[5] = { kind: 'para', pieces: [ph('\\approach'), { t: 'text', s: ' has three parts.' }] }
     const row = [...Array(8).fill('u5.p'), ...Array(4).fill('u5')]
-    const got = glyphPiecesOf({ ...at(8, 12), glyphs: glyphs('LIVEPLANhas.') }, row, {
+    const got = glyphPiecesOf({ ...at(8, 12), glyphs: glyphs('LIVEPLANhas.') } as never, row, {
       units: para,
       texts: new Map([['\\approach', 'LivePlan']]),
       names: new Set(['t5s', 't5e']),
@@ -324,10 +324,10 @@ describe('the piece of a cell’s lead macro’s glyphs (own.mjs MR 5b’s `.p`,
     const units = cell(ph('\\bertbase'), { t: 'text', s: ' (Single)' })
     const row = [...Array(9).fill('u5.p'), 'u5']
     const pg = { ...at(9, 10), glyphs: glyphs('BERTLARGEx') }
-    expect([...glyphPiecesOf(pg, row, { units, texts, names: new Set() })]).toEqual(Array(10).fill(-1))
+    expect([...glyphPiecesOf(pg as never, row, { units, texts, names: new Set() })]).toEqual(Array(10).fill(-1))
     const own = { points: [{ name: 'p5.0a', glyph: 0 }, ...at(8, 16).points], glyphs: glyphs('BERTBASE(Single)') }
     const row2 = [...Array(8).fill('u5.p'), ...Array(8).fill('u5')]
-    expect([...glyphPiecesOf(own, row2, { units, texts, names: new Set(['p5.0a']) })]).toEqual([...Array(8).fill(0), ...Array(8).fill(-1)])
+    expect([...glyphPiecesOf(own as never, row2, { units, texts, names: new Set(['p5.0a']) })]).toEqual([...Array(8).fill(0), ...Array(8).fill(-1)])
   })
 })
 
@@ -336,29 +336,29 @@ describe('the piece of a footnote call’s mark TeX gave no point after the unit
   // the end point claimed `.p` with no point of its unit open, so no piece: the element had no ink, and with an element of no ink
   // and none stated set the abstract was left English. Its glyphs are the one tail piece's)
   const glyphs = (s: string) => [...s].map((u) => ({ u }))
-  const unitsOf = (pieces: unknown[]) => {
-    const units: unknown[] = []
+  const unitsOf = (pieces: SourcePiece[]) => {
+    const units: { kind: string; pieces: SourcePiece[] }[] = []
     units[5] = { kind: 'abstract', pieces }
     return units
   }
   const pg = { points: [{ name: '5s', glyph: 0 }, { name: '5e', glyph: 5 }], glyphs: glyphs('step.1') }
   const row = [...Array(5).fill('u5'), 'u5.p']
   it('gives them to the unit’s one tail piece, a footnote’s call of no point', () => {
-    const got = glyphPiecesOf(pg, row, { units: unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark'), { t: 'text', s: '\n' }]), names: new Set(['5s', '5e']) })
+    const got = glyphPiecesOf(pg as never, row, { units: unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark'), { t: 'text', s: '\n' }]), names: new Set(['5s', '5e']) })
     expect([...got]).toEqual([-1, -1, -1, -1, -1, 1])
   })
   it('gives them the call where an earlier piece of the unit closed on the page (S1’s last opened piece is no owner past the end)', () => {
     // (2610.35877v1 p1: the "1" went to the abstract's piece 15, closed long before, its last opened point on the page)
     const units = unitsOf([{ t: 'text', s: 'a ' }, ph('$x$'), { t: 'text', s: '.' }, ph('\\footnotemark')])
     const page = { points: [{ name: '5s', glyph: 0 }, { name: 'p5.1a', glyph: 1 }, { name: 'p5.1b', glyph: 2 }, { name: '5e', glyph: 3 }], glyphs: glyphs('ax.1') }
-    const got = glyphPiecesOf(page, ['u5', 'u5.p', 'u5', 'u5.p'], { units, names: new Set(['5s', 'p5.1a', 'p5.1b', '5e']) })
+    const got = glyphPiecesOf(page as never, ['u5', 'u5.p', 'u5', 'u5.p'], { units, names: new Set(['5s', 'p5.1a', 'p5.1b', '5e']) })
     expect([...got]).toEqual([-1, 1, -1, 3])
   })
   it('gives none where the tail holds two calls, or the call has a point of its own', () => {
     const two = unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark'), ph('\\footnotemark')])
-    expect([...glyphPiecesOf(pg, row, { units: two, names: new Set(['5s', '5e']) })]).toEqual(Array(6).fill(-1))
+    expect([...glyphPiecesOf(pg as never, row, { units: two, names: new Set(['5s', '5e']) })]).toEqual(Array(6).fill(-1))
     const marked = unitsOf([{ t: 'text', s: 'step.' }, ph('\\footnotemark')])
-    expect([...glyphPiecesOf(pg, row, { units: marked, names: new Set(['5s', '5e', 'n5.1a']) })]).toEqual(Array(6).fill(-1))
+    expect([...glyphPiecesOf(pg as never, row, { units: marked, names: new Set(['5s', '5e', 'n5.1a']) })]).toEqual(Array(6).fill(-1))
   })
 })
 
@@ -373,16 +373,16 @@ describe('the piece of a glyph a page after its opening point (TeX’s stream ru
     const open = new Map()
     const p1 = { points: [{ name: 'p5.3a', glyph: 4 }], glyphs: glyphs('With') }
     const p2 = { points: [{ name: 'p5.3b', glyph: 3 }], glyphs: glyphs('x=1 is') }
-    expect([...glyphPiecesOf(p1, Array(4).fill('u5'), { open })]).toEqual(Array(4).fill(-1))
-    const got = glyphPiecesOf(p2, [...Array(3).fill('u5.p'), ...Array(3).fill('u5')], { open })
+    expect([...glyphPiecesOf(p1 as never, Array(4).fill('u5'), { open })]).toEqual(Array(4).fill(-1))
+    const got = glyphPiecesOf(p2 as never, [...Array(3).fill('u5.p'), ...Array(3).fill('u5')], { open })
     expect([...got]).toEqual([3, 3, 3, -1, -1, -1])
   })
   it('gives a piece broken over the break its glyphs on both pages', () => {
     const open = new Map()
     const p1 = { points: [{ name: 'p5.1a', glyph: 2 }], glyphs: glyphs('a (Mc') }
     const p2 = { points: [{ name: 'p5.1b', glyph: 7 }], glyphs: glyphs('Fadden) is') }
-    expect([...glyphPiecesOf(p1, ['u5', 'u5', 'u5.p', 'u5.p', 'u5.p'], { open })]).toEqual([-1, -1, 1, 1, 1])
-    const got = glyphPiecesOf(p2, [...Array(7).fill('u5.p'), ...Array(3).fill('u5')], { open })
+    expect([...glyphPiecesOf(p1 as never, ['u5', 'u5', 'u5.p', 'u5.p', 'u5.p'], { open })]).toEqual([-1, -1, 1, 1, 1])
+    const got = glyphPiecesOf(p2 as never, [...Array(7).fill('u5.p'), ...Array(3).fill('u5')], { open })
     expect([...got]).toEqual([...Array(7).fill(1), -1, -1, -1])
   })
 })
@@ -599,7 +599,7 @@ describe('the instrument adapter’s wire facts of an element (what today’s wi
       { t: 'close', id: 'g', src: '}' },
       ph('\\[ a = b \\]'),
       { t: 'text', s: ' and' },
-    ])
+    ] as never)
     const facts = elsOf(content).map((e) => [e.src, e.stop ?? null, e.silent ?? null])
     expect(facts).toEqual([
       ['\\begin{equation} x = y. \\label{e}\\end{equation}', '.', null],
@@ -626,7 +626,7 @@ describe('the instrument adapter’s wire facts of an element (what today’s wi
     // sets the list after the entry, \BR@@bibitem#1#2\par then \BR@backref; today's wire sends it on no wire and puts it back
     // after the translation, an en space before it, mt.mjs listOf, TRANSLATE_VERSION 7)
     const pieces = [{ t: 'text', s: 'A. Author. A title. In Proc., ' }, ph('5470--5479,'), { t: 'text', s: ' ' }, ph('2022.'), ph(BACKREF_LIST)]
-    const content = contentOf(pieces)
+    const content = contentOf(pieces as never)
     const els = elsOf(content) as (El & { after?: string })[]
     expect(els.map((e) => [e.src, e.after ?? null, e.silent ?? null])).toEqual([
       ['5470--5479,', null, null],

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { piecesOf } from '../../packages/engine/src/instrument/instrument.ts'
 import { LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
-import { identifierSource, inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '../../packages/engine/src/source/latex-front.ts'
+import { identifierSource, inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch, type SourcePiece } from '../../packages/engine/src/source/latex-front.ts'
 import { todayAnswers } from './helpers/today-answers.ts'
 
 /** today's wire of each unit the cases send (src/pdf-reader/engine/translate/mt.mjs serialize), recorded before the cut-over
@@ -25,7 +25,7 @@ describe('loadProject: a file \\input under another spelling is the file the sou
     const units = p.units as (Unit & { file: string })[]
     expect([...new Set(units.map(u => u.file))]).toEqual(['sections/a.tex', 'sections/b.tex'])
     const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))]))
-    const out = patch(p, translated as Map<(typeof p.units)[number], unknown[]>)
+    const out = patch(p, translated as Map<(typeof p.units)[number], SourcePiece[]>)
     expect([...out.keys()].sort()).toEqual(['main.tex', 'sections/a.tex', 'sections/b.tex'])
     expect(new TextDecoder().decode(out.get('sections/a.tex'))).toContain('<T0>')
   })
@@ -51,7 +51,7 @@ describe('loadProject: a file named in another case is the one kpathsea opens (t
     // (written back under the package's name, which TeX opens)
     const p = loadProject(inMemory(new Map([['main.tex', enc('\\documentclass{article}\n\\begin{document}\n\\input{chapters/prompts}\n\\end{document}\n')], ['chapters/Prompts.tex', enc('Prose.\n')]])), 'main.tex')
     const translated = new Map((p.units as Unit[]).map((u) => [u, u.pieces.map((x) => (x.t === 'text' ? { ...x, tr: true, s: '<T>' } : x))]))
-    expect([...patch(p, translated as Map<(typeof p.units)[number], unknown[]>).keys()].sort()).toEqual(['chapters/Prompts.tex', 'main.tex'])
+    expect([...patch(p, translated as Map<(typeof p.units)[number], SourcePiece[]>).keys()].sort()).toEqual(['chapters/Prompts.tex', 'main.tex'])
   })
   it('takes the name as given first, folds no directory, and reads none where two names fold alike', () => {
     expect(filesOf('\\input{c/prompts}', ['c/Prompts.tex', 'c/prompts.tex'])).toEqual(['c/prompts.tex'])
@@ -88,7 +88,7 @@ const textOf = (u: Unit) => u.pieces.filter(p => p.t === 'text').map(p => p.s).j
 const patched = (p: ReturnType<typeof project>) => {
   const units = p.units as Unit[]
   const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))]))
-  return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], unknown[]>).get('main.tex'))
+  return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], SourcePiece[]>).get('main.tex'))
 }
 
 describe('the front matter: its notes (1706.03762) and its names and places (the owner, 2026-09-28)', () => {
@@ -118,7 +118,7 @@ describe('the front matter: its notes (1706.03762) and its names and places (the
     const marks = names.flatMap(u => u.pieces.filter(q => q.t === 'ph').map(q => (q as { src?: string }).src))
     expect(marks.filter(s => s === '\\textdagger')).toHaveLength(2)
     // (and the instrument keeps each an element of the unit's content: no face switch, no text symbol read as text)
-    const content = names.flatMap(u => piecesOf(u.pieces) as { t: string; src?: string }[])
+    const content = names.flatMap(u => piecesOf(u.pieces as SourcePiece[]) as { t: string; src?: string }[])
     expect(content.filter(q => q.t === 'el' && q.src === '\\textdagger')).toHaveLength(2)
   })
 
@@ -227,7 +227,7 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
     const p = project(tex)
     const units = p.units as Unit[]
     const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))]))
-    return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], unknown[]>, { mark: markUnits(p.units, translated) }).get('main.tex'))
+    return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], SourcePiece[]>, { mark: markUnits(p.units, translated as never) }).get('main.tex'))
   }
 
   it('its names go into \\axtwide, their marks with them, the block\'s own braces around it', () => {
@@ -347,7 +347,7 @@ describe('what goes around the translation: tables fitted, notes the class compa
   const typeset = (p: ReturnType<typeof withTables>, pick: (u: Unit) => boolean) => {
     const units = p.units as Unit[]
     const translated = new Map(units.filter(pick).map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))]))
-    return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], unknown[]>).get('main.tex'))
+    return new TextDecoder().decode(patch(p, translated as Map<(typeof p.units)[number], SourcePiece[]>).get('main.tex'))
   }
   const TABLES = '\\documentclass{article}\\begin{document}\n\\begin{tabular}{ll}\nFrozen profile & Prompting only \\\\\n\\end{tabular}\n\n\\begin{longtable}{l}\nA long cell \\\\\n\\end{longtable}\n\\end{document}'
 
@@ -401,7 +401,7 @@ describe('what goes around the translation: tables fitted, notes the class compa
 })
 
 describe('a translation breaks its lines as its own', () => {
-  type P = { t: string; s?: string; src?: string; tr?: boolean }
+  type P = SourcePiece
   const text = (s: string): P => ({ t: 'text', s, tr: true })
   const ph = (src: string): P => ({ t: 'ph', src })
   const joined = (ps: P[]) => ps.map(p => (p.t === 'text' ? p.s : `[${p.src}]`)).join('')
@@ -851,7 +851,7 @@ describe('patch: where each unit is written', () => {
   it('one span per top-level unit, in file order, its bytes the unit as written; a footnote inside its paragraph\'s; the bytes the same with spans and without', () => {
     const p = loadProject(inMemory(new Map([['main.tex', enc(SRC)]])), 'main.tex')
     const units = p.units as (Unit & { nested?: boolean })[]
-    const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))])) as Map<(typeof p.units)[number], unknown[]>
+    const translated = new Map(units.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))])) as Map<(typeof p.units)[number], SourcePiece[]>
     const all: { file: string; unit: (typeof p.units)[number]; from: number; to: number; outer?: (typeof p.units)[number] }[] = []
     const out = patch(p, translated, { spans: all })
     expect(out.get('main.tex')).toEqual(patch(p, translated).get('main.tex'))
@@ -920,7 +920,7 @@ describe('nothing is inserted inside a call or between a subscript and its opera
   it('in a translation too: the title translated as a heading, the call as it stands before it', () => {
     const p = paperOf(BOOK, CHAPTER)
     const all = p.units as Unit[]
-    const out = dec(patch(p.project, new Map(all.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))])) as Map<(typeof p.units)[number], unknown[]>).get('main.tex'))
+    const out = dec(patch(p.project, new Map(all.map((u, i) => [u, u.pieces.map(x => (x.t === 'text' ? { ...x, tr: true, s: `<T${i}>` } : x))])) as Map<(typeof p.units)[number], SourcePiece[]>).get('main.tex'))
     expect(out).toContain('\\strangechapter{$\\infty$}{<T1>}\\label{ch:eot}')
   })
 

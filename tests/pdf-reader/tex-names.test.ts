@@ -16,7 +16,7 @@ const renamed = (text: string, to: string) => {
   const r = refInTarget(text, to, labelsOf(to))
   if (r === null) return null
   let out = '', at = 0
-  for (const [a, b, w] of r) { out += text.slice(at, a) + w; at = b }
+  for (const [a, b, w] of r as [number, number, string][]) { out += text.slice(at, a) + w; at = b }
   return out + text.slice(at)
 }
 
@@ -136,7 +136,7 @@ describe('the paper\'s own name units (PDF-READER §19.14): a word no package na
     const r = refInTarget(text, to, labelsOf(to), names)
     if (r === null) return null
     let out = '', at = 0
-    for (const [a, b, w] of r) { out += text.slice(at, a) + w; at = b }
+    for (const [a, b, w] of r as [number, number, string][]) { out += text.slice(at, a) + w; at = b }
     return out + text.slice(at)
   }
   it('zh\'s "Section A.7" and every CJK target\'s "and", a plural read as its type\'s singular (2610.18513v1 p19)', () => {
