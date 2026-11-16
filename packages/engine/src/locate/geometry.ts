@@ -653,7 +653,8 @@ export function lineGeometry(w: Work, owned: Owned): void {
         // (PieceClass.text) is stated by that later, as before)
         else if ((cls === 'macro' || cls === 'umacro') && classOf.get(id)?.told && !classOf.get(id)?.text) {
           el.text = classOf.get(id)!.told!
-          ;(mem.told ??= new Set()).add(id)
+          mem.told ??= new Set()
+          mem.told.add(id)
         }
       }
       mem.elements.push([id, el])
