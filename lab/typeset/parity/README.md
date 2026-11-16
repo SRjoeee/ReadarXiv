@@ -578,7 +578,10 @@ today's engine (`AXT_TODAY`) nor the web's tree (`AXT_WEB`); they still read the
 rows: which pairs can be drawn, v2's rows, the verdict's rows), the served faces (`AXT_FACE_TABLES`, `AXT_FACE_SLICES`: v2's
 reader draws with them), arXiv's PDFs and lab-data's baseline (today's prepare dumps, reader dumps and the tap). Copies of
 those trees, and of today's engine and the web's tree for the tools that still read them, are SanDisk's
-`readarxiv-lab-archive/today-frozen/trees` (lanes/c1-freeze.md, "the copies").
+`readarxiv-lab-archive/today-frozen/trees` (lanes/c1-freeze.md, "the copies"). Read so, the gate's verdict is the drawn gate's:
+its report's numbers the same in both modes, its sheet the same; two drawings of today's side differ by a few pixels of
+arXiv's own page (a page's dark pixel count by one to three, one original line's darkness by 0.0003) and by some images'
+encodings, which a frozen side no longer does.
 
 ## The added pairs (lab/typeset/added.mjs, 2026-11-13)
 
