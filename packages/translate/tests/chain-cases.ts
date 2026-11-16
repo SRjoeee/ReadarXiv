@@ -5,8 +5,8 @@
 // a rule that changes an outcome fails tests/chain-digest.test.ts until `pnpm digests --write` writes the new digest, and the
 // chain's identity (identityOf) moves with it: every row of every chain is asked again.
 //
-// The texts are ASCII and Latin-script, so that no case reads a word boundary ICU's dictionaries decide (a CJK text's), which
-// a Node with another ICU could cut otherwise. A case is added with the change it holds, never alone: a case added moves
+// The texts are ASCII and Latin-script (and one letter outside the BMP, `𝒜`, where a case counts code units), so that no case
+// reads a word boundary ICU's dictionaries decide (a CJK text's), which a Node with another ICU could cut otherwise. A case is added with the change it holds, never alone: a case added moves
 // the digest as a change of behaviour does.
 import { chainOf, keyOf } from '../src/chain.ts'
 import {
@@ -15,6 +15,7 @@ import {
   type OutPiece,
   type Piece,
   type Result,
+  type Sentences,
   type Translator,
   type UnitIn,
 } from '../src/contract.ts'
@@ -73,6 +74,15 @@ const caps = (s: string) => s.toUpperCase()
 /** gives every unit back with its text in capitals, its elements and groups where they were */
 const upper = (identity = 'upper:0', o: Omit<FakeOptions, 'identity' | 'reply'> = {}) =>
   fakeTranslator({ identity, ...o, reply: (out) => mapText(out, caps) })
+/** a reply's sentences where an echo states them: one starts after each ". " of its projection (each element one character),
+ *  on both sides */
+const stopsOf = (out: readonly OutPiece[]): Sentences | undefined => {
+  const p = flat(out)
+    .map((x) => (x.t === 'text' ? x.s : '￼'))
+    .join('')
+  const at = [...p.matchAll(/\. /g)].map((m) => (m.index as number) + 2).filter((x) => x < p.length)
+  return at.length ? { src: at, tr: at } : undefined
+}
 /** gives a unit of text alone back in capitals, and nothing for one that holds an element or a group (refused) */
 const textOnly = (identity = 'text-only:0') =>
   fakeTranslator({ identity, reply: (out) => (out.some((p) => p.t !== 'text') ? [] : mapText(out, caps)) })
@@ -313,6 +323,24 @@ export const CASES: readonly ChainCase[] = [
       ]),
     ],
     translators: () => [upper()],
+  },
+  // (the review of #647: a row's sentences in code units past a character outside the BMP, a sentence that opens with letters
+  // held before an element starting before them on both sides; letters in a group that does not hold the element offered in
+  // it, the group kept whole)
+  {
+    rule: 'glued',
+    name: 'held letters: sentences counted in code units and starting before a held name; a link’s letters offered in it',
+    target: 'de',
+    units: [
+      unit('s', [t('𝒜 is fixed. M'), { t: 'el', id: 'k', kind: 'macro', text: 'ą' }, t('dry works.')], true),
+      unit('l', [
+        t('Work by '),
+        span('1', 'link', [t('M')], true),
+        { t: 'el', id: 'k', kind: 'macro', text: 'ą' },
+        t('dry.'),
+      ]),
+    ],
+    translators: () => [upper('upper:0', { sentences: stopsOf })],
   },
 ]
 

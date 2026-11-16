@@ -74,8 +74,9 @@ export type Piece =
       nameLang?: string | undefined
       /** a command's element (kind `macro`): the text TeX set for it where it stands, on its line's baseline at its text's
        *  size (the PDF's engine, read on arXiv's page: `\hl{guitar}`'s "guitar", `\k{a}`'s "ą"); absent for a raised or
-       *  lowered one, one set at another size, one that sets nothing, and for an element of any other kind. Letters glued to it that make one word with this text (UAX #29) are that word's: the chain sends
-       *  none of them as a word of its own (words.ts) */
+       *  lowered one, one set at another size, one that sets nothing, and for an element of any other kind. The letters and
+       *  marks of the unit's text that touch it, on a side this text begins or ends with a letter, a mark or a digit, and in
+       *  no group that does not hold it, are its word's: the chain sends none of them as a word of its own (words.ts) */
       text?: string | undefined
     }
   | {

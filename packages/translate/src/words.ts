@@ -33,7 +33,10 @@
 // element (held back, it would stand as written in the translation). An element that states no text (a raised
 // mark, `\textsuperscript{1}Carnegie`; one that sets nothing) holds nothing back, nor is the kind asked: the text decides, by
 // its characters' categories, no list. A run between two elements is the first's: it comes back after the element it follows,
-// else before the one it precedes, outside the groups that hold the element but not the run.
+// else before the one it precedes, outside the groups that hold the element but not the run. A run never takes a letter out of
+// a group that does not hold the element (a link or a styled group around letters alone, `\href{…}{M}\k{a}dry`): held, it would
+// leave the group without them, a link of no text the original states with its text; such letters go on the wire in their
+// group, and the run stops at that group's edge.
 //
 // The chain applies both rules once, to the unit before anything else reads it (chain.ts settle, rowContextOf): every wire
 // writes the unit so unwrapped, every reading reads the reply against it (the tags and markers wires, the runs floor, the
@@ -204,20 +207,25 @@ function heldLettersOf(unit: UnitIn): Whole | null {
     const c = projection.codePointAt(x) as number
     return { ch: String.fromCodePoint(c), n: c > 0xffff ? 2 : 1 }
   }
-  const textAt = (x: number) => at[x]?.t === 'text'
+  /** a text character every group of which holds the element too: one in a group that does not (a link or a styled group
+   *  around letters alone) is never taken out of it, which a held run would leave without them (a link of no text) */
+  const textOf = (x: number, self: Extract<At, { t: 'el' }>) => {
+    const p = at[x]
+    return p?.t === 'text' && p.groups.every((g, i) => self.groups[i] === g)
+  }
   for (const { a, b } of texts) {
     const self = at[a] as Extract<At, { t: 'el' }>
     const s = projection.slice(a, b)
     if (WORD_END.test(s.slice(0, [...s][0]?.length ?? 0))) {
       let x = a - 1
-      for (let c = cp(x, true); c && textAt(x) && !held.has(x) && HELD.test(c.ch); c = cp(x, true)) {
+      for (let c = cp(x, true); c && textOf(x, self) && !held.has(x) && HELD.test(c.ch); c = cp(x, true)) {
         for (let k = 0; k < c.n; k++) held.set(x - k, { el: self, side: 'before' })
         x -= c.n
       }
     }
     if (WORD_END.test([...s].at(-1) ?? '')) {
       let x = b
-      for (let c = cp(x, false); c && textAt(x) && !held.has(x) && HELD.test(c.ch); c = cp(x, false)) {
+      for (let c = cp(x, false); c && textOf(x, self) && !held.has(x) && HELD.test(c.ch); c = cp(x, false)) {
         for (let k = 0; k < c.n; k++) held.set(x + k, { el: self, side: 'after' })
         x += c.n
       }
@@ -256,7 +264,8 @@ function heldLettersOf(unit: UnitIn): Whole | null {
         for (const ch of p.s) {
           if (!held.has(n)) {
             s += ch
-            keep.push(n)
+            // (one position of the sent projection a code unit, as its offsets count: a character outside the BMP two)
+            for (let k = 0; k < ch.length; k++) keep.push(n + k)
           }
           n += ch.length
         }
@@ -283,7 +292,16 @@ function heldLettersOf(unit: UnitIn): Whole | null {
     }
     ownOf.set(at.length, own)
   }
-  const sentToOwn = [...keep.map((x) => ownOf.get(x) as number), ownOf.get(at.length) as number]
+  /** a kept position as a sentence's start: an element's before the letters held before it, which are its word's and come
+   *  back before it, in the sentence that starts at it (mapSentences' row side) */
+  const startOf = (x: number): number => {
+    const a = at[x]
+    if (a?.t !== 'el') return x
+    let y = x
+    while (held.get(y - 1)?.el.el === a.el && held.get(y - 1)?.side === 'before') y--
+    return y
+  }
+  const sentToOwn = [...keep.map((x) => ownOf.get(startOf(x)) as number), ownOf.get(at.length) as number]
   const back = (r: Result): Result => {
     if (!r.ok) return r
     const { content: row, inserted } = putBack(r.content, runs)
