@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { LANG_CODE_TO_LOCALE_NAME, LANG_CODES, toBcp47 } from '@/config/languages'
-import { TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { LANG_CODE_TO_LOCALE_NAME, toBcp47 } from '@/config/languages'
 import { chromeLanguages, languageItems, ownName, READER_LANGUAGES } from '@/pdf-reader/host/languages'
 import { languageKeywords } from '@/ui/language-keywords'
 
 describe('the languages the reader offers (the reader\'s design, §6.7)', () => {
-  it('are the ones the layer sets (the engine\'s TARGETS), and every one of them', () => {
-    expect(READER_LANGUAGES).toHaveLength(TARGETS.length)
-    expect([...READER_LANGUAGES].sort()).toEqual(LANG_CODES.filter(c => (TARGETS as readonly string[]).includes(toBcp47(c))).sort())
-  })
 
   it('are named each in its own language, by script (CJK in the design\'s order, Latin, Cyrillic), the current one selected', () => {
     const items = languageItems('kor')

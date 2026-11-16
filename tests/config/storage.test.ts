@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
-import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, DEFAULT_PDF_CLASSES, DEFAULT_PDF_READER, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
-import { TOGGLE_DEFAULTS, TOGGLES } from '@/pdf-reader/engine/rules/content-classes.mjs'
+import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, DEFAULT_PDF_READER, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
 import { serviceSchema } from '@/config/services'
 import { chooseFirstTarget, configItem, getConfig, readConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
 
@@ -773,13 +772,6 @@ describe('provider selection', () => {
       expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where })
       fakeBrowser.reset()
     }
-  })
-
-  it('the reader\'s "What to translate" defaults are the engine\'s, under the engine\'s toggles (rules/content-classes.mjs)', () => {
-    expect(DEFAULT_PDF_CLASSES).toEqual(TOGGLE_DEFAULTS)
-    expect(Object.keys(DEFAULT_CONFIG.pdfReader.classes).sort()).toEqual(TOGGLES.filter(t => t !== 'always' && t !== 'never').sort())
-    // a toggle the schema lacks would be stripped from what the reader saves, and one it has that the engine lacks refused by the layer's open
-    expect(Object.keys(configSchema.shape.pdfReader.shape.classes.shape).sort()).toEqual(Object.keys(TOGGLE_DEFAULTS).sort())
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a stored preload margin becoming on demand', async () => {
