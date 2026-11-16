@@ -89,7 +89,7 @@ export const KEY_VERSION = 't1'
  *  (its `text`), in no group that does not hold it, offered to no translator, put back beside it in the row, the row's
  *  sentences in the unit's projection: words.ts. A change to them that changes an outcome moves it, and every row with it
  *  (identityOf); a change that changes none leaves it */
-export const CHAIN_DIGEST = '438c1e1bdeb23628f9bb08255ff2bc50365854a8951cdfb68922245557e6c7b9'
+export const CHAIN_DIGEST = 'c41af40231946bd7d56c7d72358b64f149d063a471f6583617428697dda17cbe'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 
