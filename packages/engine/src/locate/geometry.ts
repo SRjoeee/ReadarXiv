@@ -5,7 +5,7 @@
 // glyphs, pages, style, lead, read facts, elements, asInk, smallCaps, label, span fills and faces, plain text and counter.
 // Phase 8, frameMeasures: each line's column and measure (TeX's frame where it shipped the page's), a label's own line's
 // measure. Reads the index and the record's `members` and `units`; writes the members' lines' columns and measures and their
-// labels' measures.
+// labels' measures. TeX's own measure of a line where its paragraph states one is the phase's second step, measures.ts's.
 // Phase 10, rooms: each member's room under and after its lines. Reads the index and the record's `members` (their
 // travelling ink, phase 9's end marks among it) and `units`; writes the members' rooms.
 import type { El, Ink, Label, Line, Piece, Room } from '@readarxiv/format'
@@ -33,7 +33,6 @@ import type { Owned } from './ownership.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from '../own/stream.ts'
 import { gapsOf } from './gaps.ts'
-import { paragraphMeasures } from './measures.ts'
 import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, travellingInk, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
@@ -764,8 +763,6 @@ export function frameMeasures(w: Work): void {
   const { inkA, gA, framesA } = w.ix
   const { members, units } = w
   columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined), framesA)
-  // (TeX's own measure of a line where its paragraph states one that is not its frame: measures.ts)
-  paragraphMeasures(w)
 }
 
 export function rooms(w: Work): void {

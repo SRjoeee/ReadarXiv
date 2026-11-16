@@ -5,8 +5,7 @@
 // the members' lines, measures and columns (phases 6, 8) and B's points. The compile move's B1 (the display design's F12, 2c's
 // F-last and F-sep, 2d's rule 2 facts, F40's form 1).
 import type { Line, Room } from '@readarxiv/format'
-import type { Instrument } from '../instrument.ts'
-import type { GlueName } from '../marks/channels.ts'
+import type { GlueName, Instrument } from '../instrument.ts'
 import { r2 } from './lines.ts'
 import type { Member, Work } from './work.ts'
 

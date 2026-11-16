@@ -1,13 +1,12 @@
 // Each line's measure as TeX set it, where its paragraph states one that is not its frame (the compile move's C3: the display
 // design's F13): a list's \parshape (\@totalleftmargin, \linewidth), wrapfig's shape, a \hangindent, a \leftskip or \rightskip
 // of some natural size, read into the line's m0..m1 (Line[7], Line[8]) over the frame's measure columnsAndMeasures gave it.
-// Phase 8 (frameMeasures), after the frames' measures: it reads the instrument's statements (Instrument.tex.measures, by the
-// serial of each paragraph's end; Instrument.tex.paras, each unit's paragraph by TeX's own order), B's paragraph ends
-// (`qe<n><code>`, DocMarks.paraEnds) and their owners, the members' lines and their glyphs' partners on B, and writes the stated
-// lines' m0 and m1 alone.
+// Phase 8's second step (locate.ts), right after the frames' measures (geometry.ts frameMeasures): it reads the instrument's
+// statements (Instrument.tex.measures, by the serial of each paragraph's end; Instrument.tex.paras, each unit's paragraph by
+// TeX's own order), B's paragraph ends (`qe<n><code>`, DocMarks.paraEnds) and their owners, the members' lines and their
+// glyphs' partners on B, and writes the stated lines' m0 and m1 alone.
 import type { Line } from '@readarxiv/format'
-import type { Instrument } from '../instrument.ts'
-import type { ParaMeasure } from '../marks/channels.ts'
+import type { Instrument, ParaMeasure } from '../instrument.ts'
 import { ON_BASE } from './geometry.ts'
 import { r2 } from './lines.ts'
 import type { Member, Work } from './work.ts'

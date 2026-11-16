@@ -1,7 +1,7 @@
 // The marked compile's log channels and what they state with B's points: each unit's alignment (AXT-ALIGN), the paper's
 // \lineskip (the probe's row), each page's text frame (AXT-BODY at each body's opening point). Read by the front half's adapter
 // (src/pdf-reader/engine/pipeline/instrument.mjs, through the package's entry). Of the instrument's types alone.
-import type { TexFrame } from '../instrument.ts'
+import { GLUE_NAMES, type GlueName, type ParaMeasure, type TexFrame } from '../instrument.ts'
 
 /** the code of a paragraph's skips (marks.mjs alignCode): both sides stretching and \parfillskip none past them, centred;
  *  \rightskip alone flush left; \leftskip alone flush right; neither justified */
@@ -277,16 +277,6 @@ export function readHeads(log: string): Map<number, HeadSkips> {
   }
   return out
 }
-/** a paragraph's measure as TeX breaks it into lines (readMeasures), in PDF units: its \hsize, \hangindent and \hangafter,
- *  \leftskip's and \rightskip's natural sizes, and its \parshape's lines ([indent, length], where it has a shape) */
-export type ParaMeasure = {
-  hsize: number
-  hangindent: number
-  hangafter: number
-  leftskip: number
-  rightskip: number
-  shape?: [number, number][]
-}
 const DIMEN = /^(-?\d+(?:\.\d+)?)pt$/
 /**
  * Each paragraph's measure where TeX ends it (STATEMENTS_TEX's MEASURE_TEX: `AXT-MEASURE <n> <\hsize> <\hangindent>
@@ -319,22 +309,6 @@ export function readMeasures(log: string): Map<number, ParaMeasure> {
   }
   return out
 }
-/** the separations GAPS_TEX states the paper's values of, by the names it writes them under (TeX's own: \textfloatsep … ,
- *  \@fpsep as `fpsep`, \skip\footins as `footins`) */
-export const GLUE_NAMES = Object.freeze([
-  'textfloatsep',
-  'floatsep',
-  'intextsep',
-  'dbltextfloatsep',
-  'dblfloatsep',
-  'fpsep',
-  'dblfpsep',
-  'abovecaptionskip',
-  'belowcaptionskip',
-  'footins',
-  'footnotesep',
-] as const)
-export type GlueName = (typeof GLUE_NAMES)[number]
 /**
  * The paper's float, caption and footnote separations as TeX held them (STATEMENTS_TEX's GAPS_TEX: `AXT-GLUE <at> <name>
  * <glue>`), in the order TeX wrote them: once the document begins (`at` 0), then at each float where one changed (`at` the

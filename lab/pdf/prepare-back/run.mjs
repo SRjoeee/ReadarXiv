@@ -25,10 +25,10 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import { analyze, inMemory, isMemoryError, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
+import { analyze, inMemory, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { deflate, inflate } from './codec.mjs'
 import { flatOf, pieceKOf } from './pieces.mjs'
 import { silentInkOf } from './silent-gate.mjs'
 import { keptWhyOf, statedOf, trailsOf } from './stated.mjs'
@@ -101,10 +101,6 @@ const OUTPUTS = /\.(?:pdf|xdv|dvi|log|blg|ilg|glg|fls|fdb_latexmk)$|\.synctex\.g
 // (the box's bound on the files one compile gives back, which the marked compile's pass loop holds what it carries to: the
 // web's one answer's, 256 files and 8 MiB)
 const FILES_BOUND = { count: 256, bytes: 8 * 2 ** 20 }
-const deflate = b => new Uint8Array(deflateSync(b))
-// (the bounded inflate's refusal and a failed allocation thrown as they came: only a stream zlib refuses is read again raw. A
-// failed allocation read again raw came back as a data error the wrap took for its page's: memory.mjs)
-const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE' || isMemoryError(e)) throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
 
 // ---- the prepare
 const bundleDir = join(OUT, 'bundles', id)
