@@ -7594,10 +7594,14 @@ Measured again after lane cm-fix's changes (the continuation, the state given ba
 cb66b86c8) on 69 papers (cm-b's 56, the papers of the class the change moved, 2608.00812v1, 2611.03953v2, 2608.04322v1,
 2610.40645v1 and twelve of an output routine of their own), each prepared three times in the pinned image (the asks off; made
 and read but never taken; on): all 207 whole. With the asks made and not taken, every paper's settled B, its log, the probe's
-log, the plan, the definitions and every bundle object are byte for byte the asks-off ones. One paper pays a pass more:
+log, the plan, the definitions and every bundle object are byte for byte the asks-off ones. One paper paid a pass more:
 2610.38269v1, whose `\emailauthor` (elsarticle's) writes the author's name verbatim into the `.aux`, the ask before its
-`\corref` with it (`\axtask {0}{\corref {cor1}}\corref {cor1}`), so that pass 2 reads another `.aux`, and one pass later the
-asks-off side's requests and bytes. 1,340 asks in 59 papers, 1,278 answered, 78 inkless. On, 63 papers are byte for byte the
+`\corref` with it (`\axtask {0}{\corref {cor1}}\corref {cor1}`), so that pass 2 read another `.aux`, and one pass later the
+asks-off side's requests and bytes. Since pass 1's files are handed on with that wrapper taken out (What pass 1 hands on,
+above; lane cm-tidy, at a175b4fda), it pays none: on 14 papers (the two whose pass-1 files hold a wrapper, 2610.38269v1 and
+2608.05881v1, and twelve of the 69) prepared the three ways, all 42 whole, the asks made and not taken byte for byte the
+asks-off ones in all 14, and every side asked as many compiles as the asks-off side (2610.38269v1: 6, 6 and 6; its pass 2
+the asks-off pass 2's request); its bundle byte for byte what it was. 1,340 asks in 59 papers, 1,278 answered, 78 inkless. On, 63 papers are byte for byte the
 asks-off ones and 6 differ, each by an answer that moved the marking and by nothing else: inked where used, 2608.25210v2
 `\vldbauthors`, 2610.21313v1 `\tnote{a}`, `{b}`, `{d}`, 2610.20848v1 and 2610.38269v1 `\sep` (elsarticle's `\unskip, `);
 inkless where used, 2610.19159v1 `\trajectoryMark{}` and 2610.21084v1 `\sep` (cas-sc's `\par`: its keywords one to a line,
