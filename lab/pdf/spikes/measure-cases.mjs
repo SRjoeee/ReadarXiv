@@ -53,8 +53,9 @@ const MEASURES = [
   `\\begin{wrapfigure}{r}{0.35\\linewidth}\\centering\\rule{2cm}{3cm}\\end{wrapfigure}${prose(160, 10)}`,
   `\\begin{thebibliography}{9}\\bibitem{a} ${prose(40, 11)}\\bibitem{b} ${prose(40, 12)}\\end{thebibliography}`,
 ].join('\n\n')
-/** the forced breaks: each `\\` after a word of its own (Qa, Qb, …), the point to stand right after its last glyph; those of a
- *  centred block and of a table's row set none */
+/** the forced breaks: each `\\` and each `\break` ending a paragraph's line after a word of its own (Qa, Qb, …), the point to
+ *  stand right after its last glyph; those of a centred block and of a table's row set none, nor a `\break` that ends no line of
+ *  a paragraph (Zt, Zu) */
 const BREAKS = [
   `${prose(30)} Qa\\\\ \\indent ${prose(20, 1)} Qb\\\\[2pt] ${prose(20, 2)} Qc\\\\* ${prose(20, 3)} Qd\\newline ${prose(20, 4)}`,
   `${prose(12, 5)} Qe\\\\`,
@@ -62,8 +63,15 @@ const BREAKS = [
   `\\begin{center}${prose(6, 8)} Zz\\\\ ${prose(6, 9)}\\end{center}`,
   `\\begin{tabular}{l}${prose(3)} Zy\\\\ ${prose(3, 1)}\\end{tabular}`,
   `\\section{A title Qg\\\\ in two lines}${prose(20, 10)}`,
+  // (LaTeX's \break where it ends a line in a paragraph: after an \hfill (amsart's addresses), in a \vbox's paragraph, inside a
+  // macro's argument, in a p column's cell; none in an \hbox, in an l column's cell, between paragraphs, in a formula)
+  `${prose(10, 11)} Qh\\hfill\\break ${prose(10, 12)} \\hbox{${prose(2, 13)} Zu\\break ${prose(2, 14)}} ${prose(6, 15)}`,
+  `\\vbox{\\hsize=6cm ${prose(8, 16)} Qi\\break ${prose(8, 17)}}`,
+  `${prose(10, 18)} \\textbf{${prose(2, 19)} Qk\\break ${prose(2, 20)}} ${prose(6, 21)}\\par\\break ${prose(6, 22)}`,
+  `\\begin{tabular}{lp{4cm}}${prose(2, 23)} Zt\\break ${prose(2, 24)} & ${prose(6, 25)} Ql\\break ${prose(4, 26)}\\end{tabular}`,
+  `${prose(4, 27)} $x\\break y$ ${prose(4, 28)}`,
 ].join('\n\n')
-const WANT_BREAKS = ['Qa', 'Qb', 'Qc', 'Qd', 'Qe', 'Qf', 'Qg']
+const WANT_BREAKS = ['Qa', 'Qb', 'Qc', 'Qd', 'Qe', 'Qf', 'Qg', 'Qh', 'Qi', 'Qk', 'Ql']
 const doc = (cls, pre, body) => `${cls}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`
 const CASES = {
   measures: doc('\\documentclass{article}', '\\usepackage{wrapfig}', MEASURES),

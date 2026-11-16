@@ -2413,18 +2413,24 @@ export const MEASURE_TEX = [
   String.raw`\makeatother`,
 ].join('')
 /**
- * Where TeX ends a line at a forced break (the compile move's B2: the display design's F35): LaTeX's \@gnewline, every `\\`'s
- * and \newline's way in a paragraph (`\unskip`, then `\nobreak\hfil\break`), once the document begins, sets a point `kb<n>`
- * after the \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue
- * taken, as before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to
- * break made or lost. A point of the optional class `forced-break` (POINT_CLASSES), kept apart from the marks' points by
- * pageInk (ink.ts FORCED_BREAK); the line TeX ended at a break the marking gives no mark (facts-pass.ts readElements). A `\\` of
- * a centred or ragged block (\@centercr, which ends a paragraph) or a table's row sets none
+ * Where TeX ends a line at a forced break (the compile move's B2: the display design's F35): LaTeX's \@gnewline, every `\\`'s and
+ * \newline's way in a paragraph (`\unskip`, then `\nobreak\hfil\break`), once the document begins, sets a point `kb<n>` after the
+ * \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue taken, as
+ * before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to break made
+ * or lost. LaTeX's `\break` (robust: its own code the macro `\break `, `\penalty-\@M`) sets one too where it ends a line in a
+ * paragraph (horizontal mode, not an \hbox's restricted one; the coordinator's ruling 4 of 2026-11-16: amsart's `\address{…
+ * \hfill\break\indent …}`, 2608.03841v2's eight, the corpus's only uses in a unit's text), before its penalty, nothing taken (an
+ * `\hfill` before it stays the line's); none in vertical or math mode, none for \@gnewline's own \break (`\axt@kbskip`). Its
+ * robust wrapper is the kernel's: what a write of it writes is as before. A point of the optional class `forced-break`
+ * (POINT_CLASSES), kept apart from the marks' points by pageInk (ink.ts FORCED_BREAK); the line TeX ended at a break the marking
+ * gives no mark (facts-pass.ts readElements). A `\\` of a centred or ragged block (\@centercr, which ends a paragraph) or a
+ * table's row sets none
  */
 export const BREAKS_TEX = [
   String.raw`\makeatletter`,
   String.raw`\gdef\axt@kb{0}\def\axt@kbpt{\xdef\axt@kb{\the\numexpr\axt@kb+1\relax}\axt@point{kb\axt@kb}}`,
-  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\axt@gnl{#1}}\fi}\fi`,
+  String.raw`\def\axt@kbskip{0}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\def\axt@kbskip{1}\axt@gnl{#1}\def\axt@kbskip{0}}\fi\ifcsname break \endcsname\expandafter\let\expandafter\axt@brk\csname break \endcsname\expandafter\def\csname break \endcsname{\ifhmode\ifinner\else\ifaxt@off\else\ifnum\axt@kbskip=\z@\axt@kbpt\fi\fi\fi\fi\axt@brk}\fi}\fi`,
   String.raw`\makeatother`,
 ].join('')
 /**
