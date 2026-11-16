@@ -76,9 +76,10 @@ const SHOW = (at) =>
  *  it), written each time */
 const PRE = String.raw`\makeatletter\let\axt@chkav\addvspace\def\addvspace#1{\message{^^JAXT-SHOW - addv \the\glueexpr#1\relax^^J}\axt@chkav{#1}}\makeatother` +
   // (where TeX put each float, its own lists when \@makecol makes a column: the top list, the bottom list, the floats set here; the
-  // floats \@makefcolumn sets in a column of floats (\@vtryfc, its list \@flsucceed); and each output: a code of a label of the
-  // gate's own, so that it runs before the head's top-level code)
-  String.raw`\makeatletter\ifdefined\AddToHook\AddToHook{cmd/@makecol/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - top \number#1^^J}}\@toplist\def\@elt#1{\message{^^JAXT-SHOW - bot \number#1^^J}}\@botlist\def\@elt#1{\message{^^JAXT-SHOW - here \number#1^^J}}\@midlist\message{^^JAXT-SHOW - makecol 0^^J}\endgroup}\AddToHook{cmd/@outputpage/before}[axt-gate]{\message{^^JAXT-SHOW - outputpage 0^^J}}\AddToHook{cmd/@vtryfc/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - fcol \number#1^^J}}\@flsucceed\endgroup}\fi\makeatother`
+  // floats \@makefcolumn sets in a column of floats (\@vtryfc, its list \@flsucceed); the floats across both columns over a page's
+  // columns (\@combinedblfloats, \@dbltoplist); a float.sty `[H]` float, set in the main list (\float@endH); and each output: a
+  // code of a label of the gate's own, so that it runs before the head's top-level code)
+  String.raw`\makeatletter\ifdefined\AddToHook\AddToHook{cmd/@makecol/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - top \number#1^^J}}\@toplist\def\@elt#1{\message{^^JAXT-SHOW - bot \number#1^^J}}\@botlist\def\@elt#1{\message{^^JAXT-SHOW - here \number#1^^J}}\@midlist\message{^^JAXT-SHOW - makecol 0^^J}\endgroup}\AddToHook{cmd/@outputpage/before}[axt-gate]{\message{^^JAXT-SHOW - outputpage 0^^J}}\AddToHook{cmd/@vtryfc/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - fcol \number#1^^J}}\@flsucceed\endgroup}\AddToHook{cmd/@combinedblfloats/before}[axt-gate]{\begingroup\def\@elt#1{\message{^^JAXT-SHOW - dbltop \number#1^^J}}\@dbltoplist\endgroup}\AddToHook{cmd/float@endH/before}[axt-gate]{\message{^^JAXT-SHOW - Hfloat \number\@currbox^^J}}\fi\makeatother`
 /** a float of environment `env` with its caption unit `i`, `inside` set first in it, and the float's own reading of the
  *  separations at its end */
 const F = (env, place, i, inside = '') =>
@@ -137,6 +138,24 @@ const CASES = {
     ),
     HEADS,
   ],
+  // (two floats set here one over the other: float.sty's `[H]`, in the main list with \intextsep over and under each, and LaTeX's
+  // `h`; two floats across both columns over a page's columns)
+  herepair: [
+    doc(
+      '\\documentclass{article}',
+      '\\usepackage{float}',
+      `${BODY}\n${F('figure', 'H', 40)}${F('figure', 'H', 41)}${P(42, prose(40))}${F('figure', 'h', 43)}${F('figure', 'h', 44)}${P(45, prose(60))}`,
+    ),
+    HEADS,
+  ],
+  widepair: [
+    doc(
+      '\\documentclass[twocolumn]{article}',
+      '',
+      `${F('figure*', 't', 50)}${F('figure*', 't', 51)}${BODY}\n${P(52, prose(200))}`,
+    ),
+    HEADS,
+  ],
   acmart: [doc('\\documentclass[sigconf]{acmart}', '\\settopmatter{printacmref=false}\\setcopyright{none}'), HEADS],
   ieeetran: [doc('\\documentclass[conference]{IEEEtran}', ''), HEADS],
   amsart: [doc('\\documentclass{amsart}', ''), HEADS],
@@ -191,7 +210,7 @@ async function placesHeld(file, log) {
   let wholeSince = false
   let outputs = 0
   let fcol = []
-  for (const m of log.matchAll(/^AXT-SHOW - (fser|top|bot|here|fcol|makecol|outputpage) (\d+)(?: (\d+))?$|^AXT-WHOLE (\d+)$/gm)) {
+  for (const m of log.matchAll(/^AXT-SHOW - (fser|top|bot|here|dbltop|Hfloat|fcol|makecol|outputpage) (\d+)(?: (\d+))?$|^AXT-WHOLE (\d+)$/gm)) {
     if (m[4] !== undefined) {
       wholeSince = true
       continue
@@ -209,7 +228,7 @@ async function placesHeld(file, log) {
       wholeSince = false
     } else {
       const f = boxOf.get(m[2])
-      if (f !== undefined) tex.set(f, m[1])
+      if (f !== undefined) tex.set(f, m[1] === 'Hfloat' ? 'here' : m[1])
     }
   }
   let n = 0
@@ -217,17 +236,19 @@ async function placesHeld(file, log) {
     if (b.e < 0) continue
     const want = tex.get(f)
     const got = placed.get(f)
-    const fine = want === 'here' ? got === 'here' : want === 'top' || want === 'bot' || want === 'fcol' ? got === 'out' : got === undefined
+    const fine = want === 'here' ? got === 'here' : want === 'top' || want === 'bot' || want === 'dbltop' || want === 'fcol' ? got === 'out' : got === undefined
     if (!fine) out.push(`fs${f}: TeX ${want ?? 'no list (its page bracketed whole or a page of floats)'}, read ${got ?? 'none'}`)
     else n++
   }
-  // (two floats of one top list: adjacent on B, as gaps.ts reads them)
-  const tops = [...tex].filter(([, k]) => k === 'top').map(([f]) => f)
-  for (let i = 0; i + 1 < tops.length; i++) {
-    const [x, y] = [brackets.get(tops[i]), brackets.get(tops[i + 1])]
-    if (!x || !y || x.page !== y.page || y.s !== x.e + 1) continue
-    const [e, s] = [pages[x.page].points[x.e], pages[y.page].points[y.s]]
-    if (e.glyph !== s.glyph || e.box !== s.box) out.push(`fs${tops[i]}, fs${tops[i + 1]}: one top list, something between them on B`)
+  // (two floats of one top list, or of one list over both columns: adjacent on B, as gaps.ts reads them)
+  for (const list of ['top', 'dbltop']) {
+    const tops = [...tex].filter(([, k]) => k === list).map(([f]) => f)
+    for (let i = 0; i + 1 < tops.length; i++) {
+      const [x, y] = [brackets.get(tops[i]), brackets.get(tops[i + 1])]
+      if (!x || !y || x.page !== y.page || y.s !== x.e + 1) continue
+      const [e, s] = [pages[x.page].points[x.e], pages[y.page].points[y.s]]
+      if (e.glyph !== s.glyph || e.box !== s.box) out.push(`fs${tops[i]}, fs${tops[i + 1]}: one ${list} list, something between them on B`)
+    }
   }
   out.push(`ok floats placed as TeX listed them ${n} of ${[...brackets].filter(([, b]) => b.e >= 0).length}; outputs ${outputs}, whole ${whole.size}`)
   return out
