@@ -12,45 +12,72 @@ import type { Member, Work } from './work.ts'
 
 /** a member's separation by class (Room.gap) */
 export type Gap = NonNullable<Room['gap']>
-/** a float's bracket on B (LAYOUT_TEX's POINTS: `fs<n>` before its box's first glyph, `fe<n>` after its last), and a body's
- *  opening point (`bs<n>`): one serial for both, the order TeX made them in */
+/** a float's bracket on B (LAYOUT_TEX's POINTS: `fs<n>` before its box's first glyph, `fe<n>` after its last), and a column
+ *  body's (`bs<n>` before the column's main list as TeX's page builder broke it, `be<n>` after it: POINTS' \@makecol hook, run
+ *  before \@makecol sets the column's top floats over that list and its bottom ones under it): one serial for all, the order TeX
+ *  made them in */
 const FLOAT_BRACKET = /^f([se])(\d+)$/
-const BODY_POINT = /^bs(\d+)$/
+const BODY_BRACKET = /^b([se])(\d+)$/
 /** two heights told apart (PDF units): a line's are stated to a hundredth (lines.ts r2) */
 const APART = 0.01
 /** the first ink under a height on a page across x0..x1: the highest top under it (geometry.ts inkIndex `under`) */
 type InkUnder = (page: number, foot: number, x0: number, x1: number) => number
+/** where TeX placed a float, by B's brackets: in a column's body (`here`: a float the page builder met in the main list,
+ *  \@addtocurcol's, \intextsep over and under it), or outside every body of its page (`out`: \@makecol's top or bottom list,
+ *  \textfloatsep between it and the body) */
+type Placed = 'here' | 'out'
 
-/** each B page's floats, glyph by glyph (the innermost float bracket open before it, its serial; -1 none), and the serial of
- *  the last body TeX shipped on it (its last `bs<n>`; 0 none) */
-function bracketsOf(B: Instrument['ink']): { floatAt: Int32Array[]; body: number[] } {
+/** each B page's floats, glyph by glyph (the innermost float bracket open before it, its serial; -1 none); whether each glyph
+ *  stands in a column's body (inside a `bs<n>`..`be<n>` bracket); the serial of the last body TeX shipped on it (its last
+ *  `bs<n>`; 0 none); and each float's place, by its opening bracket among the bodies' in B's stream, on a page that states a
+ *  body (a page of none, floats alone or a compile made before the brackets, states no place) */
+function bracketsOf(B: Instrument['ink']): {
+  floatAt: Int32Array[]
+  inBody: Uint8Array[]
+  body: number[]
+  placed: Map<number, Placed>
+} {
   const floatAt: Int32Array[] = []
+  const inBody: Uint8Array[] = []
   const body: number[] = []
+  const placed = new Map<number, Placed>()
   for (const pg of B.pages) {
     const at = new Int32Array(pg.glyphs.length).fill(-1)
+    const bodied = new Uint8Array(pg.glyphs.length)
     const open: number[] = []
+    const bodies = new Set<number>()
     let q = 0
     let last = 0
     const points = pg.points
+    const states = points.some((x) => BODY_BRACKET.test(x.name))
     for (let g = 0; g <= pg.glyphs.length; g++) {
       for (; q < points.length && points[q]!.glyph <= g; q++) {
         const name = points[q]!.name
-        const b = BODY_POINT.exec(name)
-        if (b) last = Math.max(last, Number(b[1]))
+        const b = BODY_BRACKET.exec(name)
+        if (b) {
+          if (b[1] === 's') {
+            last = Math.max(last, Number(b[2]))
+            bodies.add(Number(b[2]))
+          } else bodies.delete(Number(b[2]))
+        }
         const f = FLOAT_BRACKET.exec(name)
         if (!f) continue
-        if (f[1] === 's') open.push(Number(f[2]))
-        else {
+        if (f[1] === 's') {
+          open.push(Number(f[2]))
+          if (states && !placed.has(Number(f[2]))) placed.set(Number(f[2]), bodies.size ? 'here' : 'out')
+        } else {
           const i = open.lastIndexOf(Number(f[2]))
           if (i >= 0) open.splice(i, 1)
         }
       }
       if (g < pg.glyphs.length && open.length) at[g] = open[open.length - 1]!
+      if (g < pg.glyphs.length && bodies.size) bodied[g] = 1
     }
     floatAt.push(at)
+    inBody.push(bodied)
     body.push(last)
   }
-  return { floatAt, body }
+  return { floatAt, inBody, body, placed }
 }
 
 /** the paper's separations in force at a serial (Instrument.tex.glues): each name's last value written at or before it */
@@ -66,12 +93,15 @@ function inForce(glues: NonNullable<Instrument['tex']['glues']>, serial: number)
  * - a heading the compile states the skips of: under a title on lines of its own (an after-skip over zero, TeX's \@sect test)
  *   `afterskip`, and its sep; after a title set in the line `runin`, the skip TeX sets after it, the after-skip negated;
  * - a float's last member (2c's F-last: the next member under it is of no float or of another, with no ink between that no unit
- *   owns, which may be the float's own): over body text `textfloatsep` where no body text stands over the float in its column
- *   (a top float), `intextsep` where some does (a float set here), `dbltextfloatsep` a float across both columns; over another
- *   float `floatsep` (`dblfloatsep`), or `fpsep` (`dblfpsep`) on a page of floats alone; the float's values (Instrument.tex.glues
- *   at its serial);
- * - body text over a float's first member: `intextsep` where body text stands under the float in its column, `textfloatsep`
- *   where none does (a bottom float), `dbltextfloatsep` a float across both columns;
+ *   owns, which may be the float's own): over body text `textfloatsep` where TeX placed the float outside its column's body (on
+ *   \@makecol's top list: its bracket `fs<n>` before the body's `bs<n>` in B's stream), `intextsep` where inside it (a float set
+ *   here, in the main list the page builder broke), `dbltextfloatsep` a float across both columns; over another float `floatsep`
+ *   (`dblfloatsep`), or `fpsep` (`dblfpsep`) on a page of floats alone; the float's values (Instrument.tex.glues at its serial);
+ * - body text over a float's first member: `intextsep` where TeX placed the float inside the body, `textfloatsep` outside it (a
+ *   bottom float), `dbltextfloatsep` a float across both columns. Body text is what TeX set in a column's body (between its
+ *   `bs<n>` and `be<n>`): a title block \twocolumn[…] sets over both columns stands in none, and states no float's separation
+ *   (2611.03953v2 p1: ICML's title and authors over a top float, which TeX set \textfloatsep under); a page that states no body
+ *   (no `bs<n>`) states none of these;
  * - inside a float, over its caption `abovecaptionskip`, the caption over what follows `belowcaptionskip`;
  * - over a heading the compile states the skips of `beforeskip`, its before-skip as TeX adds it (a negative one negated whole);
  * - body text over a footnote `footins` (the rule between is TeX's own), a footnote over a footnote `footnotesep` (a strut: no
@@ -91,10 +121,12 @@ export function gapsOf(w: Work, under: InkUnder): Map<Member, { gap?: Gap; sep?:
   const heads = new Map((ins.tex.heads ?? []).map((h) => [h.unit, h]))
   const skips = new Map((ins.tex.skips ?? []).map((k) => [k.unit, k]))
   const glues = ins.tex.glues ?? []
-  const { floatAt, body } = bracketsOf(ins.ink)
+  const { floatAt, inBody, body, placed } = bracketsOf(ins.ink)
   const own = (mem: Member) => mem.unit >= 0 && mem.unit < ins.units.length && mem.name === undefined
-  // (a member's float by its first glyph on B, its serial; null none; and the serial of the last body shipped on its B page)
+  // (a member's float by its first glyph on B, its serial; null none; whether that glyph stands in a column's body, as TeX's
+  // brackets state it; and the serial of the last body shipped on its B page)
   const floatOf = new Map<Member, number | null>()
+  const bodied = new Set<Member>()
   const bodyOf = new Map<Member, number>()
   for (const mem of members) {
     if (!own(mem) || mem.bFirst < 0) {
@@ -102,8 +134,10 @@ export function gapsOf(w: Work, under: InkUnder): Map<Member, { gap?: Gap; sep?:
       continue
     }
     const p = (pageB[mem.bFirst] as number) - 1
-    const f = floatAt[p]?.[mem.bFirst - (m.offB[p] as number)] ?? -1
+    const j = mem.bFirst - (m.offB[p] as number)
+    const f = floatAt[p]?.[j] ?? -1
     floatOf.set(mem, f >= 0 ? f : null)
+    if (f < 0 && inBody[p]?.[j] === 1) bodied.add(mem)
     bodyOf.set(mem, body[p] ?? 0)
   }
   // (each A page's lines of the members that are the paper's own text, by page: what stands under another)
@@ -116,21 +150,17 @@ export function gapsOf(w: Work, under: InkUnder): Map<Member, { gap?: Gap; sep?:
   const floatLines = (f: number, page: number) =>
     (onPage.get(page) ?? []).filter((e) => floatOf.get(e.mem) === f).map((e) => e.l)
   const spans = (f: number, page: number) => floatLines(f, page).some((l) => l[1] === 2)
-  // (body text, of no float, on the page across a float's lines: over its first line, or under its last)
-  const bodyBy = (f: number, page: number, side: 'over' | 'under') => {
-    const ls = floatLines(f, page)
-    if (!ls.length) return false
-    const x0 = Math.min(...ls.map((l) => Math.min(l[2], l[7])))
-    const x1 = Math.max(...ls.map((l) => Math.max(l[3], l[8])))
-    const top = Math.max(...ls.map((l) => l[4]))
-    const foot = Math.min(...ls.map((l) => l[4]))
-    return (onPage.get(page) ?? []).some(
-      (e) =>
-        floatOf.get(e.mem) === null &&
-        across(e.l, x0, x1) &&
-        (side === 'over' ? e.l[4] > top + APART : e.l[4] < foot - APART),
-    )
-  }
+  // (the separation between a float and the body text over or under it, by where TeX placed the float: one across both columns
+  // `dbltextfloatsep`; one in its column's body `intextsep`; one outside it, on \@makecol's top or bottom list, `textfloatsep`;
+  // none where its page states no body)
+  const floatSep = (f: number, page: number): GlueName | undefined =>
+    spans(f, page)
+      ? 'dbltextfloatsep'
+      : placed.get(f) === 'here'
+        ? 'intextsep'
+        : placed.get(f) === 'out'
+          ? 'textfloatsep'
+          : undefined
   const glue = (vals: Map<GlueName, [number, number]>, name: GlueName): Gap | undefined => {
     const v = vals.get(name)
     return v ? [name, r2(v[0]), r2(v[1])] : undefined
@@ -170,7 +200,11 @@ export function gapsOf(w: Work, under: InkUnder): Map<Member, { gap?: Gap; sep?:
           // (a page of floats alone: no body text across the member's line on it)
           const bodied = (onPage.get(page) ?? []).some((e) => floatOf.get(e.mem) === null && across(e.l, x0, x1))
           gap = glue(vals, bodied ? (two ? 'dblfloatsep' : 'floatsep') : two ? 'dblfpsep' : 'fpsep')
-        } else gap = glue(vals, two ? 'dbltextfloatsep' : bodyBy(fm, page, 'over') ? 'intextsep' : 'textfloatsep')
+        } else {
+          // (over the body text under it: by where TeX placed the float)
+          const s = bodied.has(next.mem) ? floatSep(fm, page) : undefined
+          if (s) gap = glue(vals, s)
+        }
       }
     } else if (next && fm !== null && fn === fm) {
       const vals = inForce(glues, fm)
@@ -178,8 +212,10 @@ export function gapsOf(w: Work, under: InkUnder): Map<Member, { gap?: Gap; sep?:
       else if (kindOf(mem) === 'caption') gap = glue(vals, 'belowcaptionskip')
       else if (!between && skips.has(mem.unit)) gap = parskipOf(skips.get(next.mem.unit))
     } else if (next && fm === null && fn !== null) {
-      const vals = inForce(glues, fn)
-      gap = glue(vals, spans(fn, page) ? 'dbltextfloatsep' : bodyBy(fn, page, 'under') ? 'intextsep' : 'textfloatsep')
+      // (body text over a float: by where TeX placed the float; what stands over a float outside every column's body, a two-column
+      // title block \twocolumn[…] sets over the columns, is no body text and states none)
+      const s = bodied.has(mem) ? floatSep(fn, page) : undefined
+      if (s) gap = glue(inForce(glues, fn), s)
     } else if (next && kindOf(mem) !== 'heading') {
       // (a heading the compile states no skips of states nothing: what TeX set under it is its class's own after-skip)
       const nh = kindOf(next.mem) === 'heading' ? heads.get(next.mem.unit) : undefined
