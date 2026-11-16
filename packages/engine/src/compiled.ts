@@ -134,6 +134,7 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
       inkless: unkeep(plan.inkless),
       ...(plan.lineskip ? { lineskip: unkeep(plan.lineskip) } : {}),
       ...(plan.decorated ? { decorated: unkeep(plan.decorated) } : {}),
+      ...(plan.told ? { told: unkeep(plan.told) } : {}),
     }
   } else {
     input.stage('compiling')

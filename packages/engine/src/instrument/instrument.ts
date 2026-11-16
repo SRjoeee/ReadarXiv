@@ -147,6 +147,8 @@ export type InstrumentInput = {
     texts?: unknown
     inkless?: readonly string[] | null
     decorated?: unknown
+    /** the asks' texts, [source, text] pairs (MarkedOptions.told) */
+    told?: unknown
     lineskip?: [number, number] | null
   }
   log?: string
@@ -938,6 +940,7 @@ export function classesOf(
   pieces: readonly PieceIn[],
   colours: ReadonlyMap<number, number> | null = null,
   texts: ReadonlyMap<string | undefined, string> | null = null,
+  told: ReadonlyMap<string | undefined, string> | null = null,
 ): [string, PieceClass][] {
   const out: [string, PieceClass][] = []
   const first = new Map<string, string>()
@@ -981,6 +984,9 @@ export function classesOf(
     // its rendering by among the unit's characters where the macro's glyphs are the unit's text (no points of its own))
     const t = (c.cls === 'macro' || c.cls === 'umacro') && texts ? (texts.get(p.src) ?? texts.get(src)) : undefined
     if (typeof t === 'string' && /\S/.test(t)) x.text = t
+    // (the text TeX set for it where the document uses it, every glyph stated as itself: the loop's first pass's ask)
+    const said = (c.cls === 'macro' || c.cls === 'umacro') && told ? (told.get(p.src) ?? told.get(src)) : undefined
+    if (typeof said === 'string' && /\S/.test(said)) x.told = said
     Object.assign(x, sourceFactsOf(src, k, first, colours, statedBreak(p)))
     // (a piece that sets a URL \urldef stored: the \url piece's class and copy, a text piece, a URL)
     if (shown.has(k)) {
@@ -2124,6 +2130,8 @@ export async function instrumentOf({
   // reading gave none taken (F16); and the samples TeX ends with ink a fill pushed (F14))
   const probe = probeLog ? probeFactsOf(probeLog, units) : null
   const shown = withTexts(textsOf(texts), probe?.texts)
+  // (the asks' texts: an element whose ink nothing on the page bounds is stated by them, locate/geometry.ts)
+  const told = textsOf(options.told)
   const endSamples = new Set(probe?.ends ?? [])
   const names = new Set(pages.flatMap((pg) => pg.points.map((x) => x.name)))
   const follows = followsOf(units, names, shown, inkless)
@@ -2175,7 +2183,7 @@ export async function instrumentOf({
     const id = unitId(u.kind, content)
     ids[i] = id
     const unhidden = own.units.get(i)?.unhidden
-    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown)
+    const classes = classesOf(u.pieces, colours.get(i) ?? null, shown, told)
     // (the piece the unit ends with that TeX sets as its end mark: El.end on its element, F14)
     for (const k of endPiecesOf(u.pieces, endSamples)) {
       const c = classes.find(([id]) => id === String(k))

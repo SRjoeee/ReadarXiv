@@ -15,6 +15,7 @@ import {
   mergeUses,
   readInkAnswered,
   readInkProbe,
+  readAskTexts,
   useAnswersOf,
 } from '../src/marks/marks.ts'
 
@@ -45,7 +46,30 @@ describe('the asks’ answers, read from the pass’s log', () => {
   const asked = ['\\nada', '\\kw', '\\undef', '\\myrule']
   it('answers a listing given whole with no error, inkless or not; one with an error or none is no answer', () => {
     expect(readInkAnswered(log, asked)).toEqual(['\\nada', '\\kw'])
-    expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\nada'], inked: ['\\kw'] })
+    expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\nada'], inked: ['\\kw'], texts: [['\\kw', ',']] })
+  })
+  it('reads the text an ask sets only where TeX states every glyph as itself: no rule, ligature, formula or other font', () => {
+    // (the coordinator's ruling on the third cause, 2026-11-16: elsarticle's `\sep` in its keywords sets `\unskip, `, its comma
+    // a text font's character and its space's glue, ","; a macro whose listing holds a rule, a ligature's slot, a formula or a
+    // symbol font's character states no text, whatever else it sets)
+    const log = [
+      listing(0, '\\hbox(4.3+0.0)x5.8', INKED),
+      listing(1, '\\hbox(4.3+0.0)x9.0', ['.\\T1/cmr/m/n/10 a', '.\\rule(0.4+0.0)x5.0']),
+      listing(2, '\\hbox(6.9+0.0)x5.6', ['.\\T1/cmr/m/n/10 ^^\\ (ligature fi)']),
+      listing(3, '\\hbox(4.3+0.0)x5.0', ['.\\mathon', '.\\OML/cmm/m/it/10 x', '.\\mathoff']),
+      listing(4, '\\hbox(4.3+0.0)x5.0', ['.\\OMS/cmsy/m/n/10 ^^C']),
+      listing(5, '\\hbox(6.9+0.0)x20.0', [
+        '.\\OT1/cmr/m/n/10 B',
+        '.\\OT1/cmr/m/n/10 E',
+        '.\\kern0.5',
+        '.\\OT1/cmr/m/n/10 R',
+      ]),
+    ].join('\n')
+    const asked = ['\\sep', '\\ruled', '\\fi{}', '\\x{}', '\\dagger{}', '\\ber{}']
+    expect(readAskTexts(log, asked)).toEqual([
+      ['\\sep', ','],
+      ['\\ber{}', 'BER'],
+    ])
   })
   it('reads a sample set in a paragraph from its vertical box: inkless where no node at any depth sets ink, whatever lines it holds', () => {
     const LINE = '.\\hbox(6.9+1.9)x345.0, glue set 300.0fil'
@@ -174,7 +198,11 @@ describe('the asks’ answers, read from the pass’s log', () => {
     // (the row ASK_TEX writes before the listing where the token after the sample was never reached)
     const eaten = (i: number) => listing(i, NONE, [], [`LAYOUT-PROBE 1 ink-eaten ${i}`])
     const log = [listing(0, NONE, []), eaten(1), listing(2, '\\hbox(4.3+0.0)x5.8', INKED)].join('\n')
-    expect(useAnswersOf(log, ['\\nada{}', '\\urldef', '\\kw'])).toEqual({ inkless: ['\\nada{}'], inked: ['\\kw'] })
+    expect(useAnswersOf(log, ['\\nada{}', '\\urldef', '\\kw'])).toEqual({
+      inkless: ['\\nada{}'],
+      inked: ['\\kw'],
+      texts: [['\\kw', ',']],
+    })
   })
   it('takes each answered source’s answer over the probe’s, the probe’s where the use gave none', () => {
     const probe = ['\\kw', '\\tnote{b}', '\\undef']

@@ -184,6 +184,9 @@ export interface PieceClass {
   tie?: true
   /** a text macro's text as TeX sets it (the marking's probe), where its glyphs are the unit's text, no ink of its own */
   text?: string
+  /** the text TeX set for it where the document uses it, every glyph stated as itself (the loop's first pass's ask, marks.ts
+   *  readAskTexts): what the reading states of its element where nothing on the page bounds its ink (locate/geometry.ts) */
+  told?: string
   /** TeX sets it as its unit's end mark (the compile move's F14): the unit's last ink, whose own box TeX ends with ink a glue of
    *  infinite stretch pushed (the probe's listing: an author's \qed written in the text), or which the source pushes with a fill
    *  right before it (`\hfill $\square$`): marks.ts endPiecesOf; its element's El.end */

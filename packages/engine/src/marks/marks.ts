@@ -948,6 +948,27 @@ export function readInkDecorated(
 ): [source: string, text: string][] {
   return inkTextsOf(log, samples, true, quotes)
 }
+/**
+ * The text each ask sets where the document uses a macro, from the loop's first pass's log (ASK_TEX: the ink section's form),
+ * read only where TeX states every glyph as itself (the coordinator's ruling on the third cause, 2026-11-16, lane cm-fix): the
+ * sample's listing holds characters of a text font (OT1, T1, LY1, TU) that the encoding sets as ASCII's letters, digits and
+ * punctuation (readInkTexts' own), and nodes that set no ink between them (glue, kerns, penalties, boxes at any depth); a
+ * ligature (a slot standing for two characters), a formula, a rule, leaders, a character of any other font or slot, an error,
+ * no answer. By source, where every ask of it TeX answered gives the same text: elsarticle's `\sep` in its keywords, `\unskip,
+ * ` (`\T1/… ,`, then its space's glue), ",". What the reading states of an element whose ink nothing on the page bounds
+ * (locate/geometry.ts: PieceClass.told)
+ */
+export function readAskTexts(log: string | null | undefined, asked: readonly string[]): [source: string, text: string][] {
+  const read = inkTextsOf(log, asked, false, false, true)
+  const answered = readInkAnswered(log, asked)
+  const count = new Map<string, number>()
+  for (const s of answered) count.set(s, (count.get(s) ?? 0) + 1)
+  const by = new Map<string, string[]>()
+  for (const [s, t] of read) (by.get(s) ?? by.set(s, []).get(s)!).push(t)
+  const out: [string, string][] = []
+  for (const [s, ts] of by) if (ts.length === count.get(s) && ts.every((t) => t === ts[0])) out.push([s, ts[0]!])
+  return out
+}
 /** TeX's quotation marks as a text font (OT1, T1, LY1) sets them, read with `quotes` (readInkTexts): ' at 0x27 the right quote,
  *  ` at 0x60 the left; the ligatures '' and `` the double ones, whatever slot each encoding gives them */
 const QUOTE: Readonly<Record<string, string>> = Object.freeze({ "'": '\u2019', '`': '\u2018' })
@@ -964,6 +985,7 @@ function inkTextsOf(
   samples: readonly string[],
   decorated: boolean,
   quotes = false,
+  strict = false,
 ): [source: string, text: string][] {
   const out: [source: string, text: string][] = []
   let at: number | null = null,
@@ -1058,6 +1080,10 @@ function inkTextsOf(
       }
       if (/^\.+\\pdfcolorstack /.test(line)) continue
     }
+    if (strict && /^\.+\\math(?:on|off)(?![A-Za-z])/.test(line)) {
+      bad = true
+      continue
+    }
     if (/^\.+\\mathon(?![A-Za-z])/.test(line)) math++
     else if (/^\.+\\mathoff(?![A-Za-z])/.test(line) && --math < 0) {
       bad = true
@@ -1067,6 +1093,10 @@ function inkTextsOf(
     if (c) {
       const [, enc, ch, lig] = c,
         punct = enc === 'T1' || enc === 'TU' ? PUNCT_WIDE : PUNCT_ALL
+      if (strict && lig) {
+        bad = true
+        continue
+      }
       // (a quotation mark of a text font, read as its glyph where asked)
       const q = quotes && TEXT_ENCODING.has(enc) && enc !== 'TU' ? (lig ? QUOTE_LIG[lig] : QUOTE[ch!]) : undefined
       if (q) {
@@ -1295,12 +1325,16 @@ export function probeFactsOf(
 }
 /** what TeX answered where the document uses a macro (the loop's first pass's asks, ASK_TEX), by source: those it said set no
  *  ink (readInkProbe) and those it answered otherwise (readInkAnswered) */
-export type UseAnswers = { inkless: string[]; inked: string[] }
-/** the asks' answers from the loop's first pass's log, the asked samples by their ask's index */
+export type UseAnswers = { inkless: string[]; inked: string[]; texts?: [source: string, text: string][] }
+/** the asks' answers from the loop's first pass's log, the asked samples by their ask's index; the text each inked one sets
+ *  where TeX states every glyph as itself (readAskTexts) */
 export function useAnswersOf(log: string | null | undefined, asked: readonly string[]): UseAnswers {
   const inkless = readInkProbe(log, asked, { ask: true }),
     none = new Set(inkless)
-  return { inkless, inked: readInkAnswered(log, asked).filter((s) => !none.has(s)) }
+  const inked = readInkAnswered(log, asked).filter((s) => !none.has(s))
+  const ink = new Set(inked)
+  const texts = readAskTexts(log, asked).filter(([s]) => ink.has(s))
+  return { inkless, inked, ...(texts.length ? { texts } : {}) }
 }
 /** the marking's inkless with the use's answers (F15): a source TeX answered where the document uses it takes that answer, set no
  *  ink or set some; one it did not answer there keeps the probe's. In the probe's order, the use's added after */

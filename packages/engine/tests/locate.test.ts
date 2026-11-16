@@ -2487,6 +2487,52 @@ describe('the element classes the part states', () => {
     expect(mem.elements).toEqual([['0', { kind: 'other', ink: [], text: 'BERT', style: { role: 'serif', size: 10 } }]])
   })
 
+  it('states an inked macro whose ink nothing bounds by the text TeX set where the document uses it; a bounded one by its page', () => {
+    // (the coordinator's ruling on the third cause, 2026-11-16: elsarticle's `\sep`, "," where its keywords use it (the ask's
+    // listing, PieceClass.told). Glued to the word before it (2610.38269v1's "networks\sep": no point of its own) or set after its
+    // unit's end point (2610.20848v1's last one before `\src`), its comma is the unit's text and its element was not found: it is
+    // stated by that text. One whose two places stand round its glyph is stated by the page (its glyph between them), the ask's
+    // text aside; one TeX did not state glyph by glyph (no `told`: a rule, a ligature) stays not found)
+    const B = docOf([{ lines: ['Pulsar, timing, astronomy, radio, maps'] }])
+    const content = [
+      text('Pulsar'),
+      { t: 'el' as const, id: '1', kind: 'macro', src: '\\sep' },
+      text(' timing'),
+      { t: 'el' as const, id: '3', kind: 'macro', src: '\\sep' },
+      text(' astronomy'),
+      { t: 'el' as const, id: '5', kind: 'macro', src: '\\sepb' },
+      text(' radio'),
+      { t: 'el' as const, id: '7', kind: 'macro', src: '\\sepc' },
+      text(' maps'),
+    ]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [
+          ['1', { cls: 'umacro', told: ',' }],
+          ['3', { cls: 'umacro', told: ';' }],
+          ['5', { cls: 'umacro', told: ',' }],
+          ['7', { cls: 'umacro' }],
+        ],
+      },
+    ]
+    const ins = {
+      ...instrumentOf(B, units, [[0]]),
+      // (the second's two places round its comma, glyphs 14 and 15)
+      places: [
+        { unit: 0, piece: '3', page: 1, glyph: 14, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 15, end: true },
+      ],
+    }
+    const L = locate(ins, B, align(B, B))
+    const els = new Map(L.members.find((m) => m.unit === 0)!.elements)
+    expect(els.get('1')).toMatchObject({ ink: [], text: ',' })
+    expect(els.get('3')).toMatchObject({ ink: [], text: ',' })
+    expect(els.get('5')).toMatchObject({ ink: [], text: ',' })
+    expect(els.get('7')!.text).toBeUndefined()
+  })
   it('states a paper macro’s span empty where its two places hold no glyph, or where TeX said it sets none', () => {
     // (2610.19159v1's `Tool Output\trajectoryMark{}`: after the unit's end point, its point after the group it stands in, no glyph
     // between: TeX set none for it, El.text ''. A span with one side unstated says nothing; nor does a macro whose two places

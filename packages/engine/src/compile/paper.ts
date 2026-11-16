@@ -176,6 +176,9 @@ export type MarkedOptions = {
   lineskip: [lineskip: number, limit: number] | null
   complete: Complete | null
   apart: string[]
+  /** the text each macro sets where the document uses it, TeX stating every glyph as itself (the loop's first pass's asks:
+   *  marks.ts readAskTexts): what the reading states of an element whose ink nothing on the page bounds; absent, none */
+  told?: [source: string, text: string][]
 }
 /** the marked original (markedOfPaper), or why there is none; each stage's time, the loop's and the guard's records; the mark
  *  probe's log its answers were read from (`probeLog`, the raw log a host stores beside the instrument) */
@@ -566,6 +569,8 @@ export async function markedOfPaper(
   /** the macros the marking gives no point: the probe's, then, where the loop's first pass asked where the document uses them,
    *  those answers taken (`asks`: mergeUses) */
   let inkless = probe.inkless
+  /** the asks' texts (marks.ts readAskTexts), where the loop's first pass asked */
+  let told: [string, string][] = []
   const cm = converge ? { drafts: 0, marked: 0, settled: false } : null
   /** the loop's settled pass (convergeThenMark): asked in full with the final pass's main file, it is the base page itself */
   const settled = new WeakSet<Compiled>()
@@ -656,6 +661,7 @@ export async function markedOfPaper(
     /** the answers the first pass gave where the document uses each macro: taken over the probe's, the marked files made again
      *  where one moved, as every later request then reads them (the passes, the guard's attempts, the fallback, the final pass) */
     const answered = (uses: UseAnswers) => {
+      told = uses.texts ?? []
       const merged = mergeUses(inkless, uses)
       if (merged.length === inkless.length && merged.every((x, i) => x === inkless[i])) return
       inkless = merged
@@ -692,6 +698,7 @@ export async function markedOfPaper(
     lineskip,
     complete,
     apart,
+    ...(told.length ? { told } : {}),
   }
   const record = (): GuardRecord => ({
     extra: g.extra,
