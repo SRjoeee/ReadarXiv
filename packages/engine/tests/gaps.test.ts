@@ -54,6 +54,7 @@ const glues0 = [
   { at: 0, name: 'floatsep' as const, natural: 12, shrink: 2 },
   { at: 0, name: 'intextsep' as const, natural: 12, shrink: 2 },
   { at: 0, name: 'dbltextfloatsep' as const, natural: 20, shrink: 4 },
+  { at: 0, name: 'dblfloatsep' as const, natural: 12, shrink: 2 },
   { at: 0, name: 'fpsep' as const, natural: 8, shrink: 0 },
   { at: 0, name: 'abovecaptionskip' as const, natural: 10, shrink: 0 },
   { at: 0, name: 'belowcaptionskip' as const, natural: 0, shrink: 0 },
@@ -172,8 +173,13 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
   const cap = (s: string) => unitOf('caption', s)
   const body = (s: string) => unitOf('para', s)
   /** a page's lines, each [text, y, unit], with the brackets `fs<n>`/`fe<n>` round the floats' lines (`floats`: [n, first line,
-   *  last line]) */
-  const pageOf = (lines: [string, number][], floats: [number, number, number][]) => {
+   *  last line]) and `bs<n>`/`be<n>` round the column bodies' (`bodies`, the same), in B's stream order: at one glyph a bracket
+   *  that closes before one that opens, a body's opening after a float's closing (\@makecol sets the top list over the body) */
+  const pageOf = (
+    lines: [string, number][],
+    floats: [number, number, number][],
+    bodies: [number, number, number][] = [],
+  ) => {
     const starts: number[] = []
     let k = 0
     for (const [t] of lines) {
@@ -181,10 +187,14 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
       k += t.length
     }
     starts.push(k)
-    const points: [string, number][] = []
-    for (const [n, a, b] of floats) points.push([`fs${n}`, starts[a]!], [`fe${n}`, starts[b + 1]!])
-    points.sort((x, y) => x[1] - y[1])
-    return { lines: lines.map(([text, y]) => ({ text, y })), points }
+    const points: [string, number, number][] = []
+    for (const [n, a, b] of floats) points.push([`fs${n}`, starts[a]!, 2], [`fe${n}`, starts[b + 1]!, 0])
+    for (const [n, a, b] of bodies) points.push([`bs${n}`, starts[a]!, 1], [`be${n}`, starts[b + 1]!, 0])
+    points.sort((x, y) => x[1] - y[1] || x[2] - y[2])
+    return {
+      lines: lines.map(([text, y]) => ({ text, y })),
+      points: points.map(([n, g]) => [n, g] as [string, number]),
+    }
   }
   it('states a top float’s \\textfloatsep under its last member, a float set here its \\intextsep on both sides', () => {
     const [c0] = roomsOf(
@@ -196,6 +206,7 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
             ['more body', 636],
           ],
           [[1, 0, 0]],
+          [[2, 1, 2]],
         ),
       ],
       [cap('Figure 1 caption'), body('body text'), body('more body')],
@@ -212,6 +223,7 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
             ['body below', 620],
           ],
           [[2, 1, 1]],
+          [[1, 0, 2]],
         ),
       ],
       [body('body above'), cap('Figure 2 caption'), body('body below')],
@@ -222,6 +234,38 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
     expect(b0!.gap).toEqual(['intextsep', 12, 2])
     expect(b2!.gap).toBeUndefined()
   })
+  it('states the two \\intextsep TeX set between two floats set here one over the other, whole: natural sizes and shrinks added', () => {
+    // (2608.04322v1 p9: float.sty's [H] Figures 7 and 8, \float@endH's `\vskip\intextsep \box \vskip\intextsep` each, the
+    // second float's picture between the captions on A; the coordinator's ruling of 2026-11-16: the gap is the glue TeX set
+    // between the two members whole, each float's own value; the second's under it, the body going on, its own one)
+    const [b0, c1, c2, b3] = roomsOf(
+      [
+        {
+          ...pageOf(
+            [
+              ['body above', 700],
+              ['cap a', 660],
+              ['cap b', 600],
+              ['body below', 560],
+            ],
+            [
+              [1, 1, 1],
+              [2, 2, 2],
+            ],
+            [[3, 0, 3]],
+          ),
+          boxes: [[5, -3, 72, 612, 200, 650]] as [number, number, number, number, number, number][],
+        },
+      ],
+      [body('body above'), cap('cap a'), cap('cap b'), body('body below')],
+      [[0, 1, 2, 3]],
+      { frames, skips: [para(0), para(3)], glues: [...glues0, { at: 2, name: 'intextsep', natural: 10, shrink: 1 }] },
+    )
+    expect(b0!.gap).toEqual(['intextsep', 12, 2])
+    expect(c1!.gap).toEqual(['intextsep', 22, 3])
+    expect(c2!.gap).toEqual(['intextsep', 10, 1])
+    expect(b3!.gap).toBeUndefined()
+  })
   it('states a bottom float’s \\textfloatsep over it, and nothing under it', () => {
     const [b0, c1] = roomsOf(
       [
@@ -231,6 +275,7 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
             ['Figure 3 caption', 660],
           ],
           [[3, 1, 1]],
+          [[2, 0, 0]],
         ),
       ],
       [body('body above'), cap('Figure 3 caption')],
@@ -240,20 +285,26 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
     expect(b0!.gap).toEqual(['textfloatsep', 20, 4])
     expect(c1!.gap).toBeUndefined()
   })
-  it('states \\floatsep between two floats, \\@fpsep on a page of floats alone, the values the float states', () => {
+  it('states \\floatsep between two floats of a column’s top list, the next one’s own ink between them, the values the float states', () => {
+    // (two figures at the column's top, the second's picture between the two captions on A)
     const [c0, c1] = roomsOf(
       [
-        pageOf(
-          [
-            ['cap a', 700],
-            ['cap b', 670],
-            ['body', 640],
-          ],
-          [
-            [1, 0, 0],
-            [2, 1, 1],
-          ],
-        ),
+        {
+          ...pageOf(
+            [
+              ['cap a', 700],
+              ['cap b', 640],
+              ['body', 610],
+            ],
+            [
+              [1, 0, 0],
+              [2, 1, 1],
+            ],
+            [[3, 2, 2]],
+          ),
+          // (the second float's picture, before its caption in its box)
+          boxes: [[5, -3, 72, 652, 200, 690]] as [number, number, number, number, number, number][],
+        },
       ],
       [cap('cap a'), cap('cap b'), body('body')],
       [[0, 1, 2]],
@@ -262,24 +313,116 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
     )
     expect(c0!.gap).toEqual(['floatsep', 12, 2])
     expect(c1!.gap).toEqual(['textfloatsep', 30, 0])
-    const [d0] = roomsOf(
+  })
+  it('states \\@fpsep between two floats of a column of floats beside a column’s body, nothing under its last', () => {
+    const two = [
+      {
+        block: [72, 540] as [number, number],
+        columns: [
+          [72, 300],
+          [312, 540],
+        ] as [number, number][],
+        foot: 100,
+      },
+    ]
+    const lines = [
+      { text: 'cap a', x: 72, y: 700 },
+      { text: 'cap b', x: 72, y: 600 },
+      { text: 'right body', x: 330, y: 700 },
+    ]
+    const n = (k: number) => lines.slice(0, k).reduce((t, l) => t + l.text.length, 0)
+    const [d0, d1] = roomsOf(
+      [
+        {
+          lines,
+          points: [
+            ['fs1', 0],
+            ['fe1', n(1)],
+            ['fs2', n(1)],
+            ['fe2', n(2)],
+            ['bs3', n(2)],
+            ['be3', n(3)],
+          ],
+        },
+      ],
+      [cap('cap a'), cap('cap b'), body('right body')],
+      [[0, 1, 2]],
+      { frames: two, skips: [para(2)], glues: glues0, bodySides: [[3, 2]] },
+    )
+    expect(d0!.gap).toEqual(['fpsep', 8, 0])
+    expect(d1!.gap).toBeUndefined()
+  })
+  it('states no float’s separation on a page its output routine bracketed whole (a class’s own, a page of floats)', () => {
+    const [b0, c1, c2] = roomsOf(
       [
         pageOf(
           [
-            ['cap a', 700],
-            ['cap b', 600],
+            ['body above', 700],
+            ['cap a', 660],
+            ['cap b', 620],
           ],
           [
-            [1, 0, 0],
             [2, 1, 1],
+            [3, 2, 2],
           ],
+          [[1, 0, 2]],
         ),
       ],
-      [cap('cap a'), cap('cap b')],
-      [[0, 1]],
-      { frames, glues: glues0 },
+      [body('body above'), cap('cap a'), cap('cap b')],
+      [[0, 1, 2]],
+      { frames, skips: [para(0)], glues: glues0, whole: [1] },
     )
-    expect(d0!.gap).toEqual(['fpsep', 8, 0])
+    expect(b0!.gap).toBeUndefined()
+    expect(c1!.gap).toBeUndefined()
+    expect(c2!.gap).toBeUndefined()
+  })
+  it('states \\dblfloatsep between two floats over both columns and \\dbltextfloatsep under the last', () => {
+    const left = ['left one', 'left two', 'left three'].map((t, i) => ({ text: t, x: 72, y: 600 - 12 * i }))
+    const right = ['right one', 'right two', 'right three'].map((t, i) => ({ text: t, x: 330, y: 600 - 12 * i }))
+    const capA = 'Figure 1: a caption across both of the columns'
+    const capB = 'Figure 2: another caption across both columns'
+    const lines = [{ text: capA, x: 72, y: 700 }, { text: capB, x: 72, y: 650 }, ...left, ...right]
+    const L = (k: number) => lines.slice(0, k).reduce((t, l) => t + l.text.length, 0)
+    const two = [
+      {
+        block: [72, 540] as [number, number],
+        columns: [
+          [72, 300],
+          [312, 540],
+        ] as [number, number][],
+        foot: 100,
+      },
+    ]
+    const [c0, c1] = roomsOf(
+      [
+        {
+          lines,
+          points: [
+            ['fs1', 0],
+            ['fe1', L(1)],
+            ['fs2', L(1)],
+            ['fe2', L(2)],
+            ['bs3', L(2)],
+            ['be3', L(5)],
+            ['bs4', L(5)],
+            ['be4', L(8)],
+          ],
+        },
+      ],
+      [cap(capA), cap(capB), body('left one left two left three'), body('right one right two right three')],
+      [[0, 1, 2, 2, 2, 3, 3, 3]],
+      {
+        frames: two,
+        skips: [para(2), para(3)],
+        glues: glues0,
+        bodySides: [
+          [3, 1],
+          [4, 2],
+        ],
+      },
+    )
+    expect(c0!.gap).toEqual(['dblfloatsep', 12, 2])
+    expect(c1!.gap).toEqual(['dbltextfloatsep', 20, 4])
   })
   it('states a caption’s skips inside its float: over it \\abovecaptionskip, under it \\belowcaptionskip', () => {
     const [x0, c1, t2] = roomsOf(
@@ -292,6 +435,7 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
             ['body', 600],
           ],
           [[1, 0, 2]],
+          [[2, 3, 3]],
         ),
       ],
       [body('inside text'), cap('Table 1 caption'), unitOf('cell', 'cell'), body('body')],
@@ -331,9 +475,14 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
       [
         {
           lines,
+          // (the float over both columns, then each column's body: left, right)
           points: [
             ['fs5', 0],
             ['fe5', capText.length],
+            ['bs6', capText.length],
+            ['be6', capText.length + left.reduce((n, l) => n + l.text.length, 0)],
+            ['bs7', capText.length + left.reduce((n, l) => n + l.text.length, 0)],
+            ['be7', lines.reduce((n, l) => n + l.text.length, 0)],
           ],
         },
       ],
@@ -342,6 +491,67 @@ describe('a float’s separations (2c’s F-last and F-sep), read by TeX’s own
       { frames, skips: [para(1), para(2)], glues: glues0 },
     )
     expect(c0!.gap).toEqual(['dbltextfloatsep', 20, 4])
+  })
+  it('reads a float’s place by TeX’s brackets: a top float under a two-column title block, the block no body text', () => {
+    // (\twocolumn[…]'s title block over the columns, in no column's body; the float on the column's top list, its bracket
+    // before the body's: TeX sets \textfloatsep under it, and no float's separation under the title block (2611.03953v2 p1))
+    const [t0, c1] = roomsOf(
+      [
+        pageOf(
+          [
+            ['Title of the paper', 740],
+            ['Figure 1 caption', 700],
+            ['body text', 660],
+            ['more body', 636],
+          ],
+          [[1, 1, 1]],
+          [[2, 2, 3]],
+        ),
+      ],
+      [unitOf('author', 'Title of the paper'), cap('Figure 1 caption'), body('body text'), body('more body')],
+      [[0, 1, 2, 3]],
+      { frames, skips: [para(2), para(3)], glues: glues0 },
+    )
+    expect(c1!.gap).toEqual(['textfloatsep', 20, 4])
+    expect(t0!.gap).toBeUndefined()
+  })
+  it('reads a float the page builder met at the head of its column’s body as set here: \\intextsep under it', () => {
+    // (an [h] float first in the main list: its bracket inside the body's, nothing of the body over it)
+    const [c0] = roomsOf(
+      [
+        pageOf(
+          [
+            ['Figure 6 caption', 700],
+            ['body text', 660],
+            ['more body', 636],
+          ],
+          [[1, 0, 0]],
+          [[2, 0, 2]],
+        ),
+      ],
+      [cap('Figure 6 caption'), body('body text'), body('more body')],
+      [[0, 1, 2]],
+      { frames, skips: [para(1), para(2)], glues: glues0 },
+    )
+    expect(c0!.gap).toEqual(['intextsep', 12, 2])
+  })
+  it('states no float’s separation on a page whose compile states no column body', () => {
+    const [c0, b1] = roomsOf(
+      [
+        pageOf(
+          [
+            ['Figure 7 caption', 700],
+            ['body text', 660],
+          ],
+          [[1, 0, 0]],
+        ),
+      ],
+      [cap('Figure 7 caption'), body('body text')],
+      [[0, 1]],
+      { frames, skips: [para(1)], glues: glues0 },
+    )
+    expect(c0!.gap).toBeUndefined()
+    expect(b1!.gap).toBeUndefined()
   })
 })
 

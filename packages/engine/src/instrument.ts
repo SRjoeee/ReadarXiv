@@ -4,7 +4,6 @@
 // instrument.mjs); the back half reads nothing else of the source, the marks or the compile.
 import type { Piece, Style } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
-import type { GlueName, ParaMeasure } from './marks/channels.ts'
 import type { Recovered } from './read.ts'
 
 /** what a unit's ink is, of the unit's: its text (what a translation replaces), an element's (a piece that travels with the
@@ -184,6 +183,9 @@ export interface PieceClass {
   tie?: true
   /** a text macro's text as TeX sets it (the marking's probe), where its glyphs are the unit's text, no ink of its own */
   text?: string
+  /** the text TeX set for it where the document uses it, every glyph stated as itself (the loop's first pass's ask, marks.ts
+   *  readAskTexts): what the reading states of its element where nothing on the page bounds its ink (locate/geometry.ts) */
+  told?: string
   /** TeX sets it as its unit's end mark (the compile move's F14): the unit's last ink, whose own box TeX ends with ink a glue of
    *  infinite stretch pushed (the probe's listing: an author's \qed written in the text), or which the source pushes with a fill
    *  right before it (`\hfill $\square$`): marks.ts endPiecesOf; its element's El.end */
@@ -251,6 +253,15 @@ export interface Instrument {
      *  \leftskip or \rightskip of some natural size), by its end's serial (B's `qe<n><code>`; marks/channels.ts readMeasures,
      *  STATEMENTS_TEX's AXT-MEASURE), in PDF units */
     measures?: ({ para: number } & ParaMeasure)[]
+    /** the body brackets (B's `bs<n>`..`be<n>`, by serial) that hold a whole page, floats inside, where no \@makecol ran for it
+     *  (marks/channels.ts readWhole, STATEMENTS_TEX's AXT-WHOLE): where TeX placed a float there no bracket says */
+    whole?: number[]
+    /** each body bracket's side as TeX states it (LAYOUT_TEX's AXT-BODY, marks/channels.ts readBodies), by serial: 1 and 2 the left
+     *  and the right column of a two-column page (\@makecol's), 0 a one-column body or a page's whole box */
+    bodySides?: [number, 0 | 1 | 2][]
+    /** each unit's paragraph as TeX's own order states it (marks/channels.ts readParas: the last AXT-MEASURE before the unit's
+     *  `AXT-ALIGN <u> p`), the paragraph its end mark ended in: [unit index, paragraph serial] */
+    paras?: [number, number][]
   }
   /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
   recovered?: Recovered
@@ -267,6 +278,35 @@ export interface TexFrame {
   columns: [number, number][]
   foot?: number
 }
+
+/** a paragraph's measure as TeX breaks it into lines (marks/channels.ts readMeasures), in PDF units: its \hsize, \hangindent
+ *  and \hangafter, \leftskip's and \rightskip's natural sizes, and its \parshape's lines ([indent, length], where it has a
+ *  shape) */
+export type ParaMeasure = {
+  hsize: number
+  hangindent: number
+  hangafter: number
+  leftskip: number
+  rightskip: number
+  shape?: [number, number][]
+}
+
+/** the separations GAPS_TEX states the paper's values of, by the names it writes them under (TeX's own: \textfloatsep … ,
+ *  \@fpsep as `fpsep`, \skip\footins as `footins`): what marks/channels.ts readGlues reads */
+export const GLUE_NAMES = Object.freeze([
+  'textfloatsep',
+  'floatsep',
+  'intextsep',
+  'dbltextfloatsep',
+  'dblfloatsep',
+  'fpsep',
+  'dblfpsep',
+  'abovecaptionskip',
+  'belowcaptionskip',
+  'footins',
+  'footnotesep',
+] as const)
+export type GlueName = (typeof GLUE_NAMES)[number]
 
 /** the empty owners of a page of n glyphs */
 export const ownersOf = (n: number): Owners => ({

@@ -15,7 +15,10 @@ import {
   mergeUses,
   readInkAnswered,
   readInkProbe,
+  readAskTexts,
+  readInkTexts,
   useAnswersOf,
+  withoutAsks,
 } from '../src/marks/marks.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -45,9 +48,48 @@ describe('the asks’ answers, read from the pass’s log', () => {
   const asked = ['\\nada', '\\kw', '\\undef', '\\myrule']
   it('answers a listing given whole with no error, inkless or not; one with an error or none is no answer', () => {
     expect(readInkAnswered(log, asked)).toEqual(['\\nada', '\\kw'])
-    expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\nada'], inked: ['\\kw'] })
+    expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\nada'], inked: ['\\kw'], texts: [['\\kw', ',']] })
   })
-  it('reads a sample set in a paragraph from its vertical box: one line and space beside it inkless; two lines, or a box beside, never', () => {
+  it('reads the text an ask sets only where TeX states every glyph as itself: no rule, ligature, formula or other font', () => {
+    // (the coordinator's ruling on the third cause, 2026-11-16: elsarticle's `\sep` in its keywords sets `\unskip, `, its comma
+    // a text font's character and its space's glue, ","; a macro whose listing holds a rule, a ligature's slot, a formula or a
+    // symbol font's character states no text, whatever else it sets)
+    const log = [
+      listing(0, '\\hbox(4.3+0.0)x5.8', INKED),
+      listing(1, '\\hbox(4.3+0.0)x9.0', ['.\\T1/cmr/m/n/10 a', '.\\rule(0.4+0.0)x5.0']),
+      listing(2, '\\hbox(6.9+0.0)x5.6', ['.\\T1/cmr/m/n/10 ^^\\ (ligature fi)']),
+      listing(3, '\\hbox(4.3+0.0)x5.0', ['.\\mathon', '.\\OML/cmm/m/it/10 x', '.\\mathoff']),
+      listing(4, '\\hbox(4.3+0.0)x5.0', ['.\\OMS/cmsy/m/n/10 ^^C']),
+      listing(5, '\\hbox(6.9+0.0)x20.0', [
+        '.\\OT1/cmr/m/n/10 B',
+        '.\\OT1/cmr/m/n/10 E',
+        '.\\kern0.5',
+        '.\\OT1/cmr/m/n/10 R',
+      ]),
+      // (an ask set in a paragraph of its own, its vertical box: 2610.20848v1's `\sep` in its keywords as pass 1 lists it; a
+      // LuaTeX paragraph node first in its line)
+      listing(6, '\\vbox(1.01+1.40999)x522.0', [
+        '.\\hbox(1.01+1.40999)x522.0, glue set 258.5fil',
+        '..\\localpar',
+        '..\\hbox(0.0+0.0)x0.0',
+        '..\\T1/ntxtlf/m/n/10 ,',
+        '..\\glue 2.5 plus 2.49995 minus 0.80005',
+        '..\\hbox(0.0+0.0)x0.0',
+        '..\\penalty 10000',
+        '..\\glue(\\parfillskip) 0.0 plus 1.0fil',
+        '..\\glue(\\rightskip) 0.0 plus 1.0fil',
+      ]),
+    ].join('\n')
+    const asked = ['\\sep', '\\ruled', '\\fi{}', '\\x{}', '\\dagger{}', '\\ber{}', '\\esep']
+    expect(readAskTexts(log, asked)).toEqual([
+      ['\\sep', ','],
+      ['\\ber{}', 'BER'],
+      ['\\esep', ','],
+    ])
+    // (the probe's reading as before: a paragraph's box is no answer of its)
+    expect(readInkTexts(log, asked).map(([x]) => x)).not.toContain('\\esep')
+  })
+  it('reads a sample set in a paragraph from its vertical box: inkless where no node at any depth sets ink, whatever lines it holds', () => {
     const LINE = '.\\hbox(6.9+1.9)x345.0, glue set 300.0fil'
     const EMPTY = '..\\hbox(0.0+0.0)x0.0'
     const ENDS = ['..\\penalty 10000', '..\\glue(\\parfillskip) 0.0 plus 1.0fil', '..\\glue(\\rightskip) 0.0']
@@ -55,13 +97,15 @@ describe('the asks’ answers, read from the pass’s log', () => {
     const log = [
       // (\\nada{} in a paragraph: its one line, the two empty boxes the ask sets around it)
       listing(0, BOX, [LINE, EMPTY, EMPTY, ...ENDS]),
-      // (\\par there: the line it ends, the box after it a line of its own)
+      // (\\par there: the line it ends, then the paragraph the document goes on with, the ask's own box in it)
       listing(1, '\\vbox(18.9+0.0)x345.0', [
         LINE,
         EMPTY,
         ...ENDS,
         '.\\glue(\\baselineskip) 12.0',
-        '.\\hbox(0.0+0.0)x0.0',
+        LINE,
+        EMPTY,
+        ...ENDS,
       ]),
       // (\\\\ there: two lines)
       listing(2, '\\vbox(18.9+0.0)x345.0', [
@@ -76,8 +120,37 @@ describe('the asks’ answers, read from the pass’s log', () => {
       ]),
       // (\\vspace there: its glue after the line, which the line's \\vadjust put there)
       listing(3, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\glue 10.0']),
-      // (a box a \\vadjust of the line put after it: material beside it; a mark that left the line is none)
+      // (a box of no ink a \\vadjust of the line put after it, a mark that left the line: none of them ink)
       listing(4, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\mark{x}', '.\\hbox(5.0+0.0)x10.0']),
+      // (an \\item a paper's macro makes, in a paragraph: the line it ends, then the paragraph the document goes on with, where
+      // LaTeX sets the item's label through \\everypar: ink)
+      listing(8, '\\vbox(20.0+2.5)x345.0', [
+        LINE,
+        EMPTY,
+        ...ENDS,
+        '.\\penalty -51',
+        '.\\glue 4.0 plus 2.0 minus 1.0',
+        '.\\hbox(7.5+2.5)x345.0, glue set 345.0fil',
+        '..\\hbox(7.5+2.5)x0.0',
+        '...\\hbox(7.5+2.5)x20.00003, glue set 20.00003fil',
+        '....\\OT1/cmr/m/n/10 (',
+        '....\\OT1/cmr/m/n/10 B',
+        '....\\OT1/cmr/m/n/10 )',
+        EMPTY,
+        ...ENDS,
+      ]),
+      // (a paragraph's end and a rule set after it: the rule's ink)
+      listing(9, '\\vbox(12.0+0.0)x345.0', [
+        LINE,
+        EMPTY,
+        ...ENDS,
+        '.\\glue(\\baselineskip) 11.6',
+        '.\\hbox(0.4+0.0)x345.0',
+        '..\\hbox(0.4+0.0)x345.0',
+        '...\\rule(0.4+0.0)x345.0',
+        EMPTY,
+        ...ENDS,
+      ]),
       // (between paragraphs, \\par: nothing at all)
       listing(5, '\\vbox(0.0+0.0)x0.0', []),
       // (between paragraphs, hyperref's \\phantomsection: its destination and a penalty, no line, no material)
@@ -95,10 +168,22 @@ describe('the asks’ answers, read from the pass’s log', () => {
         ...ENDS,
       ]),
     ].join('\n')
-    const asked = ['\\nada{}', '\\mypar{}', '\\mycr{}', '\\vsp{}', '\\mk{}', '\\mypar', '\\lua{}', '\\phantomsection']
+    const asked = [
+      '\\nada{}',
+      '\\mypar{}',
+      '\\mycr{}',
+      '\\vsp{}',
+      '\\mk{}',
+      '\\mypar',
+      '\\lua{}',
+      '\\phantomsection',
+      '\\myitem{(B)}',
+      '\\parrule{}',
+    ]
     expect(useAnswersOf(log, asked)).toEqual({
-      inkless: ['\\nada{}', '\\vsp{}', '\\mypar', '\\phantomsection', '\\lua{}'],
-      inked: ['\\mypar{}', '\\mycr{}', '\\mk{}'],
+      inkless: ['\\nada{}', '\\mypar{}', '\\mycr{}', '\\vsp{}', '\\mk{}', '\\mypar', '\\phantomsection', '\\lua{}'],
+      inked: ['\\myitem{(B)}', '\\parrule{}'],
+      texts: [['\\myitem{(B)}', '(B)']],
     })
     // (in a horizontal box, the probe's, LuaTeX's paragraph node read as before: not known)
     const probe = listing(0, NONE, ['.\\vbox(0.0+0.0)x10.0', '..\\hbox(0.0+0.0)x10.0', '...\\localpar'])
@@ -132,7 +217,11 @@ describe('the asks’ answers, read from the pass’s log', () => {
     // (the row ASK_TEX writes before the listing where the token after the sample was never reached)
     const eaten = (i: number) => listing(i, NONE, [], [`LAYOUT-PROBE 1 ink-eaten ${i}`])
     const log = [listing(0, NONE, []), eaten(1), listing(2, '\\hbox(4.3+0.0)x5.8', INKED)].join('\n')
-    expect(useAnswersOf(log, ['\\nada{}', '\\urldef', '\\kw'])).toEqual({ inkless: ['\\nada{}'], inked: ['\\kw'] })
+    expect(useAnswersOf(log, ['\\nada{}', '\\urldef', '\\kw'])).toEqual({
+      inkless: ['\\nada{}'],
+      inked: ['\\kw'],
+      texts: [['\\kw', ',']],
+    })
   })
   it('takes each answered source’s answer over the probe’s, the probe’s where the use gave none', () => {
     const probe = ['\\kw', '\\tnote{b}', '\\undef']
@@ -249,5 +338,33 @@ describe('where the asks stand (askPlan), and the marked files that carry them (
     const main = dec(files(p, plan).get('main.tex'))
     expect(main).not.toMatch(/urldef[^\n]*axtask/)
     expect(main).toMatch(/C \\axtask\{0\}\{\\kw\{\}\}\\axtpma\{p\d+\.\d+a\}\\kw\{\} d\./)
+  })
+})
+
+describe("an ask's wrapper a class wrote into a file, taken out of the files pass 1 hands on (withoutAsks)", () => {
+  // (a class that writes a macro's argument as it stands copies the ask with the piece after it; TeX's \\write prints each
+  // control word with one space after it)
+  it('takes the wrapper by its grammar and its sample’s tokens: what the source had in its place, nothing', () => {
+    const aux = '\\emailauthor{ada@example.org}{Ada Quill\\axtask {0}{\\corref {cor1}}\\corref {cor1}}\n'
+    expect(withoutAsks(aux, ['\\corref{cor1}'])).toEqual({
+      text: '\\emailauthor{ada@example.org}{Ada Quill\\corref {cor1}}\n',
+      taken: 1,
+      left: 0,
+    })
+    // (a copy of the source as written: no space after the control word)
+    expect(withoutAsks('a\\axtask{1}{\\kw{}}\\kw{} b', ['\\nada{}', '\\kw{}']).text).toBe('a\\kw{} b')
+    // (a sample's own groups, and braces a control symbol takes)
+    expect(withoutAsks('\\axtask {0}{\\textbf {a{b}c}\\{}x', ['\\textbf{a{b}c}\\{']).text).toBe('x')
+  })
+  it('leaves what the grammar does not read: another index, another sample, another control word, an escaped backslash', () => {
+    for (const [text, asked] of [
+      ['\\axtask {2}{\\kw {}}', ['\\kw{}']],
+      ['\\axtask {0}{\\kw {x}}', ['\\kw{}']],
+      ['\\axtask {00}{\\kw {}}', ['\\kw{}']],
+      ['\\axtasks {0}{\\kw {}}', ['\\kw{}']],
+      ['\\\\axtask {0}{\\kw {}}', ['\\kw{}']],
+      ['\\axtask {0}{\\kw {}', ['\\kw{}']],
+    ] as [string, string[]][])
+      expect(withoutAsks(text, asked)).toEqual({ text, taken: 0, left: 1 })
   })
 })

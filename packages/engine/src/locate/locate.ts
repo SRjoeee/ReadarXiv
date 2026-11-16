@@ -28,6 +28,7 @@ import { frameMeasures, lineGeometry, rooms } from './geometry.ts'
 import { flowsAndTies, rowAligns } from './flows.ts'
 import { leadNames } from './leads.ts'
 import { linksOnA } from './links.ts'
+import { paragraphMeasures } from './measures.ts'
 import { placeUnits } from './members.ts'
 import { groupsOf, type Owned, ownershipOf } from './ownership.ts'
 import { sentenceStarts } from './sentences.ts'
@@ -62,6 +63,7 @@ export function locate(ins: Instrument, inkA: Doc, m: Mapping, o: LocateOptions 
   lineGeometry(w, claims) // 6: reads an ownership still open
   sentenceStarts(w) // 7
   frameMeasures(w) // 8
+  paragraphMeasures(w) // 8, after the frames' measures
   endMarks(w, claims) // 9: the last claim
   // (frozen: a write after this throws; the phases after read it)
   const owned = claims.freeze()

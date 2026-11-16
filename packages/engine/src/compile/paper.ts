@@ -69,6 +69,7 @@ import {
   readSkipProbe,
   NAME_MARK_FILE,
   useAnswersOf,
+  withoutAsks,
   withoutNameMarks,
 } from '../marks/marks.ts'
 import type { Complete, MarkClass, Switches, UseAnswers } from '../marks/marks.ts'
@@ -176,6 +177,9 @@ export type MarkedOptions = {
   lineskip: [lineskip: number, limit: number] | null
   complete: Complete | null
   apart: string[]
+  /** the text each macro sets where the document uses it, TeX stating every glyph as itself (the loop's first pass's asks:
+   *  marks.ts readAskTexts): what the reading states of an element whose ink nothing on the page bounds; absent, none */
+  told?: [source: string, text: string][]
 }
 /** the marked original (markedOfPaper), or why there is none; each stage's time, the loop's and the guard's records; the mark
  *  probe's log its answers were read from (`probeLog`, the raw log a host stores beside the instrument) */
@@ -566,6 +570,8 @@ export async function markedOfPaper(
   /** the macros the marking gives no point: the probe's, then, where the loop's first pass asked where the document uses them,
    *  those answers taken (`asks`: mergeUses) */
   let inkless = probe.inkless
+  /** the asks' texts (marks.ts readAskTexts), where the loop's first pass asked */
+  let told: [string, string][] = []
   const cm = converge ? { drafts: 0, marked: 0, settled: false } : null
   /** the loop's settled pass (convergeThenMark): asked in full with the final pass's main file, it is the base page itself */
   const settled = new WeakSet<Compiled>()
@@ -656,6 +662,7 @@ export async function markedOfPaper(
     /** the answers the first pass gave where the document uses each macro: taken over the probe's, the marked files made again
      *  where one moved, as every later request then reads them (the passes, the guard's attempts, the fallback, the final pass) */
     const answered = (uses: UseAnswers) => {
+      told = uses.texts ?? []
       const merged = mergeUses(inkless, uses)
       if (merged.length === inkless.length && merged.every((x, i) => x === inkless[i])) return
       inkless = merged
@@ -692,6 +699,7 @@ export async function markedOfPaper(
     lineskip,
     complete,
     apart,
+    ...(told.length ? { told } : {}),
   }
   const record = (): GuardRecord => ({
     extra: g.extra,
@@ -1266,6 +1274,19 @@ const bibMissing = (files: ReadonlyMap<string, Uint8Array>, fsys: Fsys): boolean
     })
 }
 
+/** the files the loop's first pass wrote with its asks, each holding an ask's wrapper with it taken out (marks.ts withoutAsks:
+ *  its own grammar and its sample's tokens, nothing else), the others as they are: what the next pass is handed, so that no
+ *  pass reads a wrapper back (it defines no \\axtask) */
+const unasked = (files: ReadonlyMap<string, Uint8Array>, asked: readonly string[]): Map<string, Uint8Array> =>
+  new Map(
+    [...files].map(([p, b]): [string, Uint8Array] => {
+      const text = latin1(b)
+      if (!text.includes('\\axtask')) return [p, b]
+      const r = withoutAsks(text, asked)
+      return [p, r.taken ? latin1Bytes(r.text) : b]
+    }),
+  )
+
 /** the final pass's main file of a marked one (finalPass, the loop's full passes): graphicx's draft option's line made
  *  NO_DRIVER_GROUP's, one line for one, so that no line moves; null where the file does not begin with that line */
 const finalMainOf = (bytes: Uint8Array | null | undefined): Uint8Array | null => {
@@ -1288,7 +1309,8 @@ const finalMainOf = (bytes: Uint8Array | null | undefined): Uint8Array | null =>
  *     bibliography; every later pass is the final pass's files (finalMainOf: graphicx's draft line made NO_DRIVER_GROUP's),
  *     in full, asking the bibliography step only where its input changed since the step last ran (bibInput)
  *   - each pass is given every file the passes before it returned (Compiled `files`: every file the host saw written, a
- *     rewrite of the same bytes too), the latest copy of each, in place of the paper's own file of that path; never in place
+ *     rewrite of the same bytes too; pass 1's with every ask's wrapper a class wrote into one taken out, unasked), the latest
+ *     copy of each, in place of the paper's own file of that path; never in place
  *     of one of the pass's own (the marked files: a file TeX rewrote there is the original's copy, which would take the marks
  *     away); a file not returned keeps its bytes
  *   - a full pass whose every returned file has the bytes it was given at that path (sameFile: a babel name's marks aside in
@@ -1422,6 +1444,8 @@ async function convergeThenMark(
     else ({ c: first } = await pass(true, !shipped))
   }
   if (!ranThrough(first)) return fallback('draft-failed')
+  // (the files pass 1 wrote, handed on with every ask's wrapper a class wrote into one taken out: what the source had there)
+  if (asks && first.files) first = { ...first, files: unasked(first.files, asks.asked) }
   if (!first.files) return fallback('no-files')
   if (!shipped && otherBibJobs(first.files, main)) return fallback('aux-jobs')
   if (!shipped && bibMissing(first.files, paper.fsys)) return fallback('bib-missing')

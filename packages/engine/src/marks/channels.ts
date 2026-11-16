@@ -1,7 +1,7 @@
 // The marked compile's log channels and what they state with B's points: each unit's alignment (AXT-ALIGN), the paper's
 // \lineskip (the probe's row), each page's text frame (AXT-BODY at each body's opening point). Read by the front half's adapter
 // (src/pdf-reader/engine/pipeline/instrument.mjs, through the package's entry). Of the instrument's types alone.
-import type { TexFrame } from '../instrument.ts'
+import { GLUE_NAMES, type GlueName, type ParaMeasure, type TexFrame } from '../instrument.ts'
 
 /** the code of a paragraph's skips (marks.mjs alignCode): both sides stretching and \parfillskip none past them, centred;
  *  \rightskip alone flush left; \leftskip alone flush right; neither justified */
@@ -277,16 +277,6 @@ export function readHeads(log: string): Map<number, HeadSkips> {
   }
   return out
 }
-/** a paragraph's measure as TeX breaks it into lines (readMeasures), in PDF units: its \hsize, \hangindent and \hangafter,
- *  \leftskip's and \rightskip's natural sizes, and its \parshape's lines ([indent, length], where it has a shape) */
-export type ParaMeasure = {
-  hsize: number
-  hangindent: number
-  hangafter: number
-  leftskip: number
-  rightskip: number
-  shape?: [number, number][]
-}
 const DIMEN = /^(-?\d+(?:\.\d+)?)pt$/
 /**
  * Each paragraph's measure where TeX ends it (STATEMENTS_TEX's MEASURE_TEX: `AXT-MEASURE <n> <\hsize> <\hangindent>
@@ -319,22 +309,6 @@ export function readMeasures(log: string): Map<number, ParaMeasure> {
   }
   return out
 }
-/** the separations GAPS_TEX states the paper's values of, by the names it writes them under (TeX's own: \textfloatsep … ,
- *  \@fpsep as `fpsep`, \skip\footins as `footins`) */
-export const GLUE_NAMES = Object.freeze([
-  'textfloatsep',
-  'floatsep',
-  'intextsep',
-  'dbltextfloatsep',
-  'dblfloatsep',
-  'fpsep',
-  'dblfpsep',
-  'abovecaptionskip',
-  'belowcaptionskip',
-  'footins',
-  'footnotesep',
-] as const)
-export type GlueName = (typeof GLUE_NAMES)[number]
 /**
  * The paper's float, caption and footnote separations as TeX held them (STATEMENTS_TEX's GAPS_TEX: `AXT-GLUE <at> <name>
  * <glue>`), in the order TeX wrote them: once the document begins (`at` 0), then at each float where one changed (`at` the
@@ -352,6 +326,33 @@ export function readGlues(log: string): { at: number; name: GlueName; natural: n
     if (g) out.push({ at: Number(m[1]), name: m[2] as GlueName, natural: g[0], shrink: g[1] })
   }
   return out
+}
+/**
+ * Each unit's paragraph as TeX's own order states it: STATEMENTS_TEX's `AXT-MEASURE <n>` is written in LaTeX's para/end hook, the
+ * unit's `AXT-ALIGN <u> p` (LAYOUT_TEX's \axt@agpar) in a para/after next-code its end mark queued, and LaTeX runs a paragraph's
+ * para/end before its para/after (a hook's normal code before its next code): the serial of the last AXT-MEASURE before a unit's
+ * `p` line is the paragraph its end mark ended in, the serial its end's `qe<n>` point takes where TeX sets one (none after a box).
+ * A unit whose end mark TeX set only in an \hbox (`h`: a one-line caption measured in \sbox and shipped in an \hbox to \hsize),
+ * in vertical mode (`v`), or for which it stated nothing is paired with none. By unit index (a heading's `h<i>` its unit's; a
+ * cell's `t<i>` none); a unit's first `p` statement (its first occurrence's). The 79-column wrap of AXT-ALIGN joined
+ */
+export function readParas(log: string): Map<number, number> {
+  const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
+  const out = new Map<number, number>()
+  let last: number | undefined
+  for (const m of text.matchAll(/^AXT-MEASURE (\d{1,9}) |^AXT-ALIGN h?(\d{1,9}) p /gm)) {
+    if (m[1] !== undefined) last = Number(m[1])
+    else if (last !== undefined && !out.has(Number(m[2]))) out.set(Number(m[2]), last)
+  }
+  return out
+}
+/** the body brackets that hold a whole page (STATEMENTS_TEX's WHOLE_TEX, `AXT-WHOLE <n>`): the serials of the `bs<n>`..`be<n>` that
+ *  POINTS' \@outputpage hook made where no \@makecol ran for the page (a class whose output routine is its own, a page of
+ *  floats), floats inside them; every other body bracket is a column's main list as the page builder broke it */
+export function readWhole(log: string): number[] {
+  const out = new Set<number>()
+  for (const m of log.matchAll(/^AXT-WHOLE (\d{1,9})$/gm)) out.add(Number(m[1]))
+  return [...out].sort((x, y) => x - y)
 }
 /** a body's opening point (POINTS_TEX's `bs<n>`) and a page's column mark (MARK_DEF's `c<columns>-<page>`, a point beside its
  *  destination) */

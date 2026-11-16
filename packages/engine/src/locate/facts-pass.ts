@@ -31,6 +31,7 @@ import {
   tailOf,
 } from './facts.ts'
 import { type ColumnCell, columnBoxes, type FreeWord, innerOf } from './columns.ts'
+import { ON_BASE } from './geometry.ts'
 import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
 import { spellOf } from '../own/stream.ts'
@@ -487,7 +488,8 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated; where
     // that text is in TeX's case for its faked small capitals (locate's mem.smallCaps, facts.ts elementCase), their share, and no
     // case change)
-    if (fill !== undefined || el.text !== undefined) {
+    // (an element stated by the text TeX set where its macro is used has no glyph to read a style off: none)
+    if (fill !== undefined || (el.text !== undefined && !(gs.length === 0 && mem.told?.has(id)))) {
       const sc = mem.smallCaps?.get(id)
       const { upper, ...read } = styleOf(gs)
       el.style = {
@@ -1122,6 +1124,30 @@ function readDirection(_fx: FactsIndex, r: MemberReading): void {
   if (unit && rightToLeft(unit.content)) for (const l of mem.lines) l[9] |= LINE_FLAG.RTL
 }
 
+/** a single line's row: the line with its extent widened to everything TeX set on it within its measure (the member's own ink,
+ *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure) */
+function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined): Line {
+  const [m0, m1] = fx.blockOf(l)
+  let x0 = labelX0 !== undefined ? Math.min(l[2], labelX0) : l[2]
+  let x1 = l[3]
+  const end = mem.elements.find(([id]) => id === '~$')?.[1]
+  for (const k of end?.ink ?? [])
+    if (k[0] === l[0] && Math.abs(k[5] - l[4]) <= ON_BASE) {
+      x0 = Math.min(x0, k[1])
+      x1 = Math.max(x1, k[3])
+    }
+  for (const k of fx.linesOn.get(l[0]) ?? [])
+    if (k !== l && !(k[9] & LINE_FLAG.KEPT) && Math.abs(k[4] - l[4]) <= ON_BASE && k[3] > m0 && k[2] < m1) {
+      x0 = Math.min(x0, k[2])
+      x1 = Math.max(x1, k[3])
+    }
+  if (x0 === l[2] && x1 === l[3]) return l
+  const row = [...l] as Line
+  row[2] = x0
+  row[3] = x1
+  return row
+}
+
 /** its alignment, where TeX did not state it */
 function readAlign(fx: FactsIndex, r: MemberReading): void {
   const { blockOf, column, linesOn } = fx
@@ -1132,6 +1158,16 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
     const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
     // (a cell is read by its column's cells alone, never by the page's column: today's centredFlag RUN:2102)
     let a = unit.cell ? (unit.align ?? 'j') : alignOf(mem.lines, sizeOf, blockOf, unit.align, labelX0)
+    // (a single line TeX told justified that its own ink reads centred keeps TeX's word where its row is not centred: the row is
+    // everything TeX set on that line within its measure, the member's own ink, its label, the end mark a fill pushed (its `~$`
+    // element), another member's line on its baseline (a run-in head before it); the coordinator's ruling of 2026-11-16, lane
+    // cm-fix: 2610.40645v1 p19's proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its words alone read
+    // centred under F13's measure. The row only keeps TeX's word: a row of other members' ink whose hull happens to stand about
+    // the middle is no centring (a theorem's head beside its first line, 2608.11084v1 p13; a list item's label and its last line,
+    // 2608.27210v1 p2). A line nothing told is read by its own ink as before: a running head's title beside its page number on
+    // one baseline is two members, not one row)
+    if (a === 'c' && unit.align === 'j' && own.length === 1 && !unit.cell)
+      if (alignOf([rowOf(fx, mem, own[0]![0], labelX0)], sizeOf, blockOf, unit.align, undefined) !== 'c') a = 'j'
     if (unit.cell && own.length === 1) {
       const l0 = own[0]![0]
       const c = unit.cell

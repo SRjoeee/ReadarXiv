@@ -38,8 +38,10 @@ export type TextPiece = { t: 'text'; s: string; src?: string; tr?: boolean; bare
  *  stated where the piece is made (phPiece) and read wherever a forced break is asked of it (forcedBreak); not enumerable, as an
  *  open piece's `sets` is, so that the unit's JSON, its hash and its marks are as they were */
 export type PhPiece = { t: 'ph'; src: string; s?: undefined; bared?: boolean; opens?: boolean; readonly brk?: true }
-/** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84) */
-export const BREAK_SOURCE = /^\\\\\*?(?:\[[^\]]*\])?$|^\\newline$/
+/** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84); LaTeX's
+ *  `\\break`, which ends the line it stands in in a paragraph (the coordinator's ruling 4 of 2026-11-16: the marked compile
+ *  states where, BREAKS_TEX's point; amsart's `\\hfill\\break\\indent` in 2608.03841v2's addresses) */
+export const BREAK_SOURCE = /^\\\\\*?(?:\[[^\]]*\])?$|^\\(?:newline|break)$/
 /** a placeholder of the source `src`, stating whether it is a forced break of its unit's text (`brk`, §18.75): where its source
  *  is one (BREAK_SOURCE), and where the walk states it (`brk` true: a paper's row-ending macro inside a grid cell, which ends a
  *  line of the box the cell holds as `\\\\` does there). Every placeholder the reader makes is made here */

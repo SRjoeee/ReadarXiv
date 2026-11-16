@@ -13,6 +13,7 @@ import {
   LAYOUT_TEX,
   MEASURE_TEX,
   STATEMENTS_TEX,
+  WHOLE_TEX,
 } from '../../src/marks/marks.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -40,11 +41,14 @@ const OWN = [
   '\\axt@msr',
   '\\axt@kbpt',
   '\\axt@gnl',
+  'AXT-WHOLE',
+  '\\axt@whole',
+  'axt-whole',
 ]
 
 describe('the statements the rebuilt prepare’s compile makes (STATEMENTS_TEX)', () => {
-  it('are the separations’, the paragraphs’ measures’ and the forced breaks’ TeX, a text of their own', () => {
-    expect(STATEMENTS_TEX).toBe(GAPS_TEX + MEASURE_TEX + BREAKS_TEX)
+  it('are the separations’, the paragraphs’ measures’, the forced breaks’ and the whole-page brackets’ TeX, a text of their own', () => {
+    expect(STATEMENTS_TEX).toBe(GAPS_TEX + MEASURE_TEX + BREAKS_TEX + WHOLE_TEX)
     for (const s of OWN) expect(STATEMENTS_TEX).toContain(s)
   })
   it('stand in none of the heads today’s reader writes, nor in the marked files it makes', () => {

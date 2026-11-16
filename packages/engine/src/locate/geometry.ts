@@ -5,7 +5,7 @@
 // glyphs, pages, style, lead, read facts, elements, asInk, smallCaps, label, span fills and faces, plain text and counter.
 // Phase 8, frameMeasures: each line's column and measure (TeX's frame where it shipped the page's), a label's own line's
 // measure. Reads the index and the record's `members` and `units`; writes the members' lines' columns and measures and their
-// labels' measures.
+// labels' measures. TeX's own measure of a line where its paragraph states one is the phase's second step, measures.ts's.
 // Phase 10, rooms: each member's room under and after its lines. Reads the index and the record's `members` (their
 // travelling ink, phase 9's end marks among it) and `units`; writes the members' rooms.
 import type { El, Ink, Label, Line, Piece, Room } from '@readarxiv/format'
@@ -33,7 +33,6 @@ import type { Owned } from './ownership.ts'
 import { type RowBox, rowsOf } from './rows.ts'
 import { regionsOf } from '../own/stream.ts'
 import { gapsOf } from './gaps.ts'
-import { paragraphMeasures } from './measures.ts'
 import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, travellingInk, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
@@ -644,6 +643,18 @@ export function lineGeometry(w: Work, owned: Owned): void {
       if (!ink.length && el.text === undefined && INKED_CLASSES.has(stated)) {
         if (emptySpan || emptyPiece.has(`${mem.unit}|${id}`) || jointPiece.has(`${mem.unit}|${id}`)) el.text = ''
         else if (outsidePiece.has(`${mem.unit}|${id}`)) el.keep = 1
+        // (an inked macro whose ink nothing on the page bounds (no closing point, a paper's macro's; no opening point where it is
+        // glued to the word before it; or set after its unit's end point) is stated by the text TeX set for it where the document
+        // uses it, every glyph stated as itself (PieceClass.told, the loop's first pass's ask; the coordinator's ruling on the
+        // third cause, 2026-11-16, lane cm-fix): elsarticle's `\sep` set as "," in 2610.38269v1's keywords, glued to the word
+        // before it, and in 2610.20848v1's after the unit's end point. Its glyphs stay the unit's text's, as a text macro's do
+        // (\bert above); one whose text TeX did not state glyph by glyph stays not found, and one the probe states a text for
+        // (PieceClass.text) is stated by that later, as before)
+        else if ((cls === 'macro' || cls === 'umacro') && classOf.get(id)?.told && !classOf.get(id)?.text) {
+          el.text = classOf.get(id)!.told!
+          mem.told ??= new Set()
+          mem.told.add(id)
+        }
       }
       mem.elements.push([id, el])
     }
@@ -752,8 +763,6 @@ export function frameMeasures(w: Work): void {
   const { inkA, gA, framesA } = w.ix
   const { members, units } = w
   columnsAndMeasures(members, inkA, gA, (mem) => (mem.unit >= 0 ? units[mem.unit]?.cell?.table : undefined), framesA)
-  // (TeX's own measure of a line where its paragraph states one that is not its frame: measures.ts)
-  paragraphMeasures(w)
 }
 
 export function rooms(w: Work): void {

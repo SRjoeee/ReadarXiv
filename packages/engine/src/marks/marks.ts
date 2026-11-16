@@ -622,18 +622,25 @@ export function inkSection(samples: readonly string[], from = 0): string {
  * (inkSection: its rows, its box, \showbox, the group levels it unwinds), its source tokenized where the document uses it and set
  * in the mode it is used in, read by readInkProbe and readInkAnswered over the asked samples, every group the sample left open
  * closed after it (ASK_UNWIND). The mode: in a paragraph, the sample is set as a paragraph, in a vertical box at the measure in
- * force (\hsize, \parshape, the skips as they stand), between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`), so that a
- * sample that ends the paragraph or the line there leaves two lines, or a line and a box, which readInkProbe never reads as
- * inkless; between paragraphs, in a vertical box as it stands; in a horizontal box (a table's cell, an \mbox) and in a formula,
- * in a horizontal box, in math for the formula. The mode is read and its conditional closed before the sample runs. Right after
- * the sample stands \axt@aseen, which says it was reached: a sample that took it as its argument read past its own source, and
- * the ask writes `ink-eaten <i>` (eatenOf: no answer).
+ * force (\hsize, \parshape, the skips as they stand), between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`); between
+ * paragraphs, in a vertical box as it stands; in a horizontal box (a table's cell, an \mbox) and in a formula, in a horizontal
+ * box, in math for the formula. The mode is read and its conditional closed before the sample runs. Right after the sample stands
+ * \axt@aseen, which says it was reached: a sample that took it as its argument read past its own source, and the ask writes
+ * `ink-eaten <i>` (eatenOf: no answer). Where the sample left TeX in vertical mode (in a paragraph: it ended the paragraph; between
+ * paragraphs: it began none), the ask goes on into the paragraph the document goes on with (\axt@acont): \noindent, with only the
+ * \everypar the sample left in force (LaTeX's paragraph hooks kept out: the primitive's own list is `\the\everypar` inside the
+ * box), so that what a sample leaves for the next paragraph's start is set in the listed box: an `\item`'s label, which LaTeX sets
+ * there through \everypar (2608.00812v1's `\nameditem`, `\item[#1]`), read as its ink, never as nothing; a `\medbreak` leaves
+ * nothing there and its listing holds no ink at any depth.
  * It changes nothing the pass writes or sets: where \protect is
  * not \@typeset@protect (a moving argument written to the .aux, a .toc, a mark) it expands to nothing; in an alignment between
  * its rows (an align group, \currentgrouptype 6, in vertical mode: where TeX looks for \noalign or \omit, and a token of ours
  * would begin a cell before a \hline, colortbl's \rowcolor or longtable's \endhead) it expands to nothing; an index is asked once
  * (a caption measured, then set); its conditional is closed before the sample runs (a paper's `\fi`); every counter is given back
- * after it as \include's checkpoint gives them (\cl@@ckpt); its group writes no file (\@fileswfalse: a \cite or a \label inside
+ * after it as \include's checkpoint gives them (\cl@@ckpt), and so are the global state a list's item and a paragraph's start
+ * keep (LaTeX's \if@nobreak, \if@inlabel, \if@newlist, \if@noparitem, \if@minipage, \if@noskipsec and the \@labels box: an
+ * `\item` asked, and the label it leaves set, must find the document's own `\item` where it was) and the serials the marks' own
+ * paragraph hooks step (\axt@pe, \axt@pq, \axt@agn: \axt@asave, \axt@arest); its group writes no file (\@fileswfalse: a \cite or a \label inside
  * writes no line to the .aux, so the .bbl BibTeX makes of it is the same); and it ends with a paragraph of its own in a box
  * (\everypar empty), whose end starts TeX's error count again, as the ink section's empty paragraph after each sample does: the
  * errors of a paragraph's asks never add up to the hundred that stop TeX. "! OK." counts no error of TeX's
@@ -652,17 +659,95 @@ export const ASK_TEX = [
   // (the box each mode sets its sample in, and which one: read where the ask stands, its conditional closed before the sample;
   // right after the sample, a token that says it was reached: a sample that took it as its argument read past its own source)
   '\\def\\axt@aseen{\\global\\let\\axt@aseenok\\relax}',
-  '\\long\\def\\axt@aset@p#1{\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\hbox{}#1\\axt@aseen\\hbox{}\\@@par}}',
-  '\\long\\def\\axt@aset@v#1{\\setbox\\axt@abox\\vbox{\\everypar{}#1\\axt@aseen}}',
+  // (where the sample left vertical mode behind it, the paragraph the document goes on with: \noindent with the \everypar the
+  // sample left alone, LaTeX's paragraph hooks out of it where it has them (\IndentBox: its primitive is then \tex_everypar:D))
+  '\\def\\axt@acont{\\ifvmode\\ifdefined\\IndentBox\\csname tex_everypar:D\\endcsname{\\the\\everypar}\\fi\\noindent\\fi}',
+  '\\long\\def\\axt@aset@p#1{\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\hbox{}#1\\axt@aseen\\axt@acont\\hbox{}\\@@par}}',
+  '\\long\\def\\axt@aset@v#1{\\setbox\\axt@abox\\vbox{\\everypar{}#1\\axt@aseen\\ifvmode\\axt@acont\\hbox{}\\@@par\\fi}}',
+  // (the global state an ask may move, kept before it and given back after it: LaTeX's paragraph and list flags, its pending
+  // label, the marks' own paragraph serials)
+  '\\newbox\\axt@alab',
+  '\\def\\axt@asave{\\global\\setbox\\axt@alab\\copy\\@labels\\global\\let\\axt@a@nb\\if@nobreak\\global\\let\\axt@a@il\\if@inlabel\\global\\let\\axt@a@nl\\if@newlist\\global\\let\\axt@a@np\\if@noparitem\\global\\let\\axt@a@mp\\if@minipage\\global\\let\\axt@a@ns\\if@noskipsec\\global\\let\\axt@a@pe\\axt@pe\\global\\let\\axt@a@pq\\axt@pq\\global\\let\\axt@a@ag\\axt@agn}',
+  '\\def\\axt@arest{\\global\\setbox\\@labels\\box\\axt@alab\\global\\let\\if@nobreak\\axt@a@nb\\global\\let\\if@inlabel\\axt@a@il\\global\\let\\if@newlist\\axt@a@nl\\global\\let\\if@noparitem\\axt@a@np\\global\\let\\if@minipage\\axt@a@mp\\global\\let\\if@noskipsec\\axt@a@ns\\global\\let\\axt@pe\\axt@a@pe\\global\\let\\axt@pq\\axt@a@pq\\global\\let\\axt@agn\\axt@a@ag}',
   '\\long\\def\\axt@aset@h#1{\\setbox\\axt@abox\\hbox{#1\\axt@aseen}}',
   '\\long\\def\\axt@aset@m#1{\\setbox\\axt@abox\\hbox{$#1\\axt@aseen$}}',
   '\\def\\axt@amode{\\ifmmode\\let\\axt@aset\\axt@aset@m\\else\\ifvmode\\let\\axt@aset\\axt@aset@v\\else\\ifinner\\let\\axt@aset\\axt@aset@h\\else\\let\\axt@aset\\axt@aset@p\\fi\\fi\\fi}',
   '\\protected\\long\\def\\axt@ask#1#2{\\ifcsname axt@asked@#1\\endcsname\\expandafter\\@gobbletwo\\else\\expandafter\\axt@asknow\\fi{#1}{#2}}',
-  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\axt@amode\\global\\let\\axt@aseenok\\@undefined\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\axt@aset{#2}\\axt@aunwind\\ifx\\axt@aseenok\\relax\\else${probeRow('ink-eaten', '#1')}\\fi\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}}`,
+  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\axt@asave\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\axt@amode\\global\\let\\axt@aseenok\\@undefined\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\axt@aset{#2}\\axt@aunwind\\ifx\\axt@aseenok\\relax\\else${probeRow('ink-eaten', '#1')}\\fi\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}\\axt@arest}`,
   '\\makeatother',
 ].join('')
 /** one ask (ASK_TEX): sample `i` of the asked, its source as the piece writes it */
 export const askOf = (i: number, src: string): string => `\\axtask{${i}}{${src}}`
+/** a text's tokens as TeX's input reads them under a document's category codes (the TeXbook, chapter 8): a control word, a
+ *  backslash and its letters, the spaces after it skipped; a control symbol, a backslash and one other character (a control
+ *  space's spaces after it skipped too); a run of spaces one space token; every other character its own. \\write prints a
+ *  control word with one space after it (`\\corref{cor1}` written `\\corref {cor1}`): read again so, it is the same tokens */
+function texTokens(s: string): string[] {
+  const out: string[] = []
+  const cs = /\\(?:([A-Za-z]+)|[\s\S])?/y
+  let skip = false
+  for (let k = 0; k < s.length; ) {
+    const c = s[k]!
+    if (c === '\\') {
+      cs.lastIndex = k
+      const m = cs.exec(s)!
+      out.push(m[0])
+      k += m[0].length
+      // (spaces skipped after a control word and after a control space)
+      skip = m[1] !== undefined || m[0] === '\\ '
+    } else if (c === ' ' || c === '\t') {
+      if (!skip) out.push(' ')
+      skip = true
+      k++
+    } else {
+      out.push(c)
+      skip = false
+      k++
+    }
+  }
+  return out
+}
+/** an ask's wrapper as TeX writes askOf's tokens into a file: the control word (its backslash no control symbol's, no letter after
+ *  it), the one space TeX prints after it or none (a copy of the source as written), its index in braces as askOf writes it, and
+ *  its sample's group next (groupEnd) */
+const WRITTEN_ASK = /\\axtask(?![A-Za-z]) ?\{(0|[1-9][0-9]{0,8})\}(?=\{)/y
+/**
+ * A file the loop's first pass wrote, every ask's wrapper TeX wrote into it taken out: what the source had in its place, nothing
+ * (askPlan sets the ask right before its piece, which follows it, compile/live.ts withAsks). An ask writes nothing itself (ASK_TEX:
+ * in a moving argument it expands to nothing), but a class that writes a macro's argument as it stands copies the ask with the
+ * piece after it: elsarticle's \\emailauthor writes the author's name and its `\\corref` to the .aux, the ask before `\\corref`
+ * with it (2610.38269v1, 2608.05881v1: `\\axtask {0}{\\corref {cor1}}\\corref {cor1}`), and the pass that reads that file back,
+ * which defines no \\axtask (ASK_TEX is pass 1's alone), stops at it and sets its index and its sample: a stray "0" and a second
+ * \\corref mark in the e-mail footnote, and a file written again without it, one pass more (lane cm-fix). The wrapper is taken
+ * by its own grammar (WRITTEN_ASK) and its sample's tokens alone: the index of an ask of `asked`, then one group in braces whose
+ * tokens (texTokens) are that ask's sample's. One that reads otherwise is left as it stands, and counted (`left`). Latin-1 text
+ * (the bytes of a file, one character a byte, as the loop reads them)
+ */
+export function withoutAsks(text: string, asked: readonly string[]): { text: string; taken: number; left: number } {
+  let out = '',
+    last = 0,
+    taken = 0,
+    left = 0
+  for (let at = text.indexOf('\\axtask'); at >= 0; at = text.indexOf('\\axtask', at + 1)) {
+    if (at < last) continue
+    // (a backslash a control symbol `\\\\` takes is no control word's)
+    let b = at
+    while (b > 0 && text[b - 1] === '\\') b--
+    WRITTEN_ASK.lastIndex = at
+    const head = (at - b) % 2 === 0 ? WRITTEN_ASK.exec(text) : null
+    const i = head ? Number(head[1]) : -1
+    const from = WRITTEN_ASK.lastIndex
+    const end = head && i < asked.length ? groupEnd(text, from) : -1
+    if (end < 0 || texTokens(text.slice(from + 1, end - 1)).join('\0') !== texTokens(asked[i]!).join('\0')) {
+      left++
+      continue
+    }
+    out += text.slice(last, at)
+    last = end
+    taken++
+  }
+  return { text: taken ? out + text.slice(last) : text, taken, left }
+}
 /** whether a sample can be asked where the document uses it: its own groups close in it (as many \\begingroup as \\endgroup, \\bgroup
  *  as \\egroup; its braces balance, inkSamples' boxable), and so do its conditionals (each \\if… closed by its \\fi, no \\else or
  *  \\or outside one). One that opens or closes a group of the paragraph around it (a paper's `\\begingroup` piece, its `\\endgroup`
@@ -737,11 +822,6 @@ function eatenOf(log: string | null | undefined): Set<number> {
   }
   return out
 }
-/** a node of a vertical list that is neither a line nor material of its own: glue, a kern, a penalty, and a node that sets
- *  nothing and takes no place (a mark, a write, a destination, a colour or matrix of the driver's): hyperref's
- *  `\\phantomsection` between paragraphs leaves its destination there (2610.37818v1), no separator */
-const SPACE_NODE =
-  /^\.\\(?:glue|kern|penalty|mark|write|openout|closeout|pdfdest|pdfcolorstack|pdfsave|pdfrestore|pdfsetmatrix)/
 /** LuaTeX's node at a paragraph's start and the values it lists below it (none of them a box: `\\localleftbox=null`), in a
  *  paragraph's line: read in an ask's vertical box alone (the probe's boxes are horizontal, and their reading as it was) */
 const LOCAL_PAR_NODE = /^\.+\\(?:localpar|local(?:interline|broken)penalty=-?\d+|local(?:left|right)box=null)$/
@@ -756,12 +836,14 @@ const OWN_NODE =
  * The sources TeX set no ink for, from the probe's log (inkSection, ASK_TEX): each sample whose box TeX listed in full, of nodes
  * that set nothing — no character, no rule both wide and high (TeX ships no rule of no width or height: a strut), no
  * literal, special, insertion or node it lists otherwise — with no error between its rows but the listing's own `! OK.`.
- * An ask's sample set where the document uses it in a paragraph, or between paragraphs, is listed in a vertical box (ASK_TEX):
- * there it set no ink only where that box holds at most one line, and beside it nothing but space and nodes that take no place
- * (SPACE_NODE: a destination, a write, a mark). A sample
- * that ends the paragraph or the line where it is used (`\\par`, `\\\\`, `\\newline`, cas-sc's `\\sep`, which its keywords
- * environment makes `\\par`) leaves two lines there, or a line and a box: it parts what stands before it from what stands
- * after, and is never inkless. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
+ * An ask's sample set where the document uses it in a paragraph, or between paragraphs, is listed in a vertical box (ASK_TEX),
+ * with the paragraph the document goes on with where the sample left vertical mode: it set no ink where no node at any depth of
+ * that box sets any, whatever lines the box holds. A sample that ends the paragraph or the line where it is used and sets nothing
+ * (`\\par`, `\\\\`, `\\newline`, LaTeX's `\\medbreak`, cas-sc's `\\sep`, which its keywords environment makes `\\par`) is inkless
+ * there: the paragraph or the line it ends is TeX's own statement (the paragraph points), not ink of the macro (the coordinator's
+ * ruling of 2026-11-16, lane cm-fix, reversing the morning's: read "never inkless", such a macro was given a mark it has no ink
+ * after, its element no ink and no text, its unit the original's); an `\\item` a paper's macro makes is inked by the label LaTeX
+ * sets at the next paragraph's start, which the ask sets in its box. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
  * destinations in the box are no ink (OWN_NODE). A sample with no listing, an error, a line cut short or a node not known is
  * no answer: what it sets is not known
  */
@@ -776,10 +858,8 @@ export function readInkProbe(
     nodes: string[] | null = null,
     bad = false,
     done = false,
-    /** the listing's box is a vertical one (an ask's in a paragraph or between them), and the lines and material in it */
-    vertical = false,
-    parted = false,
-    lines = 0
+    /** the listing's box is a vertical one (an ask's in a paragraph or between them) */
+    vertical = false
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
@@ -789,11 +869,10 @@ export function readInkProbe(
         nodes = null
         bad = false
         done = false
-        vertical = parted = false
-        lines = 0
+        vertical = false
         continue
       }
-      if (at === i && nodes && !bad && !parted && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
+      if (at === i && nodes && !bad && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
       at = null
       continue
     }
@@ -818,9 +897,6 @@ export function readInkProbe(
       nodes.push(line)
       continue
     }
-    // (in a vertical box, what stands in it: one line, and beside it no material but space)
-    if (vertical && /^\.(?!\.)/.test(line) && !SPACE_NODE.test(line) && !(ask && OWN_NODE.test(line)))
-      if (!/^\.\\hbox\(/.test(line) || ++lines > 1) parted = true
     if (NO_INK_NODE.test(line) || (vertical && LOCAL_PAR_NODE.test(line)) || (ask && OWN_NODE.test(line))) {
       nodes.push(line)
       continue
@@ -841,7 +917,7 @@ export function readInkProbe(
 }
 
 /** the samples TeX answered in the ink section's form (inkSection, ASK_TEX): its box listed (`> \box…=`), the listing's own end
- *  (`! OK.`), and no error between its rows but that end; inkless or not (a vertical box's of two lines answered: readInkProbe).
+ *  (`! OK.`), and no error between its rows but that end; inkless or not (readInkProbe).
  *  A sample with no listing or an error is no answer */
 export function readInkAnswered(log: string | null | undefined, samples: readonly string[]): string[] {
   const eaten = eatenOf(log)
@@ -942,6 +1018,30 @@ export function readInkDecorated(
 ): [source: string, text: string][] {
   return inkTextsOf(log, samples, true, quotes)
 }
+/**
+ * The text each ask sets where the document uses a macro, from the loop's first pass's log (ASK_TEX: the ink section's form),
+ * read only where TeX states every glyph as itself (the coordinator's ruling on the third cause, 2026-11-16, lane cm-fix): the
+ * sample's listing holds characters of a text font (OT1, T1, LY1, TU) that the encoding sets as ASCII's letters, digits and
+ * punctuation (readInkTexts' own), and nodes that set no ink between them (glue, kerns, penalties, boxes at any depth); a
+ * ligature (a slot standing for two characters), a formula, a rule, leaders, a character of any other font or slot, an error,
+ * no answer. By source, where every ask of it TeX answered gives the same text: elsarticle's `\sep` in its keywords, `\unskip,
+ * ` (`\T1/… ,`, then its space's glue), ",". What the reading states of an element whose ink nothing on the page bounds
+ * (locate/geometry.ts: PieceClass.told)
+ */
+export function readAskTexts(
+  log: string | null | undefined,
+  asked: readonly string[],
+): [source: string, text: string][] {
+  const read = inkTextsOf(log, asked, false, false, true)
+  const answered = readInkAnswered(log, asked)
+  const count = new Map<string, number>()
+  for (const s of answered) count.set(s, (count.get(s) ?? 0) + 1)
+  const by = new Map<string, string[]>()
+  for (const [s, t] of read) (by.get(s) ?? by.set(s, []).get(s)!).push(t)
+  const out: [string, string][] = []
+  for (const [s, ts] of by) if (ts.length === count.get(s) && ts.every((t) => t === ts[0])) out.push([s, ts[0]!])
+  return out
+}
 /** TeX's quotation marks as a text font (OT1, T1, LY1) sets them, read with `quotes` (readInkTexts): ' at 0x27 the right quote,
  *  ` at 0x60 the left; the ligatures '' and `` the double ones, whatever slot each encoding gives them */
 const QUOTE: Readonly<Record<string, string>> = Object.freeze({ "'": '\u2019', '`': '\u2018' })
@@ -958,6 +1058,7 @@ function inkTextsOf(
   samples: readonly string[],
   decorated: boolean,
   quotes = false,
+  strict = false,
 ): [source: string, text: string][] {
   const out: [source: string, text: string][] = []
   let at: number | null = null,
@@ -1017,6 +1118,8 @@ function inkTextsOf(
     }
     if (text === null) continue
     if (/^\\hbox\(/.test(line) && !text) continue
+    // (an ask's box, the paragraph's (ASK_TEX: the sample set in a paragraph of its own in a vertical box), its lines boxes below)
+    if (strict && /^\\vbox\(/.test(line) && !text) continue
     if (decorated) {
       const depth = /^\.*/.exec(line)![0].length
       // (TeX breaks a log line at max_print_line, PRINT_LINE: a node's line that long goes on on the next line, which holds no
@@ -1052,6 +1155,10 @@ function inkTextsOf(
       }
       if (/^\.+\\pdfcolorstack /.test(line)) continue
     }
+    if (strict && /^\.+\\math(?:on|off)(?![A-Za-z])/.test(line)) {
+      bad = true
+      continue
+    }
     if (/^\.+\\mathon(?![A-Za-z])/.test(line)) math++
     else if (/^\.+\\mathoff(?![A-Za-z])/.test(line) && --math < 0) {
       bad = true
@@ -1061,6 +1168,10 @@ function inkTextsOf(
     if (c) {
       const [, enc, ch, lig] = c,
         punct = enc === 'T1' || enc === 'TU' ? PUNCT_WIDE : PUNCT_ALL
+      if (strict && lig) {
+        bad = true
+        continue
+      }
       // (a quotation mark of a text font, read as its glyph where asked)
       const q = quotes && TEXT_ENCODING.has(enc) && enc !== 'TU' ? (lig ? QUOTE_LIG[lig] : QUOTE[ch!]) : undefined
       if (q) {
@@ -1089,6 +1200,8 @@ function inkTextsOf(
       continue
     }
     if (TEXT_PASS.test(line) || line === '') continue
+    // (LuaTeX's paragraph node, first in an ask's paragraph's line (LOCAL_PAR_NODE): no ink)
+    if (strict && LOCAL_PAR_NODE.test(line)) continue
     bad = true
   }
   return out
@@ -1289,12 +1402,16 @@ export function probeFactsOf(
 }
 /** what TeX answered where the document uses a macro (the loop's first pass's asks, ASK_TEX), by source: those it said set no
  *  ink (readInkProbe) and those it answered otherwise (readInkAnswered) */
-export type UseAnswers = { inkless: string[]; inked: string[] }
-/** the asks' answers from the loop's first pass's log, the asked samples by their ask's index */
+export type UseAnswers = { inkless: string[]; inked: string[]; texts?: [source: string, text: string][] }
+/** the asks' answers from the loop's first pass's log, the asked samples by their ask's index; the text each inked one sets
+ *  where TeX states every glyph as itself (readAskTexts) */
 export function useAnswersOf(log: string | null | undefined, asked: readonly string[]): UseAnswers {
   const inkless = readInkProbe(log, asked, { ask: true }),
     none = new Set(inkless)
-  return { inkless, inked: readInkAnswered(log, asked).filter((s) => !none.has(s)) }
+  const inked = readInkAnswered(log, asked).filter((s) => !none.has(s))
+  const ink = new Set(inked)
+  const texts = readAskTexts(log, asked).filter(([s]) => ink.has(s))
+  return { inkless, inked, ...(texts.length ? { texts } : {}) }
 }
 /** the marking's inkless with the use's answers (F15): a source TeX answered where the document uses it takes that answer, set no
  *  ink or set some; one it did not answer there keeps the probe's. In the probe's order, the use's added after */
@@ -2373,24 +2490,46 @@ export const MEASURE_TEX = [
   String.raw`\makeatother`,
 ].join('')
 /**
- * Where TeX ends a line at a forced break (the compile move's B2: the display design's F35): LaTeX's \@gnewline, every `\\`'s
- * and \newline's way in a paragraph (`\unskip`, then `\nobreak\hfil\break`), once the document begins, sets a point `kb<n>`
- * after the \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue
- * taken, as before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to
- * break made or lost. A point of the optional class `forced-break` (POINT_CLASSES), kept apart from the marks' points by
- * pageInk (ink.ts FORCED_BREAK); the line TeX ended at a break the marking gives no mark (facts-pass.ts readElements). A `\\` of
- * a centred or ragged block (\@centercr, which ends a paragraph) or a table's row sets none
+ * Where TeX ends a line at a forced break (the compile move's B2: the display design's F35): LaTeX's \@gnewline, every `\\`'s and
+ * \newline's way in a paragraph (`\unskip`, then `\nobreak\hfil\break`), once the document begins, sets a point `kb<n>` after the
+ * \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue taken, as
+ * before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to break made
+ * or lost. LaTeX's `\break` (robust: its own code the macro `\break `, `\penalty-\@M`) sets one too where it ends a line in a
+ * paragraph (horizontal mode, not an \hbox's restricted one; the coordinator's ruling 4 of 2026-11-16: amsart's `\address{…
+ * \hfill\break\indent …}`, 2608.03841v2's eight, the corpus's only uses in a unit's text), before its penalty, nothing taken (an
+ * `\hfill` before it stays the line's); none in vertical or math mode, none for \@gnewline's own \break (`\axt@kbskip`). Its
+ * robust wrapper is the kernel's: what a write of it writes is as before. A point of the optional class `forced-break`
+ * (POINT_CLASSES), kept apart from the marks' points by pageInk (ink.ts FORCED_BREAK); the line TeX ended at a break the marking
+ * gives no mark (facts-pass.ts readElements). A `\\` of a centred or ragged block (\@centercr, which ends a paragraph) or a
+ * table's row sets none
  */
 export const BREAKS_TEX = [
   String.raw`\makeatletter`,
   String.raw`\gdef\axt@kb{0}\def\axt@kbpt{\xdef\axt@kb{\the\numexpr\axt@kb+1\relax}\axt@point{kb\axt@kb}}`,
-  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\axt@gnl{#1}}\fi}\fi`,
+  String.raw`\def\axt@kbskip{0}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\def\axt@kbskip{1}\axt@gnl{#1}\def\axt@kbskip{0}}\fi\ifcsname break \endcsname\expandafter\let\expandafter\axt@brk\csname break \endcsname\expandafter\def\csname break \endcsname{\ifhmode\ifinner\else\ifaxt@off\else\ifnum\axt@kbskip=\z@\axt@kbpt\fi\fi\fi\fi\axt@brk}\fi}\fi`,
+  String.raw`\makeatother`,
+].join('')
+/**
+ * Which body brackets hold a whole page (PDF-READER §18.76): POINTS brackets each column's main list as the page builder broke it
+ * (`bs<n>` .. `be<n>`, its \@makecol hook, before \@makecol sets the top and bottom lists round it), and where no \@makecol ran
+ * for a page (a class whose output routine is its own: REVTeX's ltxgrid, aastex631, opticajnl; a page of floats) its
+ * \@outputpage hook brackets the whole output box, floats and all, under the same names. Before that hook, in the same hook's
+ * code of a label of its own (so that it runs before the head's, top-level code always last), this states the serial that bracket
+ * is about to take: `AXT-WHOLE <n>`, a message alone, setting nothing. LAYOUT_TEX, today's reader's, keeps its bytes. Read by
+ * marks/channels.ts readWhole
+ */
+export const WHOLE_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\def\axt@whole{\ifaxt@bodied\else\ifvoid\@outputbox\else\message{^^JAXT-WHOLE \the\numexpr\axt@bn+1\relax^^J}\fi\fi}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{cmd/@outputpage/before}[axt-whole]{\ifcsname ifaxt@bodied\endcsname\axt@whole\fi}\fi`,
   String.raw`\makeatother`,
 ].join('')
 /** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (live.ts originalFiles
  *  `statements`, which compiledOf sets: after LAYOUT_TEX on its line, and left out of a reduced compile), each slice's in turn:
- *  the separations (GAPS_TEX), each paragraph's measure (MEASURE_TEX) and the forced breaks' points (BREAKS_TEX) */
-export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX
+ *  the separations (GAPS_TEX), each paragraph's measure (MEASURE_TEX), the forced breaks' points (BREAKS_TEX) and the body
+ *  brackets that hold a whole page (WHOLE_TEX) */
+export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX + WHOLE_TEX
 
 // ---------------------------------------------------------------- a reference's item and its name
 /** a reference to a page, not to an item (\pageref): no item's name for it */
@@ -2656,9 +2795,10 @@ export function headEnd(pieces: readonly Piece[], from = 0): number {
  *  its star, its room and the spaces before it, \\cr, \\crcr, \\tabularnewline: \\newline ends no row) */
 const BREAK = /^\\(?:\\|(?:cr|crcr|tabularnewline)(?![A-Za-z@]))/
 /** whether a piece is such a break: by its source (BREAK), or as the source reader states it a forced break (forcedBreak), a
- *  paper's row-ending macro inside a grid cell, whose body ends a row as `\\\\` does (§18.75); not \\newline, stated one too */
+ *  paper's row-ending macro inside a grid cell, whose body ends a row as `\\\\` does (§18.75); not \\newline nor \\break,
+ *  stated ones too, which end no row */
 const breaks = (p: Piece | undefined): boolean =>
-  p?.t === 'ph' && (BREAK.test(p.src ?? '') || (forcedBreak(p) && !/^\\newline$/.test(p.src ?? '')))
+  p?.t === 'ph' && (BREAK.test(p.src ?? '') || (forcedBreak(p) && !/^\\(?:newline|break)$/.test(p.src ?? '')))
 /** the pieces passed over, by index: at the unit's head (headEnd), and the same way after each forced break and each
  *  alignment tab, where a table's row or cell may begin in a table the scanner read as prose (aastex's deluxetable:
  *  \enddata after the last row's \\; tabularray's \SetCell, which must open its cell) */

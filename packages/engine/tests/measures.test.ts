@@ -60,6 +60,56 @@ function measuresOf(measures: Measure[], frame = { block: [72, 540], columns: [[
   return L.members.map((m) => m.lines.map((l) => [l[7], l[8]]))
 }
 const plain = { hsize: 468, hangindent: 0, hangafter: 1, leftskip: 0, rightskip: 0 }
+/** lines each [text, unit], one under the other; TeX's ends with a point on B (`ends`: [serial, the line it ends after]); the
+ *  statements `measures` and the units' paragraphs by TeX's order (`paras`: [unit, serial]); the members' lines' measures */
+function measuredOf(
+  lines: [string, number][],
+  ends: [number, number][],
+  measures: Measure[],
+  paras: [number, number][],
+) {
+  const B: Doc = docOf([{ lines: lines.map(([text], i) => ({ text, x: 100, y: 700 - 12 * i })) }])
+  const n = (k: number) => lines.slice(0, k).reduce((t, [x]) => t + x.length, 0)
+  B.pages[0]!.marks = {
+    paras: [],
+    paraEnds: ends.map(([serial, line]) => ({ name: `qe${serial}j`, glyph: n(line + 1), box: 0, point: 0, para: 0 })),
+    regions: [],
+    pictures: [],
+  }
+  const count = Math.max(...lines.map(([, u]) => u)) + 1
+  const units = Array.from({ length: count }, (_, u) =>
+    unitOf(
+      'para',
+      lines
+        .filter(([, v]) => v === u)
+        .map(([t]) => t)
+        .join(' '),
+    ),
+  )
+  const own = lines.map(([, u]) => u)
+  const ins: Instrument = {
+    ink: B,
+    units,
+    glyphs: B.pages.map((pg) => {
+      const O = ownersOf(pg.glyphs.length)
+      pg.glyphs.forEach((g, j) => {
+        O.unit[j] = own[g.n] ?? -1
+        O.role[j] = ROLE.text
+      })
+      return O
+    }),
+    boxes: B.pages.map((pg) => ownersOf(pg.kinds.length)),
+    tex: {
+      frames: [{ block: [72, 540], columns: [[72, 540]], foot: 100 }],
+      paragraphEnds: [ends.map(([, line]) => n(line + 1))],
+      measures,
+      paras,
+    },
+    made: { compiler: 'pdflatex', tree: '2025', front: 'test' },
+  }
+  const L = locate(ins, B, align(B, B))
+  return L.members.map((m) => m.lines.map((l) => [l[7], l[8]]))
+}
 
 describe('a paragraph’s measure as TeX sets its lines (F13)', () => {
   it('states a list paragraph’s \\parshape of one line on each of its lines, a paragraph stating none its frame', () => {
@@ -109,6 +159,212 @@ describe('a paragraph’s measure as TeX sets its lines (F13)', () => {
       [102, 540],
       [102, 540],
       [72, 540],
+    ])
+  })
+  it('reads a paragraph TeX ended after a box as its own, not the next one’s: no other paragraph’s measure, no line counted to it', () => {
+    // (unit 0's paragraph ends in a box, no point on B; unit 1's is hung after its first line; TeX pairs each unit with its own)
+    const [zero, one] = measuredOf(
+      [
+        ['first line of one', 0],
+        ['second line of it', 0],
+        ['last of it', 0],
+        ['first line of two', 1],
+        ['second of two', 1],
+        ['last', 1],
+      ],
+      [[2, 5]],
+      [{ para: 2, ...plain, hangindent: 30, hangafter: 1 }],
+      [
+        [0, 1],
+        [1, 2],
+      ],
+    )
+    expect(zero).toEqual([
+      [72, 540],
+      [72, 540],
+      [72, 540],
+    ])
+    expect(one).toEqual([
+      [72, 540],
+      [102, 540],
+      [102, 540],
+    ])
+  })
+  it('states no paragraph’s measure for a line TeX set in no paragraph (a one-line caption in an \\hbox) between two ends', () => {
+    const [, cap] = measuredOf(
+      [
+        ['a paragraph', 0],
+        ['Figure 1: a one-line caption', 1],
+        ['an item of a list', 2],
+      ],
+      [
+        [1, 0],
+        [2, 2],
+      ],
+      [{ para: 2, ...plain, shape: [[20, 400]] }],
+      [
+        [0, 1],
+        [2, 2],
+      ],
+    )
+    expect(cap).toEqual([[72, 540]])
+  })
+  it('reads a unit of three paragraphs whose second ends in a box: its first one’s lines alone', () => {
+    const [unit] = measuredOf(
+      [
+        ['first paragraph one', 0],
+        ['first paragraph two', 0],
+        ['second paragraph', 0],
+        ['third paragraph one', 0],
+        ['third paragraph two', 0],
+      ],
+      [
+        [1, 1],
+        [3, 4],
+      ],
+      [
+        { para: 1, ...plain, shape: [[10, 400]] },
+        { para: 2, ...plain, shape: [[20, 400]] },
+        { para: 3, ...plain, shape: [[30, 400]] },
+      ],
+      [[0, 3]],
+    )
+    expect(unit).toEqual([
+      [82, 482],
+      [82, 482],
+      [72, 540],
+      [72, 540],
+      [72, 540],
+    ])
+  })
+  it('reads a one-line proof that ends in a box, a run-in head on its line, as its own paragraph: the next heading’s hang is none of its', () => {
+    // (2610.40645v1 p19: ord 144's paragraph and the proof's (ords 145, 146) end in amsthm's box; the section heading after them
+    // is hung after its first line)
+    const [p0, head, proof, section] = measuredOf(
+      [
+        ['an earlier proof ends', 0],
+        ['in its box', 0],
+        ['Proof.', 1],
+        ['Combine the lemmas.', 2],
+        ['3 A section heading', 3],
+      ],
+      [[3, 4]],
+      [{ para: 3, ...plain, hangindent: 24.21, hangafter: 1 }],
+      [
+        [0, 1],
+        [2, 2],
+        [3, 3],
+      ],
+    )
+    expect(p0).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+    expect(head).toEqual([[72, 540]])
+    expect(proof).toEqual([[72, 540]])
+    expect(section).toEqual([[72, 540]])
+  })
+  it('states none for a unit TeX’s statement pairs with the paragraph that ended before it (its own a display ended, stating none)', () => {
+    // (2010.11929v2 p13: a paragraph before an align display; its unit's statement comes after the heading's AXT-MEASURE alone)
+    const [heading, para] = measuredOf(
+      [
+        ['A Heading', 0],
+        ['a paragraph that a display', 1],
+        ['ends without a par', 1],
+        ['the next paragraph', 2],
+      ],
+      [
+        [1, 0],
+        [2, 3],
+      ],
+      [{ para: 1, ...plain, shape: [[30, 400]] }],
+      [
+        [0, 1],
+        [1, 1],
+        [2, 2],
+      ],
+    )
+    expect(heading).toEqual([[102, 502]])
+    expect(para).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+  })
+  it('states none for a unit TeX’s statement pairs with a paragraph that ends after another end B shows after its lines', () => {
+    // (2111.09276v1's conclusion: its paragraph ended inside `{\small …}` by the bibliography's heading, its statement written
+    // where the group closed, after the last reference's AXT-MEASURE)
+    const [conclusion] = measuredOf(
+      [
+        ['the conclusion one', 0],
+        ['the conclusion two', 0],
+        ['References', 1],
+        ['[1] a reference', 2],
+      ],
+      [
+        [2, 2],
+        [3, 3],
+      ],
+      [{ para: 3, ...plain, shape: [[20, 400]] }],
+      [
+        [0, 3],
+        [1, 2],
+        [2, 3],
+      ],
+    )
+    expect(conclusion).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+  })
+  it('states none for a unit paired with a paragraph whose end stands before its line on B, though B shows a lower serial between', () => {
+    // (2501.14787v1 p75: a heading's end (592) on p74, a paragraph TeX ended earlier (590) standing after it on B, then the line
+    // of a unit a display ended, paired with the heading's paragraph)
+    const [, , para] = measuredOf(
+      [
+        ['A Heading', 0],
+        ['a note TeX ended before', 1],
+        ['the line after a display', 2],
+      ],
+      [
+        [2, 0],
+        [1, 1],
+      ],
+      [{ para: 2, ...plain, shape: [[30, 400]] }],
+      [
+        [0, 2],
+        [1, 1],
+        [2, 2],
+      ],
+    )
+    expect(para).toEqual([[72, 540]])
+  })
+  it('reads a paragraph TeX ended before others that B shows first: REVTeX’s abstract, boxed before the title’s paragraphs', () => {
+    // (2610.10492v1 p1: the abstract's paragraph ends first (serial 1), then the title's and the authors' (2, 3), which B shows
+    // before the abstract's lines; the abstract's measure is TeX's, its own end after its lines)
+    const [title, author, abstract] = measuredOf(
+      [
+        ['A Title', 0],
+        ['An Author', 1],
+        ['the abstract one', 2],
+        ['the abstract two', 2],
+      ],
+      [
+        [2, 0],
+        [3, 1],
+        [1, 3],
+      ],
+      [{ para: 1, ...plain, shape: [[36, 396]] }],
+      [
+        [0, 2],
+        [1, 3],
+        [2, 1],
+      ],
+    )
+    expect(title).toEqual([[72, 540]])
+    expect(author).toEqual([[72, 540]])
+    expect(abstract).toEqual([
+      [108, 504],
+      [108, 504],
     ])
   })
   it('takes \\leftskip’s and \\rightskip’s natural sizes off the line’s box', () => {

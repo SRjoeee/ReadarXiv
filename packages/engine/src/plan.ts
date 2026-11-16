@@ -118,6 +118,8 @@ interface Plan {
   inkless: Kept
   lineskip?: Kept
   decorated?: Kept
+  /** the text each macro sets where the document uses it, TeX stating every glyph as itself (MarkedOptions.told): absent, none */
+  told?: Kept
   /** the marked compile left the optional classes of points out (design-performance Q2), so a prepare from the stored objects
    *  states it as the compile's did */
   reduced?: true
@@ -151,7 +153,14 @@ const storedInstrumentOf = ({
   const inkless = keeps(options.inkless)
   const lineskip = keeps(options.lineskip)
   const decorated = keeps(options.decorated)
-  if (texts !== undefined && inkless !== undefined && lineskip !== undefined && decorated !== undefined) {
+  const told = keeps(options.told)
+  if (
+    texts !== undefined &&
+    inkless !== undefined &&
+    lineskip !== undefined &&
+    decorated !== undefined &&
+    told !== undefined
+  ) {
     const p: Plan = {
       front: 'today',
       v: 1,
@@ -159,6 +168,7 @@ const storedInstrumentOf = ({
       inkless,
       ...(lineskip ? { lineskip } : {}),
       ...(decorated ? { decorated } : {}),
+      ...(told ? { told } : {}),
       ...(reduced ? { reduced: true as const } : {}),
       bbl: bbl ? { path: bbl.path, bytes: toBase64(bbl.bytes) } : null,
       facts: { pages: f.pages, day: f.day, banner: f.banner },
@@ -190,7 +200,15 @@ const planOf = (stored: StoredInstrument): ReadPlan | null => {
   const inkless = keptOf(p.inkless)
   const lineskip = 'lineskip' in p ? keptOf(p.lineskip) : null
   const decorated = 'decorated' in p ? keptOf(p.decorated) : null
-  if (texts === undefined || inkless === undefined || lineskip === undefined || decorated === undefined) return null
+  const told = 'told' in p ? keptOf(p.told) : null
+  if (
+    texts === undefined ||
+    inkless === undefined ||
+    lineskip === undefined ||
+    decorated === undefined ||
+    told === undefined
+  )
+    return null
   if ('reduced' in p && p.reduced !== true) return null
   const reduced = 'reduced' in p
   const f = p.facts
@@ -214,6 +232,7 @@ const planOf = (stored: StoredInstrument): ReadPlan | null => {
     inkless,
     ...(lineskip ? { lineskip } : {}),
     ...(decorated ? { decorated } : {}),
+    ...(told ? { told } : {}),
     ...(reduced ? { reduced: true as const } : {}),
     bbl,
     facts: { pages, day, banner },

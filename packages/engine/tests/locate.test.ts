@@ -895,6 +895,122 @@ describe('locate: a single line’s alignment is its TeX line’s, the row it sh
     expect(L.flows).toContainEqual([1, 2])
     expect(L.members[1]!.align).toBe('j')
   })
+  it('reads a single line TeX told justified by its row: a run-in head before its words, the words alone centred, justified', () => {
+    // (2610.40645v1 p19: "Proof of Corollary 3.8." then the proof's one line, its words alone about the measure's middle; a line
+    // is centred by glue of its own only where its row's ink is inset on both sides. Between two full lines, which give the
+    // column its measure)
+    const words = 'w'.repeat(44)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: 'Proof of it.', x: 72, y: 688 },
+      { text: words, x: 174, y: 688 },
+      { text: 'y'.repeat(78), x: 72, y: 664 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('heading', 'Proof of it.'),
+      unitOf('theorem', words, { align: 'j' }),
+      unitOf('para', 'y'.repeat(78)),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3]]), B, align(B, B))
+    // (its words 174..438 about the column's middle 306: alone they read centred)
+    expect(L.members[2]!.lines[0]![2]).toBe(174)
+    expect(L.members[2]!.align).toBe('j')
+  })
+  it('keeps TeX’s justified for a single line beside another member’s line whose hull stands about the middle: the row only vetoes', () => {
+    // (2608.11084v1 p13: a theorem's head, told justified, and the theorem's first line on one baseline, their hull inset alike
+    // on both sides; 2608.27210v1 p2: a list item's label and its last line. The row read them centred, lane cm-fix 2026-11-16)
+    const head = 'h'.repeat(31)
+    const words = 'w'.repeat(36)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: head, x: 100, y: 676 },
+      { text: words, x: 296, y: 676 },
+      { text: 'y'.repeat(78), x: 72, y: 652 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('para', head, { align: 'j' }),
+      unitOf('theorem', words, { align: 'j' }),
+      unitOf('para', 'y'.repeat(78)),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3]]), B, align(B, B))
+    expect(L.members[1]!.lines[0]![2]).toBe(100)
+    expect(L.members[1]!.align).toBe('j')
+  })
+  it('reads no table cell into a single line’s row: a row header TeX told justified beside a cell, the two about the middle', () => {
+    // (2610.40394v1 p14 ord 747: a table's row header and the next cell's words on one baseline, their hull about the measure's
+    // middle; the row read it centred, lane cm-fix 2026-11-16)
+    const head = 'h'.repeat(6)
+    const words = 'w'.repeat(40)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: head, x: 140, y: 676 },
+      { text: words, x: 230, y: 676 },
+      { text: 'y'.repeat(78), x: 72, y: 652 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('para', head, { align: 'j' }),
+      unitOf('cell', words, { cell: { table: 0, row: 0, col: 1 } }),
+      unitOf('para', 'y'.repeat(78)),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3]]), B, align(B, B))
+    expect(L.members[1]!.lines[0]![2]).toBe(140)
+    expect(L.members[1]!.align).toBe('j')
+  })
+  it('reads no line of another paragraph into a single line’s row: two subcaptions side by side, each its minipage’s', () => {
+    // (2608.13505v1 p4: units 22 and 23, paired with paragraphs 28 and 31 of two minipages, told justified, their hull about the
+    // measure's middle; the row read the first centred, lane cm-fix 2026-11-16)
+    const one = 'a'.repeat(30)
+    const two = 'b'.repeat(30)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: one, x: 120, y: 676 },
+      { text: two, x: 312, y: 676 },
+      { text: 'y'.repeat(78), x: 72, y: 652 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('caption', one, { align: 'j' }),
+      unitOf('caption', two, { align: 'j' }),
+      unitOf('para', 'y'.repeat(78)),
+    ]
+    const ins = instrumentOf(B, units, [[0, 1, 2, 3]])
+    ins.tex.paras = [
+      [1, 28],
+      [2, 31],
+    ]
+    const L = locate(ins, B, align(B, B))
+    expect(L.members[1]!.lines[0]![2]).toBe(120)
+    expect(L.members[1]!.align).toBe('j')
+  })
+  it('reads a single line nothing told by its own ink, not by its row: a title centred beside another member on its baseline', () => {
+    // (a running head's title and its page number on one baseline, or two names under a figure: TeX told neither, and the row
+    // widened the title to the number's edge and read it justified: 2608.00812v1's heads, 2608.01890v1 p13's names, lane cm-fix
+    // 2026-11-16)
+    const title = 't'.repeat(44)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: title, x: 174, y: 676 },
+      { text: '12', x: 528, y: 676 },
+      { text: 'y'.repeat(78), x: 72, y: 652 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('para', title),
+      unitOf('para', '12'),
+      unitOf('para', 'y'.repeat(78)),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3]]), B, align(B, B))
+    expect(L.members[1]!.lines[0]![2]).toBe(174)
+    expect(L.members[1]!.align).toBe('c')
+  })
   it('states a caption’s label that stands on a line of its own with no line and that line’s own alignment (IEEEtran’s TABLE I)', () => {
     // (IEEEtran sets a table's \\fnum@table centred on a line of its own above its caption's text, the marked compile's label
     // point telling it the caption's (own.mjs MR 5). The part states it on none of the caption's lines (no `line`) and how its
@@ -2371,6 +2487,58 @@ describe('the element classes the part states', () => {
     expect(mem.elements).toEqual([['0', { kind: 'other', ink: [], text: 'BERT', style: { role: 'serif', size: 10 } }]])
   })
 
+  it('states an inked macro whose ink nothing bounds by the text TeX set where the document uses it; a bounded one by its page', () => {
+    // (the coordinator's ruling on the third cause, 2026-11-16: elsarticle's `\sep`, "," where its keywords use it (the ask's
+    // listing, PieceClass.told). Glued to the word before it (2610.38269v1's "networks\sep": no point of its own) or set after its
+    // unit's end point (2610.20848v1's last one before `\src`), its comma is the unit's text and its element was not found: it is
+    // stated by that text. One whose two places stand round its glyph is stated by the page (its glyph between them), the ask's
+    // text aside; one TeX did not state glyph by glyph (no `told`: a rule, a ligature) stays not found)
+    const B = docOf([{ lines: ['Pulsar, timing, astronomy, radio, maps'] }])
+    const content = [
+      text('Pulsar'),
+      { t: 'el' as const, id: '1', kind: 'macro', src: '\\sep' },
+      text(' timing'),
+      { t: 'el' as const, id: '3', kind: 'macro', src: '\\sep' },
+      text(' astronomy'),
+      { t: 'el' as const, id: '5', kind: 'macro', src: '\\sepb' },
+      text(' radio'),
+      { t: 'el' as const, id: '7', kind: 'macro', src: '\\sepc' },
+      text(' maps'),
+      { t: 'el' as const, id: '9', kind: 'macro', src: '\\sepd' },
+    ]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [
+          ['1', { cls: 'umacro', told: ',' }],
+          ['3', { cls: 'umacro', told: ';' }],
+          ['5', { cls: 'umacro', told: ',' }],
+          ['7', { cls: 'umacro' }],
+          ['9', { cls: 'umacro', text: ',', told: ';' }],
+        ],
+      },
+    ]
+    const ins = {
+      ...instrumentOf(B, units, [[0]]),
+      // (the second's two places round its comma, glyphs 14 and 15)
+      places: [
+        { unit: 0, piece: '3', page: 1, glyph: 14, end: false },
+        { unit: 0, piece: '3', page: 1, glyph: 15, end: true },
+      ],
+    }
+    const L = locate(ins, B, align(B, B))
+    const els = new Map(L.members.find((m) => m.unit === 0)!.elements)
+    expect(els.get('1')).toMatchObject({ ink: [], text: ',' })
+    // (no glyph of its own to read a style off: none, where a style read off nothing would be a size of 10 anywhere)
+    expect(els.get('1')!.style).toBeUndefined()
+    expect(els.get('3')).toMatchObject({ ink: [], text: ',' })
+    expect(els.get('5')).toMatchObject({ ink: [], text: ',' })
+    expect(els.get('7')!.text).toBeUndefined()
+    // (one the probe states a text for keeps that reading: the ask's text is not stated over it)
+    expect(els.get('9')!.text).not.toBe(';')
+  })
   it('states a paper macro’s span empty where its two places hold no glyph, or where TeX said it sets none', () => {
     // (2610.19159v1's `Tool Output\trajectoryMark{}`: after the unit's end point, its point after the group it stands in, no glyph
     // between: TeX set none for it, El.text ''. A span with one side unstated says nothing; nor does a macro whose two places

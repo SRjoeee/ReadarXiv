@@ -39,7 +39,7 @@ import {
   type TodayInkUnit,
   UNIT_FLAG,
 } from './ink-units.ts'
-import { type Annotation, annotationOf, pointsOf } from './links.ts'
+import { type Annotation, annotationOf, pointsOf } from './annotations.ts'
 import { type FloatLine, inkLeft, ledgerOf, type TodayPage, type TodayPiece, type TodayUnit } from './ledger.ts'
 
 /** the owner the figure reading's input gives arXiv's ink (PDF-READER §18.27): on a page of A our compile sets, a glyph it never

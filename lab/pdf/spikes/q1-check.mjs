@@ -32,9 +32,8 @@
 // where a paper's B or any reading differs between today and Q1, or either side refused alone. No network, no Docker. Stops
 // below 12 GiB free on the Mac or 8 GiB on the output's volume.
 import { createHash } from 'node:crypto'
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statfsSync, utimesSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import { spawnSync } from 'node:child_process'
 import * as PL from '@cantoo/pdf-lib'
 import { read } from '@readarxiv/format'
@@ -49,6 +48,8 @@ import { POINT_CLASSES, pointClassOf, readColours, readSkipProbe } from '../../.
 import { opened, storedInstrumentOf, withBbl } from '../../../packages/engine/src/plan.ts'
 import { jobName, lastTexLog, latin1, latin1Bytes } from '../../../packages/engine/src/source/latex-front.ts'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
+import { deflate, inflate } from '../prepare-back/codec.mjs'
+import { stampsOf } from './build-stamps.mjs'
 import { latexmkEngine } from './compile-image.mjs'
 import { LITE } from './lite-pdfjs.mjs'
 
@@ -109,14 +110,7 @@ function timed(argv, out, env) {
   const [real, user, sys] = existsSync(tf) ? readFileSync(tf, 'utf8').trim().split(/\s+/).map(Number) : [Number.NaN, Number.NaN, Number.NaN]
   return { real, us: user + sys, killed: !!r.error || r.signal !== null }
 }
-function walk(dir = BUILD, base = '', out = new Map()) {
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name), rel = base ? `${base}/${name}` : name, st = lstatSync(path)
-    if (st.isDirectory()) walk(path, rel, out)
-    else if (st.isFile()) out.set(rel, st.mtimeMs / 1000)
-  }
-  return out
-}
+const walk = () => stampsOf(BUILD)
 const written = (stamps, p) => stamps.has(p) && stamps.get(p) > MARKER
 /** a request's identity: every field and every file it carries */
 const requestKey = req => {
@@ -306,8 +300,6 @@ async function instrumentAndBundle(s, facts, arxiv, ref, tree, withBundle, reade
   if (!withBundle) return out
   const objects = [], parts = new Map()
   const front = async input => { await input.units(unitsObjects(sourceUnitsOf(s.paper))); return { ok: true, instrument: r.instrument, made: null } }
-  const deflate = b => new Uint8Array(deflateSync(b))
-  const inflate = (b, limit) => { const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }; try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE' || isMemoryError(e)) throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) } }
   const end = await prepare(() => ({ files: new Map([['main.tex', new Uint8Array()]]), original: arxiv, stored: null }), {
     paper: ref, made: 'q1-check', tree: { year: tree, served: SERVED, fallback: PINS.default }, engines: HOST_ENGINES, pdfjs, documentOptions, PL, deflate, inflate,
     compile: async () => { throw new Error('the back half compiles nothing') }, stage: () => {}, units: async () => {}, instrument: async () => {},
