@@ -1155,16 +1155,18 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
   // readAlign): the maker's reading (MAKE:2121-2135); a single-line cell by its column
   if (unit && unit.align !== 'c' && unit.align !== 'l' && unit.align !== 'r') {
     const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
-    // (a single line is read by its row, everything TeX set on that line within its measure: the member's own ink, its label,
-    // the end mark a fill pushed (its `~$` element), another member's line on its baseline (a run-in head before it); a line
-    // centred by glue of its own only where that row's ink is inset on both sides (the coordinator's ruling of 2026-11-16, lane
-    // cm-fix: 2610.40645v1 p19's proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its words alone read
-    // centred under F13's measure))
-    const rowLines = own.length === 1 && !unit.cell ? [rowOf(fx, mem, own[0]![0], labelX0)] : mem.lines
+    // (a single line TeX told justified is read by its row, everything TeX set on that line within its measure: the member's
+    // own ink, its label, the end mark a fill pushed (its `~$` element), another member's line on its baseline (a run-in head
+    // before it); centred by glue of its own only where that row's ink is inset on both sides (the coordinator's ruling of
+    // 2026-11-16, lane cm-fix: 2610.40645v1 p19's proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its
+    // words alone read centred under F13's measure). A line nothing told is read by its own ink as before: a running head's
+    // title beside its page number on one baseline is two members, not one row)
+    const byRow = unit.align === 'j' && own.length === 1 && !unit.cell
+    const rowLines = byRow ? [rowOf(fx, mem, own[0]![0], labelX0)] : mem.lines
     // (a cell is read by its column's cells alone, never by the page's column: today's centredFlag RUN:2102)
     let a = unit.cell
       ? (unit.align ?? 'j')
-      : alignOf(rowLines, sizeOf, blockOf, unit.align, own.length === 1 ? undefined : labelX0)
+      : alignOf(rowLines, sizeOf, blockOf, unit.align, byRow ? undefined : labelX0)
     if (unit.cell && own.length === 1) {
       const l0 = own[0]![0]
       const c = unit.cell

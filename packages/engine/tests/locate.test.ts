@@ -918,6 +918,23 @@ describe('locate: a single line’s alignment is its TeX line’s, the row it sh
     expect(L.members[2]!.lines[0]![2]).toBe(174)
     expect(L.members[2]!.align).toBe('j')
   })
+  it('reads a single line nothing told by its own ink, not by its row: a title centred beside another member on its baseline', () => {
+    // (a running head's title and its page number on one baseline, or two names under a figure: TeX told neither, and the row
+    // widened the title to the number's edge and read it justified: 2608.00812v1's heads, 2608.01890v1 p13's names, lane cm-fix
+    // 2026-11-16)
+    const title = 't'.repeat(44)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: title, x: 174, y: 676 },
+      { text: '12', x: 528, y: 676 },
+      { text: 'y'.repeat(78), x: 72, y: 652 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [unitOf('para', 'x'.repeat(78)), unitOf('para', title), unitOf('para', '12'), unitOf('para', 'y'.repeat(78))]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3]]), B, align(B, B))
+    expect(L.members[1]!.lines[0]![2]).toBe(174)
+    expect(L.members[1]!.align).toBe('c')
+  })
   it('states a caption’s label that stands on a line of its own with no line and that line’s own alignment (IEEEtran’s TABLE I)', () => {
     // (IEEEtran sets a table's \\fnum@table centred on a line of its own above its caption's text, the marked compile's label
     // point telling it the caption's (own.mjs MR 5). The part states it on none of the caption's lines (no `line`) and how its
