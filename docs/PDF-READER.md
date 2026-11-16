@@ -6778,8 +6778,8 @@ states it from the compile move (its C1, 2026-11-15); a part made before holds n
   after in the source projection (`Placed.parasAfter`, point by point as `paras`, an id or null; absent where no point names
   one; `locate/words.ts` `pieceBefore`): back from the word's offset over the projection's white space alone, the element or
   nested unit reached, where the translator is sent it in its place (not `silent`, which a wire may put back at its group's
-  front or end), and where TeX set ink for it, none of it on B at or after the paragraph's end (one set after the end opens the
-  line: 2610.39520v1's raised star after a caption's forced break); none where a character that is no white space, a silent
+  front or end), and where B gives TeX's ink of it to its piece, none of it at or after the paragraph's end (one set after the
+  end opens the line); none where a character that is no white space, a silent
   element or the unit's start comes first. A field of
   its own beside `paras`, not a third member of its tuples, which a reader of before refuses (a zod tuple holds its length):
   that one strips the field and reads the points as it did, so FORMAT stays 1. The lay pairs a point with its sentence start

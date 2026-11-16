@@ -3083,9 +3083,8 @@ describe('a paragraph TeX opened inside a unit, stated by its first word (design
     expect(three.flows[0]!.parasAfter).toBeUndefined()
   })
   it('names none where the element stands after TeX’s paragraph end: its glyph on B after the end', () => {
-    // (2610.39520v1's caption, `… PET. \\\\ $^*$ indicates …`: the raised star TeX set after the forced break opens the next line;
-    // the first word stands directly after it in the source, but it ended no paragraph: its glyph on B stands after the end.
-    // Here a mark the source writes before "Second" that TeX set after it, on the paragraph's first line)
+    // (a mark the source writes directly before the next paragraph's first word, which TeX set after the paragraph's end: it
+    // opens the line, it ended no paragraph; here one TeX set after "Second", on the paragraph's first line)
     const B = docOf([{ lines: ['First paragraph ends.', 'Second* one', 'runs on'] }])
     const content = [
       text('First paragraph ends. '),

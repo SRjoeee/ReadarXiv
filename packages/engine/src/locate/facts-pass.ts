@@ -952,10 +952,10 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
     if (paras.size) {
       mem.paras = [...paras].sort((x, y) => x[0] - y[0])
       // (beside each point, the element its first word stands directly after in the source, white space alone between, and
-      // TeX set before the paragraph's end: no glyph of it on B at or after the end (an element set after it opens the line,
-      // 2610.39520v1's raised star after a forced break; one that sets no ink, `\sep`, which is `\par`, ended the paragraph
-      // where the source puts it): the one that ended the paragraph before, which a reply returns in its place; stated where
-      // a point names one, Placed.parasAfter)
+      // TeX set before the paragraph's end: no glyph of it on B at or after the end (an element set after it opens the line;
+      // one that sets no ink, `\sep`, which is `\par`, ended the paragraph where the source puts it; one whose glyph B gives
+      // to no piece is read by the source alone, 2610.39520v1's raised star after a caption's forced break): the one that
+      // ended the paragraph before, which a reply returns in its place; stated where a point names one, Placed.parasAfter)
       const before = pieceBefore(unit.content)
       const named = mem.paras.map(([o]) => {
         const id = before(o)
