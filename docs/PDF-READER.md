@@ -7565,8 +7565,12 @@ today's request.
   keeps the page's reading (its crop, or its glyphs' text between its two points). The lay draws it as it draws a text macro of
   no ink (`packages/typeset/src/lay/read.ts:279` `textOnly`: a macro class, no ink, its text not empty, drawn as that text in the
   translation's face, where the translation's line sets it; a comma and the space after it come as the translation's text
-  places them round the element). Over the corpus (lane cm-fix's chain d10, the readers on the base's compiles): see the lane's
-  record; on the trial set, elsarticle's `\sep` els of 2610.20848v1 ord 38 and 2610.38269v1 ord 7 stated ",".
+  places them round the element). An element the probe states a text for (PieceClass.text) keeps that reading, and one stated by
+  the ask's text has no style (no glyph of its own to read one off). Over the corpus (lane cm-fix's chain d12, the readers on the
+  base's compiles, against the same readers without it): 7 element placements in 3 members, nothing else: elsarticle's `\sep`
+  "," in 2610.38269v1 ord 7 (els 1 and 7, glued) and 2610.20848v1 ord 38 (el 5, after the end point), and 2608.06701v1 ord
+  127's `\sage` "SAGE" (`\newcommand{\sage}{SAGE\xspace}`); two members leave `unproven` by it (2610.38269v1 ord 7,
+  2608.06701v1 ord 127), 2610.20848v1 ord 38 not (its `\src` stays not found).
 
 Held by the TeX gate's cases (`lab/pdf/spikes/ask-cases.mjs`, both years, the four engines, on the loop's first pass: the
 `.bbl`, the `.aux` and the `.toc` byte for byte without the asks, as many errors outside the asks, each answer as the use sets
