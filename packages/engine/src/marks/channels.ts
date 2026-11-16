@@ -353,6 +353,25 @@ export function readGlues(log: string): { at: number; name: GlueName; natural: n
   }
   return out
 }
+/**
+ * Each unit's paragraph as TeX's own order states it: STATEMENTS_TEX's `AXT-MEASURE <n>` is written in LaTeX's para/end hook, the
+ * unit's `AXT-ALIGN <u> p` (LAYOUT_TEX's \axt@agpar) in a para/after next-code its end mark queued, and LaTeX runs a paragraph's
+ * para/end before its para/after (a hook's normal code before its next code): the serial of the last AXT-MEASURE before a unit's
+ * `p` line is the paragraph its end mark ended in, the serial its end's `qe<n>` point takes where TeX sets one (none after a box).
+ * A unit whose end mark TeX set only in an \hbox (`h`: a one-line caption measured in \sbox and shipped in an \hbox to \hsize),
+ * in vertical mode (`v`), or for which it stated nothing is paired with none. By unit index (a heading's `h<i>` its unit's; a
+ * cell's `t<i>` none); a unit's first `p` statement (its first occurrence's). The 79-column wrap of AXT-ALIGN joined
+ */
+export function readParas(log: string): Map<number, number> {
+  const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
+  const out = new Map<number, number>()
+  let last: number | undefined
+  for (const m of text.matchAll(/^AXT-MEASURE (\d{1,9}) |^AXT-ALIGN h?(\d{1,9}) p /gm)) {
+    if (m[1] !== undefined) last = Number(m[1])
+    else if (last !== undefined && !out.has(Number(m[2]))) out.set(Number(m[2]), last)
+  }
+  return out
+}
 /** the body brackets that hold a whole page (STATEMENTS_TEX's WHOLE_TEX, `AXT-WHOLE <n>`): the serials of the `bs<n>`..`be<n>` that
  *  POINTS' \@outputpage hook made where no \@makecol ran for the page (a class whose output routine is its own, a page of
  *  floats), floats inside them; every other body bracket is a column's main list as the page builder broke it */

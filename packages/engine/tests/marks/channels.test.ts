@@ -12,6 +12,8 @@ import {
   readGlues,
   readHeads,
   readMeasures,
+  readParas,
+  readWhole,
   readRefNames,
   readSkips,
 } from '../../src/marks/channels.ts'
@@ -444,5 +446,40 @@ describe('readMeasures: each paragraph’s measure as TeX breaks it (STATEMENTS_
         [0.5, 10.5, 20.5, 30.5].map(pt),
       ),
     ).toBe(true)
+  })
+})
+
+describe('readParas: each unit’s paragraph by TeX’s own order (AXT-MEASURE at para/end, the unit’s AXT-ALIGN p at para/after)', () => {
+  it('pairs a unit with the last measure before its `p` line, a heading’s by its unit; none for a box’s `h` alone or `v`', () => {
+    const log = [
+      'AXT-MEASURE 141 469.75502pt 0.0pt 1 0.0pt 0.0pt 0',
+      'AXT-LINES 140 6 13.6pt 10.95 0.0pt plus 1.0pt',
+      'AXT-ALIGN 140 p 0 0.0pt 0 0.0pt 1 1.0pt',
+      'AXT-ALIGN h145 h 0 0.0pt 0 0.0pt 1 1.0pt',
+      'AXT-MEASURE 145 469.75502pt 0.0pt 1 0.0pt 0.0pt 0',
+      'AXT-ALIGN 146 p 0 0.0pt 0 0.0pt 1 1.0pt',
+      'AXT-MEASURE 146 469.75502pt 24.29997pt 1 0.0pt 0.0pt 0',
+      'AXT-ALIGN h147 p 0 0.0pt 0 0.0pt 1 1.0pt',
+      // (a caption measured in \\sbox and set in an \\hbox to \\hsize: `h` alone; a long one `h` then `p`)
+      'AXT-ALIGN 150 h 0 0.0pt 0 0.0pt 1 1.0pt',
+      'AXT-ALIGN 151 h 0 0.0pt 0 0.0pt 1 1.0pt',
+      'AXT-MEASURE 147 469.75502pt 0.0pt 1 0.0pt 0.0pt 0',
+      'AXT-ALIGN 151 p 0 0.0pt 0 0.0pt 1 1.0pt',
+      'AXT-ALIGN 152 v 0 0.0pt 0 0.0pt 1 1.0pt',
+      // (a cell's end: none)
+      'AXT-ALIGN t9 p 0 0.0pt 0 0.0pt 1 1.0pt',
+    ].join('\n')
+    expect([...readParas(log)]).toEqual([
+      [140, 141],
+      [146, 145],
+      [147, 146],
+      [151, 147],
+    ])
+  })
+})
+
+describe('readWhole: the body brackets an output routine of its own made of a whole page (STATEMENTS_TEX’s AXT-WHOLE)', () => {
+  it('reads each serial once, in order', () => {
+    expect(readWhole(['AXT-WHOLE 7', '[3', 'AXT-WHOLE 9', 'AXT-WHOLE 7', 'AXT-WHOLEX 1'].join('\n'))).toEqual([7, 9])
   })
 })

@@ -24,6 +24,7 @@ import {
   readGlues,
   readHeads,
   readMeasures,
+  readParas,
   readRefNames,
   readSkips,
   readWhole,
@@ -2341,6 +2342,7 @@ export async function instrumentOf({
   const glues = readGlues(lastTexLog(log))
   const whole = readWhole(lastTexLog(log))
   const bodySides = [...readBodies(lastTexLog(log))].map(([n, b]): [number, 0 | 1 | 2] => [n, b.side])
+  const paras = [...readParas(lastTexLog(log))]
   // (each paragraph's measure as TeX breaks it, STATEMENTS_TEX's AXT-MEASURE: those that are not the full \hsize)
   const measures = [...readMeasures(lastTexLog(log))]
     .filter(([, x]) => x.shape || x.hangindent !== 0 || x.leftskip !== 0 || x.rightskip !== 0)
@@ -2376,6 +2378,7 @@ export async function instrumentOf({
         ...(measures.length ? { measures } : {}),
         ...(whole.length ? { whole } : {}),
         ...(bodySides.length ? { bodySides } : {}),
+        ...(paras.length ? { paras } : {}),
       },
       made: { compiler: made.compiler ?? 'pdflatex', tree: made.tree ?? '', front: made.front ?? '' },
     },

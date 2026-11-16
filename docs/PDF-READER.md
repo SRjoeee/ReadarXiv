@@ -7354,7 +7354,18 @@ bytes it was.
   the shape's lines through e-TeX's `\parshapeindent` and `\parshapelength`, its count through the primitive `\parshape` as the
   head finds it (wrapfig makes `\parshape` a macro of its own: read through it, every wrapped paragraph was a TeX error). The
   instrument keeps the paragraphs whose measure is not the full `\hsize`. Phase 8 reads each into its lines' `m0..m1`: a line
-  is its paragraph's by its first text glyph's partner on B (the paragraph whose end follows it in B's stream), its rank TeX's
+  is a paragraph's only where TeX's own statements leave no other paragraph for it (the coordinator's ruling of 2026-11-16, lane
+  cm-fix): a line of its unit's last paragraph takes the paragraph TeX pairs the unit with (`marks/channels.ts` readParas,
+  `Instrument.tex.paras`: STATEMENTS_TEX's `AXT-MEASURE <n>` is written at para/end and the unit's `AXT-ALIGN <u> p` at the same
+  paragraph's para/after, so the last measure before the unit's `p` line is the paragraph its end mark ended in), where no
+  paragraph end of the unit's own stands before the line on B; any other line the paragraph whose end B shows next after it, the
+  unit's own, only where that end's serial is the one directly after the end B shows before the line (none ended after a box can
+  stand between); every other line, and a unit TeX ended in an `\hbox` (a one-line caption) or stated nothing for, none: its
+  frame's. The first reading, "the paragraph whose end follows it in B's stream", took the next paragraph's measure for one TeX
+  ended after a box, where the para/end hook sets no point (`\axt@peat`), and counted its lines as the next one's: 2610.40645v1
+  p19's proof (ords 144 to 146, amsthm's QED box) read as the next section heading's `\hangindent` after one line, 96.21..540,
+  its one line then centred; 2411.13093v4 p14's and 2608.15016v1 p2's one-line captions read as a hung paragraph's later line,
+  2608.16745v1 p7's and 2610.19860v1 p5's (in no paragraph at all) as the next paragraph's. Its rank TeX's
   line number (B's order, a row two members share one line), its box at the left edge of its frame's column whose width is the
   paragraph's `\hsize` (else the text block of that width; a minipage's, a `\parbox`'s or a p column's paragraph states none:
   where its box stands TeX's statement does not say), shifted by the line's `\parshape` indent (its last entry past it) or its

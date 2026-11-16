@@ -257,6 +257,9 @@ export interface Instrument {
     /** each body bracket's side as TeX states it (LAYOUT_TEX's AXT-BODY, marks/channels.ts readBodies), by serial: 1 and 2 the left
      *  and the right column of a two-column page (\@makecol's), 0 a one-column body or a page's whole box */
     bodySides?: [number, 0 | 1 | 2][]
+    /** each unit's paragraph as TeX's own order states it (marks/channels.ts readParas: the last AXT-MEASURE before the unit's
+     *  `AXT-ALIGN <u> p`), the paragraph its end mark ended in: [unit index, paragraph serial] */
+    paras?: [number, number][]
   }
   /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
   recovered?: Recovered

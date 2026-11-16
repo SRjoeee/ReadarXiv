@@ -2,8 +2,9 @@
 // design's F13): a list's \parshape (\@totalleftmargin, \linewidth), wrapfig's shape, a \hangindent, a \leftskip or \rightskip
 // of some natural size, read into the line's m0..m1 (Line[7], Line[8]) over the frame's measure columnsAndMeasures gave it.
 // Phase 8 (frameMeasures), after the frames' measures: it reads the instrument's statements (Instrument.tex.measures, by the
-// serial of each paragraph's end), B's paragraph ends (`qe<n><code>`, DocMarks.paraEnds), the members' lines and their glyphs'
-// partners on B, and writes the stated lines' m0 and m1 alone.
+// serial of each paragraph's end; Instrument.tex.paras, each unit's paragraph by TeX's own order), B's paragraph ends
+// (`qe<n><code>`, DocMarks.paraEnds) and their owners, the members' lines and their glyphs' partners on B, and writes the stated
+// lines' m0 and m1 alone.
 import type { Line } from '@readarxiv/format'
 import type { Instrument } from '../instrument.ts'
 import type { ParaMeasure } from '../marks/channels.ts'
@@ -27,24 +28,33 @@ export function lineShape(s: ParaMeasure, k: number): [indent: number, length: n
 }
 
 /**
- * The stated paragraphs' lines' measures. A line is its paragraph's by its first text glyph's partner on B (the paragraph whose
- * end is the first after it in B's stream); the paragraph's lines are taken in B's order, a row two members share one line
- * (a run-in title and its paragraph), so that the k-th is TeX's line k. Its measure stands at the left edge of its frame's
- * column whose width is the paragraph's \hsize (a paragraph of the column's main list, a footnote, a float's text), or of the
- * text block where the block's is (a float across both columns); a paragraph of another \hsize (a minipage's, a \parbox's, a
- * p column's) states none, where TeX's statement does not say where its box stands. From that edge, the line's indent, and
- * \leftskip's natural size, to its length, less \rightskip's. A display TeX set inside the paragraph counts as three lines to
- * its shape (TeX's \prevgraf after it): where the shape varies by line (several lines of a \parshape, a \hangindent), its
- * lines after a held row of the paragraph state none. A table cell, a figure text and a name keep the measure they have
+ * The stated paragraphs' lines' measures. A line takes a paragraph's measure only where TeX's own statements leave no other
+ * paragraph for it (the coordinator's ruling of 2026-11-16 on defect 2, lane cm-fix): (i) a line of its unit's last paragraph
+ * takes the paragraph TeX pairs the unit with (Instrument.tex.paras: the last AXT-MEASURE before the unit's `AXT-ALIGN u p`, the
+ * paragraph its end mark ended in), where no paragraph end of the unit's own stands before the line in B's stream; (ii) any other
+ * line takes the paragraph whose end B shows next after it, the unit's own (B's glyph before the end the unit's), only where that
+ * end's serial is the one directly after the end B shows before the line (no paragraph without a point, one TeX ended after a box,
+ * can stand between them); (iii) every other line, and a unit TeX ended in an \hbox or stated nothing for, takes none (its
+ * frame's, as before F13). B's "first end after the line" alone took the next paragraph's measure for a paragraph that ends in a
+ * box (amsthm's QED box) and counted its lines as the next one's: 2610.40645v1 p19's proof read as the next section heading's
+ * \hangindent. The paragraph's lines are taken in B's order, a row two members share one line (a run-in title and its paragraph),
+ * so that the k-th is TeX's line k. Its measure stands at the left edge of its frame's column whose width is the paragraph's
+ * \hsize (a paragraph of the column's main list, a footnote, a float's text), or of the text block where the block's is (a float
+ * across both columns); a paragraph of another \hsize (a minipage's, a \parbox's, a p column's) states none, where TeX's statement
+ * does not say where its box stands. From that edge, the line's indent, and \leftskip's natural size, to its length, less
+ * \rightskip's. A display TeX set inside the paragraph counts as three lines to its shape (TeX's \prevgraf after it): where the
+ * shape varies by line (several lines of a \parshape, a \hangindent), its lines after a held row of the paragraph state none. A
+ * table cell, a figure text and a name keep the measure they have
  */
 export function paragraphMeasures(w: Work): void {
-  const { ins, m, framesA } = w.ix
+  const { ins, m, framesA, unitB } = w.ix
   const stated = new Map((ins.tex.measures ?? []).map((x) => [x.para, x]))
   if (!stated.size) return
   const ends = endsOf(ins, m.offB)
   if (!ends.length) return
-  // (the paragraph of B's glyph b: the first end after it)
-  const paraOf = (b: number): number | undefined => {
+  const paired = new Map(ins.tex.paras ?? [])
+  // (the serial of B's last paragraph end at or before glyph b, and each unit's own ends (B's glyph before it the unit's), in order)
+  const before = (b: number): number | undefined => {
     let lo = 0
     let hi = ends.length
     while (lo < hi) {
@@ -52,7 +62,23 @@ export function paragraphMeasures(w: Work): void {
       if (ends[mid]![0] <= b) lo = mid + 1
       else hi = mid
     }
-    return ends[lo]?.[1]
+    return lo > 0 ? ends[lo - 1]![1] : undefined
+  }
+  const own = new Map<number, [number, number][]>()
+  for (const e of ends) {
+    const u = e[0] > 0 ? (unitB[e[0] - 1] as number) : -1
+    if (u >= 0) (own.get(u) ?? own.set(u, []).get(u)!).push(e)
+  }
+  /** the paragraph TeX's statements give the line whose first text glyph is b on B, of unit u; undefined none */
+  const paraOf = (u: number, b: number): number | undefined => {
+    const mine = own.get(u) ?? []
+    const after = mine.find((e) => e[0] > b)
+    const ownBefore = mine.some((e) => e[0] <= b)
+    const P = paired.get(u)
+    const c = after ? after[1] : P
+    if (c === undefined) return undefined
+    if (c === P && !ownBefore) return c
+    return c === (before(b) ?? 0) + 1 ? c : undefined
   }
   const byPara = new Map<number, { l: Line; b: number }[]>()
   for (const mem of w.members) {
@@ -62,7 +88,7 @@ export function paragraphMeasures(w: Work): void {
       const a = (mem.lineGlyphs[j] ?? []).find((x) => text.has(x))
       const b = a === undefined ? -1 : (m.aToB[a] as number)
       if (b < 0) return
-      const n = paraOf(b)
+      const n = paraOf(mem.unit, b)
       if (n === undefined || !stated.has(n)) return
       ;(byPara.get(n) ?? byPara.set(n, []).get(n)!).push({ l, b })
     })
