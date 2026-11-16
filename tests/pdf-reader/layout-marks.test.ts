@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
 import type { UnitLines } from '../../packages/engine/src/compile/tex-errors.ts'
 import { patch, type PhPiece, startOf, type TextPiece } from '../../packages/engine/src/source/latex-front.ts'
-import { classOf, type CommandSample, colourPieceOf, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, literalNames, MARK_CLASSES, MARK_NAME, NAME_MACROS, nameSection, NAMES_TEX, POINTS_TEX, UNMARK_CS, FOLLOWERS, INK_ANY, inkSamples, inkSection, leadSamples, markProbeTex, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, probeRow, probeSamples, probeTex, NAME_MARK_FILE, withoutNameMarks, refKeysOf, refsTex } from '../../packages/engine/src/marks/marks.ts'
+import { classOf, type CommandSample, colourPieceOf, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, literalNames, MARK_CLASSES, MARK_NAME, NAME_MACROS, nameSection, NAMES_TEX, POINTS_TEX, UNMARK_CS, FOLLOWERS, INK_ANY, inkSamples, inkSection, leadSamples, markProbeTex, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, probeRow, probeSamples, readMarkProbe, readProbe, probeTex, NAME_MARK_FILE, withoutNameMarks, refKeysOf, refsTex } from '../../packages/engine/src/marks/marks.ts'
 import { DISPLAY } from '../../packages/engine/src/instrument/mt.ts'
 import { NAME_ENGLISH } from '../../packages/engine/src/marks/names.ts'
 import { symbolText, TEXT_SYMBOLS } from '../../packages/engine/src/source/text-symbols.ts'
@@ -491,6 +491,29 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
     const pieces = p.units[0]?.pieces as Piece[]
     expect(pieces.filter(x => x.t === 'ph').map(x => classOf(x))).toEqual(['footnote', 'footnote'])
     expect(srcs(layoutMarking(p.units, MARK_CLASSES, { lines: false }).units[0])).toContain('ph \\axtpma{n0.1a}')
+  })
+  // (held here since lane c1-rewrites: the probe's rows and the switch through the moved marks alone, without today's reading,
+  // layout/marks.mjs switchedOf and askedCommands, which the cut-over deletes)
+  it('readProbe: the rows of every section, tagged; a line of another marker is no row; readMarkProbe takes its own and no other (the moved marks\' probe rows)', () => {
+    expect(probeRow('punct', 3, '\\axt@qo')).toBe('\\typeout{LAYOUT-PROBE 1 punct 3 \\axt@qo}')
+    const log = 'LAYOUT-PROBE 1 punct 0 00000000\nLAYOUT-PROBE 1 role 4 display\nother line\nLAYOUT-PROBE 2 punct 1 22222222\nLAYOUT-PROBE 1 punct 1 22222200\nLAYOUT-PROBE 1 punct 2 2200000\nLAYOUT-PROBE 1 punct 7 22222222\nLAYOUT-PROBE 1 punct 0\n'
+    expect(readProbe(log).map(r => [r.tag, r.fields.join(' ')])).toEqual([['punct', '0 00000000'], ['role', '4 display'], ['punct', '1 22222200'], ['punct', '2 2200000'], ['punct', '7 22222222'], ['punct', '0']])
+    const samples = [{ command: '\\cite' }, { command: '\\autocite' }, { command: '\\footnote' }] as CommandSample[]
+    // a line of another marker, a section of another tag, a code cut short, a sample the probe has not: no answer
+    expect(readMarkProbe(log, samples)).toEqual({ '\\cite': '00000000', '\\autocite': '22222200' })
+    // an error TeX logged in a box answers nothing: in the box as the paper sets it, no answer (x); with the opening
+    // mark, no mark (2); with both marks alone, no closing mark (1, REVTeX's citeautoscript); one before any row is no
+    // box's
+    const errs = ['! Early.', 'LAYOUT-PROBE 1 punct-at 0 4 a', '! Missing \\endcsname inserted.', 'l.12 ...', 'LAYOUT-PROBE 1 punct-at 0 5 c', './main.tex:12: Extra }, or forgotten $.', 'LAYOUT-PROBE 1 punct-at 0 5 d', 'LAYOUT-PROBE 1 punct-at 0 6 c', '! Argument of \\super@cite@swap has an extra }.', 'LAYOUT-PROBE 1 punct-at 0 6 d', 'LAYOUT-PROBE 1 punct-at 0 2 d', '! Undefined.', 'LAYOUT-PROBE 1 punct 0 00000000'].join('\n')
+    expect(readMarkProbe(errs, samples)).toEqual({ '\\cite': '0020x110' })
+  })
+  it('originalFiles passes `switches` on; without `layout` it changes no byte (the moved compile\'s marked files)', () => {
+    const p = paperOf('\\documentclass{article}\n\\begin{document}\nA claim \\cite{k}. And \\cite{j} again, see \\ref{t}.\n\\end{document}\n')
+    const v1 = decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: { '\\cite': '22220000', '\\ref': '00000000' } }))
+    expect(v1).toContain('A claim \\cite{k}. And \\axtpma{p0.3a}\\cite{j}\\axtpm{p0.3b} again')
+    expect(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES, switches: null }))).toBe(decode(originalFiles(p, { lines: true, layout: MARK_CLASSES })))
+    const t = paperOf(SOURCES.table)
+    for (const lines of [false, true]) expect(sha(originalFiles(t, { lines, switches: { '\\cite': '22222222' } }).get('main.tex') as Uint8Array)).toBe(PIN.table?.[lines ? 'lines' : 'plain'])
   })
 })
 

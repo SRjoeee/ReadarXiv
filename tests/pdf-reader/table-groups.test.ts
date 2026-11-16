@@ -71,6 +71,18 @@ describe('loadProject: each cell unit carries its place in its table', () => {
       { text: 'One cell of another table', table: 2, row: 0, col: 0, span: 1, head: false },
     ])
   })
+  // (held here since lane c1-rewrites: the cells a table's groups are read from, without today's group rule, translate/groups.mjs
+  // groupOf, which the cut-over deletes)
+  it('the cells a table\'s groups are read from: the header, each column, a cell spanning two columns by its first and its span; no cell outside a table', () => {
+    const us = unitsOf_(doc('\\begin{tabular}{lll}\n\\hline\nAa & Bb & Cc \\\\\n\\hline\nx1 one & \\multicolumn{2}{c}{spanning text} \\\\\nx2 two & three & four \\\\\nx3 six & seven & eight \\\\\n\\end{tabular}'))
+    expect(us.map(u => [plainSource(u), u.cell ? { ...u.cell } : null])).toEqual([
+      ['The prose names AlphaNet and BetaNet in running text.', null],
+      ['Aa', { table: 1, row: 0, col: 0, span: 1, head: true }], ['Bb', { table: 1, row: 0, col: 1, span: 1, head: true }], ['Cc', { table: 1, row: 0, col: 2, span: 1, head: true }],
+      ['x1 one', { table: 1, row: 1, col: 0, span: 1, head: false }], ['spanning text', { table: 1, row: 1, col: 1, span: 2, head: false }],
+      ['x2 two', { table: 1, row: 2, col: 0, span: 1, head: false }], ['three', { table: 1, row: 2, col: 1, span: 1, head: false }], ['four', { table: 1, row: 2, col: 2, span: 1, head: false }],
+      ['x3 six', { table: 1, row: 3, col: 0, span: 1, head: false }], ['seven', { table: 1, row: 3, col: 1, span: 1, head: false }], ['eight', { table: 1, row: 3, col: 2, span: 1, head: false }],
+    ])
+  })
 })
 
 describe('loadProject: an environment whose begin code begins a table is a table (2610.40576v1\'s casetable)', () => {

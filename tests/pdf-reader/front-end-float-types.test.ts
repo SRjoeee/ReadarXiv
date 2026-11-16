@@ -182,4 +182,31 @@ describe('the instrument’s unit facts from the front end’s (unitFactsOf)', (
     // (each kept unit with the reason it is kept, for the lab's dump (`keptBy`): the algorithm's body its pseudocode)
     expect([...facts.why]).toEqual([[2, 'pseudocode']])
   })
+  it('keeps a cell of an algorithm float as its pseudocode, and a cell that holds no ordinary word as written (R1): the instrument\'s own reasons', () => {
+    const paper = openPaper(
+      new Map([
+        [
+          'main.tex',
+          enc(
+            doc(
+              [
+                'We compare GSM8K with the larger benchmark of the study, and MATH with the others.',
+                '\\begin{tabular}{ll}Data & Score \\\\ GSM8K & the best one \\end{tabular}',
+                '\\begin{algorithm}\\caption{Rank}\\begin{tabular}{l}MATH\\end{tabular}\\end{algorithm}',
+              ].join('\n\n'),
+              '\\usepackage{algorithm2e}',
+            ),
+          ),
+        ],
+      ]),
+    ) as unknown as { units: Unit[] }
+    const facts = unitFactsOf(paper as never)
+    const why = paper.units.flatMap((u, i) => (facts.why.has(i) ? [[u.kind, textOf(u), facts.why.get(i)]] : []))
+    // (PDF-READER §18.72 R1: "GSM8K" holds no ordinary word, kept as written; "Data", "Score" and "the best one" are words, sent)
+    expect(why).toEqual([
+      ['cell', 'GSM8K', 'words'],
+      ['cell', 'MATH', 'pseudocode'],
+    ])
+    expect([...facts.why.keys()].every((i) => facts.kept.has(i))).toBe(true)
+  })
 })

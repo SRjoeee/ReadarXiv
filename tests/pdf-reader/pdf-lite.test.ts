@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { LINK_TEXT_PIXELS, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from '../../packages/engine/src/compile/pdf-lite.ts'
@@ -37,6 +40,22 @@ describe('liteWorkerSource', () => {
     expect(() => liteWorkerSource(1 as never)).toThrow(TypeError)
     expect(() => liteWorkerSource(`${ANCHOR}${TEXT_ANCHOR}${EXPORT_ANCHOR}`, { version: '9.9.9' })).toThrow(/made for PDF\.js/)
     expect(() => liteWorkerSource(`${ANCHOR}${TEXT_ANCHOR}${EXPORT_ANCHOR}`, { version: LITE_PDFJS })).not.toThrow()
+  })
+
+  it('is pinned: the installed worker is the version the patch was made for, holds the decode once, and the PDF.js the rebuilt reader ships (the repository\'s one pin of pdfjs-dist, its root manifest) is it', () => {
+    const require = createRequire(import.meta.url)
+    const version = (JSON.parse(readFileSync(require.resolve('pdfjs-dist/package.json'), 'utf8')) as { version: string }).version
+    expect(version).toBe(LITE_PDFJS)
+    const worker = readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8')
+    expect(worker.split(ANCHOR).length - 1).toBe(1)
+    expect(worker.split(TEXT_ANCHOR).length - 1).toBe(1)
+    expect(worker.split(EXPORT_ANCHOR).length - 1).toBe(1)
+    expect(worker.trimEnd().split('\n').filter(l => l.startsWith('export ')).at(-1)).toBe(EXPORT_ANCHOR)
+    expect(liteWorkerSource(worker, { version })).toContain('image pixels not decoded')
+    // (packages/reader takes PDF.js from its host, the repository pinning it once: the reader's build serves that pin's files,
+    // packages/reader/package.json "//", src/vite.ts pdfjsDist)
+    const root = JSON.parse(readFileSync(join(import.meta.dirname, '../../package.json'), 'utf8')) as { dependencies: Record<string, string> }
+    expect(root.dependencies['pdfjs-dist']).toBe(LITE_PDFJS)
   })
 
 })

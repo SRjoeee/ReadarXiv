@@ -635,6 +635,27 @@ describe('the refusal names the unmarked original\'s verdict and the trees tried
     expect(await markedOfPaper(paperOf(), { compile: errors.compile })).not.toHaveProperty('own')
   })
 
+  it('takes the host\'s `tried` for its why: every tree tried, then the box\'s; texlive where the paper declares a year none of them is (markedOfPaper)', async () => {
+    const ERR = '! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})'
+    const TEX23 = 'This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)\n'
+    const fail23: Compiled = { ok: true, pdf: PDF, log: `${TEX23}! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n! Emergency stop.\n` }
+    const declaring = (year: string) => paperOf(SOURCE, [['00README.json', JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], texlive_version: year, process: { compiler: 'pdflatex' } })]])
+    // (undeclared: the compile's, on both trees)
+    const plain = compiler([PROBE, fail, fail, fail])
+    expect(await markedOfPaper(paperOf(), { compile: plain.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper's own source (article) does not run through on TeX Live 2023 or 2025: ${ERR}` })
+    // (declares 2023, tried there first and then here: its own year was tried, so the compile's)
+    const routed = compiler([PROBE, fail, fail, fail])
+    expect(await markedOfPaper(declaring('2023'), { compile: routed.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
+    // (declares a year no tree tried is: TeX Live's, every tree named)
+    const other = compiler([PROBE, fail23, fail23, fail23])
+    expect(await markedOfPaper(declaring('2022'), { compile: other.compile, tried: ['2025'] })).toMatchObject({ refused: 'texlive', why: `the paper (article) declares TeX Live 2022; on TeX Live 2025 or 2023 its own source does not run through: ${ERR}`, own: { tree: '2023' } })
+    // (none tried, or the box's own year among them, or no year: today's whys)
+    for (const tried of [[], ['2025'], null, ['x', 2025]]) {
+      const c = compiler([PROBE, fail, fail, fail])
+      expect(await markedOfPaper(declaring('2023'), { compile: c.compile, tried: tried as string[] | null })).toMatchObject({ refused: 'texlive', why: `the paper (article) declares TeX Live 2023; on TeX Live 2025 its own source does not run through: ${ERR}` })
+    }
+  })
+
   it('handoverOf: the other served tree, once, where TeX failed on the paper\'s own source and no host\'s limit stopped it', () => {
     const served = ['2025', '2023']
     const failed = { ran: false, short: false, limit: null, tree: '2025' }

@@ -7,7 +7,7 @@ import { chainOf, type FetchInit, type FetchReply, google, microsoft, type Trans
 import { fakeClock, scriptedFetch } from '@readarxiv/translate/testing'
 import { MockLanguageModelV4 } from 'ai/test'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
-import { hostTranslate, WHY_OF } from '@/pdf-reader/host/translate'
+import { FIRST_BATCH, hostTranslate, NEXT_BATCH, WHY_OF } from '@/pdf-reader/host/translate'
 import { llmTranslator } from '@/providers/llm'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport, type TranslationTransport } from '@/providers/transport'
@@ -84,6 +84,16 @@ describe('the reader host translate through the background', () => {
         for (let p = 1; p < page; p++) for (let k = 0; k < 16; k++) expect(asked.has(`p${p}-${k}`)).toBe(true)
       }
     }
+  })
+  it("a 3-page open goes as production's batches of plain source, by this case's own numbers: the first call at most 2,500 characters, then at most 12,000 a call, one call at a time (7, 34 and 7 units)", async () => {
+    expect([FIRST_BATCH, NEXT_BATCH]).toEqual([2500, 12000])
+    const { transport, asked } = fake()
+    const rows = await all(hostTranslate({ transport, paper: 'p' })(threePages(), 'de', { signal: new AbortController().signal }))
+    expect(rows.length).toBe(48)
+    expect(asked.map(a => a.units.length)).toEqual([7, 34, 7])
+    const chars = asked.map(a => a.units.reduce((n, u) => n + text(u).length, 0))
+    expect(chars[0]).toBeLessThanOrEqual(2500)
+    expect(chars[1]).toBeLessThanOrEqual(12000)
   })
   it('a unit the chain refused is given as refused, the page\'s words about it left behind', async () => {
     const { transport } = fake({ refuse: 'u2' })

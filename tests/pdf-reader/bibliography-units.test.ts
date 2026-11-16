@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classOf, LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
 import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
+import { bundleUnitsOf, UNIT_FLAG_BITS } from '../../packages/engine/src/instrument/units.ts'
 import { plainSource } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // The content classes' stage 4 (docs/route/orphan-text.md §5, "References" and "Names"; the owner's rulings of 2026-10-25 and
@@ -75,6 +76,17 @@ describe('a numeric \\bibitem bibliography written in the paper (plain, abbrv, u
     expect(tex).toContain(`\\axtpma{p${id(1)}.${year}a}1994.\\axtpm{p${id(1)}.${year}b}`)
     // (the label's \\bibitem and its key as the paper wrote them)
     expect(tex).toContain('\\bibitem{bengio1994}\n')
+  })
+  it('gives the entries to the bundle as units of kind reference, none kept as the original, whatever the target (bundleUnitsOf, no unit kept: the rebuilt engine keeps none by its words)', () => {
+    const kept = null
+    const rows = bundleUnitsOf(p, kept)
+    expect(rows).toHaveLength(p.units.length + p.names.length)
+    const ids = bib(p).map(u => units(p).indexOf(u))
+    expect(ids).toHaveLength(2)
+    for (const id of ids) {
+      expect(rows[id]?.[0], `entry unit ${id}`).toBe('reference')
+      expect((rows[id]?.[1] ?? 0) & UNIT_FLAG_BITS.KEPT, `entry unit ${id}`).toBe(0)
+    }
   })
 })
 
@@ -336,5 +348,19 @@ describe('backref\'s lists after the entries (hyperref\'s pagebackref: 2610.3766
     // (after the entry's end mark and its numbers' marks, last: the list TeX sets after the entry is the next thing it sets)
     expect(text).toMatch(new RegExp(String.raw`\\axtend\{${i}e\}[^\n]*\\axtbrname\{p${i}\.${k}\}\n\n`))
     expect(text).not.toContain('\\axtbackref')
+  })
+})
+
+// (held here since lane c1-rewrites: the block's units, without today's rows (layer-proto/rows.mjs toTranslate) and classes
+// (rules/content-classes.mjs), which the cut-over deletes; a kind's class and toggle are the reader's, packages/reader
+// compose/classes.ts)
+describe('an author block with affiliations and \\thanks: its names and its places units of their own, its note the body\'s (the front end\'s kinds)', () => {
+  it('reads the author block\'s names and places, and its note, as units of their own: kinds author, affiliation and footnote', () => {
+    const tex = doc('\\maketitle\n\nThe body of the paper says something.', '\\title{A Title}\n\\author{Ada Lovelace\\thanks{Supported by the Analytical Society.}\\\\\nUniversity of London\n\\and\nCharles Babbage\\\\\nCambridge}')
+    const p = open({ 'main.tex': tex })
+    expect(units(p).filter(u => u.kind === 'author').map(u => plainSource(u as never).trim())).toEqual(['Ada Lovelace', 'Charles Babbage'])
+    expect(units(p).filter(u => u.kind === 'affiliation').map(u => plainSource(u as never).trim())).toEqual(['University of London', 'Cambridge'])
+    const note = units(p).findIndex(u => u.kind === 'footnote' && plainSource(u as never).includes('Analytical Society'))
+    expect(note).toBeGreaterThanOrEqual(0)
   })
 })

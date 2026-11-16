@@ -7,6 +7,7 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
 import { openPaper } from '../../packages/engine/src/compile/live.ts'
+import { aheadKey } from '../../packages/engine/src/marks/marks.ts'
 import { compileImageRef } from '../../lab/pdf/spikes/compile-image.mjs'
 
 // "The marks do not move the page": a marked original as the layout compile makes it (markedOfPaper: the probe, its answers to
@@ -217,5 +218,28 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
       // (the list's page numbers are on the page, after the entries' text: "1, 2" for a, "2" for b)
       expect(r.own.join('\n')).toMatch(/2021\./)
     }
+  }, 900_000)
+  // (held here since lane c1-rewrites: the look-ahead pairs' keys the moved marks' (marks/marks.ts aheadKey), no longer today's
+  // layout/marks.mjs, which the cut-over deletes)
+  it('a paper\'s macro that looks ahead before a formula, a citation or a footnote\'s call (2609.20976\'s \\snr, \\ac{SNR}\\xspace): the placeholder after it marked where TeX answered so, \\footnote not (\\xspace sets no space before it); its pairs keyed by the moved marks', async () => {
+    const pre = '\\usepackage{xspace}\\usepackage{acronym}\\usepackage{url}\\newcommand{\\snr}{\\ac{SNR}\\xspace}\\newcommand{\\lgn}{\\texttt{lognormal\\allowbreak\\_galaxies}\\xspace}\\newcommand{\\nmx}{\\textsc{nm}\\xspace}'
+    const r = await compare(doc(pre, `\\begin{acronym}\\acro{SNR}{signal-to-noise ratio}\\end{acronym}\n\n${lines('high \\snr $\\geq 50$')}\n\n${lines('the \\snr \\cite{a}')}\n\n${lines('code \\lgn \\footnote{\\url{https://x.org}}')}\n\n${lines('by \\nmx{}\\cite{a}')}`))
+    expect(r.marked).toEqual(r.own)
+    // (the formula and the citation after \\snr: its opening mark alone, theirs both — a closing mark after \\snr would make the
+    // space TeX skipped after it a second one; the footnote after \\lgn none; the citation right against \\nmx{}'s last letter
+    // none, \\xspace setting no space before the `{}`: a mark's whatsit there would let TeX hyphenate the word the citation's
+    // box keeps whole, which no box's width shows)
+    expect([r.switches[aheadKey('\\snr', ' ', '$\\geq 50$')], r.switches[aheadKey('\\snr', ' ', '\\cite{a}')], r.switches[aheadKey('\\lgn', ' ', '\\footnote{\\url{https://x.org}}')], r.switches[aheadKey('\\nmx{}', '', '\\cite{a}')]]).toEqual(['1', '1', '2', '2'])
+    expect([r.marksOf('\\snr'), r.marksOf('$\\geq 50$'), r.marksOf('\\cite{a}'), r.marksOf('\\nmx{}')]).toEqual(['a', 'ab', 'ab', 'a'])
+  }, 900_000)
+  it('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill, cut in two: \\tikz alone opens a picture it never closes, in which pgf\'s \\selectfont selects \\nullfont) before a letter macro and a look-ahead pair: both answered as without it; its pairs keyed by the moved marks', async () => {
+    const pre = '\\usepackage{tikz}\\usepackage{xspace}\\newcommand\\bert{BERT}\\newcommand{\\nmx}{\\textsc{nm}\\xspace}'
+    const body = `The \\bert{} model.\n\n${lines('by \\nmx{}\\cite{a}')}`
+    const [broken, clean] = [await compare(doc(pre, `A dot \\tikz\\fill (0,0) circle (.5ex); here.\n\n${body}`)), await compare(doc(pre, body))]
+    expect(broken.marked).toEqual(broken.own)
+    const answers = (r: typeof clean) => ({ text: r.texts.find(([s]) => s === '\\bert{}')?.[1], inkless: r.inkless.includes('\\bert{}'), pair: r.switches[aheadKey('\\nmx{}', '', '\\cite{a}')], marks: [r.marksOf('\\bert{}'), r.marksOf('\\nmx{}'), r.marksOf('\\cite{a}')] })
+    // (\\bert{}: its text, a box with ink; the citation right against \\nmx{}: 2, its opening mark alone, none on the citation)
+    expect(answers(clean)).toEqual({ text: 'BERT', inkless: false, pair: '2', marks: ['ab', 'a', ''] })
+    expect(answers(broken)).toEqual(answers(clean))
   }, 900_000)
 })

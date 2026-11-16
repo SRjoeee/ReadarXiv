@@ -227,3 +227,35 @@ describe('no mark of ours printed as text (design §3.3.2, the guard\'s `text`)'
 // paper's at all, so the host retries it instead (the box's call): such a refusal names the limit (`limit`, limitOf's name, or
 // 'budget'), and baseRefusalRetryable is that and nothing else
 
+// (held here since lane c1-rewrites: markedOfPaper's refusal naming the limit, without today's retry rule, layer-proto/format.mjs
+// baseRefusalRetryable, which the cut-over deletes with today's engine; the website's host reads the limit itself)
+describe('a refusal a host\'s limit or the compile budget caused names it (markedOfPaper\'s `limit`); one the paper caused names none', () => {
+  const STOPPED = { ok: false, log: TEX, limit: 'wall', error: 'the compile passed its wall limit' } as never
+  it('the final pass: out of budget or stopped by the host, the limit named; a pass that failed or threw, none', async () => {
+    const tight = compiler([PROBE, { ...marked(), ms: 1000 }])
+    const budget = baseOf(await markedOfPaper(paperOf(), { compile: tight.compile, compileBudgetMs: 2000 }))
+    expect(budget).toEqual({ refused: 'final', why: 'no compile left within the compile budget', limit: 'budget' })
+    const stopped = baseOf(await markedOfPaper(paperOf(), { compile: compiler([PROBE, marked(), STOPPED]).compile }))
+    expect(stopped).toEqual({ refused: 'final', why: 'the final pass was stopped by the host\'s wall limit', limit: 'wall' })
+    const halted = baseOf(await markedOfPaper(paperOf(), { compile: compiler([PROBE, marked(), { ok: true, pdf: FINAL, log: `${TEX}! Emergency stop.\n` }]).compile }))
+    const threw = baseOf(await markedOfPaper(paperOf(), { compile: compiler([PROBE, marked(), new Error('the jail broke')]).compile }))
+    for (const r of [halted, threw]) {
+      expect(r).toMatchObject({ refused: 'final' })
+      expect(r).not.toHaveProperty('limit')
+    }
+  })
+
+  it('the guard: the marked original or the paper\'s own source stopped by the host, or no compile left to tell whose fault, the limit named; the paper\'s own source failing as itself, none', async () => {
+    const markedStopped = await markedOfPaper(paperOf(), { compile: compiler([PROBE, STOPPED]).compile })
+    expect(markedStopped).toMatchObject({ refused: 'compile', why: 'the marked original was stopped by the host\'s wall limit', limit: 'wall' })
+    const fail: Compiled = { ok: true, pdf: DRAFT, log: `${TEX}! Undefined control sequence.\nl.3 \\foo\n! Emergency stop.\n` }
+    const ownStopped = await markedOfPaper(paperOf(), { compile: compiler([PROBE, fail, fail, STOPPED]).compile })
+    expect(ownStopped).toMatchObject({ refused: 'compile', why: 'the paper\'s own source was stopped by the host\'s wall limit', limit: 'wall' })
+    const untold = await markedOfPaper(paperOf(), { compile: compiler([PROBE, { ...fail, ms: 100 }]).compile, compileBudgetMs: 150 })
+    expect(untold).toMatchObject({ refused: 'compile', why: expect.stringContaining('the paper\'s own source was not compiled'), limit: 'budget' })
+    // (the paper's own source failing as itself is the paper's: no limit, for good)
+    const own = await markedOfPaper(paperOf(), { compile: compiler([PROBE, fail, fail, fail]).compile })
+    expect(own).toMatchObject({ refused: 'compile' })
+    expect(own).not.toHaveProperty('limit')
+  })
+})

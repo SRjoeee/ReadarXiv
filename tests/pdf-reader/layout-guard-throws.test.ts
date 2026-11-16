@@ -122,4 +122,12 @@ describe('markedOfPaper: a throw of the guard\'s own is no refusal', () => {
     expect(c.asked).toHaveLength(2)
   })
 
+  it('lets a failed allocation of the probe\'s compile or the marked compile go on, never a stage\'s refusal; any other failure is the stage\'s refusal (markedOfPaper)', async () => {
+    const memory = failedAllocation()
+    await expect(markedOfPaper(paperOf(), { compile: asking(() => memory as Error).compile })).rejects.toBe(memory)
+    await expect(markedOfPaper(paperOf(), { compile: asking((_, n) => (n === 0 ? PROBE : memory as Error)).compile })).rejects.toBe(memory)
+    // (any other failure is the stage's refusal, as before)
+    expect(await markedOfPaper(paperOf(), { compile: asking((_, n) => (n === 0 ? PROBE : new Error('the compiler threw'))).compile })).toMatchObject({ refused: 'compile' })
+  })
+
 })

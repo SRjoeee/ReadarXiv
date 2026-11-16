@@ -3,7 +3,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { openPaper } from '../../packages/engine/src/compile/live.ts'
+import { bundleUnitsOf } from '../../packages/engine/src/instrument/units.ts'
 import { inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
+import { sourceHash, unitText } from '../../packages/engine/tests/helpers/unit-harness.ts'
 import { unpackSource } from '../../packages/engine/src/source/tar.ts'
 import { LAB } from './helpers/lab-data'
 
@@ -100,6 +102,31 @@ describe('inFloat: the indices of the units written inside a float', () => {
     expect(p.inFloat).toEqual([1, 3])
     expect(JSON.parse(JSON.stringify(p.inFloat))).toEqual(p.inFloat)
     expect(structuredClone({ units: p.units.map(u => ({ ...u })), inFloat: p.inFloat }).inFloat).toEqual([1, 3])
+  })
+
+  // (held here since lane c1-rewrites: the bundle rows the engine package's bundleUnitsOf writes, the kept set stated, no longer
+  // through today's wrapper, layer-proto/units.mjs, whose kept set was today's name rule's)
+  it('a footnote nested in a float\'s caption is in the set by its own index, and its parent\'s hash is the hash it has outside a float; the bundle\'s rows the same (bundleUnitsOf, no unit kept)', async () => {
+    const body = (env: string) => doc(`Running text before the figure here.\n\n\\begin{${env}}Produced by the author.\\caption{The figure words\\footnote{A note in the caption here.} here.}\\end{${env}}\n\nRunning text after it.`)
+    const inside = project(body('figure')), outside = project(body('center'))
+    const units = inside.units as unknown as Unit[]
+    const parent = units.findIndex(u => u.pieces.some(p => p.t === 'nested')), note = units.findIndex(u => textOf(u) === 'A note in the caption here.')
+    expect(parent).toBeGreaterThanOrEqual(0)
+    expect(units[parent]?.pieces.find(p => p.t === 'nested')?.unit).toBe(units[note])
+    expect(inside.inFloat).toEqual(expect.arrayContaining([parent, note]))
+    expect(outside.inFloat).toEqual([])
+    // the units, their hashes, their texts and their bundle rows are those of the same source with the float a plain container
+    expect(units.length).toBe(outside.units.length)
+    for (let i = 0; i < units.length; i++) {
+      expect(await sourceHash(units[i] as never), `unit ${i}`).toBe(await sourceHash(outside.units[i] as never))
+      expect(unitText(units[i]?.pieces as never)).toEqual(unitText(outside.units[i]?.pieces as never))
+      expect(Object.keys(units[i] as object)).not.toContain('inFloat')
+    }
+    const files = (env: string) => new Map([['main.tex', enc(body(env))]])
+    const a = openPaper(files('figure')), b = openPaper(files('center'))
+    expect(a.inFloat).toEqual(inside.inFloat)
+    const kept = null
+    expect(JSON.stringify(bundleUnitsOf(a, kept))).toBe(JSON.stringify(bundleUnitsOf(b, kept)))
   })
 })
 

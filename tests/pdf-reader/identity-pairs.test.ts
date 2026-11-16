@@ -61,6 +61,10 @@ describe('the front end: a pair\'s verdict from its command\'s definition', () =
     const p = open({ 'main.tex': `\\documentclass{article}\n\\newcommand{\\plain}[1]{#1}\\newcommand{\\loud}[1]{\\textbf{#1}}\n\\begin{document}\nWe study \\plain{deep flows} and \\loud{shallow ones} in turn.\n\\end{document}\n` })
     expect(verdicts((p.units as unknown as Unit[])[0]!)).toEqual(['\\plain:nothing', '\\loud'])
   })
+  it('one whose body sets a space beside its argument is no identity; one whose lines end in comments is (review of #581): the front end\'s verdict', () => {
+    const p = open({ 'main.tex': `\\documentclass{article}\n\\newcommand{\\word}[1]{#1 }\n\\newcommand{\\same}[1]{%\n  #1%\n}\n\\begin{document}\nWe study \\word{deep}flows and \\same{shallow ones} in turn.\n\\end{document}\n` })
+    expect(verdicts((p.units as unknown as Unit[])[0]!)).toEqual(['\\word', '\\same:nothing'])
+  })
   it('the verdict is no field of the unit: its hash, its JSON and its marks are its pieces\' as before', async () => {
     // (b's head defines \\enquote alone, so that its marks are text in both: the verdicts are what differs)
     const quotes = '\\providecommand \\enquote  [1]{``#1\'\'}%\n'

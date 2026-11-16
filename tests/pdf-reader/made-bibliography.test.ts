@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper } from '../../packages/engine/src/compile/live.ts'
+import { type CompileRequest, openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
+import { bibliographyKept, madeBibliography, markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { bundleUnitsOf } from '../../packages/engine/src/instrument/units.ts'
+import { LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
 
 // A bibliography BibTeX makes (PDF-READER §19.13; the owner's ruling of 2026-10-28: a .bbl the compile makes is a shipped one):
 // a paper that ships a .bib and no .bbl (102 of the 195 local sources) had no entry units, the front end reading only the .bbl
@@ -14,6 +17,20 @@ const PRE = '\\newtheorem{theorem}{Theorem}\n\\newtheorem{conjecture}{Conjecture
 const BIB = '@article{ba2016, author={Jimmy Lei Ba}, title={Layer normalization}, year={2016}}\n'
 const paperOf = (files: Record<string, string>) => openPaper(new Map(Object.entries(files).map(([k, v]) => [k, enc(v)])))
 
+const BBL = '\\begin{thebibliography}{1}\n\n\\bibitem{ba2016}\nJimmy~Lei Ba.\n\\newblock Layer normalization.\n\\newblock 2016.\n\n\\end{thebibliography}\n'
+const source = (more: Record<string, string> = {}) => paperOf({ 'main.tex': doc(BODY, PRE), 'refs.bib': BIB, ...more })
+/** a host's compile of the draft with BibTeX: TeX ran through (AXT-END), and the files the pass and BibTeX wrote */
+const host = (files: Record<string, string>, { ok = true, end = true, returned = true } = {}) => {
+  const asked: CompileRequest[] = []
+  const compile = async (req: CompileRequest) => {
+    asked.push(req)
+    return { ok, log: end ? 'This is pdfTeX\nAXT-END\n' : 'This is pdfTeX\n', ...(returned ? { files: new Map(Object.entries(files).map(([k, v]) => [k, enc(v)])) } : {}) }
+  }
+  return { asked, compile }
+}
+const AUX = '\\relax\n\\citation{ba2016}\n\\bibstyle{plain}\n\\bibdata{refs}\n'
+const kinds = (p: ReturnType<typeof paperOf>) => (p.units as unknown as { kind: string }[]).map(u => u.kind)
+
 describe('\\bibliography inside the group of a command the role table does not know: read where TeX reads it', () => {
   // (2608.06007v1: `\\balance{ \\bibliographystyle{unsrt} \\bibliography{ref} }`, balance.sty's \\balance taking no argument,
   // its group TeX's. Read as the command's argument, one placeholder, the walk never met the \\bibliography: no .bbl was
@@ -24,3 +41,160 @@ describe('\\bibliography inside the group of a command the role table does not k
   })
 })
 
+// (held here since lane c1-rewrites: madeBibliography is the engine package's (compile/paper.ts), which today's
+// layout/paper.mjs only wrapped to give the paper opened again today's name rule's `kept` (pipeline/live.mjs withNames); the
+// cases below are today's half's (made-bibliography-today.test.ts), run on the package's madeBibliography, openPaper and
+// bundleUnitsOf, the kept set stated: none, the rebuilt engine keeping no unit by its words)
+const kept = null
+
+describe('\\bibliography ends the paragraph before it, with the job\'s .bbl and without (the package\'s openPaper and bundleUnitsOf, no unit kept)', () => {
+  it('cuts the same source units whether the package holds the .bbl or not: none of them moves when BibTeX writes it', () => {
+    const without = source(), withBbl = source({ 'main.bbl': BBL })
+    const n = without.units.length
+    expect(JSON.stringify(bundleUnitsOf(withBbl, kept).slice(0, n))).toBe(JSON.stringify(bundleUnitsOf(without, kept).slice(0, n)))
+    // (the paragraph before it holds no placeholder of \\bibliography's; the entry after every other unit)
+    expect(kinds(withBbl).slice(n)).toEqual(['reference'])
+    expect(JSON.stringify(without.units.at(-1))).not.toContain('bibliography{')
+    expect(without.project.bibliography).toEqual(['refs'])
+  })
+})
+
+describe('\\bibliography inside the group of a command the role table does not know: read where TeX reads it, and made (the package\'s madeBibliography)', () => {
+  // (2608.06007v1: `\\balance{ \\bibliographystyle{unsrt} \\bibliography{ref} }`, balance.sty's \\balance taking no argument,
+  // its group TeX's. Read as the command's argument, one placeholder, the walk never met the \\bibliography: no .bbl was
+  // made, the printed bibliography no unit's, kept blocks never translated, the References toggle dead on it)
+  const WRAPPED = BODY.replace('\\bibliographystyle{plain}\n\\bibliography{refs}', '\\balance{\n  \\bibliographystyle{plain}\n  % a comment\n  \\bibliography{refs}\n}')
+  const wrapped = (more: Record<string, string> = {}) => paperOf({ 'main.tex': doc(WRAPPED, PRE), 'refs.bib': BIB, ...more })
+  it('names the bibliography, so that BibTeX makes the .bbl; the entries are units, kind reference, the other units as before', async () => {
+    const without = wrapped()
+    expect(without.project.bibliography).toEqual(['refs'])
+    expect(bibliographyKept(without)).toBeNull()
+    const withBbl = wrapped({ 'main.bbl': BBL }), n = without.units.length
+    expect(kinds(withBbl).slice(n)).toEqual(['reference'])
+    expect(JSON.stringify(bundleUnitsOf(withBbl, kept).slice(0, n))).toBe(JSON.stringify(bundleUnitsOf(without, kept).slice(0, n)))
+    // (the entries the bibliography written bare has; the call no unit's: the paragraph before ends where it begins)
+    const entries = (p: ReturnType<typeof paperOf>) => JSON.stringify(bundleUnitsOf(p, kept).filter(u => u[0] === 'reference'))
+    expect(entries(withBbl)).toBe(entries(source({ 'main.bbl': BBL })))
+    expect(JSON.stringify(bundleUnitsOf(withBbl, kept))).not.toContain('balance')
+    const { compile } = host({ 'main.aux': AUX, 'main.bbl': BBL })
+    const r = await madeBibliography(without, { compile })
+    expect('made' in r && r.made.path).toBe('main.bbl')
+  })
+})
+
+describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first pass, the paper opened again with it (the engine package\'s, no unit kept)', () => {
+  it('asks one draft of the unmarked original with BibTeX, its files, and opens the paper with the .bbl it wrote: its entries last', async () => {
+    const paper = source(), { asked, compile } = host({ 'main.aux': AUX, 'main.bbl': BBL })
+    const r = await madeBibliography(paper, { compile })
+    expect('made' in r && r.made.path).toBe('main.bbl')
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toMatchObject({ main: 'main.tex', engine: 'pdflatex', rerun: false, bibtex: true, draft: true, files: true })
+    // (the unmarked original: the paper's own main file with graphicx's draft and the end marker, nothing else of ours)
+    expect(new TextDecoder().decode(asked[0]!.overrides.get('main.tex'))).toMatch(/^\\PassOptionsToPackage\{draft\}\{graphicx\}.*AXT-END/)
+    if (!('paper' in r)) throw new Error('no paper')
+    const again = r.paper, n = paper.units.length
+    // (every unit before the entries and every name after them the bundle's as before, byte for byte; the entry after them)
+    const was = bundleUnitsOf(paper, kept), now = bundleUnitsOf(again, kept)
+    expect(JSON.stringify(now.slice(0, n))).toBe(JSON.stringify(was.slice(0, n)))
+    expect(JSON.stringify(now.slice(n + 1))).toBe(JSON.stringify(was.slice(n)))
+    expect(now[n]?.[0]).toBe('reference')
+    expect(again.names).toEqual(paper.names)
+    // (a shipped .bbl from here on: the marked original writes it back marked, and asks no BibTeX)
+    expect(again.meta.bbl).toBe(true)
+    expect(new TextDecoder().decode(originalFiles(again, { layout: LAYOUT_CLASSES }).get('main.bbl'))).toContain(`\\leavevmode\\axtmark{${n}s}Jimmy`)
+    const marked = host({})
+    await markedOfPaper(again, { compile: async req => { marked.asked.push(req); return { ok: false, log: '' } }, final: false })
+    expect(marked.asked.length).toBeGreaterThan(0)
+    expect(marked.asked.every(q => q.bibtex === false)).toBe(true)
+  })
+  it('makes the entries where a class\'s own author command cut a unit no engine before cut: that unit before the entries, as every unit (2610.20967v1\'s spconf \\name)', async () => {
+    // (the block's unit numbered after the others but before the entries: numbered after them, it stood where the entries
+    // come, every unit before them was not as before, and the bibliography was kept as none, its entries an ink unit)
+    const sty = '\\def\\@maketitle{\\begin{tabular}[t]{c}\\@name \\\\ \\@address\\end{tabular}}\n\\def\\name#1{\\gdef\\@name{{\\em #1}\\\\}}\n\\def\\address#1{\\gdef\\@address{#1}}\n'
+    const paper = paperOf({ 'main.tex': doc(`\\maketitle\n${BODY}`, `${PRE}\n\\usepackage{spconf}\n\\name{Jane Doe$^{1}$}\n\\address{$^1$Some University}`), 'spconf.sty': sty, 'refs.bib': BIB })
+    expect(kinds(paper).at(-1)).toBe('author')
+    const r = await madeBibliography(paper, { compile: host({ 'main.aux': AUX, 'main.bbl': BBL }).compile })
+    expect('made' in r && r.made.path).toBe('main.bbl')
+    if (!('paper' in r)) throw new Error('no paper')
+    expect(kinds(r.paper).slice(-2)).toEqual(['author', 'reference'])
+  })
+  it('asks the host which compiler made arXiv\'s PDF first, where the package names none, and the paper opened again keeps it', async () => {
+    const paper = source()
+    expect(paper.meta.compilerGuessed).toBe(true)
+    const { asked, compile } = host({ 'main.aux': AUX, 'main.bbl': BBL })
+    const r = await madeBibliography(paper, { compile, compilerOf: async () => 'xelatex' })
+    expect(asked[0]?.engine).toBe('xelatex')
+    expect('paper' in r && [r.paper.meta.compiler, r.paper.meta.compilerGuessed]).toEqual(['xelatex', false])
+  })
+  it('makes none where the package ships the .bbl, names no \\bibliography, loads biblatex, or lacks a .bib it names: no compile', async () => {
+    const cases: [ReturnType<typeof paperOf>, string][] = [
+      [source({ 'main.bbl': BBL }), 'shipped'],
+      [paperOf({ 'main.tex': doc('Words with no bibliography.'), 'refs.bib': BIB }), 'none'],
+      [paperOf({ 'main.tex': doc('Words \\cite{ba2016}.\n\n\\printbibliography', '\\usepackage[backend=bibtex]{biblatex}\n\\addbibresource{refs.bib}'), 'refs.bib': BIB }), 'none'],
+      [paperOf({ 'main.tex': doc(BODY, '\\usepackage{biblatex}'), 'refs.bib': BIB }), 'biblatex'],
+      [paperOf({ 'main.tex': doc(BODY, PRE) }), 'bib-missing'],
+    ]
+    for (const [paper, why] of cases) {
+      const { asked, compile } = host({ 'main.aux': AUX, 'main.bbl': BBL })
+      // (and said before, for a host that orders its steps by it)
+      expect(bibliographyKept(paper), why).toBe(why)
+      expect(await madeBibliography(paper, { compile }), why).toMatchObject({ kept: why })
+      expect(asked, why).toHaveLength(0)
+    }
+    expect(bibliographyKept(source())).toBeNull()
+  })
+  it('keeps the paper as it was where the pass fails or says the bibliography is none BibTeX makes for this job alone', async () => {
+    const cases: [Parameters<typeof host>, string][] = [
+      [[{ 'main.aux': AUX, 'main.bbl': BBL }, { ok: false }], 'compile'],
+      [[{ 'main.aux': AUX, 'main.bbl': BBL }, { end: false }], 'compile'],
+      [[{ 'main.aux': AUX, 'main.bbl': BBL }, { returned: false }], 'no-files'],
+      // (chapterbib's or bibunits' job beside the main one's, which a one-pass request never runs BibTeX on)
+      [[{ 'main.aux': AUX, 'chap1.aux': '\\bibdata{refs}\n', 'main.bbl': BBL }], 'aux-jobs'],
+      // (an aux naming a .bib the package lacks: latexmk -norc runs no BibTeX then)
+      [[{ 'main.aux': '\\citation{ba2016}\n\\bibdata{refs,other}\n', 'main.bbl': BBL }], 'bib-missing'],
+      [[{ 'main.aux': AUX, 'main.bcf': '<bcf:controlfile/>', 'main.bbl': BBL }], 'biber'],
+      [[{ 'main.aux': AUX }], 'no-bbl'],
+      [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{0}\n\\end{thebibliography}\n' }], 'no-bbl'],
+      // (a .bbl that is more than a bibliography: a heading of its own among the source's units moves the units after it)
+      [[{ 'main.aux': AUX, 'main.bbl': `\\section*{Notes}\nA note BibTeX never writes.\n\n${BBL}` }], 'moved'],
+      // (an entry the front end reads past its end: a percent sign inside a command's argument, a comment there to TeX and to the
+      // front end, leaves the argument's group open over the next entry, whose \\bibitem would then no longer define its citation)
+      [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{2}\n\\bibitem{ba2016}%\n  Jimmy~Lei Ba, \\bibinfo{note}{\\url\n  {https://a.org/x?u=%3Fref}}\n  {Layer normalization}, 2016.%\n\\bibitem{b}%\n  Another Author, A title of a paper, 2017.%\n\\end{thebibliography}\n' }], 'entries'],
+    ]
+    for (const [args, why] of cases) {
+      const paper = source(), { compile } = host(...args)
+      const r = await madeBibliography(paper, { compile })
+      expect(r, why).toMatchObject({ kept: why })
+      expect(paper.meta.bbl, why).toBe(false)
+    }
+  })
+  it('makes the entries where a web address in an entry holds a percent sign TeX\'s \\href reads as a character (2610.21770v1\'s %3F), and where an entry of no words is no unit (2608.25210v2\'s ACM web pages)', async () => {
+    const ok = [
+      '\\begin{thebibliography}{2}\n\\bibitem{ba2016}%\n  Jimmy~Lei Ba, \\href\n  {https://a.org/x?u=%3Fref}\n  {Layer normalization}, 2016.%\n\\bibitem{b}%\n  Another Author, A title of a paper, 2017.%\n\\end{thebibliography}\n',
+      '\\begin{thebibliography}{2}\n\\bibitem[\\protect\\citeauthoryear{??}{dec}{2025}]%\n        {dec}\n \\bibinfo{year}{2025}\\natexlab{}.\n\\newblock\n  \\bibinfo{booktitle}{\\emph{\\url{https://huggingface.co/blog/x}}}.\n\n\\bibitem{ba2016}\nJimmy~Lei Ba.\n\\newblock Layer normalization.\n\\newblock 2016.\n\\end{thebibliography}\n',
+    ]
+    for (const bbl of ok) {
+      const paper = source(), { compile } = host({ 'main.aux': AUX, 'main.bbl': bbl })
+      const r = await madeBibliography(paper, { compile })
+      expect('paper' in r, bbl.slice(0, 80)).toBe(true)
+      if ('paper' in r) expect(kinds(r.paper).filter(k => k === 'reference').length).toBe(bbl.includes('Another Author') ? 2 : 1)
+    }
+  })
+  it('makes the entries where the .bib the aux names first is one the pass wrote itself: REVTeX\'s <job>Notes.bib (2610.20595v1, 2610.21770v1)', async () => {
+    // (REVTeX 4.x writes its notes as entries of `<job>Notes.bib` during the pass and names it in \\bibdata before the paper's own:
+    // on the disk latexmk decides by, so its BibTeX runs; read as a .bib the package lacks, every REVTeX paper that ships no .bbl
+    // had no entry units, its bibliography text no unit's, cut into ink units a column long)
+    const aux = '\\relax\n\\citation{ba2016}\n\\bibstyle{apsrev4-2}\n\\citation{REVTEX42Control}\n\\bibdata{mainNotes,refs}\n'
+    const paper = source(), { compile } = host({ 'main.aux': aux, 'mainNotes.bib': '@CONTROL{REVTEX42Control}\n', 'main.bbl': BBL })
+    const r = await madeBibliography(paper, { compile })
+    expect('paper' in r && kinds(r.paper).slice(paper.units.length)).toEqual(['reference'])
+    // (a .bib neither the package's nor the pass's is missing still)
+    const other = await madeBibliography(source(), { compile: host({ 'main.aux': '\\citation{ba2016}\n\\bibdata{mainNotes,refs,other}\n', 'mainNotes.bib': '', 'main.bbl': BBL }).compile })
+    expect(other).toMatchObject({ kept: 'bib-missing' })
+  })
+  it('takes a host\'s throw for the pass\'s failure, and a host that runs no such compiler for none', async () => {
+    const paper = source()
+    expect(await madeBibliography(paper, { compile: async () => { throw new Error('the jail is down') } })).toMatchObject({ kept: 'compile' })
+    expect(await madeBibliography(paper, { compile: host({}).compile, engines: ['xelatex'] })).toMatchObject({ kept: 'engine' })
+  })
+})
