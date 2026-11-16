@@ -27,6 +27,36 @@ const SOLID = 1.25
  *  a page number, keeps the original's size (the owner's ruling of 2026-11-08): its fit's floor is its size */
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
+/**
+ * A float's member (docs/PDF-READER.md §18.90): a unit of the format's own kind `caption` (a float's caption and a subfigure's:
+ * every member whose label is a float's, Label.float, is one). TeX builds a float's box once, at its natural size, and no page
+ * rhythm binds it: the page fill never spreads it (lay/page.ts, shared/fill-pass.ts), and its fit takes the leading before the
+ * room down to the least (floatOrder). A class of the unit's own kind, read where a unit's kind is read: the rule file is by
+ * script. A note is none: a run of sibling blocks in a column (body paragraphs, notes, list items, references) shares its page's
+ * rhythm, each filling its frame within the page's band (the coordinator's ruling of 2026-11-17 on the owner's choice)
+ */
+export const floatMember = (kind: string): boolean => kind === 'caption'
+/**
+ * The order of the fit's knobs for a float's member (docs/PDF-READER.md §18.90; the owner's review of 2026-11-13: the
+ * leading gives way before the separation does, for the class, and the size last): the script's order, its room knob two knobs,
+ * the gap's free part (`free`: the shrink TeX's glue states under it, Room.gap) where the script's order has the room, the rest
+ * of the room down to the least (`borrow`) directly before the size (`shrink`), at the end of an order with no size step. The
+ * class's order is by kind and the rule file's by script, so it is stated here, once, from the script's: a script whose order
+ * already has the room directly before the size (the alphabets': track, borrow, shrink, lead) keeps its order by construction,
+ * the free part first in its room
+ */
+export function floatOrder(order: readonly string[]): string[] {
+  if (!order.includes('borrow')) return [...order]
+  const out: string[] = []
+  for (const k of order) {
+    if (k === 'borrow') out.push('free')
+    else if (k === 'shrink') out.push('borrow', 'shrink')
+    else out.push(k)
+  }
+  if (!order.includes('shrink')) out.push('borrow')
+  return out
+}
+
 /** the target's rules U.params reads */
 export type ParamsRules = {
   cjk?: boolean
@@ -182,6 +212,8 @@ export function params(i: ParamsInput): Params {
     lineskip: i.lineskip,
     halfLead,
     lastLines: i.heading && !i.numbered,
+    // (a float's member: the class's order, §18.90)
+    ...(floatMember(i.kind) && Array.isArray(i.P.order) ? { order: floatOrder(i.P.order as readonly string[]) } : {}),
     // (a line of the page's head or foot keeps its size: no step of the fit or past it shrinks it; where its free row does not
     // hold it at its size it is left the original's)
     ...(HEAD_FOOT.has(i.kind) && i.blocks.length === 1 && i.blocks[0]!.rects.length === 1

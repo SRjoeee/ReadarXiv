@@ -29,6 +29,10 @@ export type FitBlock = DecorBlock & {
    *  borrow past the bottom reads apart (§18.37, B.slots roomOf) */
   toFoot?: number
   toInk?: number
+  /** a float's member's free part of the room under the block (lay/adapt.ts, docs/PDF-READER.md §18.90): the shrink
+   *  TeX's glue states in the gap under it (Room.gap), within its room down to the least (`free`) where a least is stated, else
+   *  within TeX's text block bottom; the walk's `free` knob takes it (FitState.glue) before the leading closes */
+  glue?: number
   /** a table cell of several lines laid in its column's room (lay/adapt.ts, docs/PDF-READER.md §18.75): its lines stand as TeX set
    *  them in the cell's box, the box as wide as its widest laid line, set in the room by the cell's class (`cls`), each line in
    *  the box by its own (`inner`: Placed.inner, else the cell's class): B.place's boxLines */
@@ -47,6 +51,9 @@ export type FitState = {
   scale: number
   knob: string
   fitTrack?: number
+  /** the gap's free part taken under the blocks (Block.glue, the walk's `free` knob, docs/PDF-READER.md §18.90): what only moves
+   *  or adds slots, as `borrow` does (B.slots lowOf: the room taken is the larger of it and the borrow's) */
+  glue?: true
   /** a state of the page fill's, whose last frame's slots stop at the gap's floor (B.slots footFloorAt): read as a flag; its
    *  writers set `1` (S.fill.page) and `true` (S.fill.leads) */
   box?: number | boolean

@@ -7944,6 +7944,95 @@ the evening's size step taken out, no member is laid smaller than without the ba
 six lines without the bases; 10.64 pt, 1.199, five lines with them. The coordinator's ruling of 2026-11-16: that ruling's effect,
 accepted; it goes to the owner with this page, and if he prefers the size, the evening's size step is what changes.
 
+### 18.90 A float's members: never spread by the page fill, the leading before the room (the owner's review of 2026-11-13 and his answer of 2026-11-17; the coordinator's rulings of 2026-11-16 and 2026-11-17)
+
+The display design's 2d, spacing by the original's own logic, as the owner amended it on his review of its eleven pictures (his
+export of 2026-11-13, 13:59 JST). His rule: the original's size comes first; spacing gives way before size does, while it stays
+acceptable; nothing within the normal range is touched; a size step is the last knob. His words: 「当能保持正确字号且间距可以接受的时候，我们不一定需要去调小。」
+「但是我们现在没有必要把间距还在正常范围内、不需要调小的地方也给调了。」 On his own caption laid by it: 「这个确实接近原文了 很好」.
+
+- **Never spread.** TeX builds a float's box once, at its natural size: nothing in it stretches, and a caption shorter than its
+  original leaves its white to the separation under it. A float's member (the format's own kind `caption`: every member whose
+  label is a float's, Label.float, a subfigure's too) is never laid looser than its fit set it: at the script's pitch from its
+  first line where it fits there, the slack under it (`unit/params.ts` floatMember, the unit's own kind read, no list of ours;
+  `lay/page.ts` marks the unit `held`; `shared/fill-page.ts` lays a held unit's leading, and each of its frames', no looser than its
+  fit's, and gives it no tracking). The fill may still lay one closer where the gap under it would be tighter than its own lines
+  (footFloorAt, §18.11), as it lays any unit. It votes in its page's target as before, by the fill leading its lay finds, so
+  that no page's target and no body member moves by it. `packages/typeset/tests/unit/float-spacing.test.ts`.
+- **A note is laid as before (the owner's answer of 2026-11-17, the coordinator's ruling on it).** The rule as first built held
+  the notes with a float's members (both rules named the kind `footnote` too). On its whole page of notes (2609.36054v2 p14,
+  fourteen notes, today's beside the rule's) the owner chose today's, 「我更想要现在的样子」, and wrote
+  「感觉现在的样子更均匀 但是怎么才更通一更通用？ 长期来讲那个正确。保持原样不好 我可以接受新规则」; in his general words,
+  「除了 reference 这里其他都可以」 「reference 取决于哪种长期更正确 你来判断 。 如果新规则长期更好我们就用」. The coordinator's
+  ruling, the general reading he asked for: a run of sibling blocks in a column (body paragraphs, notes, list items, references)
+  shares its page's rhythm, each filling its frame within the page's band, so that no hole opens between siblings; a float's
+  member (a caption, a subcaption) belongs to its float and is set at its own pitch, never spread. So the notes leave the change
+  whole: neither rule names them, and a note is laid exactly as before, by the page fill (its leading, its frames', its tracking),
+  its script's order and its room. The gate reads it as a body member (below).
+- **One order for the class.** When a float's member's translation needs more height, its fit turns its knobs in one
+  order, whatever the part states of the gap under it: the tracking; the gap's free part, the shrink TeX's glue states there
+  (Room.gap's third number: what TeX's own glue may shrink at that gap, so that the page could have been set so by TeX), never
+  past the least where the part states one (Room.sep, §18.11) and never past TeX's text block bottom where it states none; the
+  leading, closing to the block's own original pitch; the room down to the least; the size. A gap that states no shrink gives no
+  free part, and a gap not stated none either: that is all a missing fact changes (two orders by the presence of a fact would
+  split the class by no reason a reader could see). The owner's words on the pictures where the earlier principle stepped the
+  size: 「不缩字 只是减少一点点行距就解决问题了」: the leading gives way before the separation does, for the class.
+- **Where the order lives.** The class is a unit's kind and the rule file is by script, so the class's order is stated where a
+  unit's kind is read (`unit/params.ts` floatOrder, set by U.params): the script's own order, its room knob made two knobs, the
+  free part (`free`) where the script's order has the room and the rest (`borrow`) directly before the size. A script whose order
+  already has the room directly before the size, the alphabets' (track, borrow, shrink, lead), keeps its order by construction,
+  the free part first in its room. A body member's order, a note's too, is the script's, as before.
+- **How it is laid.** The free part (`Block.glue`, `lay/adapt.ts`; none from a gap after a title set in the line, `runin`, which
+  is no separation under its block) is taken whole, once (`fit/walk.ts` statesOf, the `free` knob), and holds through the knobs
+  after it (`FitState.glue`; B.slots lowOf: the room taken is the larger of it and the borrow's); a state of the room's that would
+  give no block more than it is not offered. Like the leading and the room it only moves or adds slots: the walk's floor
+  (§18.88) reads it so, and serves a state the floor's own lay only where its leading, its room and its free part are the floor's.
+- **The body is not touched: a correction (the coordinator's ruling of 2026-11-16).** The design's second half of the rule, "no
+  leading spreads into room that was taken", and its restatement, "taken room never makes a block looser than its page's target",
+  are withdrawn for body members. A page's pitch is not one number but its band (the owner's ruling of 2026-11-12, §18.57, D6:
+  one line spacing a page, a difference the eye does not see allowed), and the fill already holds every member it lays at or
+  under its page's target and band, with room taken or none (`shared/fill-page.ts` leadOf, `top`). Counted on today's lay of the
+  92 pairs (the compile move's bundles, 9410a0ca9), body members holding room above their page's target: the walk's borrowers,
+  door rows 151 zh, 128 ja, 61 ko, Google's 279 zh, 150 ja; the members the fill evened (§18.57), door 196 zh, 1 ja, 6 ko,
+  Google's 202 zh: every one within the band (0.01 to 0.05 over the target) but one the fill lays not (below). The design's
+  picture 8 ("1.42 times, where the page's body is 1.30") compared the member with the script's factor, not with its page,
+  whose target there is 1.50; the owner's words on it, 「如果“现在”版本是正文统一的行距 有可能是更好的」: today's is the page's
+  uniform leading, and it stands. §18.57 is laid as it is; no body member's order changes.
+- **The gate** (the reader gate, `packages/typeset/tests/replay/spacing-gate.ts`, the `F28` lines of `lab/typeset/gate-l1.mjs`;
+  each 0, a member on any fails the run): (i) a float's member laid above its rule-1 pitch (U.params leadOf over its own blocks),
+  room taken or none, the unit's own kind read (`unit/params.ts` floatMember: `caption`, no list of ours); (ii) a body member the
+  fill lays above its page's target and band, an invariant of the fill, a note read here as every member of a column's run of
+  sibling blocks (the coordinator's ruling of 2026-11-17; `packages/typeset/tests/unit/spacing-gate.test.ts`) (beside it, a
+  member the fill lays not, its fitted state not set again, `fillLead` null, kept at its fit: one on today's lay, 2610.40645v1-ja
+  p22 ord 166 at 1.319 on a target of 1.179); (iii) a member closer than its script's floor (`leadFloor`); (iv) a
+  member a step under its size that one lay at its size, every knob its order takes before the size at its bound, sets whole,
+  whose step neither the page's evening states (`Laid.evened` naming `size`) nor a size tie (`Laid.tie`). A tie's own origin
+  (`by` itself) is a tie's step: laid alone at its size with its mates where the tie left them it fits, but at the tie's one size
+  for all it does not (2610.21084v1-zh p33 ord 326, 2610.21026v1-zh p36 ord 243, 2610.19159v1-ja p5 ord 128: each fit only at
+  0.975 beside its mate at 1, its mate capped there, and each capped back at its own first need). The evening's steps and the
+  ties' are printed beside, never failed: the owner's accepted costs.
+- **The display gate's ruling FM** (`lab/typeset/parity/rulings.mjs`, his verdict on the captions laid by the rule and his
+  general words above, the coordinator's ruling of 2026-11-17): a caption the rule sets in fewer lines than today's reader, which
+  letter-spaced it onto more, at its script's pitch from its first line with the slack under it, is the rule's own look and no
+  fault: `line-count` of a float's member (floatMember on the part's kind) v2 sets in fewer lines than today on the page, today
+  at most the original's count, at the original's size, whole, laid no looser than its rule-1 pitch, on the original's first line
+  and ending no lower than the original's last. Its example, the one page the rule made newly worse: 2610.30034v1-zh p11 t218,
+  2 lines against today's 3 (letter-spaced, 0.08 em) and the original's 4.
+- **Reach** (the reader gate over the 92 pairs, the added ones apart, the compile move's bundles and Google's refilled rows and
+  the door's; the Japanese pairs and the Korean packs again under the product's rule set; at 8366cf04e against today's lay,
+  9410a0ca9, and the rule as first built, 178ee81b6, notes held too; lanes/f28-lay and lanes/f28-notes in the lab): every note
+  laid exactly as today, its dump byte for byte today's on both stores and both rule sets (213 notes on the door's rows, 214 on
+  Google's: 153 and 148 of them the first build drew otherwise); every caption's dump the first build's (none differs), so
+  drawn otherwise against today, door rows 1,045 captions, Google's 1,037 (zh and, under the recorded rule set, 11 ja), of them
+  599 and 592 changing height on a page; with the product's rule set the Japanese pairs and the Korean packs 66 captions (door)
+  and 32 (Google), no note. No body member is drawn otherwise on either store, and every body member's dump is the first
+  build's: the fill leading of 54 (door) and 32 (Google) units of one line (cells, headings, two paragraphs, a running head)
+  moved with their page's target where a caption's vote moved, nothing drawn. No member of the Spanish, German and Polish pairs
+  moved. The four lines read 0 on both stores and both rule sets. Measured on the first build (the class's knob order then
+  named the notes too): lays a page (B.break's calls) 229.9 to 228.3 over the 92 pairs' 2,595 pages (-0.7 %), no pair paying
+  more than +0.2 %; the walk's exactness check (every state passed unlaid and every state taken from the floor laid as well):
+  64,999 passed and 7,043 taken, none differing.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

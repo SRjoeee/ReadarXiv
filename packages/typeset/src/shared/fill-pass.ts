@@ -9,8 +9,9 @@ import type { FillTarget } from './fill-target.ts'
 import { type FillLaid, type FillTrace, fillPage, fillUnitsOf, type PageRules } from './fill-page.ts'
 import { settleLayout } from './settle.ts'
 
-/** a unit laid on the page: whether the fill may take it, whether it was refused, its pages */
-export type PassUnit = FillLaid & { fillable?: boolean; pages: readonly number[] }
+/** a unit laid on the page: whether the fill may take it, whether the fill never spreads it (`held`: a float's member,
+ *  docs/PDF-READER.md §18.90; shared/fill-page.ts), whether it was refused, its pages */
+export type PassUnit = FillLaid & { fillable?: boolean; held?: boolean; pages: readonly number[] }
 /** a unit the fill took: its page's target, its fill leading (the unit's as one where it was laid in runs) */
 type Filled = {
   p: PassUnit
