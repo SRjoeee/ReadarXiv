@@ -6,8 +6,9 @@ import type { ProviderErrorKind } from '@/providers/types'
 import type { PackState } from '@/shared/pack'
 import type { OutlineEntry } from '../engine/view/outline'
 import type { ViewEvent } from '../engine/view.mjs'
+import type { EngineDisplay } from '../settings'
 
-export type EngineDisplay = 'original' | 'translation' | 'bilingual'
+export type { EngineDisplay } from '../settings'
 /** why there is no bilingual version: for now (`refused`, a limit, its time given; `unreachable`, our server out of reach), or
  *  for this paper (`no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`: our server cannot make one for this version of
  *  the reader), or for this language (`target`) */

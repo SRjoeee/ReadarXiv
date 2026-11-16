@@ -1,13 +1,14 @@
 // Today's reader behind the one chrome (host/today.ts): its session opened in the chrome's panes on the page's address and its
 // first read of the settings, its settings told to the chrome as the preferences and to the slots' store with the pack, the
 // chrome's patches written as configuration changes; the store's writes held until the session is open; the controller as the
-// probes read it. The session itself is reader-host.test.ts's; here it is a stand-in
+// probes read it (host/parts.ts). The session itself is reader-host.test.ts's; here it is a stand-in
 import { describe, expect, it, vi } from 'vitest'
 import { createController, DEFAULTS, type SessionEvent as ChromeEvent, type SessionHost as ChromeHost } from '@readarxiv/reader'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading } from '@/config/storage'
+import { probeController } from '@/pdf-reader/host/parts'
 import { prefsOf, withPrefs } from '@/pdf-reader/host/prefs'
-import { configStore, probeController, todayOpen } from '@/pdf-reader/host/today'
+import { configStore, todayOpen } from '@/pdf-reader/host/today'
 import type { Session, SessionEvent, SessionHost } from '@/pdf-reader/session/events'
 
 const opened = vi.hoisted(() => ({ hosts: [] as unknown[], session: null as unknown }))

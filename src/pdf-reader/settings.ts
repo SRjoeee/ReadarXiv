@@ -4,7 +4,6 @@ import { chainConfigChanged } from '@/config/revision'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading, FallbackReason } from '@/config/storage'
 import type { Landing, SurfaceConfig } from '@/shared/surface-config'
-import type { EngineDisplay } from './session/events'
 
 /**
  * The session's first configuration, which is never waited on for ever. The page has already read the settings once
@@ -27,6 +26,9 @@ export async function firstConfig(
   const config = surface.state().config
   return config ? { config, provisional: null } : { config: DEFAULT_CONFIG, provisional: { why: { kind: 'unknown' } } }
 }
+
+/** what a page shows of a paper: its original alone, its translation alone, or both */
+export type EngineDisplay = 'original' | 'translation' | 'bilingual'
 
 /** the display the settings ask for: the HTML page's mode, unless the reader was last left on the original alone */
 export function displayOf(config: Config): EngineDisplay {
