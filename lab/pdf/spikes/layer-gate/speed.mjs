@@ -22,31 +22,19 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { median, percentile, spread, WORK_TOLERANCE } from '../../../release-check/perf.mjs'
 import { WORK_KEYS } from '../../../../src/pdf-reader/engine/layer-proto/work.mjs'
 
 /** the work counters' keys: every counter the run keeps (layer-proto/work.mjs), none left unread */
 export { WORK_KEYS }
-/** the growth of a work counter's total beyond which the check fails */
-export const WORK_TOLERANCE = 0.005
+/** the statistics and the work counters' tolerance (WORK_TOLERANCE: the growth of a counter's total beyond which the check
+ *  fails), the release check's own (lab/release-check/perf.mjs), which judges every performance gate by this check's rule */
+export { median, percentile, spread, WORK_TOLERANCE }
 /** the page step beyond which a page counts as slow (ms) */
 export const SLOW_MS = [50, 100]
 
 const finite = a => a.filter(Number.isFinite)
 
-/** the q-th percentile (0 to 100) of a list by linear interpolation between ranks (NaN for no values) */
-export function percentile(values, q) {
-  const s = finite(values).sort((a, b) => a - b)
-  if (!s.length) return Number.NaN
-  const at = (q / 100) * (s.length - 1)
-  const lo = Math.floor(at), hi = Math.ceil(at)
-  return s[lo] + (s[hi] - s[lo]) * (at - lo)
-}
-export const median = values => percentile(values, 50)
-/** the run-to-run spread of a metric: the largest value less the smallest over its repetitions */
-export function spread(values) {
-  const s = finite(values)
-  return s.length ? Math.max(...s) - Math.min(...s) : Number.NaN
-}
 /** the least-squares slope of a series against its index (the unit of the series a step), NaN for fewer than two values */
 export function slope(ys) {
   const v = finite(ys), n = v.length
