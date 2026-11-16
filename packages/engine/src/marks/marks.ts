@@ -622,18 +622,25 @@ export function inkSection(samples: readonly string[], from = 0): string {
  * (inkSection: its rows, its box, \showbox, the group levels it unwinds), its source tokenized where the document uses it and set
  * in the mode it is used in, read by readInkProbe and readInkAnswered over the asked samples, every group the sample left open
  * closed after it (ASK_UNWIND). The mode: in a paragraph, the sample is set as a paragraph, in a vertical box at the measure in
- * force (\hsize, \parshape, the skips as they stand), between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`), so that a
- * sample that ends the paragraph or the line there leaves two lines, or a line and a box, which readInkProbe never reads as
- * inkless; between paragraphs, in a vertical box as it stands; in a horizontal box (a table's cell, an \mbox) and in a formula,
- * in a horizontal box, in math for the formula. The mode is read and its conditional closed before the sample runs. Right after
- * the sample stands \axt@aseen, which says it was reached: a sample that took it as its argument read past its own source, and
- * the ask writes `ink-eaten <i>` (eatenOf: no answer).
+ * force (\hsize, \parshape, the skips as they stand), between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`); between
+ * paragraphs, in a vertical box as it stands; in a horizontal box (a table's cell, an \mbox) and in a formula, in a horizontal
+ * box, in math for the formula. The mode is read and its conditional closed before the sample runs. Right after the sample stands
+ * \axt@aseen, which says it was reached: a sample that took it as its argument read past its own source, and the ask writes
+ * `ink-eaten <i>` (eatenOf: no answer). Where the sample left TeX in vertical mode (in a paragraph: it ended the paragraph; between
+ * paragraphs: it began none), the ask goes on into the paragraph the document goes on with (\axt@acont): \noindent, with only the
+ * \everypar the sample left in force (LaTeX's paragraph hooks kept out: the primitive's own list is `\the\everypar` inside the
+ * box), so that what a sample leaves for the next paragraph's start is set in the listed box: an `\item`'s label, which LaTeX sets
+ * there through \everypar (2608.00812v1's `\nameditem`, `\item[#1]`), read as its ink, never as nothing; a `\medbreak` leaves
+ * nothing there and its listing holds no ink at any depth.
  * It changes nothing the pass writes or sets: where \protect is
  * not \@typeset@protect (a moving argument written to the .aux, a .toc, a mark) it expands to nothing; in an alignment between
  * its rows (an align group, \currentgrouptype 6, in vertical mode: where TeX looks for \noalign or \omit, and a token of ours
  * would begin a cell before a \hline, colortbl's \rowcolor or longtable's \endhead) it expands to nothing; an index is asked once
  * (a caption measured, then set); its conditional is closed before the sample runs (a paper's `\fi`); every counter is given back
- * after it as \include's checkpoint gives them (\cl@@ckpt); its group writes no file (\@fileswfalse: a \cite or a \label inside
+ * after it as \include's checkpoint gives them (\cl@@ckpt), and so are the global state a list's item and a paragraph's start
+ * keep (LaTeX's \if@nobreak, \if@inlabel, \if@newlist, \if@noparitem, \if@minipage, \if@noskipsec and the \@labels box: an
+ * `\item` asked, and the label it leaves set, must find the document's own `\item` where it was) and the serials the marks' own
+ * paragraph hooks step (\axt@pe, \axt@pq, \axt@agn: \axt@asave, \axt@arest); its group writes no file (\@fileswfalse: a \cite or a \label inside
  * writes no line to the .aux, so the .bbl BibTeX makes of it is the same); and it ends with a paragraph of its own in a box
  * (\everypar empty), whose end starts TeX's error count again, as the ink section's empty paragraph after each sample does: the
  * errors of a paragraph's asks never add up to the hundred that stop TeX. "! OK." counts no error of TeX's
@@ -652,13 +659,21 @@ export const ASK_TEX = [
   // (the box each mode sets its sample in, and which one: read where the ask stands, its conditional closed before the sample;
   // right after the sample, a token that says it was reached: a sample that took it as its argument read past its own source)
   '\\def\\axt@aseen{\\global\\let\\axt@aseenok\\relax}',
-  '\\long\\def\\axt@aset@p#1{\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\hbox{}#1\\axt@aseen\\hbox{}\\@@par}}',
-  '\\long\\def\\axt@aset@v#1{\\setbox\\axt@abox\\vbox{\\everypar{}#1\\axt@aseen}}',
+  // (where the sample left vertical mode behind it, the paragraph the document goes on with: \noindent with the \everypar the
+  // sample left alone, LaTeX's paragraph hooks out of it where it has them (\IndentBox: its primitive is then \tex_everypar:D))
+  '\\def\\axt@acont{\\ifvmode\\ifdefined\\IndentBox\\csname tex_everypar:D\\endcsname{\\the\\everypar}\\fi\\noindent\\fi}',
+  '\\long\\def\\axt@aset@p#1{\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\hbox{}#1\\axt@aseen\\axt@acont\\hbox{}\\@@par}}',
+  '\\long\\def\\axt@aset@v#1{\\setbox\\axt@abox\\vbox{\\everypar{}#1\\axt@aseen\\ifvmode\\axt@acont\\hbox{}\\@@par\\fi}}',
+  // (the global state an ask may move, kept before it and given back after it: LaTeX's paragraph and list flags, its pending
+  // label, the marks' own paragraph serials)
+  '\\newbox\\axt@alab',
+  '\\def\\axt@asave{\\global\\setbox\\axt@alab\\copy\\@labels\\global\\let\\axt@a@nb\\if@nobreak\\global\\let\\axt@a@il\\if@inlabel\\global\\let\\axt@a@nl\\if@newlist\\global\\let\\axt@a@np\\if@noparitem\\global\\let\\axt@a@mp\\if@minipage\\global\\let\\axt@a@ns\\if@noskipsec\\global\\let\\axt@a@pe\\axt@pe\\global\\let\\axt@a@pq\\axt@pq\\global\\let\\axt@a@ag\\axt@agn}',
+  '\\def\\axt@arest{\\global\\setbox\\@labels\\box\\axt@alab\\global\\let\\if@nobreak\\axt@a@nb\\global\\let\\if@inlabel\\axt@a@il\\global\\let\\if@newlist\\axt@a@nl\\global\\let\\if@noparitem\\axt@a@np\\global\\let\\if@minipage\\axt@a@mp\\global\\let\\if@noskipsec\\axt@a@ns\\global\\let\\axt@pe\\axt@a@pe\\global\\let\\axt@pq\\axt@a@pq\\global\\let\\axt@agn\\axt@a@ag}',
   '\\long\\def\\axt@aset@h#1{\\setbox\\axt@abox\\hbox{#1\\axt@aseen}}',
   '\\long\\def\\axt@aset@m#1{\\setbox\\axt@abox\\hbox{$#1\\axt@aseen$}}',
   '\\def\\axt@amode{\\ifmmode\\let\\axt@aset\\axt@aset@m\\else\\ifvmode\\let\\axt@aset\\axt@aset@v\\else\\ifinner\\let\\axt@aset\\axt@aset@h\\else\\let\\axt@aset\\axt@aset@p\\fi\\fi\\fi}',
   '\\protected\\long\\def\\axt@ask#1#2{\\ifcsname axt@asked@#1\\endcsname\\expandafter\\@gobbletwo\\else\\expandafter\\axt@asknow\\fi{#1}{#2}}',
-  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\axt@amode\\global\\let\\axt@aseenok\\@undefined\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\axt@aset{#2}\\axt@aunwind\\ifx\\axt@aseenok\\relax\\else${probeRow('ink-eaten', '#1')}\\fi\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}}`,
+  `\\long\\def\\axt@asknow#1#2{\\global\\expandafter\\let\\csname axt@asked@#1\\endcsname\\@empty\\axt@asave\\begingroup\\def\\@elt##1{\\global\\csname c@##1\\endcsname\\the\\csname c@##1\\endcsname\\relax}\\xdef\\axt@ckpt{\\cl@@ckpt}\\endgroup${probeRow('ink-at', '#1')}\\begingroup\\@fileswfalse\\axt@amode\\global\\let\\axt@aseenok\\@undefined\\global\\setbox\\axt@abox\\box\\voidb@x${PROBE_LEVEL}\\axt@aset{#2}\\axt@aunwind\\ifx\\axt@aseenok\\relax\\else${probeRow('ink-eaten', '#1')}\\fi\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@abox\\endgroup\\endgroup${probeRow('ink-end', '#1')}\\axt@ckpt\\setbox\\axt@abox\\vbox{\\everypar{}\\noindent\\@@par}\\axt@arest}`,
   '\\makeatother',
 ].join('')
 /** one ask (ASK_TEX): sample `i` of the asked, its source as the piece writes it */
@@ -2387,10 +2402,26 @@ export const BREAKS_TEX = [
   String.raw`\ifdefined\AddToHook\AddToHook{begindocument/end}{\ifdefined\@gnewline\let\axt@gnl\@gnewline\def\@gnewline#1{\ifvmode\else\ifaxt@off\else\unskip\axt@kbpt\fi\fi\axt@gnl{#1}}\fi}\fi`,
   String.raw`\makeatother`,
 ].join('')
+/**
+ * Which body brackets hold a whole page (PDF-READER §18.76): POINTS brackets each column's main list as the page builder broke it
+ * (`bs<n>` .. `be<n>`, its \@makecol hook, before \@makecol sets the top and bottom lists round it), and where no \@makecol ran
+ * for a page (a class whose output routine is its own: REVTeX's ltxgrid, aastex631, opticajnl; a page of floats) its
+ * \@outputpage hook brackets the whole output box, floats and all, under the same names. Before that hook, in the same hook's
+ * code of a label of its own (so that it runs before the head's, top-level code always last), this states the serial that bracket
+ * is about to take: `AXT-WHOLE <n>`, a message alone, setting nothing. LAYOUT_TEX, today's reader's, keeps its bytes. Read by
+ * marks/channels.ts readWhole
+ */
+export const WHOLE_TEX = [
+  String.raw`\makeatletter`,
+  String.raw`\def\axt@whole{\ifaxt@bodied\else\ifvoid\@outputbox\else\message{^^JAXT-WHOLE \the\numexpr\axt@bn+1\relax^^J}\fi\fi}`,
+  String.raw`\ifdefined\AddToHook\AddToHook{cmd/@outputpage/before}[axt-whole]{\ifcsname ifaxt@bodied\endcsname\axt@whole\fi}\fi`,
+  String.raw`\makeatother`,
+].join('')
 /** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (live.ts originalFiles
  *  `statements`, which compiledOf sets: after LAYOUT_TEX on its line, and left out of a reduced compile), each slice's in turn:
- *  the separations (GAPS_TEX), each paragraph's measure (MEASURE_TEX) and the forced breaks' points (BREAKS_TEX) */
-export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX
+ *  the separations (GAPS_TEX), each paragraph's measure (MEASURE_TEX), the forced breaks' points (BREAKS_TEX) and the body
+ *  brackets that hold a whole page (WHOLE_TEX) */
+export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX + WHOLE_TEX
 
 // ---------------------------------------------------------------- a reference's item and its name
 /** a reference to a page, not to an item (\pageref): no item's name for it */

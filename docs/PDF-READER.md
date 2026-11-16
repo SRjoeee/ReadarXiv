@@ -7284,6 +7284,13 @@ the glue TeX sets at each kind of gap, and the part names, under each member, th
     closes first thing in `\@endfloatbox`), the separations once the box is closed (one a float sets inside its box no output
     routine reads).
   - `\parskip`'s shrink: LINES_TEX already printed `\parskip` whole; readSkips reads its shrink.
+  - Which body brackets hold a whole page (`marks.ts` WHOLE_TEX, `AXT-WHOLE <n>`, readWhole; lane cm-fix, 2026-11-16): POINTS'
+    `\@makecol` hook brackets each column's main list as the page builder broke it (`bs<n>` .. `be<n>`), before `\@makecol`
+    sets the top list over it and the bottom list under it; where no `\@makecol` ran for a page (a class whose output routine is
+    its own: REVTeX's ltxgrid, aastex631, opticajnl, openjournal; a page of floats), POINTS' `\@outputpage` hook brackets the
+    whole output box, floats and all, under the same names and AXT-BODY's code 0. Right before that hook (a hook code of a label
+    of its own: the head's top-level code always runs last) a message states the serial that bracket is about to take. LAYOUT_TEX,
+    today's reader's, keeps its bytes.
 - **What the part states** (`locate/gaps.ts`, phase 10; `Room.gap`, an optional field: FORMAT stays 1). Under each member's last
   line, the class of the gap TeX set there and that glue's natural size and shrink, by what stands under it (the next member's
   line, the float each is of by B's brackets): a heading's `afterskip` (`runin` after a title set in the line, the after-skip
@@ -7435,7 +7442,13 @@ today's request.
   `.aux`: 2501.14787v1 paid a pass more), nor right after a piece that may read it as its argument (`marks.ts` looksAhead: `\urldef\tempurl`, 2402.10294v1); a later use is asked then.
 - **In the mode of its use** (`marks.ts` ASK_TEX): a sample used in a paragraph is set as a paragraph, in a vertical box at the
   measure in force, between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`); between paragraphs, in a vertical box as
-  it stands; in a horizontal box (a table's cell), in a horizontal box; in a formula, in math in a horizontal box. A command that ends the paragraph or
+  it stands; in a horizontal box (a table's cell), in a horizontal box; in a formula, in math in a horizontal box. Where the
+  sample leaves TeX in vertical mode (in a paragraph it ended it; between paragraphs it began none), the ask goes on into the
+  paragraph the document goes on with: `\noindent` with the `\everypar` the sample left in force and nothing else (LaTeX's
+  paragraph hooks kept out: inside the box the primitive's list is `\the\everypar`), so that what a sample leaves for the next
+  paragraph's start is set in the box TeX lists: an `\item` a paper's macro makes sets its label there, through `\everypar`
+  (2608.00812v1's `\nameditem{…}`, `\item[#1]`), which before this the ask never reached and read as nothing (lane cm-fix,
+  2026-11-16). A command that ends the paragraph or
   the line where it is used (`\par`, `\\`, `\newline`, a class's `\sep` defined `\unskip\par`, as cas-sc's keywords
   environment defines it: `cas-common.sty` 1612 to 1617) leaves two lines there, or a line and a box: it parts what stands
   before it from what stands after, and readInkProbe never reads it inkless (an element, as `\authorcr` is). A node that takes
@@ -7449,7 +7462,10 @@ today's request.
   command after it, 2402.10294v1) and has no answer, never one measured on the ask's own tokens (`ink-eaten`).
 - **Writes nothing** (ASK_TEX): it expands to nothing where `\protect` is not `\@typeset@protect` and between an alignment's
   rows (an align group in vertical mode: a token of ours there would begin a cell before `\hline`, colortbl's `\rowcolor` or
-  longtable's `\endhead`); every counter is given back after it (`\cl@@ckpt`, as `\include` does); its group writes no file
+  longtable's `\endhead`); every counter is given back after it (`\cl@@ckpt`, as `\include` does), and so is the global state a
+  list's item and a paragraph's start keep (LaTeX's `\if@nobreak`, `\if@inlabel`, `\if@newlist`, `\if@noparitem`,
+  `\if@minipage`, `\if@noskipsec` and the `\@labels` box: an `\item` asked must leave the document's own `\item` the state it
+  found) and the serials of the marks' own paragraph hooks (`\axt@pe`, `\axt@pq`, `\axt@agn`); its group writes no file
   (`\@fileswfalse`); every group the sample left open is closed after it, math by `$`; and it ends with a paragraph of its own
   in a box, whose end starts TeX's error count again (a paragraph's asks never add up to the hundred errors that stop TeX).
 - **Read** (`marks.ts` useAnswersOf, mergeUses; `compile/paper.ts` convergeThenMark): after pass 1, an answered use's answer,
