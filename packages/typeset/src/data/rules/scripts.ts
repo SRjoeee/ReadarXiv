@@ -31,6 +31,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     fillLead: 2,
     fillLeadRel: 1.3,
     keepAll: false,
+    spaced: false,
     cjkQuotes: true,
     noStart:
       '\u3001\u3002\uff0c\uff0e,.\uff01\uff1f!?\uff09)]\u300d\u300f\u3011\u3015\u3009\u300b\u3019\u3017\u201d\u2019\uff1a:\uff1b;\u30fb\u30fc\u301c\u2026\u3005\u309d\u309e\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308e\u30a1\u30a3\u30a5\u30a7\u30a9\u30c3\u30e3\u30e5\u30e7\u30ee\u30f5\u30f6%\uff05',
@@ -69,6 +70,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     fillLead: 2,
     fillLeadRel: 1.3,
     keepAll: false,
+    spaced: false,
     cjkQuotes: true,
     noStart:
       '\u3001\u3002\uff0c\uff0e,.\uff01\uff1f!?\uff09)]\u300d\u300f\u3011\u3015\u3009\u300b\u3019\u3017\u201d\u2019\uff1a:\uff1b;\u30fb\u30fc\u301c\u2026\u3005\u309d\u309e\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308e\u30a1\u30a3\u30a5\u30a7\u30a9\u30c3\u30e3\u30e5\u30e7\u30ee\u30f5\u30f6%\uff05',
@@ -109,6 +111,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     fillLead: 1.7,
     fillLeadRel: null,
     keepAll: false,
+    spaced: false,
     cjkQuotes: true,
     noStart:
       '\u3001\u3002\uff0c\uff0e,.\uff01\uff1f!?\uff09)]\u300d\u300f\u3011\u3015\u3009\u300b\u3019\u3017\u201d\u2019\uff1a:\uff1b;\u30fb\u30fc\u301c\u2026\u3005\u309d\u309e\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308e\u30a1\u30a3\u30a5\u30a7\u30a9\u30c3\u30e3\u30e5\u30e7\u30ee\u30f5\u30f6%\uff05',
@@ -148,7 +151,15 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     },
     fillLead: 1.7,
     fillLeadRel: null,
-    keepAll: true,
+    // (a line may break between two Hangul syllables, as xetexko's default breaks it: \XeTeXlinebreaklocale "ko", xetexko.sty:1849,
+    // on at :1851, ICU's break opportunities between syllables, under \typesetmodern :322-332; a line so broken justified by the
+    // breaker's rule for the scripts that break between characters, `cjkJust`. The owner's choice of 2026-11-16,
+    // docs/PDF-READER.md §18.90)
+    keepAll: false,
+    // (Korean writes a space between its words: nothing added after a title set in the line, §18.85; and xetexko sets glue
+    // after a formula before a Hangul syllable, never before one after a syllable (its boundary tokens, xetexko.sty:1006-1033,
+    // read the math's end alone), so a formula set against a syllable is held to it)
+    spaced: true,
     cjkQuotes: false,
     noStart:
       '\u3001\u3002\uff0c\uff0e,.\uff01\uff1f!?\uff09)]\u300d\u300f\u3011\u3015\u3009\u300b\u3019\u3017\u201d\u2019\uff1a:\uff1b;\u30fb\u30fc\u301c\u2026\u3005\u309d\u309e\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308e\u30a1\u30a3\u30a5\u30a7\u30a9\u30c3\u30e3\u30e5\u30e7\u30ee\u30f5\u30f6%\uff05',
@@ -187,6 +198,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     fillLead: null,
     fillLeadRel: null,
     keepAll: true,
+    spaced: true,
     cjkQuotes: true,
     noStart:
       '\u3001\u3002\uff0c\uff0e,.\uff01\uff1f!?\uff09)]\u300d\u300f\u3011\u3015\u3009\u300b\u3019\u3017\u201d\u2019\uff1a:\uff1b;\u30fb\u30fc\u301c\u2026\u3005\u309d\u309e\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308e\u30a1\u30a3\u30a5\u30a7\u30a9\u30c3\u30e3\u30e5\u30e7\u30ee\u30f5\u30f6%\uff05',
@@ -223,6 +235,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     fillLead: null,
     fillLeadRel: null,
     keepAll: true,
+    spaced: true,
     cjkQuotes: true,
     noStart:
       '\u3001\u3002\uff0c\uff0e,.\uff01\uff1f!?\uff09)]\u300d\u300f\u3011\u3015\u3009\u300b\u3019\u3017\u201d\u2019\uff1a:\uff1b;\u30fb\u30fc\u301c\u2026\u3005\u309d\u309e\u3041\u3043\u3045\u3047\u3049\u3063\u3083\u3085\u3087\u308e\u30a1\u30a3\u30a5\u30a7\u30a9\u30c3\u30e3\u30e5\u30e7\u30ee\u30f5\u30f6%\uff05',

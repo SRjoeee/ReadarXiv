@@ -25,12 +25,15 @@ export const readGz = (file: string): unknown => JSON.parse(gunzipSync(readFileS
  *  from the port's rule set, which the package's data/rules never held (`borrowGap`, the clearance a borrowed line kept over the
  *  next ink, which TeX's paragraph separation replaces, 2026-11-08), and with the leading a ruling set (2026-11-15, docs/
  *  PDF-READER.md §18.89: Japanese at jlreq's pitch, `leadEm` 1.7, none for every other script; Korean at xetexko's spread,
- *  `leadBase` 1.38889) */
+ *  `leadBase` 1.38889), and the breaking a ruling set (2026-11-16, §18.90: Korean broken between its syllables, `keepAll` off;
+ *  the scripts that write a space between their words, `spaced`, are those today's set kept whole, Korean and the alphabets) */
 export function ruledParams<T>(params: T, target: string): T {
   const o = { ...(params as Record<string, unknown>) }
   delete o.borrowGap
   o.leadEm = target === 'ja' ? 1.7 : null
   if (target === 'ko') o.leadBase = 1.38889
+  o.spaced = o.keepAll
+  if (target === 'ko') o.keepAll = false
   return o as T
 }
 /** today's blocks (the tap's walked blocks) as today's walk offered their room: its borrow knob offered a block's room only

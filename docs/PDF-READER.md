@@ -3016,7 +3016,7 @@ What a host (the web's door, the extension's session, the gate, the lab) calls. 
 
 Decisions made by the maintainer by looking at crops, and what they changed. The drawing code reads them at read time: none moves a version token (§18.1), and `RULES_SCHEMA` rises only for the field the fill rule adds.
 
-**A Chinese or Japanese line breaks before an inline formula (PR #438).** After a CJK character or mark a formula crop no longer glues to it: a script that breaks between CJK characters (`keepAll` false) may end the line before the crop, as xeCJK's `\CJKecglue` allows. A mark no line ends with (an opening bracket), a lead's end and a kern stay glued.
+**A Chinese or Japanese line breaks before an inline formula (PR #438).** After a CJK character or mark a formula crop no longer glues to it: a script that breaks between CJK characters and writes no spaces between its words (`keepAll` and `spaced` false: Chinese and Japanese, not Korean, §18.90) may end the line before the crop, as xeCJK's `\CJKecglue` allows. A mark no line ends with (an opening bracket), a lead's end and a kern stay glued.
 
 **A letter-spaced line squeezes (PR #438).** A line takes the group it misses only when, without it, it would stretch more than `STRETCH_MIN` = 0.05 em a gap, the overflow is at most what it can give, and that squeeze a gap is less than the stretch. What it can give: the blank halves of comma-, full-stop- and bracket-type marks, spaces down to `spaceMin`, then `SQUEEZE` = 0.02 em a gap, never past the tracking floor (`trackMin`) and never below the tracking the page fill raised (`fitTrack`). Only marks whose ink sits in one half of the em in every face the layer draws are cut: comma, full stop, enumeration comma, brackets and quotes. Never the colon, the semicolon, `!` or `?`: the CJK face centres them, and a question mark cut by half ran 0.22 em into the next character. Measured on the 53 papers of the release route's sweep: lines more than 0.15 em a gap over their unit's least 403 to 265, ragged CJK lines 625 to 457, the owner's line (2610.10069 page 7, unit 49) 0.194 to 0.022 em a gap. Long formulas stay stretched: no new cap and no new ragged rule.
 
@@ -7638,9 +7638,9 @@ drawn with the original's gap) and a title that ends with a stop or a colon are 
   coordinator's amendment of 2026-11-16: 2111.09276v1 p4's "Object Replacement" + `\hspace{0.2em}`, the wider of its page's
   titles in the original, stood closer to its text than its siblings when the element alone was its separation).
 - **The lay draws it** (`packages/typeset` breaker/tokens.ts, the one place; lay/read.ts carries the statement onto the group's
-  open piece). In a script that writes no spaces between its words (Chinese, Japanese: not Korean, `keepAll`), after the close of
-  a group so stated, before the first thing drawn after it past a tie, a citation or a note's mark (its sentence's text, or an
-  element the row begins that sentence with): a gap of one em of the line's size, a CJK character's advance, set as the paper's
+  open piece). In a script that writes no spaces between its words (Chinese, Japanese: not Korean, `spaced`, §18.90), after the
+  close of a group so stated, before the first thing drawn after it past a tie, a citation or a note's mark (its sentence's text,
+  or an element the row begins that sentence with): a gap of one em of the line's size, a CJK character's advance, set as the paper's
   own `\quad` is (a kern on what precedes it: no stretch of a justified line's, dropped where a line ends there); the white
   space the row set there is its place. Where the paper's own horizontal space is laid there (its `El.glue`, which the lay reads
   as it lays any glue, kernOn), the gap is what it leaves missing up to one em, never negative: after `\hspace{0.2em}` 0.8 em,
@@ -7781,6 +7781,50 @@ t577; 2610.40645v1-ja t44, t60, t197) and 9 on Google's (2609.20976v1-ja t7, t46
 the evening's size step taken out, no member is laid smaller than without the bases. 2610.40645v1-ja p7 t44: 10.91 pt, leading 1,
 six lines without the bases; 10.64 pt, 1.199, five lines with them. The coordinator's ruling of 2026-11-16: that ruling's effect,
 accepted; it goes to the owner with this page, and if he prefers the size, the evening's size step is what changes.
+
+### 18.90 Korean lines break between syllables, and are set to the measure (the owner's choice of 2026-11-16)
+
+A Korean line broke only at a space (the rule set's `keepAll`, as the alphabets break), and a line whose next word did not fit
+was set ragged once its slack passed what its one or two spaces may take (`spaceMax`, 1: `placeItems`): in the four papers of the
+gate pack's Korean rows, 419 of 1,313 lines that are not a paragraph's last ended more than 1 em short of their measure. Every
+Korean class breaks inside a word: xetexko between any two Hangul syllables (`\XeTeXlinebreaklocale "ko"`, `xetexko.sty:1849`, on
+at `:1851`, ICU's break opportunities; under the default `\typesetmodern`, `:322-332`, at `\XeTeXlinebreakpenalty` 50 and
+`\XeTeXlinebreakskip` 0pt plus .04em minus .02em), luatexko at the same penalty (`luatexko.lua:957`), ko.TeX by its glue between
+Hangul characters (`kotexutf.sty:483`), oblivoir by ko.TeX's (TeX Live 2025). Shown whole pages (the original, today, and a
+candidate broken between syllables: 1512.03385v1-ko p7 and p2, 2610.40645v1-ko p4), the owner chose the change. His words (the
+export of 2026-11-16T04:19:36.836Z): 「改（允许在字之间断行，两端对齐）」.
+
+- **The rule** (`packages/typeset/src/data/rules/scripts.ts`, Kore): `keepAll` false. Each Hangul syllable is a token of its own
+  (B.tokens, as each Chinese or Japanese character is), so a line may end between two syllables of a word, and between a Latin
+  word and the Hangul set against it (xetexko's `\XeKo@latincjk`, a glue, both ways: `:1014`, `:1123`). A line of mostly CJK
+  items is justified by the breaker's rule for the scripts that break between characters: its slack spread over its gaps, within
+  `cjkJust` (0.25 em a gap, Korean's as Chinese's), and a line a little short of its last group squeezed to take it
+  (`squeezes`, PR #438's `SQUEEZE` and `STRETCH_MIN`), as a Chinese line is. A mark no line opens with still joins the syllable
+  before it; a Latin word is still one token, never split between its letters (hyphenated where its patterns allow, as before).
+- **What Korean keeps** (`spaced`, a script field of the package's rule data, true for Korean and the alphabets, false for
+  Chinese and Japanese; today's rule set, §18.5, has no such field): Korean writes a space between its words, so the two rules
+  that `keepAll` false brought with it for Chinese and Japanese do not reach it. Nothing is added after a title set in the line
+  (§18.85: the row's own space separates it); and a formula set against a syllable with no space between stays held to it, as
+  xetexko sets glue after a formula before a syllable (`\XeKo@postmath`, its boundary tokens read the math's end, `:1006-1033`)
+  and none before a formula after one, where Chinese and Japanese may end a line before it (xeCJK's `\CJKecglue`, PR #438). Both
+  read in B.tokens (`breaker/tokens.ts`, `spaceless` and `ecglue`) as `!keepAll && !spaced`, so a rule set recorded before the
+  field (the tap's) reads every target as it did.
+- **Not built**: xetexko's preference for a break at a space. TeX chooses a paragraph's breaks by their demerits, each line's
+  badness (from the stretch its glue gives: plus .04em between syllables, the font's word space with its own stretch) and each
+  break's penalty (50 between syllables, none at a space), so a line ends at a space wherever the line it leaves is not too
+  loose. The breaker is greedy: it fills each line with what fits and holds no glue's stretch, badness or penalty. Stating the
+  preference needs those three of TeX's (the glue's stretch and shrink by class, TeX's badness, the penalties) and a choice
+  between a line's candidate breaks by them, at least line by line; no threshold of ours stands in for it. Nor xetexko's
+  orphan rule (`\XeKo@suppress@linebreak`, `:291-299`, called where a run of Hangul ends its paragraph, `:689-691`: the glue
+  before that run takes a penalty of 5000 at least, so the paragraph's last line does not hold it alone).
+- Chinese, traditional Chinese, Japanese and the alphabets as before (B.tokens reads `spaced` only where `keepAll` is false).
+
+Tests: `packages/typeset/tests/unit/korean-break.test.ts` (red first on the base: a Korean paragraph in a narrow column set to the
+measure on every line but its last, a word split between two syllables, and at every measure from 60 to 130 pt no line opening
+with a mark, where a word as long as a line had let its comma open the next; then, with `keepAll` alone off, the title and the
+formula red, green with `spaced`). The versions: none moves by its own rule. The units (PIPELINE), what a translator is sent
+(TRANSLATE), the chain and its digests, the cache keys and today's layout file (LAYOUT) are untouched; the reader lays a page
+when it is read, and nothing stored is keyed by its lines.
 
 ## 19. The engine's contract
 
