@@ -316,6 +316,28 @@ describe('a paragraph’s measure as TeX sets its lines (F13)', () => {
       [72, 540],
     ])
   })
+  it('states none for a unit paired with a paragraph whose end stands before its line on B, though B shows a lower serial between', () => {
+    // (2501.14787v1 p75: a heading's end (592) on p74, a paragraph TeX ended earlier (590) standing after it on B, then the line
+    // of a unit a display ended, paired with the heading's paragraph)
+    const [, , para] = measuredOf(
+      [
+        ['A Heading', 0],
+        ['a note TeX ended before', 1],
+        ['the line after a display', 2],
+      ],
+      [
+        [2, 0],
+        [1, 1],
+      ],
+      [{ para: 2, ...plain, shape: [[30, 400]] }],
+      [
+        [0, 2],
+        [1, 1],
+        [2, 2],
+      ],
+    )
+    expect(para).toEqual([[72, 540]])
+  })
   it('takes \\leftskip’s and \\rightskip’s natural sizes off the line’s box', () => {
     expect(measuresOf([{ para: 1, ...plain, leftskip: 10, rightskip: 5 }])[0]![0]).toEqual([82, 535])
   })
