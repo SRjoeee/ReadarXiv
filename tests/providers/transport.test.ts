@@ -207,6 +207,24 @@ describe('the rows: a page opened again (stage 4b deliverable 4)', () => {
     expect(changed.asked).toBe(1)
     expect(changed.r.ok && changed.r.cached).toBe(1)
   })
+  it("a row is keyed by every field of its unit a wire reads: a bibliography entry (`entry`) reads no row of the same content that is none", async () => {
+    // (Google's tags wire cuts an entry at its `newblock` elements alone, a unit that is none by its sentences' stops: two wires)
+    const stores = { answers: memory(), rows: memory() }
+    const content: UnitIn['content'] = [{ t: 'text', s: 'J. Smith. 2025. A title. ' }, { t: 'el', id: 'n1', kind: 'other', newblock: 1 }, { t: 'text', s: 'In Proc. of the Conf.' }]
+    const wires: string[] = []
+    const fetch = async (_url: string, init: FetchInit): Promise<FetchReply> => {
+      const texts = (JSON.parse(init.body) as [[string[]]])[0][0]
+      wires.push(...texts)
+      return reply(200, [texts])
+    }
+    const h = harness({ provider: 'google-web' }, { fetch, chain: chainOf() }, stores)
+    await (await h.make()).translate({ units: [{ id: 'b', content, sentences: true }], target: 'cmn' })
+    const r = await (await h.make()).translate({ units: [{ id: 'b', content, sentences: true, entry: true }], target: 'cmn' })
+    expect(r.ok && r.cached).toBe(0)
+    expect(wires).toHaveLength(2)
+    expect(wires[0]).not.toBe(wires[1])
+    expect(stores.rows.entries.size).toBe(2)
+  })
   it('a row is the chain\'s: another chain of translators, another target, or another unit reads none', async () => {
     const stores = { answers: memory(), rows: memory() }
     await (await harness({}, {}, stores).make()).translate({ units: [unit('a')], target: 'cmn' })

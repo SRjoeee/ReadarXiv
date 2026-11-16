@@ -753,9 +753,12 @@ decision: clearing it costs a re-translation and nothing else.
   and rows are new: an answer stored under the identity before is never read again, as after a raised version
   (`tests/providers/llm.test.ts`).
 - **The rows** (`rows`): a unit's accepted result, `r1 | identityOf(the chain's translators) | target | sha256 of the
-  unit (its kind, content, whether it lights by sentence) | the context's digest where a translator reads it`, its glossary
+  unit (every field of the contract's unit but its id, a label: its kind, content, whether it lights by sentence, whether a
+  reply must bring each element back whole, whether it is a bibliography entry; a field the contract adds is a type error in
+  the key until it is keyed) | the context's digest where a translator reads it`, its glossary
   the entries the unit's wires use (`rowContextOf`, the package's: the unit as the chain sends it)
-  (`src/providers/transport.ts`). A page opened again reads its units' rows before anything is asked, and sends nothing for
+  (`src/providers/transport.ts`). Two units of one content that a wire writes apart (an entry is cut at its blocks, one
+  that is none at its stops) never share a row. A page opened again reads its units' rows before anything is asked, and sends nothing for
   them. Kept only where the result is what the chain would give again: the first translator's answer, or a later one's
   where every translator before it **refused** the unit — not one that could not be reached, was cooling, had no key or no
   language pack, which may answer next time (the chain's per-unit notes tell which). So a block Microsoft mangles and
