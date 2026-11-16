@@ -7861,7 +7861,7 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   9410a0ca9, and the rule as first built, 178ee81b6, notes held too; lanes/f28-lay and lanes/f28-notes in the lab): every note
   laid exactly as today, its dump byte for byte today's on both stores and both rule sets (213 notes on the door's rows, 214 on
   Google's: 153 and 148 of them the first build drew otherwise); every caption's dump the first build's (none differs), so
-  drawn otherwise against today, door rows 1,045 captions, Google's 1,037 (zh and, under the recorded rule set, 14 ja), of them
+  drawn otherwise against today, door rows 1,045 captions, Google's 1,037 (zh and, under the recorded rule set, 11 ja), of them
   599 and 592 changing height on a page; with the product's rule set the Japanese pairs and the Korean packs 66 captions (door)
   and 32 (Google), no note. No body member is drawn otherwise on either store, and every body member's dump is the first
   build's: the fill leading of 54 (door) and 32 (Google) units of one line (cells, headings, two paragraphs, a running head)
