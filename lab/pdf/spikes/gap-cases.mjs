@@ -269,6 +269,8 @@ function twiceBetween(log, said) {
     for (let j = i + 1; j < lines.length; j++) {
       const l = lines[j]
       if (l.startsWith(`${dots}.`)) continue
+      // (a node's line TeX broke at max_print_line goes on on a line of no dots: a \write's in the float's box)
+      if (!l.startsWith('.') && lines[j - 1].length >= 79) continue
       if (!l.startsWith(dots)) break
       const item = l.slice(dots.length)
       if (/^\\vbox\(/.test(item)) {
