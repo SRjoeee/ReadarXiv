@@ -958,7 +958,10 @@ export function readInkDecorated(
  * ` (`\T1/… ,`, then its space's glue), ",". What the reading states of an element whose ink nothing on the page bounds
  * (locate/geometry.ts: PieceClass.told)
  */
-export function readAskTexts(log: string | null | undefined, asked: readonly string[]): [source: string, text: string][] {
+export function readAskTexts(
+  log: string | null | undefined,
+  asked: readonly string[],
+): [source: string, text: string][] {
   const read = inkTextsOf(log, asked, false, false, true)
   const answered = readInkAnswered(log, asked)
   const count = new Map<string, number>()
