@@ -28,7 +28,7 @@ const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
 const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */
-export const GOOGLE_DIGEST = '71174d968ad1e19995131cab181eb89a4d3063832d5cd35ffcb12fc51d3bbb10'
+export const GOOGLE_DIGEST = '28c520f5ff7da8189c760346211f9553b86bf05ebbb243c46fdfcb025830452c'
 
 const startOf = (text: string, at: number): number => {
   let i = at
@@ -57,7 +57,7 @@ export function readTagged(unit: UnitIn, raw: string): { content: OutPiece[]; se
 }
 
 /** the behaviour digest of the tags wire with its elements as voids (Chrome's codec, chrome.ts CHROME_DIGEST) */
-export const TAGS_DIGEST = '79e54de8712c9e7c7a7972821341b7b0c5b5b2de235e422451633971290ec527'
+export const TAGS_DIGEST = '5cdc828d02ca666cb3a9e5e4237db0103e5eadb9bbd3ea13886be078981bcd18'
 
 /** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Chrome's
  *  codec, its elements voids (what the prompt tells a model a void tag is), so its behaviour digest is Chrome's; Google
@@ -81,9 +81,10 @@ export function google(o: GoogleOptions): Translator {
     wire: 'tags',
     limits: { ...GOOGLE_LIMITS, ...o.limits },
     supports: async () => true,
-    // (each element a word of its sentence and each styled group the words it holds, in HTML's own inline element: as an
-    // empty element or one HTML does not know Google translates the texts on either side of it apart, each closed with a
-    // full stop of its own, and a group's words apart from their sentence; wire/tags.ts TagSpelling)
+    // (each element a word of its sentence, `<b translate=no>` holding its token, and each styled group the words it holds, a
+    // `<span>`, in HTML's own inline elements: as an empty element or one HTML does not know Google translates the texts on
+    // either side of it apart, each closed with a full stop of its own, and a group's words apart from their sentence;
+    // wire/tags.ts TagSpelling. The wire's name stays: its bytes are in every store key)
     write: (unit) => planTags(unit, 'html').wire,
     read: readTagged,
     async *send(wires, call, signal) {

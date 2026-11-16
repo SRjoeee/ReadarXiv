@@ -86,7 +86,9 @@ interface Beside {
   before: OutPiece[]
   after: OutPiece[]
 }
-interface Off {
+/** what a wire sent on no wire (`silent`), by where a reading puts it back: the unit's front and end, after a kept span's open
+ *  and before its close (by the span's id); both wires' (tags.ts reads it with withOff too) */
+export interface Off {
   front: OutPiece[]
   back: OutPiece[]
   heads: ReadonlyMap<string, OutPiece[]>
@@ -580,8 +582,9 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
   return withOff(toks, plan.off)
 }
 
-/** the tokens with what went on no wire put back: at the unit's front and end, after a kept span's open and before its close */
-function withOff(toks: Tok[], off: Off): Tok[] {
+/** the tokens with what went on no wire put back: at the unit's front and end, after a kept span's open and before its close
+ *  (both wires' one put-back: tags.ts reads its reply's tokens with it too) */
+export function withOff(toks: Tok[], off: Off): Tok[] {
   if (!off.front.length && !off.back.length && !off.heads.size && !off.tails.size) return toks
   const one = (out: OutPiece[] | undefined): Tok[] => (out?.length ? [{ t: 'void', out }] : [])
   const res: Tok[] = one(off.front)

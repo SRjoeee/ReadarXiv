@@ -539,18 +539,26 @@ export function lineGeometry(w: Work, owned: Owned): void {
       // glyphs alone, stated the text "3" and drawn flat at the line's size; on staging and in today's reader both)
       const cls0 = classOf.get(id)?.cls
       const textClass = cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)
-      const level =
-        !textClass ||
-        (!bx.length &&
-          groups.every(
-            (gs) =>
-              new Set(
-                asRead(gs, gA)
-                  .filter((g) => /\S/.test(g.u))
-                  .map((g) => r2(g.y)),
-              ).size <= 1,
-          ) &&
-          (!!classOf.get(id)?.mark || standsAsDrawn(groups, ink, false, gA)))
+      // (its glyphs on one baseline a line, each glyph of a character on its line's baseline)
+      const oneBase = groups.every(
+        (gs) =>
+          new Set(
+            asRead(gs, gA)
+              .filter((g) => /\S/.test(g.u))
+              .map((g) => r2(g.y)),
+          ).size <= 1,
+      )
+      const stands = standsAsDrawn(groups, ink, false, gA)
+      // (and, drawn as the page's text, no rule or image among its ink)
+      const level = !textClass || (!bx.length && oneBase && (!!classOf.get(id)?.mark || stands))
+      // (the same reading of its glyphs for every class, its boxes aside (soul's highlight behind `\hl{guitar}` sets none of its
+      // text): the bundle states by it the text TeX set for the element on its line, format's el `text`, where every placement of
+      // its unit agrees; no part carries it)
+      const onBase = gl.length > 0 && oneBase && stands
+      if (onBase) {
+        mem.onBase ??= new Set()
+        mem.onBase.add(id)
+      }
       // (a symbol, drawn as its reading's character (El.sym) on the line's baseline, or raised where its reading raises it: only
       // where TeX's ink is that symbol so drawn, no Latin letter or digit among its glyphs (a symbol's reading holds none, its
       // source's letters and digits once commands are dropped: phClass) and each where the drawing sets it; else drawn as its ink. 2610.10069v1 p20's `$\vs^*$`, the paper's bold s starred, was read

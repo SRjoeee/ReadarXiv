@@ -243,10 +243,19 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     lastDemoted = { id: a.id, kind: 'auth', message: 'the endpoint refused this key before' }
   }
 
+  // (the unit as its row is keyed: every field of the contract's UnitIn but its id, a label, so that two units a wire writes
+  // apart never share a row (a bibliography entry's `entry` cuts it at its blocks, hard rule 4); a field the contract adds
+  // is a type error here until it is keyed)
+  const unitKeyOf = (u: UnitIn): string => {
+    const { id: _id, kind, content, sentences, strict, entry, ...rest } = u
+    const unkeyed: Record<string, never> = rest
+    void unkeyed
+    return sha256Hex(JSON.stringify([kind ?? null, content, sentences === true, strict === true, entry === true]))
+  }
   // (the context as the unit's answers depend on it: its glossary the entries the unit's wires use, #637; without a glossary
   // the context itself, the key as before)
   const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
-    `${ROWS}|${chainId}|${lang}|${sha256Hex(JSON.stringify([u.kind ?? null, u.content, u.sentences === true, u.strict === true]))}|${usesContext && context ? sha256Hex(JSON.stringify(rowContextOf(translators, u, lang, context))) : '-'}`
+    `${ROWS}|${chainId}|${lang}|${unitKeyOf(u)}|${usesContext && context ? sha256Hex(JSON.stringify(rowContextOf(translators, u, lang, context))) : '-'}`
 
   /** one call of `chain` with `order`: results by unit, the rows read first and written after. `own`: only a translator's
    *  own answer is one (the connection test's) */

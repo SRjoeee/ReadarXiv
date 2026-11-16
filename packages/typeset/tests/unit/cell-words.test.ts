@@ -2,10 +2,11 @@
 // 「折行时不拆词」). A merged cell is a cell of several lines TeX ended every one of but its last at a forced break of its text
 // (El.ends). Where the reply sets its break at its start or its end, the reading takes none, and the breaker fills the cell's
 // lines itself, in its column's room or in their own: a line of it then ends only where the breaker lets it end and a word of
-// the target's text ends there, by the platform's own word segmentation (Intl.Segmenter of the target's language). The rooms,
-// the one size and the search for it stay, so the size falls only where no break between words fits, and a cell no size sets
-// so is laid as before. A reply that keeps its break, a paragraph cell (its lines TeX wrapped), body text, an element's edge and
-// a platform with no segmenter: as before. The texts are this test's own.
+// the target's text ends there, by the platform's own word segmentation (Intl.Segmenter of the target's language). The size
+// never gives way to whole words (the owner's answer of 2026-11-16, quoted in §18.75): at each size the fit tries, every
+// state of it between words first; where none sets the cell so, the same states as before (a word cut where a line must end);
+// the size steps down only where neither sets it. A reply that keeps its break, a paragraph cell (its lines TeX wrapped), body
+// text, an element's edge and a platform with no segmenter: as before. The texts are this test's own.
 import type { El, Part, Placed, Row } from '@readarxiv/format'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -113,14 +114,43 @@ describe('a merged cell the lay fills: its lines end between words of the target
   })
 })
 
-describe('where no break between words fits, the cell is smaller, not split', () => {
-  it('a room of 16 pt, three characters a line at 10, where 提高训练 | 速度 needs four: laid smaller, its words whole', () => {
-    // (today: 提高训 | 练速度 at the size 10, 训练 parted; under the rule four characters at 0.85, the tracking at its least,
-    // -0.03 em, take 15.98 pt)
+describe('the size never gives way to whole words (the owner’s answer of 2026-11-16): at each size, a break between words first, then as before', () => {
+  it('a break between words fits at the first size only at a closer tracking: kept, at that size (the size’s states first)', () => {
+    // (a cell of three lines whose reply sets both its breaks at its end, in 28.5 pt: at the leading 1.3 two lines of the three,
+    // five characters a line with no tracking, six at its least, -0.03 em. 提高 | 训练 | 一帆风顺 | 速度 ends no word at five, so
+    // the state with no tracking sets it only as before, 提高训练一 | 帆风顺速度; between words it fits at -0.03 em. Every state of
+    // the size is tried between words before any is laid as before: a state at a time would lay it as before)
+    const c = cell(12, [100, 128.5])
+    const three = {
+      ...c,
+      lines: [...c.lines, [1, 0, 101, 127.5, 676, 683, 674, 72, 500, 0, 10]],
+      els: [...c.els!, ['3', { kind: 'space', brk: 1, ends: [1, 0], ink: [] }]],
+    } as Placed
+    const [m] = layOf([three], rowsOf({ 12: ['提高训练一帆风顺速度', BRK, { el: '3' }] }), 'zh')
+    expect(textOf(m!)).toEqual(['提高训练', '一帆风顺速度'])
+    expect(m!.fit!.size).toBeCloseTo(10, 5)
+    expect(m!.fit!.track).toBeCloseTo(-0.03, 5)
+  })
+  it('a room of 16 pt, three characters a line at 10, where 提高训练 | 速度 needs four: at the size 10, laid as before', () => {
+    // (before round 4a: 提高训 | 练速度 at the size 10, 训练 parted; round 4a's rule took it to 0.85 for its words whole, four
+    // characters at the tracking's least, -0.03 em, 15.98 pt. A break inside a word fits at the size 10: the size stays)
     const [m] = layOf([cell(5, [100, 116])], rowsOf({ 5: [TEXT, BRK] }), 'zh')
-    expect(textOf(m!)).toEqual(['提高训练', '速度'])
-    expect(m!.fit!.size).toBeLessThan(10)
-    expect(m!.fit!.size).toBeCloseTo(8.5, 5)
+    expect(textOf(m!)).toEqual(['提高训', '练速度'])
+    expect(m!.fit!.size).toBeCloseTo(10, 5)
+  })
+  it('nothing fits at the first size: the size steps, and at the next a break between words is tried first', () => {
+    // (26 pt, eleven characters on two lines: five a line from the size 10 to 0.925, six at 0.9 with the tracking at its
+    // least; as before 预算内恢复提 | 高训练速度, between words 预算 | 内 | 恢复 | 提高 | 训练 | 速度 ends at five)
+    const [m] = layOf([cell(13, [100, 126])], rowsOf({ 13: ['预算内恢复提高训练速度', BRK] }), 'zh')
+    expect(textOf(m!)).toEqual(['预算内恢复', '提高训练速度'])
+    expect(m!.fit!.size).toBeCloseTo(9, 5)
+  })
+  it('nothing fits at the first size, and at the next only a break inside a word: laid at that size, as before', () => {
+    // (the same room: 提高 | 训练 | 研究生 | 样本 | 数量 ends no word at five or six characters, so at 0.9 it is laid as before,
+    // 提高训练研究 | 生样本数量; round 4a's rule went on down, past the floor, to seven characters a line)
+    const [m] = layOf([cell(14, [100, 126])], rowsOf({ 14: ['提高训练研究生样本数量', BRK] }), 'zh')
+    expect(textOf(m!)).toEqual(['提高训练研究', '生样本数量'])
+    expect(m!.fit!.size).toBeCloseTo(9, 5)
   })
   it('a word no size sets on a line of its room, not even below the floor: laid as before, cut, never left the original', () => {
     // (24 letters in a room of 12 at the size 10, and 20 at 0.6: no word ends inside it; today's cut by its characters)
