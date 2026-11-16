@@ -2,11 +2,13 @@
 // pairs: every page laid from its own part, each laid unit's size, leading, lines with their text and crops equal to the dump's,
 // and each member on two pages laid alike from each page's part (risk 1 of the page decision); but one whose frames the port
 // fills each at its own leading or holds TeX's share (pass.ts framed), one on a page where today's held a paragraph's gap to the
-// next one's leading (tap.ts flooredIn: the gap ruling of 2026-11-08), and one on a page of a unit whose fill leadings option (i)
-// moves (pass.ts laysOf `lead`: the owner's of 2026-11-10). The corpus: lab/typeset/gate.mjs.
+// next one's leading (tap.ts flooredIn: the gap ruling of 2026-11-08), one on a page of a unit whose fill leadings option (i)
+// moves (pass.ts laysOf `lead`: the owner's of 2026-11-10), and a float's member or a note today's fill spread (§18.90: at its
+// fit's leading, its text and size today's). The corpus: lab/typeset/gate.mjs.
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { type MeasureTable, MissingMeasure, tableMetrics } from '../../src/metrics/table.ts'
+import { floatOrNote } from '../../src/unit/params.ts'
 import type { Metrics } from '../../src/types.ts'
 import { readerDump } from './display.ts'
 import { framed, laysOf, trackedCells } from './pass.ts'
@@ -49,8 +51,23 @@ describe.skipIf(!hasTap || !hasDerived('rules') || !hasCache)(
                     { size: u.size, leading: u.leading, lines: u.lines, elements: u.elements ?? [] },
                     `ord ${u.ord}`,
                   )
+            // (a float's member or a note today's fill spread, which the port leaves at its fit's leading (docs/PDF-READER.md
+            // §18.90): its size and its lines' text today's, its lines where its fit set them)
+            const held =
+              !!m &&
+              floatOrNote(u.kind) &&
+              !firstDifference(
+                { size: m.size, texts: m.lines.map((l) => l.text) },
+                { size: u.size, texts: u.lines.map((l) => l.text) },
+                `ord ${u.ord}`,
+              ) &&
+              (m.leading ?? 0) <= (u.leading ?? 0) + 1e-9
             return d &&
-              (gap.units.has(u.ord) || room.units.has(u.ord) || lead.units.has(u.ord) || framed(lays.get(u.ord)))
+              (gap.units.has(u.ord) ||
+                room.units.has(u.ord) ||
+                lead.units.has(u.ord) ||
+                framed(lays.get(u.ord)) ||
+                held)
               ? null
               : d
           })

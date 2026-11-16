@@ -7782,6 +7782,22 @@ the evening's size step taken out, no member is laid smaller than without the ba
 six lines without the bases; 10.64 pt, 1.199, five lines with them. The coordinator's ruling of 2026-11-16: that ruling's effect,
 accepted; it goes to the owner with this page, and if he prefers the size, the evening's size step is what changes.
 
+### 18.90 A float's members and the notes: never spread by the page fill (the owner's review of 2026-11-13; the coordinator's rulings of 2026-11-16)
+
+The display design's 2d, spacing by the original's own logic, as the owner amended it on his review of its eleven pictures (his
+export of 2026-11-13, 13:59 JST). His rule: the original's size comes first; spacing gives way before size does, while it stays
+acceptable; nothing within the normal range is touched; a size step is the last knob. His words: 「当能保持正确字号且间距可以接受的时候，我们不一定需要去调小。」
+「但是我们现在没有必要把间距还在正常范围内、不需要调小的地方也给调了。」 On his own caption laid by it: 「这个确实接近原文了 很好」.
+
+- **Never spread.** TeX builds a float's box and a note once, at its natural size: nothing in it stretches, and a caption shorter
+  than its original leaves its white to the separation under it. A float's member (a caption: every member whose label is a
+  float's, Label.float) and a note (kind `footnote`) are never laid looser than their fit set them: at the script's pitch from
+  their first line where they fit there, the slack under them (`unit/params.ts` floatOrNote, a class of the unit's kind;
+  `lay/page.ts` marks the unit `held`; `shared/fill-page.ts` lays a held unit's leading, and each of its frames', no looser than its
+  fit's, and gives it no tracking). The fill may still lay one closer where the gap under it would be tighter than its own lines
+  (footFloorAt, §18.11), as it lays any unit. It votes in its page's target as before, by the fill leading its lay finds, so
+  that no page's target and no body member moves by it. `packages/typeset/tests/unit/float-spacing.test.ts`.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

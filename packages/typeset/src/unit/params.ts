@@ -27,6 +27,13 @@ const SOLID = 1.25
  *  a page number, keeps the original's size (the owner's ruling of 2026-11-08): its fit's floor is its size */
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
+/**
+ * A float's member or a note (docs/PDF-READER.md §18.90): a caption (every member whose label is a float's is one, Label.float)
+ * or a footnote. TeX builds a float's box and a note once, at its natural size, and no page rhythm binds them: the page fill
+ * never spreads them (lay/page.ts, shared/fill-pass.ts). A class of the unit's kind, read where a unit's kind is read: the rule
+ * file is by script
+ */
+export const floatOrNote = (kind: string): boolean => kind === 'caption' || kind === 'footnote'
 /** the target's rules U.params reads */
 export type ParamsRules = {
   cjk?: boolean

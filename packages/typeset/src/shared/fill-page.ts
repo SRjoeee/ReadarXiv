@@ -62,6 +62,9 @@ export type PageRules = FillRules & {
 /** what a pass hands the fill: the units filled, the units its target reads, those running on to the page */
 type FillUnits = { units: FillLaid[]; voters: FillLaid[]; continuing: FillLaid[] }
 
+/** a float's member or a note (lay/page.ts `held`, docs/PDF-READER.md §18.90), a run of one its unit's: never spread */
+const heldOf = (p: FillLaid): boolean => !!((p.parent ?? p) as { held?: boolean }).held
+
 /** a unit as S.fill.target reads it */
 const voterOf = (p: FillLaid): Voter => ({
   kind: p.unit.kind,
@@ -95,8 +98,9 @@ export function fillUnitsOf(begun: FillLaid[], continuing: FillLaid[]): FillUnit
  * all of it, the page's body units take one size, the largest up to `size` x the original's at which every one of them
  * is still set whole: one size a page where it grows, never a unit's own (D grew each unit apart, and a page mixed 1.0
  * and 1.1); a unit the fit had to shrink keeps its own largest fitting size. A unit its fitted state does not set again
- * (the text run past a display) keeps its own fit. Each unit filled is laid anew in place (p.P, p.layout, its extents
- * kept), then `onFilled(p, target)`. Returns pageTarget's answer: the page's target, its own (before it is held), the anchor
+ * (the text run past a display) keeps its own fit. A float's member or a note (`held`, docs/PDF-READER.md §18.90) is never laid
+ * looser than its fit set it, nor tracked: it votes as any unit, and the fill lays it closer only where the gap under it asks.
+ * Each unit filled is laid anew in place (p.P, p.layout, its extents kept), then `onFilled(p, target)`. Returns pageTarget's answer: the page's target, its own (before it is held), the anchor
  * and whether its body units told it; `target` null where only a continuation tells, and null where nothing tells.
  */
 export function fillPage(
@@ -183,9 +187,13 @@ export function fillPage(
     // solid at a column's foot, 2610.37668v1-zh p17, read worse than the one line its fit left there))
     const floor = r3(target - band),
       sh = q.fillShare?.needs.every((v) => v !== null && v >= floor - 1e-9) ? q.fillShare : null
-    const top = r3(target + band),
+    // (a float's member or a note, `held` (lay/page.ts, docs/PDF-READER.md §18.90): never spread, its leading no looser than its
+    // fit set it (the script's pitch from its first line where it fits so, the slack under it); the fill may still lay it closer,
+    // where the gap under it would be tighter than its lines (footFloorAt), as every unit's. Its vote is its fill leading as before)
+    const most = heldOf(p) ? q.layout.state.lead : Number.POSITIVE_INFINITY
+    const top = Math.min(r3(target + band), most),
       leads = (sh ? sh.leads : q.fillLeads)?.map((v) => (v === undefined ? v : Math.min(v, top))),
-      lead = sh ? Math.min(sh.last, top) : q.lastLead !== undefined ? Math.min(q.lastLead, top) : leadOf(q)
+      lead = Math.min(sh ? Math.min(sh.last, top) : q.lastLead !== undefined ? Math.min(q.lastLead, top) : leadOf(q), most)
     // footFloorOf reads box by truthiness; 1 keeps the original true state within FitState's numeric type.
     let st: FitState = {
       ...q.layout.state,
@@ -213,8 +221,8 @@ export function fillPage(
       tracked = 0
     const untracked = { st, l }
     // (never a table cell's: TeX stretches no entry of a tabular, the owner's ruling of 2026-11-08, "in the tables today's letter
-    // spacing is more natural", 2610.20967v1-zh p4)
-    if (short && P.cjk && p.unit.kind !== 'cell') {
+    // spacing is more natural", 2610.20967v1-zh p4; nor a float's member's or a note's, which nothing spreads, §18.90)
+    if (short && P.cjk && p.unit.kind !== 'cell' && !heldOf(p)) {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
       const K = Math.round(track / 0.01),
         st2 = (k: number): FitState => ({ ...st, track: r3(st.track + k * 0.01) })
