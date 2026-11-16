@@ -752,11 +752,6 @@ function eatenOf(log: string | null | undefined): Set<number> {
   }
   return out
 }
-/** a node of a vertical list that is neither a line nor material of its own: glue, a kern, a penalty, and a node that sets
- *  nothing and takes no place (a mark, a write, a destination, a colour or matrix of the driver's): hyperref's
- *  `\\phantomsection` between paragraphs leaves its destination there (2610.37818v1), no separator */
-const SPACE_NODE =
-  /^\.\\(?:glue|kern|penalty|mark|write|openout|closeout|pdfdest|pdfcolorstack|pdfsave|pdfrestore|pdfsetmatrix)/
 /** LuaTeX's node at a paragraph's start and the values it lists below it (none of them a box: `\\localleftbox=null`), in a
  *  paragraph's line: read in an ask's vertical box alone (the probe's boxes are horizontal, and their reading as it was) */
 const LOCAL_PAR_NODE = /^\.+\\(?:localpar|local(?:interline|broken)penalty=-?\d+|local(?:left|right)box=null)$/
@@ -771,12 +766,14 @@ const OWN_NODE =
  * The sources TeX set no ink for, from the probe's log (inkSection, ASK_TEX): each sample whose box TeX listed in full, of nodes
  * that set nothing — no character, no rule both wide and high (TeX ships no rule of no width or height: a strut), no
  * literal, special, insertion or node it lists otherwise — with no error between its rows but the listing's own `! OK.`.
- * An ask's sample set where the document uses it in a paragraph, or between paragraphs, is listed in a vertical box (ASK_TEX):
- * there it set no ink only where that box holds at most one line, and beside it nothing but space and nodes that take no place
- * (SPACE_NODE: a destination, a write, a mark). A sample
- * that ends the paragraph or the line where it is used (`\\par`, `\\\\`, `\\newline`, cas-sc's `\\sep`, which its keywords
- * environment makes `\\par`) leaves two lines there, or a line and a box: it parts what stands before it from what stands
- * after, and is never inkless. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
+ * An ask's sample set where the document uses it in a paragraph, or between paragraphs, is listed in a vertical box (ASK_TEX),
+ * with the paragraph the document goes on with where the sample left vertical mode: it set no ink where no node at any depth of
+ * that box sets any, whatever lines the box holds. A sample that ends the paragraph or the line where it is used and sets nothing
+ * (`\\par`, `\\\\`, `\\newline`, LaTeX's `\\medbreak`, cas-sc's `\\sep`, which its keywords environment makes `\\par`) is inkless
+ * there: the paragraph or the line it ends is TeX's own statement (the paragraph points), not ink of the macro (the coordinator's
+ * ruling of 2026-11-16, lane cm-fix, reversing the morning's: read "never inkless", such a macro was given a mark it has no ink
+ * after, its element no ink and no text, its unit the original's); an `\\item` a paper's macro makes is inked by the label LaTeX
+ * sets at the next paragraph's start, which the ask sets in its box. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
  * destinations in the box are no ink (OWN_NODE). A sample with no listing, an error, a line cut short or a node not known is
  * no answer: what it sets is not known
  */
@@ -791,10 +788,8 @@ export function readInkProbe(
     nodes: string[] | null = null,
     bad = false,
     done = false,
-    /** the listing's box is a vertical one (an ask's in a paragraph or between them), and the lines and material in it */
-    vertical = false,
-    parted = false,
-    lines = 0
+    /** the listing's box is a vertical one (an ask's in a paragraph or between them) */
+    vertical = false
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
@@ -804,11 +799,10 @@ export function readInkProbe(
         nodes = null
         bad = false
         done = false
-        vertical = parted = false
-        lines = 0
+        vertical = false
         continue
       }
-      if (at === i && nodes && !bad && !parted && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
+      if (at === i && nodes && !bad && !eaten.has(i) && samples[i] !== undefined) out.push(samples[i])
       at = null
       continue
     }
@@ -833,9 +827,6 @@ export function readInkProbe(
       nodes.push(line)
       continue
     }
-    // (in a vertical box, what stands in it: one line, and beside it no material but space)
-    if (vertical && /^\.(?!\.)/.test(line) && !SPACE_NODE.test(line) && !(ask && OWN_NODE.test(line)))
-      if (!/^\.\\hbox\(/.test(line) || ++lines > 1) parted = true
     if (NO_INK_NODE.test(line) || (vertical && LOCAL_PAR_NODE.test(line)) || (ask && OWN_NODE.test(line))) {
       nodes.push(line)
       continue
@@ -856,7 +847,7 @@ export function readInkProbe(
 }
 
 /** the samples TeX answered in the ink section's form (inkSection, ASK_TEX): its box listed (`> \box…=`), the listing's own end
- *  (`! OK.`), and no error between its rows but that end; inkless or not (a vertical box's of two lines answered: readInkProbe).
+ *  (`! OK.`), and no error between its rows but that end; inkless or not (readInkProbe).
  *  A sample with no listing or an error is no answer */
 export function readInkAnswered(log: string | null | undefined, samples: readonly string[]): string[] {
   const eaten = eatenOf(log)

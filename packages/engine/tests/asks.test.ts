@@ -47,7 +47,7 @@ describe('the asks’ answers, read from the pass’s log', () => {
     expect(readInkAnswered(log, asked)).toEqual(['\\nada', '\\kw'])
     expect(useAnswersOf(log, asked)).toEqual({ inkless: ['\\nada'], inked: ['\\kw'] })
   })
-  it('reads a sample set in a paragraph from its vertical box: one line and space beside it inkless; two lines, or a box beside, never', () => {
+  it('reads a sample set in a paragraph from its vertical box: inkless where no node at any depth sets ink, whatever lines it holds', () => {
     const LINE = '.\\hbox(6.9+1.9)x345.0, glue set 300.0fil'
     const EMPTY = '..\\hbox(0.0+0.0)x0.0'
     const ENDS = ['..\\penalty 10000', '..\\glue(\\parfillskip) 0.0 plus 1.0fil', '..\\glue(\\rightskip) 0.0']
@@ -55,13 +55,15 @@ describe('the asks’ answers, read from the pass’s log', () => {
     const log = [
       // (\\nada{} in a paragraph: its one line, the two empty boxes the ask sets around it)
       listing(0, BOX, [LINE, EMPTY, EMPTY, ...ENDS]),
-      // (\\par there: the line it ends, the box after it a line of its own)
+      // (\\par there: the line it ends, then the paragraph the document goes on with, the ask's own box in it)
       listing(1, '\\vbox(18.9+0.0)x345.0', [
         LINE,
         EMPTY,
         ...ENDS,
         '.\\glue(\\baselineskip) 12.0',
-        '.\\hbox(0.0+0.0)x0.0',
+        LINE,
+        EMPTY,
+        ...ENDS,
       ]),
       // (\\\\ there: two lines)
       listing(2, '\\vbox(18.9+0.0)x345.0', [
@@ -76,8 +78,37 @@ describe('the asks’ answers, read from the pass’s log', () => {
       ]),
       // (\\vspace there: its glue after the line, which the line's \\vadjust put there)
       listing(3, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\glue 10.0']),
-      // (a box a \\vadjust of the line put after it: material beside it; a mark that left the line is none)
+      // (a box of no ink a \\vadjust of the line put after it, a mark that left the line: none of them ink)
       listing(4, BOX, [LINE, EMPTY, EMPTY, ...ENDS, '.\\mark{x}', '.\\hbox(5.0+0.0)x10.0']),
+      // (an \\item a paper's macro makes, in a paragraph: the line it ends, then the paragraph the document goes on with, where
+      // LaTeX sets the item's label through \\everypar: ink)
+      listing(8, '\\vbox(20.0+2.5)x345.0', [
+        LINE,
+        EMPTY,
+        ...ENDS,
+        '.\\penalty -51',
+        '.\\glue 4.0 plus 2.0 minus 1.0',
+        '.\\hbox(7.5+2.5)x345.0, glue set 345.0fil',
+        '..\\hbox(7.5+2.5)x0.0',
+        '...\\hbox(7.5+2.5)x20.00003, glue set 20.00003fil',
+        '....\\OT1/cmr/m/n/10 (',
+        '....\\OT1/cmr/m/n/10 B',
+        '....\\OT1/cmr/m/n/10 )',
+        EMPTY,
+        ...ENDS,
+      ]),
+      // (a paragraph's end and a rule set after it: the rule's ink)
+      listing(9, '\\vbox(12.0+0.0)x345.0', [
+        LINE,
+        EMPTY,
+        ...ENDS,
+        '.\\glue(\\baselineskip) 11.6',
+        '.\\hbox(0.4+0.0)x345.0',
+        '..\\hbox(0.4+0.0)x345.0',
+        '...\\rule(0.4+0.0)x345.0',
+        EMPTY,
+        ...ENDS,
+      ]),
       // (between paragraphs, \\par: nothing at all)
       listing(5, '\\vbox(0.0+0.0)x0.0', []),
       // (between paragraphs, hyperref's \\phantomsection: its destination and a penalty, no line, no material)
@@ -95,10 +126,21 @@ describe('the asks’ answers, read from the pass’s log', () => {
         ...ENDS,
       ]),
     ].join('\n')
-    const asked = ['\\nada{}', '\\mypar{}', '\\mycr{}', '\\vsp{}', '\\mk{}', '\\mypar', '\\lua{}', '\\phantomsection']
+    const asked = [
+      '\\nada{}',
+      '\\mypar{}',
+      '\\mycr{}',
+      '\\vsp{}',
+      '\\mk{}',
+      '\\mypar',
+      '\\lua{}',
+      '\\phantomsection',
+      '\\myitem{(B)}',
+      '\\parrule{}',
+    ]
     expect(useAnswersOf(log, asked)).toEqual({
-      inkless: ['\\nada{}', '\\vsp{}', '\\mypar', '\\phantomsection', '\\lua{}'],
-      inked: ['\\mypar{}', '\\mycr{}', '\\mk{}'],
+      inkless: ['\\nada{}', '\\mypar{}', '\\mycr{}', '\\vsp{}', '\\mk{}', '\\mypar', '\\phantomsection', '\\lua{}'],
+      inked: ['\\myitem{(B)}', '\\parrule{}'],
     })
     // (in a horizontal box, the probe's, LuaTeX's paragraph node read as before: not known)
     const probe = listing(0, NONE, ['.\\vbox(0.0+0.0)x10.0', '..\\hbox(0.0+0.0)x10.0', '...\\localpar'])

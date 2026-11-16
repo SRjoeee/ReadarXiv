@@ -13,8 +13,11 @@
 // an empty macro set none (asked at a use in running text, never in a section's title or a caption, which the .aux, the .toc
 // and hyperref's nameref copy as written: the paper loads hyperref, the title and the caption are labelled); a macro first used
 // in a table's cell asked there; a macro that leaves math open (`$a`) asked, its math closed after it; a skip of no ink
-// answered; a command that ends the paragraph or the line where it is used (`\par`, `\\`, `\newline`, a keywords
-// environment's `\unskip\par`, as cas-sc's `\sep`) is never inkless; a macro that begins a paragraph between paragraphs
+// answered; a command that ends the paragraph or the line where it is used and sets no ink (`\par`, `\\`, `\newline`, a
+// keywords environment's `\unskip\par`, as cas-sc's `\sep`, LaTeX's `\medbreak`) is inkless, whatever lines its box holds (the
+// paragraph or the line it ends is TeX's own statement, its points), and one that sets a rule after the paragraph it ends inked;
+// an `\item` a paper's macro makes, asked between paragraphs and in a paragraph, is inked: the ask goes on into the paragraph the
+// document goes on with, where LaTeX sets the label through \everypar; a macro that begins a paragraph between paragraphs
 // (`\leavevmode`) is inkless, the paragraph's point of ours in its indent box read as no ink; a macro that reads past its own
 // source (an argument the front end does not know it takes) has no answer, never one measured on the ask's own tokens; hyperref's
 // anchor between paragraphs, a destination in the vertical list, is no separator (inkless where the driver writes a \pdfdest).
@@ -61,6 +64,8 @@ const MAIN = String.raw`\documentclass{article}
 \expandafter\def\csname takeone\endcsname#1{}
 \newcommand\twol[1]{}
 \newcommand\anchor{\phantomsection}
+\newcommand\myitem[1]{\item[#1]}
+\newcommand\parrule{\par\noindent\rule{\linewidth}{0.4pt}}
 \newcommand\noisyA{\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA\zzA}
 \newcommand\noisyB{\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB\zzB}
 \begin{document}
@@ -87,6 +92,12 @@ two} lines.
 
 \anchor{}
 A paragraph after an anchor.
+
+Words that end where \medbreak and words that a rule \parrule{} ends.
+
+\begin{itemize}
+\myitem{(A)} An item a macro of the paper's begins between paragraphs, \myitem{(B)} and one it begins in a paragraph.
+\end{itemize}
 
 \begin{figure}\caption{A caption \capt}\label{f1}\end{figure}
 \renewcommand\later{Late}Then \later{} again.
@@ -116,11 +127,19 @@ const WANT = {
   '\\capt': undefined,
   // (a row's rule at a row's start: not asked there, where a token of ours would begin a cell before its \\hline)
   '\\myrule': undefined,
-  // (a paragraph's end or a line's where it is used: more than one line, or vertical material, in its paragraph: never inkless)
-  '\\mypar{}': 'kept',
-  '\\mycr{}': 'kept',
-  '\\mynl{}': 'kept',
-  '\\ksep': 'kept',
+  // (a paragraph's end or a line's where it is used, which sets no ink: inkless, whatever lines its box holds (the coordinator's
+  // ruling of 2026-11-16, lane cm-fix: the paragraph or the line it ends is TeX's own statement, the paragraph points))
+  '\\mypar{}': 'inkless',
+  '\\mycr{}': 'inkless',
+  '\\mynl{}': 'inkless',
+  '\\ksep': 'inkless',
+  '\\medbreak': 'inkless',
+  // (one that ends the paragraph and sets a rule after it: its ink)
+  '\\parrule{}': 'inked',
+  // (an \item a macro of the paper's makes, asked between paragraphs and in a paragraph: the label LaTeX sets at the next
+  // paragraph's start, through \everypar, which the ask goes on into: its ink)
+  '\\myitem{(A)}': 'inked',
+  '\\myitem{(B)}': 'inked',
   // (a paragraph's start where it is used, between paragraphs: a line of no ink, our own point in its indent box)
   '\\lead{}': 'inkless',
   // (a macro that reads past its own source, which the front end does not know takes an argument: what it sets at its use

@@ -7448,12 +7448,21 @@ today's request.
   paragraph hooks kept out: inside the box the primitive's list is `\the\everypar`), so that what a sample leaves for the next
   paragraph's start is set in the box TeX lists: an `\item` a paper's macro makes sets its label there, through `\everypar`
   (2608.00812v1's `\nameditem{…}`, `\item[#1]`), which before this the ask never reached and read as nothing (lane cm-fix,
-  2026-11-16). A command that ends the paragraph or
-  the line where it is used (`\par`, `\\`, `\newline`, a class's `\sep` defined `\unskip\par`, as cas-sc's keywords
-  environment defines it: `cas-common.sty` 1612 to 1617) leaves two lines there, or a line and a box: it parts what stands
-  before it from what stands after, and readInkProbe never reads it inkless (an element, as `\authorcr` is). A node that takes
-  no place beside the line (a destination, a write, a mark: hyperref's `\phantomsection` between paragraphs, 2610.37818v1)
-  parts nothing. Set in a
+  2026-11-16). One reading then (`marks.ts` readInkProbe): a sample is inkless where used when no node at any depth of its box
+  sets ink, whatever lines the box holds. A command that ends the paragraph or the line where it is used and sets nothing
+  (`\par`, `\\`, `\newline`, LaTeX's `\medbreak` and `\smallbreak`, placeins' `\FloatBarrier`, `\break`, a class's `\sep`
+  defined `\unskip\par`, as cas-sc's keywords environment defines it: `cas-common.sty` 1612 to 1617) is inkless: no mark, its
+  element stated to set nothing (the part's `text ''`), kept on the wire as an element (`silent` is the kernel's list alone,
+  §18.79), and the paragraph or the line it ended is TeX's own statement (the paragraph points, `Placed.paras`; a forced
+  break's point where the kernel's `\\` set it). The morning's ruling read such a command "never inkless" (two lines in its box,
+  or a line and a box, as a separator's mark): the marking then gave it its opening point alone (a paper's macro gets no
+  closing mark, LOOKS_AHEAD), and with no glyph of its own after it its element stated no ink and no text, its unit the
+  original's: 2111.09276v1's `\medbreak` (five members), 2608.03841v2's `\break` (two), 2610.21377v1's `\smallbreak`,
+  2610.30769v1's and 2610.35877v1's `\FloatBarrier`, 2610.21084v1's keywords (since round 4b). It was reversed (the coordinator's
+  ruling of 2026-11-16) once the `\item` a paper's macro makes was found to list exactly as `\medbreak` did (the paragraph's
+  end, the item's penalty and skip, no ink: its label is set at the next paragraph's start) and the ask went on into that
+  paragraph (above): what parted a box was never what told ink from none. A sample that ends the paragraph and sets a rule or a
+  boxed word after it is inked by that ink. Set in a
   horizontal box alone, the same `\par` sets nothing (TeX ignores it in restricted horizontal mode). Pass 1 is the marked
   files, so an ask's box can hold the marks' own nodes (a paragraph's point in its indent box, a forced break's, a unit's
   destination): read as no ink there alone (`marks.ts` OWN_NODE), never in the probe's reading, whose document holds no mark.
@@ -7476,9 +7485,9 @@ today's request.
 
 Held by the TeX gate's cases (`lab/pdf/spikes/ask-cases.mjs`, both years, the four engines, on the loop's first pass: the
 `.bbl`, the `.aux` and the `.toc` byte for byte without the asks, as many errors outside the asks, each answer as the use sets
-it; `\par`, `\\`, `\newline` and a keywords environment's `\unskip\par` answered and never inkless where a paragraph uses
-them, where a horizontal box alone read `\par` and the keywords' `\unskip\par` inkless in all eight runs and `\\` and
-`\newline` inkless under latex). LuaTeX lists a paragraph's line with a node of its own first
+it; since lane cm-fix, `\par`, `\\`, `\newline`, a keywords environment's `\unskip\par` and `\medbreak` inkless where a
+paragraph uses them, a paragraph's end with a rule after it inked, and an `\item` a paper's macro makes inked, asked between
+paragraphs and in a paragraph). LuaTeX lists a paragraph's line with a node of its own first
 (`\localpar` and the values below it), read as no ink in an ask's vertical box alone: the probe's boxes read as before.
 Measured on 56 papers (the six of B4 and 50 of the 89 whose bibliography is shipped), each prepared three times in the
 pinned image with the box's answers (the asks off; made and read but never taken; on): all 168 whole. With the asks made and
