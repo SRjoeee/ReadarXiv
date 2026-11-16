@@ -7513,6 +7513,16 @@ today's request.
   `\fi`, which copied into a branch TeX skips would end its conditional early, 2610.21312v1), nor a sample whose source spans
   lines (its copy in the ask would move every line after it, and `\inputlineno` with them, which the marks write to the
   `.aux`: 2501.14787v1 paid a pass more), nor right after a piece that may read it as its argument (`marks.ts` looksAhead: `\urldef\tempurl`, 2402.10294v1); a later use is asked then.
+- **What pass 1 hands on** (`compile/paper.ts` convergeThenMark, `unasked`; `marks.ts` withoutAsks): an ask writes nothing
+  itself, but a class that writes a macro's argument to a file as it stands copies the ask with the piece after it
+  (elsarticle's `\emailauthor`, an author's name and its `\corref` to the `.aux`: `\axtask {0}{\corref {cor1}}\corref {cor1}`,
+  2610.38269v1 and 2608.05881v1, the corpus's only two). The pass that read it back defines no `\axtask`: it stopped there and
+  set the ask's index and its sample (a stray "0" and a second mark), and a file pass 1 alone writes and every pass reads (a
+  class that writes its file only where it finds none) would carry them to the settled page. The files pass 1 wrote are handed
+  on with each such wrapper taken out: what the source had in its place, nothing (the ask stands before its piece). Taken by
+  its own grammar alone: `\axtask`, the one space `\write` prints after a control word or none, the index of an ask of that
+  pass in braces, then one group whose TeX tokens are that ask's sample's; anything else is handed on as it stands (lane
+  cm-tidy).
 - **In the mode of its use** (`marks.ts` ASK_TEX): a sample used in a paragraph is set as a paragraph, in a vertical box at the
   measure in force, between two empty boxes (`\noindent\hbox{}<sample>\hbox{}\par`); between paragraphs, in a vertical box as
   it stands; in a horizontal box (a table's cell), in a horizontal box; in a formula, in math in a horizontal box. Where the

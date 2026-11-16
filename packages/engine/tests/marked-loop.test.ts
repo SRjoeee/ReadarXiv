@@ -774,6 +774,40 @@ describe("F15 (`asks`): the loop's pass 1 asks the paper's macros where the docu
     const b = await today(asking(), [todayOf(), finalOf()], { asks: true })
     expect(b.asked.map(requestDigest)).toEqual(a.asked.map(requestDigest))
   })
+  // (a class that writes a macro's argument to a file as it stands copies the ask with the piece after it, TeX's \\write printing
+  // each control word with a space after it: elsarticle's \\emailauthor, the ask before its \\corref with it in the .aux. The
+  // pass that reads that file back defines no \\axtask; it stops there and sets the ask's index and its sample)
+  const fileOf = (q: CompileRequest | undefined, p: string) => sorted(q).find(([x]) => x === p)?.[1]
+  it("pass 1's files are handed on with each ask's wrapper a class wrote into one taken out: the .aux it reads back", async () => {
+    const wrote = '\\relax \n\\gotmail{Ada Quill \\axtask {0}{\\nada {}}\\nada {}}\n'
+    const clean = '\\relax \n\\gotmail{Ada Quill \\nada {}}\n'
+    const { asked, made } = await q1(
+      asking(),
+      [draftOf({ 'main.aux': wrote }), fullOf({ 'main.aux': clean }), fullOf({ 'main.aux': clean })],
+      { asks: true },
+    )
+    expect(fileOf(asked[2], 'main.aux')).toBe(clean)
+    // (the pass given the file without the wrapper writes it back as it was given: no pass more)
+    expect(pdfOf(made).cm).toEqual({ drafts: 1, marked: 1, settled: true })
+  })
+  it('and a file pass 1 alone writes, never rewritten after (a class that writes its file where it finds none)', async () => {
+    const wrote = '\\mailnote{Ada Quill \\axtask {0}{\\nada {}}\\nada {}}\n'
+    const { asked, made } = await q1(
+      asking(),
+      [draftOf({ 'main.aux': AUX, 'main.mail': wrote }), fullOf({ 'main.aux': AUX })],
+      { asks: true },
+    )
+    // (handed on with the wrapper, the file would carry it to the settled page: no pass rewrites it, so every pass reads it)
+    expect(fileOf(asked[2], 'main.mail')).toBe('\\mailnote{Ada Quill \\nada {}}\n')
+    expect(pdfOf(made).cm).toEqual({ drafts: 1, marked: 1, settled: true })
+  })
+  it("a wrapper its grammar does not read (no ask of this pass's index, another sample) is handed on as it stands", async () => {
+    const other = '\\relax \n\\gotmail{\\axtask {3}{\\nada {}}\\axtask {0}{\\kw {}}}\n'
+    const { asked } = await q1(asking(), [draftOf({ 'main.aux': other }), fullOf({ 'main.aux': other })], {
+      asks: true,
+    })
+    expect(fileOf(asked[2], 'main.aux')).toBe(other)
+  })
 })
 
 describe("the bibliography pass's files, carried into the loop's pass 1 (`carried`)", () => {

@@ -18,6 +18,7 @@ import {
   readAskTexts,
   readInkTexts,
   useAnswersOf,
+  withoutAsks,
 } from '../src/marks/marks.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -337,5 +338,33 @@ describe('where the asks stand (askPlan), and the marked files that carry them (
     const main = dec(files(p, plan).get('main.tex'))
     expect(main).not.toMatch(/urldef[^\n]*axtask/)
     expect(main).toMatch(/C \\axtask\{0\}\{\\kw\{\}\}\\axtpma\{p\d+\.\d+a\}\\kw\{\} d\./)
+  })
+})
+
+describe("an ask's wrapper a class wrote into a file, taken out of the files pass 1 hands on (withoutAsks)", () => {
+  // (a class that writes a macro's argument as it stands copies the ask with the piece after it; TeX's \\write prints each
+  // control word with one space after it)
+  it('takes the wrapper by its grammar and its sample’s tokens: what the source had in its place, nothing', () => {
+    const aux = '\\emailauthor{ada@example.org}{Ada Quill\\axtask {0}{\\corref {cor1}}\\corref {cor1}}\n'
+    expect(withoutAsks(aux, ['\\corref{cor1}'])).toEqual({
+      text: '\\emailauthor{ada@example.org}{Ada Quill\\corref {cor1}}\n',
+      taken: 1,
+      left: 0,
+    })
+    // (a copy of the source as written: no space after the control word)
+    expect(withoutAsks('a\\axtask{1}{\\kw{}}\\kw{} b', ['\\nada{}', '\\kw{}']).text).toBe('a\\kw{} b')
+    // (a sample's own groups, and braces a control symbol takes)
+    expect(withoutAsks('\\axtask {0}{\\textbf {a{b}c}\\{}x', ['\\textbf{a{b}c}\\{']).text).toBe('x')
+  })
+  it('leaves what the grammar does not read: another index, another sample, another control word, an escaped backslash', () => {
+    for (const [text, asked] of [
+      ['\\axtask {2}{\\kw {}}', ['\\kw{}']],
+      ['\\axtask {0}{\\kw {x}}', ['\\kw{}']],
+      ['\\axtask {00}{\\kw {}}', ['\\kw{}']],
+      ['\\axtasks {0}{\\kw {}}', ['\\kw{}']],
+      ['\\\\axtask {0}{\\kw {}}', ['\\kw{}']],
+      ['\\axtask {0}{\\kw {}', ['\\kw{}']],
+    ] as [string, string[]][])
+      expect(withoutAsks(text, asked)).toEqual({ text, taken: 0, left: 1 })
   })
 })

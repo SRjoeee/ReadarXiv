@@ -678,6 +678,76 @@ export const ASK_TEX = [
 ].join('')
 /** one ask (ASK_TEX): sample `i` of the asked, its source as the piece writes it */
 export const askOf = (i: number, src: string): string => `\\axtask{${i}}{${src}}`
+/** a text's tokens as TeX's input reads them under a document's category codes (the TeXbook, chapter 8): a control word, a
+ *  backslash and its letters, the spaces after it skipped; a control symbol, a backslash and one other character (a control
+ *  space's spaces after it skipped too); a run of spaces one space token; every other character its own. \\write prints a
+ *  control word with one space after it (`\\corref{cor1}` written `\\corref {cor1}`): read again so, it is the same tokens */
+function texTokens(s: string): string[] {
+  const out: string[] = []
+  const cs = /\\(?:([A-Za-z]+)|[\s\S])?/y
+  let skip = false
+  for (let k = 0; k < s.length; ) {
+    const c = s[k]!
+    if (c === '\\') {
+      cs.lastIndex = k
+      const m = cs.exec(s)!
+      out.push(m[0])
+      k += m[0].length
+      // (spaces skipped after a control word and after a control space)
+      skip = m[1] !== undefined || m[0] === '\\ '
+    } else if (c === ' ' || c === '\t') {
+      if (!skip) out.push(' ')
+      skip = true
+      k++
+    } else {
+      out.push(c)
+      skip = false
+      k++
+    }
+  }
+  return out
+}
+/** an ask's wrapper as TeX writes askOf's tokens into a file: the control word (its backslash no control symbol's, no letter after
+ *  it), the one space TeX prints after it or none (a copy of the source as written), its index in braces as askOf writes it, and
+ *  its sample's group next (groupEnd) */
+const WRITTEN_ASK = /\\axtask(?![A-Za-z]) ?\{(0|[1-9][0-9]{0,8})\}(?=\{)/y
+/**
+ * A file the loop's first pass wrote, every ask's wrapper TeX wrote into it taken out: what the source had in its place, nothing
+ * (askPlan sets the ask right before its piece, which follows it, compile/live.ts withAsks). An ask writes nothing itself (ASK_TEX:
+ * in a moving argument it expands to nothing), but a class that writes a macro's argument as it stands copies the ask with the
+ * piece after it: elsarticle's \\emailauthor writes the author's name and its `\\corref` to the .aux, the ask before `\\corref`
+ * with it (2610.38269v1, 2608.05881v1: `\\axtask {0}{\\corref {cor1}}\\corref {cor1}`), and the pass that reads that file back,
+ * which defines no \\axtask (ASK_TEX is pass 1's alone), stops at it and sets its index and its sample: a stray "0" and a second
+ * \\corref mark in the e-mail footnote, and a file written again without it, one pass more (lane cm-fix). The wrapper is taken
+ * by its own grammar (WRITTEN_ASK) and its sample's tokens alone: the index of an ask of `asked`, then one group in braces whose
+ * tokens (texTokens) are that ask's sample's. One that reads otherwise is left as it stands, and counted (`left`). Latin-1 text
+ * (the bytes of a file, one character a byte, as the loop reads them)
+ */
+export function withoutAsks(text: string, asked: readonly string[]): { text: string; taken: number; left: number } {
+  let out = '',
+    last = 0,
+    taken = 0,
+    left = 0
+  for (let at = text.indexOf('\\axtask'); at >= 0; at = text.indexOf('\\axtask', at + 1)) {
+    if (at < last) continue
+    // (a backslash a control symbol `\\\\` takes is no control word's)
+    let b = at
+    while (b > 0 && text[b - 1] === '\\') b--
+    WRITTEN_ASK.lastIndex = at
+    const head = (at - b) % 2 === 0 ? WRITTEN_ASK.exec(text) : null
+    const i = head ? Number(head[1]) : -1
+    const from = WRITTEN_ASK.lastIndex
+    const end = head && i < asked.length ? groupEnd(text, from) : -1
+    if (end < 0 || texTokens(text.slice(from + 1, end - 1)).join('\0') !== texTokens(asked[i]!).join('\0')) {
+      left++
+      continue
+    }
+    out += text.slice(last, at)
+    last = end
+    taken++
+  }
+  return { text: taken ? out + text.slice(last) : text, taken, left }
+}
 /** whether a sample can be asked where the document uses it: its own groups close in it (as many \\begingroup as \\endgroup, \\bgroup
  *  as \\egroup; its braces balance, inkSamples' boxable), and so do its conditionals (each \\if… closed by its \\fi, no \\else or
  *  \\or outside one). One that opens or closes a group of the paragraph around it (a paper's `\\begingroup` piece, its `\\endgroup`
