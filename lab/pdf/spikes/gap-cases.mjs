@@ -15,7 +15,11 @@
 // document's start writes them; the values in force at each float (the last of each name written at or before its serial) as
 // the float's own reading inside it, its serial a float bracket `fs<n>` of the PDF; \parskip's shrink as readSkips reads it;
 // (4) the headings each class makes through \@startsection stated, those it makes otherwise (KOMA-Script, titlesec, a
-// chapter) not. Exit 1 on a failure.
+// chapter) not; (5) where TeX placed each float (its own lists at each \@makecol: here, top, bottom) read off B's brackets as the
+// engine reads them (locate/gaps.ts bracketsOf), none where no \@makecol made the page (REVTeX's output routine, a page of floats),
+// AXT-WHOLE stated exactly there (STATEMENTS_TEX's WHOLE_TEX), two floats of one top list adjacent on B (lane cm-fix: a two-column
+// title block over a top float, two top floats, a float set here, a page of floats, REVTeX in its reprint and preprint forms).
+// Exit 1 on a failure.
 //   pnpm exec tsx lab/pdf/spikes/gap-cases.mjs [--years=2023,2025] [--engines=pdflatex,xelatex,lualatex,latex] [--only=<case>,…]
 //     [--out=<dir>]
 // Docker with the years' pinned images (lab/pdf/compile-images.json); no network.
@@ -26,7 +30,8 @@ import { join, resolve } from 'node:path'
 import { pageInk } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { LINES_TEX } from '../../../packages/engine/src/compile/tex.ts'
-import { glueOf, readGlues, readHeads, readSkips } from '../../../packages/engine/src/marks/channels.ts'
+import { bracketsOf } from '../../../packages/engine/src/locate/gaps.ts'
+import { glueOf, readGlues, readHeads, readSkips, readWhole } from '../../../packages/engine/src/marks/channels.ts'
 import { DVI_LAYOUT_TEX, LAYOUT_TEX, STATEMENTS_TEX } from '../../../packages/engine/src/marks/marks.ts'
 import { DVI_MARK_DEF, MARK_DEF } from '../../../packages/engine/src/source/latex-front.ts'
 import { checkCompileImage, compileImageRef } from './compile-image.mjs'
@@ -69,11 +74,14 @@ const SHOW = (at) =>
   String.raw`\makeatother`
 /** the document's own readings in its preamble: the glue \@startsection hands \addvspace (a heading's before-skip as TeX adds
  *  it), written each time */
-const PRE = String.raw`\makeatletter\let\axt@chkav\addvspace\def\addvspace#1{\message{^^JAXT-SHOW - addv \the\glueexpr#1\relax^^J}\axt@chkav{#1}}\makeatother`
+const PRE = String.raw`\makeatletter\let\axt@chkav\addvspace\def\addvspace#1{\message{^^JAXT-SHOW - addv \the\glueexpr#1\relax^^J}\axt@chkav{#1}}\makeatother` +
+  // (where TeX put each float, its own lists when \@makecol makes a column: the top list, the bottom list, the floats set here; and
+  // each output: a code of a label of the gate's own, so that it runs before the head's top-level code)
+  String.raw`\makeatletter\ifdefined\AddToHook\AddToHook{cmd/@makecol/before}[axt-gate]{\begingroup\def\@elt##1{\message{^^JAXT-SHOW - top \number##1^^J}}\@toplist\def\@elt##1{\message{^^JAXT-SHOW - bot \number##1^^J}}\@botlist\def\@elt##1{\message{^^JAXT-SHOW - here \number##1^^J}}\@midlist\message{^^JAXT-SHOW - makecol 0^^J}\endgroup}\AddToHook{cmd/@outputpage/before}[axt-gate]{\message{^^JAXT-SHOW - outputpage 0^^J}}\fi\makeatother`
 /** a float of environment `env` with its caption unit `i`, `inside` set first in it, and the float's own reading of the
  *  separations at its end */
 const F = (env, place, i, inside = '') =>
-  String.raw`\begin{${env}}[${place}]${inside}\centering\rule{2cm}{1cm}\caption{\leavevmode\axtmark{${i}s}A caption of ours.\axtend{${i}e}}${SHOW('f')}\end{${env}}` + '\n'
+  String.raw`\begin{${env}}[${place}]${inside}\centering\rule{2cm}{1cm}\caption{\leavevmode\axtmark{${i}s}A caption of ours.\axtend{${i}e}}${SHOW('f')}\makeatletter\message{^^JAXT-SHOW - fser \the\numexpr\axt@bn+1\relax\space\number\@currbox^^J}\makeatother\end{${env}}` + '\n'
 /** the body every case sets: headings of each kind after text, a starred one, floats (one after the paper changed a separation,
  *  one that changes a caption's skip inside itself, one after it), a footnote */
 const BODY = [
@@ -114,6 +122,20 @@ const CASES = {
   hyperref: [doc('\\documentclass{article}', '\\usepackage[colorlinks]{hyperref}'), HEADS],
   report: [doc('\\documentclass{report}', '', `${String.raw`\chapter{\axthmark{h0s}A chapter\axthmark{h0e}}`}\n${BODY}`), HEADS],
   revtex: [doc('\\documentclass[aps,pra]{revtex4-2}', ''), HEADS],
+  // (a class whose output routine is its own, REVTeX's ltxgrid: no \\@makecol, its pages bracketed whole, in its two-column and its
+  // preprint form)
+  revtexreprint: [doc('\\documentclass[aps,pra,reprint]{revtex4-2}', ''), HEADS],
+  revtexpreprint: [doc('\\documentclass[aps,pra,preprint]{revtex4-2}', ''), HEADS],
+  // (a two-column title block over a top float; two top floats one over the other; a float the page builder sets here; a page
+  // of floats)
+  titletop: [
+    doc(
+      '\\documentclass[twocolumn]{article}',
+      '',
+      `\\twocolumn[{\\centering\\LARGE A title block over both columns\\par\\vspace{2em}}]\n${F('figure', 't', 30)}${F('figure', 't', 31)}${BODY}\n${F('figure', 'h', 32)}${P(33, prose(40))}${F('figure', 'p', 34)}${F('figure', 'p', 35)}${P(36, prose(200))}`,
+    ),
+    HEADS,
+  ],
   acmart: [doc('\\documentclass[sigconf]{acmart}', '\\settopmatter{printacmref=false}\\setcopyright{none}'), HEADS],
   ieeetran: [doc('\\documentclass[conference]{IEEEtran}', ''), HEADS],
   amsart: [doc('\\documentclass{amsart}', ''), HEADS],
@@ -142,6 +164,67 @@ async function floatSerials(file) {
   }
   await task.destroy()
   return [...new Set(out)].sort((a, b) => a - b)
+}
+/** where TeX placed each float, the engine's reading off B's brackets (gaps.ts bracketsOf with readWhole's pages) against TeX's
+ *  own lists at each \@makecol (the document's AXT-SHOW `top`, `bot`, `here` of each float's box register, `fser` naming the
+ *  serial a float's box takes); AXT-WHOLE stated for an output exactly where no \@makecol ran since the output before; two floats
+ *  of one top list adjacent on B (no glyph or box between the first's closing bracket and the next's opening one), the last
+ *  followed by its column's body bracket. Lines: `ok <note>` or a fault */
+async function placesHeld(file, log) {
+  const task = getDocument({ data: new Uint8Array(readFileSync(file)), verbosity: 0 })
+  const pdf = await task.promise
+  const pages = []
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const pg = await pdf.getPage(n)
+    const ink = pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate })
+    pages.push({ glyphs: ink.glyphs, points: ink.points })
+  }
+  await task.destroy()
+  const whole = new Set(readWhole(log))
+  const { placed, brackets } = bracketsOf({ pages }, whole)
+  const out = []
+  // (TeX's own: each box register's float by the last `fser` before it; each list at each \@makecol; each output and its columns)
+  const boxOf = new Map()
+  const tex = new Map()
+  let made = false
+  let wholeSince = false
+  let outputs = 0
+  for (const m of log.matchAll(/^AXT-SHOW - (fser|top|bot|here|makecol|outputpage) (\d+)(?: (\d+))?$|^AXT-WHOLE (\d+)$/gm)) {
+    if (m[4] !== undefined) {
+      wholeSince = true
+      continue
+    }
+    if (m[1] === 'fser') boxOf.set(m[3], Number(m[2]))
+    else if (m[1] === 'makecol') made = true
+    else if (m[1] === 'outputpage') {
+      outputs++
+      if (made === wholeSince) out.push(`output ${outputs}: ${made ? 'a \\@makecol ran and AXT-WHOLE stated' : 'no \\@makecol ran and no AXT-WHOLE'}`)
+      made = false
+      wholeSince = false
+    } else {
+      const f = boxOf.get(m[2])
+      if (f !== undefined) tex.set(f, m[1])
+    }
+  }
+  let n = 0
+  for (const [f, b] of brackets) {
+    if (b.e < 0) continue
+    const want = tex.get(f)
+    const got = placed.get(f)
+    const fine = want === 'here' ? got === 'here' : want === 'top' || want === 'bot' ? got === 'out' : got === undefined
+    if (!fine) out.push(`fs${f}: TeX ${want ?? 'no list (its page bracketed whole or a page of floats)'}, read ${got ?? 'none'}`)
+    else n++
+  }
+  // (two floats of one top list: adjacent on B, as gaps.ts reads them)
+  const tops = [...tex].filter(([, k]) => k === 'top').map(([f]) => f)
+  for (let i = 0; i + 1 < tops.length; i++) {
+    const [x, y] = [brackets.get(tops[i]), brackets.get(tops[i + 1])]
+    if (!x || !y || x.page !== y.page || y.s !== x.e + 1) continue
+    const [e, s] = [pages[x.page].points[x.e], pages[y.page].points[y.s]]
+    if (e.glyph !== s.glyph || e.box !== s.box) out.push(`fs${tops[i]}, fs${tops[i + 1]}: one top list, something between them on B`)
+  }
+  out.push(`ok floats placed as TeX listed them ${n} of ${[...brackets].filter(([, b]) => b.e >= 0).length}; outputs ${outputs}, whole ${whole.size}`)
+  return out
 }
 /** the two PDFs' pages as pageInk reads them: every glyph (its character, advance, baseline, size), box and point the same */
 async function sameInk(a, b) {
@@ -285,6 +368,11 @@ for (const year of YEARS) {
       // (\parskip's shrink as readSkips reads it, at the first paragraph)
       const sk = readSkips(log).get(1)
       if (start.parskip && (!sk || Math.abs((sk[2] ?? Number.NaN) - start.parskip[1]) > 1e-6)) faults.push(`\\parskip's shrink: ${sk?.[2]}, TeX's ${start.parskip[1]}`)
+      // (5) where TeX placed each float, as the engine reads it off B's brackets (locate/gaps.ts bracketsOf, AXT-WHOLE's pages none),
+      // against TeX's own lists at each \@makecol (here, top, bottom), and AXT-WHOLE stated exactly for each output no \@makecol made
+      const placing = existsSync(b) ? await placesHeld(b, log) : ['no PDF']
+      faults.push(...placing.filter((x) => !x.startsWith('ok ')))
+      notes.push(...placing.filter((x) => x.startsWith('ok ')).map((x) => x.slice(3)))
       const restated = glues.filter((g) => g.at > 0).map((g) => `${g.name}@fs${g.at}`)
       counts[`${year} ${e}`] ??= { ok: 0, fail: 0 }
       counts[`${year} ${e}`][faults.length ? 'fail' : 'ok']++
