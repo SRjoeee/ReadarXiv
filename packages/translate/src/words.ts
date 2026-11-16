@@ -256,7 +256,8 @@ function heldLettersOf(unit: UnitIn): Whole | null {
         for (const ch of p.s) {
           if (!held.has(n)) {
             s += ch
-            keep.push(n)
+            // (one position of the sent projection a code unit, as its offsets count: a character outside the BMP two)
+            for (let k = 0; k < ch.length; k++) keep.push(n + k)
           }
           n += ch.length
         }

@@ -223,6 +223,15 @@ describe('the letters and marks that touch an element’s text are its word’s'
     // (the sentences in the unit's own projection, and in the row as it is drawn)
     expect(r.sentences).toEqual({ src: [15], tr: [5] })
   })
+  it('a character outside the BMP before held letters: the later sentence starts where it stands (offsets in UTF-16 code units)', async () => {
+    // ("𝒜" two code units; own projection "𝒜 We use ￼s. Then it ends.", "Then" at 14 there and in the row)
+    const u = unit('a', [t('𝒜 We use '), mac('h', 'guitar'), t('s. Then it ends.')], true)
+    const { sent, result } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual(['𝒜 We use <b translate=no>x1</b>. <x id="2"/>Then it ends.'])
+    const r = ok(result)
+    expect(r.content).toEqual([tx('𝒜 We use '), { t: 'el', id: 'h' }, tx('s. Then it ends.')])
+    expect(r.sentences).toEqual({ src: [14], tr: [14] })
+  })
   it('Microsoft is sent the element alone too', async () => {
     const { sent, result } = await viaMicrosoft(guitar, () => '擦亮@a#。然后给它们调音。')
     expect(sent).toEqual(['Polish the @a#. Then tune them.'])
