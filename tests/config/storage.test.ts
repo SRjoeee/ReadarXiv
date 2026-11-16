@@ -2,9 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
-import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, DEFAULT_PDF_READER, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
+import { CLASSES as READER_CLASSES, DEFAULTS as READER_DEFAULTS } from '@readarxiv/reader'
+import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, DEFAULT_PDF_CLASSES, DEFAULT_PDF_READER, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
 import { serviceSchema } from '@/config/services'
 import { chooseFirstTarget, configItem, getConfig, readConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
+
+/**
+ * What a reader's machine holds under `pdfReader.classes` (v21), the contract a new version must still meet (hard rule 7): a
+ * FROZEN copy of today's engine's five toggles and their defaults, recorded from src/pdf-reader/engine/rules/content-classes.mjs
+ * TOGGLE_DEFAULTS at 0c069a6ea (that file's blob e3cd968f3, last changed by 5c2554d00), which the cut-over deletes. A change of
+ * these keys or defaults owes a CONFIG_VERSION and a migration, never an edit of this literal
+ */
+const SAVED_CLASSES = { heads: true, tables: true, figures: true, references: false, names: false } as const
 
 /** A reader-added service, the shape v12 stores */
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
@@ -772,6 +781,17 @@ describe('provider selection', () => {
       expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where })
       fakeBrowser.reset()
     }
+  })
+
+  it('the saved reader classes are today\'s five keys and defaults, frozen (hard rule 7): the schema\'s, the defaults\' and the rebuilt reader\'s (packages/reader prefs CLASSES and DEFAULTS) are all of them', () => {
+    const keys = Object.keys(SAVED_CLASSES).sort()
+    // (a key the schema lacks would be stripped from what a reader saves; one it has that a reader's machine lacks refused)
+    expect(Object.keys(configSchema.shape.pdfReader.shape.classes.shape).sort()).toEqual(keys)
+    expect(DEFAULT_PDF_CLASSES).toEqual(SAVED_CLASSES)
+    expect(DEFAULT_CONFIG.pdfReader.classes).toEqual(SAVED_CLASSES)
+    // (the rebuilt reader reads and writes the same five, with the same defaults: no migration is owed)
+    expect([...READER_CLASSES].sort()).toEqual(keys)
+    expect(READER_DEFAULTS.classes).toEqual(SAVED_CLASSES)
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a stored preload margin becoming on demand', async () => {
