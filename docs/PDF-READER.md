@@ -7838,14 +7838,18 @@ Korean lines under half of whose items are CJK, so set as Latin text (`latinishO
 citations set as Latin text; two pieces of a URL (a URL's break points take no glue); a syllable tied by the source's `~` to a
 formula nearly a line wide. The owner's three pages drawn at 2dd3fcaef are byte for byte the candidate he chose from (a lab hook
 on `keepAll` alone): on the four papers that hook and the build differ in one member, 1810.04805v2-ko t48, a title set in the line
-(its paper's "Pre-training data"), which the hook gave an em and the build leaves its row's space. The breaker's lays, the four papers: 42,694 to
-41,105. A page's lay in Node (the gate's own timing over the 56 pages, the served faces' measurer, which caches each text's
-measure as the reader's does): p50 9.7 to 19.7 ms, p90 24.0 to 50.4, p99 44.1 to 74.3; the same pages in Chinese 18.6, 39.5,
-146.5 and in Japanese 24.2, 57.6, 81.2: a syllable a token costs a page what a character a token costs those two. The gate's
-own tenfold rise (8.9 to 90 ms, lane cm-d) was its measuring table's, which holds today's whole Korean words and throws for every
-syllable it lacks, on every call (`metrics/table.ts` MissingMeasure, caught by the lab's `layered`); the reader measures a
-syllable once a visit (`packages/reader/src/compose/served.ts`, its measures by font and text). The time in a browser is to be
-measured.
+(its paper's "Pre-training data"), which the hook gave an em and the build leaves its row's space. The breaker's lays, the
+four papers: 42,694 to 41,105.
+
+The cost, as measured: a page's lay, the four papers' 56 pages in Node, the served faces' measurer cached by font and text as
+the reader's is: 9.7 / 24.0 / 44.1 ms to 19.7 / 50.4 / 74.3 ms (p50 / p90 / p99); the same pages in Chinese 18.6 / 39.5 / 146.5
+and in Japanese 24.2 / 57.6 / 81.2: a syllable a token costs a Korean page what a character a token costs a Chinese or a Japanese
+one today. The browser's reading: owed. The gate's own tenfold rise (8.9 to 90 ms, lane cm-d) was its measurer's: the lab's
+`layered` asked the tap's table, which holds today's whole Korean words, on every call, and caught the MissingMeasure it threw
+for every syllable (`metrics/table.ts`), 2.36 million times over the four papers; it now remembers what the table lacks, by
+font and text (`lab/typeset/served-metrics.mjs`, 586134804: the four papers' page lay in the gate p50 87 to 22 ms, every dump
+byte-identical). The reader measures a syllable once a visit (`packages/reader/src/compose/served.ts`, its measures by font and
+text).
 
 ## 19. The engine's contract
 
