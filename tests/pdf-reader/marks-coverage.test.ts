@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { completeMacros, definitionsNested, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
+import { completeMacros, definitionsNested, frontMarks, inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
 import { bblProvides, openPaper, probeFiles } from '../../packages/engine/src/compile/live.ts'
-import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, followsOf, headsOf, INK_BUDGET, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, type CommandSample, completeCall, completeCalled, followsOf, headsOf, INK_BUDGET, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe } from '../../packages/engine/src/marks/marks.ts'
+import { symbolText } from '../../packages/engine/src/source/text-symbols.ts'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
 // (LOOKS_AHEAD: no closing mark on it, no mark at all on the piece after it), a macro glued to the word before taken for that
@@ -151,7 +152,7 @@ describe('the mark probe asks about the complete macros\' calls, apart from the 
     expect(at('LAYOUT-PROBE 1 punct-at 1 0 a')).toBeGreaterThan(at('LAYOUT-PROBE 1 lineskip'))
     expect(tex).toContain('\\axtpma{q1a}\\cls{x}\\axtpm{q1b}')
     // (and a paper with none of its own asks as before)
-    expect(markProbeTex(probeSamples([u]), ['\\cls{x}'])).toBe(markProbeTex([{ src: '\\cite{a}', call: false }], ['\\cls{x}']))
+    expect(markProbeTex(probeSamples([u]), ['\\cls{x}'])).toBe(markProbeTex([{ src: '\\cite{a}', call: false } as CommandSample], ['\\cls{x}']))
     expect(markProbeTex(probeSamples([u]), ['\\cls{x}'])).not.toContain('punct-at 1 ')
   })
 })
@@ -359,7 +360,7 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     expect(rows.find(r => r.includes('ahead 2 '))).toContain('\\or\\xdef\\axt@qo{2}\\else')
     // (a paper with no pair asks as before)
     const plain = unit([ph('\\snr'), text(' and '), ph('\\cite{a}')])
-    expect(markProbeTex(probeSamples([plain]))).toBe(markProbeTex([{ src: '\\cite{a}', call: false }]))
+    expect(markProbeTex(probeSamples([plain]))).toBe(markProbeTex([{ src: '\\cite{a}', call: false } as CommandSample]))
   })
   it('readMarkProbe: each pair\'s code by its key, an error in its boxes no answer or a lesser one, whatever samples before it the reader knows', () => {
     const samples = probeSamples([u])

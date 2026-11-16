@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '@readarxiv/engine'
-import { type Follow, type Head, OWNED, OWNED_HOW, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
-import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
+import type { Follow, Head, OwnedHow, StreamPage, View } from '../../packages/engine/src/own/stream.ts'
+import { OWNED, OWNED_HOW, ownedOf, ownedPages, STREAM_COLUMNS } from '../../packages/engine/src/own/stream.ts'
+import { INK_ANY } from '../../packages/engine/src/marks/marks.ts'
 
 // Each placeholder's own ink in the marked compile by content-stream order: a page here is what pageInk reads of one,
 // its glyphs and boxes in the order shown and its points among them, its glyphs packed as the marks read keeps them
@@ -11,8 +12,8 @@ import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
 
 type Item = string | { u: string; x: number; y: number; size?: number } | { rule: [number, number, number, number] } | { at: string } | { para: string }
 /** a page from the items in stream order: a string is a run of glyphs on the current line, `{ at }` a point */
-function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
-  const glyphs: Glyph[] = [], boxes: number[] = [], points: StreamPage['points'] = [], boxAt: number[] = [], paras: StreamPage['points'] = []
+function pageOf(items: Item[], view: View = [0, 0, 612, 792]): StreamPage {
+  const glyphs: Glyph[] = [], boxes: number[] = [], points: StreamPage['points'][number][] = [], boxAt: number[] = [], paras: StreamPage['points'][number][] = []
   let x = 72, y = 700
   for (const it of items) {
     if (typeof it === 'string') {
@@ -38,7 +39,7 @@ function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
 }
 const closed: Follow = { closing: true, want: '', ends: [], blocked: false }
 const open = (want: string, ends: string[] = [], blocked = false): Follow => ({ closing: false, want, ends, blocked })
-const how = (name: string) => OWNED_HOW.indexOf(name)
+const how = (name: OwnedHow) => OWNED_HOW.indexOf(name)
 /** an entry as the cases read it: its glyphs as a string and its rule count, or its how where it is not owned */
 const shown = (pages: readonly StreamPage[], e: { how: number; glyphs: [number, number][]; boxes: unknown[] }) => (e.how < OWNED ? [e.glyphs.map(([p, g]) => pages[p - 1]?.glyphs.u[g]).join(''), e.boxes.length] as [string, number] : OWNED_HOW[e.how] as string)
 /** each owned piece's glyphs as a string and its rule count, or its how where it is not owned: ownedOf's over the whole, and

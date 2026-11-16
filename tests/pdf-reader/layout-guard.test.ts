@@ -1,14 +1,14 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { auxUnits, braceBalance, compilerOfPdf, contextUnits, cutCopyUnits, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
-import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { auxUnits, braceBalance, compilerOfPdf, contextUnits, cutCopyUnits, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '../../packages/engine/src/compile/guard.ts'
+import { WHY_MAX } from '../../packages/engine/src/instrument/format.ts'
 import { ALLOCATION_FAILED } from '@readarxiv/engine'
-import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { handoverOf, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { type Compiled, type CompileRequest, markedPreamble, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
+import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '../../packages/engine/src/marks/marks.ts'
+import { handoverOf, markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { type Compiled, type CompileRequest, markedPreamble, openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
+import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
+import type { UnitLines } from '../../packages/engine/src/compile/tex-errors.ts'
 
 // The layout guard (layout/guard.mjs, layout/paper.mjs markedOfPaper; R1 of 2026-10-19): the marked original must be the paper.
 // Each check on synthetic answers (a brace a unit's writing doubled, a mark of ours a compile wrote into a file where no
@@ -35,6 +35,8 @@ const ran = (pdf: Uint8Array, body = '', pages = 3, more: Partial<Compiled> = {}
 const viaDriver = (c: Compiled): Compiled => ({ ...c, log: (c.log ?? '').replace(/Output written on main\.pdf/, 'Output written on main.xdv') })
 /** a compile TeX ran that stopped short of the document's end */
 const stopped = (body: string): Compiled => ({ ok: true, pdf: PDF, log: `${TEX}${body}! Emergency stop.\n*** (job aborted, no legal \\end found)\n` })
+/** a compile's answer as written, typed as the host's (the guard reads only some of its fields) */
+const answer = (c: Compiled): Compiled => c
 
 function compiler(answers: (Compiled | Error)[]) {
   const asked: CompileRequest[] = []
@@ -52,7 +54,7 @@ function compiler(answers: (Compiled | Error)[]) {
 function markedFiles(paper = paperOf(), o: { unmarked?: number[]; names?: boolean } = {}) {
   const switches = readMarkProbe(PROBE_LOG, probeSamples(paper.units)), inkless = readInkProbe(PROBE_LOG, inkSamples(paper.units))
   const spans: { lines?: () => UnitLines<SourceUnit>[]; skip?: number } = {}
-  const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, ...(o.unmarked ? { unmarked: o.unmarked } : {}), ...(o.names === false ? { names: false } : {}), spans })
+  const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, ...(o.unmarked ? { unmarked: o.unmarked as unknown as ReadonlySet<number> } : {}), ...(o.names === false ? { names: false } : {}), spans })
   return { files, spans, paper }
 }
 /** an error TeX logs at a unit's line in the marked file, its place before `at` in that line's text */
@@ -160,10 +162,10 @@ describe('marksOutOfPlace and auxUnits: a mark of ours a compile wrote where no 
       ['main.aux', enc('\\@writefile{toc}{\\etoc@depthtag {x\\axtpma {p218.6a}}}\\@writefile{toc}{\\etoc@depthtag {\\axthmark {h69s}\\axtmark {t185s}\\axtcolour {c5.3}\\axtmark {c2-3}\\axtmark {g1a}}}\n')],
       ['main.log', enc('l.12 \\axtend {9e}\n')],
     ])
-    expect(auxUnits({ ok: true, files }, 1000, 'main')).toEqual(new Set([2, 218, 69, 185, 5]))
-    expect(auxUnits({ ok: true, aux: '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n' }, 1000, 'main')).toEqual(new Set([2]))
+    expect(auxUnits(answer({ ok: true, files }), 1000, 'main')).toEqual(new Set([2, 218, 69, 185, 5]))
+    expect(auxUnits(answer({ ok: true, aux: '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n' }), 1000, 'main')).toEqual(new Set([2]))
     // (ids past the paper's units are no unit of it)
-    expect(auxUnits({ ok: true, files }, 100, 'main')).toEqual(new Set([2, 69, 5]))
+    expect(auxUnits(answer({ ok: true, files }), 100, 'main')).toEqual(new Set([2, 69, 5]))
   })
 })
 

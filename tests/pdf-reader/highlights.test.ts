@@ -14,9 +14,10 @@ import { readFileSync } from 'node:fs'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { type Located, type PdfJs, prepareBack, type Tally } from '@readarxiv/engine'
-import { readInkDecorated, readInkTexts } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classesOf, decoratedCellsOf, instrumentOf } from '@/pdf-reader/engine/pipeline/instrument.mjs'
+import { readInkDecorated, readInkTexts } from '../../packages/engine/src/marks/marks.ts'
+import { classesOf, decoratedCellsOf, instrumentOf } from '../../packages/engine/src/instrument/instrument.ts'
 import { openPaper } from '../../packages/engine/src/compile/live.ts'
+import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
 import { deflate, DOCUMENT_OPTIONS, inflate } from './helpers/ocg-pdfs'
 
 const DIR = new URL('../fixtures/pdf/highlights/', import.meta.url)
@@ -24,7 +25,7 @@ const bytes = (f: string) => new Uint8Array(readFileSync(new URL(f, DIR)))
 const pdfjs = { getDocument, OPS } as unknown as PdfJs
 const HIGHLIGHT = /^\\hl(?:sun|sky)?\{/
 
-type Unit = { kind: string; pieces: { t: string; s?: string; src?: string }[] }
+type Unit = SourceUnit
 let units: Unit[] = []
 let located: Located
 let A: { glyphs: { u: string; x0: number; x1: number; y: number }[]; boxes: number[]; kinds: number[] }

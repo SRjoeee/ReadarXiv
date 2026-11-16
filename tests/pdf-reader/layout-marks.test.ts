@@ -1,11 +1,14 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
-import { patch, startOf } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { classOf, colourPieceOf, DISPLAY, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, literalNames, MARK_CLASSES, MARK_NAME, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, POINTS_TEX, UNMARK_CS, FOLLOWERS, INK_ANY, inkSamples, inkSection, leadSamples, markProbeTex, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, NAME_MARK_FILE, withoutNameMarks, refKeysOf, refsTex } from '@/pdf-reader/engine/layout/marks.mjs'
-import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
-import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
+import type { UnitLines } from '../../packages/engine/src/compile/tex-errors.ts'
+import { patch, type PhPiece, startOf, type TextPiece } from '../../packages/engine/src/source/latex-front.ts'
+import { classOf, type CommandSample, colourPieceOf, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, literalNames, MARK_CLASSES, MARK_NAME, NAME_MACROS, nameSection, NAMES_TEX, POINTS_TEX, UNMARK_CS, FOLLOWERS, INK_ANY, inkSamples, inkSection, leadSamples, markProbeTex, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, probeRow, probeSamples, probeTex, NAME_MARK_FILE, withoutNameMarks, refKeysOf, refsTex } from '../../packages/engine/src/marks/marks.ts'
+import { DISPLAY } from '../../packages/engine/src/instrument/mt.ts'
+import { NAME_ENGLISH } from '../../packages/engine/src/marks/names.ts'
+import { symbolText, TEXT_SYMBOLS } from '../../packages/engine/src/source/text-symbols.ts'
+import { NAME_KEYS } from '../../packages/engine/src/marks/names.ts'
+import { openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
 
 // The layout marks as text: which placeholder gets which mark, the units' own marks, the TeX that goes with them, the
 // marks file and its bounds. What the TeX does under TeX — that no line moves, that nothing written to a file changes —
@@ -415,7 +418,7 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
     ])
   })
   it('markProbeTex: for each sample and follower the four boxes after a word, ended at a space; a call before a second one; one line a sample, its count of errors started again', () => {
-    const tex = markProbeTex([{ src: '\\cite{a}', call: false }, { src: '\\footnote{A note.}', call: true }])
+    const tex = markProbeTex([{ src: '\\cite{a}', call: false } as CommandSample, { src: '\\footnote{A note.}', call: true } as CommandSample])
     expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 punct \d+ \\axt@qo\}/g)).toEqual(['\\typeout{LAYOUT-PROBE 1 punct 0 \\axt@qo}', '\\typeout{LAYOUT-PROBE 1 punct 1 \\axt@qo}'])
     // one document of sections, each a group of its own, after the definition of what closes the groups a sample left open
     expect(tex).toMatch(/^\\makeatletter\\gdef\\axt@unwind\{[^\n]*?\\axt@unwound\}\\begingroup/)
@@ -510,9 +513,9 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     expect(tex.match(/\\noindent\\par/g)).toHaveLength(2)
     expect(tex).not.toMatch(/\\write|\\immediate|AXT-/)
     // after the punctuation section, in the same document
-    const doc = markProbeTex([{ src: '\\cite{a}', call: false }], ['\\bert{}'])
+    const doc = markProbeTex([{ src: '\\cite{a}', call: false } as CommandSample], ['\\bert{}'])
     expect(doc.indexOf('punct 0')).toBeLessThan(doc.indexOf('ink-at 0'))
-    expect(markProbeTex([{ src: '\\cite{a}', call: false }])).not.toContain('ink-at')
+    expect(markProbeTex([{ src: '\\cite{a}', call: false } as CommandSample])).not.toContain('ink-at')
   })
   it('readInkProbe: a box TeX listed with no character and no rule both wide and high sets no ink; an error or a cut listing is no answer', () => {
     // TeX Live 2025's pdfTeX log of the section, as it writes it (\showbox under \tracingonline=0)
@@ -605,7 +608,7 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     expect(inkSamples(many.units)).toContain('\\lead{}')
     expect(leadSamples(many.units)).toEqual([])
     // asked after every other section, numbered on from the macros; with no lead, the document the probe had
-    const samples = [{ src: '\\cite{a}', call: false }]
+    const samples = [{ src: '\\cite{a}', call: false } as CommandSample]
     const doc = markProbeTex(samples, ink, leads)
     expect(doc.indexOf('ink-at 1')).toBeGreaterThan(doc.indexOf('skip'))
     expect(doc).toContain('\\hbox{\\texttt{max\\_tokens}}')
@@ -613,7 +616,7 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     expect(inkSection(['\\x'], 3)).toContain('LAYOUT-PROBE 1 ink-at 3')
   })
   it('headEnd: a unit\'s head before its start mark, as patch places it', () => {
-    const ph = (src: string) => ({ t: 'ph', src }), text = (s: string) => ({ t: 'text', s })
+    const ph = (src: string): PhPiece => ({ t: 'ph', src }), text = (s: string): TextPiece => ({ t: 'text', s })
     // a macro and a space before the first word: passed over; one glued to its word: the mark before it
     expect(headEnd([ph('\\bert'), text(' is simple')])).toBe(1)
     expect(headEnd([ph('\\bert'), text("'s model")])).toBe(0)

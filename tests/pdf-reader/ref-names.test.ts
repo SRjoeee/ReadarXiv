@@ -2,11 +2,12 @@
 // readRefNames) and stated on the reference's element by the adapter (pipeline/instrument.mjs piecesOf `nameOf`): what a
 // translator is sent for a word tied to it that abbreviates that name (packages/translate names.ts). Synthetic units.
 import { describe, expect, it } from 'vitest'
-import { refKeyOf, refKeysOf, refsTex } from '../../src/pdf-reader/engine/layout/marks.mjs'
-import { piecesOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { refKeyOf, refKeysOf, refsTex } from '../../packages/engine/src/marks/marks.ts'
+import { piecesOf } from '../../packages/engine/src/instrument/instrument.ts'
+import type { PhPiece, TextPiece } from '../../packages/engine/src/source/latex-front.ts'
 
-const ph = (src: string) => ({ t: 'ph', src })
-const text = (s: string) => ({ t: 'text', s })
+const ph = (src: string): PhPiece => ({ t: 'ph', src })
+const text = (s: string): TextPiece => ({ t: 'text', s })
 
 describe('the references the marked compile asks TeX about', () => {
   it('each label a reference names, once, in the order the units name them; no page reference, no list, no key TeX cannot hold', () => {
@@ -41,7 +42,7 @@ describe('the references the marked compile asks TeX about', () => {
 describe('the adapter states a reference’s full name on its element', () => {
   it('names the element TeX stated a name for, and no other', () => {
     const names = new Map([['fig:a', { name: 'Figure', lang: 'en' }]])
-    type Ph = { t: string; src: string }
+    type Ph = PhPiece
     const nameOf = (p: unknown) => names.get(refKeyOf(p as Ph) ?? '')
     const kindOf = (p: unknown) => {
       const src = (p as Ph).src
