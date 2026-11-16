@@ -918,6 +918,28 @@ describe('locate: a single line’s alignment is its TeX line’s, the row it sh
     expect(L.members[2]!.lines[0]![2]).toBe(174)
     expect(L.members[2]!.align).toBe('j')
   })
+  it('keeps TeX’s justified for a single line beside another member’s line whose hull stands about the middle: the row only vetoes', () => {
+    // (2608.11084v1 p13: a theorem's head, told justified, and the theorem's first line on one baseline, their hull inset alike
+    // on both sides; 2608.27210v1 p2: a list item's label and its last line. The row read them centred, lane cm-fix 2026-11-16)
+    const head = 'h'.repeat(31)
+    const words = 'w'.repeat(36)
+    const lines = [
+      { text: 'x'.repeat(78), x: 72, y: 700 },
+      { text: head, x: 100, y: 676 },
+      { text: words, x: 296, y: 676 },
+      { text: 'y'.repeat(78), x: 72, y: 652 },
+    ]
+    const B = docOf([{ lines }])
+    const units = [
+      unitOf('para', 'x'.repeat(78)),
+      unitOf('para', head, { align: 'j' }),
+      unitOf('theorem', words, { align: 'j' }),
+      unitOf('para', 'y'.repeat(78)),
+    ]
+    const L = locate(instrumentOf(B, units, [[0, 1, 2, 3]]), B, align(B, B))
+    expect(L.members[1]!.lines[0]![2]).toBe(100)
+    expect(L.members[1]!.align).toBe('j')
+  })
   it('reads no table cell into a single line’s row: a row header TeX told justified beside a cell, the two about the middle', () => {
     // (2610.40394v1 p14 ord 747: a table's row header and the next cell's words on one baseline, their hull about the measure's
     // middle; the row read it centred, lane cm-fix 2026-11-16)

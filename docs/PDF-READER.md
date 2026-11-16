@@ -7392,9 +7392,10 @@ bytes it was.
     the line's measure: an item no longer inset from it reads justified, traces-b's item 5; a single line TeX told justified is
     read centred by glue of its own only where its row's ink is inset on both sides of the measure, the row everything TeX set on
     that line: the member's ink, its label, the end mark a fill pushed, another member's line on its baseline such as a run-in
-    head, but no table cell's and no line of another paragraph TeX states (two subcaptions side by side, each its minipage's,
-    2608.13505v1 p4; a row header beside a cell's words, 2610.40394v1 p14), facts-pass.ts rowOf, lane cm-fix 2026-11-16; a line
-    nothing told is read by its own ink as before), and a member's room below its last
+    head, facts-pass.ts rowOf, lane cm-fix 2026-11-16; the row only keeps TeX's word against a centring its own ink reads, never
+    makes one: a row of other members' ink whose hull happens to stand about the middle read centred where it is a theorem's head
+    beside its first line, a list item's label beside its last, a table's row header beside a cell, two subcaptions side by side;
+    a line nothing told is read by its own ink as before), and a member's room below its last
     block. The paragraph's lay (`packages/typeset/src/unit/blocks.ts` measuresOf, which guesses a change of measure from the lines'
     edges) is not changed here: the lay lane deletes that guessing and reads `Line[7..8]` (rebuild/google-lay stays unmerged).
 - **The forced break's line** (`marks.ts` BREAKS_TEX; the point class `forced-break`, optional; `ink.ts` FORCED_BREAK, kept apart

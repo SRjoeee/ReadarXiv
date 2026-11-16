@@ -129,11 +129,6 @@ interface FactsIndex {
   staysOn: (p: number) => InkBox[]
   /** each page's lines, every member's */
   linesOn: Map<number, Line[]>
-  /** the lines of the members that are a table's cells */
-  cellLines: ReadonlySet<Line>
-  /** each line's member's unit (-1 none), and each unit's paragraph by TeX's own order (Instrument.tex.paras) */
-  lineUnit: ReadonlyMap<Line, number>
-  paraOfUnit: ReadonlyMap<number, number>
   /** a line's block: TeX's frame where it shipped the page's, else the measure of the page's or column's lines */
   blockOf: (l: Line) => [number, number]
   /** B's paragraph ends, global, each glyph position once */
@@ -235,11 +230,6 @@ function open({
   // (each page's lines, every member's: a single line's stack, centredByBlock)
   const linesOn = new Map<number, Line[]>()
   for (const mem of members) for (const l of mem.lines) (linesOn.get(l[0]) ?? linesOn.set(l[0], []).get(l[0])!).push(l)
-  const cellLines = new Set<Line>()
-  for (const mem of members) if (mem.unit >= 0 && units[mem.unit]?.cell) for (const l of mem.lines) cellLines.add(l)
-  const lineUnit = new Map<Line, number>()
-  for (const mem of members) for (const l of mem.lines) lineUnit.set(l, mem.unit)
-  const paraOfUnit = new Map(ins.tex.paras ?? [])
   // (each page's and column's block: TeX's frame where it shipped the page's (framed); else its justified lines' measure where
   // it has one, else all its lines' hull)
   const hull = new Map<string, [number, number]>()
@@ -302,9 +292,6 @@ function open({
     boxes,
     staysOn,
     linesOn,
-    cellLines,
-    lineUnit,
-    paraOfUnit,
     blockOf,
     ends,
     forced,
@@ -1137,19 +1124,9 @@ function readDirection(_fx: FactsIndex, r: MemberReading): void {
 }
 
 /** a single line's row: the line with its extent widened to everything TeX set on it within its measure (the member's own ink,
- *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure),
- *  but a table's cell's (a table's row is no paragraph's line: its row header beside the cells' words read centred, 2610.40394v1
- *  p14 ord 747) and a line of another paragraph TeX states (two subcaptions side by side, each a minipage's paragraph, read as
- *  one row about the middle: 2608.13505v1 p4 ord 22, units 22 and 23 paired with paragraphs 28 and 31). A run-in head TeX set in
- *  a box (amsthm's \proofname, `AXT-ALIGN h… h`) states no paragraph and is the line's */
+ *  its label where it stands on the line, its end mark's ink, the lines of other members on its baseline inside the measure) */
 function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined): Line {
   const [m0, m1] = fx.blockOf(l)
-  const P = fx.paraOfUnit.get(mem.unit)
-  const other = (k: Line): boolean => {
-    const v = fx.lineUnit.get(k) ?? -1
-    const Q = v >= 0 ? fx.paraOfUnit.get(v) : undefined
-    return P !== undefined && Q !== undefined && Q !== P
-  }
   let x0 = labelX0 !== undefined ? Math.min(l[2], labelX0) : l[2]
   let x1 = l[3]
   const end = mem.elements.find(([id]) => id === '~$')?.[1]
@@ -1159,15 +1136,7 @@ function rowOf(fx: FactsIndex, mem: Member, l: Line, labelX0: number | undefined
       x1 = Math.max(x1, k[3])
     }
   for (const k of fx.linesOn.get(l[0]) ?? [])
-    if (
-      k !== l &&
-      !(k[9] & LINE_FLAG.KEPT) &&
-      !fx.cellLines.has(k) &&
-      !other(k) &&
-      Math.abs(k[4] - l[4]) <= ON_BASE &&
-      k[3] > m0 &&
-      k[2] < m1
-    ) {
+    if (k !== l && !(k[9] & LINE_FLAG.KEPT) && Math.abs(k[4] - l[4]) <= ON_BASE && k[3] > m0 && k[2] < m1) {
       x0 = Math.min(x0, k[2])
       x1 = Math.max(x1, k[3])
     }
@@ -1186,18 +1155,18 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
   // readAlign): the maker's reading (MAKE:2121-2135); a single-line cell by its column
   if (unit && unit.align !== 'c' && unit.align !== 'l' && unit.align !== 'r') {
     const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
-    // (a single line TeX told justified is read by its row, everything TeX set on that line within its measure: the member's
-    // own ink, its label, the end mark a fill pushed (its `~$` element), another member's line on its baseline (a run-in head
-    // before it); centred by glue of its own only where that row's ink is inset on both sides (the coordinator's ruling of
-    // 2026-11-16, lane cm-fix: 2610.40645v1 p19's proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its
-    // words alone read centred under F13's measure). A line nothing told is read by its own ink as before: a running head's
-    // title beside its page number on one baseline is two members, not one row)
-    const byRow = unit.align === 'j' && own.length === 1 && !unit.cell
-    const rowLines = byRow ? [rowOf(fx, mem, own[0]![0], labelX0)] : mem.lines
     // (a cell is read by its column's cells alone, never by the page's column: today's centredFlag RUN:2102)
-    let a = unit.cell
-      ? (unit.align ?? 'j')
-      : alignOf(rowLines, sizeOf, blockOf, unit.align, byRow ? undefined : labelX0)
+    let a = unit.cell ? (unit.align ?? 'j') : alignOf(mem.lines, sizeOf, blockOf, unit.align, labelX0)
+    // (a single line TeX told justified that its own ink reads centred keeps TeX's word where its row is not centred: the row is
+    // everything TeX set on that line within its measure, the member's own ink, its label, the end mark a fill pushed (its `~$`
+    // element), another member's line on its baseline (a run-in head before it); the coordinator's ruling of 2026-11-16, lane
+    // cm-fix: 2610.40645v1 p19's proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its words alone read
+    // centred under F13's measure. The row only keeps TeX's word: a row of other members' ink whose hull happens to stand about
+    // the middle is no centring (a theorem's head beside its first line, 2608.11084v1 p13; a list item's label and its last line,
+    // 2608.27210v1 p2). A line nothing told is read by its own ink as before: a running head's title beside its page number on
+    // one baseline is two members, not one row)
+    if (a === 'c' && unit.align === 'j' && own.length === 1 && !unit.cell)
+      if (alignOf([rowOf(fx, mem, own[0]![0], labelX0)], sizeOf, blockOf, unit.align, undefined) !== 'c') a = 'j'
     if (unit.cell && own.length === 1) {
       const l0 = own[0]![0]
       const c = unit.cell
