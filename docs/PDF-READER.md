@@ -7656,8 +7656,9 @@ drawn with the original's gap) and a title that ends with a stop or a colon are 
   Google's stored rows the lay completes 33 separations in Chinese (one em each; 0.8 em after "Object Replacement"'s own
   0.2 em), adds nothing after 2610.21106v1's three titles (their `\quad` is the em), nothing after "Oracle" (its colon) or
   the moved "wikiHow", and nothing in the one Spanish row.
-- **Versions**: PIPELINE moves (the parts state `runin`: prepared again); LAYOUT moves (a line holding such a title is laid
-  otherwise); the translators' digests and the rows' keys stay.
+- **Versions**: PIPELINE moves (the parts state `runin`: prepared again); LAYOUT does not move for it (it names what the layout
+  maker writes, `src/pdf-reader/engine/layout/file.mjs`, §18.2, and a line holding such a title is laid by the typesetter;
+  LAYOUT 42 is the source reader's cut's, PIPELINE 104's line); the translators' digests and the rows' keys stay.
 
 ### 18.86 A trail's and an end mark's crop has an extent (2026-11-15)
 
