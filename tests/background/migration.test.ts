@@ -87,7 +87,8 @@ describe('the migration of stage 4b: a fresh profile and one carrying today\'s d
       expect(db.tables.map(t => t.name).sort()).toEqual(['answers', 'ocr', 'rows'])
       expect((await stores.stats()).entries).toBeGreaterThan(blocks.length)
 
-      // read back: the same units asked again are answered from the migrated store's rows, nothing sent
+      // read back: the same units asked again are answered from the migrated store (its rows, or the answers behind them: either
+      // alone answers them), nothing sent
       const sent = endpoint.sent.length
       expect(await all(translate(UNITS, status.targetLanguage, { signal: new AbortController().signal }))).toEqual(rows)
       expect(endpoint.sent.length).toBe(sent)
