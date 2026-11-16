@@ -284,7 +284,16 @@ function heldLettersOf(unit: UnitIn): Whole | null {
     }
     ownOf.set(at.length, own)
   }
-  const sentToOwn = [...keep.map((x) => ownOf.get(x) as number), ownOf.get(at.length) as number]
+  /** a kept position as a sentence's start: an element's before the letters held before it, which are its word's and come
+   *  back before it, in the sentence that starts at it (mapSentences' row side) */
+  const startOf = (x: number): number => {
+    const a = at[x]
+    if (a?.t !== 'el') return x
+    let y = x
+    while (held.get(y - 1)?.el.el === a.el && held.get(y - 1)?.side === 'before') y--
+    return y
+  }
+  const sentToOwn = [...keep.map((x) => ownOf.get(startOf(x)) as number), ownOf.get(at.length) as number]
   const back = (r: Result): Result => {
     if (!r.ok) return r
     const { content: row, inserted } = putBack(r.content, runs)

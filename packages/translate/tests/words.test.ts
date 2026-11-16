@@ -232,6 +232,15 @@ describe('the letters and marks that touch an element’s text are its word’s'
     expect(r.content).toEqual([tx('𝒜 We use '), { t: 'el', id: 'h' }, tx('s. Then it ends.')])
     expect(r.sentences).toEqual({ src: [14], tr: [14] })
   })
+  it('a sentence that opens with letters held before an element (`It ends. M\\k{a}dry works.`): both starts before the name', async () => {
+    // (own projection "It ends. M￼dry works.": the second sentence starts at "M", 9, in the unit and in the row)
+    const u = unit('b', [t('It ends. M'), mac('k', 'ą'), t('dry works.')], true)
+    const { sent, result } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual(['It ends. <x id="2"/><b translate=no>x1</b> works.'])
+    const r = ok(result)
+    expect(r.content).toEqual([tx('It ends. M'), { t: 'el', id: 'k' }, tx('dry works.')])
+    expect(r.sentences).toEqual({ src: [9], tr: [9] })
+  })
   it('Microsoft is sent the element alone too', async () => {
     const { sent, result } = await viaMicrosoft(guitar, () => '擦亮@a#。然后给它们调音。')
     expect(sent).toEqual(['Polish the @a#. Then tune them.'])
