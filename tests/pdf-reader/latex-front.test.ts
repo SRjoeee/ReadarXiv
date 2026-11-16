@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
-import { piecesOf } from '@/pdf-reader/engine/pipeline/instrument.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { identifierSource, inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { serialize } from '@/pdf-reader/engine/translate/mt.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
+import { piecesOf } from '../../packages/engine/src/instrument/instrument.ts'
+import { LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
+import { identifierSource, inMemory, lineBreaks, loadProject, localizeNames, markUnits, patch } from '../../packages/engine/src/source/latex-front.ts'
+import { todayAnswers } from './helpers/today-answers.ts'
+
+/** today's wire of each unit the cases send (src/pdf-reader/engine/translate/mt.mjs serialize), recorded before the cut-over
+ *  deleted it (tests/fixtures/today/latex-front.json): a unit the front end now reads otherwise has none */
+const todayAnswer = todayAnswers('latex-front')
 
 // The PDF reader's LaTeX front end: what of a paper's source is prose to translate
 
@@ -447,7 +451,7 @@ describe('a citation is one placeholder, its notes and keys with it (2610.02069:
     const [u] = p.units as Unit[]
     expect(phs(u as Unit)).toEqual([cite])
     expect(textOf(u as Unit).trim()).toBe('The code to reproduce the work in this paper is archived in a public repository .')
-    const { wire } = serialize(u as never)
+    const { wire } = todayAnswer<{ wire: string }>('serialize', u)
     expect(wire).toBe('The code to reproduce the work in this paper is archived in a public repository @a#.')
     // written back, translated around it, the call byte for byte
     expect(patched(p)).toContain(`<T0>${cite}<T0>`)
@@ -478,7 +482,7 @@ describe('a citation is one placeholder, its notes and keys with it (2610.02069:
 describe('an accent inside a word is the letter itself before translation, and the accent again wherever the source is set (2610.02069: "El Ni ñ#")', () => {
   const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
   /** a unit's words as the engine reads them: the wire, its text pieces' UTF-8 */
-  const wire = (p: ReturnType<typeof project>) => (p.units as never[]).map(u => serialize(u).wire)
+  const wire = (p: ReturnType<typeof project>) => (p.units as never[]).map(u => todayAnswer<{ wire: string }>('serialize', u).wire)
   const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
 
   it('El Ni{\\~n}o, 2610.02069\'s unit 13 as it stands: one word on the wire, no marker inside it; written back byte for byte', () => {
@@ -527,7 +531,7 @@ describe('an accent inside a word is the letter itself before translation, and t
 
 describe('a letter command is the letter itself in its word: TeX\'s skipped spaces, an empty group and a group around it alone none of the wire (2010.11929v2: "Ł ukasz Kaiser")', () => {
   const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
-  const wire = (p: ReturnType<typeof project>) => (p.units as never[]).map(u => serialize(u).wire)
+  const wire = (p: ReturnType<typeof project>) => (p.units as never[]).map(u => todayAnswer<{ wire: string }>('serialize', u).wire)
   const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
 
   it('{\\L}ukasz, 2010.11929v2\'s entry as its .bbl writes it: one word on the wire, no marker beside it; written back byte for byte', () => {
@@ -572,7 +576,7 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
     const p = project('\\documentclass{article}\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\bibitem{a} S{\\o}ren. 2020. The {\\O}resund study.\n\\end{thebibliography}\n\\end{document}')
     const entry = (p.units as Unit[]).find(u => u.kind === 'reference')
     expect(entry?.pieces.filter(x => x.t === 'ph').map(x => (x as { src?: string }).src)).toContain('2020.')
-    expect(serialize(entry as never).wire).toMatch(/^Søren\. @a# The Øresund study\.$/)
+    expect(todayAnswer<{ wire: string }>('serialize', entry).wire).toMatch(/^Søren\. @a# The Øresund study\.$/)
   })
 
   it('a group around the letter spends its pair\'s id, as a group around an accent does: the pairs after it keep theirs', () => {
@@ -743,7 +747,7 @@ describe("a quoted argument holding a declaration keeps the group that scopes it
     expect(shape(p)).toEqual([['text', 'Say \u201c'], ['open', '{'], ['ph', '\\bfseries'], ['text', 'bold words'], ['close', '}'], ['text', '\u201d normally.']])
     expect(source(p)).toContain('Say \\enquote{\\bfseries bold words} normally.')
     // (today's markers wire puts the switch after the unit's text only inside its group: it scopes nothing past it)
-    const back = (serialize((p.units as Unit[])[0] as never) as { back?: { t: string; src?: string }[] }).back ?? []
+    const back = todayAnswer<{ back?: { t: string; src?: string }[] }>('serialize', (p.units as Unit[])[0]).back ?? []
     expect(back.map(x => x.t)).toEqual(['open', 'ph', 'close'])
   })
   it("a paper's \\enquote (wrapOf) alike; an argument with no declaration of its own stays text alone", () => {

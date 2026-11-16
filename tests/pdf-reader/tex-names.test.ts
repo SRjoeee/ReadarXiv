@@ -1,13 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { headInTarget, headName, refInTarget, refName } from '@/pdf-reader/engine/rules/tex-names.mjs'
-import { BUILTIN_RULES, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { headInTarget, headName, refInTarget, refName } from '../../packages/engine/src/source/tex-names.ts'
+import { LANGUAGES } from '../../packages/typeset/src/data/rules/index.ts'
+import { resolveRules } from '../../packages/typeset/src/rules-for.ts'
 
 // The names TeX's packages give a theorem's head and a generated reference in each target (PDF-READER §19.11): translator's
 // theorem dictionaries (ctex's for Chinese), cleveref's and hyperref's language definitions, ctex's names, babel's (the layout
-// rules' labels) where a target has no other; nothing written by hand
+// rules' labels) where a target has no other; nothing written by hand. The labels and the targets are the typesetter's rule
+// set's (packages/typeset: today's rules/layout.mjs ported; its labels and targets measured equal to today's, all 19 targets,
+// key order included, before the cut-over deleted today's: lane c1-freeze, 2026-11-16)
 
-const labelsOf = (lang: string) => resolveRules(BUILTIN_RULES, lang).labels
+const labelsOf = (lang: string) => resolveRules(lang).labels
 /** a reference's text with its replacements made */
 const renamed = (text: string, to: string) => {
   const r = refInTarget(text, to, labelsOf(to))
@@ -29,7 +32,7 @@ describe('the table is TeX Live\'s', () => {
     for (const f of Object.keys(file.files)) expect(file.licence.replace('{German,French,Spanish,Russian,Portuguese,Italian,Dutch,Polish,Turkish,Czech,Swedish,Bulgarian}', 'German'), f).toContain(f.replace(/-(?:French|Spanish|Russian|Portuguese|Italian|Dutch|Polish|Turkish|Czech|Swedish|Bulgarian)\.dict$/, '-German.dict'))
   })
   it('every target the readers offer has its entry', () => {
-    expect(Object.keys(file.targets).sort()).toEqual([...TARGETS].sort())
+    expect(Object.keys(file.targets).sort()).toEqual(Object.keys(LANGUAGES).sort())
   })
 })
 

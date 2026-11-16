@@ -1,10 +1,7 @@
 // The instrument adapter states each element's class as today's reader reads its source (layer2.mjs phClass2, texToText2,
 // resolvePlaceholders' symbol and footnote mark), so that the part carries it and no rule of the typesetter reads a source.
 import { describe, expect, it } from 'vitest'
-import { glueOf as todayGlue, phClassProven, texToText2 } from '../../src/pdf-reader/engine/layer-proto/layer2.mjs'
-import { FORCED_BREAK as todayBreak } from '../../src/pdf-reader/engine/layer-proto/tex.mjs'
-import { classOf as marksClassOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
-import { BACKREF_LIST, displayStop, isInkless, serialize } from '../../src/pdf-reader/engine/translate/mt.mjs'
+import { displayStop, isInkless } from '../../packages/engine/src/instrument/mt.ts'
 import {
   boundedEmpty,
   classesOf,
@@ -20,8 +17,15 @@ import {
   splitInkOf,
   tailInkOf,
   textsOf,
-} from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
-import { phPiece } from '../../packages/engine/src/source/latex-front.ts'
+} from '../../packages/engine/src/instrument/instrument.ts'
+import { classOf as marksClassOf } from '../../packages/engine/src/marks/marks.ts'
+import { BACKREF_LIST, phPiece } from '../../packages/engine/src/source/latex-front.ts'
+import { todayAnswers } from './helpers/today-answers.ts'
+
+/** today's answers on this test's own sources (src/pdf-reader/engine/layer-proto/layer2.mjs phClassProven, texToText2 and
+ *  glueOf, layer-proto/tex.mjs FORCED_BREAK, translate/mt.mjs serialize), recorded before the cut-over deleted them
+ *  (tests/fixtures/today/instrument-classes.json): the adapter's copies are held equal to them */
+const todayAnswer = todayAnswers('instrument-classes')
 
 /** a placeholder as the source reader makes it: whether it is a forced break stated on it (phPiece, §18.75), which the adapter
  *  reads (its kind, `brk`) where it once read the source */
@@ -98,8 +102,8 @@ describe('the instrument adapter’s element classes', () => {
     const srcs = ['\\cite{a,b}', '\\citep[p.~3]{a}', '\\ref{x}', '\\eqref{e}', '$x$', '$\\sqrt{\\dmodel}$', '$\\frac{a}{b}$', '$\\sum_{\\alpha}^{\\beta}$', '$\\Sigma$', '\\~{n}', '\\"u', '$\\downarrow$', '\\[ a = b \\]', '\\begin{equation}y=F(x)\\label{eq:1}\\end{equation}', '\\bert{}', '$\\cla$', '\\textbf{x}', '\\hspace{1em}', '\\vspace{-2mm}', '\\&', '\\\\', '$$', '$^{1}$', '\\url{http://a.b}']
     for (const [k, c] of classesOf(srcs.map(ph))) {
       const src = srcs[Number(k)]!
-      const want = phClassProven(src)
-      expect([c.cls, c.unknown ?? false, c.copy ?? '']).toEqual([want.cls, want.unknown ?? false, texToText2(src) || ''])
+      const want = todayAnswer<{ cls: string; unknown?: boolean }>('phClassProven', src)
+      expect([c.cls, c.unknown ?? false, c.copy ?? '']).toEqual([want.cls, want.unknown ?? false, todayAnswer<string>('texToText2', src) || ''])
     }
   })
   it('states what the other rules read of a source: its glue, command, a forced break, a citation’s note, its identity, its colour', () => {
@@ -179,8 +183,8 @@ describe('the instrument adapter’s element classes', () => {
   it('reads glue and forced breaks as today’s functions do (its copies held equal to layer2.mjs glueOf and tex.mjs FORCED_BREAK)', () => {
     const srcs = ['\\,', '\\:', '\\;', '\\enspace', '\\thinspace', '\\quad', '\\qquad', '\\hspace{1em}', '\\hspace*{0.5cm}', '\\hskip 3pt plus 1pt', '\\kern-2pt', '\\kern 2bp', '\\hspace{\\fill}', '\\\\', '\\\\[2pt]', '\\\\*', '\\newline', '\\linebreak', '$x$']
     for (const s of srcs) {
-      expect(glueOf(s)).toEqual(todayGlue(s))
-      expect(FORCED_BREAK.test(s)).toBe(todayBreak.test(s))
+      expect(glueOf(s)).toEqual(todayAnswer('glueOf', s))
+      expect(FORCED_BREAK.test(s)).toBe(todayAnswer<boolean>('FORCED_BREAK.test', s))
     }
   })
 })
@@ -629,8 +633,8 @@ describe('the instrument adapter’s wire facts of an element (what today’s wi
       ['2022.', null, null],
       [BACKREF_LIST, ' ', null],
     ])
-    const today = serialize({ pieces })
-    expect(today.back).toEqual([{ t: 'text', tr: true, s: els[2]?.after }, pieces[4]])
+    const todayWire = todayAnswer<{ back?: unknown[] }>('serialize', { pieces })
+    expect(todayWire.back).toEqual([{ t: 'text', tr: true, s: els[2]?.after }, pieces[4]])
   })
 })
 

@@ -1,19 +1,21 @@
 // The engine package's copies of today's ink makers (packages/engine/src/locate: the ledger, inkUnitsOf, keptUnitsOf,
 // claimInk, figureUnitsOf) and the ports beside them (locate/ink.ts: contentOf, unicodeOf, spansOf;
 // ink-units.ts statedClassOf for the forms an ink unit's placeholder takes) held equal to today's (src/pdf-reader/engine): the same pages,
-// owners and units in, the same units out.
+// owners and units in, the same units out. Today's makers' answers on these pages, each case's reading of them under its label,
+// were recorded before the cut-over deleted them (tests/fixtures/today/locate-ink-today.json).
 import { describe, expect, it } from 'vitest'
-import * as P from '../../packages/engine/src/locate/ink.ts'
+import { classesOf, contentOf, spansOf, unicodeOf } from '../../packages/engine/src/instrument/instrument.ts'
+import { DISPLAY } from '../../packages/engine/src/instrument/mt.ts'
 import * as TF from '../../packages/engine/src/locate/figure-text.ts'
+import * as P from '../../packages/engine/src/locate/ink.ts'
 import * as TI from '../../packages/engine/src/locate/ink-units.ts'
 import * as TL from '../../packages/engine/src/locate/ledger.ts'
-import { figureUnitsOf } from '../../src/pdf-reader/engine/layout/figure-text.mjs'
-import { claimInk, inkUnitsOf, keptUnitsOf } from '../../src/pdf-reader/engine/layout/ink-units.mjs'
-import { ledgerOf } from '../../src/pdf-reader/engine/layout/ledger.mjs'
-import { classOf } from '../../src/pdf-reader/engine/layout/marks.mjs'
-import { classesOf, contentOf, spansOf, unicodeOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
-import { DISPLAY } from '../../src/pdf-reader/engine/translate/mt.mjs'
-import { identifiersIn } from '../../src/pdf-reader/engine/source/latex-front.mjs'
+import { classOf } from '../../packages/engine/src/marks/marks.ts'
+import { identifiersIn } from '../../packages/engine/src/source/latex-front.ts'
+import { digestOf, todayAnswers } from './helpers/today-answers.ts'
+
+/** today's makers' answers, each case's under its label and the digest of the pages and units it read */
+const todayAnswer = todayAnswers('locate-ink-today')
 
 /** the package's copies, each maker's */
 const T = { ...TF, ...TI, ...TL }
@@ -83,7 +85,6 @@ interface Impl {
   claimInk(own: unknown, ink: unknown, pages: unknown): number
   keptUnitsOf(pages: unknown, ledger: unknown, owner: (p: number, g: number) => string | null, o: unknown): unknown[]
 }
-const TODAY = { figureUnitsOf, ledgerOf, inkUnitsOf, claimInk, keptUnitsOf } as unknown as Impl
 /** today's sequence (pipeline/instrument.mjs before this change) by one implementation */
 function run(I: Impl) {
   const own = ownOf()
@@ -98,7 +99,7 @@ function run(I: Impl) {
 
 describe('today’s ink makers in the engine package', () => {
   it('make the same figure texts, ledger lines, ink units, claims and kept blocks as today’s', () => {
-    const today = run(TODAY)
+    const today = todayAnswer<ReturnType<typeof run>>('run', 'the sequence', digestOf(pages, units))
     const copy = run(T as unknown as Impl)
     // (the copy's one addition to them: each kept run's glyphs by its placeholder's piece, `glyphs.runs`, which part today's `ph`)
     type Glyphs = { ph: [number, number][]; runs?: [number, [number, number][]][] }
@@ -139,7 +140,7 @@ describe('today’s ink makers in the engine package', () => {
       const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
       return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).map((u) => u.pieces.map((p) => (p.t === 'text' ? (p as unknown as { s: string }).s : '')).join(''))
     }
-    expect(one(TODAY)).toEqual(['Reference Format: Ann Lee and Bo Chen. 2027. On tests.'])
+    expect(todayAnswer('one', 'a reference format after its heading', digestOf(pg, units))).toEqual(['Reference Format: Ann Lee and Bo Chen. 2027. On tests.'])
     expect(one(T as unknown as Impl)).toEqual(['Reference Format:', 'Ann Lee and Bo Chen. 2027. On tests.'])
   })
   it('read a stack’s glyphs at one x in the stream’s order, where today’s read the float noise of their x (the one difference)', () => {
@@ -162,7 +163,7 @@ describe('today’s ink makers in the engine package', () => {
       const ledger = I.ledgerOf([stack], own, { units: units.slice(0, 1) })
       return I.inkUnitsOf([stack], ledger, { units: units.slice(0, 1), from: 1 }).flatMap((u) => u.pieces.filter((p) => p.t === 'ph').map((p) => p.src))
     }
-    expect(one(TODAY)).toEqual(['$x21$'])
+    expect(todayAnswer('one', 'a stack at one x', digestOf(stack, units))).toEqual(['$x21$'])
     expect(one(T as unknown as Impl)).toEqual(['$x12$'])
   })
   it('keep a running head\'s number in its phrase where it stands a word space from it, as its words do: the whole head one unit (the checkpoint\'s "5 of 21")', () => {
@@ -180,7 +181,7 @@ describe('today’s ink makers in the engine package', () => {
       return I.inkUnitsOf(list, ledger, { units: units.slice(0, 1), from: 1 }).map((u) => u.pieces.filter((p) => p.t === 'text').map((p) => p.src ?? (p as { s?: string }).s).join(''))
     }
     const of21 = [1, 2, 3].map((n) => at(`${n} of 21`, n, 520))
-    expect(heads(TODAY, of21)).toEqual(['of 21', 'of 21', 'of 21'])
+    expect(todayAnswer('heads', 'of21', digestOf(of21, units))).toEqual(['of 21', 'of 21', 'of 21'])
     expect(heads(T as unknown as Impl, of21)).toEqual(['1 of 21', '2 of 21', '3 of 21'])
     // (amsart's: the title's words a word space apart, its two-digit folio nearer the last: the folio the page's in both)
     const amsart = [11, 13, 15].map((n) => {
@@ -192,13 +193,13 @@ describe('today’s ink makers in the engine package', () => {
       p.points = [{ name: 'bs1', glyph: 21, box: 0 }, { name: 'be1', glyph: 36, box: 0 }]
       return p
     })
-    expect(heads(TODAY, amsart)).toEqual(['MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW'])
+    expect(todayAnswer('heads', 'amsart', digestOf(amsart, units))).toEqual(['MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW'])
     expect(heads(T as unknown as Impl, amsart)).toEqual(['MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW', 'MEAN CURVATURE FLOW'])
     // (ACM's "2 • Names": the folio a word space from a mark of no letter or digit that sets it apart from the head's words, the
     // page's own in both, the names one translation, 2610.37668v1)
     const acm = [2, 4, 6].map((n) => at(`${n} • Ann Author, Bo Writer`, n, 72))
-    expect(heads(T as unknown as Impl, acm)).toEqual(heads(TODAY, acm))
-    expect(heads(TODAY, acm)[0]).toMatch(/^[^0-9].* Ann Author, Bo Writer$/)
+    expect(heads(T as unknown as Impl, acm)).toEqual(todayAnswer('heads', 'acm', digestOf(acm, units)))
+    expect(todayAnswer<ReturnType<typeof heads>>('heads', 'acm', digestOf(acm, units))[0]).toMatch(/^[^0-9].* Ann Author, Bo Writer$/)
   })
   it('class a word in a text face between a formula\'s lines a line of the formula, no unit (the checkpoint\'s "tr")', () => {
     // (2610.21765v1 p10's display (22): its "tr" in CMR10 a line of its own between the fraction's denominator, a formula's line,
@@ -229,9 +230,9 @@ describe('today’s ink makers in the engine package', () => {
       const own = { glyphs: [between.glyphs.map((_, k) => (k < 15 ? 'u0' : null))], boxes: [[]] }
       return (I.ledgerOf([between], own, { units: units.slice(0, 1) }) as { lines: { cls: string }[] }).lines.map((l) => l.cls)
     }
-    expect(cls(T as unknown as Impl)).toEqual(cls(TODAY))
-    expect(cls(TODAY)).toEqual(['symbols', 'orphan', 'symbols'])
-    expect(one(TODAY)).toEqual({ lines: [['symbols', 'ab'], ['orphan', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['tr', 'An orphan line of words after it here'] })
+    expect(cls(T as unknown as Impl)).toEqual(todayAnswer('cls', 'a text word between formula lines', digestOf(between, units)))
+    expect(todayAnswer('cls', 'a text word between formula lines', digestOf(between, units))).toEqual(['symbols', 'orphan', 'symbols'])
+    expect(todayAnswer('one', 'a text word between formula lines', digestOf(pg, units))).toEqual({ lines: [['symbols', 'ab'], ['orphan', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['tr', 'An orphan line of words after it here'] })
     expect(one(T as unknown as Impl)).toEqual({ lines: [['symbols', 'ab'], ['math', 'tr'], ['symbols', '['], ['orphan', 'An orphan line of words after it here']], ink: ['An orphan line of words after it here'] })
   })
   it('keep a line TeX set in a display as the formula’s, by its points, whatever its face and wherever it stands (the one change)', () => {
@@ -250,7 +251,7 @@ describe('today’s ink makers in the engine package', () => {
       const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) }) as { lines: { cls: string }[] }
       return { lines: ledger.lines.map((l) => l.cls), ink: I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).length }
     }
-    expect(cls(TODAY)).toEqual({ lines: ['notes', 'notes', 'symbols'], ink: 2 })
+    expect(todayAnswer('cls', 'a display line in a text face', digestOf(pg, units))).toEqual({ lines: ['notes', 'notes', 'symbols'], ink: 2 })
     expect(cls(T as unknown as Impl)).toEqual({ lines: ['math', 'math', 'math'], ink: 0 })
   })
   it('read a display’s line TeX set in text mode as text, through the rules of place, and a formula’s short text as the formula’s', () => {
@@ -361,7 +362,7 @@ describe('today’s ink makers in the engine package', () => {
       const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
       return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }) as unknown as Made[]
     }
-    const today = one(TODAY)
+    const today = todayAnswer<ReturnType<typeof one>>('one', 'the glyphs of a label read out of a unit', digestOf(pg, units))
     const copy = one(T as unknown as Impl)
     // (the copy's other addition, each kept run's glyphs, `glyphs.runs`, set aside as in the first case)
     expect(copy.map(({ glyphs: { label: _, runs: _r, ...g }, ...u }) => ({ ...u, glyphs: g }))).toEqual(today)
@@ -407,7 +408,7 @@ describe('today’s ink makers in the engine package', () => {
       return (I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }) as unknown as Made[]).filter((u) => u.pieces.some((p) => p.t === 'text' && !/Journal/.test(p.s ?? '')))
     }
     const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? p.s : p.t === 'ph' ? `<${p.src}>` : ''))
-    const today = one(TODAY)
+    const today = todayAnswer<ReturnType<typeof one>>('one', 'a script off its baseline', digestOf(pg, units))
     const copy = one(T as unknown as Impl)
     expect(today.map(said)).toEqual([
       ['Lifan Jiang1,2, Yibo Zhao and CO2 in SMALL and up here'],
@@ -456,7 +457,7 @@ describe('today’s ink makers in the engine package', () => {
     }
     // (the pieces' sources in the front end's Latin-1 view of their UTF-8, read back as the adapter reads them)
     const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? P.unicodeOf(p.s) : p.t === 'ph' ? `<${P.unicodeOf(p.src)}>` : ''))
-    const today = one(TODAY)
+    const today = todayAnswer<ReturnType<typeof one>>('one', 'a label of leading scripts', digestOf(pg, units))
     const copy = one(T as unknown as Impl)
     expect(today.map(said)).toEqual([
       ['*Equal contribution, ', '<$†$>', 'Corresponding authors.'],
@@ -492,7 +493,7 @@ describe('today’s ink makers in the engine package', () => {
       const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
       return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).filter((u) => u.kind === 'inkorphan').map((u) => u.pieces)
     }
-    expect(one(TODAY)).toEqual([[{ t: 'text', s: note }]])
+    expect(todayAnswer('one', 'an e-mail address in an ink unit', digestOf(pg, units))).toEqual([[{ t: 'text', s: note }]])
     expect(one(T as unknown as Impl)).toEqual([[
       { t: 'text', s: 'Correspondence to: ' },
       { t: 'ph', src: '\\url{alan.chan@example.org}' },
@@ -519,7 +520,7 @@ describe('today’s ink makers in the engine package', () => {
       return (I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }) as unknown as Made[]).filter((u) => u.kind !== 'inkheads')
     }
     const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? p.s : p.t === 'ph' ? `<${p.src}>` : ''))
-    expect(one(TODAY).map(said).join(' | ')).toContain('llm_equal_human')
+    expect(todayAnswer<ReturnType<typeof one>>('one', 'an identifier in an ink unit', digestOf(pg, units)).map(said).join(' | ')).toContain('llm_equal_human')
     expect(one(T as unknown as Impl).map(said)).toEqual([
       ['Ask ', '<\\url{llm_equal_human}>', ' first, then `', '<\\url{CallbackBase.host_label(result)}>', '`, ', '<\\url{conv5_x}>', ' and _x and camelCase, e.g. this.'],
     ])
@@ -554,7 +555,7 @@ describe('today’s ink makers in the engine package', () => {
     }
     const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? p.s : p.t === 'ph' ? `<${p.src}>` : ''))
     // (today's: every local part a word of the text)
-    expect(one(TODAY).map(said).join(' | ')).toMatch(/alpha, beta-x, gamma.*delta, eps/)
+    expect(todayAnswer<ReturnType<typeof one>>('one', 'local parts before one domain', digestOf(pg, units)).map(said).join(' | ')).toMatch(/alpha, beta-x, gamma.*delta, eps/)
     expect(one(T as unknown as Impl).map(said)).toEqual([['Contact: ', '<\\url{{alpha,beta-x,gamma}@example.org}>']])
   })
   it('mark a kept block of e-mail addresses alone so (`address`), which the lab reads; no other kept block', () => {
@@ -636,7 +637,7 @@ describe('today’s ink makers in the engine package', () => {
       const ledger = I.ledgerOf([pg], own, { units: units.slice(0, 1) })
       return I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }).filter((u) => u.kind === 'inkorphan').flatMap((u) => u.pieces.filter((p) => p.t === 'ph').map((p) => p.src!))
     }
-    expect(srcs(TODAY)).toEqual(['$x$', '$$', '$$', '$AB$', '$$'])
+    expect(todayAnswer('srcs', 'a TeX special in a math run', digestOf(pg, units))).toEqual(['$x$', '$$', '$$', '$AB$', '$$'])
     const copy = srcs(T as unknown as Impl)
     expect(copy).toEqual(['$\\{x\\}$', '$\\{$', '$\\}$', '$A\\backslash B$', '$\\$$'])
     // (and every reader of the source reads each an inline formula: the copy's classOf, the element's kind on the translators'
@@ -670,7 +671,7 @@ describe('today’s ink makers in the engine package', () => {
       const own = { glyphs: [pg.glyphs.map((_, k) => (k < 15 ? 'u0' : null))], boxes: [[]] }
       return (I.figureUnitsOf([pg], own).units as unknown as { text: string; anchor: string }[]).map((u) => [u.text, u.anchor])
     }
-    expect(anchors(TODAY)[0]).toEqual(['The entry of the box indented here', 'end'])
+    expect(todayAnswer<ReturnType<typeof anchors>>('anchors', 'an indented entry in a figure', digestOf(pg, units))[0]).toEqual(['The entry of the box indented here', 'end'])
     expect(anchors(T as unknown as Impl)).toEqual([
       ['The entry of the box indented here', 'start'],
       ['and its lines go on to the measure end', 'start'],
@@ -687,7 +688,7 @@ describe('today’s ink makers in the engine package', () => {
     expect(T.statedClassOf({ t: 'ph', src: '\\\\', kind: 'break' })).toBe(classOf({ t: 'ph', src: '\\\\' }))
   })
   it('turn an ink unit’s pieces into the format’s content and spans as the instrument adapter did', () => {
-    const today = run(TODAY)
+    const today = todayAnswer<ReturnType<typeof run>>('run', 'the sequence', digestOf(pages, units))
     const kindOf = (p: unknown) => classOf(p as { t: string; src?: string }) ?? 'other'
     for (const u of today.ink) {
       expect(P.contentOf(u.pieces)).toEqual(contentOf(u.pieces, { kindOf }))
