@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch, urlPercents } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { plainSource, seedFrom, sourceHash } from '../../packages/engine/tests/helpers/unit-harness.ts'
 

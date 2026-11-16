@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inMemory, loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 
 // Environments TeX reads line by line until a line holding their \end — verbatim's kind and comment.sty's — and what
 // the reader writes into a paper's lines around them. comment.sty ends its environment only at a line that is

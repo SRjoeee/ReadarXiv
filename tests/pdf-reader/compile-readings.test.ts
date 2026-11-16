@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { citationLines, openPaper, originalFiles, ranThrough, stoppedShort } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { citationLines } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles, ranThrough, stoppedShort } from '../../packages/engine/src/compile/live.ts'
 
 // The readings of a compile the prepare takes (live.mjs): whether its last pass stopped short or ran through, an aux's citation
 // lines, and where each unit stands in the files a compile is given. Kept from live-sequence.test.ts, whose run of the compiled

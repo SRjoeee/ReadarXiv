@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { documentBounds, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { regionsTex } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // Code stays as the paper has it: the body of an environment a paper defines as code is never a unit, so never sent to

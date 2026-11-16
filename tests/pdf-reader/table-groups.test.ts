@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/translate/groups.mjs'
 import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { plainSource as plainOf } from '@/pdf-reader/engine/translate/mt.mjs'
 

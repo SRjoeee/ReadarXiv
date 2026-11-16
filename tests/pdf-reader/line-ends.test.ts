@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { unbalancedUnits } from '@/pdf-reader/engine/layout/guard.mjs'
-import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
-import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
-import { sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
-import { inMemory } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { analyze } from '@/pdf-reader/engine/source/paper-meta.mjs'
+import { openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
+import { unbalancedUnits } from '../../packages/engine/src/compile/guard.ts'
+import { LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
+import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
+import type { UnitLines } from '../../packages/engine/src/compile/tex-errors.ts'
+import { sourceHash } from '../../packages/engine/tests/helpers/unit-harness.ts'
+import { inMemory } from '../../packages/engine/src/source/latex-front.ts'
+import { analyze } from '../../packages/engine/src/source/paper-meta.ts'
 
 // A source's line ends as TeX reads them: web2c's input_line takes a CR, an LF or a CRLF for one line's end, so a blank
 // line is a paragraph's end whatever the editor wrote. The front end read only LF: 2610.10069v1's CRLF source had its

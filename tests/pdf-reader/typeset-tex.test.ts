@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { lastTexLog, MARK_DEF } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { LINES_TEX, readLines } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
 
 // What the marked original's line probes write into a compile and what is read back from its log (the layout marks read

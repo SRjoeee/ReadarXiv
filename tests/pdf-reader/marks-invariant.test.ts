@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { openPaper } from '../../packages/engine/src/compile/live.ts'
 import { compileImageRef } from '../../lab/pdf/spikes/compile-image.mjs'
 
 // "The marks do not move the page": a marked original as the layout compile makes it (markedOfPaper: the probe, its answers to

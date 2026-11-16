@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inMemory } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { analyze } from '@/pdf-reader/engine/source/paper-meta.mjs'
 import { untar } from '@/pdf-reader/engine/source/tar.mjs'
 

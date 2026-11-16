@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { LAYOUT_CLASSES, NAMES_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
 import { paperParams, readArgs, textless } from '../../packages/engine/src/source/arg-roles.ts'
 

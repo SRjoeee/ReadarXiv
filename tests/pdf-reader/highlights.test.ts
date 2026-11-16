@@ -16,7 +16,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { type Located, type PdfJs, prepareBack, type Tally } from '@readarxiv/engine'
 import { readInkDecorated, readInkTexts } from '@/pdf-reader/engine/layout/marks.mjs'
 import { classesOf, decoratedCellsOf, instrumentOf } from '@/pdf-reader/engine/pipeline/instrument.mjs'
-import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper } from '../../packages/engine/src/compile/live.ts'
 import { deflate, DOCUMENT_OPTIONS, inflate } from './helpers/ocg-pdfs'
 
 const DIR = new URL('../fixtures/pdf/highlights/', import.meta.url)

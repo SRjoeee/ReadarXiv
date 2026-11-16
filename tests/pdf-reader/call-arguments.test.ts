@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { readArgs, paperParams } from '../../packages/engine/src/source/arg-roles.ts'
 
 // A command and its arguments are one piece of the source: no unit begins or ends between them, so nothing of the
