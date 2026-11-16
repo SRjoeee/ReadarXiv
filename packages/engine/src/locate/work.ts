@@ -118,8 +118,8 @@ export interface Member {
    *  opened it on] (Placed.paras), ascending */
   paras?: [offset: number, line: number][]
   /** beside `paras`, point by point: the id of the element the point's first word stands directly after in the source
-   *  projection, white space alone between (facts-pass.ts readOpens), else null; absent where no point names one
-   *  (Placed.parasAfter) */
+   *  projection, white space alone between, no glyph of it on B at or after the paragraph's end (facts-pass.ts readOpens),
+   *  else null; absent where no point names one (Placed.parasAfter) */
   parasAfter?: (string | null)[]
   /** each placed word's (and each element's word's) glyphs on A, global: the word as [its offset, its line] (sentences.ts, beside
    *  `words`): what a paragraph's first glyph on A is found by (facts-pass.ts readOpens). Never stated */

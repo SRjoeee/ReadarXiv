@@ -442,8 +442,9 @@ export const Placed = z.object({
   paras: z.array(z.tuple([int, int])).optional(),
   // beside `paras`, point by point (the same length): the element of the unit each point's first word stands directly after in
   // the source projection, by its piece id (an element the translator is sent in its place, not `silent`, or a nested unit),
-  // nothing but white space between its character and the word's offset: the element that ended the paragraph before (cas-sc's
-  // `\sep`, which is `\par`), which a reply returns in its place where it returns the element; null where none does. Absent
+  // nothing but white space between its character and the word's offset, and no ink of it TeX set after the paragraph's end:
+  // the element that ended the paragraph before (cas-sc's `\sep`, which is `\par`), which a reply returns in its place where it
+  // returns the element; null where none does. Absent
   // where no point names one. A field of its own, not a third member of `paras`' tuples, which a reader of before refuses (a
   // tuple holds its length): that one strips it, reads the points as it did, and FORMAT stays (docs/PDF-READER.md §18.69)
   parasAfter: z.array(z.union([z.string(), z.null()])).optional(),

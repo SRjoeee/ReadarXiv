@@ -848,9 +848,12 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
         if ((unitB[c] as number) === mem.unit && mem.wordAt.has(m.bToA[c] as number)) wordB = c
     const st = { span: 0, el: 0, break: 0, region: 0, text: 0, words: 0 }
     const paras = new Map<number, number>()
-    const stateWord = (o: number | undefined, j: number) => {
+    // (each stated word's paragraph end on B: what the element it stands after is read against, Placed.parasAfter)
+    const endOf = new Map<number, number>()
+    const stateWord = (o: number | undefined, j: number, e: number) => {
       if (o === undefined || paras.has(o)) return
       paras.set(o, j)
+      endOf.set(o, e)
       st.words++
     }
     for (const e of ends) {
@@ -906,7 +909,7 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
         const jBefore = pb >= mem.bFirst ? lineOf.get(m.bToA[pb] as number) : undefined
         if (jBefore === j - 1 && mem.elements.some(([, el]) => el.ends?.[0] === j - 1)) {
           st.break++
-          stateWord(word, j)
+          stateWord(word, j, e)
           continue
         }
         // (a region: the paragraph before ends with a display (B's glyph before the end a display's), the line before or its own
@@ -921,7 +924,7 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
         // (else its first word alone states it)
         if (word !== undefined) {
           st.text++
-          stateWord(word, j)
+          stateWord(word, j, e)
           continue
         }
         // (no point stated: an open or an element stands where the next paragraph begins in the source (its side after met by
@@ -937,7 +940,7 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
       // (a group's open or an element states it; its first word too, the carrier a reply cannot drop)
       if ('el' in at) st.el++
       else st.span++
-      stateWord(word, j)
+      stateWord(word, j, e)
       if ('el' in at) {
         const el = mem.elements.find(([id]) => id === at.el)?.[1]
         if (el && el.opens === undefined) el.opens = j
@@ -948,11 +951,17 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
     }
     if (paras.size) {
       mem.paras = [...paras].sort((x, y) => x[0] - y[0])
-      // (beside each point, the element its first word stands directly after in the source, white space alone between: the
-      // one that ended the paragraph before (cas-sc's `\sep`, which is `\par`), which a reply returns in its place; stated
-      // where a point names one, Placed.parasAfter)
+      // (beside each point, the element its first word stands directly after in the source, white space alone between, and
+      // TeX set before the paragraph's end: no glyph of it on B at or after the end (an element set after it opens the line,
+      // 2610.39520v1's raised star after a forced break; one that sets no ink, `\sep`, which is `\par`, ended the paragraph
+      // where the source puts it): the one that ended the paragraph before, which a reply returns in its place; stated where
+      // a point names one, Placed.parasAfter)
       const before = pieceBefore(unit.content)
-      const named = mem.paras.map(([o]) => before(o))
+      const named = mem.paras.map(([o]) => {
+        const id = before(o)
+        const last = id === null ? undefined : lastOf.get(Number(id))
+        return last !== undefined && last >= (endOf.get(o) as number) ? null : id
+      })
       if (named.some((x) => x !== null)) mem.parasAfter = named
     }
     if (Object.values(st).some((n) => n > 0)) mem.opensStated = st

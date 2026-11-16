@@ -3082,6 +3082,21 @@ describe('a paragraph TeX opened inside a unit, stated by its first word (design
     expect(three.flows[0]!.paras).toEqual([[27, 1]])
     expect(three.flows[0]!.parasAfter).toBeUndefined()
   })
+  it('names none where the element stands after TeX’s paragraph end: its glyph on B after the end', () => {
+    // (2610.39520v1's caption, `… PET. \\\\ $^*$ indicates …`: the raised star TeX set after the forced break opens the next line;
+    // the first word stands directly after it in the source, but it ended no paragraph: its glyph on B stands after the end.
+    // Here a mark the source writes before "Second" that TeX set after it, on the paragraph's first line)
+    const B = docOf([{ lines: ['First paragraph ends.', 'Second* one', 'runs on'] }])
+    const content = [
+      text('First paragraph ends. '),
+      { t: 'el' as const, id: '1', kind: 'math', src: '$^*$' },
+      text(' Second one runs on'),
+    ]
+    const u = para(content, { classes: [['1', { cls: 'other' }]] })
+    const { flows } = partOf(owned(B, [u], [[0, 0, 0]], [[27, 1]], [21]), B)
+    expect(flows[0]!.paras).toEqual([[24, 1]])
+    expect(flows[0]!.parasAfter).toBeUndefined()
+  })
   it('states none after a display: the display is a block of its own (a region), counted apart', () => {
     const B = docOf([{ lines: ['Text before', 'x', 'Text after'] }])
     const content = [
