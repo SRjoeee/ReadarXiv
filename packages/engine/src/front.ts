@@ -13,7 +13,7 @@ import { compiledOf, type PreparePdfJs } from './compiled.ts'
 import { analyze } from './source/paper-meta.ts'
 import { bundleUnitsOf } from './instrument/units.ts'
 import type { Compiled, CompileRequest, Paper } from './compile/live.ts'
-import { contentOf, elementKindOf, instrumentOf, unitFactsOf } from './instrument/instrument.ts'
+import { contentOf, elementKindOf, entryOf, instrumentOf, unitFactsOf } from './instrument/instrument.ts'
 import { creationEpochOf } from './compile/base.ts'
 import { inMemory } from './source/latex-front.ts'
 import { texLiveOfPdf } from './compile/guard.ts'
@@ -111,8 +111,10 @@ export function unitsObjects(units: Unit[]): Uint8Array[] {
  *  same content, the same id, kept by its own unitFactsOf), each once, before any compile of the marks: what a translator
  *  reads first. Each states what the bundle's unit will state of it and the source tells already, so that what is asked of a
  *  translator on these is what is asked on the bundle's units: an element's kind (elementKindOf: a tie a space, a forced break
- *  a break), and `sentences` where the bundle lights it by sentence (bundle.ts: `!kept && bySentence(kind, figure)`; a source
- *  unit is no figure's text). A reference's name is the marked compile's (readRefNames over its log) and cannot be told here */
+ *  a break), `sentences` where the bundle lights it by sentence (bundle.ts: `!kept && bySentence(kind, figure)`; a source
+ *  unit is no figure's text), and `entry` for a bibliography's entry (instrument.ts entryOf: the tags wire cuts it at its
+ *  blocks, its twin's wire). A reference's name is the marked compile's (readRefNames over its log) and a command's element's
+ *  `text` arXiv's page's (bundle.ts statedOf): neither can be told here */
 export function sourceUnitsOf(paper: Paper): Unit[] {
   const units = paper.units
   const bundle = bundleUnitsOf(paper)
@@ -141,6 +143,8 @@ export function sourceUnitsOf(paper: Paper): Unit[] {
       ...(u.depth !== undefined && Number.isInteger(u.depth) ? { depth: u.depth } : {}),
       ...(!kept && bySentence(u.kind) ? { sentences: true as const } : {}),
       ...(kept ? { kept: true as const } : {}),
+      // (a bibliography's entry, cut at its blocks on the tags wire, as the instrument states its twin: entryOf)
+      ...(entryOf(u) ? { entry: true as const } : {}),
       // (the block its source ties a note to, as the bundle's unit states it: latex-front.mjs tieNotes)
       ...(u.of ? { of: u.of } : {}),
     })
