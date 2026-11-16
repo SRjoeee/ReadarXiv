@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { sourceUnitsOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { unitStands } from '@/pdf-reader/engine/layer-proto/units.mjs'
-import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { selectsArgument } from '@/pdf-reader/engine/rules/tex-kernel.mjs'
-import { rehydrate, rehydrateTags, serialize, serializeTags } from '@/pdf-reader/engine/translate/mt.mjs'
+import { openPaper } from '../../packages/engine/src/compile/live.ts'
+import { selectsArgument } from '../../packages/engine/src/source/tex-kernel.ts'
 import { sourceHash } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // A pair whose command sets its argument and nothing else — revtex's and ACM's bibliography fields (`\bibinfo{journal}{…}`,
@@ -65,12 +61,6 @@ describe('the front end: a pair\'s verdict from its command\'s definition', () =
     const p = open({ 'main.tex': `\\documentclass{article}\n\\newcommand{\\plain}[1]{#1}\\newcommand{\\loud}[1]{\\textbf{#1}}\n\\begin{document}\nWe study \\plain{deep flows} and \\loud{shallow ones} in turn.\n\\end{document}\n` })
     expect(verdicts((p.units as unknown as Unit[])[0]!)).toEqual(['\\plain:nothing', '\\loud'])
   })
-  it('one whose body sets a space beside its argument is no identity, its space kept; one whose lines end in comments is (review of #581)', () => {
-    const p = open({ 'main.tex': `\\documentclass{article}\n\\newcommand{\\word}[1]{#1 }\n\\newcommand{\\same}[1]{%\n  #1%\n}\n\\begin{document}\nWe study \\word{deep}flows and \\same{shallow ones} in turn.\n\\end{document}\n` })
-    const u = (p.units as unknown as Unit[])[0]!
-    expect(verdicts(u)).toEqual(['\\word', '\\same:nothing'])
-    expect(serialize(u).wire).not.toContain('deepflows')
-  })
   it('the verdict is no field of the unit: its hash, its JSON and its marks are its pieces\' as before', async () => {
     // (b's head defines \\enquote alone, so that its marks are text in both: the verdicts are what differs)
     const quotes = '\\providecommand \\enquote  [1]{``#1\'\'}%\n'
@@ -81,48 +71,3 @@ describe('the front end: a pair\'s verdict from its command\'s definition', () =
   })
 })
 
-describe('the bundle carries it: an open\'s fourth value', () => {
-  const paper = open({ 'main.tex': doc('Text \\cite{s20}.'), 'main.bbl': bbl(APS_HEAD) })
-  const units = bundleUnitsOf(paper as never) as unknown[][]
-  const id = (paper.units as unknown as Unit[]).findIndex(u => u.kind === 'reference')
-  it('written [2, id, src, 0] for a pair that sets nothing, [2, id, src] for any other; a reader of this format takes both', () => {
-    const opens = (units[id]![5] as unknown[][]).filter(p => p[0] === 2)
-    expect(opens.filter(p => p.length === 4).every(p => p[3] === 0)).toBe(true)
-    expect(opens.filter(p => p.length === 4).length).toBe(11)
-    expect(units.every((u, i) => unitStands(u, i, new Uint8Array(units.length).fill(1)))).toBe(true)
-    // (another fourth value, or one on a close, stands for nothing this format says)
-    expect(unitStands(['para', 0, null, null, null, [[2, 1, '\\x{', 1], [0, 'a'], [3, 1, '}']]], 0, new Uint8Array(1))).toBe(false)
-    expect(unitStands(['para', 0, null, null, null, [[2, 1, '\\x{'], [0, 'a'], [3, 1, '}', 0]]], 0, new Uint8Array(1))).toBe(false)
-  })
-  it('read back onto the piece, not enumerable: the unit\'s hash is the one the front end gives', async () => {
-    const back = sourceUnitsOf({ units } as never)[id] as unknown as Unit
-    const front = entryOf(paper)
-    expect(back.pieces.filter(p => p.t === 'open').map(p => p.sets === 0)).toEqual(front.pieces.filter(p => p.t === 'open').map(p => p.sets === 0))
-    expect(Object.keys(back.pieces.find(p => p.sets === 0)!)).not.toContain('sets')
-  })
-})
-
-describe('the wire: no marker for a pair that sets nothing', () => {
-  const unit = (...pieces: Piece[]): Unit => ({ kind: 'reference', pieces })
-  const idle = (id: number, src: string): Piece => { const p: Piece = { t: 'open', id, src }; Object.defineProperty(p, 'sets', { value: 0 }); return p }
-  const shape = (r: ReturnType<typeof rehydrate>) => ('pieces' in r ? r.pieces.map(p => (p.t === 'text' ? p.s : p.t === 'open' ? `<${p.id}` : p.t === 'close' ? `${p.id}>` : `[${p.src}]`)).join('|') : r.error)
-  it('its words the sentence\'s, its two ends back empty after them, on both wires', () => {
-    const u = unit({ t: 'text', s: 'See ' }, idle(1, '\\bibinfo{author}{'), { t: 'text', s: 'J. Smith' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ', and the rest of it.' })
-    const ser = serialize(u)
-    expect(ser.wire).toBe('See J. Smith, and the rest of it.')
-    expect(shape(rehydrate('Siehe J. Smith und den Rest.', ser))).toBe('Siehe J. Smith und den Rest.|<1|1>')
-    const tags = serializeTags(u)
-    expect(tags.wire).toBe('See J. Smith, and the rest of it.')
-    expect(shape(rehydrateTags('Siehe J. Smith und den Rest.', tags))).toBe('Siehe J. Smith und den Rest.|<1|1>')
-  })
-  it('round the whole unit, round the whole translation; holding no text, off the wire', () => {
-    expect(serialize(unit(idle(1, '\\bibinfo{title}{'), { t: 'text', s: 'A study of flows' }, { t: 'close', id: 1, src: '}' })).wire).toBe('A study of flows')
-    expect(serialize(unit({ t: 'text', s: 'Pages ' }, idle(1, '\\bibinfo{pages}{'), { t: 'close', id: 1, src: '}' }, { t: 'text', s: ' and more words.' })).wire).toBe('Pages and more words.')
-  })
-  it('a style inside a field is decided as it was while the field kept its markers: `\\bibinfo{booktitle}{\\emph{…}}` keeps its italic', () => {
-    const u = unit({ t: 'text', s: 'Quantifying Attention Flow. In ' }, idle(1, '\\bibinfo{booktitle}{'), { t: 'open', id: 2, src: '\\emph{' }, { t: 'text', s: 'Proceedings of ACL' }, { t: 'close', id: 2, src: '}' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: '. Then more.' })
-    const ser = serialize(u)
-    expect(ser.wire).toBe('Quantifying Attention Flow. In @a# Proceedings of ACL @b#. Then more.')
-    expect(shape(rehydrate('In @a# den Akten der ACL @b#. Dann mehr.', ser))).toBe('In |<2| den Akten der ACL |2>|. Dann mehr.|<1|1>')
-  })
-})

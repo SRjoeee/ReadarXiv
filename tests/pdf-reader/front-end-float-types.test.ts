@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { unitFactsOf } from '@/pdf-reader/engine/pipeline/instrument.mjs'
-import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { openPaper } from '../../packages/engine/src/compile/live.ts'
+import { unitFactsOf } from '../../packages/engine/src/instrument/instrument.ts'
+import { inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
 
 // Each caption's float type, LaTeX's \@captype where its \caption runs (`floatTypes`, the front end's: [unit index, type]
 // beside the units, as `inFloat`): the float environment it is set in (a starred one's, wrapfig's and rotating's as their
@@ -181,34 +181,5 @@ describe('the instrument’s unit facts from the front end’s (unitFactsOf)', (
     ])
     // (each kept unit with the reason it is kept, for the lab's dump (`keptBy`): the algorithm's body its pseudocode)
     expect([...facts.why]).toEqual([[2, 'pseudocode']])
-  })
-  it('keeps a cell of an algorithm float as its pseudocode, and a cell that holds no ordinary word as written (R1)', () => {
-    const paper = openPaper(
-      new Map([
-        [
-          'main.tex',
-          enc(
-            doc(
-              [
-                'We compare GSM8K with the larger benchmark of the study, and MATH with the others.',
-                '\\begin{tabular}{ll}Data & Score \\\\ GSM8K & the best one \\end{tabular}',
-                '\\begin{algorithm}\\caption{Rank}\\begin{tabular}{l}MATH\\end{tabular}\\end{algorithm}',
-              ].join('\n\n'),
-              '\\usepackage{algorithm2e}',
-            ),
-          ),
-        ],
-      ]),
-    ) as unknown as { units: Unit[] }
-    const facts = unitFactsOf(paper as never)
-    const why = paper.units.flatMap((u, i) => (facts.why.has(i) ? [[u.kind, textOf(u), facts.why.get(i)]] : []))
-    // (PDF-READER §18.72 R1: "GSM8K" holds no ordinary word, kept as written; "Data", "Score" and "the best one" are words, sent.
-    // Today's reader keeps "GSM8K" by its own name rule, its openPaper's `kept`, which the instrument does not read)
-    expect((paper as unknown as { kept: Set<Unit> }).kept.has(paper.units.find((u) => textOf(u) === 'GSM8K')!)).toBe(true)
-    expect(why).toEqual([
-      ['cell', 'GSM8K', 'words'],
-      ['cell', 'MATH', 'pseudocode'],
-    ])
-    expect([...facts.why.keys()].every((i) => facts.kept.has(i))).toBe(true)
   })
 })

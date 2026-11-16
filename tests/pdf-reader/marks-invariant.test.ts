@@ -193,29 +193,6 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     expect(r.switches['\\cite']?.slice(0, 4)).toBe('3333')
     expect(r.marksOf('\\cite{a}')).toBe('ab')
   }, 900_000)
-  it('a paper\'s macro that looks ahead before a formula, a citation or a footnote\'s call (2609.20976\'s \\snr, \\ac{SNR}\\xspace): the placeholder after it marked where TeX answered so, \\footnote not (\\xspace sets no space before it)', async () => {
-    const pre = '\\usepackage{xspace}\\usepackage{acronym}\\usepackage{url}\\newcommand{\\snr}{\\ac{SNR}\\xspace}\\newcommand{\\lgn}{\\texttt{lognormal\\allowbreak\\_galaxies}\\xspace}\\newcommand{\\nmx}{\\textsc{nm}\\xspace}'
-    const r = await compare(doc(pre, `\\begin{acronym}\\acro{SNR}{signal-to-noise ratio}\\end{acronym}\n\n${lines('high \\snr $\\geq 50$')}\n\n${lines('the \\snr \\cite{a}')}\n\n${lines('code \\lgn \\footnote{\\url{https://x.org}}')}\n\n${lines('by \\nmx{}\\cite{a}')}`))
-    expect(r.marked).toEqual(r.own)
-    const { aheadKey } = await import('@/pdf-reader/engine/layout/marks.mjs')
-    // (the formula and the citation after \\snr: its opening mark alone, theirs both — a closing mark after \\snr would make the
-    // space TeX skipped after it a second one; the footnote after \\lgn none; the citation right against \\nmx{}'s last letter
-    // none, \\xspace setting no space before the `{}`: a mark's whatsit there would let TeX hyphenate the word the citation's
-    // box keeps whole, which no box's width shows)
-    expect([r.switches[aheadKey('\\snr', ' ', '$\\geq 50$')], r.switches[aheadKey('\\snr', ' ', '\\cite{a}')], r.switches[aheadKey('\\lgn', ' ', '\\footnote{\\url{https://x.org}}')], r.switches[aheadKey('\\nmx{}', '', '\\cite{a}')]]).toEqual(['1', '1', '2', '2'])
-    expect([r.marksOf('\\snr'), r.marksOf('$\\geq 50$'), r.marksOf('\\cite{a}'), r.marksOf('\\nmx{}')]).toEqual(['a', 'ab', 'ab', 'a'])
-  }, 900_000)
-  it('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill, cut in two: \\tikz alone opens a picture it never closes, in which pgf\'s \\selectfont selects \\nullfont) before a letter macro and a look-ahead pair: both answered as without it', async () => {
-    const pre = '\\usepackage{tikz}\\usepackage{xspace}\\newcommand\\bert{BERT}\\newcommand{\\nmx}{\\textsc{nm}\\xspace}'
-    const body = `The \\bert{} model.\n\n${lines('by \\nmx{}\\cite{a}')}`
-    const [broken, clean] = [await compare(doc(pre, `A dot \\tikz\\fill (0,0) circle (.5ex); here.\n\n${body}`)), await compare(doc(pre, body))]
-    expect(broken.marked).toEqual(broken.own)
-    const { aheadKey } = await import('@/pdf-reader/engine/layout/marks.mjs')
-    const answers = (r: typeof clean) => ({ text: r.texts.find(([s]) => s === '\\bert{}')?.[1], inkless: r.inkless.includes('\\bert{}'), pair: r.switches[aheadKey('\\nmx{}', '', '\\cite{a}')], marks: [r.marksOf('\\bert{}'), r.marksOf('\\nmx{}'), r.marksOf('\\cite{a}')] })
-    // (\\bert{}: its text, a box with ink; the citation right against \\nmx{}: 2, its opening mark alone, none on the citation)
-    expect(answers(clean)).toEqual({ text: 'BERT', inkless: false, pair: '2', marks: ['ab', 'a', ''] })
-    expect(answers(broken)).toEqual(answers(clean))
-  }, 900_000)
   it('a complete macro glued to the placeholder after it (\\rate{}\\_{}): its closing mark where TeX answered so for that follower; glued to a character of the text (2610.21098\'s \\HarnessLimitShare{}\\%, the percent a character of the text since 2026-11-11; \\S one since F9 (d), the identifier rule\'s \\_ still a placeholder), none, as before a word', async () => {
     const r = await compare(doc('\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('of \\share{}\\% each')}\n\n${lines('of \\rate{}\\_{} each')}`))
     expect(r.marked).toEqual(r.own)

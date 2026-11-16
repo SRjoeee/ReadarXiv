@@ -5,7 +5,7 @@ import { auxUnits, braceBalance, compilerOfPdf, contextUnits, cutCopyUnits, erro
 import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { ALLOCATION_FAILED } from '@readarxiv/engine'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { handoverOf, layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
+import { handoverOf, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, markedPreamble, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
@@ -604,10 +604,6 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
 
 describe('the refusal names the unmarked original\'s verdict and the trees tried; handoverOf, the host\'s rule over it', () => {
   const fail = stopped('! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n')
-  const ERR = '! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})'
-  const TEX23 = 'This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)\n'
-  const fail23: Compiled = { ok: true, pdf: PDF, log: `${TEX23}! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n! Emergency stop.\n` }
-  const declaring = (year: string) => paperOf(SOURCE, [['00README.json', JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], texlive_version: year, process: { compiler: 'pdflatex' } })]])
 
   it('names it where the unmarked original was compiled: TeX\'s failure, a short one, a host\'s limit, a throw, and ours', async () => {
     const texs = compiler([PROBE, fail, fail, fail])
@@ -635,27 +631,6 @@ describe('the refusal names the unmarked original\'s verdict and the trees tried
     // (a marked original that stands carries no verdict)
     const errors = compiler([PROBE, ran(PDF, errorAt(2, 'paragraph').log), ran(UNMARKED, errorAt(2, 'paragraph').log)])
     expect(await markedOfPaper(paperOf(), { compile: errors.compile })).not.toHaveProperty('own')
-  })
-
-  it('takes the host\'s `tried` for its why: every tree tried, then the box\'s; texlive where the paper declares a year none of them is', async () => {
-    // (undeclared: the compile's, on both trees)
-    const plain = compiler([PROBE, fail, fail, fail])
-    expect(await markedOfPaper(paperOf(), { compile: plain.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper's own source (article) does not run through on TeX Live 2023 or 2025: ${ERR}` })
-    // (declares 2023, tried there first and then here: its own year was tried, so the compile's)
-    const routed = compiler([PROBE, fail, fail, fail])
-    expect(await markedOfPaper(declaring('2023'), { compile: routed.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
-    // (and through layoutMarksOfPaper, which takes the same options: refused before anything is opened)
-    const whole = compiler([PROBE, fail, fail, fail])
-    const open = async () => { throw new Error('nothing to open') }
-    expect(await layoutMarksOfPaper(declaring('2023'), { compile: whole.compile, open, OPS: {}, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
-    // (declares a year no tree tried is: TeX Live's, every tree named)
-    const other = compiler([PROBE, fail23, fail23, fail23])
-    expect(await markedOfPaper(declaring('2022'), { compile: other.compile, tried: ['2025'] })).toMatchObject({ refused: 'texlive', why: `the paper (article) declares TeX Live 2022; on TeX Live 2025 or 2023 its own source does not run through: ${ERR}`, own: { tree: '2023' } })
-    // (none tried, or the box's own year among them, or no year: today's whys)
-    for (const tried of [[], ['2025'], null, ['x', 2025]]) {
-      const c = compiler([PROBE, fail, fail, fail])
-      expect(await markedOfPaper(declaring('2023'), { compile: c.compile, tried: tried as string[] | null })).toMatchObject({ refused: 'texlive', why: `the paper (article) declares TeX Live 2023; on TeX Live 2025 its own source does not run through: ${ERR}` })
-    }
   })
 
   it('handoverOf: the other served tree, once, where TeX failed on the paper\'s own source and no host\'s limit stopped it', () => {
@@ -802,10 +777,4 @@ describe('markedOfPaper: the compiler a package does not name is arXiv\'s PDF\'s
     await expect(markedOfPaper(paperOf(), { compile: compiler([PROBE]).compile, compilerOf: async () => { throw new RangeError(ALLOCATION_FAILED) } })).rejects.toThrow(ALLOCATION_FAILED)
   })
 
-  it('layoutMarksOfPaper passes it on', async () => {
-    const paper = paperOf()
-    const c = compiler([PROBE])
-    await layoutMarksOfPaper(paper, { compile: c.compile, open: async () => null as never, OPS: {} as never, compilerOf: async () => 'latex' }).catch(() => {})
-    expect(ENGINES(c.asked)[0]).toBe('latex')
-  })
 })

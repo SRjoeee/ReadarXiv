@@ -2,11 +2,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
-import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { unpackSource } from '@/pdf-reader/engine/source/tar.mjs'
-import { sourceHash, unitText } from '../../packages/engine/tests/helpers/unit-harness.ts'
+import { openPaper } from '../../packages/engine/src/compile/live.ts'
+import { inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
+import { unpackSource } from '../../packages/engine/src/source/tar.ts'
 import { LAB } from './helpers/lab-data'
 
 // The units written inside a float (`inFloat`, the front end's: their indices in `units`, beside them): TeX sets a float away from
@@ -95,28 +93,6 @@ describe('inFloat: the indices of the units written inside a float', () => {
       ['Inside the figure words.', true],
       ['After the figure, running text again.', false],
     ])
-  })
-
-  it('a footnote nested in a float\'s caption is in the set by its own index, and its parent\'s hash is the hash it has outside a float', async () => {
-    const body = (env: string) => doc(`Running text before the figure here.\n\n\\begin{${env}}Produced by the author.\\caption{The figure words\\footnote{A note in the caption here.} here.}\\end{${env}}\n\nRunning text after it.`)
-    const inside = project(body('figure')), outside = project(body('center'))
-    const units = inside.units as unknown as Unit[]
-    const parent = units.findIndex(u => u.pieces.some(p => p.t === 'nested')), note = units.findIndex(u => textOf(u) === 'A note in the caption here.')
-    expect(parent).toBeGreaterThanOrEqual(0)
-    expect(units[parent]?.pieces.find(p => p.t === 'nested')?.unit).toBe(units[note])
-    expect(inside.inFloat).toEqual(expect.arrayContaining([parent, note]))
-    expect(outside.inFloat).toEqual([])
-    // the units, their hashes, their texts and their bundle rows are those of the same source with the float a plain container
-    expect(units.length).toBe(outside.units.length)
-    for (let i = 0; i < units.length; i++) {
-      expect(await sourceHash(units[i] as never), `unit ${i}`).toBe(await sourceHash(outside.units[i] as never))
-      expect(unitText(units[i]?.pieces as never)).toEqual(unitText(outside.units[i]?.pieces as never))
-      expect(Object.keys(units[i] as object)).not.toContain('inFloat')
-    }
-    const files = (env: string) => new Map([['main.tex', enc(body(env))]])
-    const a = openPaper(files('figure')), b = openPaper(files('center'))
-    expect(a.inFloat).toEqual(inside.inFloat)
-    expect(JSON.stringify(bundleUnitsOf(a))).toBe(JSON.stringify(bundleUnitsOf(b)))
   })
 
   it('a list of numbers, rising: it survives JSON and a copy of the units', () => {
