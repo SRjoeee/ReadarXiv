@@ -7815,6 +7815,28 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   after it (`FitState.glue`; B.slots lowOf: the room taken is the larger of it and the borrow's); a state of the room's that would
   give no block more than it is not offered. Like the leading and the room it only moves or adds slots: the walk's floor
   (§18.88) reads it so, and serves a state the floor's own lay only where its leading, its room and its free part are the floor's.
+- **The body is not touched: a correction (the coordinator's ruling of 2026-11-16).** The design's second half of the rule, "no
+  leading spreads into room that was taken", and its restatement, "taken room never makes a block looser than its page's target",
+  are withdrawn for body members. A page's pitch is not one number but its band (the owner's ruling of 2026-11-12, §18.57, D6:
+  one line spacing a page, a difference the eye does not see allowed), and the fill already holds every member it lays at or
+  under its page's target and band, with room taken or none (`shared/fill-page.ts` leadOf, `top`). Counted on today's lay of the
+  92 pairs (the compile move's bundles, 9410a0ca9), body members holding room above their page's target: the walk's borrowers,
+  door rows 151 zh, 128 ja, 61 ko, Google's 279 zh, 150 ja; the members the fill evened (§18.57), door 196 zh, 1 ja, 6 ko,
+  Google's 202 zh: every one within the band (0.01 to 0.05 over the target) but one the fill lays not (below). The design's
+  picture 8 ("1.42 times, where the page's body is 1.30") compared the member with the script's factor, not with its page,
+  whose target there is 1.50; the owner's words on it, 「如果“现在”版本是正文统一的行距 有可能是更好的」: today's is the page's
+  uniform leading, and it stands. §18.57 is laid as it is; no body member's order changes.
+- **The gate** (the reader gate, `packages/typeset/tests/replay/spacing-gate.ts`, the `F28` lines of `lab/typeset/gate-l1.mjs`;
+  each 0, a member on any fails the run): (i) a float's member or a note laid above its rule-1 pitch (U.params leadOf over its
+  own blocks), room taken or none; (ii) a body member the fill lays above its page's target and band, an invariant of the fill
+  (beside it, a member the fill lays not, its fitted state not set again, `fillLead` null, kept at its fit: one on today's lay,
+  2610.40645v1-ja p22 ord 166 at 1.319 on a target of 1.179); (iii) a member closer than its script's floor (`leadFloor`); (iv) a
+  member a step under its size that one lay at its size, every knob its order takes before the size at its bound, sets whole,
+  whose step neither the page's evening states (`Laid.evened` naming `size`) nor a size tie (`Laid.tie`). A tie's own origin
+  (`by` itself) is a tie's step: laid alone at its size with its mates where the tie left them it fits, but at the tie's one size
+  for all it does not (2610.21084v1-zh p33 ord 326, 2610.21026v1-zh p36 ord 243, 2610.19159v1-ja p5 ord 128: each fit only at
+  0.975 beside its mate at 1, its mate capped there, and each capped back at its own first need). The evening's steps and the
+  ties' are printed beside, never failed: the owner's accepted costs.
 
 ## 19. The engine's contract
 

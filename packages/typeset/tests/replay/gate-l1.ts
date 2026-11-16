@@ -45,6 +45,7 @@ import type { Metrics, Page, RuleParams, Rows } from '../../src/types.ts'
 import { type DumpUnit, dumpUnit, pieceCrops, viewsOf } from './display.ts'
 import { type Cover, coverDone, coverOf, newCover } from './cover.ts'
 import { newParasGate, type ParasGate, parasGate } from './paras-gate.ts'
+import { newSpacingGate, type SpacingGate, spacingGate } from './spacing-gate.ts'
 import { walkCase } from './fit-input.ts'
 import type { GateUnit } from './gate.ts'
 import { keptJoin, keptRow, type L1Placed, l1Paper, type TodayPrepared, todayPrepared, todayUnitOf } from './l1.ts'
@@ -81,6 +82,8 @@ export type GateL1 = {
      *  never drives a unit there, so the runner lists them, its run with today's members (--subst=all) beside) */
     below: number[]
   }
+  /** the spacing rule's four lines over every laid member (spacing-gate.ts, docs/PDF-READER.md §18.90) */
+  spacing: SpacingGate
   /** each page's lay (layPagePrepared: L8-E1), ms; the adapter's setting of every member (L6), ms in all */
   ms: number[]
   adaptMs: number
@@ -605,6 +608,8 @@ export function gateL1Pair(
      *  (lab/typeset/painted.mjs: every lit box painted whole, on both panes), which reads the reader's painter, a package this
      *  one does not import */
     laid?: (page: number, laid: Page) => void
+    /** where given, each member the spacing lines read, a line of its facts (spacing-gate.ts), for a lab tool's record */
+    spacing?: (line: string) => void
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -621,6 +626,7 @@ export function gateL1Pair(
     thrown: new Map(),
     tieHeld: new Set(),
     inv: { laid: 0, lines: 0, I3: [], I4: [], I5: [], I5by: new Map(), below: [] },
+    spacing: newSpacingGate(),
     ms: [],
     adaptMs: 0,
     inputs: new Map(),
@@ -1127,8 +1133,11 @@ export function gateL1Pair(
     // (the ink boxes the part states for each member laid, by its laid ord: its elements' and its label's, which I5 reads a crop
     // ending a line by)
     const inksBy = new Map<number, number[][]>()
+    // (and the class of the gap its part states under it, Room.gap's, for the spacing lines' record: '-' none)
+    const gapBy = new Map<number, string>()
     for (const m of part.flows.flat()) {
       const a = adapted.get(m.ord)
+      if (a) gapBy.set(a.ord, m.room.gap ? `${m.room.gap[0]}:${m.room.gap[2]}` : '-')
       if (a)
         inksBy.set(a.ord, [
           ...(m.els ?? []).flatMap(([, e]) => e.ink as number[][]),
@@ -1155,6 +1164,16 @@ export function gateL1Pair(
       out.threw.push(`p${pg}: ${String((e as Error)?.message ?? e).slice(0, 120)}`)
     }
     if (got) invariantsOf(pg, got.members, R, out.inv, (ord) => inksBy.get(ord), servedMeasure)
+    if (got)
+      spacingGate(
+        pg,
+        got.members,
+        R,
+        out.spacing,
+        (p) => got!.passes.find((q) => q.page === p)?.target?.target ?? null,
+        (ord) => gapBy.get(ord) ?? '',
+        o.spacing,
+      )
     if (got && out.entry && entryRows && metrics) {
       const t1 = performance.now()
       const linkFates: LinkFate[] = []
