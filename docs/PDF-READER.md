@@ -7837,6 +7837,15 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   for all it does not (2610.21084v1-zh p33 ord 326, 2610.21026v1-zh p36 ord 243, 2610.19159v1-ja p5 ord 128: each fit only at
   0.975 beside its mate at 1, its mate capped there, and each capped back at its own first need). The evening's steps and the
   ties' are printed beside, never failed: the owner's accepted costs.
+- **Reach** (the reader gate over the 92 pairs, the added ones apart, the compile move's bundles and Google's refilled rows and the
+  door's, at 5f835110b against 9410a0ca9; lanes/f28-lay in the lab): drawn otherwise, door rows 1,045 captions and 153 notes,
+  Google's 1,037 and 148 (zh and, under the recorded rule set, 14 ja), of them 599 and 592 captions and 72 and 69 notes changing
+  height on a page; with the product's rule set the Japanese pairs 38 and 36 members, the Korean packs 37. No body member is
+  drawn otherwise on either store; the fill leading of 54 (door) and 32 (Google) units of one line (cells, headings, two
+  paragraphs) moved with their page's target where a caption's vote moved, nothing drawn. No member of the Spanish, German and
+  Polish pairs moved. The four lines read 0 on both stores. Lays a page (B.break's calls) 229.9 to 228.3 over the 92 pairs'
+  2,595 pages (-0.7 %), no pair paying more than +0.2 %; the walk's exactness check (every state passed unlaid and every state
+  taken from the floor laid as well): 64,999 passed and 7,043 taken, none differing.
 
 ## 19. The engine's contract
 
