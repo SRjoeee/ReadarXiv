@@ -31,20 +31,27 @@ export function lineShape(s: ParaMeasure, k: number): [indent: number, length: n
  * The stated paragraphs' lines' measures. A line takes a paragraph's measure only where TeX's own statements leave no other
  * paragraph for it (the coordinator's ruling of 2026-11-16 on defect 2, lane cm-fix): (i) a line of its unit's last paragraph
  * takes the paragraph TeX pairs the unit with (Instrument.tex.paras: the last AXT-MEASURE before the unit's `AXT-ALIGN u p`, the
- * paragraph its end mark ended in), where no paragraph end of the unit's own stands before the line in B's stream; (ii) any other
+ * paragraph its end mark ended in), where no paragraph end of the unit's own stands before the line in B's stream, and only where
+ * that paragraph comes after the end B shows before the line and no later than the first end B shows after it; (ii) any other
  * line takes the paragraph whose end B shows next after it, the unit's own (B's glyph before the end the unit's), only where that
- * end's serial is the one directly after the end B shows before the line (no paragraph without a point, one TeX ended after a box,
- * can stand between them); (iii) every other line, and a unit TeX ended in an \hbox or stated nothing for, takes none (its
+ * end's serial is the one directly after the end B shows before the line (no paragraph without a point, one TeX ended after a
+ * box, can stand between them); (iii) every other line, and a unit TeX ended in an \hbox or stated nothing for, takes none (its
  * frame's, as before F13). B's "first end after the line" alone took the next paragraph's measure for a paragraph that ends in a
  * box (amsthm's QED box) and counted its lines as the next one's: 2610.40645v1 p19's proof read as the next section heading's
- * \hangindent. The paragraph's lines are taken in B's order, a row two members share one line (a run-in title and its paragraph),
- * so that the k-th is TeX's line k. Its measure stands at the left edge of its frame's column whose width is the paragraph's
- * \hsize (a paragraph of the column's main list, a footnote, a float's text), or of the text block where the block's is (a float
- * across both columns); a paragraph of another \hsize (a minipage's, a \parbox's, a p column's) states none, where TeX's statement
- * does not say where its box stands. From that edge, the line's indent, and \leftskip's natural size, to its length, less
- * \rightskip's. A display TeX set inside the paragraph counts as three lines to its shape (TeX's \prevgraf after it): where the
- * shape varies by line (several lines of a \parshape, a \hangindent), its lines after a held row of the paragraph state none. A
- * table cell, a figure text and a name keep the measure they have
+ * \hangindent. The pairing alone took a paragraph that is not the line's in two ways, which (i)'s bounds turn away: a unit whose
+ * paragraph a display ended (TeX breaks the lines before `$$` with no \par, so no AXT-MEASURE, and the empty paragraph after the
+ * display states none) is paired with the paragraph before it, a heading's \hangindent read into its lines (2010.11929v2 p13,
+ * 2307.16209v1 p25); a unit whose paragraph ended inside a group its mark stands outside of has its statement written where that
+ * group closes, and is paired with the group's last paragraph (2111.09276v1's conclusion, ended by the bibliography's heading
+ * inside `{\small …}`: paired with the last reference, 62 ends after its lines). The paragraph's lines are taken in B's order, a
+ * row two members share one line (a run-in title and its paragraph), so that the k-th is TeX's line k. Its measure stands at the
+ * left edge of its frame's column whose width is the paragraph's \hsize (a paragraph of the column's main list, a footnote, a
+ * float's text), or of the text block where the block's is (a float across both columns); a paragraph of another \hsize (a
+ * minipage's, a \parbox's, a p column's) states none, where TeX's statement does not say where its box stands. From that edge,
+ * the line's indent, and \leftskip's natural size, to its length, less \rightskip's. A display TeX set inside the paragraph
+ * counts as three lines to its shape (TeX's \prevgraf after it): where the shape varies by line (several lines of a \parshape, a
+ * \hangindent), its lines after a held row of the paragraph state none. A table cell, a figure text and a name keep the measure
+ * they have
  */
 export function paragraphMeasures(w: Work): void {
   const { ins, m, framesA, unitB } = w.ix
@@ -53,8 +60,8 @@ export function paragraphMeasures(w: Work): void {
   const ends = endsOf(ins, m.offB)
   if (!ends.length) return
   const paired = new Map(ins.tex.paras ?? [])
-  // (the serial of B's last paragraph end at or before glyph b, and each unit's own ends (B's glyph before it the unit's), in order)
-  const before = (b: number): number | undefined => {
+  // (the index in B's ends of the first end after glyph b, and each unit's own ends (B's glyph before it the unit's), in order)
+  const at = (b: number): number => {
     let lo = 0
     let hi = ends.length
     while (lo < hi) {
@@ -62,7 +69,7 @@ export function paragraphMeasures(w: Work): void {
       if (ends[mid]![0] <= b) lo = mid + 1
       else hi = mid
     }
-    return lo > 0 ? ends[lo - 1]![1] : undefined
+    return lo
   }
   const own = new Map<number, [number, number][]>()
   for (const e of ends) {
@@ -73,12 +80,16 @@ export function paragraphMeasures(w: Work): void {
   const paraOf = (u: number, b: number): number | undefined => {
     const mine = own.get(u) ?? []
     const after = mine.find((e) => e[0] > b)
-    const ownBefore = mine.some((e) => e[0] <= b)
     const P = paired.get(u)
     const c = after ? after[1] : P
     if (c === undefined) return undefined
-    if (c === P && !ownBefore) return c
-    return c === (before(b) ?? 0) + 1 ? c : undefined
+    const i = at(b)
+    const prev = i > 0 ? ends[i - 1]![1] : 0
+    if (c === prev + 1) return c
+    // ((i): the paired paragraph, no end of the unit's own before the line, where it ends after the end B shows before the line
+    // and no later than the first B shows after it)
+    if (c !== P || P <= prev || mine.some((e) => e[0] <= b)) return undefined
+    return i === ends.length || P <= ends[i]![1] ? P : undefined
   }
   const byPara = new Map<number, { l: Line; b: number }[]>()
   for (const mem of w.members) {

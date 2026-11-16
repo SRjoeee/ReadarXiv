@@ -264,6 +264,58 @@ describe('a paragraph’s measure as TeX sets its lines (F13)', () => {
     expect(proof).toEqual([[72, 540]])
     expect(section).toEqual([[72, 540]])
   })
+  it('states none for a unit TeX’s statement pairs with the paragraph that ended before it (its own a display ended, stating none)', () => {
+    // (2010.11929v2 p13: a paragraph before an align display; its unit's statement comes after the heading's AXT-MEASURE alone)
+    const [heading, para] = measuredOf(
+      [
+        ['A Heading', 0],
+        ['a paragraph that a display', 1],
+        ['ends without a par', 1],
+        ['the next paragraph', 2],
+      ],
+      [
+        [1, 0],
+        [2, 3],
+      ],
+      [{ para: 1, ...plain, shape: [[30, 400]] }],
+      [
+        [0, 1],
+        [1, 1],
+        [2, 2],
+      ],
+    )
+    expect(heading).toEqual([[102, 502]])
+    expect(para).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+  })
+  it('states none for a unit TeX’s statement pairs with a paragraph that ends after another end B shows after its lines', () => {
+    // (2111.09276v1's conclusion: its paragraph ended inside `{\small …}` by the bibliography's heading, its statement written
+    // where the group closed, after the last reference's AXT-MEASURE)
+    const [conclusion] = measuredOf(
+      [
+        ['the conclusion one', 0],
+        ['the conclusion two', 0],
+        ['References', 1],
+        ['[1] a reference', 2],
+      ],
+      [
+        [2, 2],
+        [3, 3],
+      ],
+      [{ para: 3, ...plain, shape: [[20, 400]] }],
+      [
+        [0, 3],
+        [1, 2],
+        [2, 3],
+      ],
+    )
+    expect(conclusion).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+  })
   it('takes \\leftskip’s and \\rightskip’s natural sizes off the line’s box', () => {
     expect(measuresOf([{ para: 1, ...plain, leftskip: 10, rightskip: 5 }])[0]![0]).toEqual([82, 535])
   })
