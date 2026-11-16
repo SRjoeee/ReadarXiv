@@ -2718,9 +2718,10 @@ export function headEnd(pieces: readonly Piece[], from = 0): number {
  *  its star, its room and the spaces before it, \\cr, \\crcr, \\tabularnewline: \\newline ends no row) */
 const BREAK = /^\\(?:\\|(?:cr|crcr|tabularnewline)(?![A-Za-z@]))/
 /** whether a piece is such a break: by its source (BREAK), or as the source reader states it a forced break (forcedBreak), a
- *  paper's row-ending macro inside a grid cell, whose body ends a row as `\\\\` does (§18.75); not \\newline, stated one too */
+ *  paper's row-ending macro inside a grid cell, whose body ends a row as `\\\\` does (§18.75); not \\newline nor \\break,
+ *  stated ones too, which end no row */
 const breaks = (p: Piece | undefined): boolean =>
-  p?.t === 'ph' && (BREAK.test(p.src ?? '') || (forcedBreak(p) && !/^\\newline$/.test(p.src ?? '')))
+  p?.t === 'ph' && (BREAK.test(p.src ?? '') || (forcedBreak(p) && !/^\\(?:newline|break)$/.test(p.src ?? '')))
 /** the pieces passed over, by index: at the unit's head (headEnd), and the same way after each forced break and each
  *  alignment tab, where a table's row or cell may begin in a table the scanner read as prose (aastex's deluxetable:
  *  \enddata after the last row's \\; tabularray's \SetCell, which must open its cell) */

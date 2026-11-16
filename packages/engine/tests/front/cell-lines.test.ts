@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { openPaper } from '../../src/compile/live.ts'
 import { elementKindOf, unitFactsOf } from '../../src/instrument/instrument.ts'
-import { inMemory, loadProject, startOf } from '../../src/source/latex-front.ts'
+import { forcedBreak, inMemory, loadProject, phPiece, startOf } from '../../src/source/latex-front.ts'
 
 type Piece = { t: string; s?: string; src?: string }
 type Unit = { kind: string; pieces: Piece[]; cell?: { row: number; col: number } }
@@ -162,5 +162,16 @@ describe("a paper's row-ending macro inside a grid cell is a forced break of the
   it('the macro at the grid’s row end ends the row, as before', () => {
     const us = unitsOf(MACROS, '\\begin{tabular}{c|c}\n\\hline\nError rate & testing \\br\n\\hline\non test set & 2.5 \\brh\n\\end{tabular}')
     expect([at(us, 0, 0).map(words), at(us, 1, 0).map(words)]).toEqual([['Error rate'], ['on test set']])
+  })
+})
+
+describe('LaTeX’s \\break is a forced break of its unit’s text, as `\\\\` and \\newline are', () => {
+  it('states \\break a forced break, its element a break; a macro whose name begins so none', () => {
+    // (the coordinator's ruling 4 of 2026-11-16: 2608.03841v2's amsart addresses, `\hfill\break\indent`, the marked compile
+    // stating where each ends its line, BREAKS_TEX's point)
+    expect(forcedBreak(phPiece('\\break'))).toBe(true)
+    expect(elementKindOf(phPiece('\\break'))).toBe('break')
+    expect(forcedBreak(phPiece('\\breakline'))).toBe(false)
+    expect(forcedBreak(phPiece('\\linebreak'))).toBe(false)
   })
 })
