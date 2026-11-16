@@ -55,6 +55,9 @@ export interface Member {
   /** the elements (by piece id) of a symbol's class whose ink is not that symbol as its reading draws it (a letter or digit among
    *  its glyphs, or a raise or a drop the reading does not draw): drawn as their ink, a formula's (bundle.ts classed) */
   asInk?: Set<string>
+  /** its elements stated by the text TeX set where the document uses their macro (PieceClass.told, geometry.ts): no glyph of
+   *  theirs, no style read off one */
+  told?: Set<string>
   /** the share an element's faked small capitals are set at, by its id, where its text is in TeX's case for them (facts.ts
    *  elementCase): its style states it (facts-pass, El.style.sc) */
   smallCaps?: Map<string, number>

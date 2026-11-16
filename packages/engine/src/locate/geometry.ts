@@ -649,8 +649,12 @@ export function lineGeometry(w: Work, owned: Owned): void {
         // uses it, every glyph stated as itself (PieceClass.told, the loop's first pass's ask; the coordinator's ruling on the
         // third cause, 2026-11-16, lane cm-fix): elsarticle's `\sep` set as "," in 2610.38269v1's keywords, glued to the word
         // before it, and in 2610.20848v1's after the unit's end point. Its glyphs stay the unit's text's, as a text macro's do
-        // (\bert above); one whose text TeX did not state glyph by glyph stays not found)
-        else if ((cls === 'macro' || cls === 'umacro') && classOf.get(id)?.told) el.text = classOf.get(id)!.told!
+        // (\bert above); one whose text TeX did not state glyph by glyph stays not found, and one the probe states a text for
+        // (PieceClass.text) is stated by that later, as before)
+        else if ((cls === 'macro' || cls === 'umacro') && classOf.get(id)?.told && !classOf.get(id)?.text) {
+          el.text = classOf.get(id)!.told!
+          ;(mem.told ??= new Set()).add(id)
+        }
       }
       mem.elements.push([id, el])
     }

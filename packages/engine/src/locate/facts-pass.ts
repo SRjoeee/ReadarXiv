@@ -488,7 +488,8 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     // (its style where it is filled otherwise than black, or where the typesetter may draw it as text: its text stated; where
     // that text is in TeX's case for its faked small capitals (locate's mem.smallCaps, facts.ts elementCase), their share, and no
     // case change)
-    if (fill !== undefined || el.text !== undefined) {
+    // (an element stated by the text TeX set where its macro is used has no glyph to read a style off: none)
+    if (fill !== undefined || (el.text !== undefined && !(gs.length === 0 && mem.told?.has(id)))) {
       const sc = mem.smallCaps?.get(id)
       const { upper, ...read } = styleOf(gs)
       el.style = {

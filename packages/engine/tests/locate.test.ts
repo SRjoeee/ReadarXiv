@@ -2504,6 +2504,7 @@ describe('the element classes the part states', () => {
       text(' radio'),
       { t: 'el' as const, id: '7', kind: 'macro', src: '\\sepc' },
       text(' maps'),
+      { t: 'el' as const, id: '9', kind: 'macro', src: '\\sepd' },
     ]
     const units: InstrumentUnit[] = [
       {
@@ -2515,6 +2516,7 @@ describe('the element classes the part states', () => {
           ['3', { cls: 'umacro', told: ';' }],
           ['5', { cls: 'umacro', told: ',' }],
           ['7', { cls: 'umacro' }],
+          ['9', { cls: 'umacro', text: ',', told: ';' }],
         ],
       },
     ]
@@ -2529,9 +2531,13 @@ describe('the element classes the part states', () => {
     const L = locate(ins, B, align(B, B))
     const els = new Map(L.members.find((m) => m.unit === 0)!.elements)
     expect(els.get('1')).toMatchObject({ ink: [], text: ',' })
+    // (no glyph of its own to read a style off: none, where a style read off nothing would be a size of 10 anywhere)
+    expect(els.get('1')!.style).toBeUndefined()
     expect(els.get('3')).toMatchObject({ ink: [], text: ',' })
     expect(els.get('5')).toMatchObject({ ink: [], text: ',' })
     expect(els.get('7')!.text).toBeUndefined()
+    // (one the probe states a text for keeps that reading: the ask's text is not stated over it)
+    expect(els.get('9')!.text).not.toBe(';')
   })
   it('states a paper macro’s span empty where its two places hold no glyph, or where TeX said it sets none', () => {
     // (2610.19159v1's `Tool Output\trajectoryMark{}`: after the unit's end point, its point after the group it stands in, no glyph
