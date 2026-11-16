@@ -5528,7 +5528,12 @@ words; the translator translated what it was given.
   digit (Unicode's general categories L, M, N), the run of letters and combining marks (L, M) of the unit's text that touches
   it on that side, as far as it goes, is offered to no translator, and the row has it back beside the element, literally:
   after the element it follows (a run between two elements is the first's), else before the one it precedes, outside the
-  groups that hold the element but not the run; the row's sentences in the unit's projection and past the letters put back.
+  groups that hold the element but not the run; the row's sentences in the unit's projection and past the letters put back,
+  a sentence that opens with letters held before an element starting before them on both sides. No letter is taken out of
+  a group that does not hold the element (a link or a styled group around letters alone): held, it would leave the group
+  without them, a link of no text, which the acceptance rule refuses against the original; such letters go on the wire in
+  their group and the run stops at its edge (the review of #647; over the four sets no held side stood so, and the 70
+  sides below are unchanged).
   What it exists for is a word's letters sent alone and read as a word of their own: 2111.09276v1's Table 1 on staging,
   Google, `\hlyellow{guitar}s.` went out as the element and "s.", and "s" came back as the word for seconds. A name written
   with an accent command (`M\k{a}dry`, `Y\i ld\i r\i m`) keeps its letters with it, and a panel's letter after "Figure 2"

@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { google, tagsWire } from '../src/adapters/google.ts'
 import { microsoft } from '../src/adapters/microsoft.ts'
+import { accept } from '../src/accept.ts'
 import { chainOf, rowContextOf } from '../src/chain.ts'
 import type { FetchInit, Glossary, OutPiece, Piece, Result, UnitIn } from '../src/contract.ts'
 import { fakeTranslator, scriptedFetch } from '../src/testing/fakes.ts'
@@ -274,6 +275,24 @@ describe('the letters and marks that touch an element’s text are its word’s'
     const { sent, result } = await viaGoogle(u, () => '现在擦亮<b translate=no>x1</b>。')
     expect(sent).toEqual(['Polish the <b translate=no>x1</b> now.'])
     expect(ok(result).content).toEqual([tx('现在擦亮'), sp('1', [{ t: 'el', id: 'h' }]), tx('s。')])
+  })
+  it('letters in a group that does not hold the element (a link whose text is "M" before `\\k{a}dry`) stay in it, on the wire', async () => {
+    // (held, they left the link empty, a `must` group the original states with its text: accept refused the row)
+    const u = unit('l', [t('Work by '), span('1', 'link', [t('M')], true), mac('k', 'ą'), t('dry.')])
+    for (const via of [viaGoogle, viaMicrosoft]) {
+      const { result } = await via(u, (w) => w)
+      const r = ok(result)
+      expect(r.content).toEqual([tx('Work by '), sp('1', [tx('M')]), { t: 'el', id: 'k' }, tx('dry.')])
+      expect(accept(u, r.content)).toEqual({ ok: true })
+    }
+    expect((await viaGoogle(u, (w) => w)).sent).toEqual(['Work by <span id="1">M</span><b translate=no>x2</b>.'])
+  })
+  it('letters after the element, past the edge of a group that holds them and not it: up to the edge alone', async () => {
+    // ("ab" in the element's group, "cd" in a link after it: "cd" goes on the wire in its link)
+    const u = unit('e', [t('See '), mac('g', 'guitar'), t('ab'), span('2', 'link', [t('cd')], true), t(' now.')])
+    const { sent, result } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual(['See <b translate=no>x1</b><span id="2">cd</span> now.'])
+    expect(ok(result).content).toEqual([tx('See '), { t: 'el', id: 'g' }, tx('ab'), sp('2', [tx('cd')]), tx(' now.')])
   })
   it('letters after an element of no text (a tie) and before one of their word: back before that one, not after the tie', async () => {
     const u = unit('t', [t('Work by'), el('s', 'space'), t('M'), mac('k', 'ą'), t('dry.')])
