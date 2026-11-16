@@ -7849,6 +7849,13 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   for all it does not (2610.21084v1-zh p33 ord 326, 2610.21026v1-zh p36 ord 243, 2610.19159v1-ja p5 ord 128: each fit only at
   0.975 beside its mate at 1, its mate capped there, and each capped back at its own first need). The evening's steps and the
   ties' are printed beside, never failed: the owner's accepted costs.
+- **The display gate's ruling FM** (`lab/typeset/parity/rulings.mjs`, his verdict on the captions laid by the rule and his
+  general words above, the coordinator's ruling of 2026-11-17): a caption the rule sets in fewer lines than today's reader, which
+  letter-spaced it onto more, at its script's pitch from its first line with the slack under it, is the rule's own look and no
+  fault: `line-count` of a float's member (floatMember on the part's kind) v2 sets in fewer lines than today on the page, today
+  at most the original's count, at the original's size, whole, laid no looser than its rule-1 pitch, on the original's first line
+  and ending no lower than the original's last. Its example, the one page the rule made newly worse: 2610.30034v1-zh p11 t218,
+  2 lines against today's 3 (letter-spaced, 0.08 em) and the original's 4.
 - **Reach of the rule as first built, notes held too** (the reader gate over the 92 pairs, the added ones apart, the compile
   move's bundles and Google's refilled rows and the door's, at 5f835110b against 9410a0ca9; lanes/f28-lay in the lab): drawn
   otherwise, door rows 1,045 captions and 153 notes, Google's 1,037 and 148 (zh and, under the recorded rule set, 14 ja), of them 599 and 592 captions and 72 and 69 notes changing

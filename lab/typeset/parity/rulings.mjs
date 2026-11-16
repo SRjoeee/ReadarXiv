@@ -10,7 +10,7 @@
 // own noise floor (verdict.mjs NEAR), the engine's own grain (SIZE_STEP), a fact the page states, or a number in his own words. What
 // the page states beside a covered difference (L2's cause, S4's steps) is reported (`coveredSays`), never a condition.
 import { rulesFor, scriptOf } from '../../../packages/typeset/src/rules-for.ts'
-import { leadOf } from '../../../packages/typeset/src/unit/params.ts'
+import { floatMember, leadOf } from '../../../packages/typeset/src/unit/params.ts'
 import { inkedLine, NEAR } from './verdict.mjs'
 import { OVER_MIN, SIZE_STEP } from './fidelity.mjs'
 
@@ -879,7 +879,54 @@ export const RULINGS = [
       return `laid at ${f.lead} x the original's pitch (the script's base ${f.base}), its last line ${r2(f.over)} pt from the original's last, under one laid pitch (${r2(f.pitch)})`
     },
   },
+  {
+    id: 'FM',
+    title: "a float's member at its own pitch, never spread: fewer lines than today's letter-spaced ones, the slack under it",
+    verdict: '可以',
+    date: '2026-11-17',
+    seen: "staging/check-list-f28.zh.html (lab-data refactor-2026-11), the captions laid by the rule (cards 2, 3 and 5, his verdict on each the one this entry states; card 4, a caption a line shorter than its original at 1.30 from its first line, the white under it, named on the page as the class of 2610.30034v1-zh p11's caption and left with no verdict of its own) and his general words; his export of 2026-11-16T17:29:43Z, a copy in lanes/f28-notes/owner-comments-check-list-f28.json; the coordinator's ruling of 2026-11-17 (briefs/f28-notes.md): that caption KNOWN and accepted by his general words; the rule as built: PDF-READER §18.90 (rebuild/f28-lay)",
+    words: '除了 reference 这里其他都可以\nreference 取决于哪种长期更正确 你来判断 。 如果新规则长期更好我们就用',
+    example:
+      "2610.30034v1-zh p11 t218 (Figure 1's caption): 2 lines at the original's 7.97 pt, laid at 1.3 x its pitch from its first line, where today letter-spaces it (its widest letter gap 0.08 em) onto 3 and the original sets 4; its last line 15.24 pt over the original's last",
+    condition:
+      "line-count: a float's member (the part states its kind `caption`: U.params floatMember, the typesetter's own class, PDF-READER §18.90) that v2 sets in fewer lines on the page than today, today's at most the original's count, at the original's size (within the size floor), the unit whole (WHOLE); laid as the rule lays it, never spread: its Page member's leading (`fit.lead`) no looser than its script's pitch over its own original pitch (U.params leadOf over the rule set the tree holds, at the original's size and its pitch on the page, the upper median of its gaps as U.blocks reads it: rule 1's), its first line on the original's first (the anchor measure within its floor), and its last line on the page no lower than the original's last (within the precision both are stated at, NEAR.room): the slack under it. Today's letter spacing is reported beside, never a condition. A caption laid looser than its script's pitch, off the original's first line, or ending under the original's last (room taken), one of as many lines as today or more, one smaller than the original, a body member or a note, is judged as before",
+    holds(d, x) {
+      if (d.flag !== 'line-count' || !d.unit || d.pages) return false
+      const t = d.today?.value,
+        v = d.v2?.value,
+        o = d.original
+      if (![t, v, o].every(Number.isFinite) || !(v < t) || t > o) return false
+      const u = x.unit(d)
+      if (!u?.sides?.v2 || u.part === null || u.part === undefined || !x.whole(u.key) || !atOriginal(u.sides.v2)) return false
+      return ownPitch(u, x, String(x.v2?.pair ?? '').split('-').at(-1)) !== null
+    },
+    says(d, x) {
+      const u = x.unit(d)
+      const f = ownPitch(u, x, String(x.v2.pair).split('-').at(-1))
+      return `laid at ${f.lead} x its pitch (its script's ${f.base}) from its first line, its last line ${r2(f.over)} pt over the original's last; the widest letter gap today ${u.sides.today?.letter ?? 'none'} em, v2 ${u.sides.v2.letter ?? 'none'} em`
+    },
+  },
 ]
+/**
+ * FM's facts of a float's member on the page (PDF-READER §18.90): its script's pitch over its own original pitch (leadOf, the rule
+ * set the tree holds: rule 1's), the leading it is laid at (its Page member's), and how far its last line stands over the
+ * original's last; null where the part's member is not a float's, it is not laid, it is laid looser than that pitch, its first
+ * line stands off the original's first (the anchor measure past its floor), or its last line under the original's last
+ */
+function ownPitch(u, x, target) {
+  const m = x.laid(u.part),
+    f = x.member(u.part),
+    v = u.sides.v2
+  if (!target || !f || !floatMember(f.kind) || m?.state !== 'laid' || !m.lines?.length || !Number.isFinite(m.fit?.lead)) return null
+  const ol = f.lines.filter((l) => l[0] === x.n).map((l) => l[4]).sort((a, b) => b - a)
+  const p0 = upperMedianGap(ol)
+  if (p0 === null) return null
+  const base = leadOf([{ pitch0: p0 }], f.style?.size ?? v.osize, rulesFor(target).set)
+  if (m.fit.lead > base + 1e-9 || !v.anchor || v.anchor.off > posFloor(v.osize)) return null
+  const ys = m.lines.map((l) => l[0]).sort((a, b) => b - a)
+  const over = ys.at(-1) - ol.at(-1)
+  return over >= -NEAR.room ? { base, lead: m.fit.lead, over } : null
+}
 /** JK: the scripts whose pitch the owner's choice of 2026-11-16 set (PDF-READER §18.89): Japanese (jlreq), Korean (xetexko) */
 const PITCHED = new Set(['Jpan', 'Kore'])
 /** the upper median of the gaps between rows (baselines, top first), as U.blocks reads a block's pitch; none for one row */

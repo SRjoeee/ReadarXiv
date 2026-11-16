@@ -70,6 +70,46 @@ describe("JK: a Japanese or Korean paragraph at its script's pitch (the owner's 
   })
 })
 
+describe("FM: a float's member at its own pitch, never spread (his verdict of 2026-11-17), fewer lines than today's letter-spaced ones", () => {
+  // (2610.30034v1-zh p11 t218's geometry: a caption of `o` original lines at 8 pt on a 9 pt pitch from 571; today letter-spaces it
+  // onto `t`, v2 sets `k` from 571 at the leading the lay states. The script's pitch, 1.3 x 1.25 x 8 over 9 capped at 1.3: 1.3)
+  type Case = { kind?: string; lead?: number; k?: number; t?: number; o?: number; size?: number; off?: number }
+  const page = ({ kind = 'caption', lead = 1.3, k = 2, t = 3, o = 4, size = 8, off = 0 }: Case) => {
+    const ol = Array.from({ length: o }, (_, i) => fact(48, 300, 571 - i * 9, 8))
+    const laidLines = Array.from({ length: k }, (_, i) => [571 - i * 9 * lead, 48, 300, []])
+    const v2 = {
+      pair: '2610.00000v1-zh',
+      facts: { [N]: { members: [{ ord: 218, kind, align: 'j', style: { size: 8 }, lines: ol }], ties: [] } },
+      pages: { [N]: { members: [{ ord: 218, state: 'laid', fit: { size, lead, track: 0, borrowed: 0 }, lines: laidLines }] } },
+    }
+    const { page: p } = judged(
+      {
+        diffs: [worse('line-count', `t218 ${kind}`, o, t, k, [o - t, o - k])],
+        units: [{ key: 't218', kind, part: 218, align: 'j', sides: { today: side(t, 8, 8, o, { letter: 0.08 }), v2: side(k, size, 8, o, { anchor: { off }, letter: 0 }) } }],
+      },
+      { v2, rec: rec() },
+    )
+    const d = (p.diffs as (Diff & { coveredSays?: string })[])[0]!
+    return [d.worse, d.covered ?? null, d.coveredSays ?? null]
+  }
+  it("fewer lines than today at its script's pitch from its first line, the slack under it: covered by FM", () => {
+    // (2 lines at 1.3 x 9 = 11.7: its last at 559.3, 15.3 over the original's last at 544)
+    expect(page({})).toEqual([false, 'FM', "laid at 1.3 x its pitch (its script's 1.3) from its first line, its last line 15.3 pt over the original's last; the widest letter gap today 0.08 em, v2 0 em"])
+    expect(page({ lead: 1.15 })[1]).toBe('FM')
+  })
+  it('a note or a body paragraph, looser than its pitch, off its first line, ending under the original\'s last, as many lines as today or today past the original, or smaller: worse', () => {
+    expect(page({ kind: 'footnote' })).toEqual([true, null, null])
+    expect(page({ kind: 'para' })).toEqual([true, null, null])
+    expect(page({ lead: 1.45 })).toEqual([true, null, null])
+    expect(page({ off: 2 })).toEqual([true, null, null])
+    // (5 lines of the original's 6 at 1.3: the last at 524.2, 1.8 under the original's last at 526: room taken)
+    expect(page({ k: 5, t: 6, o: 6 })).toEqual([true, null, null])
+    expect(page({ t: 2 })).toEqual([true, null, null])
+    expect(page({ t: 5 })).toEqual([true, null, null])
+    expect(page({ size: 7.8 })).toEqual([true, null, null])
+  })
+})
+
 describe("TRS and Fm: the page fill's evening (his rules of 2026-11-12, 17:25), read from what the lay states", () => {
   // (a tight paragraph the page's fill evened: v2's Page member states it, `evened`: the knobs taken, its line count on the page
   // before them, and for the foot the depth its state allows past TeX's text block bottom)
@@ -1004,9 +1044,10 @@ describe('the rulings file', () => {
       // AN the owner's ruling of 2026-11-13 on the author block's notes, built in lane f2-author; CT his choice of 2026-11-13 on a
       // table's cells, built in lane cells-like-body; CU the coordinator's ruling (c) of 2026-11-13 under it, the same lane)
       // (CB the owner's decision of 2026-11-13, his choice of the column's box, built in lane cell-col; JK his choice of 2026-11-16
-      // of jlreq's and xetexko's pitch, built in lane cm-d)
-      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' || r.id === 'CU' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' || r.id === 'CT' ? r.verdict === "the owner's ruling" : r.id === 'CB' ? r.verdict === "the owner's decision" : r.id === 'JK' ? r.verdict === "the owner's choice" : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
-      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' || r.id === 'CT' || r.id === 'CU' || r.id === 'CB' ? '2026-11-13' : r.id === 'JK' ? '2026-11-16' : '2026-11-12')
+      // of jlreq's and xetexko's pitch, built in lane cm-d; FM his verdict of 2026-11-17 on the captions laid by the spacing rule,
+      // "OK", built in lanes f28-lay and f28-notes)
+      expect(r.id === 'T2' ? r.verdict.startsWith('\u2460') : r.id === 'T1' ? r.verdict === 'pseudocode kept' : r.id === 'WB' || r.id === 'CU' ? r.verdict === "the coordinator's ruling" : r.id === 'AN' || r.id === 'CT' ? r.verdict === "the owner's ruling" : r.id === 'CB' ? r.verdict === "the owner's decision" : r.id === 'JK' ? r.verdict === "the owner's choice" : r.id === 'FM' ? r.verdict === '\u53ef\u4ee5' : ['\u53ef\u4ee5\u63a5\u53d7', '\u91c7\u7528', '\u540c\u610f\u4f60\u7684\u5efa\u8bae'].includes(r.verdict)).toBe(true)
+      expect(r.date).toBe(r.id === 'T1' ? '2026-11-08' : r.id === 'WB' || r.id === 'AN' || r.id === 'CT' || r.id === 'CU' || r.id === 'CB' ? '2026-11-13' : r.id === 'JK' ? '2026-11-16' : r.id === 'FM' ? '2026-11-17' : '2026-11-12')
       expect(r.example.length).toBeGreaterThan(20)
       expect(r.condition === null ? r.unstated : r.condition).toBeTruthy()
       expect(r.condition === null).toBe(r.holds === null)
