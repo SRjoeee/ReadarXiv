@@ -7306,11 +7306,15 @@ the glue TeX sets at each kind of gap, and the part names, under each member, th
   itself a float's separation; it states none now. The float's list is read the same way (lane cm-fix, the coordinator's rulings
   of 2026-11-16): the class under a float's last ink is what TeX set after the float in its list, its brackets adjacent with no
   ink between (`floatsep` over the next float of a column's top or bottom list, though the next float's own picture stands under
-  the caption on A: 2608.04322v1 p9's Figure 7 over Figure 8, its caption once stated nothing; `dblfloatsep` between two floats
-  over both columns, `dbltextfloatsep` under the last; `fpsep` between two floats of a column of floats, the two-column page's
-  column of no body bracket, AXT-BODY's side telling the column; under the last of a bottom list or of a column of floats
-  nothing, its column's foot), each number the marked compile's own statement of the parameter (AXT-GLUE, the value in force at
-  the float's serial). On a page bracketed whole (`AXT-WHOLE`: a class whose output routine is its own, REVTeX's ltxgrid, or a
+  the caption on A; `dblfloatsep` between two floats over both columns, `dbltextfloatsep` under the last; `fpsep` between two
+  floats of a column of floats, the two-column page's column of no body bracket, AXT-BODY's side telling the column; under the
+  last of a bottom list or of a column of floats nothing, its column's foot), each number the marked compile's own statement of
+  the parameter (AXT-GLUE, the value in force at the float's serial). Two floats set here one over the other are no list's: TeX
+  sets `\intextsep` under the first and `\intextsep` again over the second (LaTeX's `\@addtocurcol` for `h`, float.sty's
+  `\float@endH` for `[H]`: `\vskip\intextsep \box \vskip\intextsep`; 2608.04322v1 p9's Figures 7 and 8 are `[H]`, checked by
+  `\showoutput`), so the first's last member states `intextsep`, the one TeX set under it, and the gap names one glue: the
+  second stands in the words "round a float set here". On a page bracketed whole (`AXT-WHOLE`: a class whose output routine
+  is its own, REVTeX's ltxgrid, or a
   page of floats) no bracket says where TeX placed a float, and no float separation is stated there, nor on a page that states
   no body: no geometric guess (the coordinator's ruling). In a float `abovecaptionskip` over
   its caption and `belowcaptionskip` under it;
@@ -7358,10 +7362,18 @@ bytes it was.
   cm-fix): a line of its unit's last paragraph takes the paragraph TeX pairs the unit with (`marks/channels.ts` readParas,
   `Instrument.tex.paras`: STATEMENTS_TEX's `AXT-MEASURE <n>` is written at para/end and the unit's `AXT-ALIGN <u> p` at the same
   paragraph's para/after, so the last measure before the unit's `p` line is the paragraph its end mark ended in), where no
-  paragraph end of the unit's own stands before the line on B; any other line the paragraph whose end B shows next after it, the
+  paragraph end of the unit's own stands before the line on B, and only where that paragraph comes after the end B shows before
+  the line and no later than the first end B shows after it; any other line the paragraph whose end B shows next after it, the
   unit's own, only where that end's serial is the one directly after the end B shows before the line (none ended after a box can
   stand between); every other line, and a unit TeX ended in an `\hbox` (a one-line caption) or stated nothing for, none: its
-  frame's. The first reading, "the paragraph whose end follows it in B's stream", took the next paragraph's measure for one TeX
+  frame's. The pairing alone is not the unit's paragraph in two ways the whole corpus showed (the chain against c2: 1136 lines
+  newly outside their measure, 535 of them traced in 8 papers): a paragraph a display ends (TeX breaks the lines before `$$` with
+  no `\par`, so no `AXT-MEASURE`, and the empty paragraph after the display states none) pairs its unit with the paragraph before
+  it, a heading's `\hangindent` read into its lines (2010.11929v2 p13, 2307.16209v1 p25: 476 lines); a paragraph that ends
+  inside a group its mark stands outside of has its statement written where the group closes, paired with that group's last
+  paragraph (2111.09276v1's conclusion, ended by the bibliography's heading inside `{\small …}`, paired with the last reference:
+  59 lines). The bounds turn both away. The first reading, "the paragraph whose end follows it in B's stream", took the next
+  paragraph's measure for one TeX
   ended after a box, where the para/end hook sets no point (`\axt@peat`), and counted its lines as the next one's: 2610.40645v1
   p19's proof (ords 144 to 146, amsthm's QED box) read as the next section heading's `\hangindent` after one line, 96.21..540,
   its one line then centred; 2411.13093v4 p14's and 2608.15016v1 p2's one-line captions read as a hung paragraph's later line,
