@@ -7376,7 +7376,17 @@ bytes it was.
   it, a heading's `\hangindent` read into its lines (2010.11929v2 p13, 2307.16209v1 p25: 476 lines); a paragraph that ends
   inside a group its mark stands outside of has its statement written where the group closes, paired with that group's last
   paragraph (2111.09276v1's conclusion, ended by the bibliography's heading inside `{\small …}`, paired with the last reference:
-  59 lines). The bounds turn both away. The first reading, "the paragraph whose end follows it in B's stream", took the next
+  59 lines). The bounds turn both away. The rule in the coordinator's words of 2026-11-16 (accepted as the rule, each part
+  answering a measured wrong with a red test): (i) bounded by B's ends round the line, as above; (ii) with the unit's own end
+  where the paragraph TeX ended before it stands on B before the line or there is none; and the row only vetoes a centring and
+  never creates one (below). Against c2 over the corpus (245 papers, the readers alone on the base's compiles: lane cm-fix's chain
+  d9): 5,213 lines' measures moved, in 1,529 placements of 137 papers; 3,167 from outside their ink to inside it, 2,041 inside to
+  inside; 5 placements stand outside, each TeX's own or an author block's: 2602.23285v2 p1 and p2 ord 1, an author line TeX set
+  wider than the text block (overfull, its ink 116.47..514.48 past 108..504 on both sides); 2608.28692v1 p1 and p2 ord 81, an
+  affiliation line of the title block set left of its measure; 2610.16663v1 p42 ord 352, a reference's label TeX hangs left of the
+  entry's measure (`\leftmargin`, `\labelsep`). One right measure is lost, a known remainder: 2608.11084v1 p13 ord 106, a
+  theorem whose paragraph a display broke, its unit's `AXT-ALIGN p` written before paragraph 96's measure (P = 95 ended before
+  its lines): no rule gives it 96, its lines take their frame's. The first reading, "the paragraph whose end follows it in B's stream", took the next
   paragraph's measure for one TeX
   ended after a box, where the para/end hook sets no point (`\axt@peat`), and counted its lines as the next one's: 2610.40645v1
   p19's proof (ords 144 to 146, amsthm's QED box) read as the next section heading's `\hangindent` after one line, 96.21..540,
@@ -7408,7 +7418,13 @@ bytes it was.
   B holds as many of these points as breaks, each break's line is the one of the unit's last glyph before its point, in order
   (2608.25210v2 t196: the window's line ends are two, its break one, its line full: no count of line ends told it). A `\\` of a
   centred or ragged block (`\@centercr`, which ends a paragraph) and a table's row set none. Reach on the stored run (r3-int, 89
-  papers): 271 forced-break pieces, 354 placed copies, 220 stating their line, 134 not, in 15 papers.
+  papers): 271 forced-break pieces, 354 placed copies, 220 stating their line, 134 not, in 15 papers. LaTeX's `\break` sets the
+  point too where it ends a line in a paragraph (the coordinator's ruling 4 of 2026-11-16, lane cm-fix): its code, the robust
+  command's own macro `\break ` (`\penalty-\@M`), wrapped, in horizontal mode that is no `\hbox`'s, before its penalty, nothing
+  taken (an `\hfill` before it stays the line's); none in vertical or math mode, none for `\@gnewline`'s own `\break`; a write
+  of it writes as before. The corpus's uses inside a unit's text: 8, every one a line end, in one paper (2608.03841v2's amsart
+  addresses, `\hfill\break\indent`). The lay pairs a forced break by its source, `\\` and `\newline` alone
+  (`packages/typeset/src/unit/breaks.ts` FORCED_BREAK): until it reads `\break` as one, the point is stated and not drawn by.
 - **Held** (`lab/pdf/spikes/measure-cases.mjs`, both pinned years, four engines): no glyph, box or point of the compile without the
   statements moves; every statement read is TeX's own placement (each full line of every placed paragraph from its measure's
   left edge to its right, to 0.02 pt); each forced break's point stands right after the word before its `\\`, none in a centred
