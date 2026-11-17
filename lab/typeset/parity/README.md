@@ -21,7 +21,7 @@ glyphs as PDF.js's text content gives them, their PDF fonts) and the original's 
 today's prepare dump states them), never off v2's part where the two can differ (`fidelity.mjs`).
 
 ```
-node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [--fresh=off] [<pair>…]
+node lab/typeset/parity/run.mjs [--work=<dir>] [--out=<dir>] [--pages=<n>,…] [--toggles=on] [--fresh=off] [--freeze-today=<dir> | --today-frozen=<dir>] [<pair>…]
 ```
 
 `--toggles=on` lays and draws both readers with every switch of "What to translate" on (figure and table text, headers and
@@ -40,7 +40,7 @@ when a page is worse than today's outside the owner's rulings, or when the run i
 | v2's lay | `heavy-slot.sh test -- node lab/typeset/parity/v2.mjs --out=<work>/v2 <pair>…` | each page laid by the reader's own lay (`packages/reader/src/compose/typeset.ts` `typesetLay`: `layPage` under the rules, toggles and options the reader passes, nothing more) over the paper's part and the pair's door rows, the layered metrics and the served hyphenation patterns, driven page by page as `lab/typeset/checkpoint/laid.mjs --entry` drives the checkpoint's (gate-l1.ts; `hook.mjs` puts the reader's lay in place of gate-l1's own entry call) |
 | the drawing | `heavy-slot.sh e2e -- node lab/typeset/parity/render.mjs --work=<work> --out=<out> [--pages=<n>,…] <pair>…` | arXiv's page (PDF.js) and its glyphs' runs (its text content: each run's box, baseline, size and PDF font), today's (`today/entry.mjs`) and v2's (`v2page/main.ts`) drawn in one Chromium at PDF.js's scale 1, device scale 2; each side shot whole, with its translated text alone (its figure texts with it) and without its text (its copy, the original's ink it keeps, its crops); what each drew read back (`measure-dom.mjs`: each crop with its piece and its source on A) and its pixels read (`analyse.mjs` with `pixels.mjs`); the run's manifest `<work>/raw/run.json` |
 | the fresh rows' fill (its own step, never a gate's) | `heavy-slot.sh test -- node lab/typeset/parity/v2.mjs --fresh=fill --out=<scratch> <pair>…` | the replies the cache lacks asked of Microsoft's keyless endpoint through the translate package's adapter, one request at a time, each recorded in `$AXT_LAB_DATA/refactor-2026-11/parity/fresh-rows/` (`AXT_PARITY_FRESH_ROWS`) under the chain's key; no page laid (below, "Fresh rows") |
-| today's rows are production's | `node lab/typeset/parity/production-rows.mjs [<pair>…]` (an added pair's through `lab/typeset/added.mjs --`) | whether the door rows today's side lays are production's: production's own row path (today's engine's `layer-proto/rows.mjs` `layerRows` over the release's units and the stored rows read back as results) gives every stored row back, a kept row by its state (production stores no translation of a unit it keeps). Rows a lab replica made, each unit's row without `layerRows`, are not: 2111.09276v1-zh and 2611.03953v2-zh until 2026-11-13, 11 rows production keeps translated. A line a pair, exit 1 where one is not production's; about a second for 92 pairs. The release check runs it first in each display gate |
+| today's rows are production's | `node lab/typeset/parity/production-rows.mjs [<pair>…]` (an added pair's through `lab/typeset/added.mjs --`) | whether the door rows today's side lays are production's: production's own row path (today's engine's `layer-proto/rows.mjs` `layerRows` over the release's units and the stored rows read back as results) gives every stored row back, a kept row by its state (production stores no translation of a unit it keeps). Rows a lab replica made, each unit's row without `layerRows`, are not: 2111.09276v1-zh and 2611.03953v2-zh until 2026-11-13, 11 rows production keeps translated. A line a pair, exit 1 where one is not production's; about a second for 92 pairs. The release check runs it first in each display gate, its answers read from the frozen folder (`--freeze=<dir>`, `--today-frozen=<dir>` or `AXT_TODAY_FROZEN`: "Today's side frozen") |
 | the verdict | `AXT_L1_BUNDLES=<the bundles v2.mjs laid> node lab/typeset/parity/measure.mjs --work=<work> --out=<out> [<pair>…]` | the measures below (`verdict.mjs`, `fidelity.mjs`) over the run's own drawing, `parity.json` and `index.html`; it reads the part's joins and page numbers from the bundles, so it is told the same ones v2.mjs laid |
 
 On the maintainer's machine (shared with other lanes' jobs, 2026-11-08) the 22 pairs took 15 s to lay and 954 s to draw
@@ -92,7 +92,8 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   (`view/layer-side.mjs` `drawingOf`): the door's copy (render A, the drawn units' groups hidden, its crops and pastes), its
   SVG, its links, under `view/engine.css` and the text-rendering decision, its faces the web's face sources; a page the
   layer draws nothing of its own on is arXiv's (`shownOriginal`). Two choices are the baseline's, not the product's
-  (`baseline/NOTES.md` §4): no 16 ms live-fills clock, and the run kept with `records`.
+  (`baseline/NOTES.md` §4): no 16 ms live-fills clock, and the run kept with `records`. Or read from its frozen records in
+  place of drawing it (below, "Today's side frozen").
 - **v2's side**: the paper's L1 bundle (`AXT_L1_BUNDLES`, default `lanes/L7/prepare/bundles`; the release check passes its
   own prepare's), the tap's ledgers and metrics (`baseline/tap/`), the served faces (`AXT_FACE_TABLES`, `AXT_FACE_SLICES`).
   The reader is opened with no engine of the host's, so that it composes and draws with its own served faces and sheet as
@@ -534,7 +535,57 @@ Pages are ordered by a score: each measure's worse differences (8 at most) times
 only where nearer the original"; stage reader, after `prepare`, over that run's bundles): the three steps over the 22 pairs, then
 the same three over the added pairs (below) with their numbers apart (`numbers.added`), judged by measure.mjs's exit codes (no
 page worse, and each run judged whole). It is a cut-over blocker: the report's cut-over verdict
-stays NO-GO until it passes (`lab/release-check/CI.md`).
+stays NO-GO until it passes (`lab/release-check/CI.md`). Its drawing and its check of today's rows read today's side from the
+frozen folder (`AXT_TODAY_FROZEN`, below, "Today's side frozen"), as `display-wide` does over the 90 pairs.
+
+## Today's side frozen (`frozen.mjs`, 2026-11-16)
+
+The cut-over deletes today's engine; the design's amendment 8.3 freezes today's OUTPUTS before it, so that the gate still
+reads today's side as it was drawn and a measure corrected or added later can still be taken on it. render.mjs
+`--freeze-today=<dir>` draws today's side as always and writes into `<dir>`, once, what it drew and read of each pair;
+`--today-frozen=<dir>` reads that in place of drawing it: today's engine is neither bundled (`AXT_TODAY`, `AXT_WEB`) nor
+opened, and everything after (v2's side, the pixels, the raw files, the images, the verdict) is made as before from the same
+readings and the same shots. run.mjs hands either flag to the drawing, and to the added pairs' run with it.
+
+- `<dir>/shots/<sha256>.png`: every shot of today's context, by the digest of its bytes, stored once whatever pair, page or
+  toggles took it: arXiv's page (A, drawn by today's page with PDF.js: frozen with today's side, since nothing else draws it),
+  today's pane whole (T), its translated text alone (Tt), its drawing without its text (Tc), as the screenshot gave them.
+- `<dir>/<toggles>/<pair>.json` (`defaults` or `on`): what today's page said on opening (`opened`), each page's readings
+  (`view`, `original`: its links, runs and fonts; `today`: what today's drawing read back) and its shots' digests, its
+  sentence boxes (`litBoxes`, apart from `today`, joined to it where the drawing joins them) or the error a step met, the
+  page errors today's page raised, the inputs it was drawn from (`inputs`: the release bundle's refs and target as today's
+  page opens them, the digests of the door rows and of arXiv's PDF) and how (`drawn`: the run, its raw file, today's engine's
+  and the web tree's commits, Chromium's version, the scale). The readings are kept as the browser handed them, NaN, the
+  infinities, -0 and an undefined's key included (`lab/frozen-json.mjs`): a JSON round trip would read a NaN back as null,
+  another reading.
+
+A record is written once: a run asked to freeze a pair already frozen stops before it draws. Read, a record stands for the
+run's pair only under the same toggles and over the same inputs; otherwise the pair is not drawn (the run's `missing`, with
+the reason), and a page the record lacks, or a shot missing or not its digest's bytes, fails the page: the run is then not
+judged whole. Today's pixel readings are taken again from the frozen shots on every run, as they are on a drawn one: each is
+taken against the run's v2 facts (the units' boxes and regions, the figure texts' boxes), which move with the candidate; the
+readings of the freezing run itself stay in its raw files (`drawn.raw`). The manifest names where today's side came from
+(`today`); the raw files and the sheet are those of a drawn run.
+
+Production's row path's answers are frozen beside it: `production-rows.mjs --freeze=<dir>` records each pair's answer (the
+comparison of the stored rows with what today's `layerRows` makes of them) in `<dir>/production-rows.json` under the digest
+of what it was read from (the release's catalog, its units chunks, the stored rows' manifest and their row objects), and
+`--today-frozen=<dir>` prints the recorded answer, line for line as a run of today's engine prints it, for a pair whose
+inputs are the same; another pair is not read. The answer is one fact of fixed inputs, whether today's own row path gives
+the stored rows back, so it needs no engine once recorded.
+
+The frozen folder is SanDisk's `readarxiv-lab-archive/today-frozen/frozen` (`AXT_TODAY_FROZEN`): display-wide's 90 pairs under
+the default toggles, the 22 with every switch on, the added pairs in both modes, and production's answers for the 90 and the
+added pairs (the counts and the proofs: lanes/c1-freeze.md). render.mjs and production-rows.mjs read `AXT_TODAY_FROZEN` where
+neither of their flags is given: the release check's display gates set it on their steps. Read so, the gates need neither
+today's engine (`AXT_TODAY`) nor the web's tree (`AXT_WEB`); they still read the release sweep's cache (the catalogs and door
+rows: which pairs can be drawn, v2's rows, the verdict's rows), the served faces (`AXT_FACE_TABLES`, `AXT_FACE_SLICES`: v2's
+reader draws with them), arXiv's PDFs and lab-data's baseline (today's prepare dumps, reader dumps and the tap). Copies of
+those trees, and of today's engine and the web's tree for the tools that still read them, are SanDisk's
+`readarxiv-lab-archive/today-frozen/trees` (lanes/c1-freeze.md, "the copies"). Read so, the gate's verdict is the drawn gate's:
+its report's numbers the same in both modes, its sheet the same; two drawings of today's side differ by a few pixels of
+arXiv's own page (a page's dark pixel count by one to three, one original line's darkness by 0.0003) and by some images'
+encodings, which a frozen side no longer does.
 
 ## The added pairs (lab/typeset/added.mjs, 2026-11-13)
 

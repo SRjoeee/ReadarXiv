@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject, patch, walkStepCount } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { plainSource, serialize } from '@/pdf-reader/engine/translate/mt.mjs'
+import { inMemory, loadProject, patch, walkStepCount } from '../../packages/engine/src/source/latex-front.ts'
+import { plainSource } from '../../packages/engine/tests/helpers/unit-harness.ts'
+import { todayAnswers } from './helpers/today-answers.ts'
+
+/** today's wire of each unit the cases send (src/pdf-reader/engine/translate/mt.mjs serialize), recorded before the cut-over
+ *  deleted it (tests/fixtures/today/source-reader-text.json): a unit the source reader now reads otherwise has none */
+const todayAnswer = todayAnswers('source-reader-text')
 
 // The source reader's text of 2026-10-24 (S1-S4 of the pin regression's root-cause pass): what the translator is sent is
 // what TeX sets, never other words. A paper macro that sets words of its own is expanded, not taken for a wrapper (S1); a
@@ -84,7 +89,7 @@ describe('S2: a file that is not UTF-8 is read in the encoding it declares, lati
   it('\\usepackage[latin1]{inputenc}: each byte its Latin-1 letter, none a U+FFFD (2610.20581); the file written back is its own bytes', () => {
     const p = projectOf({ 'main.tex': bytes(LATIN1) })
     expect(texts(p)).toEqual(['Universit\u00e9 Gustave Eiffel and Meeks-P\u00e9rez-Ros wrote it.'])
-    expect(serialize(units(p)[0] as never).wire).not.toContain('\ufffd')
+    expect(todayAnswer<{ wire: string }>('serialize', units(p)[0]).wire).not.toContain('\ufffd')
     // (the file is transcoded where it is written, as since #435: its letters UTF-8 under its own inputenc option)
     expect(new TextDecoder().decode(untranslated(p))).toContain('Universit\u00e9 Gustave')
   })
@@ -112,7 +117,7 @@ describe('S3: an accent command is its Unicode letter, decoded once (2610.20595,
   ])('%s', (_, body, want) => {
     const p = project(doc(body))
     expect(texts(p)).toEqual([want])
-    const wire = serialize(units(p)[0] as never).wire
+    const wire = todayAnswer<{ wire: string }>('serialize', units(p)[0]).wire
     expect(wire).toContain(want.split(' ').find(w => /[^ -~]/.test(w)))
     expect(wire).not.toMatch(/\u00c3|\ufffd/)
   })
