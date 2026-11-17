@@ -20,7 +20,7 @@
 // With --entry, I11 (painted.mjs, the coordinator's ruling of 2026-11-13): every box of every shape the reader paints of each laid
 // page, on both panes, held inside what the reader's own rows and outlines paint; one not painted whole fails the run (exit 1),
 // 0 the only passing value (I10 judges Laid.lit, never the paint: a display's second row on neither pane passed it).
-import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
 import { gateL1Pair } from '../../packages/typeset/tests/replay/gate-l1.ts'
@@ -134,6 +134,10 @@ const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
 const verdicts = new Map(), examples = new Map(), classes = new Map(), classEx = new Map()
 const I5by = new Map(), byPaper = new Map(), below = []
 const inv = { laid: 0, lines: 0, I3: 0, I4: 0, I5: 0 }, invEx = { I3: [], I4: [], I5: [] }
+// (the spacing rule's four lines, spacing-gate.ts: every failing member named; AXT_GATE_SPACING=<file>: every member read, a line
+// of its facts, its pair first, appended (the added pairs' run apart appends to the set's))
+const spacing = { read: new Map(), floatSpread: [], floatHeld: 0, takenSpread: [], unfilled: [], underFloor: [], stepped: [], explained: new Map(), by: new Map() }
+const SPACING = process.env.AXT_GATE_SPACING
 const pageMs = []
 let adaptMs = 0, readMs = 0
 // E1-E3 (the coordinator's exit): each unit the baseline lays by its inputs (equal, or the first that differs: E1), the units
@@ -174,7 +178,13 @@ for (const pair of pairs) {
   if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
   judging = pair
-  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept, ...(ENTRY ? { leave: LEAVE, laid: paintOf(pair) } : {}) }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept, ...(ENTRY ? { leave: LEAVE, laid: paintOf(pair) } : {}), ...(SPACING ? { spacing: (line) => appendFileSync(SPACING, `${pair}\t${line}\n`) } : {}) }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  for (const [k, n] of g.spacing.read) add(spacing.read, k, n)
+  for (const k of ['floatSpread', 'takenSpread', 'unfilled', 'underFloor', 'stepped']) for (const x of g.spacing[k]) spacing[k].push(`${pair} ${x}`)
+  spacing.floatHeld += g.spacing.floatHeld
+  // (the size steps a stated cause explains, by the pair's target: the evening's (§18.57) and the ties' (§18.64), printed beside)
+  for (const [k, n] of g.spacing.explained) add(spacing.explained, `${pair.replace(/^.*-([a-z]{2,3})(\.pack)?$/, '$1')} ${k}`, n)
+  for (const [k, n] of g.spacing.by) add(spacing.by, k, n)
   count.laid += g.units.length
   count.adapted += g.setting.size
   count.pages += g.pages
@@ -274,6 +284,19 @@ console.log(JSON.stringify(count))
 console.log(`not set by the adapter: ${top(stops)}`)
 console.log(`I3, I4 by paper: ${JSON.stringify(Object.fromEntries(byPaper))}`)
 console.log(`under the fit's floor (X.further's shrink): ${below.length} members`)
+// (the spacing rule's four lines, spacing-gate.ts, docs/PDF-READER.md §18.90: each 0 to pass, every member that is not named,
+// the run failed)
+{
+  const byLine = (n) => [...spacing.by].filter(([k]) => k.startsWith(`(${n}) `)).map(([k, v]) => `${v} ${k.slice(n.length + 3)}`).join(', ')
+  console.log(`F28 the spacing rule over the members read (${top(spacing.read)}): (i) a float's member above its rule-1 pitch ${spacing.floatSpread.length}${spacing.floatSpread.length ? ` (${byLine('i')}; ${spacing.floatHeld} of them holding room it took)` : ''}; (ii) a body member (a note too) the fill lays above its page's target and band ${spacing.takenSpread.length}${spacing.takenSpread.length ? ` (${byLine('ii')})` : ''} (beside: ${spacing.unfilled.length} the fill lays not, kept at its fit); (iii) under its script's floor ${spacing.underFloor.length}${spacing.underFloor.length ? ` (${byLine('iii')})` : ''}; (iv) a step smaller though it sets whole at its size, no stated cause ${spacing.stepped.length}${spacing.stepped.length ? ` (${byLine('iv')})` : ''}; beside, the size steps a stated cause explains (the evening's §18.57, a size tie's §18.64), by target: ${top(spacing.explained) || 'none'}`)
+  const LIMIT = Number(process.env.AXT_GATE_SPACING_LIST ?? 40)
+  for (const [n, k] of [['i', 'floatSpread'], ['ii', 'takenSpread'], ['ii, the fill lays it not', 'unfilled'], ['iii', 'underFloor'], ['iv', 'stepped']]) {
+    for (const x of spacing[k].slice(0, LIMIT)) console.log(`F28 (${n}) ${x}`)
+    if (spacing[k].length > LIMIT) console.log(`F28 (${n}) … and ${spacing[k].length - LIMIT} more`)
+  }
+  // (each line 0 to pass: a member on any of them fails the run)
+  if (spacing.floatSpread.length || spacing.takenSpread.length || spacing.underFloor.length || spacing.stepped.length) process.exitCode = 1
+}
 if (process.env.AXT_GATE_BELOW) writeFileSync(process.env.AXT_GATE_BELOW, `${below.join('\n')}\n`)
 console.log(`I5, each line past its slot by the placement's rule (count, largest excess pt): ${[...I5by].map(([k, b]) => `${k} ${b.n} (${b.max.toFixed(2)})`).join('; ')}`)
 console.log(`invariants over the laid members (page by page): ${JSON.stringify(inv)}; ${['I3', 'I4', 'I5'].map(k => `${k}: ${invEx[k].join(' | ')}`).join('; ')}`)

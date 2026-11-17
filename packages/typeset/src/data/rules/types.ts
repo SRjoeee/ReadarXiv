@@ -32,7 +32,13 @@ export type ScriptRules = {
   adaptiveFill: { band: number; track: number; size: number } | null
   fillLead: number | null
   fillLeadRel: number | null
+  /** whether a line breaks only at the script's spaces (the alphabets), never between two of its CJK characters */
   keepAll: boolean
+  /** whether the script writes a space between its words (Korean and the alphabets; Chinese and Japanese write none): its own
+   *  spaces separate its words, so a script that breaks between its characters and writes them (Korean, `keepAll` false) adds
+   *  nothing after a title set in the line (docs/PDF-READER.md §18.85), and holds a formula set against a character with no space
+   *  between to it, as xetexko sets no glue between a Hangul syllable and the math after it (§18.91); read by B.tokens only */
+  spaced: boolean
   cjkQuotes: boolean
   noStart: string
   noEnd: string

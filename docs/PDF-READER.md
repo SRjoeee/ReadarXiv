@@ -3016,7 +3016,7 @@ What a host (the web's door, the extension's session, the gate, the lab) calls. 
 
 Decisions made by the maintainer by looking at crops, and what they changed. The drawing code reads them at read time: none moves a version token (§18.1), and `RULES_SCHEMA` rises only for the field the fill rule adds.
 
-**A Chinese or Japanese line breaks before an inline formula (PR #438).** After a CJK character or mark a formula crop no longer glues to it: a script that breaks between CJK characters (`keepAll` false) may end the line before the crop, as xeCJK's `\CJKecglue` allows. A mark no line ends with (an opening bracket), a lead's end and a kern stay glued.
+**A Chinese or Japanese line breaks before an inline formula (PR #438).** After a CJK character or mark a formula crop no longer glues to it: a script that breaks between CJK characters and writes no spaces between its words (`keepAll` and `spaced` false: Chinese and Japanese, not Korean, §18.91) may end the line before the crop, as xeCJK's `\CJKecglue` allows. A mark no line ends with (an opening bracket), a lead's end and a kern stay glued.
 
 **A letter-spaced line squeezes (PR #438).** A line takes the group it misses only when, without it, it would stretch more than `STRETCH_MIN` = 0.05 em a gap, the overflow is at most what it can give, and that squeeze a gap is less than the stretch. What it can give: the blank halves of comma-, full-stop- and bracket-type marks, spaces down to `spaceMin`, then `SQUEEZE` = 0.02 em a gap, never past the tracking floor (`trackMin`) and never below the tracking the page fill raised (`fitTrack`). Only marks whose ink sits in one half of the em in every face the layer draws are cut: comma, full stop, enumeration comma, brackets and quotes. Never the colon, the semicolon, `!` or `?`: the CJK face centres them, and a question mark cut by half ran 0.22 em into the next character. Measured on the 53 papers of the release route's sweep: lines more than 0.15 em a gap over their unit's least 403 to 265, ragged CJK lines 625 to 457, the owner's line (2610.10069 page 7, unit 49) 0.194 to 0.022 em a gap. Long formulas stay stretched: no new cap and no new ragged rule.
 
@@ -7799,9 +7799,9 @@ drawn with the original's gap) and a title that ends with a stop or a colon are 
   coordinator's amendment of 2026-11-16: 2111.09276v1 p4's "Object Replacement" + `\hspace{0.2em}`, the wider of its page's
   titles in the original, stood closer to its text than its siblings when the element alone was its separation).
 - **The lay draws it** (`packages/typeset` breaker/tokens.ts, the one place; lay/read.ts carries the statement onto the group's
-  open piece). In a script that writes no spaces between its words (Chinese, Japanese: not Korean, `keepAll`), after the close of
-  a group so stated, before the first thing drawn after it past a tie, a citation or a note's mark (its sentence's text, or an
-  element the row begins that sentence with): a gap of one em of the line's size, a CJK character's advance, set as the paper's
+  open piece). In a script that writes no spaces between its words (Chinese, Japanese: not Korean, `spaced`, §18.91), after the
+  close of a group so stated, before the first thing drawn after it past a tie, a citation or a note's mark (its sentence's text,
+  or an element the row begins that sentence with): a gap of one em of the line's size, a CJK character's advance, set as the paper's
   own `\quad` is (a kern on what precedes it: no stretch of a justified line's, dropped where a line ends there); the white
   space the row set there is its place. Where the paper's own horizontal space is laid there (its `El.glue`, which the lay reads
   as it lays any glue, kernOn), the gap is what it leaves missing up to one em, never negative: after `\hspace{0.2em}` 0.8 em,
@@ -7943,6 +7943,164 @@ t577; 2610.40645v1-ja t44, t60, t197) and 9 on Google's (2609.20976v1-ja t7, t46
 the evening's size step taken out, no member is laid smaller than without the bases. 2610.40645v1-ja p7 t44: 10.91 pt, leading 1,
 six lines without the bases; 10.64 pt, 1.199, five lines with them. The coordinator's ruling of 2026-11-16: that ruling's effect,
 accepted; it goes to the owner with this page, and if he prefers the size, the evening's size step is what changes.
+
+### 18.90 A float's members: never spread by the page fill, the leading before the room (the owner's review of 2026-11-13 and his answer of 2026-11-17; the coordinator's rulings of 2026-11-16 and 2026-11-17)
+
+The display design's 2d, spacing by the original's own logic, as the owner amended it on his review of its eleven pictures (his
+export of 2026-11-13, 13:59 JST). His rule: the original's size comes first; spacing gives way before size does, while it stays
+acceptable; nothing within the normal range is touched; a size step is the last knob. His words: 「当能保持正确字号且间距可以接受的时候，我们不一定需要去调小。」
+「但是我们现在没有必要把间距还在正常范围内、不需要调小的地方也给调了。」 On his own caption laid by it: 「这个确实接近原文了 很好」.
+
+- **Never spread.** TeX builds a float's box once, at its natural size: nothing in it stretches, and a caption shorter than its
+  original leaves its white to the separation under it. A float's member (the format's own kind `caption`: every member whose
+  label is a float's, Label.float, a subfigure's too) is never laid looser than its fit set it: at the script's pitch from its
+  first line where it fits there, the slack under it (`unit/params.ts` floatMember, the unit's own kind read, no list of ours;
+  `lay/page.ts` marks the unit `held`; `shared/fill-page.ts` lays a held unit's leading, and each of its frames', no looser than its
+  fit's, and gives it no tracking). The fill may still lay one closer where the gap under it would be tighter than its own lines
+  (footFloorAt, §18.11), as it lays any unit. It votes in its page's target as before, by the fill leading its lay finds, so
+  that no page's target and no body member moves by it. `packages/typeset/tests/unit/float-spacing.test.ts`.
+- **A note is laid as before (the owner's answer of 2026-11-17, the coordinator's ruling on it).** The rule as first built held
+  the notes with a float's members (both rules named the kind `footnote` too). On its whole page of notes (2609.36054v2 p14,
+  fourteen notes, today's beside the rule's) the owner chose today's, 「我更想要现在的样子」, and wrote
+  「感觉现在的样子更均匀 但是怎么才更通一更通用？ 长期来讲那个正确。保持原样不好 我可以接受新规则」; in his general words,
+  「除了 reference 这里其他都可以」 「reference 取决于哪种长期更正确 你来判断 。 如果新规则长期更好我们就用」. The coordinator's
+  ruling, the general reading he asked for: a run of sibling blocks in a column (body paragraphs, notes, list items, references)
+  shares its page's rhythm, each filling its frame within the page's band, so that no hole opens between siblings; a float's
+  member (a caption, a subcaption) belongs to its float and is set at its own pitch, never spread. So the notes leave the change
+  whole: neither rule names them, and a note is laid exactly as before, by the page fill (its leading, its frames', its tracking),
+  its script's order and its room. The gate reads it as a body member (below).
+- **One order for the class.** When a float's member's translation needs more height, its fit turns its knobs in one
+  order, whatever the part states of the gap under it: the tracking; the gap's free part, the shrink TeX's glue states there
+  (Room.gap's third number: what TeX's own glue may shrink at that gap, so that the page could have been set so by TeX), never
+  past the least where the part states one (Room.sep, §18.11) and never past TeX's text block bottom where it states none; the
+  leading, closing to the block's own original pitch; the room down to the least; the size. A gap that states no shrink gives no
+  free part, and a gap not stated none either: that is all a missing fact changes (two orders by the presence of a fact would
+  split the class by no reason a reader could see). The owner's words on the pictures where the earlier principle stepped the
+  size: 「不缩字 只是减少一点点行距就解决问题了」: the leading gives way before the separation does, for the class.
+- **Where the order lives.** The class is a unit's kind and the rule file is by script, so the class's order is stated where a
+  unit's kind is read (`unit/params.ts` floatOrder, set by U.params): the script's own order, its room knob made two knobs, the
+  free part (`free`) where the script's order has the room and the rest (`borrow`) directly before the size. A script whose order
+  already has the room directly before the size, the alphabets' (track, borrow, shrink, lead), keeps its order by construction,
+  the free part first in its room. A body member's order, a note's too, is the script's, as before.
+- **How it is laid.** The free part (`Block.glue`, `lay/adapt.ts`; none from a gap after a title set in the line, `runin`, which
+  is no separation under its block) is taken whole, once (`fit/walk.ts` statesOf, the `free` knob), and holds through the knobs
+  after it (`FitState.glue`; B.slots lowOf: the room taken is the larger of it and the borrow's); a state of the room's that would
+  give no block more than it is not offered. Like the leading and the room it only moves or adds slots: the walk's floor
+  (§18.88) reads it so, and serves a state the floor's own lay only where its leading, its room and its free part are the floor's.
+- **The body is not touched: a correction (the coordinator's ruling of 2026-11-16).** The design's second half of the rule, "no
+  leading spreads into room that was taken", and its restatement, "taken room never makes a block looser than its page's target",
+  are withdrawn for body members. A page's pitch is not one number but its band (the owner's ruling of 2026-11-12, §18.57, D6:
+  one line spacing a page, a difference the eye does not see allowed), and the fill already holds every member it lays at or
+  under its page's target and band, with room taken or none (`shared/fill-page.ts` leadOf, `top`). Counted on today's lay of the
+  92 pairs (the compile move's bundles, 9410a0ca9), body members holding room above their page's target: the walk's borrowers,
+  door rows 151 zh, 128 ja, 61 ko, Google's 279 zh, 150 ja; the members the fill evened (§18.57), door 196 zh, 1 ja, 6 ko,
+  Google's 202 zh: every one within the band (0.01 to 0.05 over the target) but one the fill lays not (below). The design's
+  picture 8 ("1.42 times, where the page's body is 1.30") compared the member with the script's factor, not with its page,
+  whose target there is 1.50; the owner's words on it, 「如果“现在”版本是正文统一的行距 有可能是更好的」: today's is the page's
+  uniform leading, and it stands. §18.57 is laid as it is; no body member's order changes.
+- **The gate** (the reader gate, `packages/typeset/tests/replay/spacing-gate.ts`, the `F28` lines of `lab/typeset/gate-l1.mjs`;
+  each 0, a member on any fails the run): (i) a float's member laid above its rule-1 pitch (U.params leadOf over its own blocks),
+  room taken or none, the unit's own kind read (`unit/params.ts` floatMember: `caption`, no list of ours); (ii) a body member the
+  fill lays above its page's target and band, an invariant of the fill, a note read here as every member of a column's run of
+  sibling blocks (the coordinator's ruling of 2026-11-17; `packages/typeset/tests/unit/spacing-gate.test.ts`) (beside it, a
+  member the fill lays not, its fitted state not set again, `fillLead` null, kept at its fit: one on today's lay, 2610.40645v1-ja
+  p22 ord 166 at 1.319 on a target of 1.179); (iii) a member closer than its script's floor (`leadFloor`); (iv) a
+  member a step under its size that one lay at its size, every knob its order takes before the size at its bound, sets whole,
+  whose step neither the page's evening states (`Laid.evened` naming `size`) nor a size tie (`Laid.tie`). A tie's own origin
+  (`by` itself) is a tie's step: laid alone at its size with its mates where the tie left them it fits, but at the tie's one size
+  for all it does not (2610.21084v1-zh p33 ord 326, 2610.21026v1-zh p36 ord 243, 2610.19159v1-ja p5 ord 128: each fit only at
+  0.975 beside its mate at 1, its mate capped there, and each capped back at its own first need). The evening's steps and the
+  ties' are printed beside, never failed: the owner's accepted costs.
+- **The display gate's ruling FM** (`lab/typeset/parity/rulings.mjs`, his verdict on the captions laid by the rule and his
+  general words above, the coordinator's ruling of 2026-11-17): a caption the rule sets in fewer lines than today's reader, which
+  letter-spaced it onto more, at its script's pitch from its first line with the slack under it, is the rule's own look and no
+  fault: `line-count` of a float's member (floatMember on the part's kind) v2 sets in fewer lines than today on the page, today
+  at most the original's count, at the original's size, whole, laid no looser than its rule-1 pitch, on the original's first line
+  and ending no lower than the original's last. Its example, the one page the rule made newly worse: 2610.30034v1-zh p11 t218,
+  2 lines against today's 3 (letter-spaced, 0.08 em) and the original's 4.
+- **Reach** (the reader gate over the 92 pairs, the added ones apart, the compile move's bundles and Google's refilled rows and
+  the door's; the Japanese pairs and the Korean packs again under the product's rule set; at 8366cf04e against today's lay,
+  9410a0ca9, and the rule as first built, 178ee81b6, notes held too; lanes/f28-lay and lanes/f28-notes in the lab): every note
+  laid exactly as today, its dump byte for byte today's on both stores and both rule sets (213 notes on the door's rows, 214 on
+  Google's: 153 and 148 of them the first build drew otherwise); every caption's dump the first build's (none differs), so
+  drawn otherwise against today, door rows 1,045 captions, Google's 1,037 (zh and, under the recorded rule set, 11 ja), of them
+  599 and 592 changing height on a page; with the product's rule set the Japanese pairs and the Korean packs 66 captions (door)
+  and 32 (Google), no note. No body member is drawn otherwise on either store, and every body member's dump is the first
+  build's: the fill leading of 54 (door) and 32 (Google) units of one line (cells, headings, two paragraphs, a running head)
+  moved with their page's target where a caption's vote moved, nothing drawn. No member of the Spanish, German and Polish pairs
+  moved. The four lines read 0 on both stores and both rule sets. Measured on the first build (the class's knob order then
+  named the notes too): lays a page (B.break's calls) 229.9 to 228.3 over the 92 pairs' 2,595 pages (-0.7 %), no pair paying
+  more than +0.2 %; the walk's exactness check (every state passed unlaid and every state taken from the floor laid as well):
+  64,999 passed and 7,043 taken, none differing.
+
+### 18.91 Korean lines break between syllables, and are set to the measure (the owner's choice of 2026-11-16)
+
+A Korean line broke only at a space (the rule set's `keepAll`, as the alphabets break), and a line whose next word did not fit
+was set ragged once its slack passed what its one or two spaces may take (`spaceMax`, 1: `placeItems`): in the four papers of the
+gate pack's Korean rows, 419 of 1,313 lines that are not a paragraph's last ended more than 1 em short of their measure. Every
+Korean class breaks inside a word: xetexko between any two Hangul syllables (`\XeTeXlinebreaklocale "ko"`, `xetexko.sty:1849`, on
+at `:1851`, ICU's break opportunities; under the default `\typesetmodern`, `:322-332`, at `\XeTeXlinebreakpenalty` 50 and
+`\XeTeXlinebreakskip` 0pt plus .04em minus .02em), luatexko at the same penalty (`luatexko.lua:957`), ko.TeX by its glue between
+Hangul characters (`kotexutf.sty:483`), oblivoir by ko.TeX's (TeX Live 2025). Shown whole pages (the original, today, and a
+candidate broken between syllables: 1512.03385v1-ko p7 and p2, 2610.40645v1-ko p4), the owner chose the change. His words (the
+export of 2026-11-16T04:19:36.836Z): 「改（允许在字之间断行，两端对齐）」.
+
+- **The rule** (`packages/typeset/src/data/rules/scripts.ts`, Kore): `keepAll` false. Each Hangul syllable is a token of its own
+  (B.tokens, as each Chinese or Japanese character is), so a line may end between two syllables of a word, and between a Latin
+  word and the Hangul set against it (xetexko's `\XeKo@latincjk`, a glue, both ways: `:1014`, `:1123`). A line of mostly CJK
+  items is justified by the breaker's rule for the scripts that break between characters: its slack spread over its gaps, within
+  `cjkJust` (0.25 em a gap, Korean's as Chinese's), and a line a little short of its last group squeezed to take it
+  (`squeezes`, PR #438's `SQUEEZE` and `STRETCH_MIN`), as a Chinese line is. A mark no line opens with still joins the syllable
+  before it; a Latin word is still one token, never split between its letters (hyphenated where its patterns allow, as before).
+- **What Korean keeps** (`spaced`, a script field of the package's rule data, true for Korean and the alphabets, false for
+  Chinese and Japanese; today's rule set, §18.5, has no such field): Korean writes a space between its words, so the two rules
+  that `keepAll` false brought with it for Chinese and Japanese do not reach it. Nothing is added after a title set in the line
+  (§18.85: the row's own space separates it); and a formula set against a syllable with no space between stays held to it, as
+  xetexko sets glue after a formula before a syllable (`\XeKo@postmath`, its boundary tokens read the math's end, `:1006-1033`)
+  and none before a formula after one, where Chinese and Japanese may end a line before it (xeCJK's `\CJKecglue`, PR #438). Both
+  read in B.tokens (`breaker/tokens.ts`, `spaceless` and `ecglue`) as `!keepAll && !spaced`, so a rule set recorded before the
+  field (the tap's) reads every target as it did.
+- **Not built**: xetexko's preference for a break at a space. TeX chooses a paragraph's breaks by their demerits, each line's
+  badness (from the stretch its glue gives: plus .04em between syllables, the font's word space with its own stretch) and each
+  break's penalty (50 between syllables, none at a space), so a line ends at a space wherever the line it leaves is not too
+  loose. The breaker is greedy: it fills each line with what fits and holds no glue's stretch, badness or penalty. Stating the
+  preference needs those three of TeX's (the glue's stretch and shrink by class, TeX's badness, the penalties) and a choice
+  between a line's candidate breaks by them, at least line by line; no threshold of ours stands in for it. Nor xetexko's
+  orphan rule (`\XeKo@suppress@linebreak`, `:291-299`, called where a run of Hangul ends its paragraph, `:689-691`: the glue
+  before that run takes a penalty of 5000 at least, so the paragraph's last line does not hold it alone).
+- Chinese, traditional Chinese, Japanese and the alphabets as before (B.tokens reads `spaced` only where `keepAll` is false).
+
+Tests: `packages/typeset/tests/unit/korean-break.test.ts` (red first on the base: a Korean paragraph in a narrow column set to the
+measure on every line but its last, a word split between two syllables, and at every measure from 60 to 130 pt no line opening
+with a mark, where a word as long as a line had let its comma open the next; then, with `keepAll` alone off, the title and the
+formula red, green with `spaced`). The versions: none moves by its own rule. The units (PIPELINE), what a translator is sent
+(TRANSLATE), the chain and its digests, the cache keys and today's layout file (LAYOUT) are untouched; the reader lays a page
+when it is read, and nothing stored is keyed by its lines.
+
+Measured (2026-11-16, 2dd3fcaef against its base 9410a0ca9, the integration's view c1-gates). The reader gate lays its entry
+with the tap's recorded rule set, which keeps Korean whole; laid instead with the package's own (a lab hook), on the door's rows
+of the 92 pairs and the gate pack's four Korean pairs and on Google's rows of the 92: every pair but the four Korean ones
+byte-identical to the base on both stores; the four Korean pairs' members laid otherwise 166 of 184 (1512.03385v1), 71 of 150
+(1706.03762v7), 99 of 152 (1810.04805v2) and 129 of 162 (2608.04322v1), their lines 2,169 to 2,120; I3, I4 and I5 none before
+and after, I10 no fault. Lines not a paragraph's last more than 1 em short (lane cm-d's count): 419 of 1,313 to 7 of 1,265
+(1512.03385v1 140 to 0, 1706.03762v7 17 to 0, 1810.04805v2 142 to 6, 2608.04322v1 120 to 1); 2610.40645v1-ko's pages 4, 11 and
+32, 5 of 52 to 3 of 52, the three the lines a display formula ends (TeX's own break: set short as before). The seven: three
+Korean lines under half of whose items are CJK, so set as Latin text (`latinishOf`), their spaces past `spaceMax`; a run of
+citations set as Latin text; two pieces of a URL (a URL's break points take no glue); a syllable tied by the source's `~` to a
+formula nearly a line wide. The owner's three pages drawn at 2dd3fcaef are byte for byte the candidate he chose from (a lab hook
+on `keepAll` alone): on the four papers that hook and the build differ in one member, 1810.04805v2-ko t48, a title set in the line
+(its paper's "Pre-training data"), which the hook gave an em and the build leaves its row's space. The breaker's lays, the
+four papers: 42,694 to 41,105.
+
+The cost, as measured: a page's lay, the four papers' 56 pages in Node, the served faces' measurer cached by font and text as
+the reader's is: 9.7 / 24.0 / 44.1 ms to 19.7 / 50.4 / 74.3 ms (p50 / p90 / p99); the same pages in Chinese 18.6 / 39.5 / 146.5
+and in Japanese 24.2 / 57.6 / 81.2: a syllable a token costs a Korean page what a character a token costs a Chinese or a Japanese
+one today. The browser's reading: owed. The gate's own tenfold rise (8.9 to 90 ms, lane cm-d) was its measurer's: the lab's
+`layered` asked the tap's table, which holds today's whole Korean words, on every call, and caught the MissingMeasure it threw
+for every syllable (`metrics/table.ts`), 2.36 million times over the four papers; it now remembers what the table lacks, by
+font and text (`lab/typeset/served-metrics.mjs`, 586134804: the four papers' page lay in the gate p50 87 to 22 ms, every dump
+byte-identical). The reader measures a syllable once a visit (`packages/reader/src/compose/served.ts`, its measures by font and
+text).
 
 ## 19. The engine's contract
 
