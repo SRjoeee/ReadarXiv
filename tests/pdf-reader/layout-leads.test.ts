@@ -2,7 +2,8 @@
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { encodeLayoutMarks, INK_ANY, layoutMarksOf, parseLayoutMarks, readInkTexts } from '@/pdf-reader/engine/layout/marks.mjs'
-import { DOCUMENT_OPTIONS, markedSample, pixelsApart, renderPage, wrapped } from './helpers/ocg-pdfs'
+import { DOCUMENT_OPTIONS, markedSample, pixelsApart, renderPage } from './helpers/ocg-pdfs'
+import { wrapped } from './helpers/ocg-wrapped'
 
 // The cells left English against production after the release sweep of 2026-10-24 (2610.21098v1 p13, 2610.21176v1 p13): a cell
 // whose lead TeX sets before its start mark, where no mark goes, is owned by the text TeX sets for that lead — the probe's own

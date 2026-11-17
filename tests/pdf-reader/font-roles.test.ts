@@ -5,21 +5,12 @@
 // No face is the reader's own: one rendering on every device
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { COVERAGE, COVERAGE_SOURCE, METRICS } from '@/pdf-reader/engine/rules/font-coverage.mjs'
-import { canDraw } from '@/pdf-reader/engine/rules/font-draw.mjs'
-import { canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe } from '@/pdf-reader/engine/rules/font-roles.mjs'
+import { COVERAGE, COVERAGE_SOURCE, METRICS } from '../../packages/engine/src/fonts/font-coverage.ts'
+import { canDrawIn, classifyFont, type Design, FACES, type FaceId, type FontClass, faceFor, familyOfFonts, familyOfProbe } from '../../packages/engine/src/fonts/font-roles.ts'
 import { rolesFor } from './helpers/roles'
 
 const cls = (name: string) => { const c = classifyFont(name); return { cls: c.cls, bold: c.bold, italic: c.italic, caps: c.caps, design: c.design, known: c.known } }
-const covers = (id: FaceId, cp: number) => {
-  const r = COVERAGE[id] ?? []
-  for (let i = 0; i + 1 < r.length; i += 2) if (cp >= r[i]! && cp <= r[i + 1]!) return true
-  return false
-}
 const probe = (rm: string) => ({ rm, sf: 'cmss', tt: 'cmtt', body: rm })
-const run = (o: Partial<{ script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }>) =>
-  ({ script: 'latin' as const, cls: 'serif' as const, design: 'cm' as const, bold: false, italic: false, caps: false, ...o })
-const STYLES = [[false, false, 'regular'], [true, false, 'bold'], [false, true, 'italic'], [true, true, 'bolditalic']] as const
 
 describe('classifyFont', () => {
   it('each name\'s class', () => {
@@ -78,105 +69,6 @@ describe('the family of a paper', () => {
   })
 })
 
-describe('the roles', () => {
-  it('the CJK roles follow the rulings: Regular and Bold beside every English family', () => {
-    // (no Kai: emphasis is the body sheared, the owner's ruling of 2026-10-19; no Light and SemiBold beside Computer Modern
-    // and Garamond, which read lighter than the page they sit in: the maintainer's ruling of 2026-10-29)
-    const families = ['cm', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'other'] as const
-    // (Korean: Source Han Serif K, as SC and TC, the maintainer, 2026-10-06)
-    const groups = { zh: 'shs-sc', 'zh-TW': 'shs-tc', 'zh-Hant': 'shs-tc', ja: 'haranoaji', ko: 'shs-k' } as const
-    for (const [target, group] of Object.entries(groups)) for (const family of families) {
-      expect(rolesFor(target, family).cjk, `${target} ${family}`).toEqual({ body: `${group}-regular`, bold: `${group}-bold` })
-    }
-    for (const lang of ['de', 'fr', 'ru']) expect(rolesFor(lang, 'cm').cjk, lang).toBeNull()
-    expect(rolesFor('zh', 'cm')).toMatchObject({ target: 'zh', family: 'cm' })
-    expect(() => rolesFor('ar', 'cm')).toThrow()
-  })
-
-  it('the fallbacks: TC to SC at its weight, every Latin face to Latin Modern Math, none for a Kai no role takes', () => {
-    const tw = rolesFor('zh-TW', 'cm')
-    expect(tw.fallbacks['shs-tc-regular']).toEqual(['shs-sc-regular'])
-    expect(tw.fallbacks['shs-tc-bold']).toEqual(['shs-sc-bold'])
-    // (TC's weights the catalog holds, and no other: its Light and SemiBold went with the ruling of 2026-10-29)
-    expect(Object.keys(tw.fallbacks).filter(id => id.startsWith('shs-tc-')).sort()).toEqual(['shs-tc-bold', 'shs-tc-medium', 'shs-tc-regular'])
-    expect(tw.fallbacks.bkai00mp).toBeUndefined()
-    expect(rolesFor('zh', 'times').fallbacks.fandolkai).toBeUndefined()
-    for (const [id, face] of Object.entries(FACES)) {
-      const latin = !/^(shs-|haranoaji|fandolkai|bkai00mp)/.test(face.id) && id !== 'lm-math'
-      if (latin) expect(tw.fallbacks[id], id).toEqual(['lm-math'])
-    }
-    expect(tw.fallbacks['lm-math']).toBeUndefined()
-  })
-
-  it('faceFor by design', () => {
-    // [design, the Latin target's group (and a CJK target's Latin runs), the Cyrillic target's]
-    // CM's text in CMU Serif, CM's own glyphs, but its bold italic in Latin Modern (nearer CM's than CMU's)
-    const CM_TEXT = { regular: 'cmun-serif', bold: 'cmun-serif', italic: 'cmun-serif', bolditalic: 'lm-roman' }
-    const table: [Design, string | Record<string, string>, string][] = [
-      ['cm', CM_TEXT, 'cmun-serif'], ['other', 'lm-roman', 'cmun-serif'], ['times', 'nimbus-roman', 'nimbus-roman'],
-      ['libertine', 'libertine', 'libertine'], ['palatino', 'domitian', 'domitian'], ['charter', 'xcharter', 'xcharter'],
-      ['garamond', 'ebgaramond', 'ebgaramond'], ['utopia', 'erewhon', 'erewhon'], ['helvetica', 'nimbus-sans', 'nimbus-sans'],
-      ['cmss', 'lm-sans', 'cmun-sans'], ['courier', 'freemono', 'freemono'], ['cmtt', 'lm-mono', 'cmun-mono'],
-      ['beramono', 'dejavu-mono', 'dejavu-mono'], ['inconsolata', 'inconsolata', 'pt-mono'], ['biolinum', 'biolinum', 'biolinum'],
-    ]
-    // a group without a style's file: its italic set upright, its bold set regular, as TeX's substitution does; and a
-    // style whose file lacks the target's letters, the nearest style that has them (Linux Libertine O's bold italic has
-    // no Cyrillic)
-    const missing: Record<string, Partial<Record<string, string>>> = {
-      'lm-mono': { bold: 'regular', bolditalic: 'italic' },
-      inconsolata: { italic: 'regular', bolditalic: 'bold' },
-      'pt-mono': { italic: 'regular', bolditalic: 'bold' },
-    }
-    const missingIn = (target: string, group: string) => (target === 'ru' && group === 'libertine' ? { bolditalic: 'bold' } : missing[group])
-    const clsOf = (d: Design): FontClass['cls'] => (['helvetica', 'cmss', 'biolinum'].includes(d) ? 'sans' : ['courier', 'cmtt', 'beramono', 'inconsolata'].includes(d) ? 'mono' : 'serif')
-    for (const [design, latn, cyrl] of table) {
-      for (const [target, groups] of [['de', latn], ['zh', latn], ['ja', latn], ['ru', cyrl]] as const) {
-        const roles = rolesFor(target, 'cm')
-        for (const [bold, italic, style] of STYLES) {
-          const group = typeof groups === 'string' ? groups : groups[style]!
-          const want = `${group}-${missingIn(target, group)?.[style] ?? style}`
-          expect(faceFor(roles, run({ design, cls: clsOf(design), bold, italic })), `${target} ${design} ${style}`).toBe(want)
-          expect(FACES[want], want).toBeDefined()
-        }
-      }
-    }
-    // the math class, whatever its design
-    for (const target of ['de', 'ru', 'zh']) {
-      expect(faceFor(rolesFor(target, 'times'), run({ cls: 'math', design: 'cm' }))).toBe('lm-math')
-      expect(faceFor(rolesFor(target, 'times'), run({ cls: 'math', design: 'times', bold: true }))).toBe('lm-math')
-    }
-    // an unknown family is set in Latin Modern by its class
-    expect(faceFor(rolesFor('de', 'other'), run({ design: 'other', cls: 'sans' }))).toBe('lm-sans-regular')
-    expect(faceFor(rolesFor('de', 'other'), run({ design: 'other', cls: 'mono' }))).toBe('lm-mono-regular')
-    expect(faceFor(rolesFor('ru', 'other'), run({ design: 'other', cls: 'mono' }))).toBe('cmun-mono-regular')
-    // small capitals: Latin Modern's caps face; elsewhere the face itself (its smcp, or capitals at 0.8: the drawing's)
-    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true }))).toBe('lm-roman-caps')
-    expect(faceFor(rolesFor('zh', 'cm'), run({ design: 'cm', caps: true }))).toBe('lm-roman-caps')
-    expect(faceFor(rolesFor('de', 'times'), run({ design: 'times', caps: true }))).toBe('nimbus-roman-regular')
-    expect(faceFor(rolesFor('ru', 'cm'), run({ design: 'cm', caps: true }))).toBe('cmun-serif-regular')
-    // the caps face has an oblique and no bold: italic small capitals take it, bold ones the family's bold
-    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, italic: true }))).toBe('lm-roman-caps-italic')
-    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true }))).toBe('cmun-serif-bold')
-    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true, italic: true }))).toBe('lm-roman-bolditalic')
-    // CJK runs: the body family by weight and slant, whatever the run's class (no sans, no fangsong: §4.4)
-    const zh = rolesFor('zh', 'cm')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica' }))).toBe('shs-sc-regular')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'mono', design: 'cmtt' }))).toBe('shs-sc-regular')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica', bold: true }))).toBe('shs-sc-bold')
-    // a CJK run's face is its weight's, slanted or not: its slant is a shear of that face where it is drawn (layer-proto/
-    // fonts.mjs CJK_SLANT_DEG, the owner's ruling of 2026-10-19), a bold italic run's the bold face's
-    expect(faceFor(zh, run({ script: 'cjk', italic: true }))).toBe('shs-sc-regular')
-    expect(faceFor(zh, run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
-    expect(faceFor(rolesFor('zh', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
-    expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', italic: true }))).toBe('shs-tc-regular')
-    expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-tc-bold')
-    const ja = rolesFor('ja', 'times')
-    expect(faceFor(ja, run({ script: 'cjk', italic: true }))).toBe('haranoaji-regular')
-    expect(faceFor(ja, run({ script: 'cjk', bold: true, italic: true }))).toBe('haranoaji-bold')
-    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk', bold: true }))).toBe('shs-k-bold')
-  })
-})
-
 describe('the faces', () => {
   it('no face is the system\'s', () => {
     const GENERIC = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-serif|ui-sans-serif|ui-monospace|ui-rounded|math|emoji|fangsong|-apple-system|BlinkMacSystemFont)$/i
@@ -198,7 +90,7 @@ describe('the faces', () => {
     expect(new Set(files).size).toBe(files.length)
     const keys = Object.values(FACES).map(f => `${f.family}|${f.weight}|${f.style}`)
     expect(new Set(keys).size).toBe(keys.length)
-    for (const file of ['src/pdf-reader/engine/rules/font-roles.mjs', 'src/pdf-reader/engine/rules/font-coverage.mjs']) {
+    for (const file of ['packages/engine/src/fonts/font-roles.ts', 'packages/engine/src/fonts/font-coverage.ts']) {
       expect(readFileSync(file, 'utf8'), file).not.toMatch(/local\(/)
     }
   })
@@ -311,46 +203,140 @@ describe('the faces', () => {
     expect(new Set(web(/^(shs-|haranoaji-|cmun-|domitian-|erewhon-|ebgaramond-|libertine-|biolinum-)/))).toEqual(new Set(['ofl']))
   })
 
-  it('canDraw by coverage and fallbacks', () => {
-    const tw = rolesFor('zh-TW', 'cm')
-    const alone = { ...tw, fallbacks: {} }
-    // the first character of `face`'s coverage, from the CJK blocks on, that `other` alone cannot draw
-    const firstLacking = (face: FaceId, other: FaceId) => {
-      const r = COVERAGE[face] ?? []
-      for (let i = 0; i + 1 < r.length; i += 2) {
-        for (let cp = Math.max(r[i]!, 0x2e80); cp <= r[i + 1]!; cp++) if (!canDraw(String.fromCodePoint(cp), [other], alone)) return cp
-      }
-      return -1
-    }
-    // a character Source Han Serif SC holds and TC lacks is drawn through TC's fallback. Release 2.003R's language OTFs
-    // map the same 44,779 code points in SC and in TC, so there it draws nothing TC cannot: the coverage is then equal
-    const only = firstLacking('shs-sc-regular', 'shs-tc-regular')
-    if (only < 0) expect(COVERAGE['shs-tc-regular']).toEqual(COVERAGE['shs-sc-regular'])
-    else {
-      expect(canDraw(String.fromCodePoint(only), ['shs-tc-regular'], tw)).toBe(true)
-      expect(canDraw(String.fromCodePoint(only), ['shs-tc-regular'], alone)).toBe(false)
-    }
-    // a character no face holds (the private use area), and one face unknown to the table
-    expect(canDraw('\ue000', Object.keys(FACES), tw)).toBe(false)
-    expect(canDraw(`a\ue000`, ['lm-roman-regular'], tw)).toBe(false)
-    expect(canDraw('a', ['no-such-face'], { ...tw, fallbacks: {} })).toBe(false)
-    // white space is never a character to draw
-    expect(canDraw(' \t\n\u00a0\u3000', [], tw)).toBe(true)
-    expect(canDraw('', [], tw)).toBe(true)
-    expect(canDraw('a b', ['lm-roman-regular'], tw)).toBe(true)
-    // a symbol a Latin face lacks comes from Latin Modern Math
-    let symbol = -1
-    for (let cp = 0x2200; cp <= 0x22ff && symbol < 0; cp++) if (covers('lm-math', cp) && !covers('nimbus-roman-regular', cp)) symbol = cp
-    expect(symbol).toBeGreaterThan(0)
-    expect(canDraw(String.fromCodePoint(symbol), ['nimbus-roman-regular'], rolesFor('de', 'times'))).toBe(true)
-    expect(canDraw(String.fromCodePoint(symbol), ['nimbus-roman-regular'], { ...rolesFor('de', 'times'), fallbacks: {} })).toBe(false)
-    // a code point past the BMP is one character
-    expect(canDraw('\u{1F600}', ['lm-roman-regular'], tw)).toBe(covers('lm-roman-regular', 0x1f600) || covers('lm-math', 0x1f600))
-  })
 })
 
 // Task 7's fix round 1 (task-7-review.md): each row failed before its fix
 describe('the fixes of the review', () => {
+
+  it('M6 (with M1 and M2): every face\'s licence identifier, as its name table or licence file states it', () => {
+    const GUST = 'LicenseRef-GUST-Font-License', URW = 'AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817'
+    const BY_GROUP: Record<string, string> = {
+      'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', mincho: 'OFL-1.1',
+      fandolkai: 'GPL-3.0-or-later WITH Font-exception-2.0', bkai00mp: 'Arphic-1999',
+      'lm-roman': GUST, 'lm-roman-caps': GUST, 'lm-sans': GUST, 'lm-mono': GUST, 'lm-math': GUST, freemono: 'GPL-3.0-or-later WITH Font-exception-2.0',
+      libertine: 'OFL-1.1', 'humanist-sans': 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', transitional: 'OFL-1.1',
+      'cmun-serif': 'OFL-1.1', 'cmun-sans': 'OFL-1.1', 'cmun-mono': 'OFL-1.1', domitian: 'OFL-1.1',
+      'nimbus-roman': URW, 'nimbus-sans': URW,
+      'dejavu-mono': 'Bitstream-Vera', 'slab-mono': 'ParaType-Free-Font-1.3',
+    }
+    const BY_FACE: Record<string, string> = { 'inconsolata-regular': 'OFL-1.1', 'inconsolata-bold': 'Apache-2.0' }
+    for (const f of Object.values(FACES)) expect(f.licence, f.id).toBe(BY_FACE[f.id] ?? BY_GROUP[f.family.slice('axt-'.length)])
+  })
+
+})
+
+
+// ---- the role table's roles, rolesFor, faceFor and canDrawIn (packages/engine src/fonts/font-roles.ts), their CJK faces the rebuilt
+// typesetter's rule data (helpers/roles.ts). Held here since lane c1-rewrites: today's halves' (font-roles-today) read the CJK faces
+// from today's layout rules and checked today's canDraw (rules/font-draw.mjs) and a CJK run's faces (layer-proto/fonts.mjs), which
+// the cut-over deletes with today's engine; the roles' assertions stay, canDraw's go, and where one held what the role table
+// chose (M3: the face drawn holds the target's letters) it is restated on canDrawIn over that face's coverage
+
+const run =(o: Partial<{ script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }>) =>
+  ({ script: 'latin' as const, cls: 'serif' as const, design: 'cm' as const, bold: false, italic: false, caps: false, ...o })
+const STYLES = [[false, false, 'regular'], [true, false, 'bold'], [false, true, 'italic'], [true, true, 'bolditalic']] as const
+
+describe('the roles over the rebuilt typesetter\'s CJK faces (rolesFor and faceFor: packages/engine fonts, packages/typeset rule data)', () => {
+  it('the CJK roles follow the rulings: Regular and Bold beside every English family', () => {
+    // (no Kai: emphasis is the body sheared, the owner's ruling of 2026-10-19; no Light and SemiBold beside Computer Modern
+    // and Garamond, which read lighter than the page they sit in: the maintainer's ruling of 2026-10-29)
+    const families = ['cm', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'other'] as const
+    // (Korean: Source Han Serif K, as SC and TC, the maintainer, 2026-10-06)
+    const groups = { zh: 'shs-sc', 'zh-TW': 'shs-tc', 'zh-Hant': 'shs-tc', ja: 'haranoaji', ko: 'shs-k' } as const
+    for (const [target, group] of Object.entries(groups)) for (const family of families) {
+      expect(rolesFor(target, family).cjk, `${target} ${family}`).toEqual({ body: `${group}-regular`, bold: `${group}-bold` })
+    }
+    for (const lang of ['de', 'fr', 'ru']) expect(rolesFor(lang, 'cm').cjk, lang).toBeNull()
+    expect(rolesFor('zh', 'cm')).toMatchObject({ target: 'zh', family: 'cm' })
+    expect(() => rolesFor('ar', 'cm')).toThrow()
+  })
+
+  it('the fallbacks: TC to SC at its weight, every Latin face to Latin Modern Math, none for a Kai no role takes', () => {
+    const tw = rolesFor('zh-TW', 'cm')
+    expect(tw.fallbacks['shs-tc-regular']).toEqual(['shs-sc-regular'])
+    expect(tw.fallbacks['shs-tc-bold']).toEqual(['shs-sc-bold'])
+    // (TC's weights the catalog holds, and no other: its Light and SemiBold went with the ruling of 2026-10-29)
+    expect(Object.keys(tw.fallbacks).filter(id => id.startsWith('shs-tc-')).sort()).toEqual(['shs-tc-bold', 'shs-tc-medium', 'shs-tc-regular'])
+    expect(tw.fallbacks.bkai00mp).toBeUndefined()
+    expect(rolesFor('zh', 'times').fallbacks.fandolkai).toBeUndefined()
+    for (const [id, face] of Object.entries(FACES)) {
+      const latin = !/^(shs-|haranoaji|fandolkai|bkai00mp)/.test(face.id) && id !== 'lm-math'
+      if (latin) expect(tw.fallbacks[id], id).toEqual(['lm-math'])
+    }
+    expect(tw.fallbacks['lm-math']).toBeUndefined()
+  })
+
+  it('faceFor by design', () => {
+    // [design, the Latin target's group (and a CJK target's Latin runs), the Cyrillic target's]
+    // CM's text in CMU Serif, CM's own glyphs, but its bold italic in Latin Modern (nearer CM's than CMU's)
+    const CM_TEXT = { regular: 'cmun-serif', bold: 'cmun-serif', italic: 'cmun-serif', bolditalic: 'lm-roman' }
+    const table: [Design, string | Record<string, string>, string][] = [
+      ['cm', CM_TEXT, 'cmun-serif'], ['other', 'lm-roman', 'cmun-serif'], ['times', 'nimbus-roman', 'nimbus-roman'],
+      ['libertine', 'libertine', 'libertine'], ['palatino', 'domitian', 'domitian'], ['charter', 'xcharter', 'xcharter'],
+      ['garamond', 'ebgaramond', 'ebgaramond'], ['utopia', 'erewhon', 'erewhon'], ['helvetica', 'nimbus-sans', 'nimbus-sans'],
+      ['cmss', 'lm-sans', 'cmun-sans'], ['courier', 'freemono', 'freemono'], ['cmtt', 'lm-mono', 'cmun-mono'],
+      ['beramono', 'dejavu-mono', 'dejavu-mono'], ['inconsolata', 'inconsolata', 'pt-mono'], ['biolinum', 'biolinum', 'biolinum'],
+    ]
+    // a group without a style's file: its italic set upright, its bold set regular, as TeX's substitution does; and a
+    // style whose file lacks the target's letters, the nearest style that has them (Linux Libertine O's bold italic has
+    // no Cyrillic)
+    const missing: Record<string, Partial<Record<string, string>>> = {
+      'lm-mono': { bold: 'regular', bolditalic: 'italic' },
+      inconsolata: { italic: 'regular', bolditalic: 'bold' },
+      'pt-mono': { italic: 'regular', bolditalic: 'bold' },
+    }
+    const missingIn = (target: string, group: string) => (target === 'ru' && group === 'libertine' ? { bolditalic: 'bold' } : missing[group])
+    const clsOf = (d: Design): FontClass['cls'] => (['helvetica', 'cmss', 'biolinum'].includes(d) ? 'sans' : ['courier', 'cmtt', 'beramono', 'inconsolata'].includes(d) ? 'mono' : 'serif')
+    for (const [design, latn, cyrl] of table) {
+      for (const [target, groups] of [['de', latn], ['zh', latn], ['ja', latn], ['ru', cyrl]] as const) {
+        const roles = rolesFor(target, 'cm')
+        for (const [bold, italic, style] of STYLES) {
+          const group = typeof groups === 'string' ? groups : groups[style]!
+          const want = `${group}-${missingIn(target, group)?.[style] ?? style}`
+          expect(faceFor(roles, run({ design, cls: clsOf(design), bold, italic })), `${target} ${design} ${style}`).toBe(want)
+          expect(FACES[want], want).toBeDefined()
+        }
+      }
+    }
+    // the math class, whatever its design
+    for (const target of ['de', 'ru', 'zh']) {
+      expect(faceFor(rolesFor(target, 'times'), run({ cls: 'math', design: 'cm' }))).toBe('lm-math')
+      expect(faceFor(rolesFor(target, 'times'), run({ cls: 'math', design: 'times', bold: true }))).toBe('lm-math')
+    }
+    // an unknown family is set in Latin Modern by its class
+    expect(faceFor(rolesFor('de', 'other'), run({ design: 'other', cls: 'sans' }))).toBe('lm-sans-regular')
+    expect(faceFor(rolesFor('de', 'other'), run({ design: 'other', cls: 'mono' }))).toBe('lm-mono-regular')
+    expect(faceFor(rolesFor('ru', 'other'), run({ design: 'other', cls: 'mono' }))).toBe('cmun-mono-regular')
+    // small capitals: Latin Modern's caps face; elsewhere the face itself (its smcp, or capitals at 0.8: the drawing's)
+    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true }))).toBe('lm-roman-caps')
+    expect(faceFor(rolesFor('zh', 'cm'), run({ design: 'cm', caps: true }))).toBe('lm-roman-caps')
+    expect(faceFor(rolesFor('de', 'times'), run({ design: 'times', caps: true }))).toBe('nimbus-roman-regular')
+    expect(faceFor(rolesFor('ru', 'cm'), run({ design: 'cm', caps: true }))).toBe('cmun-serif-regular')
+    // the caps face has an oblique and no bold: italic small capitals take it, bold ones the family's bold
+    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, italic: true }))).toBe('lm-roman-caps-italic')
+    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true }))).toBe('cmun-serif-bold')
+    expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true, italic: true }))).toBe('lm-roman-bolditalic')
+    // CJK runs: the body family by weight and slant, whatever the run's class (no sans, no fangsong: §4.4)
+    const zh = rolesFor('zh', 'cm')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica' }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'mono', design: 'cmtt' }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica', bold: true }))).toBe('shs-sc-bold')
+    // a CJK run's face is its weight's, slanted or not: its slant is a shear of that face where it is drawn (the owner's ruling
+    // of 2026-10-19), a bold italic run's the bold face's
+    expect(faceFor(zh, run({ script: 'cjk', italic: true }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
+    expect(faceFor(rolesFor('zh', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
+    expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', italic: true }))).toBe('shs-tc-regular')
+    expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-tc-bold')
+    const ja = rolesFor('ja', 'times')
+    expect(faceFor(ja, run({ script: 'cjk', italic: true }))).toBe('haranoaji-regular')
+    expect(faceFor(ja, run({ script: 'cjk', bold: true, italic: true }))).toBe('haranoaji-bold')
+    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk', bold: true }))).toBe('shs-k-bold')
+  })
+})
+
+// Task 7's fix round 1 (task-7-review.md), the rows of the roles and of canDrawIn: each failed before its fix
+describe('the fixes of the review, on the role table over the typesetter\'s CJK faces', () => {
   const LATIN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
   // each target's own letters: what a face must hold to set its text
   const LETTERS: Record<string, string> = {
@@ -358,13 +344,10 @@ describe('the fixes of the review', () => {
     pt: `${LATIN}ÃÕÁÂÀÇÉÊÍÓÔÚÜãõáâàçéêíóôúü`, ru: 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя', zh: LATIN,
   }
   const DESIGNS: Design[] = ['cm', 'other', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'helvetica', 'cmss', 'courier', 'cmtt', 'beramono', 'inconsolata', 'biolinum']
+  /** whether a face's own coverage holds every character of a text: canDrawIn over that face's ranges alone */
+  const holds = (text: string, id: FaceId) => canDrawIn(text, [COVERAGE[id] ?? []])
 
-  it('E2: canDrawIn is canDraw over the ranges a host serves: a character in none of them is not drawable', () => {
-    // a face's whole coverage is canDraw's own check
-    const tw = rolesFor('de', 'times')
-    for (const text of ['Hello, world', 'caf\u00e9', '\u03b1\u03b2', '\u4e2d\u6587', '\ue000', '\u{1F600}']) {
-      expect(canDrawIn(text, [COVERAGE['nimbus-roman-regular']!, COVERAGE['lm-math']!]), text).toBe(canDraw(text, ['nimbus-roman-regular'], tw))
-    }
+  it('E2: canDrawIn over the ranges a host serves: a character in none of them is not drawable', () => {
     // slices: ranges cut from a face's coverage, each its own list; a character is drawable when any slice holds it
     const ascii = [0x20, 0x7e], latin1 = [0xa0, 0xff]
     expect(canDrawIn('abc', [ascii])).toBe(true)
@@ -384,32 +367,20 @@ describe('the fixes of the review', () => {
     expect(canDrawIn('a\u200bb', [ascii])).toBe(true)
   })
 
-  it('I2: canDraw skips the invisible characters, as the TeX path drops them', () => {
-    const zh = rolesFor('zh', 'cm'), ja = rolesFor('ja', 'cm'), ko = rolesFor('ko', 'cm')
-    // a zero width space, non-joiner, joiner, word joiner, byte order mark, soft hyphen, variation selector
-    for (const ch of ['\u200b', '\u200c', '\u200d', '\u2060', '\ufeff', '\u00ad', '\ufe00']) {
-      expect(canDraw(`\u4e2d${ch}\u6587`, ['shs-sc-regular'], zh), ch.codePointAt(0)!.toString(16)).toBe(true)
-      expect(canDraw(`\u65e5${ch}\u672c`, ['haranoaji-regular'], ja)).toBe(true)
-      expect(canDraw(`\ud55c${ch}\uad6d`, ['shs-k-regular'], ko)).toBe(true)
-    }
-    // a visible character no face holds still is not drawable
-    expect(canDraw('\u4e2d\u200b\ue000', ['shs-sc-regular'], zh)).toBe(false)
-  })
-
-  it('M3: a style whose face lacks the target\'s letters falls back within its family, never to the original', () => {
+  it('M3: a style whose face lacks the target\'s letters falls back within its family, never to the original: the face drawn holds every letter of the target (its coverage, canDrawIn)', () => {
     const ru = rolesFor('ru', 'libertine')
     const face = faceFor(ru, run({ design: 'libertine', bold: true, italic: true }))
     expect(face).toBe('libertine-bold')
-    expect(canDraw(LETTERS.ru!, [face], { ...ru, fallbacks: {} })).toBe(true)
+    expect(holds(LETTERS.ru!, face)).toBe(true)
     // every design, target and style: the face drawn holds every letter of the target, with no fallback
     for (const target of Object.keys(LETTERS)) {
-      const roles = rolesFor(target, 'cm'), alone = { ...roles, fallbacks: {} }
+      const roles = rolesFor(target, 'cm')
       for (const design of DESIGNS) {
         const cls: FontClass['cls'] = ['helvetica', 'cmss', 'biolinum'].includes(design) ? 'sans' : ['courier', 'cmtt', 'beramono', 'inconsolata'].includes(design) ? 'mono' : 'serif'
         for (const [bold, italic, style] of STYLES) {
           for (const caps of [false, true]) {
             const id = faceFor(roles, run({ design, cls, bold, italic, caps }))
-            expect(canDraw(LETTERS[target]!, [id], alone), `${target} ${design} ${style}${caps ? ' caps' : ''}: ${id}`).toBe(true)
+            expect(holds(LETTERS[target]!, id), `${target} ${design} ${style}${caps ? ' caps' : ''}: ${id}`).toBe(true)
           }
         }
       }
@@ -430,30 +401,7 @@ describe('the fixes of the review', () => {
     expect(faceFor(rolesFor('ru', 'libertine'), run({ design: 'biolinum', cls: 'sans', italic: true }))).toBe('biolinum-italic')
   })
 
-  it('M6 (with M1 and M2): every face\'s licence identifier, as its name table or licence file states it', () => {
-    const GUST = 'LicenseRef-GUST-Font-License', URW = 'AGPL-3.0-only WITH PS-or-PDF-font-exception-20170817'
-    const BY_GROUP: Record<string, string> = {
-      'shs-sc': 'OFL-1.1', 'shs-tc': 'OFL-1.1', 'shs-k': 'OFL-1.1', mincho: 'OFL-1.1',
-      fandolkai: 'GPL-3.0-or-later WITH Font-exception-2.0', bkai00mp: 'Arphic-1999',
-      'lm-roman': GUST, 'lm-roman-caps': GUST, 'lm-sans': GUST, 'lm-mono': GUST, 'lm-math': GUST, freemono: 'GPL-3.0-or-later WITH Font-exception-2.0',
-      libertine: 'OFL-1.1', 'humanist-sans': 'OFL-1.1', xcharter: 'Bitstream-Charter', ebgaramond: 'OFL-1.1', transitional: 'OFL-1.1',
-      'cmun-serif': 'OFL-1.1', 'cmun-sans': 'OFL-1.1', 'cmun-mono': 'OFL-1.1', domitian: 'OFL-1.1',
-      'nimbus-roman': URW, 'nimbus-sans': URW,
-      'dejavu-mono': 'Bitstream-Vera', 'slab-mono': 'ParaType-Free-Font-1.3',
-    }
-    const BY_FACE: Record<string, string> = { 'inconsolata-regular': 'OFL-1.1', 'inconsolata-bold': 'Apache-2.0' }
-    for (const f of Object.values(FACES)) expect(f.licence, f.id).toBe(BY_FACE[f.id] ?? BY_GROUP[f.family.slice('axt-'.length)])
-  })
-
-  it('M6: fallbacks of more than one hop; the probe\'s body before its roman', () => {
-    const tw = rolesFor('zh-TW', 'cm')
-    // a character AR PL KaitiM Big5 lacks, drawn only two hops away
-    let lacks = -1
-    for (let cp = 0x4e00; cp <= 0x9fff && lacks < 0; cp++) if (!canDraw(String.fromCodePoint(cp), ['bkai00mp'], { ...tw, fallbacks: {} }) && canDraw(String.fromCodePoint(cp), ['shs-sc-regular'], { ...tw, fallbacks: {} })) lacks = cp
-    expect(lacks).toBeGreaterThan(0)
-    const chain = { ...tw, fallbacks: { bkai00mp: ['lm-roman-regular'], 'lm-roman-regular': ['shs-sc-regular'] } }
-    expect(canDraw(String.fromCodePoint(lacks), ['bkai00mp'], chain)).toBe(true)
-    expect(canDraw(String.fromCodePoint(lacks), ['bkai00mp'], { ...chain, fallbacks: { bkai00mp: ['lm-roman-regular'] } })).toBe(false)
+  it('M6: the probe\'s body before its roman', () => {
     expect(familyOfProbe({ rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'ptm' })).toBe('times')
     // a body set sans keeps its roman's weights
     expect(familyOfProbe({ rm: 'ptm', sf: 'phv', tt: 'pcr', body: 'phv' })).toBe('times')
@@ -513,27 +461,6 @@ describe('the fixes of the review', () => {
         for (const script of ['cjk', 'latin'] as const) {
           for (const [bold, italic] of STYLES) expect(faceFor(roles, run({ script, bold, italic })), `${target} ${family}`).not.toMatch(/unbatang/)
         }
-      }
-    }
-  })
-})
-
-describe('a CJK run\'s faces (layer-proto/fonts.mjs)', () => {
-  it('end with a Latin face of its weight that holds the copy space, after its CJK faces (#47.14: the device drew U+0020)', async () => {
-    const { faceOfRoles } = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
-    for (const to of ['zh', 'zh-Hant', 'ja', 'ko']) {
-      for (const bold of [false, true]) for (const italic of [false, true]) {
-        const roles = rolesFor(to, 'times')
-        const face = faceOfRoles(roles, { fam: 'serif', design: 'times', bold, italic, caps: false } as never, 'cjk')
-        const ids = face.ids as FaceId[]
-        // (its CJK faces first, so that every CJK character is theirs; the space no CJK slice serves is the Latin face's)
-        expect(ids[0]).toBe(bold ? roles.cjk!.bold : roles.cjk!.body)
-        const last = ids.at(-1)!
-        expect(last).not.toMatch(/^(?:shs-|haranoaji)/)
-        expect(covers(last, 0x20)).toBe(true)
-        expect(FACES[last]!.weight).toBe(FACES[ids[0]!]!.weight)
-        expect(FACES[last]!.style).toBe('normal')
-        expect(face.family.split(', ').at(-1)).toBe(`"${FACES[last]!.family}"`)
       }
     }
   })

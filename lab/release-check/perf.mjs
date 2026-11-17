@@ -10,9 +10,26 @@
 // both sides' noise; with the larger alone, 3 + 3 runs of one engine failed on noise about 1 time in 10, speed.mjs's header). A
 // measure that does not depend on the clock (bytes, TeX's passes, requests) has no noise: its repetitions agree, and it
 // differs where it moves by more than the speed check's tolerance for its work counters (WORK_TOLERANCE, 0.5 %).
-import { median, percentile, spread, WORK_TOLERANCE } from '../pdf/spikes/layer-gate/speed.mjs'
+// The four statistics are this module's own, and the speed check reads them from here: the release check imports nothing of
+// today's engine's gates (speed.mjs reads today's work counters, which the cut-over deletes).
 
-export { median, percentile, spread, WORK_TOLERANCE }
+/** the growth of a work counter's total beyond which the check fails */
+export const WORK_TOLERANCE = 0.005
+
+/** the q-th percentile (0 to 100) of a list by linear interpolation between ranks (NaN for no values) */
+export function percentile(values, q) {
+  const s = finite(values).sort((a, b) => a - b)
+  if (!s.length) return Number.NaN
+  const at = (q / 100) * (s.length - 1)
+  const lo = Math.floor(at), hi = Math.ceil(at)
+  return s[lo] + (s[hi] - s[lo]) * (at - lo)
+}
+export const median = values => percentile(values, 50)
+/** the run-to-run spread of a metric: the largest value less the smallest over its repetitions */
+export function spread(values) {
+  const s = finite(values)
+  return s.length ? Math.max(...s) - Math.min(...s) : Number.NaN
+}
 
 /**
  * The measures. `of(rep)`: the value of one repetition's summary (repOf / prepareRepOf); lower is better for every one;

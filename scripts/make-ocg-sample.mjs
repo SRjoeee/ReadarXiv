@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { openPaper } from '../src/pdf-reader/engine/pipeline/live.mjs'
-import { wrapped } from '../tests/pdf-reader/helpers/ocg-pdfs.ts'
+import { wrapped } from '../tests/pdf-reader/helpers/ocg-wrapped.ts'
 
 const dir = new URL('../tests/fixtures/pdf/ocg/', import.meta.url), sample = new URL('../tests/fixtures/pdf/sample-1/', import.meta.url)
 

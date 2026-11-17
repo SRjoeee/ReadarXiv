@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { COVERAGE_SOURCE } from '../../src/pdf-reader/engine/rules/font-coverage.mjs'
+import { COVERAGE_SOURCE } from '../../packages/engine/src/fonts/font-coverage.ts'
 import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, compileIdentity, compileImageRef, identityOf, imageFromArg, imageIdOf, latexmkEngine, platformArgs } from '../../lab/pdf/spikes/compile-image.mjs'
 
 // The compile image's identity (lab/pdf/spikes/compile-image.mjs): one reference for every Docker compile of the lab, the same

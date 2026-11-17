@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { classOf, LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { classesOn, shownTranslated, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
-import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
+import { classOf, LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
+import { bundleUnitsOf, UNIT_FLAG_BITS } from '../../packages/engine/src/instrument/units.ts'
+import { plainSource } from '../../packages/engine/tests/helpers/unit-harness.ts'
 
 // The content classes' stage 4 (docs/route/orphan-text.md §5, "References" and "Names"; the owner's rulings of 2026-10-25 and
 // 2026-10-28): a bibliography's entries are units of their own, read from the bibliography's TeX the compile reads (the paper's
@@ -79,15 +77,16 @@ describe('a numeric \\bibitem bibliography written in the paper (plain, abbrv, u
     // (the label's \\bibitem and its key as the paper wrote them)
     expect(tex).toContain('\\bibitem{bengio1994}\n')
   })
-  it('gives the entries their classes, translated once whatever the target, shown by the reader\'s toggles alone', () => {
-    const bundle = { units: bundleUnitsOf(p) }
-    for (const lang of ['zh', 'de']) for (const u of bib(p)) expect(toTranslate(bundle as never, lang)).toContain(units(p).indexOf(u))
-    expect(bib(p).map(u => unitClass(u))).toEqual(['references', 'references'])
-    // (the defaults: references off)
-    expect(bib(p).map(u => unitShown(u, classesOn(null)))).toEqual([false, false])
-    // (references on: each entry whole, its names with it; the names toggle, the author block's alone, shows none of it)
-    expect(bib(p).map(u => unitShown(u, classesOn({ references: true })))).toEqual([true, true])
-    expect(bib(p).map(u => unitShown(u, classesOn({ names: true })))).toEqual([false, false])
+  it('gives the entries to the bundle as units of kind reference, none kept as the original, whatever the target (bundleUnitsOf, no unit kept: the rebuilt engine keeps none by its words)', () => {
+    const kept = null
+    const rows = bundleUnitsOf(p, kept)
+    expect(rows).toHaveLength(p.units.length + p.names.length)
+    const ids = bib(p).map(u => units(p).indexOf(u))
+    expect(ids).toHaveLength(2)
+    for (const id of ids) {
+      expect(rows[id]?.[0], `entry unit ${id}`).toBe('reference')
+      expect((rows[id]?.[1] ?? 0) & UNIT_FLAG_BITS.KEPT, `entry unit ${id}`).toBe(0)
+    }
   })
 })
 
@@ -305,31 +304,6 @@ describe('REVTeX\'s empty number field opening an entry (2610.20716v1)', () => {
   })
 })
 
-describe('an author block with affiliations and \\thanks: its names and its places the class names, its note the body\'s, translated for every target', () => {
-  const tex = doc('\\maketitle\n\nThe body of the paper says something.', '\\title{A Title}\n\\author{Ada Lovelace\\thanks{Supported by the Analytical Society.}\\\\\nUniversity of London\n\\and\nCharles Babbage\\\\\nCambridge}')
-  const p = open({ 'main.tex': tex })
-  const bundle = { units: bundleUnitsOf(p) }
-  it('sends the author block\'s names and places, and its note, whatever the target writes names as', () => {
-    const authors = units(p).flatMap((u, i) => (u.kind === 'author' || u.kind === 'affiliation' ? [i] : []))
-    expect(units(p).filter(u => u.kind === 'author').map(u => plainSource(u as never).trim())).toEqual(['Ada Lovelace', 'Charles Babbage'])
-    expect(units(p).filter(u => u.kind === 'affiliation').map(u => plainSource(u as never).trim())).toEqual(['University of London', 'Cambridge'])
-    // (German writes names as the paper does: until TRANSLATE_VERSION 6 the block stayed in the source for it)
-    for (const lang of ['de', 'fr', 'zh', 'ja']) expect(toTranslate(bundle as never, lang), lang).toEqual(expect.arrayContaining(authors))
-    const note = units(p).findIndex(u => u.kind === 'footnote' && plainSource(u as never).includes('Analytical Society'))
-    expect(note).toBeGreaterThanOrEqual(0)
-    expect(toTranslate(bundle as never, 'de')).toContain(note)
-  })
-  it('shows the names and the places translated under the names toggle alone (the whole block, 2026-10-30); the note and the body always', () => {
-    const author = units(p).find(u => u.kind === 'author')!, note = units(p).find(u => u.kind === 'footnote')!, place = units(p).find(u => u.kind === 'affiliation')!
-    expect([unitClass(author), unitClass(note), unitClass(place)]).toEqual(['names', 'body', 'names'])
-    expect([unitShown(place, classesOn(null)), unitShown(place, classesOn({ names: false, references: false }))]).toEqual([false, false])
-    expect(shownTranslated('names', classesOn(null))).toBe(false)
-    expect([unitShown(author, classesOn({ names: true })), unitShown(place, classesOn({ names: true }))]).toEqual([true, true])
-    expect([unitShown(author, classesOn({ references: true })), unitShown(place, classesOn({ references: true }))]).toEqual([false, false])
-    expect(unitShown(note, classesOn(null))).toBe(true)
-  })
-})
-
 describe('backref\'s lists after the entries (hyperref\'s pagebackref: 2610.37668v1\'s "2, 25" stayed where the entry was drawn translated)', () => {
   const on = open({ 'main.tex': doc(`Attention needs normalization \\cite{layernorm2016}.\n\n${PLAIN}`, '\\usepackage[pagebackref]{hyperref}') })
   it('ends each entry in the list\'s piece, after its numbers are kept: the list is TeX\'s, after the entry\'s text', () => {
@@ -374,5 +348,19 @@ describe('backref\'s lists after the entries (hyperref\'s pagebackref: 2610.3766
     // (after the entry's end mark and its numbers' marks, last: the list TeX sets after the entry is the next thing it sets)
     expect(text).toMatch(new RegExp(String.raw`\\axtend\{${i}e\}[^\n]*\\axtbrname\{p${i}\.${k}\}\n\n`))
     expect(text).not.toContain('\\axtbackref')
+  })
+})
+
+// (held here since lane c1-rewrites: the block's units, without today's rows (layer-proto/rows.mjs toTranslate) and classes
+// (rules/content-classes.mjs), which the cut-over deletes; a kind's class and toggle are the reader's, packages/reader
+// compose/classes.ts)
+describe('an author block with affiliations and \\thanks: its names and its places units of their own, its note the body\'s (the front end\'s kinds)', () => {
+  it('reads the author block\'s names and places, and its note, as units of their own: kinds author, affiliation and footnote', () => {
+    const tex = doc('\\maketitle\n\nThe body of the paper says something.', '\\title{A Title}\n\\author{Ada Lovelace\\thanks{Supported by the Analytical Society.}\\\\\nUniversity of London\n\\and\nCharles Babbage\\\\\nCambridge}')
+    const p = open({ 'main.tex': tex })
+    expect(units(p).filter(u => u.kind === 'author').map(u => plainSource(u as never).trim())).toEqual(['Ada Lovelace', 'Charles Babbage'])
+    expect(units(p).filter(u => u.kind === 'affiliation').map(u => plainSource(u as never).trim())).toEqual(['University of London', 'Cambridge'])
+    const note = units(p).findIndex(u => u.kind === 'footnote' && plainSource(u as never).includes('Analytical Society'))
+    expect(note).toBeGreaterThanOrEqual(0)
   })
 })

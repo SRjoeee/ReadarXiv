@@ -1,14 +1,14 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { auxUnits, braceBalance, compilerOfPdf, contextUnits, cutCopyUnits, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
-import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { auxUnits, braceBalance, compilerOfPdf, contextUnits, cutCopyUnits, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '../../packages/engine/src/compile/guard.ts'
+import { WHY_MAX } from '../../packages/engine/src/instrument/format.ts'
 import { ALLOCATION_FAILED } from '@readarxiv/engine'
-import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { handoverOf, layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { type Compiled, type CompileRequest, markedPreamble, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
+import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '../../packages/engine/src/marks/marks.ts'
+import { handoverOf, markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { type Compiled, type CompileRequest, markedPreamble, openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
+import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
+import type { UnitLines } from '../../packages/engine/src/compile/tex-errors.ts'
 
 // The layout guard (layout/guard.mjs, layout/paper.mjs markedOfPaper; R1 of 2026-10-19): the marked original must be the paper.
 // Each check on synthetic answers (a brace a unit's writing doubled, a mark of ours a compile wrote into a file where no
@@ -35,6 +35,8 @@ const ran = (pdf: Uint8Array, body = '', pages = 3, more: Partial<Compiled> = {}
 const viaDriver = (c: Compiled): Compiled => ({ ...c, log: (c.log ?? '').replace(/Output written on main\.pdf/, 'Output written on main.xdv') })
 /** a compile TeX ran that stopped short of the document's end */
 const stopped = (body: string): Compiled => ({ ok: true, pdf: PDF, log: `${TEX}${body}! Emergency stop.\n*** (job aborted, no legal \\end found)\n` })
+/** a compile's answer as written, typed as the host's (the guard reads only some of its fields) */
+const answer = (c: Compiled): Compiled => c
 
 function compiler(answers: (Compiled | Error)[]) {
   const asked: CompileRequest[] = []
@@ -52,7 +54,7 @@ function compiler(answers: (Compiled | Error)[]) {
 function markedFiles(paper = paperOf(), o: { unmarked?: number[]; names?: boolean } = {}) {
   const switches = readMarkProbe(PROBE_LOG, probeSamples(paper.units)), inkless = readInkProbe(PROBE_LOG, inkSamples(paper.units))
   const spans: { lines?: () => UnitLines<SourceUnit>[]; skip?: number } = {}
-  const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, ...(o.unmarked ? { unmarked: o.unmarked } : {}), ...(o.names === false ? { names: false } : {}), spans })
+  const files = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, ...(o.unmarked ? { unmarked: o.unmarked as unknown as ReadonlySet<number> } : {}), ...(o.names === false ? { names: false } : {}), spans })
   return { files, spans, paper }
 }
 /** an error TeX logs at a unit's line in the marked file, its place before `at` in that line's text */
@@ -160,10 +162,10 @@ describe('marksOutOfPlace and auxUnits: a mark of ours a compile wrote where no 
       ['main.aux', enc('\\@writefile{toc}{\\etoc@depthtag {x\\axtpma {p218.6a}}}\\@writefile{toc}{\\etoc@depthtag {\\axthmark {h69s}\\axtmark {t185s}\\axtcolour {c5.3}\\axtmark {c2-3}\\axtmark {g1a}}}\n')],
       ['main.log', enc('l.12 \\axtend {9e}\n')],
     ])
-    expect(auxUnits({ ok: true, files }, 1000, 'main')).toEqual(new Set([2, 218, 69, 185, 5]))
-    expect(auxUnits({ ok: true, aux: '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n' }, 1000, 'main')).toEqual(new Set([2]))
+    expect(auxUnits(answer({ ok: true, files }), 1000, 'main')).toEqual(new Set([2, 218, 69, 185, 5]))
+    expect(auxUnits(answer({ ok: true, aux: '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n' }), 1000, 'main')).toEqual(new Set([2]))
     // (ids past the paper's units are no unit of it)
-    expect(auxUnits({ ok: true, files }, 100, 'main')).toEqual(new Set([2, 69, 5]))
+    expect(auxUnits(answer({ ok: true, files }), 100, 'main')).toEqual(new Set([2, 69, 5]))
   })
 })
 
@@ -604,10 +606,6 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
 
 describe('the refusal names the unmarked original\'s verdict and the trees tried; handoverOf, the host\'s rule over it', () => {
   const fail = stopped('! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n')
-  const ERR = '! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})'
-  const TEX23 = 'This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)\n'
-  const fail23: Compiled = { ok: true, pdf: PDF, log: `${TEX23}! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n! Emergency stop.\n` }
-  const declaring = (year: string) => paperOf(SOURCE, [['00README.json', JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], texlive_version: year, process: { compiler: 'pdflatex' } })]])
 
   it('names it where the unmarked original was compiled: TeX\'s failure, a short one, a host\'s limit, a throw, and ours', async () => {
     const texs = compiler([PROBE, fail, fail, fail])
@@ -637,17 +635,17 @@ describe('the refusal names the unmarked original\'s verdict and the trees tried
     expect(await markedOfPaper(paperOf(), { compile: errors.compile })).not.toHaveProperty('own')
   })
 
-  it('takes the host\'s `tried` for its why: every tree tried, then the box\'s; texlive where the paper declares a year none of them is', async () => {
+  it('takes the host\'s `tried` for its why: every tree tried, then the box\'s; texlive where the paper declares a year none of them is (markedOfPaper)', async () => {
+    const ERR = '! Undefined control sequence. (l.3 \\newcommand{\\bert}{\\foo})'
+    const TEX23 = 'This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)\n'
+    const fail23: Compiled = { ok: true, pdf: PDF, log: `${TEX23}! Undefined control sequence.\nl.3 \\newcommand{\\bert}{\\foo}\n! Emergency stop.\n` }
+    const declaring = (year: string) => paperOf(SOURCE, [['00README.json', JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], texlive_version: year, process: { compiler: 'pdflatex' } })]])
     // (undeclared: the compile's, on both trees)
     const plain = compiler([PROBE, fail, fail, fail])
     expect(await markedOfPaper(paperOf(), { compile: plain.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper's own source (article) does not run through on TeX Live 2023 or 2025: ${ERR}` })
     // (declares 2023, tried there first and then here: its own year was tried, so the compile's)
     const routed = compiler([PROBE, fail, fail, fail])
     expect(await markedOfPaper(declaring('2023'), { compile: routed.compile, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
-    // (and through layoutMarksOfPaper, which takes the same options: refused before anything is opened)
-    const whole = compiler([PROBE, fail, fail, fail])
-    const open = async () => { throw new Error('nothing to open') }
-    expect(await layoutMarksOfPaper(declaring('2023'), { compile: whole.compile, open, OPS: {}, tried: ['2023'] })).toMatchObject({ refused: 'compile', why: `the paper (article) declares TeX Live 2023; its own source does not run through on TeX Live 2023 or 2025: ${ERR}`, own: { tree: '2025' } })
     // (declares a year no tree tried is: TeX Live's, every tree named)
     const other = compiler([PROBE, fail23, fail23, fail23])
     expect(await markedOfPaper(declaring('2022'), { compile: other.compile, tried: ['2025'] })).toMatchObject({ refused: 'texlive', why: `the paper (article) declares TeX Live 2022; on TeX Live 2025 or 2023 its own source does not run through: ${ERR}`, own: { tree: '2023' } })
@@ -802,10 +800,4 @@ describe('markedOfPaper: the compiler a package does not name is arXiv\'s PDF\'s
     await expect(markedOfPaper(paperOf(), { compile: compiler([PROBE]).compile, compilerOf: async () => { throw new RangeError(ALLOCATION_FAILED) } })).rejects.toThrow(ALLOCATION_FAILED)
   })
 
-  it('layoutMarksOfPaper passes it on', async () => {
-    const paper = paperOf()
-    const c = compiler([PROBE])
-    await layoutMarksOfPaper(paper, { compile: c.compile, open: async () => null as never, OPS: {} as never, compilerOf: async () => 'latex' }).catch(() => {})
-    expect(ENGINES(c.asked)[0]).toBe('latex')
-  })
 })

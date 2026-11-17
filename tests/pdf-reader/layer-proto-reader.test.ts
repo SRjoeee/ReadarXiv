@@ -736,6 +736,8 @@ describe('the door reaches no server-only module', () => {
         const spec = m[1]!
         if (spec.startsWith('.') || spec.startsWith('@/')) todo.push(fileOf(f, spec))
         else if (spec.startsWith(TRANSITION)) todo.push(fileOf(f, resolve('packages/engine/src', spec.slice(TRANSITION.length))))
+        // (the faces and patterns moved into the engine package, which today's old paths re-export: walked as the engine's own)
+        else if (spec === '@readarxiv/engine/fonts') todo.push(resolve('packages/engine/src/fonts/index.ts'))
         else others.set(spec, [...(others.get(spec) ?? []), f])
       }
       for (const m of text.matchAll(DYNAMIC)) dynamic.push(`${f}|${text.slice(m.index, m.index + 40)}`)

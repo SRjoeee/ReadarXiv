@@ -4,7 +4,7 @@
 // (ROLE.label), both of the one unit the name's key makes
 import { ROLE } from '@readarxiv/engine'
 import { describe, expect, it } from 'vitest'
-import { nameGroupOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { nameGroupOf } from '../../packages/engine/src/instrument/instrument.ts'
 
 describe('a babel name’s groups as the instrument owns them', () => {
   it('reads an occurrence’s word as the name and its number before it as its label, nothing else as a name’s', () => {

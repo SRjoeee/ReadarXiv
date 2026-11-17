@@ -1,5 +1,5 @@
 # lab/typeset/marks-data.py <fonts dir> [--check]: writes packages/typeset/src/data/marks.ts, the ink of the full-width marks
-# of every CJK face of the role table (src/pdf-reader/engine/rules/font-roles.mjs FACE_TABLE, read as text as
+# of every CJK face of the role table (packages/engine/src/fonts/font-roles.ts FACE_TABLE, read as text as
 # scripts/font-roles.py reads it), measured in the very files the website subsets and serves: each mark's default glyph (its
 # cmap's, no feature applied: the glyph the reader draws, its sheet turning `locl` off, docs/PDF-READER.md §18.48), its ink's
 # left and right edges as thousandths of its advance, the left rounded down and the right up so that the stored box holds
@@ -7,7 +7,7 @@
 # Symbols and Punctuation and the Halfwidth and Fullwidth Forms blocks, and the curly quotes, dashes, ellipsis and middle dot a
 # CJK run takes where the rules set them as CJK's (packages/typeset/src/breaker/script.ts CJK_QUOTES); the vertical and
 # small forms (U+FE10-FE6F) are vertical text's and compatibility's, which no line the layer sets holds, and a mark the data
-# lacks keeps its full box. Each file's SHA-256 must be the binding one (src/pdf-reader/engine/rules/font-coverage.mjs
+# lacks keeps its full box. Each file's SHA-256 must be the binding one (packages/engine/src/fonts/font-coverage.ts
 # METRICS), else the run fails and writes nothing. The fonts folder is the one scripts/font-roles.py reads (every face's
 # file under its table name; readarxiv-web's scripts/fetch-font-files.mjs fills one).
 #
@@ -27,8 +27,8 @@ from fontTools.pens.boundsPen import BoundsPen
 from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-ROLES = ROOT / 'src/pdf-reader/engine/rules/font-roles.mjs'
-COVERAGE = ROOT / 'src/pdf-reader/engine/rules/font-coverage.mjs'
+ROLES = ROOT / 'packages/engine/src/fonts/font-roles.ts'
+COVERAGE = ROOT / 'packages/engine/src/fonts/font-coverage.ts'
 OUT = ROOT / 'packages/typeset/src/data/marks.ts'
 BLOCKS = [(0x3000, 0x303F), (0xFF00, 0xFFEF)]
 CJK_QUOTES = [0x201C, 0x201D, 0x2018, 0x2019, 0x2014, 0x2026, 0xB7]

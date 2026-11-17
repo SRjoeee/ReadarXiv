@@ -1,10 +1,10 @@
-// src/pdf-reader/engine/rules/font-letters.mjs
-// Made from the coverage table (font-coverage.mjs) by tests/pdf-reader/font-letters.test.ts, which holds the two equal
+// packages/engine/src/fonts/font-letters.ts
+// Made from the coverage table (font-coverage.ts) by tests/pdf-reader/font-letters.test.ts, which holds the two equal
 // (WRITE_FONT_LETTERS=1 writes it again): what a reader reads of each face's coverage, so that the table itself is no part of
 // a reader's bundle. Not edited by hand.
 
-/** each face's alphabets whose every letter it holds (font-roles.mjs LETTER_SETS: a language's own, and a script's bare letters) */
-export const HOLDS = Object.freeze({
+/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters) */
+export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   "biolinum-bold": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
   "biolinum-bolditalic": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
   "biolinum-italic": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
@@ -90,4 +90,4 @@ export const HOLDS = Object.freeze({
   "xcharter-regular": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
 })
 /** the faces that set small capitals of their own (GSUB smcp, the table's METRICS) */
-export const SMCP = Object.freeze(["biolinum-bold","biolinum-bolditalic","biolinum-italic","biolinum-regular","cmun-mono-regular","cmun-sans-bold","cmun-sans-regular","cmun-serif-bold","cmun-serif-regular","domitian-regular","ebgaramond-bold","ebgaramond-bolditalic","ebgaramond-italic","ebgaramond-regular","erewhon-bold","erewhon-bolditalic","erewhon-italic","erewhon-regular","libertine-bold","libertine-bolditalic","libertine-italic","libertine-regular","xcharter-bold","xcharter-bolditalic","xcharter-italic","xcharter-regular"])
+export const SMCP: readonly string[] = Object.freeze(["biolinum-bold","biolinum-bolditalic","biolinum-italic","biolinum-regular","cmun-mono-regular","cmun-sans-bold","cmun-sans-regular","cmun-serif-bold","cmun-serif-regular","domitian-regular","ebgaramond-bold","ebgaramond-bolditalic","ebgaramond-italic","ebgaramond-regular","erewhon-bold","erewhon-bolditalic","erewhon-italic","erewhon-regular","libertine-bold","libertine-bolditalic","libertine-italic","libertine-regular","xcharter-bold","xcharter-bolditalic","xcharter-italic","xcharter-regular"])

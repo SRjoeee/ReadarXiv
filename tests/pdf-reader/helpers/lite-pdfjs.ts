@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { float32Outlines, liteWorkerSource, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
+import { float32Outlines, liteWorkerSource, NO_IMAGE_PIXELS } from '../../../packages/engine/src/compile/pdf-lite.ts'
 
 // PDF.js's worker without the images' pixels (engine/layout/pdf-lite.mjs), installed for the tests that read the ink of a PDF: once
 // per test file, before its first getDocument. A document is read without its pixels by passing LITE (`maxImageSize`) to

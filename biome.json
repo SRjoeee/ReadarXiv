@@ -30,6 +30,10 @@
 			"formatter": { "enabled": false }
 		},
 		{
+			"includes": ["packages/engine/src/fonts/font-coverage.ts", "packages/engine/src/fonts/font-letters.ts"],
+			"formatter": { "enabled": false }
+		},
+		{
 			"includes": ["packages/ui/src/locales/**"],
 			"formatter": { "enabled": false }
 		},

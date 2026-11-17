@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
 
 // An inline formula ends where TeX ends it. LaTeX's \( is a math shift outside math, and its \) a math shift inside inline
 // math (latex.ltx: \( `\ifmmode\@badmath\else$\fi`, \) `\ifmmode\ifinner$\else\@badmath\fi`), so a formula opened by `$` is

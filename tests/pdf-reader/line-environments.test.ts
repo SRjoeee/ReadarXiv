@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { inMemory, loadProject, patch, type SourcePiece } from '../../packages/engine/src/source/latex-front.ts'
+import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 
 // Environments TeX reads line by line until a line holding their \end — verbatim's kind and comment.sty's — and what
 // the reader writes into a paper's lines around them. comment.sty ends its environment only at a line that is
@@ -147,7 +147,7 @@ describe('a table holding an environment read by lines is not fitted', () => {
   const withTables = (tex: string) => loadProject(inMemory(new Map([['main.tex', enc(tex)]])), 'main.tex', { tables: true })
   const fitted = (body: string) => {
     const p = withTables(`${PREAMBLE}\n\\begin{document}\n${body}\n\\end{document}\n`), units = p.units as Unit[]
-    return new TextDecoder().decode(patch(p, translate(units) as Map<(typeof p.units)[number], unknown[]>).get('main.tex')).includes('\\axtfit{')
+    return new TextDecoder().decode(patch(p, translate(units) as Map<(typeof p.units)[number], SourcePiece[]>).get('main.tex')).includes('\\axtfit{')
   }
   it('\\axtfit takes the table as an argument, read before TeX could read the environment\'s lines: a comment, the paper\'s own, a verbatim kind', () => {
     expect(fitted('\\begin{tabular}{l}\nA cell \\\\\n\\end{tabular}')).toBe(true)

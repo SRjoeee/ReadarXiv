@@ -15,7 +15,7 @@ import { CAUSE, HOLDER_JOIN, holdersDeclared, keptWhyOf, statedOf } from '../../
 // @ts-expect-error — a plain node module of the lab
 import { flatOf, keyedByPiece, pieceKOf } from '../../lab/pdf/prepare-back/pieces.mjs'
 import { RAW_ADDRESSES, readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../../packages/typeset/tests/replay/l1.ts'
-import { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../src/pdf-reader/engine/source/latex-front.mjs'
+import { ADDRESS_GROUP, EMAIL_ADDRESS } from '../../packages/engine/src/source/latex-front.ts'
 
 type DumpPiece = { kind: string; s?: string; src?: string }
 type Line = { page: number; x0: number; x1: number; baseline: number; top: number; bottom: number }

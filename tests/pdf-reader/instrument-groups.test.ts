@@ -4,9 +4,10 @@
 // no span, which the tags wire would send as a tag pair for nothing. Over the 88 papers' bundles, 20,172 of the first kind and
 // 2,943 of the second, none with a face, a fill, a link or a paragraph TeX opened at it of its own
 import { describe, expect, it } from 'vitest'
-import { contentOf, passedOf, piecesOf, spansOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { contentOf, passedOf, piecesOf, spansOf } from '../../packages/engine/src/instrument/instrument.ts'
+import type { SourcePiece } from '../../packages/engine/src/source/latex-front.ts'
 
-type P = { t: string; s?: string; src?: string; id?: number }
+type P = SourcePiece
 const open = (src: string, id: number, sets?: 0): P => {
   const p: P = { t: 'open', src, id }
   if (sets === 0) Object.defineProperty(p, 'sets', { value: 0 })
