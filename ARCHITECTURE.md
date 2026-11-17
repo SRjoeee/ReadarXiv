@@ -23,7 +23,7 @@ again in the translation.
 | `@readarxiv/ui` (`packages/ui`) | The controls, the design tokens and the one string catalogue of the extension, the reader and the website | the controls, `ROLES`, `S` | no package |
 | `@readarxiv/engine` (`packages/engine`) | The prepare: a paper's source and arXiv's PDF in, its bundle out | `prepare` (`packages/engine/src/prepare.ts`), `prepareFront`, `prepareBack`, `align`, `locate`, `wrap`, `bundle` | format, text |
 | `@readarxiv/typeset` (`packages/typeset`) | A page's translation laid into the room arXiv's page gives it: rules, language data, the breaker, the fit, the page fill | `layPage` (`packages/typeset/src/lay/entry.ts`), `rulesFor` | format, text |
-| `@readarxiv/translate` (`packages/translate`) | The translator contract, the adapters (Microsoft, Google, the browser's built-in) and the chain that falls back between them | `chainOf`, `identityOf`, `keyOf`, `unitInOf`, `accept` | format, text |
+| `@readarxiv/translate` (`packages/translate`) | The translator contract, the adapters (Microsoft, Google, the browser's built-in) and the chain that falls back between them | `chainOf`, `identityOf`, `keyOf`, `unitInOf`, `askedOf`, `accept` | format, text |
 | `@readarxiv/reader` (`packages/reader`) | The bilingual reader: the session, the panes and page stack, composing, the highlight, the chrome | `openReader` (`packages/reader/src/reader.ts`), `openSession`, `mountChrome`, the `Host` it runs in | format, typeset, text, ui |
 
 The directions point one way, and `scripts/check-boundary.mjs` holds them (its table `PACKAGES`; it runs in `pnpm lint`): a
@@ -119,7 +119,10 @@ an incremental update over A's exact bytes: A followed by it is the **composed d
 The units are cut into objects under the units' bound (1 MiB, `packages/format/src/io.ts` `BOUNDS`).
 
 **Rows: the translations.** A row is one unit's translation for one target, keyed by unit id: the translated pieces (every
-element of the unit back exactly once), the translator that gave it, and its sentences on both sides, or why there is none.
+element of the unit back exactly once), the translator that gave it, and its sentences on both sides, or why there is none;
+and the statement it answered, `asked`, the digest of the unit as the translators were given it (`askedOf`,
+`packages/translate/src/bundle.ts`), which the id does not cover (an element's `name` or `text`, a group's `must`, the unit's
+`entry`): a host keeps a stored row only for the statement it would send now (PDF-READER §18.2).
 
 Two more values cross a seam and are not shapes of the paper. **The instrument** (`packages/engine/src/instrument.ts`) is what
 the front half hands the back half: B's pages read, each glyph's and box's owner, the units, TeX's statements; it is stored as
@@ -244,6 +247,7 @@ a gate is named by its id there. The rows after them are this repository's own.
 | The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
 | Each behaviour digest is the hash of its case table's outcomes | `packages/translate/tests/digests.test.ts`, `packages/translate/tests/chain-digest.test.ts`, `tests/providers/prompt.test.ts`; `pnpm digests` | |
 | A translator is sent no field of identity (`src`, `keys`, `open`, `close`, `depth`, `of`) | `packages/translate/tests/bundle.test.ts` | |
+| A row's statement digest (`askedOf`) moves with every field a translator is given and with no order of keys; the extension's row key holds it, every stored key where it was | `packages/translate/tests/bundle.test.ts`; `tests/providers/row-key.test.ts` (the HTML fixtures' blocks on both wires, the reader's fixture bundles' units) | |
 | No element a unit states `silent` has ink or a text TeX set in any placement of a part | the chain's runner (`lab/pdf/prepare-back/run.mjs`, exit 5, by `silent-gate.mjs`), so the release check's `prepare`; `tests/lab/silent-gate.test.ts` | |
 | An element's `text` is stated only where every placement of its unit in a part agrees: on its line's baseline, at its text's size, no mark | `packages/engine/tests/wire-facts.test.ts` | |
 | Every site that decides a reading option reads `toggleKind` | `tests/pdf-reader/toggle-kind.test.ts` | |

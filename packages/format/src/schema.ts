@@ -590,6 +590,10 @@ export const Why = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unconfigured'), code: z.string() }),
   z.object({ kind: z.literal('aborted') }),
 ])
+/** the statement a row answered: the digest of its unit as the translators were given it (packages/translate askedOf), which
+ *  its id does not cover (an element's `name` or `text`, a group's `must` or `stop`, the unit's `entry`). A host keeps a stored
+ *  row only for the statement it would send now. Absent on a row made before it (a reader of before strips it) */
+const asked = Digest.optional()
 export const Row = z.discriminatedUnion('ok', [
   z.object({
     id: Id,
@@ -597,12 +601,14 @@ export const Row = z.discriminatedUnion('ok', [
     content: z.array(OutPiece),
     by: z.string(),
     sentences: z.object({ src: z.array(int), tr: z.array(int) }).optional(),
+    asked,
   }),
-  z.object({ id: Id, ok: z.literal(false), why: Why }),
+  z.object({ id: Id, ok: z.literal(false), why: Why, asked }),
 ])
 
 /** a paper's rows for one target, as the server stores and serves them (the Worker's rows file, the extension's store): each a
- *  translate package's Result, by unit id, in the units' reading order (the head's Units, first occurrence), each id once */
+ *  translate package's Result, by unit id, naming the statement it answered (`asked`; the extension's store names it in the
+ *  row's key), in the units' reading order (the head's Units, first occurrence), each id once */
 export const Rows = z
   .object({ format, rows: z.array(Row) })
   .refine((x) => new Set(x.rows.map((r) => r.id)).size === x.rows.length, { message: 'a unit id twice' })

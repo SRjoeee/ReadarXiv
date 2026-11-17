@@ -2,10 +2,19 @@
 // projected onto the contract's UnitIn. What a wire reads of them is kept; what only names them (an element's `src` and
 // `keys`, a group's `open` and `close`, a heading's `depth`, the paper's `kept`, a nested unit's `unit`, `pre` and `post`)
 // is left. The pin is read off the wire code itself: every field any wire, adapter or the chain reads of the projection is
-// recorded, and none may be one the projection left.
-import { Piece as FormatPiece, type Unit as FormatUnit, Unit as FormatUnitSchema } from '@readarxiv/format'
+// recorded, and none may be one the projection left. And the digest of that statement (src/bundle.ts askedOf), which a row
+// names: what moves it, what does not.
+import {
+  canonical,
+  Piece as FormatPiece,
+  type Unit as FormatUnit,
+  Unit as FormatUnitSchema,
+  read,
+  utf8,
+} from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import {
+  askedOf,
   type ChromeApi,
   chainOf,
   chrome,
@@ -13,6 +22,7 @@ import {
   google,
   microsoft,
   type Result,
+  sha256Hex,
   type Translator,
   type UnitIn,
   unitInOf,
@@ -264,5 +274,86 @@ describe('unitInOf: a bundle unit as a translator is given it', () => {
       return left.get(at)?.has(field) === true
     })
     expect(readLeft).toEqual([])
+  })
+})
+
+/** an object's keys the other way round, at every level (an array keeps its order: a piece's place is its statement) */
+function reversed<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(reversed) as T
+  if (typeof v !== 'object' || v === null) return v
+  return Object.fromEntries(
+    Object.entries(v)
+      .reverse()
+      .map(([k, x]) => [k, reversed(x)]),
+  ) as T
+}
+
+describe('askedOf: the digest of the statement a row answered', () => {
+  const unit = unitInOf(FULL)
+  /** the unit with one piece of its content (by its place in it, a group's content as `[i, j]`) changed */
+  const withPiece = (at: number | [number, number], f: (p: UnitIn['content'][number]) => object): UnitIn => {
+    const content = unit.content.map((p, i) => {
+      if (typeof at === 'number') return i === at ? (f(p) as typeof p) : p
+      if (i !== at[0] || p.t !== 'span') return p
+      return { ...p, content: p.content.map((q, j) => (j === at[1] ? (f(q) as typeof q) : q)) }
+    })
+    return { ...unit, content }
+  }
+  const drop = <T extends object>(o: T, k: string): T => {
+    const { [k]: _, ...rest } = o as Record<string, unknown>
+    return rest as T
+  }
+
+  it('is the SHA-256 of [kind, content, sentences, strict, entry], each piece its fields in the contract’s order', () => {
+    expect(askedOf(unit)).toMatch(/^[0-9a-f]{64}$/)
+    // (unitInOf gives the pieces in the contract's order already: format's reader gives them in its schema's, the same)
+    expect(askedOf(unit)).toBe(
+      sha256Hex(JSON.stringify([unit.kind, unit.content, unit.sentences === true, false, unit.entry === true])),
+    )
+    expect(askedOf({ id: 'u', content: [{ t: 'text', s: 'Plain words.' }] })).toBe(
+      sha256Hex(JSON.stringify([null, [{ t: 'text', s: 'Plain words.' }], false, false, false])),
+    )
+  })
+
+  it('moves with every field a translator is given: the text, an element’s name, text and stop, a group’s must, stop and style, the unit’s entry', () => {
+    const moved: [string, UnitIn][] = [
+      ['a text', withPiece(0, (p) => ({ ...p, s: 'We set ' }))],
+      ['an element’s name', withPiece(14, (p) => ({ ...p, name: 'Fig.' }))],
+      ['an element named where it was not', withPiece(1, (p) => ({ ...p, name: 'Equation' }))],
+      ['an element’s text', withPiece(2, (p) => ({ ...p, text: 'rules' }))],
+      ['an element’s text taken away', withPiece(2, (p) => drop(p, 'text'))],
+      ['an element’s stop', withPiece(6, (p) => ({ ...p, stop: ';' }))],
+      ['an element’s silent', withPiece(7, (p) => drop(p, 'silent'))],
+      ['an element’s newblock', withPiece(4, (p) => drop(p, 'newblock'))],
+      ['an element’s after', withPiece(16, (p) => ({ ...p, after: ' ' }))],
+      ['an element’s nameLang', withPiece(14, (p) => ({ ...p, nameLang: 'de' }))],
+      ['an element’s kind', withPiece(1, (p) => ({ ...p, kind: 'other' }))],
+      ['an element alone', withPiece(1, (p) => ({ ...p, alone: true }))],
+      ['what an element reads as', withPiece(1, (p) => ({ ...p, reads: 'θ' }))],
+      ['a group’s must', withPiece(8, (p) => drop(p, 'must'))],
+      ['a group’s stop', withPiece(8, (p) => drop(p, 'stop'))],
+      ['a group’s style', withPiece(8, (p) => ({ ...p, style: 'italic' }))],
+      ['a text inside a group', withPiece([12, 1], (p) => ({ ...p, s: 'all of it' }))],
+      ['the unit’s entry', drop(unit, 'entry')],
+      ['the unit’s kind', { ...unit, kind: 'caption' }],
+      ['the unit by sentence', drop(unit, 'sentences')],
+      ['the unit strict', { ...unit, strict: true }],
+    ]
+    const base = askedOf(unit)
+    const digests = moved.map(([what, u]) => [what, askedOf(u)] as const)
+    expect(digests.filter(([, d]) => d === base).map(([what]) => what)).toEqual([])
+    expect(new Set(digests.map(([, d]) => d)).size).toBe(moved.length)
+  })
+
+  it('does not move with the order of a unit’s or a piece’s keys, an absent field stated undefined, a flag stated false, or the id', () => {
+    const base = askedOf(unit)
+    expect(askedOf(reversed(unit))).toBe(base)
+    // (the bundle's own unit read back from canonical bytes, its keys sorted, by format's reader: the same statement)
+    const back = read('units', utf8(canonical({ format: 1, units: [FULL] }))).units[0] as FormatUnit
+    expect(askedOf(unitInOf(back))).toBe(base)
+    expect(askedOf(unitInOf(reversed(FULL)))).toBe(base)
+    expect(askedOf(withPiece(1, (p) => ({ ...p, stop: undefined, name: undefined })))).toBe(base)
+    expect(askedOf({ ...unit, strict: false })).toBe(base)
+    expect(askedOf({ ...unit, id: id('f') })).toBe(base)
   })
 })
