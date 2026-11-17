@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader in Korean, Chinese and Japanese, a character a translation writes in several code points, such as a Korean syllable written as its letters, a kana with a separate voiced mark or a character with a variation selector, is set and drawn as one character, and a line never ends inside it. Its parts had been measured and drawn apart, a syllable as separate letters. Both translators the reader uses write such characters whole, so a page is seldom affected.
 - Changed: in the PDF reader, a figure's or a table's caption keeps its own line spacing, as the paper sets it, and leaves any room it does not need under it. A caption whose translation is shorter than the original had been spread to fill the original's height, its lines pulled apart or its letters spaced out.
 - Changed: in the PDF reader in Korean, a line may end between two syllables of a word, as Korean typesetting does, and every line of a paragraph but its last reaches the column's edge. A Korean line had ended only at a space, and a line whose next word did not fit had been left short, about one line in three in a narrow column.
 - Fixed: in the PDF reader in Chinese and Japanese, a title an author sets at the start of a paragraph with no full stop after it, such as "**Global Matching** We leverage …", is kept apart from the sentence after it by one character's width. It had run flush into it. The translation is asked for as before.

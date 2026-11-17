@@ -14,7 +14,7 @@
 // replay reads them as today does; the decision (`setName`) takes their answers.
 import { cover } from '../breaker/cover.ts'
 import { fontString } from '../breaker/measure.ts'
-import { cjkClassRe } from '../breaker/script.ts'
+import { cjkLeadRe, clustersOf } from '../breaker/script.ts'
 import { caseRuns, type Face, type Token, type TStyle, upperOf } from '../breaker/tokens.ts'
 import type { FaceId, Metrics } from '../types.ts'
 import { styleOfChars } from '../unit/lead.ts'
@@ -153,9 +153,10 @@ export function nameScriptRuns(
   quotes: boolean,
   ownSmallCaps: (id: string) => boolean,
 ): NameDrawn {
-  const re = cjkClassRe(quotes),
+  const re = cjkLeadRe(quotes),
     parts: { cls: 'cjk' | 'latin'; s: string }[] = []
-  for (const ch of text) {
+  // (by its grapheme clusters, each classed by its first code point, as B.tokens cuts a run)
+  for (const ch of clustersOf(text)) {
     const cls = re.test(ch) ? 'cjk' : 'latin',
       last = parts.at(-1)
     if (last?.cls === cls) last.s += ch

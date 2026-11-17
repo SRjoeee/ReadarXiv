@@ -12,7 +12,7 @@
 import { hangOf, leadOf } from '../breaker/break.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
-import { cjkClassRe, markOf } from '../breaker/script.ts'
+import { cjkLeadRe, clustersOf, markOf } from '../breaker/script.ts'
 import { shown, type TextPiece } from '../breaker/text.ts'
 import type { Face, Token, TStyle } from '../breaker/tokens.ts'
 import { firstCompress } from '../fit/walk.ts'
@@ -120,13 +120,16 @@ function figureRuns(
   quotes: boolean,
   at: readonly (TStyle | undefined)[] = [],
 ): FigureRun[] {
-  const cjkRe = cjkClassRe(quotes),
+  const cjkLead = cjkLeadRe(quotes),
     runs: { cls: 'cjk' | 'latin'; s: string; st: TStyle | undefined }[] = []
   let k = 0
-  for (const ch of text) {
-    const cls = cjkRe.test(ch) ? 'cjk' : 'latin',
-      st = at[k++],
+  // (by its grapheme clusters, each classed and styled by its first code point, as B.tokens cuts a run: a character and its
+  // variation selector, a kana and its voiced mark, are one run's, drawn in one face)
+  for (const ch of clustersOf(text)) {
+    const cls = cjkLead.test(ch) ? 'cjk' : 'latin',
+      st = at[k],
       last = runs.at(-1)
+    k += ch.length === 1 ? 1 : [...ch].length
     if (last?.cls === cls && last.st === st) last.s += ch
     else runs.push({ cls, s: ch, st })
   }

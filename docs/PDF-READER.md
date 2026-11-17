@@ -8051,7 +8051,8 @@ candidate broken between syllables: 1512.03385v1-ko p7 and p2, 2610.40645v1-ko p
 export of 2026-11-16T04:19:36.836Z): 「改（允许在字之间断行，两端对齐）」.
 
 - **The rule** (`packages/typeset/src/data/rules/scripts.ts`, Kore): `keepAll` false. Each Hangul syllable is a token of its own
-  (B.tokens, as each Chinese or Japanese character is), so a line may end between two syllables of a word, and between a Latin
+  (B.tokens, as each Chinese or Japanese character is; a grapheme cluster, so a decomposed syllable too, §18.92), so a line may
+  end between two syllables of a word, and between a Latin
   word and the Hangul set against it (xetexko's `\XeKo@latincjk`, a glue, both ways: `:1014`, `:1123`). A line of mostly CJK
   items is justified by the breaker's rule for the scripts that break between characters: its slack spread over its gaps, within
   `cjkJust` (0.25 em a gap, Korean's as Chinese's), and a line a little short of its last group squeezed to take it
@@ -8106,6 +8107,64 @@ for every syllable (`metrics/table.ts`), 2.36 million times over the four papers
 font and text (`lab/typeset/served-metrics.mjs`, 586134804: the four papers' page lay in the gate p50 87 to 22 ms, every dump
 byte-identical). The reader measures a syllable once a visit (`packages/reader/src/compose/served.ts`, its measures by font and
 text).
+
+### 18.92 A character is a grapheme cluster: a run that breaks between its characters is cut between clusters (PR #649's review, the owner's answer of 2026-11-17)
+
+B.tokens (`breaker/tokens.ts`) cut a CJK run, where the rules break between its characters (`keepAll` false), at every code
+point, and classed each code point apart. So a decomposed Hangul syllable (L V T, the conjoining jamo, which `breaker/script.ts`
+counts among the CJK blocks) was three tokens, measured apart, a line free to end between them and each drawn at its own place,
+its letters apart; a kana and its combining voiced mark (U+3099, U+309A) two; a character and its variation selector (U+FE00 to
+U+FE0F, U+E0100 to U+E01EF: no CJK block, so the selector opened a Latin part, measured in the Latin face) two. Reach on the stored
+rows: none (both translators answer composed; below). It is fixed because the cut is wrong, not because a paper shows it.
+
+- **The rule**: a run is walked by its grapheme clusters (UAX #29's extended clusters, the platform's own: `Intl.Segmenter`,
+  granularity `grapheme`), each classed by its first code point (`cjkLeadRe`), so a run that breaks between its characters is cut
+  between clusters, never inside one, and each token's offsets (UTF-16, for the sentences, the words and the links) are its first
+  unit's, as before. No list of ours: where a chunk holds no code point that may join another (`breaker/script.ts` `mayJoin`:
+  the code points whose Grapheme_Cluster_Break lets them join a neighbour, CR, LF, Extend, ZWJ, SpacingMark, Prepend,
+  Regional_Indicator and the conjoining L, V and T, written in the properties ECMAScript names, `\p{M}`, `\p{Grapheme_Extend}`,
+  `\p{Emoji_Modifier}`, `\p{Regional_Indicator}`, `\p{Cf}` and the three jamo blocks, with the letters of those classes no such
+  property names, Unicode 17's Thai and Lao SARA AM, the Prepend letters of Indic_Syllabic_Category and Kirat Rai's vowel signs),
+  each code point is a cluster of its own and the chunk is walked by its code points as before (`clustersOf`); else by the
+  segmenter's clusters. The class is held to the platform's segmenter over every assigned code point
+  (`packages/typeset/tests/unit/graphemes.test.ts`: none it joins to a neighbour escapes the class).
+- **Every other place a CJK run is read character by character**, each read where it breaks, measures, squeezes or draws:
+  - the tracking a token, a run's edge and a line's ink end carry after each character (`break.ts` tokW, `emit/display.ts` runEdge,
+    `shared/share.ts`): counted by clusters (`charsOf`), as the drawing's letter spacing is set after each typographic character
+    unit (CSS Text 3 §8.2), not after each code point;
+  - the drawing (`emit/display.ts` lineRuns): a CJK token of one cluster of several code points is a run of its own at its own
+    place, glued to nothing, its text drawn whole: a run of single characters places each code point (it would draw the cluster
+    apart again), and a run glued of several would drop the spacing the breaker sets between characters; the CJK ink
+    (`inkLines`) reads a run by its clusters, so a character with its selector keeps the CJK ink;
+  - a figure text's and a name's runs by script (`shared/figures.ts` figureRuns, `shared/names.ts` nameScriptRuns): by clusters,
+    each its first code point's class and style, so a selector is never set apart in the Latin face;
+  - unchanged, each already by clusters or not a character's: a word wider than its line cut by its graphemes (`break.ts`,
+    the same segmenter, now `script.ts` graphemesOf); a line's squeeze and justification, which count the gaps between items (a
+    cluster one item); B.cover's characters a face must hold (`breaker/cover.ts`: every code point asked of its face, a selector
+    too); a layout's tally of characters set and lost (`breaker/place.ts` laidOut, both sides counted alike); the text layer's
+    split of the original's own items (`emit/text.ts`) and the links' offsets (`emit/links.ts`, at the tokens' own offsets, every
+    one a cluster's edge); a mark's blank half (`markOf`, a token of one code point alone: a mark with its selector keeps its
+    whole box, the face's measure being of the mark's default glyph);
+  - not changed, and not made worse: the edge readers of a token (`tokens.ts` spacelessEdge, markBlankEdge, the rules' marks no
+    line ends with, `script.ts` keptPair, `shared/figures.ts` blanksOf, `unit/marks.ts` mergeTail) read a token's first code point,
+    a cluster's base, and its last, which for a token ending in a cluster of several is the cluster's last extender, not its base
+    (UAX #14 LB9 reads a combining sequence by its base): before the change that extender was a token of its own, read the same.
+- **Tests** (texts of our own; red on the base, green here): `packages/typeset/tests/unit/token-clusters.test.ts`, laid through
+  layPage with a face that shapes each cluster as one character: a decomposed Hangul syllable one token measured whole (no text
+  measured holds a letter of it without the whole), a word a token a syllable, a Korean paragraph and a Japanese one decomposed
+  laid at every measure from 60 to 130 pt as their composed forms, character by character where each is drawn, no line ending
+  inside a cluster; a Han character with a variation selector one CJK token, its selector never a line's start, laid as the
+  character alone; an emoji's ZWJ sequence in a Chinese line one token at every measure (a guard: one before too); composed
+  Chinese, Japanese and Korean tokenized as before, byte for byte (each sample's tokens hashed, the base's digests).
+  `graphemes.test.ts`: the class against the segmenter, and the clusters of each case walked and counted.
+- **The cost, measured before the form was chosen** (2026-11-17, the reader gate's own run of the 92 pairs on both stores, every
+  B.tokens call answered by three forms on the same input in a turning order, each timed alone, under other lanes' load of 18
+  rising to 134): the base's walk 25,793 ms (door) and 34,212 (Google); the segmenter on every chunk 27,932 (+8.3 %) and 40,327
+  (+17.9 %), a pair's median +22.5 %; the class's test first, the segmenter only where a chunk holds a joiner, 23,713 (-8.1 %) and
+  33,385 (-2.4 %), a pair's median -0.5 %. The second form is built. Over the 293,506 calls both forms answered as the base, and
+  no token's text held a code point of the class.
+- The versions: none moves. A page is laid when it is read; the units (PIPELINE), what a translator is sent (TRANSLATE), the
+  chain's digests and today's layout file (LAYOUT) are untouched.
 
 ## 19. The engine's contract
 
