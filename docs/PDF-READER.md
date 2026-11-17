@@ -3481,7 +3481,8 @@ out through the groups around the mark (the paper's braces, a template's `\begin
 by `\aftergroup` up to the innermost entry and never past it; the template's end writes `AXT-CELL <i> <class>` only where
 that index is defined at its own group level, so a cell of a tabular inside a cell never writes the outer cell's. A cell's
 end mark writes `AXT-ALIGN` as any unit's does (named `t<i>`, which today's reader passes over): a p, m or b cell's lines are
-its paragraph's (`>{\centering\arraybackslash}p`, tabularx's X, tblr's cells). The engine (`marks/channels.ts` `readAlign`)
+its paragraph's (`>{\centering\arraybackslash}p`, tabularx's X, tblr's cells), and an m or a b cell's class is where TeX stands
+those lines in its row, which the part states (`Placed.stand`, §18.92). The engine (`marks/channels.ts` `readAlign`)
 gives a cell its paragraph's alignment where TeX set it one, else its class's: c centred, l flush left, r flush right; and
 the typesetter keeps a cell's flush as any unit's (today's never did, no fact telling it then): an r column's translation
 ends where its original ends and, clipped there, widens to its left, and an l column's wrapped lines are ragged.
@@ -8101,6 +8102,61 @@ for every syllable (`metrics/table.ts`), 2.36 million times over the four papers
 font and text (`lab/typeset/served-metrics.mjs`, 586134804: the four papers' page lay in the gate p50 87 to 22 ms, every dump
 byte-identical). The reader measures a syllable once a visit (`packages/reader/src/compose/served.ts`, its measures by font and
 text).
+
+### 18.92 A cell of an m or a b column stands where TeX stands it in its row (the coordinator's ruling of 2026-11-17)
+
+2610.21313v1's Table I sets every column `>{\centering\arraybackslash}m{2.2cm}`. A cell of its first column, a quantity and its
+unit with a table note's mark, is two lines on arXiv's page (baselines 403.91 and 395.94, p4, unit 83); the row's other cells, one
+line each, stand at 399.93, the middle of the two. Google's translation fits one line, as TeX would set it, and TeX would stand that
+line where the row's one-line cells stand; the lay stood it on the original's first line (403.20 once settled into its band), at
+the cell's top (lane cell-83's probe; 2501.14787v1's Table 3, p11, units 92 and 101, the same). TeX states the column's class (the
+marked compile's `AXT-CELL <i> <\@chnum>`, §18.13), and the engine read c, l and r of it alone: the part said nothing of where a
+cell's lines stand in its row, and the lay fills a cell's lines from its first baseline down (B.slots).
+
+- **What TeX does** (array.sty v2.6n of 2025/09/25, the pinned TeX Live 2025's). An m column's cell is set in a `\vbox` and
+  lowered by half its height past the strut's (`\@classz`, `array.sty:154-156`; `\ar@align@mcell`, `:162-173`: `\lower` by
+  half of `\ht` less `\ht\@arstrutbox` plus `\baselineskip`, which `\@array` sets to nothing inside the alignment, `:232`), so
+  that the middle of its first and last baselines stands on the row's baseline, whatever its count of lines, where the first
+  line is the strut's height (the strut `\@startpbox` sets at its start, `:192-194`); a cell of one line no taller than the strut
+  stands on it as set. A b column's cell is a `\vbox` (`:159`), its last line on the row's baseline; a p column's a `\vtop`
+  (`:158`), its first line there. This is not the `\vcenter` of the array.sty before (the cell's box centred on the math axis), and
+  it stands the lines the same way where the first line is the strut's height. Measured in TeX (array.sty v2.6n, byte for byte
+  the pinned one's, in pdfLaTeX): one, four and six lines of an m column at `\scriptsize`, `\normalsize` and `\arraystretch` 1.5,
+  the middle of the first and last baselines on the row's baseline every time, and a b column's last line on it; and on our
+  compile of 2610.21313v1, the row's one-line cells on the middle of unit 83's two lines to a thousandth of a point.
+- **The engine states it** (`marks/channels.ts` `readCellStands`, the cell's first `AXT-CELL` record, as `readCellBoxes` reads
+  it): a cell of an m column (`\@chnum` 3) or a b column (5) states `Placed.stand`, `m` or `b`, on every placement of it
+  (`InstrumentUnit.cell.stand`, `bundle/bundle.ts`). Absent for c, l and r (a line of the template's own box), for p (TeX's first
+  line on the row's, where the lay starts it) and for a cell no template of LaTeX's set (a plain `\halign`, tabularray's tblr,
+  which state no class). A field of its own, not a fifth member of `Placed.cell`, whose tuple a reader of before refuses: that one
+  strips it and lays the cell from its first line as before, so FORMAT stays. The record is in every stored marked log already: no
+  TeX moves, no compile's key moves, no paper compiles again (the modules the stored instrument's code reaches, `compiled.ts`
+  and `plan.ts`'s, are none of the four this reads in).
+- **The lay places by it** (`packages/typeset/src/fit/stand.ts` `toStand`, X.stand, called by B.place's `laidOut` beside
+  X.lastLines). Once the breaker has laid the cell's lines, the block of them is moved, every line by the same: an m cell's with
+  the middle of its first and last baselines on the middle of the original's first and last, a b cell's with its last line on
+  the original's last. One rule, whatever the count of the laid lines and whatever pitch the fit or the page fill gave them, so
+  that the same count at the same pitch is no move at all. Every layout of the cell passes there: the fit's walk, X.further, and
+  every lay of the page fill (its fill leadings, its tries, its size), each before it is settled. The writers of a cell's
+  baselines: B.slots (from its first baseline down), B.break's settle (TeX's `\lineskip` rule, inside the breaking), X.lastLines
+  (a heading's alone), X.stand, and S.settle, which moves a line standing on one of the original's baselines into that line's
+  band at the size drawn and no other line: a line X.stand leaves on the original's lines is cleared as before, one it moves
+  between them stands where the rule stands it, inside its band (the measurement below). Only a member whose lines are one block
+  (one cell's): a unit the source walk runs on past its row's end into the next row's cell (2501.14787v1's units 94, 96, 99 and
+  100, the walk's own defect) has its lines in two blocks and is laid as before.
+- **Not built.** The first line's height past the strut: TeX lowers the box by half of what a taller first line adds (a raised
+  mark, a tall formula), which the part does not state, and the rule reads the original's lines as they stand; a p cell (TeX's
+  first line is where the lay starts it); a cell with no `AXT-CELL` (its class unknown); a box inside a c, l or r cell; an m, p or
+  b cell's measure, which is still the original lines' extent and not the column's `\hsize`.
+
+Tests: `packages/engine/tests/cell-stand.test.ts` (red first: the reading of classes 3 and 5 in a log of our own, a cell's
+first record, and the part's `stand` on an m and a b cell and none on a p and an l cell), `packages/format/tests/format.test.ts`
+(the field read with and without, no other class, a fifth member of `cell` refused), `packages/typeset/tests/unit/cell-stand.test.ts`
+(red first on the lay: the rule at fewer, equal and more lines for m and b, the two-block member and a line of another block left
+alone; a page's lay: one line of two stood on the middle, two of three on the middle line, the same count drawn as before, a b
+cell on its last line, a CJK cell between two rules inside its band and settled as before at the same count). The versions:
+PIPELINE 105 (the parts of the cells that gain the field); TRANSLATE, LAYOUT and FORMAT stay (no wire, no mark, no field a reader
+of before misreads).
 
 ## 19. The engine's contract
 
