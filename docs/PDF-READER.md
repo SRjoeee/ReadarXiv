@@ -8010,7 +8010,12 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   (`by` itself) is a tie's step: laid alone at its size with its mates where the tie left them it fits, but at the tie's one size
   for all it does not (2610.21084v1-zh p33 ord 326, 2610.21026v1-zh p36 ord 243, 2610.19159v1-ja p5 ord 128: each fit only at
   0.975 beside its mate at 1, its mate capped there, and each capped back at its own first need). The evening's steps and the
-  ties' are printed beside, never failed: the owner's accepted costs.
+  ties' are printed beside, never failed: the owner's accepted costs. Each line reads every run of a member (PR #649's review): a
+  unit its displays split is laid a run at a time, each run at its own state and size (`fit/runs.ts` layoutRuns; the fill fills
+  each run apart, `shared/fill-pass.ts`), and the joined layout's own state and scale are its first run's alone; so each run its
+  lines carry (`LaidLine.seg`) is read once, in order, with that run's own fill leading, parameters, tokens and blocks
+  (`FillLaid.runs`), a member of one run as before, and a failing member's entry names each run that fails the line
+  (`run 2 of 3`), as the record (`AXT_GATE_SPACING`) names the run of each line it writes.
 - **The display gate's ruling FM** (`lab/typeset/parity/rulings.mjs`, his verdict on the captions laid by the rule and his
   general words above, the coordinator's ruling of 2026-11-17): a caption the rule sets in fewer lines than today's reader, which
   letter-spaced it onto more, at its script's pitch from its first line with the slack under it, is the rule's own look and no
