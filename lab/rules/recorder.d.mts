@@ -23,6 +23,7 @@ export interface Recorder {
   th(id: number, table: object, key: PropertyKey): boolean
   hush(...sources: unknown[]): void
   ns<T>(set: T, ...sources: unknown[]): T
+  cloned(value: unknown): void
   loaded(path: string): void
   context(next: { paper?: string | null; test?: string | null; file?: string | null; page?: number | null }): void
   readonly current: { paper: string | null; test: string | null; file: string | null; page: number | null }
