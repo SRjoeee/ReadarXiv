@@ -8353,7 +8353,11 @@ two pieces; two more there own no ink of their display). Every reader after the 
 (`stateDisplays`): the piece's kind in the units objects, which locate reads for the rows it holds where TeX set them, the
 run-ins read, and the wire (a display is a break of its sentence, its own marker); the element's class, the part's `El.kind`,
 which the typesetter lays a kept display by; and the stop the source sets at the display's end, read by `displayStop` as a
-spelled display's (`\be x = y. \end{equation}`: `.`). Where the spelling and TeX agree nothing moves.
+spelled display's before its `\end{…}`: up to where the paper's own definition closes the display, which the source reader states
+on the placeholder from what it reads of the paper's definitions (`PhPiece.closes`, not enumerable: no unit's hash, JSON or mark
+moves): before the partner macro that ends the environment a macro began (`\be x = y, \ee`: `,`; `latex-front.ts` envMacros), and
+before the end of the argument a macro's body ends a display environment with (`\newcommand{\al}[1]{\begin{align}{#1}\end{align}}`,
+`\al{x = y.}`: `.`; the reader's bodies, `displayArgEnd`). Where the spelling and TeX agree nothing moves.
 
 TeX states a display, never that a piece is none: a display the pass before did not set at its place gets no point (§18.19), a
 `$$` display no region, a display after another no mark. So a piece TeX states none at keeps the class its marks read, how it
@@ -8378,12 +8382,10 @@ twin states it.
   p14's display (6.5), 2608.10322v2 p4's (2.2) and (2.3), 2608.01890v1 p13's two `eqnarray`s and 2608.23517v1 p5's (1.13) and
   (1.14) stay where TeX set them, the translation around them; 2608.23517v1's 76-row alignment on p34 and p35, whose unit did
   not fit and stayed English, is laid around its rows.
-- **Not done: the stop before the paper's own end macro.** `\be x = y, \ee` ends with the paper's `\ee`, which `displayStop`
-  does not read off as it reads `\end{equation}`: the stop stays unread there (the wire's `displayEnds` still gives a display
-  followed by a capital its full stop). The source reader knows the paper's end macros (`latex-front.ts` envMacros), but only
-  inside its walk; stating them for a reader after the compile changes the source reader's code, which the website keys a
-  stored instrument by (the marks' closure: 488,756 bytes to 488,766), so every stored paper would compile once more. Left to
-  the coordinator.
+- **The cost of the stop's reading** (the coordinator's ruling of 2026-11-19): the source reader's code is what the website keys a
+  stored instrument by (the marks' closure: 488,756 bytes to 489,452, sha256 16435db6…), so every stored paper compiles once more
+  at the pin that takes it; production holds no such instrument yet. The marked TeX does not move (the marks read no `closes`):
+  no lab compile key moves.
 - **Not done: a display a unit opens with written through a paper's macro.** The marking passes over a display at a unit's
   head by its class (`headsOf`), so `\be` there has no mark and no ink of its own on B: kept as the original's by its place,
   as before (2608.09746v1, 2608.04473v1: 9 elements).

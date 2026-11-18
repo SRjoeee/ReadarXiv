@@ -2057,7 +2057,13 @@ export function stateDisplays(
     if (p.t === 'span') stateDisplays(p.content, ids, pieces, classes)
     if (p.t !== 'el' || !ids.has(p.id) || p.kind === 'display') continue
     p.kind = 'display'
-    const stop = displayStop(pieces[Number(p.id)]?.src, true)
+    // (its source up to where the paper's own definition closes it, where the source reader states that (PhPiece.closes: before
+    // `\\ee`, before an `\\al{…}`'s argument's end), as a spelled display's is read up to its `\\end{…}`)
+    const q = pieces[Number(p.id)] as (SrcPiece & { closes?: number }) | undefined
+    const stop = displayStop(
+      typeof q?.src === 'string' && q.closes !== undefined ? q.src.slice(0, q.closes) : q?.src,
+      true,
+    )
     if (stop) p.stop = stop
     const c = classes?.get(p.id)
     if (!c) continue

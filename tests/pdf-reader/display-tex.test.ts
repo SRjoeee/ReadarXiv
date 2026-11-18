@@ -44,6 +44,8 @@ const paperOf = (macro: boolean) => {
 \def\iftru{\iftrue}
 \newcommand{\kw}{keyword}
 \newcommand{\vx}{\mathbf{x}}
+\newcommand{\bq}{\begin{quote}}
+\newcommand{\eq}{\end{quote}}
 \begin{document}
 \section{Weights}
 The total of the weights we keep for every row of the table is given by
@@ -64,6 +66,28 @@ and the text goes on after it.
 \fi
 
 A text macro \kw{} and an inline formula $\vx$ stay as they were in this sentence of the paper.
+
+The bound on the rows reads
+${be('m = n + 1 ,')}
+where m counts the rows of the table.
+
+The total of the second table is
+${be('t = 2 .')}
+The next sentence starts after the display.
+
+The rows of the second form read
+${al('a &= b \\\\\n c &= d .')}
+The sentence after the rows starts here.
+
+The pair of rows reads
+${al('e &= f \\\\\n g &= h ,')}
+where both rows hold for the table.
+
+A quoted line follows.
+\bq
+The quote ends here.
+\eq
+The text goes on after the quote.
 
 The last display ends as the environment does:
 ${macro ? '\\be\np = 1 .\n\\end{equation}' : '\\begin{equation}\np = 1 .\n\\end{equation}'}
@@ -169,6 +193,10 @@ describe.skipIf(!docker)('a display TeX set through a macro of the paper, as a s
   }, 900_000)
   const CASES: [string, string, string][] = [
     ['between two stretches of text', '\\be\nw =', '\\begin{equation}\nw ='],
+    ['with a comma before the macro that ends it', '\\be\nm =', '\\begin{equation}\nm ='],
+    ['with a full stop before the macro that ends it', '\\be\nt =', '\\begin{equation}\nt ='],
+    ["with a full stop before its argument's end", '\\al{\na &=', '\\begin{align}\na &='],
+    ["with a comma before its argument's end", '\\al{\ne &=', '\\begin{align}\ne &='],
     ["at its unit's end", '\\be\ns =', '\\begin{equation}\ns ='],
     ['with a parameter whose body is an environment', '\\al{', '\\begin{align}'],
     ['inside a conditional of the paper', '\\be\nq =', '\\begin{equation}\nq ='],
@@ -190,8 +218,19 @@ describe.skipIf(!docker)('a display TeX set through a macro of the paper, as a s
       for (const w of [g, ms])
         expect(w.write(unitInOf({ ...a.u, id: b.u.id }), 'zh-Hans')).toBe(w.write(unitInOf(b.u), 'zh-Hans'))
     })
-  it("reads a display's stop at its source's end as a spelled one's", () => {
+  it("reads a display's stop at its source's end as a spelled one's, before the paper's macro or its argument's end", () => {
     expect(holding(macro, '\\be\np =').el.stop).toBe('.')
+    expect(holding(macro, '\\be\nm =').el.stop).toBe(',')
+    expect(holding(macro, '\\be\nt =').el.stop).toBe('.')
+    expect(holding(macro, '\\al{\na &=').el.stop).toBe('.')
+    expect(holding(macro, '\\al{\ne &=').el.stop).toBe(',')
+    expect(holding(macro, '\\be\nw =').el.stop).toBe(undefined)
+  })
+  it("keeps a paper's closing macro that closes no display as it was: its marks' class, no stop", () => {
+    const us = macro.units.filter((x) => elsOf(x.content).some((e) => /^\\[be]q\b/.test(e.src)))
+    expect(us.length).toBeGreaterThan(0)
+    for (const e of us.flatMap((x) => elsOf(x.content)).filter((x) => /^\\[be]q\b/.test(x.src)))
+      expect([e.kind, e.stop]).toEqual(['macro', undefined])
   })
   it('keeps a text macro and an inline formula as their marks state them, nothing held', () => {
     const { u } = holding(macro, '\\kw')
