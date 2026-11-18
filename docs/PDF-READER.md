@@ -11068,7 +11068,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   figure texts of the parity's pages once its `align` read a drawn line by its ink (9744efab3), none of them judged, today's
   figure texts joining no unit. Over the 123 reader dumps 609 of 14,351 figure texts move (452 level, 154 turned along their run,
   3 left unfit by their advance now drawn), every other outcome today's; replayed with no mark's em holding a blank half
-  (`lab/typeset/replay-figures.mjs --marks=today`), all 14,351 are today's. A figure text is still set as today's within its
+  (`c7e44a94b:lab/typeset/replay-figures.mjs --marks=today`), all 14,351 are today's. A figure text is still set as today's within its
   line: no CJK–Latin autospace and no blank half taken between two marks, which the breaker's lines set.
 - **Its ink** is its own group `f<k>` (`layout/wrap.mjs`): its runs wrapped where they are shown, in the page's stream, or in the
   stream of the form an included PDF is, that form written again once in the wrap section under its own number, its dict ours but

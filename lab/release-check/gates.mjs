@@ -898,7 +898,7 @@ export const GATES = [
     holds: [],
     // (today's engine at 065c1d973, read only: AXT_TODAY, else the worktree beside this one that packages/typeset/tests/replay/tap.ts names)
     needs: ctx => [exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/rules/tex-names.json'))],
-    // (not move-fit.mjs --check, which held the breaker's five moved files to today's code and the changes it lists: the
+    // (not move-fit.mjs --check (deleted at the cut-over with the replays), which held the breaker's five moved files to today's code and the changes it lists: the
     // typesetter's rulings edit those files in place since a8c36be1f (2026-11-08, a URL broken where its url package lets TeX
     // break it), about forty commits of PDF-READER §18 and §19, so the file it would write is no longer the package's and the
     // check failed on every one; the moved code is held as the ported files are, by the reader's gates and the display gates;
@@ -1104,8 +1104,8 @@ export const GATES = [
 
 /**
  * The gates retired, each with its reason and what holds its question now. A retired gate is not run and not judged: naming it
- * to --only says why, and the report lists them. Its tools stay runnable in the lab until the cut-over deletes them with today's
- * engine (design 3i, C1).
+ * to --only says why, and the report lists them. The replays' tools went at the cut-over (design 3i, C1); a record that cites
+ * them keeps its sentence.
  */
 export const RETIRED = [
   {
