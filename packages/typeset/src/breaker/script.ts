@@ -55,25 +55,47 @@ export const graphemesOf = (t: string): string[] => Array.from(GRAPHEMES.segment
  * Prepended_Concatenation_Mark), and the letters (Lo) of those classes no such property names, as Unicode 17 classes them: Thai's
  * and Lao's SARA AM (SpacingMark), the Prepend letters of Indic_Syllabic_Category Consonant_Preceding_Repha and
  * Consonant_Prefixed, Kirat Rai's vowel signs. A text that holds none is its code points, each a cluster of its own; held to the
- * platform's own segmenter over every assigned code point by packages/typeset/tests/unit/graphemes.test.ts
+ * platform's own segmenter over every assigned code point by packages/typeset/tests/unit/graphemes.test.ts. Sticky: it reads
+ * the one code point of a text that starts at its lastIndex (pointsOf)
  */
 const JOINS =
-  /[\r\n\p{M}\p{Grapheme_Extend}\p{Emoji_Modifier}\p{Regional_Indicator}\p{Cf}\u{1100}-\u{11ff}\u{a960}-\u{a97f}\u{d7b0}-\u{d7ff}\u{d4e}\u{e33}\u{eb3}\u{111c2}\u{111c3}\u{113d1}\u{1193f}\u{11941}\u{11a84}-\u{11a89}\u{11d46}\u{11f02}\u{16d63}\u{16d67}-\u{16d6a}]/u
-/** whether a text may hold a grapheme cluster of two code points or more (JOINS: none where it holds no such code point) */
-export const mayJoin = (t: string): boolean => JOINS.test(t)
-/** a text's grapheme clusters, walked as `for (const g of clustersOf(t))`: the text itself (its code points, each its own
- *  cluster) where it holds no code point that joins another (mayJoin), else the platform's clusters (graphemesOf) */
-export const clustersOf = (t: string): Iterable<string> => (JOINS.test(t) ? graphemesOf(t) : t)
-/** how many characters a reader sees in a text: its grapheme clusters (clustersOf), counted without a list where each code point
- *  is one */
-export function charsOf(t: string): number {
-  if (JOINS.test(t)) return graphemesOf(t).length
+  /[\r\n\p{M}\p{Grapheme_Extend}\p{Emoji_Modifier}\p{Regional_Indicator}\p{Cf}\u{1100}-\u{11ff}\u{a960}-\u{a97f}\u{d7b0}-\u{d7ff}\u{d4e}\u{e33}\u{eb3}\u{111c2}\u{111c3}\u{113d1}\u{1193f}\u{11941}\u{11a84}-\u{11a89}\u{11d46}\u{11f02}\u{16d63}\u{16d67}-\u{16d6a}]/uy
+/**
+ * JOINS's answer for each code unit of the Basic Multilingual Plane, read the first time a text holds it (pointsOf): 1 where it
+ * joins nothing, 2 where it may join, 0 not read yet. The class's own answers and nothing else, the same whatever was read
+ * before, so no input of a lay is kept. A text is so read by one load a code unit rather than by the class's test at every
+ * call: a token's count is asked at every width the breaker and the fit's bound compute (break.ts tokW), and the class tested
+ * over a text of two-byte code units (Han, Hangul, Cyrillic) cost two to four times the code-point count it replaced
+ */
+const UNITS = new Uint8Array(0x10000)
+/** a text's code points where none of them may join another (JOINS), -1 where one may: each read by its code unit (UNITS), a
+ *  code point beyond the BMP (its two units) or a lone surrogate by JOINS read at it */
+function pointsOf(t: string): number {
   let n = 0
-  for (let i = 0; i < t.length; i++) {
+  for (let i = 0; i < t.length; i++, n++) {
     const c = t.charCodeAt(i)
-    if (c < 0xdc00 || c > 0xdfff || i === 0 || t.charCodeAt(i - 1) < 0xd800 || t.charCodeAt(i - 1) > 0xdbff) n++
+    const bmp = c < 0xd800 || c > 0xdfff
+    let k = bmp ? UNITS[c]! : 0
+    if (k === 0) {
+      JOINS.lastIndex = i
+      k = JOINS.test(t) ? 2 : 1
+      if (bmp) UNITS[c] = k
+    }
+    if (k === 2) return -1
+    if (!bmp && t.codePointAt(i)! > 0xffff) i++
   }
   return n
+}
+/** whether a text may hold a grapheme cluster of two code points or more (JOINS: none where it holds no such code point) */
+export const mayJoin = (t: string): boolean => pointsOf(t) < 0
+/** a text's grapheme clusters, walked as `for (const g of clustersOf(t))`: the text itself (its code points, each its own
+ *  cluster) where it holds no code point that joins another (mayJoin), else the platform's clusters (graphemesOf) */
+export const clustersOf = (t: string): Iterable<string> => (pointsOf(t) < 0 ? graphemesOf(t) : t)
+/** how many characters a reader sees in a text: its grapheme clusters (clustersOf), counted without a list where each code point
+ *  is one (its code points, pointsOf) */
+export function charsOf(t: string): number {
+  const n = pointsOf(t)
+  return n < 0 ? graphemesOf(t).length : n
 }
 const PUNCT_CLOSE =
   /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
