@@ -792,8 +792,8 @@ decision: clearing it costs a re-translation and nothing else.
   request shaping did), the `rules` slot and `RULES_VERSION` (an HTML block's wire is in the key, and a rule that changes
   what is sent changes the wire), `renderPath` (the wire again), the cuts and `marked-over-cap` (the tags adapter writes its
   boundary markers into the wire it is keyed by), `normalizedText` (the adapters collapse white space as they write).
-  `TRANSLATE_VERSION` keeps its meaning for the PDF engine's own wire (`src/pdf-reader/engine/translate/`, the website's rows
-  until its stage 3c and the extension's old reader), which no key of the extension reads any more.
+  `TRANSLATE_VERSION` went with the PDF engine's own wire at the cut-over (today's engine's translate/; the website keeps
+  its mirror until its own cut-over); no key of the extension read it.
 
 ### The configuration
 
@@ -1032,9 +1032,8 @@ only how it meets the rest of the extension.
   visitor's credentials or a referrer: only the paper's id and version leave the machine), the papers it kept answered
   first (`host/stored-fetch.ts`, `cache/paper-store.ts`), the preferences over the extension's configuration (a write is a
   patch on the latest stored), and the rows made through the background's chain (§8), laid by the reader's own typesetter.
-  `today` (`AXT_READER=today pnpm build`) is the session the bullets below describe (`session/`, the engine's reading view,
-  our server's v1 layer): the reader the released extension (0.5.2) reads with, built and tested until the cut-over removes
-  it; going back is that one build setting.
+  `today`, the session the bullets below describe (`session/`, the engine's reading view, our server's v1 layer), the reader
+  the released extension (0.5.2) reads with, went with today's engine at the cut-over (C1): the bullets below are its record.
 - **The typesetter** (`@readarxiv/typeset`) is pure functions of data and the translated text. Its entry, the one the reader
   calls, is `layPage(part, rows, rules, metrics)` (`packages/typeset/src/lay/entry.ts`): one page laid from its own part
   alone and the rows by unit id, giving what is drawn, line by line. Under it, `layFlowPrepared(members, rules)` lays a
