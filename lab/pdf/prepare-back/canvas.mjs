@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path'
 import { pageInk } from '@readarxiv/engine'
 import { chromium } from 'playwright'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { servedPage } from './served-page.mjs'
 
 const [OUT, LIST] = process.argv.slice(2)
 const CANVAS = process.argv.find(a => a.startsWith('--canvas='))?.slice(9) ?? 'gpu'
@@ -154,13 +155,7 @@ try {
     }
     const files = new Map([['a.pdf', A], ['w.pdf', SELF ? A : W]])
     const page = await browser.newPage()
-    await page.route('http://canvas.local/**', route => {
-      const path = new URL(route.request().url()).pathname
-      if (path === '/') return route.fulfill({ contentType: 'text/html', body: PAGE })
-      if (path.startsWith('/pdf/')) return route.fulfill({ contentType: 'application/pdf', body: Buffer.from(files.get(path.slice(5))) })
-      const f = join(PDFJS, path.slice('/pdfjs/'.length))
-      return existsSync(f) ? route.fulfill({ contentType: f.endsWith('.mjs') ? 'text/javascript' : 'application/octet-stream', body: readFileSync(f) }) : route.fulfill({ status: 404 })
-    })
+    await page.route('http://canvas.local/**', servedPage(PAGE, files, PDFJS))
     await page.goto(`http://canvas.local/?hwa=${CANVAS === 'gpu' ? 1 : 0}${NORMALIZE ? '&normalize=1' : ''}${FLUSH ? '&flush=1' : ''}`)
     await page.waitForFunction(() => window.gate)
     const call = (fn, ...a) => page.evaluate(([f, x]) => window.gate[f](...x), [fn, a])

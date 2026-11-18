@@ -17,6 +17,7 @@ import { build } from 'vite'
 import { write } from '../../../packages/format/src/index.ts'
 import { answerBytes, startServer } from '../../../packages/reader/e2e/server.mjs'
 import { readerAssets } from '../../../packages/reader/src/vite.ts'
+import { offlineRoute } from '../offline-route.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const HERE = import.meta.dirname
@@ -205,12 +206,7 @@ for (const [key, list] of byKey) {
   const [seg, target, v] = key.split('|')
   current = key
   const context = await browser.newContext({ viewport: { width: 1100, height: 1250 }, deviceScaleFactor: DPR })
-  await context.route('**/*', (route) => {
-    const u = route.request().url()
-    if (u.startsWith(server.origin) || u.startsWith('data:') || u.startsWith('blob:')) return route.continue()
-    refused.push(u)
-    return route.abort()
-  })
+  await context.route('**/*', offlineRoute(server, refused))
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (x) => errors.push(String(x)))
