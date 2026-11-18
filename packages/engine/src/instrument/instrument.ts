@@ -162,6 +162,9 @@ export type InstrumentInput = {
   made?: { compiler?: string; tree?: string; front?: string }
 }
 
+// (locate/ink.ts's unicodeOf, the one copy: still this module's export, which today's engine path re-exports,
+// src/pdf-reader/engine/pipeline/instrument.mjs)
+export { unicodeOf }
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */
 const START_POINT = /^[ht]?(\d+)s$/
 const END_POINT = /^[ht]?(\d+)e$/
