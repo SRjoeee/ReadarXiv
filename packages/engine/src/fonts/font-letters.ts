@@ -90,5 +90,5 @@ export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze(
   "xcharter-italic": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
   "xcharter-regular": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
 })
-/** the faces that set small capitals of their own (GSUB smcp, the table's METRICS) */
+/** the faces that set small capitals of their own: their file's GSUB table has OpenType's `smcp` feature (the table's METRICS) */
 export const SMCP: readonly string[] = Object.freeze(["biolinum-bold","biolinum-bolditalic","biolinum-italic","biolinum-regular","cmun-mono-regular","cmun-sans-bold","cmun-sans-regular","cmun-serif-bold","cmun-serif-regular","domitian-regular","ebgaramond-bold","ebgaramond-bolditalic","ebgaramond-italic","ebgaramond-regular","erewhon-bold","erewhon-bolditalic","erewhon-italic","erewhon-regular","libertine-bold","libertine-bolditalic","libertine-italic","libertine-regular","xcharter-bold","xcharter-bolditalic","xcharter-italic","xcharter-regular"])

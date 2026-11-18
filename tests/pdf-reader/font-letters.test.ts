@@ -36,7 +36,7 @@ const made = () => {
 export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
 ${ids.map(id => `  ${JSON.stringify(id)}: Object.freeze(${JSON.stringify(holdsOf(id))}),`).join('\n')}
 })
-/** the faces that set small capitals of their own (GSUB smcp, the table's METRICS) */
+/** the faces that set small capitals of their own: their file's GSUB table has OpenType's \`smcp\` feature (the table's METRICS) */
 export const SMCP: readonly string[] = Object.freeze(${JSON.stringify(smcp)})
 `
 }
@@ -60,6 +60,12 @@ describe('the faces\' letters a reader reads (rules/font-letters.mjs)', () => {
     expect(HOLDS['shs-sc-regular']!.includes('Latn')).toBe(true)
     expect(HOLDS['shs-sc-regular']!.includes('fr')).toBe(false)
     expect(HOLDS['lm-math']!.includes('Cyrl')).toBe(false)
+  })
+  // (each face read as a reader asks it, by membership: in SMCP exactly where its file's GSUB has the smcp feature, METRICS)
+  it('lists a face among those of small capitals of their own exactly where its file has the smcp feature', () => {
+    for (const id of Object.keys(METRICS)) expect(SMCP.includes(id), id).toBe((METRICS as Record<string, { smcp: boolean }>)[id]!.smcp)
+    expect(SMCP.includes('libertine-regular')).toBe(true)
+    expect(SMCP.includes('nimbus-roman-regular')).toBe(false)
   })
   it('names every face of the table, and some alphabets of each that sets text', () => {
     expect(Object.keys(HOLDS).sort()).toEqual(Object.keys(COVERAGE).sort())

@@ -44,15 +44,16 @@ function pdfOf(objects: (string | [string, string])[]): Uint8Array {
   body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
   return enc(body)
 }
-/** a PDF whose cross-reference is a stream of `/W` widths, its data `rows` predicted by `/Predictor` (none filtered) */
-function xrefStreamPdf(W: [number, number, number], predictor: number | null): Uint8Array {
+/** a PDF whose cross-reference is a stream of `/W` widths, its data `rows` predicted by `/Predictor` (none filtered), its first
+ *  row (the free list's head, type 0) of type `first` */
+function xrefStreamPdf(W: [number, number, number], predictor: number | null, first = 0): Uint8Array {
   const head = '%PDF-1.5\n'
   const o1 = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'
   const o2 = '2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n'
   const offsets = [0, head.length, head.length + o1.length, head.length + o1.length + o2.length]
   const field = (v: number, n: number) => Array.from({ length: n }, (_, k) => (v >>> (8 * (n - 1 - k))) & 255)
   const rows = offsets.flatMap((off, i) => [
-    ...field(i ? 1 : 0, W[0]),
+    ...field(i ? 1 : first, W[0]),
     ...field(i ? off : 0, W[1]),
     ...field(i ? 0 : 255, W[2]),
   ])
@@ -135,6 +136,12 @@ describe("a stream's predictor and a cross-reference stream's field widths (xref
   })
   it('a field wider than eight bytes (/W [1 9 1]) is refused before a row is read', () => {
     expect(() => open(xrefStreamPdf([1, 9, 1], null))).toThrow(/with \/W \[ 1 9 1 \]/)
+  })
+  it('an entry of a type past the three PDF 32000-1 defines (§7.5.8.3: 0 free, 1 in use, 2 in an object stream) is refused', () => {
+    // (PDF.js, meeting one, reads the whole file again by its own scan: what it would then read is not the cross-reference's)
+    for (const t of [3, 255])
+      expect(() => open(xrefStreamPdf([1, 2, 1], null, t)), String(t)).toThrow(/an? cross-reference entry of type/)
+    expect(String(open(xrefStreamPdf([1, 2, 1], null, 0)).lookup(PL.PDFRef.of(1, 0) as never))).toContain('/Catalog')
   })
 })
 
@@ -236,5 +243,14 @@ describe('the wrap\'s proof of a split `"` (wrap.ts sameOps)', () => {
         ok: true,
         split: 1,
       })
+  })
+  it('refuses a page whose owned run is set in a text rendering mode that clips (PDF 32000-1 §9.3.6: modes 4 to 7)', async () => {
+    // (a run that adds its glyphs to the clipping path: hiding it would change what the page clips, so the page stays the
+    // original's; mode 0, filled, is wrapped as above)
+    for (const mode of [4, 5, 6]) {
+      const page = (await wrapSplit(`BT /F1 10 Tf ${mode} Tr 72 700 Td (abcd) Tj ET`)).pages.get(1)
+      expect(page, String(mode)).toMatchObject({ ok: false })
+      expect(page?.why, String(mode)).toMatch(/clipping text mode/)
+    }
   })
 })
