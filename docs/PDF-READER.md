@@ -8163,6 +8163,26 @@ and `\hangafter`, each stated line's measure its `Line[7..8]`: line 0's m0 72, l
   over the figure). Not read here: a line's stated measure for every line (§18.77), and the engine's references whose last line
   states its frame's measure (lane para-shape: 1,108 in 174 papers), which H2 reads by the later lines' ink, at the hang.
 
+Measured (2026-11-18, against the base ca18829f9). The reader gate (the recorded rule set, both stores' rows, the 92 pairs and
+the 2 added) against the base's dumps: 21 members a store drawn otherwise, each in a class, none moved by another's change: H1
+(a) the abstract (its later lines from 71.69 to the drawn label's width, 101.63 on Google's rows, 101.09 on the door's) and 8
+captions of 2307.16209v1 (from 84.95 to 117.83 to 126.79); H2 4 captions of 2610.21201v1 (from 90 to their measure, 138.36) and 8
+contents entries of 2307.16209v1 (from 84.95 to 149.06 and 143.03); on the door's rows one more, 2610.21377v1's caption 204 (H1
+(a), its translation one line: an element 0.01 pt right). The 19 captions §18.29's ink test hangs are laid byte for byte as
+before. Laid lines 59,864 to 59,870 and 61,836 to 61,840 (a line more on 6 and 4 members), no size moved; I3, I4, I5's counts, I6,
+the paragraph points and the spacing lines as before; I10 and I11 no fault. The gate's entry lays references in two pairs the
+runner does not (2611.03953v2-zh, 2602.23285v2-ja): they move to their hang. The package's rule set, bases on and off: every dump
+byte-identical. With every toggle on (lane para-shape's lay over Google's rows, the 92 pairs): of 3,978 reference entries, 1,276
+had their later lines off the original's starts, 22 have (two-line entries whose one later line states nothing, or the engine's
+misstated last line), 0 moved away; the door's rows (the display gate's pairs): 308 to 2. The display gate, read frozen: default,
+no page no longer worse, one newly worse, 2609.36054v2-zh p4's Figure 2 hung at the drawn label's width, 74.51, where the base
+laid its later lines at the original's 95.18 by an accident of its right side (`measuresOf` read a change after its short second
+line and the slots took the narrower measure by height) and today's reader at 95.61 (its Figure 1 on p3, hung so by §18.29, is
+judged nearer, as before); every toggle on, 293 references' alignments and 6 line counts newly nearer the original, 3 differences
+gone (one covered, two of line counts), and six pages newly worse: that caption,
+and 15 references of 2602.23285v2-ja and 2608.16117v1-de drawn one size step smaller, their later lines narrower by the hang (an
+em) with no room on the page for a line more, where TeX's would run on.
+
 Tests: `packages/typeset/tests/unit/para-hang.test.ts` (red first on the base: `\@hangfrom` with a label drawn anew and TeX's
 hang stated 0.31 off the ink, every later line at the drawn label's width with more and fewer lines than the original; a
 `\hangindent` with no label; natbib's `\bibhang`, of three lines and of two (its one later line at the measure TeX states); a
