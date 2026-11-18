@@ -195,6 +195,17 @@ export interface StackEvents {
 }
 type Listener<K extends keyof StackEvents> = (e: StackEvents[K]) => void
 
+/** the `on` of a part that tells events of map `E` to its listeners (the stack's, the composer's, the panes'): `f` added to
+ *  `type`'s, and a function that takes it off again */
+export function onOf<E>(listeners: Map<keyof E, Set<(e: unknown) => void>>) {
+  return <K extends keyof E>(type: K, f: (e: E[K]) => void) => {
+    const set = listeners.get(type) ?? new Set()
+    listeners.set(type, set)
+    set.add(f as (e: unknown) => void)
+    return () => set.delete(f as (e: unknown) => void)
+  }
+}
+
 /**
  * The page boxes' rounding the reader's panes share. PDF.js floors a page box to a multiple of its canvas's pixel fraction as
  * it draws it (`--scale-round-x`, `-y`: from the output scale, which a large page at a high zoom restricts), so that a page drawn
@@ -1330,12 +1341,7 @@ export function createStack(o: StackOptions): Stack {
     get held() {
       return aheadHeld
     },
-    on(type, f) {
-      const set = listeners.get(type) ?? new Set()
-      listeners.set(type, set)
-      set.add(f as (e: unknown) => void)
-      return () => set.delete(f as (e: unknown) => void)
-    },
+    on: onOf<StackEvents>(listeners),
     probe() {
       let views = 0,
         nearN = 0,

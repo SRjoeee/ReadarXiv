@@ -14,6 +14,7 @@ import type { OwnedClock } from '../stack/clock.ts'
 import type { Scheduler } from '../stack/scheduler.ts'
 import {
   createStack,
+  onOf,
   type PageContent,
   PDF_TO_CSS,
   roundingTable,
@@ -1576,12 +1577,7 @@ export function createPanes(o: PanesOptions): Panes {
     get aheadHeld() {
       return right.held
     },
-    on(type, f) {
-      const set = listeners.get(type) ?? new Set()
-      listeners.set(type, set)
-      set.add(f as (e: unknown) => void)
-      return () => set.delete(f as (e: unknown) => void)
-    },
+    on: onOf<PaneEvents>(listeners),
     probe() {
       const d = follower.driver()
       return {
