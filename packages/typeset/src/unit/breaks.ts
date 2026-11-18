@@ -11,8 +11,8 @@ import type { El, Placed, SpanAt } from '@readarxiv/format'
 import { firstWordAt, projectionOf, type Sentences, startsInProjection, worded } from '../lay/lit.ts'
 import { type Rect, rectKey } from '../util.ts'
 
-/** a placeholder row of the layout file (file.d.mts LayoutPh): its kind, flags (PH_FLAG) and segments (stride 6: page, x0,
- *  baseline, x1, top, bottom) */
+/** a placeholder row of the layout file (file.d.mts LayoutPh): its kind, flags (layout/file.mjs PH_FLAG) and segments (stride
+ *  6: page, x0, baseline, x1, top, bottom) */
 type LayoutPh = { kind: string; flags: number; segs: readonly number[] }
 /** the layout file's unit as the breaks read it (file.d.mts LayoutUnit) */
 export type LayoutUnit = {
@@ -43,8 +43,6 @@ export type V0Piece =
  *  next line opens another frame), and whether it is a group's paragraph */
 export type Break = { next: number; room: number | null; pitch: number | null; paragraph?: true }
 
-/** layout/file.mjs:272 PH_FLAG */
-export const PH_FLAG = Object.freeze({ EMPTY: 16, LOST: 32, TEXT: 64, JOINED: 128, OUTSIDE: 256 })
 /** v0's placeholder classes that draw ink of their own (TEX:18) */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
 

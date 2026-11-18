@@ -1,8 +1,7 @@
-// S.names and S.nameLed on synthetic names: the branches the corpus never takes (every name of the 123 pairs had a word, fit
-// its room and was hidden by its group; no counter's name, no small capitals among the names drawn on their own).
+// S.names on synthetic names: the branches the corpus never takes (every name of the 123 pairs had a word, fit its room and
+// was hidden by its group; no counter's name, no small capitals among the names drawn on their own).
 import { describe, expect, it } from 'vitest'
 import type { Face } from '../../src/breaker/tokens.ts'
-import { nameLed } from '../../src/shared/name-led.ts'
 import {
   counterOf,
   type NameInput,
@@ -157,26 +156,5 @@ describe('S.names: the decision', () => {
     const mine = [...chars('R', 100, 5, 12), ...chars('EFERENCES', 105, 4, 9.6)]
     const got = setName(input({ nm: row({ key: 'ref', capitals: true }), mine, P: { cjk: true, floorMin: 0.6 } }))
     expect(got.rec).toMatchObject({ drawn: true, text: 'Literatur', size: 12 })
-  })
-})
-
-describe('S.nameLed', () => {
-  const rec = {
-    ...setName(input({ nm: row({ x1: 140 }) })).rec,
-  }
-  const block = { page: 1, B: [500], x0: 145, indent: 0, sizes: [10] }
-  it('starts the line after a drawn name that leads no unit on it, the original’s separation kept', () => {
-    expect(nameLed(block, [rec])).toBe(100 + 75 + 5)
-  })
-  it('takes none: centred, off its baseline or page, before the name, too far, outside its column, or not drawn', () => {
-    expect(nameLed({ ...block, centred: true }, [rec])).toBeNull()
-    expect(nameLed({ ...block, B: [503] }, [rec])).toBeNull()
-    expect(nameLed({ ...block, page: 2 }, [rec])).toBeNull()
-    expect(nameLed({ ...block, x0: 120 }, [rec])).toBeNull()
-    expect(nameLed({ ...block, x0: 171 }, [rec])).toBeNull()
-    expect(nameLed(block, [{ ...rec, column: [150, 300] }])).toBeNull()
-    expect(nameLed(block, [{ ...rec, drawn: false }])).toBeNull()
-    expect(nameLed(block, [{ ...rec, unit: 3 }])).toBeNull()
-    expect(nameLed(undefined, [rec])).toBeNull()
   })
 })

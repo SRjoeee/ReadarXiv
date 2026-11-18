@@ -8309,9 +8309,9 @@ rows: none (both translators answer composed; below). It is fixed because the cu
   - unchanged, each already by clusters or not a character's: a word wider than its line cut by its graphemes (`break.ts`,
     the same segmenter, now `script.ts` graphemesOf); a line's squeeze and justification, which count the gaps between items (a
     cluster one item); B.cover's characters a face must hold (`breaker/cover.ts`: every code point asked of its face, a selector
-    too); a layout's tally of characters set and lost (`breaker/place.ts` laidOut, both sides counted alike); the text layer's
-    split of the original's own items (`emit/text.ts`) and the links' offsets (`emit/links.ts`, at the tokens' own offsets, every
-    one a cluster's edge); a mark's blank half (`markOf`, a token of one code point alone: a mark with its selector keeps its
+    too); a layout's tally of characters set and lost (`breaker/place.ts` laidOut, both sides counted alike); the links' offsets
+    (`emit/links.ts`, at the tokens' own offsets, every one a cluster's edge; the text layer is the reader's, `compose/text.ts`,
+    whose port in the typesetter, never wired, went as a dead module on 2026-11-19); a mark's blank half (`markOf`, a token of one code point alone: a mark with its selector keeps its
     whole box, the face's measure being of the mark's default glyph);
   - not changed, and not made worse: the edge readers of a token (`tokens.ts` spacelessEdge, markBlankEdge, the rules' marks no
     line ends with, `script.ts` keptPair, `shared/figures.ts` blanksOf, `unit/marks.ts` mergeTail) read a token's first code point,

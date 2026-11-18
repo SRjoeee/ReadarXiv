@@ -1,7 +1,6 @@
-// S.names and S.nameLed replayed against today's run: every babel name of a pair's pages (today's bundle: today-names.ts) set by
-// the port over the page's characters as today read them, against the baseline's reader dump (`names`: drawn, why, its line's
-// start, baseline and text as the markup drew it); and every S.nameLed F1 slot of the pair's ledger (the start of a unit's first
-// line after a name that leads no unit), with every other laid round checked to take none.
+// S.names replayed against today's run: every babel name of a pair's pages (today's bundle: today-names.ts) set by the port over
+// the page's characters as today read them, against the baseline's reader dump (`names`: drawn, why, its line's start, baseline
+// and text as the markup drew it).
 //
 // The page's characters: today's reading of the page's draw (the left part's, the reader's own input) under two stand-ins for
 // the design widths the tap does not record (today-names.ts); a name whose answer differs between the two is not compared and is
@@ -12,9 +11,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { faceOf, ownSmallCaps } from '../../../../packages/typeset/src/breaker/faces.ts'
 import { type MeasureTable, tableMetrics } from '../../../../packages/typeset/src/metrics/table.ts'
-import { nameLed } from '../../../../packages/typeset/src/shared/name-led.ts'
 import {
-  type NameRecord,
   type NameRow,
   nameChars,
   nameRoom,
@@ -22,7 +19,6 @@ import {
   type SetName,
   setName,
 } from '../../../../packages/typeset/src/shared/names.ts'
-import { blockOfTap } from '../../../../packages/typeset/tests/replay/fit-input.ts'
 import { derived, firstDifference, LAB, ledger, readGz, TAP, TODAY } from '../../../../packages/typeset/tests/replay/tap.ts'
 import { pageChars, tapChars, todayNames } from './today-names.ts'
 import { paperOf } from '../../../../packages/typeset/tests/replay/today.ts'
@@ -39,7 +35,7 @@ export type NameCase = {
   /** the tap's own characters of the page (samples/pages) give another answer */
   tapOther?: true
 }
-export type NamesResult = { names: NameCase[]; led: { cases: number; slots: number; differ: string[] } }
+export type NamesResult = { names: NameCase[] }
 
 let rules: { targets: Record<string, { params: Raw }> } | null = null
 let labelsOf: Record<string, { labels?: Record<string, string> }> | null = null
@@ -71,7 +67,7 @@ export function lineOf(set: SetName, view: readonly number[]): Raw | null {
   }
 }
 
-/** a pair's names and S.nameLed slots replayed */
+/** a pair's names replayed */
 export async function namesOf(pair: string): Promise<NamesResult> {
   const L = ledger(pair)
   const paper = paperOf(pair)
@@ -90,7 +86,6 @@ export async function namesOf(pair: string): Promise<NamesResult> {
   const metrics = tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`)) as MeasureTable)
   const labels = labelsOf![L.target]?.labels ?? null
   const out: NameCase[] = []
-  const records: NameRecord[] = []
   const set = (nm: NameRow, chars: readonly PageChar[]): SetName => {
     const mine = nameChars(nm, chars)
     return setName({
@@ -127,14 +122,11 @@ export async function namesOf(pair: string): Promise<NamesResult> {
       gb = set(nm, b)
     if (!same(got, gb)) {
       out.push({ occurrence: nm.occurrence, page: nm.page, chars: 'draw', d: null, widths: true })
-      // (its record for S.nameLed: none drawn, so that no start is read of a name not decided)
-      records.push({ ...got.rec, drawn: false })
       continue
     }
     // (the tap's own reading of the page, where pass 2 kept it: a cross-check of the draw's reading, which is the reader's input)
     const exact = tapChars(pair, nm.page)
     const tapOther = exact && !same(set(nm, exact), got) ? true : undefined
-    records.push(got.rec)
     let d: string | null = null
     if (!want) d = 'not in the dump'
     else if (got.wait) d = `waits for ${JSON.stringify(got.wait).slice(0, 80)}`
@@ -161,23 +153,5 @@ export async function namesOf(pair: string): Promise<NamesResult> {
     }
     out.push({ occurrence: nm.occurrence, page: nm.page, chars: from, d, ...(tapOther ? { tapOther } : {}) })
   }
-  // S.nameLed: every laid round's first block after the page's names (a slot where today took one; none elsewhere)
-  const led = { cases: 0, slots: 0, differ: [] as string[] }
-  for (const u of L.units) {
-    for (const r of new Set(u.slots.filter((x) => x.by === 'X.cut').map((x) => x.round))) {
-      const slots = u.slots.filter((x) => x.round === r)
-      if (slots.some((x) => x.by === 'S.rowStart')) continue
-      const f2 = slots.find((x) => x.by === 'X.cut')?.value as Raw
-      const b0 = (f2.walkedBlocks as Raw[] | undefined)?.[0]
-      if (!b0) continue
-      led.cases++
-      const slot = slots.find((x) => x.by === 'S.nameLed')?.value as { start: number } | undefined
-      if (slot) led.slots++
-      const b = blockOfTap(b0) as Parameters<typeof nameLed>[0]
-      const start = nameLed(b, records)
-      const dd = firstDifference(start, slot ? slot.start : null, 'start')
-      if (dd) led.differ.push(`ord ${u.ord} round ${r}: ${dd}`)
-    }
-  }
-  return { names: out, led }
+  return { names: out }
 }
