@@ -16,6 +16,8 @@ const CASE_V = /\b[A-Z][\w'’-]*\s+v\.$/
 const NUMBERED_PART =
   /\b(?:Eqn|Eqns|Sect|Sects|Ch|Chap|Chaps|Tab|Tabs|App|Apps|Alg|Algs|Ex|Exs|Thms|Defs|Lems|Props|Cors|Rem|Rems|Conj|Obs|Prob|Probs|Nos|Vols)\.$/
 const ITS_NUMBER = /^\s*(?:\(?\d|[A-Z](?:\.?\d|(?!\w))|[IVX]+\b)/
+/** a month's abbreviation before its day or year (`in Jan. 2020.`): the segmenter cuts after it where no lower-case word follows
+ *  the number, and a year that ends its sentence is no numbered part's number (NUMBERED); packages/text/tests/sentences.test.ts */
 const MONTH = /\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.$/
 const ITS_DATE = /^\s*\d/
 /** a short capitalised label before its number (`Exer. 5`), not before an enumerator (`2)`, `2.`) */

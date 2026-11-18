@@ -15,6 +15,14 @@ describe('sentenceCuts over a projection', () => {
     expect(sentenceCuts('Oregon v. Mitchell held it. Next.')).toEqual([28])
     expect(sentenceCuts('As in App. B we show it. Done.')).toEqual([25])
   })
+  // (MONTH: Intl.Segmenter cuts after "Jan. " where no lower-case word follows the number before the next stop or capital, and
+  // a year that ends its sentence, "2020.", is no numbered part's number (NUMBERED): the month's abbreviation alone keeps it)
+  it("a month's abbreviation before its day or year ends no sentence, where a word's full stop before a year does", () => {
+    const p = 'The data were collected in Jan. 2020. A second set followed.'
+    expect(sentenceCuts(p)).toEqual([p.indexOf('A second')])
+    const q = 'The data were collected in winter. 2020. A second set followed.'
+    expect(sentenceCuts(q)).toEqual([q.indexOf('2020'), q.indexOf('A second')])
+  })
   it('an annotation belongs to the sentence before it; a formula reads as a word', () => {
     const p = `It holds.${OBJ} We go on.`
     expect(sentenceCuts(p, (at) => (at === 9 ? 'annotation' : undefined))).toEqual([11])
