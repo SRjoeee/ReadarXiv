@@ -102,7 +102,7 @@ export function translatorsOf(config: Config, deps: TranslatorDeps): Translators
  * does not answer, or whose reply is refused, goes to Microsoft alone, and a 429 cools Google and sends its units on at once.
  * The page's one-wire rule (above) is the HTML page's render path and has no part in it
  */
-export const WEBSITE_ORDER: readonly Engine[] = ['google-web', 'microsoft']
+const WEBSITE_ORDER: readonly Engine[] = ['google-web', 'microsoft']
 
 /**
  * The PDF reader's translators: the page's chain (translatorsOf) where the reader picked a translator (`providerChosen`, v22),
