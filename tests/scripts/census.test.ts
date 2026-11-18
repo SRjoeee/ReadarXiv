@@ -390,6 +390,7 @@ describe("the reduction round's measures", () => {
         "/** a gap's width at most, em */",
         'export const GAP_MAX = 3',
         "export const KINDS = ['para', 'heading', 'caption'] as const",
+        'export type Kind = (typeof KINDS)[number]',
         "export const STATE = z.enum(['open', 'shut', 'gone'])",
         "const NAMES = ['Figure', 'Table', 'Algorithm']",
         '',
@@ -475,8 +476,9 @@ describe("the reduction round's measures", () => {
 
   it('counts vocabularies apart from name lists', () => {
     const d = r.trees.NOW.debt
-    expect(d.vocabularies.list.map(x => x.name)).toEqual(['KEYS', 'KINDS', 'STATE'])
-    expect(d.lists.list.map(x => x.name)).toEqual(['NAMES'])
+    // (KINDS: a type read off it; STATE: a schema's enum; KEYS is `as const` and nothing types over it: a name list)
+    expect(d.vocabularies.list.map(x => x.name)).toEqual(['KINDS', 'STATE'])
+    expect(d.lists.list.map(x => x.name)).toEqual(['KEYS', 'NAMES'])
   })
 
   it('counts translate chains by implementation: hosts of a package take its chain', () => {
@@ -504,5 +506,172 @@ describe("the reduction round's measures", () => {
     expect(engine.trees.NOW?.values).toMatchObject({ longestFunction: 1004, functionsOver1000: 1, tenLongest: 1004 + 7 + 8, contentVersions: 2, budgetsUnmeasured: 1, historyComments: 3, unsafeCasts: 3, suppressions: 1, chains: 2 })
     const web = record(null, j.web!.current, j.web!.lines, { commit: null, at: 't0', about: 'a fixture' })
     expect(web.trees.NOW?.values).toMatchObject({ chains: 0, longestFunction: 1, tenLongest: 1 })
+  })
+})
+
+// A list is classed by what the code does with its members, never by how it is spelled (DEFINITIONS.lists), and an export
+// is live by what is read of it (DEFINITIONS.dead), on a third tree: a package whose lists are each used one way (a type read
+// off them in their module or an importer's, a schema's enum, a union of the code's they are declared an array or a set of,
+// a JavaScript module's list typed by its declaration; names matched against a value, a table's rows, an annotation nothing
+// else names, a type read off a list whose members are not kept), and whose entry reads two members of one namespace, passes
+// another namespace on whole and re-exports a third; a test reads one member of a fourth.
+describe('lists by use, exports by what is read', () => {
+  const P3 = {
+    name: 'engine',
+    areas: [
+      { prefix: 'packages/p/src/', area: 'pkg:p', role: 'product' },
+      { prefix: 'packages/', area: 'packages', role: 'config' },
+      { prefix: 'tests/', area: 'tests', role: 'test' },
+      { prefix: '', area: 'root', role: 'config' },
+    ],
+    workspaces: ['packages'],
+    publicEntries: { packageExports: 'packages' },
+    engineAreas: ['pkg:p'],
+    debtAreas: ['pkg:p'],
+    builds: [{ name: 'packages', entries: { packageExports: 'packages' } }],
+  }
+  let root = ''
+  let r: Census
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), text)
+  }
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'census-use-'))
+    put('engine/package.json', JSON.stringify({ name: 'e3' }))
+    put('engine/packages/p/package.json', JSON.stringify({ name: '@x/p', exports: { '.': './src/index.ts' } }))
+    put(
+      'engine/packages/p/src/kinds.ts',
+      [
+        "import { z } from 'zod'",
+        '// our kinds: a type is read off them',
+        "export const KINDS = Object.freeze(['para', 'heading', 'caption'] as const)",
+        'export type Kind = (typeof KINDS)[number]',
+        "// a paper's font names, declared `as const`: matched against a name read off a page, no type read off them",
+        "export const FONTS = ['cmr10', 'cmbx10', 'cmti10'] as const",
+        'export const isTexFont = (name: string): boolean => (FONTS as readonly string[]).includes(name)',
+        '// a family of ours: a union the code names, the list declared an array of it, no `as const`',
+        "export type Family = 'cm' | 'times' | 'other'",
+        "export const FAMILIES: readonly Family[] = Object.freeze(['cm', 'times', 'other'])",
+        "export const familyOf = (name: string): Family => (name.startsWith('cm') ? 'cm' : 'other')",
+        '// the stops that go on: a set of a union the code names elsewhere',
+        "export type Stop = 'busy' | 'rate' | 'network' | 'auth'",
+        "export const GOES: ReadonlySet<Stop> = new Set<Stop>(['busy', 'rate', 'network'])",
+        "export const stopOf = (s: string): Stop => (GOES.has(s as Stop) ? (s as Stop) : 'auth')",
+        '// an annotation whose union nothing else names: spelling alone',
+        "export const ONLY: readonly ('a' | 'b' | 'c')[] = ['a', 'b', 'c']",
+        "// a type read off a list whose members are not kept: `string`",
+        "export const LOOSE = ['x', 'y', 'z']",
+        'export type Loose = (typeof LOOSE)[number]',
+        "// a schema's enum, written in place and by a list's name",
+        "export const STATE = z.enum(['open', 'shut', 'gone'])",
+        "const UNDER = ['none', 'solid', 'dotted'] as const",
+        'export const Look = z.object({ underline: z.enum(UNDER) })',
+        "// a table of each face's alphabets, read off its file: rows of measured values",
+        "export const HOLDS: Readonly<Record<string, readonly string[]>> = { a: ['Latn', 'Cyrl', 'de'], b: ['Latn', 'de', 'fr'] }",
+        '',
+      ].join('\n'),
+    )
+    put('engine/packages/p/src/modes.ts', "export const MODES = ['stack', 'side', 'only'] as const\n")
+    put(
+      'engine/packages/p/src/use.ts',
+      "import * as K from './kinds.ts'\nimport { MODES } from './modes.ts'\nexport type Mode = (typeof MODES)[number]\nexport const kindAt = (k: K.Kind): number => K.KINDS.indexOf(k)\n",
+    )
+    put('engine/packages/p/src/old.mjs', "export const CLASSES = Object.freeze(['math', 'cite', 'ref'])\nexport const NAMES = Object.freeze(['Figure', 'Table', 'Algorithm'])\nexport const classOf = x => (CLASSES.includes(x) ? x : 'math')\n")
+    put(
+      'engine/packages/p/src/old.d.mts',
+      "export type MarkClass = 'math' | 'cite' | 'ref'\nexport declare const CLASSES: readonly MarkClass[]\nexport declare const NAMES: readonly string[]\nexport declare function classOf(x: string): MarkClass\n",
+    )
+    put('engine/packages/p/src/ns.ts', 'export const a = 1\nexport const b = 2\nexport const c = 3\n')
+    put('engine/packages/p/src/whole.ts', 'export const d = 4\nexport const e = 5\n')
+    put('engine/packages/p/src/re.ts', 'export const f = 6\n')
+    put('engine/packages/p/src/two.ts', 'export const g = 7\nexport const h = 8\n')
+    put(
+      'engine/packages/p/src/index.ts',
+      [
+        "import * as N from './ns.ts'",
+        "import * as W from './whole.ts'",
+        "export { kindAt } from './use.ts'",
+        "export { classOf } from './old.mjs'",
+        "export { familyOf, isTexFont, stopOf } from './kinds.ts'",
+        "export * as R from './re.ts'",
+        'const keep = (m: object): number => Object.keys(m).length',
+        'export const total = (x: typeof N.b): number => N.a + x + keep(W)',
+        "export type { Family } from './kinds.ts'",
+        '',
+      ].join('\n'),
+    )
+    put('engine/tests/two.test.ts', "import * as T from '../packages/p/src/two.ts'\nexport const seen = T.g\n")
+    // (a dynamic import's module object: destructured, bound to a name, one member read off it, and one handed on unread)
+    for (const [m, a, b] of [['three', 'i', 'j'], ['four', 'k', 'l'], ['five', 'n', 'o'], ['six', 'q', 's']]) put(`engine/packages/p/src/${m}.ts`, `export const ${a} = 1\nexport const ${b} = 2\n`)
+    put(
+      'engine/tests/dyn.test.ts',
+      [
+        'export const run = async (): Promise<number> => {',
+        "  const { i } = await import('../packages/p/src/three.ts')",
+        "  const m = await import('../packages/p/src/four.ts')",
+        "  return i + m.k + (await import('../packages/p/src/five.ts')).n",
+        '}',
+        "export const later = () => import('../packages/p/src/six.ts')",
+        '',
+      ].join('\n'),
+    )
+    // (the website declares a list of the package's union, through the package's entry in its pin)
+    put('web/package.json', JSON.stringify({ name: 'w3' }))
+    put('web/app/main.ts', "import { pickOf } from './pick.ts'\nexport const run = () => pickOf('cm')\n")
+    put('web/app/pick.ts', "import type { Family } from '@x/p'\nexport const PICKS: readonly Family[] = ['cm', 'times', 'other']\nexport const pickOf = (f: Family): number => PICKS.indexOf(f)\n")
+    const SITE3 = { ...WEB, workspaces: ['vendor/e/packages'] }
+    r = await census({ today: null, now: [scanTree('engine', join(root, 'engine'), P3), scanTree('web', join(root, 'web'), SITE3)] })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('classes a list as a vocabulary where the code types over its members, whatever it is declared with', () => {
+    const d = r.trees.NOW.debt
+    // KINDS and MODES: a type read off them (in their module, in an importer); FAMILIES and GOES: declared of a union the
+    // code names elsewhere; CLASSES: a JavaScript module's list its declaration types so; STATE and UNDER: a schema's enum
+    expect(d.vocabularies.list.filter(x => x.repo === 'engine').map(x => x.name).sort()).toEqual(['CLASSES', 'FAMILIES', 'GOES', 'KINDS', 'MODES', 'STATE', 'UNDER'])
+    expect(Object.fromEntries(d.vocabularies.list.filter(x => ['KINDS', 'GOES', 'CLASSES', 'UNDER'].includes(x.name ?? '')).map(x => [x.name, x.by]))).toEqual({
+      KINDS: 'a type read off it',
+      GOES: 'declared of Stop',
+      CLASSES: 'declared of MarkClass',
+      UNDER: "a schema's enum",
+    })
+  })
+
+  it("classes a website's list declared of a package's union a vocabulary, the union read through the pin", () => {
+    expect(r.trees.NOW.debt.vocabularies.list.filter(x => x.repo === 'web').map(x => [x.name, x.by])).toEqual([['PICKS', 'declared of Family']])
+  })
+
+  it("keeps a name list a name list whatever its spelling: `as const`, an annotation nothing else names, a table's rows", () => {
+    const d = r.trees.NOW.debt
+    // FONTS is `as const` and matched against a value; ONLY's union is named nowhere else; LOOSE's members are not kept, so
+    // the type read off it is `string`; HOLDS's two rows; NAMES is declared `readonly string[]`
+    expect(d.lists.list.filter(x => x.repo === 'engine').map(x => x.name).sort()).toEqual(['FONTS', 'HOLDS', 'HOLDS', 'LOOSE', 'NAMES', 'ONLY'])
+  })
+
+  it('counts an export live through a namespace import only where the importer reads it', () => {
+    const dead = r.trees.NOW.dead
+    // ns.ts: N.a and `typeof N.b` read, c not; two.ts: the test reads T.g alone, so h is dead and g is the tests' only
+    expect(dead.deadExportList).toEqual(expect.arrayContaining(['packages/p/src/ns.ts:3 c', 'packages/p/src/two.ts:2 h']))
+    expect(dead.deadExportList).not.toEqual(expect.arrayContaining(['packages/p/src/ns.ts:1 a']))
+    expect(dead.deadExportList).not.toEqual(expect.arrayContaining(['packages/p/src/ns.ts:2 b']))
+    expect(dead.deadExportList).not.toEqual(expect.arrayContaining(['packages/p/src/two.ts:1 g']))
+  })
+
+  it("reads a dynamic import's module object as a namespace: destructured, bound to a name, a member read off it", () => {
+    const dead = r.trees.NOW.dead.deadExportList
+    expect(dead).toEqual(expect.arrayContaining(['packages/p/src/three.ts:2 j', 'packages/p/src/four.ts:2 l', 'packages/p/src/five.ts:2 o']))
+    for (const x of ['packages/p/src/three.ts:1 i', 'packages/p/src/four.ts:1 k', 'packages/p/src/five.ts:1 n', 'packages/p/src/six.ts:1 q', 'packages/p/src/six.ts:2 s']) expect(dead).not.toContain(x)
+  })
+
+  it('counts every export live where a namespace escapes whole, and lists each such import with why', () => {
+    const dead = r.trees.NOW.dead
+    // W is passed on whole, R re-exported whole: their exports live, each import listed
+    for (const x of ['packages/p/src/whole.ts:1 d', 'packages/p/src/whole.ts:2 e', 'packages/p/src/re.ts:1 f']) expect(dead.deadExportList).not.toContain(x)
+    expect(dead.wholeImports).toEqual([
+      { from: 'packages/p/src/index.ts', line: 2, to: 'packages/p/src/whole.ts', why: 'a namespace passed on whole' },
+      { from: 'packages/p/src/index.ts', line: 6, to: 'packages/p/src/re.ts', why: 'a namespace re-exported' },
+      { from: 'tests/dyn.test.ts', line: 6, to: 'packages/p/src/six.ts', why: 'a dynamic import' },
+    ])
   })
 })

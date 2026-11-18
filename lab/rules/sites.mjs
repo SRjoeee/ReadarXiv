@@ -613,7 +613,9 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
   // (`JSON.stringify(L)`, `structuredClone(L)`, `Object.values(L)` and Object's and Reflect's other readers but freeze,
   // `X.concat(L)`, a method borrowed onto it (`Array.prototype.includes.call(L, x)`, `.apply(L, …)`), a pattern made of it
   // (`new RegExp(L)`). Each such read of a list's binding (its module's, and through every import of it) or of the literal
-  // itself is noted on the rule (`unseen`): its entries cannot be judged by their hits (ledger.mjs: not judged)
+  // itself is noted on the rule (`unseen`): its entries cannot be judged by their hits (ledger.mjs: not judged). A copy by
+  // structuredClone of a list no binding names (a table's, read by a key known at run time) is recorded where it runs
+  // (recorder.mjs install: the global handed on, each list it copies read)
   const unseenOf = (ref, ps) => {
     let child = ref
     let i = ps.length - 1

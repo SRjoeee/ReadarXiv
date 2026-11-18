@@ -12,15 +12,25 @@ export interface Tree {
     rules: { ledger: boolean; recorded: string | null; unexplained: number; magnitudes: number; notJudged: number; list: { at: string; key: string | null; repo: string; file: string; line: number }[] }
     thresholds: { all: Counts; headline: Counts; headlineTunedNoReason: number; list: { class: string; name: string | null; unit?: string; source?: string | null; at: string }[] }
     budgets: { count: number; unmeasured: number; headline: number; headlineUnmeasured: number; byUnit: Counts; bySource: Counts }
-    vocabularies: { count: number; headline: number; list: { form: string; size: number; name: string | null; at: string }[] }
-    lists: { headline: Counts; list: { form: string; size: number; name: string | null }[] }
+    vocabularies: { count: number; headline: number; list: { form: string; size: number; name: string | null; at: string; repo: string; headline: boolean; by: string }[] }
+    lists: { headline: Counts; list: { form: string; size: number; name: string | null; at: string; repo: string; headline: boolean; class: string }[] }
     papers: { id: string; at: string }[]
     texFiles: { name: string; at: string }[]
     versions: { count: number; mirrors: number; schema: number; content: number; list: { name: string; value: string | number; at: string; mirror: boolean; schema: boolean }[] }
   }
   types: { engine: number; engineAll: number; unchecked: number; mjs: number; any: number; nocheck: string[]; suppressions: number; casts: number; unsafeCasts: number; nonNull: number; packages: { suppressions: number; casts: number; unsafeCasts: number; nonNull: number } }
   duplicates: { groups: number; lines: number; copied: string[] }
-  dead: { modules: number; moduleList: string[]; deadExportList: string[]; deadExports: number; testOnlyExports: number }
+  dead: {
+    modules: number
+    moduleList: string[]
+    deadExportList: string[]
+    deadExports: number
+    testOnlyExports: number
+    /** each import that took every export of a product module, and why */
+    wholeImports: { from: string; line: number; to: string; why: string }[]
+    /** each namespace import of a product module: the members it reads, and where it escapes whole */
+    namespaceImports: { from: string; role: string; line: number; to: string; reads: string[]; whole: { line: number; why: string }[] | null }[]
+  }
   functions: { count: number; longest: Fn | null; over500: number; over1000: number; over1000List: Fn[]; ten: Fn[]; tenLongest: number; byRepo: Record<string, { longest: Fn | null; over500: number; over1000: Fn[]; ten: Fn[]; tenLongest: number }> }
   history: { files: number; todays: number; dated: number; measuredDates: number; named: number; lines: number; byFile: { repo: string; file: string; lines: number; at: number[] }[] }
 }

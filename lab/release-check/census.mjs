@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { cyclesOf, graphOf, pathTo, reach, scanTree, typeCheckedOf } from './census-lib.mjs'
+import { cyclesOf, graphOf, listsAcross, pathTo, reach, scanTree, typeCheckedOf } from './census-lib.mjs'
 import { ENGINE_PROFILE } from './census-profile.mjs'
 import { itemsOf, judge, LEDGER_FORMAT, MEASURES, newLinesOf, partOf, record, reportOf } from './census-ratchet.mjs'
 import { VERDICTS } from '../rules/ledger.mjs'
@@ -41,7 +41,7 @@ export const DEFINITIONS = {
   thresholds: 'A threshold is a numeric literal that is an operand of <, <=, > or >=, an argument of Math.min or Math.max, or the value of a module-level UPPER_CASE constant (or of a numeric property of one); 0, 1 and -1 are structural; a literal written in hex, octal or binary, and an object of three or more distinct integers, is a code point, mask or enumeration; a value that is a unit\'s factor (72, 72.27, 65536, 25.4, 1000, 1024, 100, 60, …) is a conversion where its name or comment names a unit and borderline where it does not; one whose comment (as `comments` defines it) cites a definition (TeX, LaTeX, a file of a TeX distribution named by its extension, the PDF, Unicode, a font, a standard) and no paper or measurement is borderline; every other is tuned (with evidence where its comment cites a paper, the corpus or a measurement; with no reason where it has no comment); a budget (budgets) is counted apart, neither tuned nor borderline.',
   comments: "A rule's comment (a threshold's, a budget's, a name list's, a version constant's) is the block of comments directly before the statement that declares it, no blank line and no other statement between the block and the statement (an exported declaration's statement is the export), cut where the comments' kind changes: a block comment (/* */, /** */) standing there is the statement's alone, whatever stands above it, else the run of line comments with no blank line inside; with any comment on the rule's own line; a block that opens the file is the file's opening comment, no statement's.",
   budgets: 'A budget is a threshold whose constant\'s name (or a table\'s property\'s) names what the code may spend or hold: its last word MS, SECONDS, TIMEOUT, BYTES, KIB, MIB, PX, PIXELS, MAX, CAP, LIMIT or BUDGET, or its first KEEP or MAX (camelCase alike), whose value is a whole number and whose comment measures it in no unit of a document (em, pt, bp, sp); its unit is time, bytes or pixels where its name says so, else where its comment\'s first sentence does, a count otherwise; it is unmeasured unless its comment cites a measurement (a paper, the corpus, "measured") or a platform\'s limit (a definition the thresholds read, or a platform named beside a limit).',
-  lists: 'A name list is an array literal of three or more strings of 40 characters at most (a Set or Map built from one included), or a regular expression with three or more alternatives that are words or TeX names; defined where its comment cites a definition (as a threshold\'s comment is read), listed otherwise. A vocabulary is not a name list: such an array declared `as const` (its type the literal\'s), or handed to a schema\'s `enum`; vocabularies are counted apart. Nor is a rules registry\'s list of citations: the `ports` of each entry of an array declared as rule entries (`RuleSpec`), the code the rule carries cited by file and line.',
+  lists: 'A name list is an array literal of three or more strings of 40 characters at most (a Set or Map built from one included), or a regular expression with three or more alternatives that are words or TeX names: names the code matches against what it reads (a paper\'s text, fonts, macros, environments, words; a format\'s or a platform\'s names), and each row of a table of measured or published values (the reduction design\'s second kind, a mirror of an external definition: a list, its source cited by its comment); defined where its comment cites a definition (as a threshold\'s comment is read), listed otherwise. A vocabulary is not a name list: a list whose members the code types over, a closed set of its own: a type of the code is read off it (`typeof X` in a type of its module, of a module that imports it or of its declaration file, its members kept literal by `as const` or by a closed type it is declared of), it is a schema\'s `enum` (made in place or by its name), or it is declared an array or a set of a closed type of the code (a union of literals, `keyof` a type, a type read off a vocabulary, followed through aliases, imports and `Exclude`-like wrappers; in its declaration, a `satisfies`, a Set\'s type argument or a JavaScript module\'s declaration file) that another type of the code names too; the website\'s lists read the pinned packages\' types; vocabularies are counted apart. How a list is spelled classes nothing: `as const` with no type read off it, or an annotation whose type nothing else names, leaves a name list a name list. Nor is a rules registry\'s list of citations: the `ports` of each entry of an array declared as rule entries (`RuleSpec`), the code the rule carries cited by file and line.',
   specialCases: 'A per-paper case is an arXiv identifier (dddd.ddddd) in a regular-expression literal of product code, or in a string or template literal that decides (in a branch\'s test, an operand of ===, !==, == or !=, or matched by includes, has, startsWith, endsWith, test, match, indexOf, get, exec or search); a per-package or per-class case is such a deciding literal naming a .sty or .cls file.',
   versions: 'A version constant raised by hand is a module-level UPPER_CASE constant of product code whose value is a string or number literal and whose name ends in VERSION, SCHEMA or FORMAT or whose comment says it is raised, rises or is bumped; a mirror is a second definition, in another file or repository, of the same name (less _VERSION) with the same value. A version constant is a store\'s schema number where its name ends in SCHEMA or FORMAT, or the first sentence of its own comment (the one right before it, not the file\'s opening comment, or on its line), or a sentence of its file\'s opening comment that names it, says schema, shape or grammar (the form of what is stored) and its own first sentence does not say it changes with what is computed ("a change to what", "changes what"); every other is a content version (it says what is computed changed); a constant and its mirrors are one or the other together.',
   unchecked: 'A line no type checker reads is a code line of a product JavaScript file (no project of the repository\'s `typecheck` script sets checkJs), or of a TypeScript file that no such project includes or reaches by its imports; a `.mjs` read through a hand-written `.d.mts` is unchecked; `any` counts the any keywords of product TypeScript, `nocheck` the files that say @ts-nocheck, `suppressions` the comments @ts-ignore and @ts-expect-error.',
@@ -49,7 +49,7 @@ export const DEFINITIONS = {
   functions: "A function's length is its code lines (as `lines` defines a code line) from its first line to its last, its nested functions' among them; every function of product code is measured, at any depth (a nested function also on its own), generated files apart: the longest, the count over 500 and over 1,000 code lines, and the code lines of the ten longest.",
   history: "A history comment line, in the packages (product code and style sheets under a profile's workspace directories), is a line whose comment text says today's, holds a date (yyyy-mm-dd) that names no measurement (a date beside 'measured' or 'measurement' is kept), or names a reviewer (Codex, Devin, Copilot, CodeRabbit), a round (`round B14`) or a plan or task (`Plan 8b`, `Task 5`); each line counted once.",
   duplicates: 'A duplicated rule is a function of 60 tokens or more (comments and white space aside, names and literals as written) whose tokens equal a function\'s in another file of product, lab or tooling code, counted at the outermost such function; a copy note is a file whose first 12 lines say COPIED or "copied from".',
-  dead: "A dead module is a product module no build's entry point reaches, a type-only import counted (the website's builds counted where its tree is given); a dead export is an exported name of a product module (not an entry) that no module of either tree imports, through re-exports followed; `tests only` where only tests, the lab or tooling import it.",
+  dead: "A dead module is a product module no build's entry point reaches, a type-only import counted (the website's builds counted where its tree is given); a dead export is an exported name of a product module (not an entry) that no module of either tree imports, through re-exports followed; `tests only` where only tests, the lab or tooling import it. A namespace import (`import * as N`) imports the members its module reads of it (`N.x`, `N.T`, `typeof N.x`), and so does a dynamic import's or a require's module object (the members a declaration destructures of it, one read off it, or those read of the name it is bound to); where the namespace escapes whole (passed on, re-exported, read by a computed member, its type taken whole, a module object not awaited into a name) it imports every member, as a re-exported namespace (`export * as`), a star re-export, a whole module's type (`import('…')` with no member), a page's script and a file named by its URL do: each import that takes every export of a product module is listed with why.",
   rules: "A rule (a tuned threshold or a name list of the debt areas) is unexplained where its comment cites no definition (a borderline threshold, a defined list) and the rule ledger (lab/rules/ledger.json, keyed by file without extension, enclosing function, signature and ordinal: lab/rules/sites.mjs) holds no row whose verdict gives it a reason (lab/rules/ledger.mjs VERDICTS); a magnitude with no stated source and a list whose entries are not judged are reported apart, not counted; with no ledger, every tuned threshold and every list citing no definition is unexplained.",
   cutover: "What the cut-over deletes: the product files the builds' entry points (each build's shared and old-arm entries, and its new-arm ones) reach now and no longer reach from its shared and new-arm entries once each build's old-arm modules (the profile's `cut.seeds`, from the design's \"what goes\") are taken out of the graph; with them, every test, lab or tooling file that imports one of them.",
 }
@@ -576,6 +576,18 @@ export function deadOf(view, roots) {
   const exports = product.filter(x => !entryIds.has(x.id) && !x.f.generated).flatMap(x => (x.f.exports ?? []).filter(ex => !ex.type).map(ex => ({ x, ex, roles: used.get(`${x.id}#${ex.name}`) })))
   const deadExports = exports.filter(e => !e.roles)
   const testOnly = exports.filter(e => e.roles && !e.roles.has('product'))
+  // (each import that took every export of a product module, and why: a namespace that escapes whole, one re-exported, a star
+  // re-export, a dynamic import, a file named by its URL; each namespace import of a product module with the members it reads)
+  const idAt = id => (id.startsWith('engine:') ? id.slice('engine:'.length) : id)
+  const intoProduct = e => view.byId.has(e.from) && view.byId.get(e.to)?.f.role === 'product' && (view.byId.get(e.to).f.exports ?? []).some(ex => !ex.type)
+  const wholeImports = graph.edges
+    .filter(e => intoProduct(e) && (e.names ?? []).includes('*'))
+    .map(e => ({ from: idAt(e.from), line: e.line, to: idAt(e.to), why: e.whole ?? 'every name' }))
+    .sort((a, b) => a.from.localeCompare(b.from) || a.line - b.line)
+  const namespaceImports = graph.edges
+    .filter(e => intoProduct(e) && e.namespace)
+    .map(e => ({ from: idAt(e.from), role: view.byId.get(e.from).f.role, line: e.line, to: idAt(e.to), reads: e.namespace.members, whole: e.namespace.escapes.length ? e.namespace.escapes : null }))
+    .sort((a, b) => a.from.localeCompare(b.from) || a.line - b.line)
   return {
     modules: deadModules.length,
     lines: sum(deadModules.map(x => x.f.lines.code)),
@@ -585,6 +597,8 @@ export function deadOf(view, roots) {
     deadExports: deadExports.length,
     testOnlyExports: testOnly.length,
     deadExportList: deadExports.map(e => `${at(e.x, e.ex.line)} ${e.ex.name}`),
+    wholeImports,
+    namespaceImports,
     moduleItems: deadModules.map(x => ({ repo: x.repo, file: x.path, line: null, code: x.f.lines.code })),
     exportItems: deadExports.map(e => ({ repo: e.x.repo, file: e.x.path, line: e.ex.line, name: e.ex.name })),
   }
@@ -595,6 +609,8 @@ export function deadOf(view, roots) {
 /** the census of the trees: TODAY's scans (or null), NOW's, and AFTER derived from NOW */
 export async function census({ today, now, rulesLedger = null }) {
   const out = { definitions: DEFINITIONS, trees: {} }
+  // (the website's lists classed with this repository's types in reach: DEFINITIONS.lists)
+  for (const scans of [today, now]) if (scans?.length > 1) listsAcross(scans)
   // (the rule ledger's keys of this checkout's items, where its scan kept the debt areas' syntax trees)
   const keysOf = (scans, graph) => {
     const engine = scans.find(s => s.repo === 'engine')
@@ -862,7 +878,8 @@ export function markdownOf(c) {
     L.push(`Type coverage: unchecked by area ${Object.entries(t.types.byArea).slice(0, 10).map(([a, x]) => `${a} ${n(x)}`).join(', ')}; of which .mjs/.js ${n(t.types.mjs)}; ts-ignore/expect-error ${t.types.suppressions}.`)
     L.push(`Rule debt: thresholds ${JSON.stringify(t.debt.thresholds.all)} (tuned by area: ${Object.entries(t.debt.thresholds.byArea).map(([a, x]) => `${a} ${x}`).join(', ')}); lists ${JSON.stringify(t.debt.lists.all)}; versions ${t.debt.versions.list.map(x => `${x.name}=${x.value}`).join(', ')}; mirrors ${t.debt.versions.mirrorGroups.map(g => g.join(' = ')).join('; ') || 'none'}.`)
     L.push(`Duplicates by areas: ${Object.entries(t.duplicates.pairs).slice(0, 10).map(([a, x]) => `${a}: ${x.groups} (${n(x.lines)} lines)`).join('; ') || 'none'}. Copy notes: ${t.duplicates.copied.join(', ') || 'none'}.`)
-    L.push(`Dead modules: ${t.dead.moduleList.slice(0, 20).join(', ') || 'none'}${t.dead.moduleList.length > 20 ? ', …' : ''}.`, '')
+    L.push(`Dead modules: ${t.dead.moduleList.slice(0, 20).join(', ') || 'none'}${t.dead.moduleList.length > 20 ? ', …' : ''}.`)
+    L.push(`Imports taking every export of a product module (${t.dead.wholeImports.length}): ${t.dead.wholeImports.map(w => `${w.from}:${w.line} -> ${w.to} (${w.why})`).join('; ') || 'none'}.`, '')
   }
   L.push('## Definitions', '', ...Object.entries(DEFINITIONS).map(([k, d]) => `- **${k}**: ${d}`), '')
   return `${L.join('\n')}\n`
@@ -879,7 +896,7 @@ export function debtListOf(c, label = 'AFTER') {
   for (const [f, xs] of Object.entries(byFile).sort()) L.push(`## ${f}`, '', ...xs.sort((a, b) => Number(/line (\d+)/.exec(a)[1]) - Number(/line (\d+)/.exec(b)[1])), '')
   L.push('## Special cases', '', ...t.debt.papers.map(p => `- per paper: ${p.id} at ${p.at}`), ...t.debt.texFiles.map(p => `- per package or class: ${p.name} at ${p.at}`), '')
   L.push('## Version constants', '', `(${DEFINITIONS.versions})`, '', ...t.debt.versions.list.map(v => `- ${v.name} = ${JSON.stringify(v.value)} at ${v.at}: ${v.schema ? "a store's schema number" : 'a content version'}${v.mirror ? ', a mirror' : ''}`), '', 'Mirrors:', '', ...t.debt.versions.mirrorGroups.map(g => `- ${g.join(' = ')}`), '')
-  L.push('## Vocabularies', '', `(${DEFINITIONS.lists})`, '', ...t.debt.vocabularies.list.map(x => `- ${x.at}: ${x.form} of ${x.size}${x.name ? ` ${x.name}` : ''}: ${x.sample.join(', ')}${x.size > x.sample.length ? ', …' : ''}`), '')
+  L.push('## Vocabularies', '', `(${DEFINITIONS.lists})`, '', ...t.debt.vocabularies.list.map(x => `- ${x.at}: ${x.form} of ${x.size}${x.name ? ` ${x.name}` : ''} (${x.by}): ${x.sample.join(', ')}${x.size > x.sample.length ? ', …' : ''}`), '')
   return `${L.join('\n')}\n`
 }
 
