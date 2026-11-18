@@ -18,13 +18,13 @@ again in the translation.
 
 | Package | What it is | Its entry, the names that matter | May import |
 |---|---|---|---|
-| `@readarxiv/format` (`packages/format`) | The bundle's schema (`packages/format/src/schema.ts`), its one reader and writer (`packages/format/src/io.ts`), a unit's id (`packages/format/src/ids.ts`), and the documents our server gives a reader (`packages/format/src/doc.ts`) | `read`, `write`, `unitId`, `PaperDoc`, `OpenAsk`, `fold`, `FORMAT` | no package |
+| `@readarxiv/format` (`packages/format`) | The bundle's schema (`packages/format/src/schema.ts`), its one reader and writer (`packages/format/src/io.ts`), a unit's id (`packages/format/src/ids.ts`), and the documents our server gives a reader (`packages/format/src/doc.ts`) | `read`, `write`, `unitId`, `PaperDoc`, `OpenAsk`, `fold`, `FORMAT`, `FORMATS` (what a reader's open names, and a host that opens a paper ahead of it) | no package |
 | `@readarxiv/text` (`packages/text`) | The sentence cuts several packages share (`packages/text/src/sentences.ts`), a token's edge punctuation, the identifier's and the flush number's (`packages/text/src/edges.ts`), and the font tables the prepare and the typesetter both read, held once: the face catalogue and the role table's groups (`font-faces.ts`, its FACE_TABLE the one the website's fonts are built from), each face's letters (`font-letters.ts`, made from the coverage table), a PostScript or NFSS name's design (`font-classes.ts`) and today's reading of a font's name (`font-names.ts`) | `sentenceCuts`, `ABBR`, `edgeMark`, `FACES`, `HOLDS`, `classifyFont`, `familyOfFonts`, `readFontName` | no package |
-| `@readarxiv/ui` (`packages/ui`) | The controls, the design tokens and the one string catalogue of the extension, the reader and the website | the controls, `ROLES`, `S` | no package |
+| `@readarxiv/ui` (`packages/ui`) | The controls, the design tokens and the one string catalogue of the extension, the reader and the website | the controls, `ROLES`, `S`; for a host's own pages, with no pack and no control, `@readarxiv/ui/languages` (`LOCALE_CODES`, `pickLocale`) and `@readarxiv/ui/bands` (`BUILT_IN_BANDS`) | no package |
 | `@readarxiv/engine` (`packages/engine`) | The prepare: a paper's source and arXiv's PDF in, its bundle out | `prepare` (`packages/engine/src/prepare.ts`), `prepareFront`, `prepareBack`, `align`, `locate`, `wrap`, `bundle` | format, text |
 | `@readarxiv/typeset` (`packages/typeset`) | A page's translation laid into the room arXiv's page gives it: rules, language data, the breaker, the fit, the page fill | `layPage` (`packages/typeset/src/lay/entry.ts`), `rulesFor` | format, text |
-| `@readarxiv/translate` (`packages/translate`) | The translator contract, the adapters (Microsoft, Google, the browser's built-in) and the chain that falls back between them | `chainOf`, `identityOf`, `keyOf`, `unitInOf`, `askedOf`, `accept` | format, text |
-| `@readarxiv/reader` (`packages/reader`) | The bilingual reader: the session, the panes and page stack, composing, the highlight, the chrome | `openReader` (`packages/reader/src/reader.ts`), `openSession`, `mountChrome`, the `Host` it runs in | format, typeset, text, ui |
+| `@readarxiv/translate` (`packages/translate`) | The translator contract, the adapters (Microsoft, Google, the browser's built-in) and the chain that falls back between them | `chainOf`, `identityOf`, `keyOf`, `unitInOf`, `askedOf`, `accept`, `adapterOf` (the adapter an identity is of) | format, text |
+| `@readarxiv/reader` (`packages/reader`) | The bilingual reader: the session, the panes and page stack, composing, the highlight, the chrome | `openReader` (`packages/reader/src/reader.ts`), `openSession`, `mountChrome`, the `Host` it runs in; what a host's page does before the reader's code has loaded, `@readarxiv/reader/early` (`firstAsk`, `themeOf`, `dimmed`: no package reached) | format, typeset, text, ui |
 
 The directions point one way, and `scripts/check-boundary.mjs` holds them (its table `PACKAGES`; it runs in `pnpm lint`): a
 package imports another only through its entry, `@readarxiv/<name>`, never a deep or a relative path into it; no package
@@ -157,8 +157,9 @@ compiles. What the host owns enters as `host`: the compile, PDF.js and its optio
 it serves, where each object goes.
 
 1. A's facts (`originalFactsOf`: its page count, its day, the TeX Live year its banner names) and the tree (`treeOf`: the
-   paper's declaration, else the banner's year, else the default). A paper of another tree is answered with that tree before
-   anything is compiled.
+   paper's declaration, else the banner's year, else the default). A paper whose A is past the page bound (`PAGES_MAX` in
+   `packages/engine/src/prepare.ts`, 10,000 pages) is refused `too-large` as soon as its page count is read, before its tree;
+   a paper of another tree is answered with that tree before anything is compiled.
 2. The front half, `prepareFront` (`packages/engine/src/front.ts`), in a frame of its own so that the source's files are let go
    before the back half begins. Its stored half, `compiledOf` (`packages/engine/src/compiled.ts`), opens the paper with the
    source reader (`packages/engine/src/source/latex-front.ts`), makes the bibliography where TeX must, hands the source's units
@@ -246,7 +247,8 @@ a gate is named by its id there. The rows after them are this repository's own.
 | A unit's id is its kind and its pieces' source, nothing else | `packages/format/tests/format.test.ts` | |
 | One writer of A's ownership; the members' lists agree with it | `packages/engine/tests/helpers/locate.ts` (every locate test fails on a disagreement not carried) | over the corpus the lab's runner writes the findings (`ownership/<id>.json`) and its exit does not take them |
 | A unit is located only where every glyph it owns on B has a partner on A | `packages/engine/tests/locate.test.ts` | |
-| The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
+| The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none; a paper whose A is past the page bound is refused `too-large` before its tree and any compile | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
+| What a host takes ahead of the reader or around it is the packages' own, through entries that reach no package or no pack: the original's first ask and the look (`@readarxiv/reader/early`), the interface's languages and the built-in bands (`@readarxiv/ui/languages`, `@readarxiv/ui/bands`) | `packages/reader/tests/early.test.ts`, `packages/ui/tests/host-entries.test.ts` | |
 | Each behaviour digest is the hash of its case table's outcomes | `packages/translate/tests/digests.test.ts`, `packages/translate/tests/chain-digest.test.ts`, `tests/providers/prompt.test.ts`; `pnpm digests` | |
 | A translator is sent no field of identity (`src`, `keys`, `open`, `close`, `depth`, `of`) | `packages/translate/tests/bundle.test.ts` | |
 | A row's statement digest (`askedOf`) moves with every field a translator is given and with no order of keys; the extension's row key holds it, every stored key where it was | `packages/translate/tests/bundle.test.ts`; `tests/providers/row-key.test.ts` (the HTML fixtures' blocks on both wires, the reader's fixture bundles' units) | |

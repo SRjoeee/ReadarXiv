@@ -11,6 +11,7 @@
   "//": "PDF.js (pdfjs-dist) is the host's, as the engine package's is: the repository pins it once, in its root manifest, and a host that builds the reader gives it (design-reduction R8).",
   "exports": {
     ".": "./src/index.ts",
+    "./early": "./src/early.ts",
     "./vite": "./src/vite.ts",
     "./pdfjs-legacy": "./src/pdfjs/legacy.ts",
     "./reader.css": "./src/chrome/reader.css"

@@ -65,7 +65,7 @@ packages/reader/tests/chrome/capsule.test.ts 27  # 2026-11-07: moved with the ch
 src/entrypoints/capsule/main.tsx 4  # 2026-11-04: +1, the gate counts kana and hangul now: the capsule's Korean words; 2026-11-04: +2, the capsule's words in Traditional Chinese and Japanese (the glossary of 2026-11-04, §E), for the short count's measurement; 2026-10-04: the capsule's dev page (never shipped, wxt.config.ts DEV_PAGES) plays a run in the website's words, round 4's copy (its `T`), which the extension's packs do not hold
 packages/reader/tests/chrome/tip.test.ts 4  # 2026-11-07: moved with the chrome into packages/reader (stage 5a), 4 → 4 by Biome's wrapping of the package's tests; 2026-09-25: the reader's controls found by their Chinese names, as the interface shows them; +1, 2026-09-26: a tooltip inside a popover, its button named in Chinese
 packages/reader/tests/chrome/toolbar.test.ts 17  # 2026-11-07: moved with the chrome into packages/reader (stage 5a), 19 → 17 by Biome's wrapping of the package's tests; 2026-09-25: the toolbar's controls found by their Chinese names; +7, 2026-09-26: the interface review's names, links and shortcuts, found by their Chinese names; +2, 2026-09-26: the zoom value's width held, found by its Chinese name
-tests/config/appearance.test.ts 1
+tests/config/appearance.test.ts 2  # 2026-11-19: +1, the built-in bands' names as a saved configuration holds them, the expectation that holds them unmoved (lane final-adds)
 tests/config/languages.test.ts 3
 tests/config/storage.test.ts 20  # raised 2026-09-17: the migration test starting from v8 carries a glossary entry with a Chinese translation in and out — the non-Latin value a migration must not mangle
 tests/core/marks.test.ts 8

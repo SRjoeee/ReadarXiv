@@ -6,9 +6,11 @@
 //
 // A chunk enters only from an answer its source checked, under the object's name the source gives (its address, entity-tag and
 // length): a source bound to another object never takes it. In memory, for the reader's life.
+import { CHUNK } from './chunk.ts'
 
-/** PDF.js's own chunk, which every document here is opened with: every range a document asks is whole chunks of it */
-export const CHUNK = 65_536
+// (a chunk's size is chunk.ts's, which a host's page reads before the reader's code has loaded; named here too, where the
+// reader's own modules and the website's tests take it)
+export { CHUNK }
 /** the most the store holds (bytes): 64 MiB is past a heavy paper's reads for a jump with both documents (2608.16117v1: the
  *  layer's 15 MB and the left's 4.5 to 5.6 MB, measured on the website) */
 const STORE_BYTES = 64 * 2 ** 20

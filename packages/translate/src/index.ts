@@ -11,6 +11,8 @@ export { askedOf, NESTED_KIND, unitInOf } from './bundle.ts'
 export { chainOf, identityOf, keyOf, realClock, rowContextOf } from './chain.ts'
 export { sha256Hex } from './sha256.ts'
 export {
+  type Adapter,
+  adapterOf,
   type Chain,
   type Clock,
   type ElKind,
