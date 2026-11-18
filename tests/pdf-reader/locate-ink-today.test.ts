@@ -6,10 +6,10 @@
 import { describe, expect, it } from 'vitest'
 import { classesOf, contentOf, spansOf, unicodeOf } from '../../packages/engine/src/instrument/instrument.ts'
 import { DISPLAY } from '../../packages/engine/src/instrument/mt.ts'
-import * as TF from '../../packages/engine/src/locate/figure-text.ts'
-import * as P from '../../packages/engine/src/locate/ink.ts'
-import * as TI from '../../packages/engine/src/locate/ink-units.ts'
-import * as TL from '../../packages/engine/src/locate/ledger.ts'
+import { figureUnitsOf } from '../../packages/engine/src/locate/figure-text.ts'
+import { contentOf as inkContentOf, latin1View, spansOf as inkSpansOf, unicodeOf as inkUnicodeOf } from '../../packages/engine/src/locate/ink.ts'
+import { claimInk, inkUnitsOf, keptUnitsOf, statedClassOf } from '../../packages/engine/src/locate/ink-units.ts'
+import { ledgerOf } from '../../packages/engine/src/locate/ledger.ts'
 import { classOf } from '../../packages/engine/src/marks/marks.ts'
 import { identifiersIn } from '../../packages/engine/src/source/latex-front.ts'
 import { digestOf, todayAnswers } from './helpers/today-answers.ts'
@@ -18,7 +18,7 @@ import { digestOf, todayAnswers } from './helpers/today-answers.ts'
 const todayAnswer = todayAnswers('locate-ink-today')
 
 /** the package's copies, each maker's */
-const T = { ...TF, ...TI, ...TL }
+const T = { figureUnitsOf, ledgerOf, inkUnitsOf, claimInk, keptUnitsOf, statedClassOf }
 type G = Record<string, unknown>
 /** a page in today's shape: lines of glyphs set left to right (a glyph half its size wide), the marks' points by glyph */
 function pageOf(lines: { s: string; x?: number; y: number; size?: number; font?: string; form?: boolean; fid?: number; space?: number }[], marks: { points?: [string, number][]; paras?: [string, number][]; paraEnds?: [string, number, number, number][]; regions?: { kind: string; from: number; to: number }[]; pictures?: [string, number][] } = {}) {
@@ -456,7 +456,7 @@ describe('today’s ink makers in the engine package', () => {
       return (I.inkUnitsOf([pg], ledger, { units: units.slice(0, 1), from: 1 }) as unknown as Made[]).filter((u) => u.pieces.some((p) => p.t === 'text' && !/Journal/.test(p.s ?? '')))
     }
     // (the pieces' sources in the front end's Latin-1 view of their UTF-8, read back as the adapter reads them)
-    const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? P.unicodeOf(p.s) : p.t === 'ph' ? `<${P.unicodeOf(p.src)}>` : ''))
+    const said = (u: Made) => u.pieces.map((p) => (p.t === 'text' ? inkUnicodeOf(p.s) : p.t === 'ph' ? `<${inkUnicodeOf(p.src)}>` : ''))
     const today = todayAnswer<ReturnType<typeof one>>('one', 'a label of leading scripts', digestOf(pg, units))
     const copy = one(T as unknown as Impl)
     expect(today.map(said)).toEqual([
@@ -691,17 +691,17 @@ describe('today’s ink makers in the engine package', () => {
     const today = todayAnswer<ReturnType<typeof run>>('run', 'the sequence', digestOf(pages, units))
     const kindOf = (p: unknown) => classOf(p as { t: string; src?: string }) ?? 'other'
     for (const u of today.ink) {
-      expect(P.contentOf(u.pieces)).toEqual(contentOf(u.pieces as never, { kindOf }))
-      expect(P.spansOf(u.pieces)).toEqual(spansOf(u.pieces as never))
+      expect(inkContentOf(u.pieces)).toEqual(contentOf(u.pieces as never, { kindOf }))
+      expect(inkSpansOf(u.pieces)).toEqual(spansOf(u.pieces as never))
     }
-    const pieces = [{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: P.latin1View('Física é') }, { t: 'close', id: 1, src: '}' }, { t: 'ph', src: '$x$' }]
-    expect(P.contentOf(pieces)).toEqual(contentOf(pieces as never, { kindOf }))
-    expect(P.spansOf(pieces)).toEqual(spansOf(pieces as never))
+    const pieces = [{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: latin1View('Física é') }, { t: 'close', id: 1, src: '}' }, { t: 'ph', src: '$x$' }]
+    expect(inkContentOf(pieces)).toEqual(contentOf(pieces as never, { kindOf }))
+    expect(inkSpansOf(pieces)).toEqual(spansOf(pieces as never))
     // (a colour group: the port states the fill its open names, as the adapter states a source unit's from TeX's log; today's
     // adapter, given no log for an ink unit, stated none)
     const coloured = [{ t: 'text', s: 'Mail ' }, { t: 'open', id: 1, src: '\\textcolor[HTML]{7A7F80}{' }, { t: 'text', s: 'a@b.org' }, { t: 'close', id: 1, src: '}' }]
-    expect(P.spansOf(coloured)).toEqual(spansOf(coloured as never, new Map([[1, 0x7a7f80]])))
+    expect(inkSpansOf(coloured)).toEqual(spansOf(coloured as never, new Map([[1, 0x7a7f80]])))
     expect(spansOf(coloured as never)).toEqual([['1', { cmd: 'textcolor' }]])
-    for (const s of ['plain', P.latin1View('Física'), 'wide \u4e2d', 3]) expect(P.unicodeOf(s)).toBe(unicodeOf(s))
+    for (const s of ['plain', latin1View('Física'), 'wide \u4e2d', 3]) expect(inkUnicodeOf(s)).toBe(unicodeOf(s))
   })
 })
