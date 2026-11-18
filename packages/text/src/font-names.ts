@@ -5,7 +5,7 @@
 // shared/figures.ts fontClassOf). PDF.js's own guess for a font it could not load is left out: no reader of these takes it.
 
 /** a font's family as its name tells it */
-export type FontFam = 'serif' | 'sans' | 'mono' | 'math'
+type FontFam = 'serif' | 'sans' | 'mono' | 'math'
 /** a font's family, weight, slant and small capitals as its name tells them */
 export interface FontNameClass {
   fam: FontFam
@@ -15,7 +15,7 @@ export interface FontNameClass {
 }
 /** and the Latin family whose face the reader draws it in (times, cm, palatino, charter, libertine, helvetica, cmss, courier,
  *  cmtt), whether the name is one at all (a Type 3 bitmap font's or a renamed subset's is not), and the name read */
-export interface FontNameStyle extends FontNameClass {
+interface FontNameStyle extends FontNameClass {
   design: string
   known: boolean
   name: string

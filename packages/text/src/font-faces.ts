@@ -239,7 +239,7 @@ export const LATIN_FALLBACKS: Readonly<Record<FaceId, readonly FaceId[]>> = Obje
 // cmbxti10, CMU 32), as its small capitals are (LM's caps face 26 of 26 against cmcsc10, CMU's smcp 3) and its sans and
 // typewriter (LM 57-59 against cmss10, cmssbx10, cmssi10 and cmitt10, CMU 21-43; cmtt10 60 and 61)
 /** a design's column: one group, or a group by style */
-export type GroupColumn = string | Readonly<Record<string, string>>
+type GroupColumn = string | Readonly<Record<string, string>>
 export const CM_TEXT: Readonly<Record<string, string>> = {
   regular: 'cmun-serif',
   bold: 'cmun-serif',

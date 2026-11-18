@@ -18,7 +18,6 @@ export {
   FACES,
   type Face,
   type FaceId,
-  type GroupColumn,
   isCjkFace,
   LATIN_FALLBACKS,
   LATIN_GROUPS,
@@ -30,12 +29,5 @@ export {
   styleOf,
 } from './font-faces.ts'
 export { HOLDS, SMCP } from './font-letters.ts'
-export {
-  bareFontName,
-  type FontFam,
-  type FontNameClass,
-  type FontNameStyle,
-  readFontName,
-  readFontStyle,
-} from './font-names.ts'
+export { bareFontName, type FontNameClass, readFontName, readFontStyle } from './font-names.ts'
 export { ABBR, opensAfter, STAND_IN, type StandIn, sentenceCuts, TERMINAL_ABBR } from './sentences.ts'
