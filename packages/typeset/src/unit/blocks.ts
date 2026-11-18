@@ -29,6 +29,8 @@ export type LineInfo = {
   file?: boolean
   j?: number
   frame?: number
+  /** TeX's measure's left edge for the line, as the part states it (Line[7]): where its ink stands at it, TeX set it under it */
+  m0?: number
 }
 
 export type BlocksInput = {
@@ -44,6 +46,10 @@ export type BlocksInput = {
   paraAt?: ReadonlySet<string> | null
   /** TeX's \baselineskip for the unit's lines (Placed.lead where the part states it): every block's pitch, null where unstated */
   pitch?: number | null
+  /** TeX may have set the unit's first line apart from the edge its later lines share, left of it (a hang after the first line,
+   *  a list item's first line or label in the margin: docs/PDF-READER.md §18.94): its lines set justified or flush left
+   *  (Placed.align j, l); absent, a block's edge is its leftmost line's */
+  apart?: boolean
 }
 
 /** a block of a unit's lines (layer2.d.mts Block2): its lines, bounds, pitch, measures, the original's baselines `B` and
@@ -74,6 +80,14 @@ export type Block = {
   through?: boolean
 }
 
+/**
+ * What two lines' ink starts may differ by under one measure, in em of the line's size: a glyph's side bearing and microtype's
+ * protrusion (docs/PDF-READER.md §18.94). Measured over the 245 papers' parts (lane hang, 2026-11-18): of 190,155 text lines past
+ * a member's first, 175,833 stand within 0.125 em of the measure TeX states for them, 159 within 0.125 to 0.2 em, then 7 to 26 a
+ * 0.025 em bin to 0.4 em (lines TeX did not start at it: indents, content); within 0.25 em, |ink - m0| q0.9999 0.211 em, and
+ * the step between two lines of one stated measure q0.9999 0.240 em. A hang or a label in the margin stands 1 em and more apart
+ */
+export const ONE_EDGE = 0.25
 /** a change of a paragraph's measure: a line's edge this many em off the line's before it (L2:534) */
 const STEP_EM = 2
 /** lines set to one measure: their edges within this many em of it (L2:537) */
@@ -141,6 +155,30 @@ export function measureOn(Y: readonly number[], at: (i: number) => [number, numb
 
 type Raw = Omit<Block, 'after' | 'B' | 'exact' | 'sizes' | 'pitch0' | 'free' | 'flow'> & { after?: number }
 
+/**
+ * The edge a block's later text lines share where its first line stands left of it by more than a line's ink differs by under
+ * one measure (ONE_EDGE), each later line within that of the leftmost: TeX's \hangindent after the first line (\@hangfrom's label
+ * box, an author's hang), a list item TeX sets its first line left of the list's measure (natbib's \bibhang, a negative
+ * \itemindent) or whose label stands in the margin. Shared by two later lines or more, or by one that stands at the measure TeX
+ * states for it (`stated`): one line alone shares no edge (a paragraph's second line that is a display's row, a line set far
+ * right). Undefined where the first line is held or none follows, where the later lines share no edge (content set at its own
+ * starts, a shape that changes again), and where the first line is not left of it (a \parindent, a line its protruded first
+ * glyph alone sets left)
+ */
+function apartEdge(
+  rs: readonly Rect[],
+  kept: (r: Rect) => boolean,
+  size: (r: Rect) => number,
+  stated: (r: Rect) => boolean,
+): number | undefined {
+  const first = rs[0]
+  const later = rs.slice(1).filter((r) => !kept(r))
+  if (!first || kept(first) || !later.length || (later.length === 1 && !stated(later[0]!))) return undefined
+  const edge = Math.min(...later.map((r) => r[1]))
+  if (!later.every((r) => r[1] - edge <= ONE_EDGE * size(r))) return undefined
+  return first[1] < edge - ONE_EDGE * size(first) ? edge : undefined
+}
+
 /** the unit's lines as blocks, its kept lines never moved, each block with the kept regions before it (L2:626 blocksOf2) */
 function blocksOf2(i: BlocksInput): Raw[] {
   const { rects, keep, regionOf, referenced, breakAt, joinAt, centred, paraAt } = i
@@ -174,17 +212,30 @@ function blocksOf2(i: BlocksInput): Raw[] {
     }
     cur!.rects.push([page, x0, y0, x1, y1])
   }
-  const whole: Raw[] = blocks.map((b) => {
+  const infoOf = (r: Rect) => i.lineInfo.get(rectKey(r)) ?? i.lineInfo.get(rectKeyNoX0(r))
+  const sizeOf = (r: Rect) => infoOf(r)?.size ?? (r[4] - r[2]) / 0.894
+  // (a line that stands at the measure TeX states for it, within what a line's ink differs by under one measure)
+  const stated = (r: Rect) => {
+    const m0 = infoOf(r)?.m0
+    return m0 !== undefined && Math.abs(r[1] - m0) <= ONE_EDGE * sizeOf(r)
+  }
+  const whole: Raw[] = blocks.map((b, bi) => {
     const rs = b.rects
-    const x0 = Math.min(...rs.map((r) => r[1]))
+    const c = centred === true
+    const measures = c ? null : measuresOf(rs, keep)
+    // (the unit's first block, where TeX set its first line apart from the edge its later lines share, left of it (apartEdge;
+    // §18.94, H1 and H2): its edge theirs, its first line's indent signed, that line starting where it starts. Not where its
+    // measure changes again after the first line (measuresOf's runs: a wrapped figure's shape, by height, as before); its right
+    // edge its rightmost line's whatever its first line)
+    const edge = bi === 0 && i.apart && !c && !measures ? apartEdge(rs, kept, sizeOf, stated) : undefined
+    const x0 = edge ?? Math.min(...rs.map((r) => r[1]))
     const x1 = Math.max(...rs.map((r) => r[3]))
     const top = Math.max(...rs.map((r) => r[4]))
     const bottom = Math.min(...rs.map((r) => r[2]))
     const h = median(rs.map((r) => r[4] - r[2]))
     const pitch = rs.length > 1 ? median(rs.slice(1).map((r, k) => rs[k]![4] - r[4])) : h * 1.38
-    const indent = Math.max(0, rs[0]![1] - x0)
-    const c = centred === true
-    return { ...b, x0, x1, top, bottom, h, pitch, indent, centred: c, measures: c ? null : measuresOf(rs, keep) }
+    const indent = edge !== undefined ? rs[0]![1] - edge : Math.max(0, rs[0]![1] - x0)
+    return { ...b, x0, x1, top, bottom, h, pitch, indent, centred: c, measures }
   })
   if (!keep?.size && !breakAt?.size) return whole.map((b) => ({ ...b, after: 0 }))
   let after = 0
