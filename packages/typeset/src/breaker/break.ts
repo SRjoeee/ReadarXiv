@@ -4,7 +4,7 @@
 // call's (`P.measure`, `m`), its patterns `P.patterns`.
 import { textless } from './cuts.ts'
 import { breakPoints } from './hyph.ts'
-import { keptPair, kinsokuOf, noStart } from './script.ts'
+import { charsOf, graphemesOf, keptPair, kinsokuOf, noStart } from './script.ts'
 import { inFlow, texRoomOf } from './slots.ts'
 import type { FitBlock, FitParams, FitState, LaidItem, LaidLine } from '../fit/types.ts'
 import type { Mins } from './hyph.ts'
@@ -63,9 +63,6 @@ type EndMark = NonNullable<Token['endMark']>
 /** a URL's crop cut at a break point, its head and its tail (urlCut's) */
 type UrlCut = NonNullable<ReturnType<typeof urlCut>>
 
-const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
-/** a text's graphemes, each a string: what a reader sees as one character */
-const graphemesOf = (t: string): string[] => Array.from(GRAPHEMES.segment(t), (g) => g.segment)
 /**
  * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
  * kind the file's crops exempt (tex.mjs cropsOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's
@@ -161,8 +158,10 @@ const tokW = (t: Measured, f: number, st: FitState, scale: number): number => {
   if (t.crop) return (t.cw as number) * scale
   if (t.space) return (t.w100 * f) / 100
   let w = (t.w100 * f) / 100
-  if (t.cls === 'cjk') w += st.track * f * [...(t.s as string)].length
-  else if (st.trackLatin) w += st.trackLatin * f * [...(t.s as string)].length
+  // (the tracking after each character a reader sees, a grapheme cluster (script.ts charsOf), as the drawing's letter spacing is
+  // set after each (CSS Text 3 §8.2, a typographic character unit): a decomposed Hangul syllable one character, not three)
+  if (t.cls === 'cjk') w += st.track * f * charsOf(t.s as string)
+  else if (st.trackLatin) w += st.trackLatin * f * charsOf(t.s as string)
   return w
 }
 /**

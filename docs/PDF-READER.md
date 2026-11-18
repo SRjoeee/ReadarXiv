@@ -8013,7 +8013,16 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   (`by` itself) is a tie's step: laid alone at its size with its mates where the tie left them it fits, but at the tie's one size
   for all it does not (2610.21084v1-zh p33 ord 326, 2610.21026v1-zh p36 ord 243, 2610.19159v1-ja p5 ord 128: each fit only at
   0.975 beside its mate at 1, its mate capped there, and each capped back at its own first need). The evening's steps and the
-  ties' are printed beside, never failed: the owner's accepted costs.
+  ties' are printed beside, never failed: the owner's accepted costs. Each line reads every run of a member (PR #649's review): a
+  unit its displays split is laid a run at a time, each run at its own state and size (`fit/runs.ts` layoutRuns; the fill fills
+  each run apart, `shared/fill-pass.ts`), and the joined layout's own state and scale are its first run's alone; so each run its
+  lines carry (`LaidLine.seg`) is read once, in order, with that run's own fill leading, parameters, tokens and blocks
+  (`FillLaid.runs`), a member of one run as before, and a failing member's entry names each run that fails the line
+  (`run 2 of 3`), as the record (`AXT_GATE_SPACING`) names the run of each line it writes. Read so over the 92 pairs and the
+  two added (2026-11-17, the lays byte for byte as before): 1,989 members of two runs or more on each store under the recorded
+  rule set (paragraphs and theorems; no caption, no note), 76 (door) and 73 (Google) under the package's; every line 0 as when
+  each member was read by its first run; beside, the size steps a tie states 4 runs more on the door's rows and 6 on Google's
+  (2608.16117v1-de ords 57 and 115, 2610.21084v1-zh ord 326, 2610.22197v1-zh ord 74), and the member the fill lays not the same.
 - **The display gate's ruling FM** (`lab/typeset/parity/rulings.mjs`, his verdict on the captions laid by the rule and his
   general words above, the coordinator's ruling of 2026-11-17): a caption the rule sets in fewer lines than today's reader, which
   letter-spaced it onto more, at its script's pitch from its first line with the slack under it, is the rule's own look and no
@@ -8049,7 +8058,8 @@ candidate broken between syllables: 1512.03385v1-ko p7 and p2, 2610.40645v1-ko p
 export of 2026-11-16T04:19:36.836Z): 「改（允许在字之间断行，两端对齐）」.
 
 - **The rule** (`packages/typeset/src/data/rules/scripts.ts`, Kore): `keepAll` false. Each Hangul syllable is a token of its own
-  (B.tokens, as each Chinese or Japanese character is), so a line may end between two syllables of a word, and between a Latin
+  (B.tokens, as each Chinese or Japanese character is; a grapheme cluster, so a decomposed syllable too, §18.93), so a line may
+  end between two syllables of a word, and between a Latin
   word and the Hangul set against it (xetexko's `\XeKo@latincjk`, a glue, both ways: `:1014`, `:1123`). A line of mostly CJK
   items is justified by the breaker's rule for the scripts that break between characters: its slack spread over its gaps, within
   `cjkJust` (0.25 em a gap, Korean's as Chinese's), and a line a little short of its last group squeezed to take it
@@ -8178,6 +8188,70 @@ each an m cell, its size, leading and text as before, each inside its band: 2610
 14 a store, are drawn byte for byte as before (2610.21313v1's units 85 and 86 with their first line cleared down from the rule over
 it by S.settle, as before), and the four laid in fewer lines whose lines are two blocks (2501.14787v1's units 94, 96, 99 and 100)
 as before. The new lay over the parts made before (no `stand`): every dump byte-identical to the lay batch's on both stores.
+
+### 18.93 A character is a grapheme cluster: a run that breaks between its characters is cut between clusters (PR #649's review, the owner's answer of 2026-11-17)
+
+B.tokens (`breaker/tokens.ts`) cut a CJK run, where the rules break between its characters (`keepAll` false), at every code
+point, and classed each code point apart. So a decomposed Hangul syllable (L V T, the conjoining jamo, which `breaker/script.ts`
+counts among the CJK blocks) was three tokens, measured apart, a line free to end between them and each drawn at its own place,
+its letters apart; a kana and its combining voiced mark (U+3099, U+309A) two; a character and its variation selector (U+FE00 to
+U+FE0F, U+E0100 to U+E01EF: no CJK block, so the selector opened a Latin part, measured in the Latin face) two. Reach on the stored
+rows: none (both translators answer composed; below). It is fixed because the cut is wrong, not because a paper shows it.
+
+- **The rule**: a run is walked by its grapheme clusters (UAX #29's extended clusters, the platform's own: `Intl.Segmenter`,
+  granularity `grapheme`), each classed by its first code point (`cjkLeadRe`), so a run that breaks between its characters is cut
+  between clusters, never inside one, and each token's offsets (UTF-16, for the sentences, the words and the links) are its first
+  unit's, as before. No list of ours: where a chunk holds no code point that may join another (`breaker/script.ts` `mayJoin`:
+  the code points whose Grapheme_Cluster_Break lets them join a neighbour, CR, LF, Extend, ZWJ, SpacingMark, Prepend,
+  Regional_Indicator and the conjoining L, V and T, written in the properties ECMAScript names, `\p{M}`, `\p{Grapheme_Extend}`,
+  `\p{Emoji_Modifier}`, `\p{Regional_Indicator}`, `\p{Cf}` and the three jamo blocks, with the letters of those classes no such
+  property names, Unicode 17's Thai and Lao SARA AM, the Prepend letters of Indic_Syllabic_Category and Kirat Rai's vowel signs),
+  each code point is a cluster of its own and the chunk is walked by its code points as before (`clustersOf`); else by the
+  segmenter's clusters. The class is held to the platform's segmenter over every assigned code point
+  (`packages/typeset/tests/unit/graphemes.test.ts`: none it joins to a neighbour escapes the class).
+- **Every other place a CJK run is read character by character**, each read where it breaks, measures, squeezes or draws:
+  - the tracking a token, a run's edge and a line's ink end carry after each character (`break.ts` tokW, `emit/display.ts` runEdge,
+    `shared/share.ts`): counted by clusters (`charsOf`), as the drawing's letter spacing is set after each typographic character
+    unit (CSS Text 3 §8.2), not after each code point;
+  - the drawing (`emit/display.ts` lineRuns): a CJK token of one cluster of several code points is a run of its own at its own
+    place, glued to nothing, its text drawn whole: a run of single characters places each code point (it would draw the cluster
+    apart again), and a run glued of several would drop the spacing the breaker sets between characters; the CJK ink
+    (`inkLines`) reads a run by its clusters, so a character with its selector keeps the CJK ink;
+  - a figure text's and a name's runs by script (`shared/figures.ts` figureRuns, `shared/names.ts` nameScriptRuns): by clusters,
+    each its first code point's class and style, so a selector is never set apart in the Latin face;
+  - unchanged, each already by clusters or not a character's: a word wider than its line cut by its graphemes (`break.ts`,
+    the same segmenter, now `script.ts` graphemesOf); a line's squeeze and justification, which count the gaps between items (a
+    cluster one item); B.cover's characters a face must hold (`breaker/cover.ts`: every code point asked of its face, a selector
+    too); a layout's tally of characters set and lost (`breaker/place.ts` laidOut, both sides counted alike); the text layer's
+    split of the original's own items (`emit/text.ts`) and the links' offsets (`emit/links.ts`, at the tokens' own offsets, every
+    one a cluster's edge); a mark's blank half (`markOf`, a token of one code point alone: a mark with its selector keeps its
+    whole box, the face's measure being of the mark's default glyph);
+  - not changed, and not made worse: the edge readers of a token (`tokens.ts` spacelessEdge, markBlankEdge, the rules' marks no
+    line ends with, `script.ts` keptPair, `shared/figures.ts` blanksOf, `unit/marks.ts` mergeTail) read a token's first code point,
+    a cluster's base, and its last, which for a token ending in a cluster of several is the cluster's last extender, not its base
+    (UAX #14 LB9 reads a combining sequence by its base): before the change that extender was a token of its own, read the same.
+- **Tests** (texts of our own; red on the base, green here): `packages/typeset/tests/unit/token-clusters.test.ts`, laid through
+  layPage with a face that shapes each cluster as one character: a decomposed Hangul syllable one token measured whole (no text
+  measured holds a letter of it without the whole), a word a token a syllable, a Korean paragraph and a Japanese one decomposed
+  laid at every measure from 60 to 130 pt as their composed forms, character by character where each is drawn, no line ending
+  inside a cluster; a Han character with a variation selector one CJK token, its selector never a line's start, laid as the
+  character alone; an emoji's ZWJ sequence in a Chinese line one token at every measure (a guard: one before too); composed
+  Chinese, Japanese and Korean tokenized as before, byte for byte (each sample's tokens hashed, the base's digests).
+  `graphemes.test.ts`: the class against the segmenter, and the clusters of each case walked and counted.
+- **The cost, measured before the form was chosen** (2026-11-17, the reader gate's own run of the 92 pairs on both stores, every
+  B.tokens call answered by three forms on the same input in a turning order, each timed alone, under other lanes' load of 18
+  rising to 134): the base's walk 25,793 ms (door) and 34,212 (Google); the segmenter on every chunk 27,932 (+8.3 %) and 40,327
+  (+17.9 %), a pair's median +22.5 %; the class's test first, the segmenter only where a chunk holds a joiner, 23,713 (-8.1 %) and
+  33,385 (-2.4 %), a pair's median -0.5 %. The second form is built. Over the 293,506 calls both forms answered as the base, and
+  no token's text held a code point of the class. Measured again on the built form (2026-11-18, the same run from this head: the
+  base's tokenizer, the head's and the segmenter on every chunk on every call's input, four readings, the stores alternating,
+  the 1-minute load read at each pair, 10 to 184): the head's against the base's +0.3 % and +0.7 % (door), +0.6 % and -3.6 %
+  (Google) in all, each call's ratio's median 1.000 in every reading, the head quicker on 43 to 52 % of the calls: no difference,
+  under the base's own spread between two readings of a store (its total 57 % and 18 %, a call's median 10 % and 5 %); the
+  segmenter on every chunk +28.4 %, +22.6 %, +25.6 %, +23.0 %, each call's ratio's median 1.33 to 1.37, quicker on 5 to 6 % of
+  the calls in every reading.
+- The versions: none moves. A page is laid when it is read; the units (PIPELINE), what a translator is sent (TRANSLATE), the
+  chain's digests and today's layout file (LAYOUT) are untouched.
 
 ## 19. The engine's contract
 
