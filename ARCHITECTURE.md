@@ -19,7 +19,7 @@ again in the translation.
 | Package | What it is | Its entry, the names that matter | May import |
 |---|---|---|---|
 | `@readarxiv/format` (`packages/format`) | The bundle's schema (`packages/format/src/schema.ts`), its one reader and writer (`packages/format/src/io.ts`), a unit's id (`packages/format/src/ids.ts`), and the documents our server gives a reader (`packages/format/src/doc.ts`) | `read`, `write`, `unitId`, `PaperDoc`, `OpenAsk`, `fold`, `FORMAT` | no package |
-| `@readarxiv/text` (`packages/text`) | The sentence cuts several packages share (`packages/text/src/sentences.ts`) | `sentenceCuts`, `ABBR` | no package |
+| `@readarxiv/text` (`packages/text`) | The sentence cuts several packages share (`packages/text/src/sentences.ts`), and a token's edge punctuation, the identifier's and the flush number's (`packages/text/src/edges.ts`) | `sentenceCuts`, `ABBR`, `edgeMark` | no package |
 | `@readarxiv/ui` (`packages/ui`) | The controls, the design tokens and the one string catalogue of the extension, the reader and the website | the controls, `ROLES`, `S` | no package |
 | `@readarxiv/engine` (`packages/engine`) | The prepare: a paper's source and arXiv's PDF in, its bundle out | `prepare` (`packages/engine/src/prepare.ts`), `prepareFront`, `prepareBack`, `align`, `locate`, `wrap`, `bundle` | format, text |
 | `@readarxiv/typeset` (`packages/typeset`) | A page's translation laid into the room arXiv's page gives it: rules, language data, the breaker, the fit, the page fill | `layPage` (`packages/typeset/src/lay/entry.ts`), `rulesFor` | format, text |

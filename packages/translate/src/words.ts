@@ -26,22 +26,38 @@
 // translator; the row has it back beside the element, literally, as the source sets it. What F10 exists for is a word's
 // letters sent alone, read as a word of their own: 2111.09276v1's Table 1 on staging, Google: `\hlyellow{guitar}s.`
 // went out as an element and "s.", and "s" came back as 秒, seconds; a name written with an accent command (`M\k{a}dry`) keeps
-// its letters with it, and a panel's letter after "Figure 2" is held. A digit is never held: a number goes through a
+// its letters with it, and a panel's letter after "Figure 2" is held. This arm never holds a digit: a number goes through a
 // translator as written, and held back it would be cut at its decimal point or its comma (`0.2\pp` leaving "0." on the
 // wire); "s2" after an element holds back the "s" and leaves the "2". Nothing is held across any other character: a
 // possessive after a system's name ("TensorCast's") is a word of the sentence, which the translator translates beside the
 // element (held back, it would stand as written in the translation). An element that states no text (a raised
-// mark, `\textsuperscript{1}Carnegie`; one that sets nothing) holds nothing back, nor is the kind asked: the text decides, by
-// its characters' categories, no list. A run between two elements is the first's: it comes back after the element it follows,
-// else before the one it precedes, outside the groups that hold the element but not the run. A run never takes a letter out of
-// a group that does not hold the element (a link or a styled group around letters alone, `\href{…}{M}\k{a}dry`): held, it would
-// leave the group without them, a link of no text the original states with its text; such letters go on the wire in their
-// group, and the run stops at that group's edge.
+// mark, `\textsuperscript{1}Carnegie`; one that sets nothing) holds no letter back, nor does this arm ask the kind: the text
+// decides, by its characters' categories, no list. A run between two elements is the first's: it comes back after the element
+// it follows, else before the one it precedes, outside the groups that hold the element but not the run. A run never takes a
+// letter out of a group that does not hold the element (a link or a styled group around letters alone,
+// `\href{…}{M}\k{a}dry`): held, it would leave the group without them, a link of no text the original states with its text;
+// such letters go on the wire in their group, and the run stops at that group's edge.
+//
+// A number set flush against an inline formula is held with it (the rule's second arm, lane flush-hold of 2026-11-18): an
+// author types `32$\times$32`, `$-$0.016`, `6$n$+2`, `0$.$5`, the number outside the math and flush against it, and sent beside
+// the formula's tag the number came back broken (a counter or a noun put between the digits and the formula, digits lost:
+// 1512.03385v1 in Korean on staging, Google, both 32s of "32×32" gone). For an element of kind `math` (an inline formula;
+// a display is `display`), on each side: the run of the unit's text characters that touch it, as far as white space, in the
+// text piece beside it and in no group that does not hold it (as above), less the sentence punctuation, quotes and unpaired
+// bracket at its far edge (@readarxiv/text edgeMark, the identifier's edge, §18.25), is offered to no translator where it holds
+// a digit (N) and no letter or mark (L, M), and comes back beside the formula literally, as held letters do. So a translator
+// is sent the formula alone where the paper prints one expression, and the row has the number exactly as typed at the
+// formula's side, wherever the reply set the formula. A run that holds a letter goes on the wire (`$i$-th`, `J1744$-$`: words a
+// translator translates; `2.5$\mu$m` holds the 2.5 and sends the m); a formula states no `text`, so the first arm never reads
+// it, and a number against an element of another kind goes through as written (`0.58\pp`). The arms are one function: the
+// side's run differs (letters touching a text that ends a word; a number touching a formula), the rest is the same, a run
+// between two elements the first's.
 //
 // The chain applies both rules once, to the unit before anything else reads it (chain.ts settle, rowContextOf): every wire
 // writes the unit so unwrapped, every reading reads the reply against it (the tags and markers wires, the runs floor, the
 // acceptance rule, the literal put-back and the references of groups.ts), so no wire and no reading decides it again. The
 // unit's own content, and so the original's, never changes; a row's sentences come back in the unit's own projection.
+import { edgeMark } from '@readarxiv/text'
 import { hasLetter, headLength } from './accept.ts'
 import { type OutPiece, type Piece, type Result, SOURCE, type Sentences, type UnitIn } from './contract.ts'
 
@@ -59,11 +75,11 @@ type Span = Extract<Piece, { t: 'span' }>
 const holdsFree = (ps: readonly Piece[]): boolean => ps.some((p) => p.t === 'span' && (!p.must || holdsFree(p.content)))
 
 /** The unit as a translator is sent it (the module's two rules: a group that is not `must` and cuts a word unwrapped; letters
- *  glued to an element's text held back), with the way back for a row; null where neither changes it, and the
- *  unit goes as it is */
+ *  glued to an element's text, and a number flush against an inline formula, held back), with the way back for a row; null
+ *  where neither changes it, and the unit goes as it is */
 export function wholeWordsOf(unit: UnitIn): Whole | null {
   const groups = cutGroupsOf(unit)
-  const held = heldLettersOf(groups?.unit ?? unit)
+  const held = heldRunsOf(groups?.unit ?? unit)
   if (!held) return groups
   if (!groups) return held
   return { unit: held.unit, back: (r) => groups.back(held.back(r)) }
@@ -170,16 +186,25 @@ const WORD_END = /^[\p{L}\p{M}\p{N}]$/u
 /** a character held back where it touches such a side: a letter or a combining mark (L, M), never a digit: a number goes
  *  through a translator as written, and held back it would be cut at its decimal point or its comma (`0.2\pp`) */
 const HELD = /^[\p{L}\p{M}]$/u
+/** the kind of an inline formula (contract.ts ElKind, the source reader's `$…$`, `\(…\)`, `\ensuremath`; the page's `<math>`): the
+ *  element a number set flush against is held with */
+const FORMULA = 'math'
+/** what ends a run touching a formula: white space (Unicode's, the wires' own) */
+const SPACE = /^\s$/u
+/** a run touching a formula is held where it holds a digit and no letter or mark */
+const DIGIT = /\p{N}/u
+const LETTER = /[\p{L}\p{M}]/u
 /** the projection position of each piece of the unit: a text's characters (with the groups around them) or an element */
 type At = { t: 'text'; piece: Piece; k: number; groups: string[] } | { t: 'el'; el: El; groups: string[] }
 
-/** The unit with the letters and marks glued to an element's text held back (the module's second rule, F10), and the way
- *  back for a row; null where no element states a text that such a character touches */
-function heldLettersOf(unit: UnitIn): Whole | null {
-  // (the projection with each element's text in its place, each position's piece; an element stating none, U+FFFC)
+/** The unit with the letters and marks glued to an element's text, and a number flush against an inline formula, held back
+ *  (the module's second rule, F10, and its second arm), and the way back for a row; null where nothing is held */
+function heldRunsOf(unit: UnitIn): Whole | null {
+  // (the projection with each element's text in its place, each position's piece; an element stating none, U+FFFC; the
+  // elements whose sides the rule reads, in source order: one stating a text, and an inline formula)
   let projection = ''
   const at: At[] = []
-  const texts: { el: El; a: number; b: number }[] = []
+  const sides: { a: number; b: number; arm: 'letters' | 'number' }[] = []
   const walk = (ps: readonly Piece[], groups: string[]) => {
     for (const p of ps) {
       if (p.t === 'text') {
@@ -187,17 +212,18 @@ function heldLettersOf(unit: UnitIn): Whole | null {
         projection += p.s
       } else if (p.t === 'el') {
         const s = shownOf(p)
-        if (s !== OBJ) texts.push({ el: p, a: projection.length, b: projection.length + s.length })
+        if (s !== OBJ) sides.push({ a: projection.length, b: projection.length + s.length, arm: 'letters' })
+        else if (p.kind === FORMULA) sides.push({ a: projection.length, b: projection.length + 1, arm: 'number' })
         for (let k = 0; k < s.length; k++) at.push({ t: 'el', el: p, groups })
         projection += s
       } else walk(p.content, [...groups, p.id])
     }
   }
   walk(unit.content, [])
-  if (!texts.length) return null
+  if (!sides.length) return null
   // (each element's run on each side its text begins or ends with a letter, a mark or a digit: the unit's text characters of
-  // those categories that touch it, as far as they go; elements in source order, so that a run between two is the first's,
-  // after it)
+  // those categories that touch it, as far as they go; each formula's on each side, a number; elements in source order, so
+  // that a run between two is the first's, after it)
   const held = new Map<number, { el: Extract<At, { t: 'el' }>; side: 'before' | 'after' }>()
   const cp = (x: number, back: boolean): { ch: string; n: number } | null => {
     // (the code point ending at x, back; else the one starting at x)
@@ -213,8 +239,44 @@ function heldLettersOf(unit: UnitIn): Whole | null {
     const p = at[x]
     return p?.t === 'text' && p.groups.every((g, i) => self.groups[i] === g)
   }
-  for (const { a, b } of texts) {
+  /** the number arm's run on one side of a formula: the text characters touching it from `x0` outward (`step`), in the text
+   *  piece beside it and under textOf, as far as white space or one held already; less its far edge's punctuation; held where
+   *  it holds a digit and no letter or mark */
+  const numberRun = (x0: number, step: 1 | -1, self: Extract<At, { t: 'el' }>, side: 'before' | 'after') => {
+    const first = at[x0]
+    if (first?.t !== 'text') return
+    // (its positions, outward, a code unit each)
+    const xs: number[] = []
+    let x = x0
+    for (
+      let c = cp(x, step < 0);
+      c &&
+      textOf(x, self) &&
+      !held.has(x) &&
+      (at[x] as Extract<At, { t: 'text' }>).piece === first.piece &&
+      !SPACE.test(c.ch);
+      c = cp(x, step < 0)
+    ) {
+      for (let k = 0; k < c.n; k++) xs.push(x + step * k)
+      x += step * c.n
+    }
+    let run = [...xs]
+      .sort((p, q) => p - q)
+      .map((y) => projection[y])
+      .join('')
+    const far = step > 0 ? 'end' : 'start'
+    while (run && edgeMark(run, far)) run = far === 'end' ? run.slice(0, -1) : run.slice(1)
+    if (!DIGIT.test(run) || LETTER.test(run)) return
+    // (what is left is the part touching the formula: its first positions outward)
+    for (const y of xs.slice(0, run.length)) held.set(y, { el: self, side })
+  }
+  for (const { a, b, arm } of sides) {
     const self = at[a] as Extract<At, { t: 'el' }>
+    if (arm === 'number') {
+      numberRun(a - 1, -1, self, 'before')
+      numberRun(b, 1, self, 'after')
+      continue
+    }
     const s = projection.slice(a, b)
     if (WORD_END.test(s.slice(0, [...s][0]?.length ?? 0))) {
       let x = a - 1

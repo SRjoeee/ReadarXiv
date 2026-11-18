@@ -346,6 +346,11 @@ describe('the letters and marks that touch an element’s text are its word’s'
     const { sent } = await viaGoogle(u, (w) => w)
     expect(sent).toEqual(['A stake of <b translate=no>x1</b>,000 was paid.'])
   })
+  it('a formula’s glued letters are not held: the formula states no text (`$i$-th`, `$d$-dimensional`)', async () => {
+    const u = unit('i', [t('The '), el('f'), t('-th row and the '), el('g'), t('th one.')])
+    const { sent } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual(['The <b translate=no>x1</b>-th row and the <b translate=no>x2</b>th one.'])
+  })
   it('a text that ends with a stop or a bracket holds back no letter after it; one that ends with a digit holds the letter it touches', async () => {
     const u = unit('e', [
       t('Made in the '),
@@ -364,5 +369,206 @@ describe('the letters and marks that touch an element’s text are its word’s'
       'Made in the <b translate=no>x1</b>A now, see <b translate=no>x2</b>bc and <b translate=no>x3</b>.',
     ])
     expect(ok(result).content.at(-1)).toEqual(tx('a。'))
+  })
+})
+
+// (the same rule's second arm, lane flush-hold of 2026-11-18, docs/PDF-READER.md §18.47: an author types `32$\times$32`,
+// `$-$0.016`, `6$n$+2`, the number outside the math and flush against it. Sent beside the formula's tag, the number came back
+// broken: a counter or a noun put between the digits and the formula, digits lost (staging, 1512.03385v1 in Korean, Google:
+// both 32s of "32×32" gone, a verb drawn beside the ×). The run of the unit's text that touches an inline formula (kind `math`),
+// up to white space, in its own text piece and in no group that does not hold the formula, less the sentence punctuation,
+// quotes and unpaired bracket at its far edge (@readarxiv/text, the identifier's edge), is held where it holds a digit and no
+// letter, and put back literally beside the formula, wherever the reply set it. Text of our own)
+describe('a number set flush against an inline formula is held with it', () => {
+  const E = (id: string): OutPiece => ({ t: 'el', id })
+  // (1512.03385v1's unit on staging, its shape in sentences of our own: `32$\times$32`, `3$\times$3`, `2$n$`, `6$n$+2`)
+  const grid = unit('r', [
+    t('The inputs are 32'),
+    el('a'),
+    t('32 images. The first layer is 3'),
+    el('b'),
+    t('3 filters. We stack '),
+    el('c'),
+    t(' layers with 2'),
+    el('d'),
+    t(' layers a size, and 6'),
+    el('e'),
+    t('+2 layers in all.'),
+  ])
+  const gridBack = [
+    tx('Die Eingaben sind Bilder von 32'),
+    E('a'),
+    tx('32. Die erste Schicht hat 3'),
+    E('b'),
+    tx('3 Filter. Wir stapeln '),
+    E('c'),
+    tx(' Schichten mit 2'),
+    E('d'),
+    tx(' Schichten je Größe, insgesamt 6'),
+    E('e'),
+    tx('+2 Schichten.'),
+  ]
+  it('Google is sent the formulas alone; the row has every number back flush beside its formula, where the reply moved it', async () => {
+    const { sent, result } = await viaGoogle(
+      grid,
+      () =>
+        'Die Eingaben sind Bilder von <b translate=no>x1</b>. Die erste Schicht hat <b translate=no>x2</b> Filter. Wir stapeln <b translate=no>x3</b> Schichten mit <b translate=no>x4</b> Schichten je Größe, insgesamt <b translate=no>x5</b> Schichten.',
+    )
+    expect(sent).toEqual([
+      'The inputs are <b translate=no>x1</b> images. The first layer is <b translate=no>x2</b> filters. We stack <b translate=no>x3</b> layers with <b translate=no>x4</b> layers a size, and <b translate=no>x5</b> layers in all.',
+    ])
+    expect(ok(result).content).toEqual(gridBack)
+  })
+  it('Microsoft is sent the formulas alone too, and its row has the numbers back the same way', async () => {
+    const { sent, result } = await viaMicrosoft(
+      grid,
+      () =>
+        'Die Eingaben sind Bilder von @a#. Die erste Schicht hat @b# Filter. Wir stapeln @c# Schichten mit @d# Schichten je Größe, insgesamt @e# Schichten.',
+    )
+    expect(sent).toEqual([
+      'The inputs are @a# images. The first layer is @b# filters. We stack @c# layers with @d# layers a size, and @e# layers in all.',
+    ])
+    expect(ok(result).content).toEqual(gridBack)
+  })
+  it('the glue: a reply’s space beside the formula stays outside the number, which comes back flush (`6$n$+2`, not "6n + 2")', async () => {
+    // (sent "6<x1>+2", the reply's " + 2" stood: the glue takes a space back only before a letter, a digit or a mark)
+    const u = unit('g', [t('There are 6'), el('n'), t('+2 layers.')])
+    const { sent, result } = await viaGoogle(u, () => 'Es gibt <b translate=no>x1</b> Schichten.')
+    expect(sent).toEqual(['There are <b translate=no>x1</b> layers.'])
+    expect(ok(result).content).toEqual([tx('Es gibt 6'), E('n'), tx('+2 Schichten.')])
+  })
+  it('a sentence that opens with a number held before a formula starts before the number, in the unit and in the row', async () => {
+    // (a formula whose reading the host states, `×`, as the page does; the cutter's sentence at the formula, the unit's at "32",
+    // 9, and the row's: the number put back before the formula is the later sentence's)
+    const u = unit('s', [t('It ends. 32'), { t: 'el', id: 'f', kind: 'math', reads: '×' }, t('32 Tiles work.')], true)
+    const { sent, result } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual(['It ends. <x id="2"/><b translate=no>x1</b> Tiles work.'])
+    const r = ok(result)
+    expect(r.content).toEqual([tx('It ends. 32'), E('f'), tx('32 Tiles work.')])
+    expect(r.sentences).toEqual({ src: [9], tr: [9] })
+  })
+  it('a run between two formulas is the first’s (`$\\sim$15$\\%$`): back after the first, wherever the reply set the second', async () => {
+    const u = unit('b', [t('An error of '), el('s'), t('15'), el('p'), t(' is seen.')])
+    const g = await viaGoogle(u, () => 'Ein Fehler von <b translate=no>x1</b><b translate=no>x2</b> ist da.')
+    expect(g.sent).toEqual(['An error of <b translate=no>x1</b><b translate=no>x2</b> is seen.'])
+    expect(ok(g.result).content).toEqual([tx('Ein Fehler von '), E('s'), tx('15'), E('p'), tx(' ist da.')])
+    // (side by side once the number is held, Microsoft's wire joins the two in one marker, as any two touching elements)
+    const m = await viaMicrosoft(u, () => 'Ein Fehler von @a# ist da.')
+    expect(m.sent).toEqual(['An error of @a# is seen.'])
+    expect(ok(m.result).content).toEqual([tx('Ein Fehler von '), E('s'), tx('15'), E('p'), tx(' ist da.')])
+  })
+  // (each case: the unit, and the wire Google is sent; the probe's samples by kind, lanes/flush-digits/samples.txt)
+  const CASES: [string, Piece[], string][] = [
+    [
+      'digits on both sides (`256$\\times$256`)',
+      [t('Images of 256'), el('f'), t('256 pixels.')],
+      'Images of X pixels.',
+    ],
+    [
+      'a decimal set with a formula’s point (`0$.$5`)',
+      [t('A rate of 0'), el('f'), t('5 is used.')],
+      'A rate of X is used.',
+    ],
+    [
+      'digits after a sign the formula sets (`$-$0.016`)',
+      [t('It moves by '), el('f'), t('0.016 here.')],
+      'It moves by X here.',
+    ],
+    ['a sign and digits after a formula (`$p$=20`)', [el('f'), t('=20 runs were made.')], 'X runs were made.'],
+    ['a range (`1260$-$1460 MHz`)', [t('Band 5 (1260'), el('f'), t('1460 MHz) is used.')], 'Band 5 (X MHz) is used.'],
+    [
+      'a per cent sign in the run (`$>$99%`)',
+      [t('It holds '), el('f'), t('99% of the time.')],
+      'It holds X of the time.',
+    ],
+    [
+      'a comma at the far edge stays text (`$\\times$2.5,`)',
+      [t('Scaled by '), el('f'), t('2.5, then cut.')],
+      'Scaled by X, then cut.',
+    ],
+    [
+      'a stop at the far edge stays text',
+      [t('It falls by '), el('f'), t('0.003. Then it rises.')],
+      'It falls by X. Then it rises.',
+    ],
+    [
+      'a stop and a bracket at the far edge (`$\\ell$1).`)',
+      [t('A loss (smoothed '), el('f'), t('1). Then more.')],
+      'A loss (smoothed X). Then more.',
+    ],
+    [
+      'unpaired brackets at both far edges (`(16$\\times$16)`)',
+      [t('Use tokens (16'), el('f'), t('16) here.')],
+      'Use tokens (X) here.',
+    ],
+    [
+      'a bracket its pair answers inside the run is the run’s (`$\\zeta$(9)`)',
+      [t('Only '), el('f'), t('(9) remains.')],
+      'Only X remains.',
+    ],
+    ['quotes at the far edges stay text', [t('The "3'), el('f'), t('3" grid.')], 'The "X" grid.'],
+    [
+      'a run holding a letter is not held; the other side is (`J1744$-$1134`)',
+      [t('Pulsar J1744'), el('f'), t('1134 is seen.')],
+      'Pulsar J1744X is seen.',
+    ],
+    [
+      'a number before a unit’s letter (`2.5$\\mu$m`): the number held, the letter sent',
+      [t('A 2.5'), el('f'), t('m film.')],
+      'A Xm film.',
+    ],
+    ['a note mark on a count (`$^{a}$13 runs`)', [el('f'), t('13 runs failed.')], 'X runs failed.'],
+    ['marks alone touching a formula: nothing held', [t('For '), el('f'), t(', it holds.')], 'For X, it holds.'],
+    [
+      'a number apart from the formula (a space between): nothing held',
+      [t('About 32 '), el('f'), t(' 32 tiles.')],
+      'About 32 X 32 tiles.',
+    ],
+  ]
+  for (const [name, content, wire] of CASES)
+    it(name, async () => {
+      const { sent } = await viaGoogle(unit('c', content), (w) => w)
+      expect(sent).toEqual([wire.replace('X', '<b translate=no>x1</b>')])
+    })
+  it('a number in a group that does not hold the formula stays in it, on the wire; one outside a group that holds it comes back outside', async () => {
+    const inBold = unit('i', [t('A '), span('1', 'bold', [t('3')]), el('f'), t('3 grid.')])
+    expect((await viaGoogle(inBold, (w) => w)).sent).toEqual(['A <span id="1">3</span><b translate=no>x2</b> grid.'])
+    const outside = unit('o', [t('Take 3'), span('1', 'italic', [el('f'), t(' cells')]), t(' now.')])
+    const { sent, result } = await viaGoogle(
+      outside,
+      () => 'Nimm <span id="1"><b translate=no>x2</b> Zellen</span> jetzt.',
+    )
+    expect(sent).toEqual(['Take <span id="1"><b translate=no>x2</b> cells</span> now.'])
+    expect(ok(result).content).toEqual([tx('Nimm 3'), sp('1', [E('f'), tx(' Zellen')]), tx(' jetzt.')])
+  })
+  it('formulas apart by white space alone once their numbers are held (`$p$=5 $n$=20`): Microsoft joins them in one marker, and each number comes back beside its own', async () => {
+    const u = unit('j', [el('p'), t('=5 '), el('n'), t('=20 runs, seed 50.')])
+    const { sent, result } = await viaMicrosoft(u, () => '@a# Läufe, Seed 50.')
+    expect(sent).toEqual(['@a# runs, seed 50.'])
+    expect(ok(result).content).toEqual([E('p'), tx('=5 '), E('n'), tx('=20 Läufe, Seed 50.')])
+  })
+  it('a group of a number and its formula alone (`\\textbf{1.35$\\times$}`): it goes on no wire, and comes back around them', async () => {
+    const u = unit('h', [t('It reaches '), span('2', 'bold', [t('1.35'), el('f')]), t(' speedups.')])
+    const { sent, result } = await viaGoogle(u, () => 'Es erreicht <b translate=no>x1</b> Beschleunigung.')
+    expect(sent).toEqual(['It reaches <b translate=no>x1</b> speedups.'])
+    expect(ok(result).content).toEqual([tx('Es erreicht '), sp('2', [tx('1.35'), E('f')]), tx(' Beschleunigung.')])
+  })
+  it('a number against an element of another kind goes through as written (`0.58\\pp`, a reference, a display)', async () => {
+    const u = unit('k', [
+      t('It rose by 0.58'),
+      { t: 'el', id: 'p', kind: 'macro' },
+      t(' points, see Table 1'),
+      el('r', 'ref'),
+      t('2 and the rest.'),
+    ])
+    expect((await viaGoogle(u, (w) => w)).sent).toEqual([
+      'It rose by 0.58<b translate=no>x1</b> points, see Table 1<b translate=no>x2</b>2 and the rest.',
+    ])
+  })
+  it('a unit of numbers and a formula alone (a cell `32$\\times$32`) has no letter: sent nothing, as before', async () => {
+    const u = unit('n', [t('32'), el('f'), t('32')])
+    const { sent, result } = await viaGoogle(u, (w) => w)
+    expect(sent).toEqual([])
+    expect(ok(result).content).toEqual([tx('32'), E('f'), tx('32')])
   })
 })

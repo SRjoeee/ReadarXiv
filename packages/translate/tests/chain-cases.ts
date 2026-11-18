@@ -83,6 +83,10 @@ const stopsOf = (out: readonly OutPiece[]): Sentences | undefined => {
   const at = [...p.matchAll(/\. /g)].map((m) => (m.index as number) + 2).filter((x) => x < p.length)
   return at.length ? { src: at, tr: at } : undefined
 }
+/** gives every unit back with each digit of its text lost to a `#`: what a translator sent a number can do to it (lane
+ *  flush-digits' rows: a counter or a noun put between, digits lost), made total, so that a digit the chain holds back shows */
+const digitless = (identity = 'digitless:0') =>
+  fakeTranslator({ identity, reply: (out) => mapText(out, (s) => s.replace(/\p{N}/gu, '#')) })
 /** gives a unit of text alone back in capitals, and nothing for one that holds an element or a group (refused) */
 const textOnly = (identity = 'text-only:0') =>
   fakeTranslator({ identity, reply: (out) => (out.some((p) => p.t !== 'text') ? [] : mapText(out, caps)) })
@@ -341,6 +345,29 @@ export const CASES: readonly ChainCase[] = [
       ]),
     ],
     translators: () => [upper('upper:0', { sentences: stopsOf })],
+  },
+  // (lane flush-hold: a number set flush against an inline formula, its far edge's comma left as text, not offered, back beside
+  // the formula as printed; a run that holds a letter and a number apart from the formula offered, and lost)
+  {
+    rule: 'glued',
+    name: 'a number flush against a formula: not offered, back beside it; its comma, a letter run and a spaced number offered',
+    target: 'de',
+    units: [
+      unit('n', [
+        t('Use 32'),
+        el('x'),
+        t('32 tiles, as '),
+        el('p'),
+        t('=20, or 2.5'),
+        el('u'),
+        t('m and 4 '),
+        el('k'),
+        t(' more, unit A1'),
+        el('a'),
+        t('.'),
+      ]),
+    ],
+    translators: () => [digitless()],
   },
 ]
 
