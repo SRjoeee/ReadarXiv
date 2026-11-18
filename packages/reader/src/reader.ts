@@ -947,6 +947,10 @@ export function openReader(
               const o2 = JSON.parse(new TextDecoder().decode(await objectOf(r))) as { rows?: Row[] }
               rowsIn(o2.rows ?? [])
             }
+            // (a document held since this round began, heard while it read its objects, is read now, never waited for: the wait
+            // below is for the next change, and a follow whose last document says nothing runs asks for no other, so its run's
+            // end stayed unread with every row in, arriving for good: staging, 2026-11-17, 2608.04322v1)
+            if (rt.state.doc !== d) continue
             if (
               tg &&
               (tg.state === 'done' || tg.state === 'failed') &&
