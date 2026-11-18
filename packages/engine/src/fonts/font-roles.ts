@@ -374,7 +374,7 @@ export const ENGLISH_FAMILIES: readonly EnglishFamily[] = Object.freeze([
   'garamond',
   'utopia',
   'other',
-] as const)
+])
 const SERIF_DESIGN = new Set<string>(ENGLISH_FAMILIES)
 
 // style words: URW's Medi(um) is its bold, and its Regu, Ital and Obli abbreviations; Medium spelled out is not bold

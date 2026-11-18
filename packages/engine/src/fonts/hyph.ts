@@ -7,9 +7,36 @@
 
 /** hyph-utf8's languages the engine hyphenates with: French, Spanish and Portuguese (#121-4: those three were hyphenated with
  *  English's patterns), and the languages of the owner's ruling of 2026-10-29 */
-const HYPH_UTF8 = ['fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg'] as const
+const HYPH_UTF8: readonly Exclude<PatternLanguage, 'en' | 'de'>[] = [
+  'fr',
+  'es',
+  'pt',
+  'it',
+  'nl',
+  'pl',
+  'tr',
+  'id',
+  'cs',
+  'sv',
+  'uk',
+  'bg',
+]
 /** the languages of TeX's pattern files the layer hyphenates with */
-export type PatternLanguage = 'en' | 'de' | (typeof HYPH_UTF8)[number]
+export type PatternLanguage =
+  | 'en'
+  | 'de'
+  | 'fr'
+  | 'es'
+  | 'pt'
+  | 'it'
+  | 'nl'
+  | 'pl'
+  | 'tr'
+  | 'id'
+  | 'cs'
+  | 'sv'
+  | 'uk'
+  | 'bg'
 /** TeX's pattern files, by language, under texmf-dist: Knuth's hyphen.tex, dehyphn.tex (German, new orthography), and
  *  hyph-utf8's */
 export const TEX_PATTERN_FILES = Object.freeze({
