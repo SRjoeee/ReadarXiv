@@ -32,7 +32,7 @@ import {
 } from '../marks/channels.ts'
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
-import { linkTargetOf } from '../locate/ink.ts'
+import { linkTargetOf, unicodeOf } from '../locate/ink.ts'
 import { ownersOf, ROLE } from '../instrument.ts'
 import { readPdf } from '../read.ts'
 import { runIns } from '../marks/run-ins.ts'
@@ -162,24 +162,9 @@ export type InstrumentInput = {
   made?: { compiler?: string; tree?: string; front?: string }
 }
 
-const UTF8 = new TextDecoder('utf-8')
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */
 const START_POINT = /^[ht]?(\d+)s$/
 const END_POINT = /^[ht]?(\d+)e$/
-/** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode; a string that is already wide as it is */
-export function unicodeOf(s: unknown): string {
-  if (typeof s !== 'string') return ''
-  let ascii = true
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i)
-    if (c > 0xff) return s
-    if (c > 0x7f) ascii = false
-  }
-  if (ascii) return s
-  const b = new Uint8Array(s.length)
-  for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i)
-  return UTF8.decode(b)
-}
 
 /** a group's style, read off its command: what today's front end leaves to the reader's regex tables (transition) */
 const SPAN_STYLES: readonly (readonly [RegExp, string])[] = [
