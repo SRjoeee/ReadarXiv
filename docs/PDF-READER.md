@@ -8376,12 +8376,16 @@ twin states it.
   its glyphs B's owners give the unit's text), stated in the units alone. Unreached: 9 displays a unit opens with; 4 pieces
   TeX's display starts at with no ink of theirs (two a paper's `\iffalse` macro); 17 with no mark and no ink of their own (after
   a paper's macro that may look ahead, or in a branch a paper's `\iffalse` macro skips). No element newly unfound, no member
-  newly the original's, no alignment and no line's measure moved. The wire: 62 units' wires move on each of Google's,
-  Microsoft's and Chrome's (a display a capital follows now ends its sentence); 53 units holding such a display send the same
-  bytes (between lower-case text or at the unit's end, one marker either way). Laid by the typesetter with §18.94: 2608.04473v1
-  p14's display (6.5), 2608.10322v2 p4's (2.2) and (2.3), 2608.01890v1 p13's two `eqnarray`s and 2608.23517v1 p5's (1.13) and
-  (1.14) stay where TeX set them, the translation around them; 2608.23517v1's 76-row alignment on p34 and p35, whose unit did
-  not fit and stayed English, is laid around its rows.
+  newly the original's, no alignment and no line's measure moved. Their stops: every one of the 229 has its end stated by the
+  source reader (151 before the paper's macro that ends the environment, 78 before an `\al{…}`'s argument's end); 147 read a
+  stop (`.` 98, `,` 49), of the 190 that had flowed as text 122 (`.` 77, `,` 45); of the 82 that read none, 66 set their
+  punctuation before the paper's own label macro (`\def\la{\label}`), which the tail reader does not read off as it reads
+  `\label{…}`, and 16 set none. The wire against the base: 97 units' wires move on each of Google's, Microsoft's and Chrome's (a
+  display's stop written after its marker, a display a capital follows ending its sentence), none outside the five papers; 18
+  units holding such a display send the same bytes (no stop, between lower-case text or at the unit's end, one marker either
+  way). Laid by the typesetter with §18.94: 2608.04473v1 p14's display (6.5), 2608.10322v2 p4's (2.2) and (2.3), 2608.01890v1
+  p13's two `eqnarray`s and 2608.23517v1 p5's (1.13) and (1.14) stay where TeX set them, the translation around them;
+  2608.23517v1's 76-row alignment on p34 and p35, whose unit did not fit and stayed English, is laid around its rows.
 - **The cost of the stop's reading** (the coordinator's ruling of 2026-11-19): the source reader's code is what the website keys a
   stored instrument by (the marks' closure: 488,756 bytes to 489,452, sha256 16435db6…), so every stored paper compiles once more
   at the pin that takes it; production holds no such instrument yet. The marked TeX does not move (the marks read no `closes`):
