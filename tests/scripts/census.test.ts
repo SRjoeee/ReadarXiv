@@ -703,7 +703,7 @@ describe("the repository's debt areas", () => {
     const scan = scanTree('engine', root, ENGINE_PROFILE)
     const files = [...scan.files].map(([path, f]) => ({ id: `engine:${path}`, repo: 'engine', path, f, scan }))
     const d = debtOf({ label: 'AFTER', scans: [scan], files })
-    const headline = (name: string) => d.lists.list.find((l: { name?: string }) => l.name === name)?.headline
+    const headline = (name: string) => d.lists.list.find((l) => l.name === name)?.headline
     expect([headline('DESIGNS'), headline('WORDS'), headline('MOVED')]).toEqual([true, true, true])
     // (a package the two do not share is no debt area of theirs)
     expect(headline('OTHER')).toBe(false)
