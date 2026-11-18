@@ -1,4 +1,4 @@
-// The background's stores of translation (DESIGN §9; interfaces/translate/DECISION.md "Rows" and "What stage 4 builds"):
+// The background's stores of translation (DESIGN §9; the translate decision, "Rows" and "What stage 4 builds"):
 // three tables of one IndexedDB database, each read and written in bulk, one transaction a call.
 // - `answers`: the chain's Store (`@readarxiv/translate` Ports.store), the raw reply a translator gave for the bytes it was
 //   sent, kept only once accepted and judged again on every read (a better reading of an old reply needs no new request);

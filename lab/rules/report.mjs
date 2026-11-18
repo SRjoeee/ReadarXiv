@@ -1,4 +1,4 @@
-// lab/rules/report.mjs: the rule ledger's report (design-reduction-2026-11-13.md §3c, R4; amendment 8.9), by area (R5a-d,
+// lab/rules/report.mjs: the rule ledger's report (the reduction design §3c, R4; amendment 8.9), by area (R5a-d,
 // areas.mjs) and by file. Per area: the yield table (every verdict's count; the rules to remove, the sites to fold in
 // rules that stay, the list entries to remove); every flagged citation with its whole comment, for the coordinator to
 // confirm or strike before a removal lane acts on the area; BY NAME, the rules the ledger marks as deciding nothing (file,

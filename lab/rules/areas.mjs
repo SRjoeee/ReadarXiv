@@ -1,4 +1,4 @@
-// lab/rules/areas.mjs: the reduction's areas (design-reduction-2026-11-13.md §4, R5a-d), by a module's path, before and
+// lab/rules/areas.mjs: the reduction's areas (the reduction design §4, R5a-d), by a module's path, before and
 // after R1a moves the front half into packages/engine (§3a's table). Area (d) takes every module of engine/src outside
 // locate and the front half (8.9). A path in none of them is `other`. Not shipped.
 

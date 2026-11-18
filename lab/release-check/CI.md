@@ -87,8 +87,8 @@ maintainer's machine, registered to this repository alone, with labels `self-hos
   and the rounds' tools that read it through the tree's chain and lay the reader gate over it; `baseline/corpora/papers.json`:
   the harness's corpus papers, opened from this run's bundles with this run's rows of them, `reader-parts`' Google rows);
   today's engine at `065c1d973` checked out beside the
-  worktree (`AXT_TODAY`: no longer the display gates', which read today's side frozen, `AXT_TODAY_FROZEN`, SanDisk's
-  `readarxiv-lab-archive/today-frozen/frozen`); the release sweep's cache and the reader's served faces, which the typeset runners read
+  worktree (`AXT_TODAY`: no longer the display gates', which read today's side frozen, `AXT_TODAY_FROZEN`, in the
+  lab's archive); the release sweep's cache and the reader's served faces, which the typeset runners read
   (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`); Playwright's Chromium; for `perf-batch`, the website's tree its
   reader is built in (`PERF_WEB`, a website worktree: its HEAD with this commit as `vendor/readarxiv`) and the round's box
   image (`PERF_NEW_IMAGE`). Docker for `perf-batch` alone (a compile no cache holds is a failed paper: exit 3).

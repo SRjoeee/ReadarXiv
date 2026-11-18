@@ -1114,7 +1114,7 @@ function alignTop(side) {
  * Both sides just located, where they were not (a first visit's original on both, this machine's copy, a demo): the
  * sync follows nothing before (syncFrom, alignTop and arm go by the anchors), so a side read before had no step
  * followed and no rest that levelled, and the pair stood apart until the next scroll's rest (6,393 px on 2608.02163,
- * spikes/early-scroll.mjs; the website's 5,129 px, readarxiv-web #23). Levelled by the side the reader scrolled
+ * spikes/early-scroll.mjs; the website's 5,129 px, as its own report found). Levelled by the side the reader scrolled
  * meanwhile (readEarly: a scroll of the side of their last input), as at its rest (alignTop): it stays where the reader
  * put it. Not by the driver: on the compositor a hover over the other side makes that one the driver, and the side
  * scrolled was thrown back (2,000 px); nor by a scroll PDF.js made by itself on the side of the driver (a zoom after a

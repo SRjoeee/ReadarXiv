@@ -71,7 +71,7 @@ export const BUILT_IN_STYLES: readonly StyleProfile[] = [
   style('blur', '模糊', { blur: true }),
 ]
 /** A built-in band's `name` is the one every saved configuration holds for it, and the website's copy of these three
- *  (readarxiv-web `web/src/reader/highlights.ts`): it tells the band not renamed (`profileName`), and is shown nowhere,
+ *  (in its reader's highlights): it tells the band not renamed (`profileName`), and is shown nowhere,
  *  since a band is never renamed nor copied. What a reader sees is the pack's name (`O.reading.builtInHighlights`), which
  *  changed on 2026-11-03 while these stayed, so that no stored band reads as one renamed (UI.md S-O-49) */
 export const BUILT_IN_HIGHLIGHTS: readonly HighlightProfile[] = [

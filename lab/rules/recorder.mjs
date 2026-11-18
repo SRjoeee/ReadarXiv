@@ -1,4 +1,4 @@
-// lab/rules/recorder.mjs: the rule ledger's instrument, its run-time half (design-reduction-2026-11-13.md §3c, R4). The
+// lab/rules/recorder.mjs: the rule ledger's instrument, its run-time half (the reduction design §3c, R4). The
 // instrumented code (transform.mjs, the site map of sites.mjs) calls `globalThis.__axtRules` at each site; this records,
 // per site: how often it ran and each outcome's count; for a comparison and a Math.min / max, the nearest case on each
 // side of the bound (the rule's value): the effective operand (the value of the rule's literal or constant at which that

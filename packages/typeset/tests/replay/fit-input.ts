@@ -1,8 +1,8 @@
-// The walk's inputs at today's smallest composite that materialises them (baseline/tap/TAP.md §4: X.walk replayed whole at F2,
+// The walk's inputs at today's smallest composite that materialises them (the tap's spec §4: X.walk replayed whole at F2,
 // layoutCut), made from a unit's ledger round: its measured tokens (B.measure's ref into tokens/<pair>.tokens.json.gz, each
 // token's face and style by index, a crop by its page, box and baseline), the label crops the run set before its first line
 // (F1's rowLabelCrop, U.decor's carriedCrop), the blocks the walk was handed (F2's walkedBlocks), the size and the unit's own
-// parameters (U.params), the target's rules (lanes/L3/replay/rules.json.gz: today's resolveRules), the hyphenation patterns
+// parameters (U.params), the target's rules (lane L3's derived rules: today's resolveRules), the hyphenation patterns
 // the run loaded, and the widths of the pair's metrics table. And what F2 recorded: the layout and its lines, summarized as
 // the tap summarizes them, so that a port's layout is compared field by field.
 import { existsSync, readFileSync } from 'node:fs'
@@ -12,13 +12,14 @@ import { fitMeasure } from '../../src/breaker/measure.ts'
 import { hyphenationOf, type Patterns } from '../../src/breaker/hyph.ts'
 import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
 import { derived, LAB, ledger, readGz, ruledRoom, TAP } from './tap.ts'
+import { CACHE } from './today.ts'
 
 type Raw = Record<string, unknown>
 /** the tap's numbers back: a non-finite one is written as its string */
 export const num = (v: unknown): unknown =>
   v === 'Infinity' ? Infinity : v === '-Infinity' ? -Infinity : v === 'NaN' ? Number.NaN : v
 
-/** a pair's tokens file (TAP.md §5): the faces and styles its tokens name by index, each unit's tokens by its ref */
+/** a pair's tokens file (the tap's spec §5): the faces and styles its tokens name by index, each unit's tokens by its ref */
 type TokenFile = { faces: (Face & { font: string })[]; styles: TStyle[]; units: Record<string, Raw[]> }
 const tokenFiles = new Map<string, TokenFile>()
 const tokensOf = (pair: string): TokenFile => {
@@ -33,11 +34,9 @@ const metrics = (pair: string) => {
   return m
 }
 
-/** the hyphenation files the reader was served (the tap's replay-check HYPHS: the sweep cache's first, then the baseline's) */
-const HYPHS = [
-  '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/hyph',
-  join(LAB, 'refactor-2026-11', 'baseline', 'static', 'hyph'),
-]
+/** the hyphenation files the reader was served (the tap's replay-check HYPHS: the sweep cache's first, AXT_SWEEP_CACHE's, then
+ *  the baseline's) */
+const HYPHS = [join(CACHE, 'static', 'hyph'), join(LAB, 'refactor-2026-11', 'baseline', 'static', 'hyph')]
 const patternsByLang = new Map<string, Patterns | null>()
 const patternsOf = (lang: string): Patterns | null => {
   if (!patternsByLang.has(lang)) {
@@ -195,7 +194,7 @@ export function walkCase(pair: string, ord: number, round: number): WalkCase | s
   }
 }
 
-/** a number as the tap prints it (TAP.md §1: as JSON prints it, non-finite as a string) */
+/** a number as the tap prints it (the tap's spec §1: as JSON prints it, non-finite as a string) */
 const fin = (v: unknown) => (typeof v === 'number' ? (Number.isFinite(v) ? v : String(v)) : (v ?? null))
 /** a layout summarized as the tap's layoutOf, its lines as linesOf */
 export function layoutOf(l: Raw | null) {

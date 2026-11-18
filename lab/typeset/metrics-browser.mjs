@@ -25,7 +25,7 @@
 // none of these. Offline: a static server on 127.0.0.1 serves the page and the
 // slices, the browser aborts any other request. Lab-data stays where it is: nothing is written. Run from the worktree's root,
 // in the machine's browser slot:
-//   /Users/cheongzhiyan/Developer/readarxiv-lab-data/bin/heavy-slot.sh e2e -- node lab/typeset/metrics-browser.mjs
+//   <the lab's heavy-slot.sh> e2e -- node lab/typeset/metrics-browser.mjs
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'

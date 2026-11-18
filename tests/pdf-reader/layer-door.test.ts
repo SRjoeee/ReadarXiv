@@ -306,9 +306,9 @@ describe('the door: three opens, the same pages', () => {
   it('lays a page once the rows it reads are in, whatever order the rows come in: after rows of higher-numbered units, with no end()', async () => {
     const want = await cascadeInOrder()
     const strip = (svg: string) => svg.replace(' lang="zh"', '')
-    // The rows as the Translation Workflow tells them: deltas, each one's rows rising by id (worker/src/jobs/windows.ts rowsOf), the
+    // The rows as our server's translation run tells them: deltas, each one's rows rising by id, the
     // deltas in any order. (a) Page 1's paragraph, unit 0, after every other row (a retried batch, a row a delta had no room for);
-    // (b) by pages' closures, the page in view first, page 6, then pages 1 to 5 (windows.ts pageBatches): the rows of units 5 to
+    // (b) by pages' closures, the page in view first, page 6, then pages 1 to 5 (the run's batches by page): the rows of units 5 to
     // 10 first. Pages 6, 2 and 1 asked, page 1 last, as the side asks the pages near the view (page 1 in view)
     for (const order of ['unit 0 last', 'page 6 first'] as const) {
       const { layer, told, run } = await cascadeDoor({ end: false, rows: false })

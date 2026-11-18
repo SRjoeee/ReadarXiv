@@ -1,5 +1,5 @@
 // lab/rules/pattern.mjs: a pattern list's entries, read from the pattern's structure, and the shadow pattern the recorder
-// reads which entry a match took through (design-reduction-2026-11-13.md §3c: a list is judged by its entries' hits). Pure.
+// reads which entry a match took through (the reduction design §3c: a list is judged by its entries' hits). Pure.
 // Not shipped.
 //
 // AN ENTRY of a pattern is an alternative of one of its alternations (a group's, or the whole pattern's, where it holds two

@@ -1,4 +1,4 @@
-// What the reader paints a page from: `Page`, as interfaces/page design-a §1.2 decides it (DECISION: "L4 (reader shell)
+// What the reader paints a page from: `Page`, as the page design A §1.2, decides it (DECISION: "L4 (reader shell)
 // consumes Page only"). The typesetter (packages/typeset, lane L3) makes it; until its `layPage` is exported, the reader states
 // the shape here, word for word, and takes the call that makes one as a dependency (`Lay`), so that lane L3's `layPage`
 // replaces the fixtures' stand-in behind the same call. When typeset exports these types, this file imports them.

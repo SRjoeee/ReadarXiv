@@ -1,4 +1,4 @@
-// lab/rules/ledger.mjs: the rule ledger (design-reduction-2026-11-13.md §3c, amendment 8.9): every rule of the site map
+// lab/rules/ledger.mjs: the rule ledger (the reduction design §3c, amendment 8.9): every rule of the site map
 // (sites.mjs) with what the recording (merge.mjs) says it decides, and the classifier's verdict. Pure. Not shipped.
 //
 // The classifier's rules, as settled (8.9), in the order they are applied:

@@ -11,13 +11,13 @@ import { describe, expect, it } from 'vitest'
 /**
  * Every path the website imports as `@vendor/<path>`, by path under src/ (without an extension, as the website writes
  * it, except for a style sheet), with every value it imports from it: the static and dynamic imports and the members it
- * reads off a namespace import, in its source and its tests (readarxiv-web 0bf496b5, gathered 2026-11-07). A path or a
+ * reads off a namespace import, in its source and its tests (gathered from the website on 2026-11-07). A path or a
  * name is removed from this list only when the website stops importing it, in a pull request that names the website's
  * commit that stopped.
  *
- * Type-only imports are not held: the website types every `@vendor/` module by its own `types/vendor.d.ts` and never
+ * Type-only imports are not held: the website types every `@vendor/` module by its own declarations and never
  * compiles against these sources (three of the controller's types it imports, ReaderEvent, ReaderHost and ReaderPrefs,
- * exist only there), and its bundlers erase type imports. Its `web/tests/vendor-types.test.ts` holds those declarations
+ * exist only there), and its bundlers erase type imports. A test of its own holds those declarations
  * to the pin's source.
  */
 const WEBSITE_IMPORTS: readonly { path: string; names: readonly string[] }[] = [
@@ -64,7 +64,7 @@ const WEBSITE_IMPORTS: readonly { path: string; names: readonly string[] }[] = [
 
 /**
  * Every path of the workspace packages the website reaches by a relative path into its submodule (`vendor/readarxiv/<path>`),
- * outside the alias and outside src/ (readarxiv-web e0ae76dd, gathered 2026-11-13 from its code, its scripts and its tests):
+ * outside the alias and outside src/ (gathered from the website on 2026-11-13, from its code, its scripts and its tests):
  * - the modules its browser checks, scripts and tests import (plain `node`, whose own type stripping reads a `.ts` module,
  *   esbuild, or its test runner), each with every value it takes, named as a bundler finds it (with or without an extension);
  * - the files and folders it reads, bundles or credits by their path (names: none), a folder written with its `/`.
@@ -91,20 +91,20 @@ const WEBSITE_PACKAGE_PATHS: readonly { path: string; names: readonly string[] }
   { path: 'packages/reader/src/session/paper.ts', names: ['abstractTitleOf', 'htmlVersionOf'] },
   // (the files and folders read, bundled or credited by their path)
   { path: 'packages/engine/src/bundle/bundle.ts', names: [] },
-  // (live.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  // (live.ts read by its path in the website's tests, named `.mjs` there until its next pin)
   { path: 'packages/engine/src/compile/live.ts', names: [] },
-  // (paper.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  // (paper.ts read by its path in the website's tests, named `.mjs` there until its next pin)
   { path: 'packages/engine/src/compile/paper.ts', names: [] },
   { path: 'packages/engine/src/compiled.ts', names: [] },
   { path: 'packages/engine/src/front.ts', names: [] },
-  // (instrument.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  // (instrument.ts read by its path in the website's tests, named `.mjs` there until its next pin)
   { path: 'packages/engine/src/instrument/instrument.ts', names: [] },
   { path: 'packages/engine/src/locate/locate.ts', names: [] },
   { path: 'packages/engine/src/locate/words.ts', names: [] },
-  // (colour.ts credited by its row in docs/THIRD_PARTY.md, which the website's licence gate reads, tests/vite-licence-gate.test.ts;
-  // names.ts held in its reader's bundle, web/tests/layer-imports.test.ts; both at e0ae76dd, named `.mjs` there until its next pin)
+  // (colour.ts credited by its row in docs/THIRD_PARTY.md, which the website's licence gate reads; names.ts held in its
+  // reader's bundle by a test of its own; both named `.mjs` there until its next pin)
   { path: 'packages/engine/src/marks/colour.ts', names: [] },
-  // (marks.ts read by its path in the website's tests at e0ae76dd, named `.mjs` there until its next pin)
+  // (marks.ts read by its path in the website's tests, named `.mjs` there until its next pin)
   { path: 'packages/engine/src/marks/marks.ts', names: [] },
   { path: 'packages/engine/src/marks/names.ts', names: [] },
   { path: 'packages/engine/src/plan.ts', names: [] },

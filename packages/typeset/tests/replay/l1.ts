@@ -1,5 +1,5 @@
-// Lane L1's bundles of the corpus, as the converge lane's last run made them with the code of this tree (readarxiv-lab-data
-// refactor-2026-11/lanes/L7/prepare/bundles/<paper>/, lanes/L7-converge.md; lane L1's own runs: lanes/L1-out9):
+// Lane L1's bundles of the corpus, as the converge lane's last run made them with the code of this tree (in the lab's
+// data, beside lane L7's record; lane L1's own runs beside them):
 // a paper's head (`head.json`), its parts by page (`<digest>.part`: design-a's Part, flows of Placed members) and its Units
 // objects (`<digest>.units`). Read as JSON, every field as the bundle holds it (packages/format's schema on L1's branch:
 // `read` names the facts carried as read on A). Lab-data only: the bundles hold licensed papers' text.
@@ -12,7 +12,7 @@ import { bundlesDir } from './bundles.ts'
 import { type DoorRow, doorSentences } from './rows.ts'
 import { LAB } from './tap.ts'
 
-/** the bundles folder: AXT_L1_BUNDLES, which must be one where set (bundles.ts: never the default in its place), else lanes/L7's */
+/** the bundles folder: AXT_L1_BUNDLES, which must be one where set (bundles.ts: never the default in its place), else lane L7's */
 export const L1_BUNDLES_DIR = bundlesDir(
   process.env,
   join(LAB, 'refactor-2026-11', 'lanes', 'L7', 'prepare', 'bundles'),

@@ -793,7 +793,7 @@ export function createPanes(o: PanesOptions): Panes {
    * `replace`). Fresh (`fresh`, or the kept position not standing: `rightKnown`) where the pane has moved before its scroll event
    * came: the reader moved it itself (its places put, a relayout), or a scale, a display or a resize moved its pages; told from
    * kept values there, 2 of 248 tells differed over the lab paper's display change and narrow view, the kept position the old
-   * scale's while the places were the new one's (lanes/reader-q7.md, Q8)
+   * scale's while the places were the new one's (lane reader-q7's record, Q8)
    */
   function tellRightPage(fresh = false) {
     if (!right.pages || !shown(R)) return

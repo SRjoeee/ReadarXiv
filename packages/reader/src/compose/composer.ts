@@ -1,4 +1,4 @@
-// Composing the right pane (design §4.5 "composing a page"; interfaces/page design-a §2.2, §2.3): what each slot of the right
+// Composing the right pane (design §4.5 "composing a page"; the page design A §2.2, §2.3): what each slot of the right
 // stack shows, from the documents open and the pages laid. Today's layer side (src/pdf-reader/engine/view/layer-side.mjs at
 // baf2083e0, docs/PDF-READER.md §11.8) carried over the stack: each behaviour with the reason it was found.
 //
@@ -27,7 +27,7 @@
 //   it lit or hit); one the new generation lays with nothing, or fails, the original's; the drawings kept off the view, the
 //   generation before's, let go. The left pane is not touched. A row stated again otherwise (our server's run on the source's
 //   units, begun before the bundle states which units are cut into sentences, replaced mid-way by one on the layer's, which
-//   states the same ids again with their sentences: readarxiv-web worker v2 machine.ts wanted, startRecent; format.ts fits)
+//   states the same ids again with their sentences: our server's units wanted and its recent run; format.ts fits)
 //   lays again the pages that read it, as any landing that changes what a page read: laid once for good, a page lit its units
 //   whole in the tab that watched its rows arrive, and by sentence after a reload (staging, 2026-11-11: 1706.03762v7 p2,
 //   2610.21312v1 p1).

@@ -32,11 +32,13 @@ const sheet = JSON.parse(readFileSync(arg('examples'), 'utf8'))
 const regions = JSON.parse(readFileSync(arg('render'), 'utf8'))
 const DPR = 2
 const MIN_FREE_GIB = 12
-const TABLES = process.env.AXT_FACE_TABLES ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/refactor-read/web/src/fonts/static'
-const SLICES = (
-  process.env.AXT_FACE_SLICES ??
-  '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/static-fonts:/Users/cheongzhiyan/Developer/readarxiv-web-wt/rate-limit/web/public/static-fonts'
-).split(':')
+// (the served faces: AXT_FACE_TABLES the website build's tables, AXT_FACE_SLICES the slices' directories joined by ':', no default)
+const TABLES = process.env.AXT_FACE_TABLES
+const SLICES = (process.env.AXT_FACE_SLICES ?? '').split(':').filter(Boolean)
+if (!TABLES || SLICES.length === 0) {
+  console.error('real.mjs: set AXT_FACE_TABLES and AXT_FACE_SLICES to the served faces')
+  process.exit(2)
+}
 
 const freeGiB = () => Number(execFileSync('df', ['-g', '/'], { encoding: 'utf8' }).trim().split('\n')[1].split(/\s+/)[3])
 if (freeGiB() < MIN_FREE_GIB) throw new Error(`disk: ${freeGiB()} GiB free, under ${MIN_FREE_GIB}`)

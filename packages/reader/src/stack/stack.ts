@@ -5,8 +5,8 @@
 // - **Slots.** A slot is the page's box, sized by PDF.js's own rule (setLayerDimensions: `round(down, var(--total-scale-factor)
 //   × the page's size, var(--scale-round-x))`) under the stack's `--scale-factor`, so that a slot of either pane and a page box of
 //   PDF.js's viewer of the same page at the same scale are the same box, with nothing measured. Every slot is page 1's size until
-//   its own page is read (a page's setup reads its page object, a range the store shares, never its content: W pdfjs.ts
-//   eagerPages, whose job this is now): read in order once page 1 is drawn.
+//   its own page is read (a page's setup reads its page object, a range the store shares, never its content: the website's
+//   eager pages, whose job this is now): read in order once page 1 is drawn.
 // - **What a slot shows** is asked of the owner (`contentOf(n)`): a page view (a document, the optional content it is drawn
 //   with, whether PDF.js's own text and annotation layers are on it, and what is laid over it), the left's own drawing of the
 //   page (`left`: a copy of the left pane's canvas while the page waits for its layer, docs/PDF-READER.md §11.7, no second

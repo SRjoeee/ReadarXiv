@@ -1,4 +1,4 @@
-// The acceptance rule, the chain's one (interfaces/translate/DECISION.md; design-a §1.3, design-b §1.1): applied to every
+// The acceptance rule, the chain's one (the translate decision; design-a §1.3, design-b §1.1): applied to every
 // reading of every reply, stored or fresh. A reading the rule refuses goes to the next translator for that unit alone.
 import type { OutPiece, Piece, Sentences, UnitIn } from './contract.ts'
 

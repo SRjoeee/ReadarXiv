@@ -1,4 +1,4 @@
-// The HTML page's blocks on the translator contract (interfaces/translate/DECISION.md, design-b §2.3): a block's wire, as
+// The HTML page's blocks on the translator contract (the translate decision, design-b §2.3): a block's wire, as
 // the protector serialised it in the session's format, read as a typed unit; a translation's content written back as
 // that wire, for `rehydrate` as it is; the translator's sentences as the wire lengths the renderer's sentence map takes.
 // Every pair of the tags wire is a span that must come back (the decision: the HTML page keeps its styled words, a

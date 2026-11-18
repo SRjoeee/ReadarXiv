@@ -620,8 +620,8 @@ describe('a generation let go', () => {
 
 describe('a row stated again otherwise (a run our server replaced mid-way)', () => {
   /** a rows source whose rows the test states, each once more where it says so: our server's attempt on the source's units
-   *  (no sentences) replaced by one on the layer's units, the same ids stated again with their sentences (worker v2
-   *  machine.ts wanted, startRecent; format.ts fits) */
+   *  (no sentences) replaced by one on the layer's units, the same ids stated again with their sentences (our server's
+   *  units wanted and its recent run; format.ts fits) */
   function statedRows(target: string) {
     const got = new Map<string, Row>()
     const ls = new Set<() => void>()

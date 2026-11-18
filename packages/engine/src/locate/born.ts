@@ -6,7 +6,7 @@
 // order (those no unit holds: the ownership's `free`) cut into lines by the line rule (lines.ts), and consecutive lines of one page gathered into a block where the next one
 // stands under the one before within 1.75 of its size and overlaps it across; a block's text is its glyphs' Unicode, a space
 // where two stand apart by 0.15 of their size and between its lines. Text inside a form XObject (an included figure) is
-// `inkfigures`, the rest `inkorphan` (the ink kinds of today's bundle, FORMAT.md §2).
+// `inkfigures`, the rest `inkorphan` (the ink kinds of today's bundle, the dump spec §2).
 import type { Piece } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'

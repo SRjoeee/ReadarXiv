@@ -1,4 +1,4 @@
-// lab/rules/sites.mjs: the rule ledger's instrument, its static half (design-reduction-2026-11-13.md §3c, R4). The rules are
+// lab/rules/sites.mjs: the rule ledger's instrument, its static half (the reduction design §3c, R4). The rules are
 // the census's own (lab/release-check/census-lib.mjs factsOf, read with its `nodes` option): every threshold of class tuned
 // or borderline and every name list of a product file in RULE_AREAS. For each rule, the places where it decides at run time
 // (its sites), and for each file the edits that wrap them in a call of the recorder (recorder.mjs), applied at load time by

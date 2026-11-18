@@ -92,7 +92,7 @@ first pair the maintainer reads, 2303.11366v4, is not asked (`FIRST` beside `PAI
   (`view/layer-side.mjs` `drawingOf`): the door's copy (render A, the drawn units' groups hidden, its crops and pastes), its
   SVG, its links, under `view/engine.css` and the text-rendering decision, its faces the web's face sources; a page the
   layer draws nothing of its own on is arXiv's (`shownOriginal`). Two choices are the baseline's, not the product's
-  (`baseline/NOTES.md` §4): no 16 ms live-fills clock, and the run kept with `records`. Or read from its frozen records in
+  (the baseline's notes, §4): no 16 ms live-fills clock, and the run kept with `records`. Or read from its frozen records in
   place of drawing it (below, "Today's side frozen").
 - **v2's side**: the paper's L1 bundle (`AXT_L1_BUNDLES`, default `lanes/L7/prepare/bundles`; the release check passes its
   own prepare's), the tap's ledgers and metrics (`baseline/tap/`), the served faces (`AXT_FACE_TABLES`, `AXT_FACE_SLICES`).
@@ -362,8 +362,8 @@ measure's `unmeasured` count).
 
 ## The owner's rulings of 2026-11-12
 
-On 2026-11-12 the owner looked at one example of each class of difference the gate still read as worse (lab-data
-`verification/display-classes.zh.html`: the original, today's and v2's crops of one page a class) and gave his verdict on each
+On 2026-11-12 the owner looked at one example of each class of difference the gate still read as worse (the
+lab's page of the classes: the original, today's and v2's crops of one page a class) and gave his verdict on each
 (`verification/owner-comments-display-classes-2026-11-12.json`). `rulings.mjs` holds them, one entry a class: its title, the
 condition the gate reads in words and in code (`holds`), his verdict and words as he wrote them, the date, the example he saw.
 A ruling is a class stated by a condition measured on the page, never a list of pages or units, so that the next paper's page
@@ -574,15 +574,15 @@ of what it was read from (the release's catalog, its units chunks, the stored ro
 inputs are the same; another pair is not read. The answer is one fact of fixed inputs, whether today's own row path gives
 the stored rows back, so it needs no engine once recorded.
 
-The frozen folder is SanDisk's `readarxiv-lab-archive/today-frozen/frozen` (`AXT_TODAY_FROZEN`): display-wide's 90 pairs under
+The frozen folder is in the lab's archive (`AXT_TODAY_FROZEN`, none by default): display-wide's 90 pairs under
 the default toggles, the 22 with every switch on, the added pairs in both modes, and production's answers for the 90 and the
-added pairs (the counts and the proofs: lanes/c1-freeze.md). render.mjs and production-rows.mjs read `AXT_TODAY_FROZEN` where
+added pairs (the counts and the proofs: lane c1-freeze's record). render.mjs and production-rows.mjs read `AXT_TODAY_FROZEN` where
 neither of their flags is given: the release check's display gates set it on their steps. Read so, the gates need neither
 today's engine (`AXT_TODAY`) nor the web's tree (`AXT_WEB`); they still read the release sweep's cache (the catalogs and door
 rows: which pairs can be drawn, v2's rows, the verdict's rows), the served faces (`AXT_FACE_TABLES`, `AXT_FACE_SLICES`: v2's
 reader draws with them), arXiv's PDFs and lab-data's baseline (today's prepare dumps, reader dumps and the tap). Copies of
-those trees, and of today's engine and the web's tree for the tools that still read them, are SanDisk's
-`readarxiv-lab-archive/today-frozen/trees` (lanes/c1-freeze.md, "the copies"). Read so, the gate's verdict is the drawn gate's:
+those trees, and of today's engine and the web's tree for the tools that still read them, are in the
+lab's archive (lane c1-freeze's record, "the copies"). Read so, the gate's verdict is the drawn gate's:
 its report's numbers the same in both modes, its sheet the same; two drawings of today's side differ by a few pixels of
 arXiv's own page (a page's dark pixel count by one to three, one original line's darkness by 0.0003) and by some images'
 encodings, which a frozen side no longer does.

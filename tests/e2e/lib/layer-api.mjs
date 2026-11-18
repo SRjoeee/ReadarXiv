@@ -177,7 +177,7 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     const progress = layer.ms === 0 ? 1 : Math.floor((elapsed / layer.ms) * 100) / 100
     // BUNDLE 4's objects made so far: the chunks and the head at once, each part once the progress passes its share
     const made = four ? { layer: { units: layer4.refs.units, head: layer4.refs.head, parts: layer4.refs.parts.slice(0, Math.floor(progress * (layer4.refs.parts.length + 1))) } } : {}
-    // (the web's shape: a place in the queue is 1 or more, null where it is not known; layer-api.ts PreparingSchema)
+    // (the web's shape: a place in the queue is 1 or more, null where it is not known; its layer API's preparing answer)
     return json(202, { position: null, stage: STAGES[Math.min(STAGES.length - 1, Math.floor(progress * STAGES.length))], progress, retryAfterMs: Math.max(1, Math.min(pollMs, Math.ceil(left))), ...made }, NO_STORE)
   }
 

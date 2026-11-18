@@ -20,7 +20,7 @@
 // A face is the typesetter's font string (typeset types.ts FaceId: `400 100px "axt-nimbus-roman", "axt-lm-math"`), each family
 // the catalogue's (typeset data/faces.ts FACES), never a system face nor a generic family.
 //
-// The Metrics measure as lane L7's spec for the reader says (lanes/L7-converge.md "The reader's own Metrics", held in a browser
+// The Metrics measure as lane L7's spec for the reader says (lane L7's record, "The reader's own Metrics", held in a browser
 // by lab/typeset/metrics-browser.mjs's `rules` mode, equal to the measurer on 98,862 of 98,862): a text cut where its
 // characters' slice changes (the first family of the string whose face, by CSS's matching, has a slice declaring the
 // character), each run measured alone in the font string without small capitals, a run of CJK characters unkerned and cut
@@ -43,8 +43,8 @@ const FONTS = /^[A-Za-z0-9._-]{1,32}$/
 const FILE = /^static-fonts\/[0-9a-f]{16}\.woff2$/
 const LANG = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/
 
-/** the longest Retry-After waited for before the one more ask: our site's visitor limit's own (readarxiv-web
- *  worker/src/rate-limit.ts LIMIT_PERIOD_S, the longest its count takes to fall below the limit again) */
+/** the longest Retry-After waited for before the one more ask: our site's visitor limit's own (the
+ *  period of the platform's limit on a visitor's asks the site sets, the longest its count takes to fall below it again) */
 export const BUSY_MAX_MS = 60_000
 
 /** a pseudo-face the default engine's lay waits on while a language's patterns come (compose/typeset.ts): `ready` loads them */

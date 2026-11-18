@@ -290,7 +290,7 @@ describe("the toolbar (the reader's design, §6.1)", () => {
   })
 })
 
-describe("the narrow window's rule, the host's (parts.tsx narrow; interfaces/host design-a §6)", () => {
+describe("the narrow window's rule, the host's (parts.tsx narrow; the host design A §6)", () => {
   const radios = (c: HTMLElement) =>
     [...c.querySelectorAll<HTMLElement>('[role="radiogroup"].display [role="radio"]')].map((r) => [
       r.getAttribute('aria-label'),

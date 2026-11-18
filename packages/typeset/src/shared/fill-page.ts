@@ -4,7 +4,8 @@
 // its replay (replay-fill: 3,013 of 3,014 cases equal, the one short of its F2 chain). Its target is
 // S.fill.target's port, its settling S.settle's, the layout S.fill.leads found the unit's field `fillLaid` (today's module
 // WeakMap), the shared row's ink ends measured by the unit's own measure (`p.P.measure`); an optional `trace` is told what the
-// tap read inside it, at its probes' places (baseline/tap/engine.diff): each unit's decision, the page's size, each unit filled.
+// tap read inside it, at its probes' places (the tap's own patch of the engine it recorded): each unit's decision, the
+// page's size, each unit filled.
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
 import { closerLead, fillLeadsOf, framesOf } from './fill-leads.ts'

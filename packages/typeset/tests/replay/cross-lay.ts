@@ -5,7 +5,7 @@
 // fill of f reads it beside the units it fills. The entry hands each unit begun on a pass page as it laid it
 // (EntryOptions.lays, lay/page.ts UnitLay); this compares them, unit by unit, every lay against the first that laid it.
 //
-// One cause is known and stays (the lane page-target's trace of 2026-11-12, LATER.md): the head pass (shared/fill-page.ts
+// One cause is known and stays (the lane page-target's trace of 2026-11-12, the rebuild's later work): the head pass (shared/fill-page.ts
 // headOf) reads the leading of the paragraph over a unit from that paragraph's current layout, and a paragraph begun on the
 // page before f and ending in one line at the top of f is filled by f's lay (its first page is a pass page there) and left at
 // its fit by f + 1's (it is not); so the unit under it is laid lower by one lay than by the other. Told by what it moves: the

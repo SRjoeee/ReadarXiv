@@ -457,7 +457,7 @@ describe('a number set flush against an inline formula is held with it', () => {
     expect(m.sent).toEqual(['An error of @a# is seen.'])
     expect(ok(m.result).content).toEqual([tx('Ein Fehler von '), E('s'), tx('15'), E('p'), tx(' ist da.')])
   })
-  // (each case: the unit, and the wire Google is sent; the probe's samples by kind, lanes/flush-digits/samples.txt)
+  // (each case: the unit, and the wire Google is sent; the probe's samples by kind, in lane flush-digits' record)
   const CASES: [string, Piece[], string][] = [
     [
       'digits on both sides (`256$\\times$256`)',

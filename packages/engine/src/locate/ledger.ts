@@ -1082,8 +1082,8 @@ export function inkLeft(
   return { ...ledger, orphanLetters, orphans }
 }
 
-/** the sweep's invariant (o), no orphan letters: a row a listed orphan line, in the sweep's shape (scripts/sweep/invariants.mjs
- *  of the web), every row a violation */
+/** the sweep's invariant (o), no orphan letters: a row a listed orphan line, in the sweep's shape (the website's sweep of
+ *  invariants), every row a violation */
 export const orphanRows = (ledger: TodayLedger, { paper }: { paper: string }) =>
   ledger.orphans.map((o) => ({
     inv: 'o',

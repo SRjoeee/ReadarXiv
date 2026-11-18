@@ -1,7 +1,7 @@
 // lab/typeset/gate.mjs [--out=<dir>] [<pair>…]: the gate's runner (contract stage2-typeset, deliverable 4) over the members
 // as today prepared them (packages/typeset/tests/replay/gate.ts gatePair: every unit prepared from its last round's inputs in
 // the tap, each page laid by the package's composition, layPagePrepared, from that page's own part, design-a §1.3). Writes
-// each pair's reader dump in the baseline's format (FORMAT.md §4: the laid units' size, leading, lines with their text and
+// each pair's reader dump in the baseline's format (the dump spec §4: the laid units' size, leading, lines with their text and
 // crops; the units it does not lay, with the baseline's cause or its own; the baseline's notLaid as they are) under
 // <dir>/reader/ (default lab-data lanes/L3/gate/today/), and counts risk 1 of the page decision: a member on two pages laid
 // alike from each page's part. Then: node <baseline>/tools/diff.mjs <baseline> <dir> --scope=reader. The members from lane

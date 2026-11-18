@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The rule ledger's instrument (lab/rules/: design-reduction-2026-11-13.md §3c, R4) on a tree written here: a package
+// The rule ledger's instrument (lab/rules/: the reduction design §3c, R4) on a tree written here: a package
 // module of rules (a constant compared through a product, a table entry, a literal comparison, a Math.min, a set, a list,
 // a regular expression of alternatives, a constant read only as a factor, a parameter that shadows a constant), a module
 // that imports two of them (by name and through a namespace) and makes a set of one, and a runner. The site map counts

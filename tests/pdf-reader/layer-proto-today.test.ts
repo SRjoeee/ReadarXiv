@@ -6,8 +6,8 @@ import { breakPoints, hyphenationOf, TEX_PATTERN_ENCODINGS } from '@/pdf-reader/
 import { layGroups, layOrder } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
-// The layer's v0: the approved prototype ported into the engine (layer-proto/, from readarxiv-web's exp/instant-layer
-// at 9e56fca). Its drawing is measured by the layer gate against the prototype's own floor (--engine-kind=proto); these
+// The layer's v0: the approved prototype ported into the engine (layer-proto/, from the website's private prototype, as
+// it stood when it was approved). Its drawing is measured by the layer gate against the prototype's own floor (--engine-kind=proto); these
 // are its pure parts: the order the prototype's page laid units in, the hyphenation patterns it read from TeX's files,
 // and how it reads a placeholder's source
 

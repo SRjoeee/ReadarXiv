@@ -72,7 +72,7 @@ const TRADITIONAL = new Set(['hant', 'tw', 'hk', 'mo'])
  * Chinese goes by its script: a script written out wins (`zh-Hans-TW` is Simplified), then Taiwan, Hong Kong and Macao
  * are Traditional, and the rest (`zh`, `zh-CN`, `zh-SG`) Simplified; Cantonese reads Traditional unless it says
  * `Hans`. Every other language by its code, then by its primary subtag (`ja-JP` → `ja`, `en-GB` → `en`).
- * The website mirrors this rule (readarxiv-web, settings.ts `nearestCode`); a change here is a change there
+ * The website mirrors this rule (its own settings' nearest code); a change here is a change there
  */
 export function localeOfTag(tag: string): LocaleCode | null {
   const wanted = tag.trim().toLowerCase().replace(/-[a-z0-9](-.*)?$/, '')

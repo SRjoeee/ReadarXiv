@@ -1,5 +1,5 @@
 // S.fill.target replayed on every call of the corpus: the ledgers' passes hold each call's whole input and output
-// (baseline/tap/TAP.md §3 L10), 3,014 page passes over the 123 reader dumps.
+// (the tap's spec §3 L10), 3,014 page passes over the 123 reader dumps.
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'

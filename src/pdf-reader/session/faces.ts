@@ -4,7 +4,7 @@
 //   GET <api>/static-fonts/index.json                  { schema: 1, fonts, faces: { <face id>: { group }, … }, … }
 //   GET <api>/static-fonts/<group>.json?fonts=<fonts>  { schema: 1, group, slices: [[start, end, …], …], faces: { <face id>: [{ path } | null, …] }, … }
 //
-// a group's table asked with the index's FONTS, as the web asks it (web/src/layer/faces.ts tableUrlsOf): the tables are
+// a group's table asked with the index's FONTS, as the website's reader asks it: the tables are
 // immutable for a year and change only with FONTS, so that a browser holding one of another FONTS asks again
 //
 // each slice's file at `<api>/<path>` (`static-fonts/<16 hex>.woff2`). Only those fields are read; what else a table holds is

@@ -48,7 +48,7 @@
 //   --records    (or LAYER_RECORDS) the translation alone (record.json, units.json) from another folder of the same layout:
 //                spikes/table-groups.mjs --write's decided records over the engine's own layout files
 //   --fixtures   (or LAYER_FIXTURES) the fixtures' layout.json, units.json and arxiv.pdf from another folder of the same
-//                layout (the web's web/e2e/.fixtures/); the references stay data/layer-fixtures' (LAYER_REFS another). A
+//                layout (the web's own end-to-end fixtures); the references stay data/layer-fixtures' (LAYER_REFS another). A
 //                fixture's base.pdf, where it has one (our base page, BUNDLE 8), is the page the layer is drawn over, its
 //                add-on made over and its bundle's base: every read of that page, served as /fixtures/<fixture>/base.pdf
 //                (arXiv's PDF where there is none); arxiv.pdf stays the left's
@@ -61,8 +61,8 @@
 //                run only (no --only, no --pages); --ruling=<file> (with --record): a ruling of the maintainer's the
 //                record is made under, where it stands against the merge rule (a JSON file: { date, by, on, quote, english,
 //                measures, scope, why }), kept in the record with every earlier one and listed in its .md
-//   --label      the progress folder's name (pixel tier): ~/Downloads/readarxiv-test/layer-progress/<NN>-<label>/
-//                (LAYER_PROGRESS names another): per page of the controller's set an image of four panels in a 2 x 2
+//   --label      the progress folder's name (pixel tier): <LAYER_PROGRESS>/<NN>-<label>/
+//                (LAYER_PROGRESS, no default: unset, the run fails naming it): per page of the controller's set an image of four panels in a 2 x 2
 //                grid, each --panel-width wide (1,000 px): the original and the prototype above, this run and the previous
 //                recorded run (of the same layout files where there is one, else the baseline) below; metrics.md and
 //                index.html; default the engine's branch
@@ -191,7 +191,7 @@ import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rea
 import { createRequire } from 'node:module'
 import { createServer } from 'node:http'
 import { gzipSync } from 'node:zlib'
-import { availableParallelism, homedir } from 'node:os'
+import { availableParallelism } from 'node:os'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { chromium } from 'playwright'
 import { packageFile, ZOD_PATH } from '../packages-route.mjs'
@@ -348,7 +348,8 @@ const NO_START_PATH = '/src/pdf-reader/engine/layer-proto/no-start.mjs', NO_STAR
 /** TeX's room after a forced break, the drawing's and the measure's one reading of it (measure.mjs imports it by its address
  *  in this repository): this repository's, as the UAX 14 table is */
 const BREAK_ROOM_PATH = '/src/pdf-reader/engine/layer-proto/break-room.mjs', BREAK_ROOM_FILE = join(REPO, BREAK_ROOM_PATH.slice(1))
-const PROGRESS = process.env.LAYER_PROGRESS ?? join(homedir(), 'Downloads/readarxiv-test/layer-progress')
+// (unset, a path no machine holds, under /dev/null, a file: the progress folder's making fails with the variable's name)
+const PROGRESS = process.env.LAYER_PROGRESS ?? '/dev/null/LAYER_PROGRESS-unset'
 const ONLY = typeof arg('only') === 'string' ? arg('only').split(',').filter(Boolean) : null
 const PAGES = typeof arg('pages') === 'string' ? Number(arg('pages')) : null
 // (--perf and --door-memory: one worker, so that a reading is the fixture's own and not its neighbours' in the one browser)

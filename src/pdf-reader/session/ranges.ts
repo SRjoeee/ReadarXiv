@@ -1,5 +1,5 @@
 // Our base page read by ranges, each answer held to the layer's base (the run's bind, run.ts bindOurs): the same contract as the web's
-// reader (readarxiv-web web/src/ranges.ts), written for the extension's run.
+// reader's own reads by ranges, written for the extension's run.
 //
 // A layer over our own compile (the layer route, design §3.2) is drawn over our base page, a file of our server named by the digest of
 // its bytes (server.ts basePath): one object per address, never replaced. The composed document asks it for what its pages need and

@@ -5,8 +5,8 @@
 // baseline's tools/prepare.mjs computes, so that the same cached compiles are hit; and it decides the tree first by the entry's
 // own rule (treeOf), as the box's service runs a paper on the tree the box answers. Writes:
 //   <out>/bundles/<id>/<digest>.<kind> each object, and head.json (the head, as written);
-//   <out>/prepare/<id>.prepare.json the prepare dump in the baseline's format (readarxiv-lab-data/refactor-2026-11/baseline/
-//   FORMAT.md §3), for its tools/diff.mjs;
+//   <out>/prepare/<id>.prepare.json the prepare dump in the baseline's format (the baseline's dump
+//   spec §3), for its differential;
 //   <out>/located/<id>.json what the gate reads beside the dump: each unit's place, cause, member ords; the wrap's pages; parts;
 //   the float lines (`floatLines`: Located.floatLines, a paper's words: lab data alone; float-lines.mjs reports them);
 //   <out>/ownership/<id>.json what the ownership's check finds (Located.disagreements, packages/engine/src/locate/ownership.ts),
@@ -208,12 +208,12 @@ if (tally && !('refused' in tally.addOn) && (process.argv.includes('--prove') ||
   }
 }
 
-// ---- the prepare dump (FORMAT.md §3)
+// ---- the prepare dump (the dump spec §3)
 const located = tally?.locatedAll ?? null
 const addOn = tally?.addOn ?? null
 const r2 = v => Math.round(v * 100) / 100
 const OBJ = '￼'
-// (a unit's pieces as FORMAT.md's flat list, §2, each its k by place, and each element's `k` its piece's: pieces.mjs flatOf,
+// (a unit's pieces as the dump spec's flat list, §2, each its k by place, and each element's `k` its piece's: pieces.mjs flatOf,
 // pieceKOf, lane lost-11)
 /** the flat pieces' text, a placeholder or a nested unit U+FFFC */
 const textOfPieces = ps => ps.map(p => (p.kind === 'text' ? p.s : p.kind === 'ph' || p.kind === 'nested' ? OBJ : '')).join('')

@@ -9,7 +9,7 @@
 # small forms (U+FE10-FE6F) are vertical text's and compatibility's, which no line the layer sets holds, and a mark the data
 # lacks keeps its full box. Each file's SHA-256 must be the binding one (packages/engine/src/fonts/font-coverage.ts
 # METRICS), else the run fails and writes nothing. The fonts folder is the one scripts/font-roles.py reads (every face's
-# file under its table name; readarxiv-web's scripts/fetch-font-files.mjs fills one).
+# file under its table name; the website's build fills one).
 #
 #   python3 lab/typeset/marks-data.py <fonts dir>           writes the module
 #   python3 lab/typeset/marks-data.py <fonts dir> --check   writes nothing; exits 1 where the module differs

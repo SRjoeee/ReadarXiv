@@ -1,5 +1,5 @@
 // B.faces replayed on the tap: every face today's faceOf gave a run of the sampled rounds of tokensOf2 (watched by
-// lab/typeset/derive.mjs: lanes/L3/replay/B.tokens.json.gz `faces`, by the run's style and script class), over the roles of
+// lab/typeset/derive.mjs: lane L3's derived B.tokens `faces`, by the run's style and script class), over the roles of
 // the pair's target, English family and CJK family (the ledger's info.paper, setRoleFaces' arguments); and whether each
 // face draws small capitals of its own. The catalogue (data/faces.ts) is the package's source; tests/unit/data.test.ts holds
 // its shape.

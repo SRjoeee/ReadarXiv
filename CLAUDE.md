@@ -57,7 +57,7 @@ Chinese, Japanese and Korean that is product data stays: the locale packs (`src/
 pnpm install
 pnpm dev                 # WXT dev mode; load .output/chrome-mv3-dev unpacked
 pnpm typecheck           # tsc --noEmit, then tsc -b packages (each workspace package under its own tsconfig) — vitest does not type-check
-pnpm lint                # Biome linter, the English gate, Biome's formatter over packages/, the boundary gate, the review-citation gate (src/pdf-reader names no reviewer; the rest of src/ is counted); pnpm lint:fix applies safe fixes
+pnpm lint                # Biome linter, the English gate, Biome's formatter over packages/, the boundary gate, the review-citation gate (src/pdf-reader names no reviewer; the rest of src/ is counted), the machine-path gate (no tracked file outside parked/ names a home directory or a mounted volume); pnpm lint:fix applies safe fixes
 pnpm test                # vitest; pnpm test:watch
 pnpm build               # wxt build + scripts/check-output.mjs
 pnpm exec wxt build --mode development   # the dev pages too: the gallery (every popup state) and the controls sheet

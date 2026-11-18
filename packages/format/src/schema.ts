@@ -1,4 +1,4 @@
-// The bundle's objects, FORMAT 1 (interfaces/page/design-a.md §1.1, decided in interfaces/page/DECISION.md): one zod schema
+// The bundle's objects, FORMAT 1 (the page design A §1.1, decided in the page decision): one zod schema
 // per kind, the types inferred from them. Coordinates are arXiv's page (the original PDF's user space), PDF units, y up, pages
 // 1-based, written on a 1/100 grid by the prepare. An object's reader ignores a field it does not know (zod strips it), so a
 // new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread.
@@ -11,7 +11,7 @@ const int = z.number().int()
 const page = z.number().int().min(1)
 const flag = z.literal(1)
 
-/** a unit's id: the content hash of its kind and pieces (ids.ts unitId; the baseline's FORMAT.md §2) */
+/** a unit's id: the content hash of its kind and pieces (ids.ts unitId; the baseline's dump spec §2) */
 export const Id = z.string().regex(/^[0-9a-f]{64}$/)
 /** an object's digest: the lowercase hexadecimal SHA-256 of its bytes */
 export const Digest = z.string().regex(/^[0-9a-f]{64}$/)
@@ -23,7 +23,7 @@ export const Ink = z.tuple([page, num, num, num, num, num])
 export const PrepWhy = z.enum(['unlocated', 'unwrapped', 'page'])
 
 // ---------------------------------------------------------------- what a translator reads
-/** a unit's kind: an open string, today's documented set (FORMAT.md §2): para heading caption footnote cell abstract theorem
+/** a unit's kind: an open string, today's documented set (the dump spec §2): para heading caption footnote cell abstract theorem
  *  figure author affiliation reference; name (babel's names); inkheads inkcontents inknotes inkorphan inknames inkreferences
  *  (text our compile set that no source unit owns); inkfigures (text inside a figure); named (a unit's form with the author
  *  block's names it holds sent as elements, Part.paper.named: no member's) */
@@ -551,7 +551,7 @@ export const Part = z.object({
 
 // ---------------------------------------------------------------- what opens a paper
 /** the original (A): its length, its digest, and the digest of each CHUNK bytes of it, so that a reader checks every range
- *  it reads (interfaces/host/DECISION.md): `chunks` the base64url of the first 16 bytes of each chunk's SHA-256, joined */
+ *  it reads (the host decision): `chunks` the base64url of the first 16 bytes of each chunk's SHA-256, joined */
 export const ORIGINAL_CHUNK = 65536
 export const Original = z.object({
   bytes: int.min(0),

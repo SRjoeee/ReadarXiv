@@ -125,8 +125,8 @@ const UA = 'ReadarXiv/0.1 (+https://readarxiv.org; research)'
 const STAGING = 'https://app-staging.readarxiv.org'
 /** staging's versions (2026-10-06): the pipeline's is this engine's (a move here makes another cut and another output, which
  *  staging does not hold), the rules' this repository's; the typesetting's (6 since the engine has none: an older engine's own),
- *  the image, the geometry schema and the chain the web's (src/shared/versions.ts TYPESETTING and GEOMETRY_SCHEMA,
- *  container/image.json, wrangler.jsonc MT_CHAIN) */
+ *  the image, the geometry schema and the chain the web's (its typesetting and geometry
+ *  versions, its container's image, its configured chain) */
 const STAGING_VERSIONS = { pipeline: PIPELINE_VERSION, typesetting: LIVE.TYPESETTING_VERSION ?? '6', rules: RULES_VERSION, image: '1', geometry: 2, chain: 'mt:microsoft>google-web' }
 const FREE_MIN = 10 * 2 ** 30
 const ARXIV_GAP_MS = 3200

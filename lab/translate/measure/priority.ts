@@ -1,4 +1,4 @@
-// Open measurement 2 of interfaces/translate/DECISION.md: the latest call first (the chain's one rule of priority) against
+// Open measurement 2 of the translate decision: the latest call first (the chain's one rule of priority) against
 // today's rank (layer-proto/rows.mjs runRows: batches of 2,500 then 12,000 plain characters, each the units nearest the
 // reading place when it is cut, one batch at a time), on a slow fake translator (an LLM's profile, design-a §1.5: about
 // 1.3 s to a first answer, longer with size). The reader opens at page 1 and asks for every unit; at `--scroll` seconds it

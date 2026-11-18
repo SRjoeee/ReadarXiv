@@ -222,7 +222,7 @@ pt-mono-bold             PTM75F.ttf                      texlive  pt-mono       
 `
 
 // A face's family is more than the CSS family it is declared and drawn in: it is the name inside every subset served of
-// it. The web's subsetter (readarxiv-web, container/src/fonts/subset.py) writes it as the name table's family, unique
+// it. The website's subsetter (its build's own) writes it as the name table's family, unique
 // identifier, full and PostScript names (IDs 1, 3, 4, 6; the typographic names, 16 and 17, are dropped) and as the CFF
 // table's font, full and family names and each CID font dictionary's, keeps the face's copyright and licence (IDs 0, 13
 // and 14, the CFF notice) and states the change (ID 10). A subset is a Modified Version, which may carry no name its

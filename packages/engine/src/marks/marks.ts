@@ -1288,7 +1288,7 @@ const FIL_GLUE = /^\.\\glue(?:\(\\[A-Za-z@]+\))? -?[\d.]+ plus [\d.]*[1-9][\d.]*
  * running), a box holding one. amsthm's \qed (`\hfill\quad` and the box of its square's rules), an author's own (`\hfill` and a
  * symbol), LLNCS's (a fil, a penalty, a skip, a fil again and its square): set at a paragraph's end, TeX pushes it to its
  * line's end, the unit's end mark (El.end). A fill after the last ink, or one inside a box only, pushes none; a listing not read
- * whole is no answer. 27 of the 33 end marks the probes of B15 hold (lanes/probes-facts.md, F14)
+ * whole is no answer. 27 of the 33 end marks the probes of B15 hold (lane probes-facts' record, F14)
  */
 export function readInkEnds(log: string | null | undefined, samples: readonly string[]): string[] {
   const out: string[] = []
@@ -2070,7 +2070,7 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   // the crash follows the node list's memory, no one point causes it), and a paper production serves is not refused. Its cost: an
   // end after a box tells the alignment of a unit TeX set in it (marks/channels.ts boxedAlignOf), right where read: five members
   // of two papers keep B14's "justified" where the page centres them (2610.21313v1's affiliation 7, 2610.42112v1's author 1 and
-  // affiliations 486 to 488). The exclusion goes when the marked compile is robust to such a paper (refactor-2026-11 LATER.md).
+  // affiliations 486 to 488). The exclusion goes when the marked compile is robust to such a paper (the rebuild's later work).
   // Every paragraph TeX
   // ends, a unit's or none's, but while the gate is off (a contents list, the output routine, where points made 2610.30769v1's
   // hyperref links unstable and pdfTeX crash), as no mark is: an ink unit's alignment where no unit's end mark tells it

@@ -650,7 +650,7 @@ function withBreaks(
  * has no word placed on A, and the whole unit lit whole for it (startsOnA): the lab's 8 units by default and 78 with every switch
  * on that today pairs by sentence were all such, or a translation's sentence with no token drawn (bySentence's `unlaid`: an
  * element moved past the translation's last stop), joined the same way (the feature list's F1). Joined, the other sentences stay
- * the translator's pairs, and the one joined lights with its neighbour on both panes (lanes/hl-display: a cut stands on both
+ * the translator's pairs, and the one joined lights with its neighbour on both panes (lane hl-display's record: a cut stands on both
  * panes or on neither). A paragraph point pairs with these cuts (unit/breaks.ts paraPieces)
  */
 export function worded(

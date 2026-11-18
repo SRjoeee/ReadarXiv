@@ -18,7 +18,7 @@
 //
 // The translation is the original's words, each written backwards (the same letters: the same width in the same face), with a
 // word put before some units' text so that their elements move; its rows are the translate package's Result shape. The
-// reader dump (readarxiv-lab-data/refactor-2026-11/baseline/FORMAT.md §4) is laid by a greedy breaker over Helvetica's widths on
+// reader dump (the baseline's dump spec §4) is laid by a greedy breaker over Helvetica's widths on
 // the member's own lines, then the room below, the size stepped down to fit: the stand-in of lane L3's typesetter, which the
 // reader's converter turns into `Page`s exactly as it turns the baseline's own dumps.
 //   node --import tsx lab/pdf/reader-fixtures/make.mjs [--check] [--only=<paper>]

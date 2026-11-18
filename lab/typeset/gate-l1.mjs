@@ -350,7 +350,7 @@ if (ENTRY) {
     if (P.off.length) process.exitCode = 1
   }
   // (I6 across the pages' lays, cross-lay.ts: a unit laid otherwise by two pages' lays fails the run, but where the head pass's
-  // known cause tells it (headOf reading the paragraph over it filled by one lay, at its fit by the other: LATER.md), counted
+  // known cause tells it (headOf reading the paragraph over it filled by one lay, at its fit by the other: the rebuild's later work), counted
   // and listed apart)
   const X = entry.crossLay
   console.log(`I6 across the pages' lays (cross-lay.ts): ${X.units} units begun on a pass page, ${X.twice} laid by two pages' lays or more; ${X.head.length + X.other.length} laid otherwise: ${X.head.length} by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${X.other.length} by another cause`)
