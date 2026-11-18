@@ -1,10 +1,11 @@
 // The facts today's reader works out from the page's characters before it typesets (most of prepareUnit, and the readers the
-// run calls around a lay: interfaces/typeset-inputs.md §1B-§1F), read once by the prepare on arXiv's page with exact ownership
-// (stage 1a-2, contract stage1a2-facts.md). Each reading is pure, over a member's own glyphs and lines and the page's other
+// run calls around a lay: the typesetter's inventory of its inputs, §1B-§1F), read once by the prepare on arXiv's page with
+// exact ownership (stage 1a-2's contract). Each reading is pure, over a member's own glyphs and lines and the page's other
 // ink; where today's rule had a threshold that only guarded its re-derivation of ownership, ownership answers instead and the
 // threshold is gone; a threshold that is a typographic fact stays, named, with its source. File:line: today's engine at
 // 065c1d973 (`L2` layer-proto/layer2.mjs, `RUN` run.mjs, `TEX` tex.mjs, `MAKE` layout/make.mjs).
 import type { Ink, Line, Piece, Style } from '@readarxiv/format'
+import { bareFontName as bare, readFontName as classifyFont, type FontNameClass } from '@readarxiv/text'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { isInk, r2 } from './lines.ts'
@@ -48,50 +49,12 @@ export function fixedFacesOf(glyphs: Iterable<DocGlyph>): Set<string> {
   return new Set([...faces].filter(([, f]) => f.one && f.letters).map(([face]) => face))
 }
 
-// ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont, ported as it is)
-/** the PostScript name without its subset tag */
-const bare = (name: string) => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
-export interface FontClass {
-  fam: 'serif' | 'sans' | 'mono' | 'math'
-  bold: boolean
-  italic: boolean
-  caps: boolean
-}
+// ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont: @readarxiv/text's)
 /** a PDF font's class, weight, slant and small capitals from its PostScript name: today's classifyFont
- *  (layer-proto/fonts.mjs:42 at 065c1d973), its `design` and PDF.js's fallback guess left out (no rule of the part reads them) */
-export function classifyFont(name: string): FontClass {
-  const n = bare(name)
-  let fam: FontClass['fam'] = 'serif'
-  if (
-    /^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex|mib|syb)|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i.test(
-      n,
-    ) ||
-    /math|symbol/i.test(n)
-  )
-    fam = 'math'
-  else if (
-    /mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|beramono|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i.test(
-      n,
-    )
-  )
-    fam = 'mono'
-  else if (
-    /sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|^cmssbx|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i.test(
-      n,
-    )
-  )
-    fam = 'sans'
-  const bold =
-    /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmbxti|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i.test(
-      n,
-    )
-  const italic =
-    /italic|ital\b|ital$|oblique|slant|kursiv|inclined|^(cm|lm)ti|^cmsl|^sfti|^sfsl|^sfsi|^sfbi|^cmbxti|^cmbxsl|^cmssi|^cmitt|^cmsltt|^cmmi|-it$|-bi$|linlibertineti|linlibertinetbi|linbiolinumti|-ita?$|italicmt|obliquemt/i.test(
-      n,
-    )
-  const caps = /caps|^cmcsc|^sfcc|^sfxc|smallcap|-sc$|sc\d*$|^cmtcsc|^lmromancaps/i.test(n) && !/^cmsc/i.test(n)
-  return { fam, bold, italic, caps }
-}
+ *  (layer-proto/fonts.mjs:42 at 065c1d973), held once in @readarxiv/text (readFontName), its `design` and PDF.js's fallback
+ *  guess left out (no rule of the part reads them) */
+export type FontClass = FontNameClass
+export { classifyFont }
 
 /**
  * A font's family keys as its PostScript name tells them, subset tag off: the name before its first hyphen (DejaVuSans and
@@ -118,7 +81,8 @@ export function oneFamily(a: string, b: string): boolean {
 export const sameFamily = (a: readonly [string, string], b: readonly [string, string]) =>
   (!!a[0] && a[0] === b[0]) || (!!a[1] && a[1] === b[1])
 
-const mostOf = <T>(xs: Iterable<T>): T | undefined => {
+/** the value most of `xs` hold, a tie to the one met first; undefined for none */
+export const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   const n = new Map<T, number>()
   let best: T | undefined
   let k = 0
@@ -132,6 +96,13 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   }
   return best
 }
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
+/** a character's letters as two sides of an alignment compare them: decomposed, marks off, lower case, its letters and digits
+ *  alone (a ligature its letters) */
+export const fold = (ch: string): number[] =>
+  [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
+    .filter((c) => LETTER_OR_DIGIT.test(c))
+    .map((c) => c.codePointAt(0) as number)
 const real = (g: { u: string }) => /\S/.test(g.u)
 /** what a style is read off a glyph by: its Unicode, its font's base name, its size (up its line; `along` it, where that differs)
  *  and its fill. A glyph set level is one (DocGlyph); so is one set turned (DocTurned, a figure's turned text), whose font, size

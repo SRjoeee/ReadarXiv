@@ -48,7 +48,8 @@ export function ServiceMenu({ controller, store }: { controller: ReaderControlle
               if (id === MANAGE_SERVICES || item?.action) return openOptions('translate/services')
               // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
               // while the bar showed the raw id (the popup's rule)
-              store.patch(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))
+              // (a pick, recorded: the PDF reader follows it, v22)
+              store.patch(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id, providerChosen: true } : c))
             }} />
         </Popover>
       )}

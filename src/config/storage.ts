@@ -154,6 +154,13 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
       }
       return out
     },
+    // v21 -> v22: the mark of a translator chosen (`providerChosen`; the owner's ruling of 2026-11-19). A stored provider says
+    // who wrote it: the install writes Microsoft (the default since 2026-09-10, before the first release), so a stored
+    // `microsoft` cannot be told from a pick and is nobody's; Google's and Chrome's ids were never a default, and a service's
+    // id is written by an add or a pick (migration 12's from v11's `openai-compat`, a default of no released build), so each
+    // is the reader's pick, kept. A provider that is no string is passed on for the schema to name, as every migration here does
+    22: (v21: (Omit<Config, 'version' | 'provider' | 'providerChosen'> & { version: 21; provider?: unknown }) | null) =>
+      typeof v21 !== 'object' || v21 === null ? v21 : { ...v21, version: 22 as const, providerChosen: v21.provider !== 'microsoft' },
   },
 })
 

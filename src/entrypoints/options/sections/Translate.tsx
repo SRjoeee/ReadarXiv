@@ -102,7 +102,8 @@ function Services({ data }: { data: OptionsData }) {
   const ids = [...builtIns.map(b => b.id), ...config.services.map(s => s.id)]
   const can = (id: string) => !builtIns.some(b => b.id === id && b.disabled)
   const choose = (id: string, how: 'pointer' | 'key') => {
-    void writes.attempt(latest => ({ ...latest, provider: id }))
+    // (a pick, recorded: the PDF reader follows it, v22)
+    void writes.attempt(latest => ({ ...latest, provider: id, providerChosen: true }))
     setPointed(how === 'pointer' ? id : null)
   }
   const keys = radioKeys(ids, config.provider, can, id => choose(id, 'key'), i => radios.current.get(ids[i]!)?.focus())
@@ -116,7 +117,7 @@ function Services({ data }: { data: OptionsData }) {
    * stays open saying so, the service not handed over (Task 107)
    */
   const added = async (s: Service, ms: number) => {
-    await writes.save(latest => ({ ...latest, services: latest.services.some(x => x.id === s.id) ? latest.services : [...latest.services, s], provider: s.id }))
+    await writes.save(latest => ({ ...latest, services: latest.services.some(x => x.id === s.id) ? latest.services : [...latest.services, s], provider: s.id, providerChosen: true }))
     setConnected(c => ({ ...c, [s.id]: ms }))
     setFresh(s.id)
     setForm(null)
@@ -266,7 +267,10 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now
   const remove = (service: Service, focus: boolean) => {
     // written only once the hold is granted: the background, hearing of the deletion, finds the undo held (I1)
     const hold = holdOrigin(service.baseURL, service.id)
-    const stored = hold.ready.then(() => writes.attempt(latest => ({ ...latest, services: latest.services.filter(s => s.id !== service.id), provider: latest.provider === service.id ? 'microsoft' : latest.provider })))
+    // (the service chosen deleted: Microsoft in its place, chosen by nobody, so that the PDF reader follows the website, v22)
+    const stored = hold.ready.then(() => writes.attempt(latest => (latest.provider === service.id
+      ? { ...latest, services: latest.services.filter(s => s.id !== service.id), provider: 'microsoft', providerChosen: false }
+      : { ...latest, services: latest.services.filter(s => s.id !== service.id) })))
     const g: Gone = { service, index: config.services.findIndex(s => s.id === service.id), chosen: config.provider === service.id, focus, stored, hold }
     pending.current.add(g)
     setGone(x => [...x, g])
@@ -285,7 +289,9 @@ function useDeletions(config: Config, writes: ListWrites<Config>, focusOn: { now
     setGone(x => x.filter(y => y !== g))
     // after the same grant the deletion's write waits for, so an undo pressed before it is written after the deletion
     void g.hold.ready.then(() => writes.attempt(latest => (latest.services.some(s => s.id === g.service.id) ? latest
-      : { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.chosen && latest.provider === 'microsoft' ? g.service.id : latest.provider })))
+      : g.chosen && latest.provider === 'microsoft'
+        ? { ...latest, services: insertAt(latest.services, g.index, g.service), provider: g.service.id, providerChosen: true }
+        : { ...latest, services: insertAt(latest.services, g.index, g.service) })))
       .then(done => {
         // the focus goes to the service's radio once its row is drawn again, as the styles and the prompts lists do: a
         // frame after the press, or after the write, may find no row yet, and the focus falls to the page (Part 7's

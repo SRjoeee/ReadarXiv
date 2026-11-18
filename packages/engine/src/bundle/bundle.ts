@@ -1,4 +1,4 @@
-// bundle(located, addOn, original): the bundle's objects (interfaces/page/design-a.md §1.1, §1.3, §2.1): `Units` (each distinct
+// bundle(located, addOn, original): the bundle's objects (the page design A §1.1, §1.3, §2.1): `Units` (each distinct
 // unit once, what a translator reads, in windows under the Worker's 1 MiB), one self-sufficient `Part` a page that has
 // anything to lay, the add-on's bytes, and last the `Head` that names them all (the original's length, digest and 64 KiB
 // chunk digests among them). Every object is written by @readarxiv/format's `write`: canonical bytes, named by their digest.

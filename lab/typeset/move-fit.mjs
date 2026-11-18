@@ -15,7 +15,8 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const TODAY = process.env.AXT_TODAY ?? '/Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/refactor-read'
+// (today's engine: AXT_TODAY, else the worktree `refactor-read` beside this repository's)
+const TODAY = process.env.AXT_TODAY ?? join(import.meta.dirname, '..', '..', '..', 'refactor-read')
 const SOURCES = {
   layer2: readFileSync(join(TODAY, 'src/pdf-reader/engine/layer-proto/layer2.mjs'), 'utf8').split('\n'),
   run: readFileSync(join(TODAY, 'src/pdf-reader/engine/layer-proto/run.mjs'), 'utf8').split('\n'),

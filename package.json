@@ -37,10 +37,11 @@
     "e2e:placeholders": "node tests/e2e/placeholders.mjs",
     "e2e:small-caps": "node tests/e2e/layer-small-caps.mjs",
     "release-check": "node lab/release-check/run.mjs",
-    "lint": "biome lint . && biome format packages && node scripts/check-english.mjs && node scripts/check-boundary.mjs && node scripts/check-review-citations.mjs",
+    "lint": "biome lint . && biome format packages && node scripts/check-english.mjs && node scripts/check-boundary.mjs && node scripts/check-review-citations.mjs && node scripts/check-machine-paths.mjs",
     "check:boundary": "node scripts/check-boundary.mjs",
     "check:english": "node scripts/check-english.mjs",
     "check:citations": "node scripts/check-review-citations.mjs",
+    "check:machine-paths": "node scripts/check-machine-paths.mjs",
     "lint:fix": "biome lint --write ."
   },
   "devDependencies": {

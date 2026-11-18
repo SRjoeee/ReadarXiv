@@ -12,8 +12,16 @@ describe('the reader preferences over the extension configuration', () => {
   it('reads every field from its stored key', () => {
     const c = config({ mode: 'only', theme: 'dark', uiLanguage: 'ja', targetLanguage: 'deu', reading: { sentenceHighlight: false, openIn: 'same-tab' }, pdfReader: { ...DEFAULT_CONFIG.pdfReader, sync: false, swapped: true, dimPages: false, classes: { ...DEFAULT_CONFIG.pdfReader.classes, references: true } } })
     const p = prefsOf(c, { revision: 'r1', languages: ['en'] })
-    expect(p).toMatchObject({ display: 'translation', target: 'de', sync: false, theme: 'dark', swapped: true, dim: false, ui: 'ja', links: 'same-tab', translator: 'r1', highlight: { on: false, band: c.appearance.activeHighlight } })
+    expect(p).toMatchObject({ display: 'translation', target: 'de', sync: false, theme: 'dark', swapped: true, dim: false, ui: 'ja', links: 'same-tab', highlight: { on: false, band: c.appearance.activeHighlight } })
     expect(p.classes.references).toBe(true)
+  })
+  it("names the translator by the chain the PDF reader asks: the chain's revision, and the website's chain apart where nobody picked one (v22), so that a pick asks again what stopped short", () => {
+    const site = prefsOf(config(), { revision: 'r1' }).translator
+    const picked = prefsOf(config({ providerChosen: true }), { revision: 'r1' }).translator
+    expect(picked).toBe('r1')
+    expect(site).not.toBe(picked)
+    expect(site).toContain('r1')
+    expect(prefsOf(config(), {}).translator).toBeNull()
   })
   it('names a built-in band under its shipped name as none, a renamed one by its name', () => {
     const highlights = DEFAULT_CONFIG.appearance.highlights.map((h, i) => (i === 1 ? { ...h, name: 'mine' } : h))

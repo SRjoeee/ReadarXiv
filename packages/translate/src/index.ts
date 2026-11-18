@@ -1,5 +1,5 @@
 // @readarxiv/translate: the translator contract, its adapters and the chain that falls back between them
-// (interfaces/translate/DECISION.md). A host makes one chain, `chainOf(ports)`, and translates through it; a row is keyed
+// (the translate decision). A host makes one chain, `chainOf(ports)`, and translates through it; a row is keyed
 // by `identityOf(translators)` besides unit id and target.
 
 /** What `@readarxiv/translate` is for: the translator contract, its adapters and the chain that falls back between them */
@@ -11,6 +11,8 @@ export { askedOf, NESTED_KIND, unitInOf } from './bundle.ts'
 export { chainOf, identityOf, keyOf, realClock, rowContextOf } from './chain.ts'
 export { sha256Hex } from './sha256.ts'
 export {
+  type Adapter,
+  adapterOf,
   type Chain,
   type Clock,
   type ElKind,

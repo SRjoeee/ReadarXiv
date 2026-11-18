@@ -1,4 +1,4 @@
-// Open measurement 3 of interfaces/translate/DECISION.md: whether one re-ask helps Microsoft or only costs calls (the LLM
+// Open measurement 3 of the translate decision: whether one re-ask helps Microsoft or only costs calls (the LLM
 // probe's re-ask fixed 48 of 57; Microsoft's free endpoint may answer a text the same way twice). The store keeps only
 // accepted replies, so the measure needs a trace: every request and reply of a chain run with Microsoft's `reask: 1`,
 // written by `traced(fetch, sink)` around the Worker's fetch on staging (one JSON line per request: its wires and the

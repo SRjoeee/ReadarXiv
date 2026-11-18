@@ -1,5 +1,5 @@
-// The registry (interfaces/page/design-b.md §1.1): every rule of today's typesetting with one named home, the inventory rows
-// it is the one home of (interfaces/typeset-inputs.md: A1…G17, T1…T39, §3.x; "1F:<field>" a field of its §1F), the code it
+// The registry (the page design B §1.1): every rule of today's typesetting with one named home, the inventory rows
+// it is the one home of (the typesetter's inventory of its inputs: A1…G17, T1…T39, §3.x; "1F:<field>" a field of its §1F), the code it
 // ports (engine 065c1d973, `src/pdf-reader/engine/`: L2 layer-proto/layer2.mjs, RUN layer-proto/run.mjs, TEX layer-proto/tex.mjs,
 // other files by name), and its state. Data only. Rule ids and step names are a persisted vocabulary: the gate's ledgers and
 // the tap (baseline/tap/) are kept in lab-data and read across versions, so an id is never renamed; a rule split in two

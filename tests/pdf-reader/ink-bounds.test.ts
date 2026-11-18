@@ -556,7 +556,7 @@ describe("pageInk's walk reads every page of the repository's PDFs as it did bef
 const CORPUS: readonly string[] = ['2610.21377v1', '2610.19274v1', '2610.40394v1', '2501.14787v1', '2610.40576v1', '2608.12606v1', '2010.11929v2', '2307.16209v1', '2608.27728v1', '2608.04322v1']
 describe("pageInk's walk reads ten corpus papers as it did before (asked once, AXT_INK_CORPUS, where the lab's data is)", () => {
   it.skipIf(!process.env.AXT_INK_CORPUS)('every page, whole and in pieces, under every reading', async () => {
-    const listing = join(process.env.AXT_LAB_DATA ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data', 'refactor-2026-11/baseline/corpora/all.tsv')
+    const listing = join(process.env.AXT_LAB_DATA ?? '/dev/null/AXT_LAB_DATA-unset', 'refactor-2026-11/baseline/corpora/all.tsv')
     if (!existsSync(listing)) return
     const dirs = new Map(readFileSync(listing, 'utf8').trim().split('\n').map(l => l.split('\t') as [string, string]))
     let pages = 0, papers = 0

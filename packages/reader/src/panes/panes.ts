@@ -9,6 +9,7 @@
 // to it as it changes (`scalechanging`, a zoom's step delay with it), as the places followed it.
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { EventBus, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs'
+import { onOf } from '../listeners.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { OwnedClock } from '../stack/clock.ts'
 import type { Scheduler } from '../stack/scheduler.ts'
@@ -793,7 +794,7 @@ export function createPanes(o: PanesOptions): Panes {
    * `replace`). Fresh (`fresh`, or the kept position not standing: `rightKnown`) where the pane has moved before its scroll event
    * came: the reader moved it itself (its places put, a relayout), or a scale, a display or a resize moved its pages; told from
    * kept values there, 2 of 248 tells differed over the lab paper's display change and narrow view, the kept position the old
-   * scale's while the places were the new one's (lanes/reader-q7.md, Q8)
+   * scale's while the places were the new one's (lane reader-q7's record, Q8)
    */
   function tellRightPage(fresh = false) {
     if (!right.pages || !shown(R)) return
@@ -1576,12 +1577,7 @@ export function createPanes(o: PanesOptions): Panes {
     get aheadHeld() {
       return right.held
     },
-    on(type, f) {
-      const set = listeners.get(type) ?? new Set()
-      listeners.set(type, set)
-      set.add(f as (e: unknown) => void)
-      return () => set.delete(f as (e: unknown) => void)
-    },
+    on: onOf<PaneEvents>(listeners),
     probe() {
       const d = follower.driver()
       return {

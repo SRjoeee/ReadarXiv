@@ -8,8 +8,8 @@ import { isMemoryError } from '@readarxiv/engine'
 
 afterEach(() => { vi.restoreAllMocks() })
 
-// isMemoryError (bundle 4 contract C8.4, amendment M7) is the web's predicate word for word (container/src/run/memory.ts):
-// this is the web's own truth table (container/tests/memory.test.ts), as the spec
+// isMemoryError (bundle 4 contract C8.4, amendment M7) is the web's predicate word for word (its container's):
+// this is the web's own truth table (its container's test), as the spec
 
 /** a real failed allocation, as V8 throws it */
 function failedAllocation(): unknown {

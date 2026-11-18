@@ -19,7 +19,7 @@
 import type { Piece } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
 import type { DocGlyph } from '../doc.ts'
-import { apart, lineChange, lineEnd } from './facts.ts'
+import { apart, fold, lineChange, lineEnd } from './facts.ts'
 
 /** the unit kinds lit whole, never by sentence (today's view/highlight.mjs NOT_RUNNING): a heading, a table's cell, a figure's
  *  text, a figure's ink text (what lies among their words is their float's or their table's); and a babel name, a word */
@@ -86,13 +86,7 @@ export function pieceBefore(content: readonly Piece[]): (o: number) => string | 
   }
 }
 
-const LETTER = /[\p{L}\p{N}]/u
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
-/** a character's letters as both sides are compared: decomposed, marks off, lower case, its letters and digits alone */
-const fold = (ch: string): number[] =>
-  [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
-    .filter((c) => LETTER.test(c))
-    .map((c) => c.codePointAt(0) as number)
 /** a break between two words in either sequence (no folded letter is a space) */
 const SEP = 32
 /** the steps an alignment may take, per letter of the two sides: a resource bound (myers.ts `work`), never a decision about

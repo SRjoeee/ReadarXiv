@@ -4,6 +4,7 @@
 // map and a recording written here, one rule a case: a site that decides, one that folds beside it, a test of our own
 // taking the other side, a test that reads the lab's data (the corpus), never run, a magnitude, a value with a source, a
 // citation of each kind, the list rules. Then the census on a tree written here, with and without a ledger.
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -15,7 +16,7 @@ import { citationsOf, exercisedBy, type Ledger, ledgerOf, recordedOf, trackedOf,
 import type { Recording, SiteSums } from '../../lab/rules/merge.mjs'
 import { remapOf } from '../../lab/rules/record.mjs'
 import { reportOf } from '../../lab/rules/report.mjs'
-import type { Rule, Site, SiteMap } from '../../lab/rules/sites.mjs'
+import { type Rule, type Site, type SiteMap, sitesOfTree } from '../../lab/rules/sites.mjs'
 
 // ---- a site map and a recording by hand: rule name -> its sites, each site's sums per input
 type Spec = { kind?: 'threshold' | 'list'; comment?: string; cls?: string; entries?: string[]; sites: { kind: Site['kind']; per: Record<string, Partial<SiteSums>> }[]; wholeReads?: number }
@@ -256,5 +257,32 @@ describe("the census's reading of the ledger", () => {
     const rulesLedger = { recorded: { commit: 'c0ffee' }, rules: { 'packages/engine/src/index::(top)::GAP': { verdict: 'magnitude' }, 'packages/engine/src/index::(top)::KINDS#1': { verdict: 'decides' }, 'packages/engine/src/index::far::>4#1': { verdict: 'remove' } } }
     const read = await census({ today: null, now: scan(), rulesLedger })
     expect(read.trees.NOW.debt.rules).toMatchObject({ ledger: true, recorded: 'c0ffee', unexplained: 1, magnitudes: 1, notJudged: 0 })
+  })
+  it('reports a bound the ledger reads a budget apart, beside the magnitudes, never as a rule with no reason (VERDICTS.budget)', async () => {
+    const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: p => p.startsWith('packages/engine/src/') })]
+    const rulesLedger = { recorded: { commit: 'c0ffee' }, rules: { 'packages/engine/src/index::(top)::GAP': { verdict: 'magnitude' }, 'packages/engine/src/index::(top)::KINDS#1': { verdict: 'decides' }, 'packages/engine/src/index::far::>4#1': { verdict: 'budget' } } }
+    const read = await census({ today: null, now: scan(), rulesLedger })
+    expect(read.trees.NOW.debt.rules).toMatchObject({ ledger: true, unexplained: 0, magnitudes: 1, notJudged: 0, budgets: 1 })
+    expect(read.trees.NOW.debt.rules.list).toEqual([])
+  })
+})
+
+describe("the ledger's areas: the census's debt areas, @readarxiv/text among them", () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'axt-rules-areas-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('package.json', JSON.stringify({ name: 'e3' }))
+    for (const pkg of ['engine', 'typeset', 'text']) put(`packages/${pkg}/src/far.ts`, 'export const far = (d: number) => d > 4\n')
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    execFileSync('git', ['add', '-A'], { cwd: root })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  it('holds a rule of a module of @readarxiv/text, as one of the engine or the typesetter (pkg:text, where the font tables are held)', () => {
+    const keys = Object.keys(sitesOfTree(root, ENGINE_PROFILE).rules)
+    expect(['engine', 'typeset', 'text'].map(pkg => keys.includes(`packages/${pkg}/src/far::far::>4#1`))).toEqual([true, true, true])
   })
 })

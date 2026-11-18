@@ -1,6 +1,6 @@
 // The reader's client of our server's v2 routes (L5's routes: `GET /api/v2/papers/<seg>?t=&f=` follows, a whole document an
 // answer or a stream frame, never starting work; `POST /api/v2/open` starts what is missing; `GET /api/v2/o/<path>` immutable
-// bytes), over the host's fetch alone: one implementation for both hosts (interfaces/host DECISION: `follow`, `object` and the
+// bytes), over the host's fetch alone: one implementation for both hosts (the host decision: `follow`, `object` and the
 // server's rows are the reader's over `fetch`).
 //
 // Every ask is bounded by the network's silence (docs/PDF-READER.md §8.1, the coordinator's R6 of 2026-11-18): REQUEST_MS with
@@ -14,7 +14,7 @@
 // fetch rejected, nothing in time, a body that broke: `Refused('network')`) or our server at fault (a 5xx: `Refused('server')`);
 // the caller's abort is the caller's, never asked again. An object is read within its bound and held to its digest before
 // anything parses it; past a content-encoding a response's content-length is the body's as sent, not the bytes read here, so
-// only the read counts them (W open.ts bodyWithin, layer/files.ts).
+// only the read counts them (as the website's own reads did).
 import { BOUNDS, OpenAnswer, PaperDoc } from '@readarxiv/format'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
 import { type Doc, FORMATS, type PaperRef, type Ref, WAIT_MAX_MS } from './machine.ts'
@@ -28,7 +28,7 @@ export const REQUEST_MS = 30_000
 export const RETRY_MS = 1_000
 /** how long a follow waits before it asks again once the last document heard says nothing runs for what is followed (the
  *  prepare, the target's run): our server's own reconnection time for such a stream, whose last frame that document is
- *  (`retry: 60000`, server design-a "Followers"; worker v2 paper.ts `#tell`). Staging, 2026-11-07: a done paper asked again
+ *  (`retry: 60000`, server design-a "Followers", as our server's paper tells it). Staging, 2026-11-07: a done paper asked again
  *  at once each time its one-frame stream ended, 18 to 50 times a second */
 const IDLE_MS = 60_000
 
@@ -255,7 +255,7 @@ export function docOf(x: unknown): Doc | null {
   const d = PaperDoc.safeParse(x)
   return d.success ? d.data : null
 }
-/** a 429's word, as our server's body says it: the visitor's rate of asks (worker v2 routes.ts `rate-limited`), else its
+/** a 429's word, as our server's body says it: the visitor's rate of asks (its word `rate-limited`), else its
  *  capacity */
 const rateOf = (v: unknown): 'rate' | 'busy' =>
   (v as { error?: unknown } | null)?.error === 'rate-limited' ? 'rate' : 'busy'
@@ -268,8 +268,8 @@ const afterOf = (r: Response): number | null => {
 const missOf = async (r: Response): Promise<string> =>
   ((await jsonOf(r)) as { error?: unknown } | null)?.error === 'not-found' ? 'not-found' : 'not-opened'
 
-/** whether anything runs for what is followed: the prepare, or the target's run (our server's `busy`, worker v2 machine.ts: a
- *  work in flight is `running` in the document) */
+/** whether anything runs for what is followed: the prepare, or the target's run (our server's `busy`: a work in flight is
+ *  `running` in the document) */
 const runs = (d: Doc, target: string | null): boolean =>
   d.prepare.state === 'running' || (target !== null && d.targets[target]?.state === 'running')
 

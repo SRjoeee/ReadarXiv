@@ -1,4 +1,4 @@
-// The session as an explicit machine (interfaces/host DECISION, design-b §1: the session's machine first): `step(state, input)`
+// The session as an explicit machine (the host decision, design-b §1: the session's machine first): `step(state, input)`
 // pure and total; the resources each state owns declared by `resources(state)`, a map of tickets the runtime acquires and
 // releases by diffing it after every step (nobody writes "release"); every asynchronous result returned as an input carrying its
 // ticket, and dropped (before step) where that ticket is no longer live, so that a stale open, a late answer or a result of a
@@ -493,8 +493,8 @@ export interface Need {
   at: number | null
 }
 /**
- * What the paper lacks for this visit that nothing in flight will bring, as our server's open would start it (its R3: worker v2
- * machine.ts `wantPrepare`, `wantTranslate` by an open), each with the end of the wait our server names for it:
+ * What the paper lacks for this visit that nothing in flight will bring, as our server's open would start it (its R3: the prepare
+ * and the target's run an open starts), each with the end of the wait our server names for it:
  * - the paper itself, and the target's run with it, where the follow says the paper is not opened;
  * - the prepare, where there is no layer or the layer is stale, none runs, and no failure of the paper's own stands (failed with
  *   no retry: our server prepares it again under another build alone, which the document does not say);

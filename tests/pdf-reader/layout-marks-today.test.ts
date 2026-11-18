@@ -671,7 +671,7 @@ describe('readMarked: the marked original read once, a page at a time (the page 
   it('the unit marks are what the web read of the same document: its marks with their words (marksOfDoc), in the names\' order', async () => {
     const { doc } = counted()
     const { unitMarks } = await readMarked(doc, '', { engine: 'pdflatex', units, OPS })
-    // the web's reading (container/src/run/geometry.ts marksOfDoc): every page's text, then each unit mark's page looked up
+    // the web's reading (its container's reading of the marks): every page's text, then each unit mark's page looked up
     const text = []
     for (let p = 1; p <= doc.numPages; p++) { const tc = await (await doc.getPage(p)).getTextContent(); text.push({ page: p, items: tc.items, styles: tc.styles }) }
     const pdfMarks = new Map()

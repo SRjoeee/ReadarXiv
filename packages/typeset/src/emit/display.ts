@@ -181,7 +181,7 @@ const fillOf = (c: string | undefined) =>
 
 /** the ink of a CJK run that names no fill of its own: today's layer ink (layer-proto/run.mjs SVG_RULES), 92 % of black at full
  *  coverage. The owner's exception of 2026-11-08 to the PDF's black: the translation's CJK text at today's weight, its Latin,
- *  digits and formulas in the PDF's black (lanes/cjk-weight.md: the one difference between today's CJK and v2's was this ink) */
+ *  digits and formulas in the PDF's black (lane cjk-weight's record: the one difference between today's CJK and v2's was this ink) */
 export const CJK_INK = 0x141414
 
 /**

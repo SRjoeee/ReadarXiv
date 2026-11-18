@@ -138,6 +138,19 @@ describe('driverLostInk: what dvipdfmx says it could not draw', () => {
     expect(driverLostInk('dvipdfmx:warning: Image inclusion failed for "fig.eps".')).toMatchObject({ count: 1, samples: [[null, 'Image inclusion failed for "fig.eps".']] })
     for (const log of ['', null, 'Output written on main.pdf (3 pages).', 'xdvipdfmx:warning: Interpreting PS code failed!!! Output might be broken!!!']) expect(driverLostInk(log as never), String(log)).toEqual({ count: 0, samples: [] })
   })
+  it('counts every special lost and keeps the first SAMPLES of them for the why (a picture of six PSTricks specials)', () => {
+    const log = [1, 2, 3, 4, 5, 6].map((p) => block(`ps:tx@Dict begin STP newpath ${p}`, p)).join('\n')
+    expect(driverLostInk(log)).toEqual({ count: 6, samples: [1, 2, 3, 4].map((p) => [p, `ps:tx@Dict begin STP newpath ${p}`]) })
+  })
+})
+
+describe('markTextOf keeps every page and unit of its hits, and the first SAMPLES hits for the why', () => {
+  it('reads six printed marks over three pages: every page and unit, four samples', () => {
+    const r = markTextOf(['\\axtmark{1s} \\axtmark{2s}', '\\axtmark{3s} \\axtmark{4s} \\axtmark{5s}', '\\axtmark{6s}'])
+    expect(r.pages).toEqual([1, 2, 3])
+    expect([...r.units].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(r.samples).toEqual([[1, '\\axtmark{1s}'], [1, '\\axtmark{2s}'], [2, '\\axtmark{3s}'], [2, '\\axtmark{4s}']])
+  })
 })
 
 describe('the XMP dates, where arXiv\'s PDF has no /CreationDate (its PDFs of 2026, rewritten by pikepdf)', () => {

@@ -1,6 +1,6 @@
 // src/pdf-reader/engine/layer-proto/layer1.mjs
-// Ported from the private prototype (readarxiv-web, exp/instant-layer at 9e56fca,
-// web/prototypes/instant-layer/layer.js), 2026-10-06, as the instant layer's v0: iteration 1's helpers. Our own code,
+// Ported from the website's private prototype of the instant layer (its iteration 1, as the prototype stood when it was
+// approved), 2026-10-06, as the instant layer's v0: iteration 1's helpers. Our own code,
 // so no licence applies; the provenance is kept so that every number the prototype was approved on traces back to it.
 // Unchanged in behaviour: the changes are the module paths, CJK characters written as \u escapes (the English gate),
 // imports nothing uses left out, and what is named below. The prototype's own description follows.

@@ -1,10 +1,10 @@
 // The engine package's copies of today's ink makers (packages/engine/src/locate: the ledger, inkUnitsOf, keptUnitsOf,
-// claimInk, figureUnitsOf) and the ports beside them (locate/ink.ts: contentOf, unicodeOf, spansOf;
+// claimInk, figureUnitsOf) and the ports beside them (locate/ink.ts: contentOf, spansOf, and unicodeOf, which the instrument reads too;
 // ink-units.ts statedClassOf for the forms an ink unit's placeholder takes) held equal to today's (src/pdf-reader/engine): the same pages,
 // owners and units in, the same units out. Today's makers' answers on these pages, each case's reading of them under its label,
 // were recorded before the cut-over deleted them (tests/fixtures/today/locate-ink-today.json).
 import { describe, expect, it } from 'vitest'
-import { classesOf, contentOf, spansOf, unicodeOf } from '../../packages/engine/src/instrument/instrument.ts'
+import { classesOf, contentOf, spansOf } from '../../packages/engine/src/instrument/instrument.ts'
 import { DISPLAY } from '../../packages/engine/src/instrument/mt.ts'
 import { figureUnitsOf } from '../../packages/engine/src/locate/figure-text.ts'
 import { contentOf as inkContentOf, latin1View, spansOf as inkSpansOf, unicodeOf as inkUnicodeOf } from '../../packages/engine/src/locate/ink.ts'
@@ -702,6 +702,6 @@ describe('today’s ink makers in the engine package', () => {
     const coloured = [{ t: 'text', s: 'Mail ' }, { t: 'open', id: 1, src: '\\textcolor[HTML]{7A7F80}{' }, { t: 'text', s: 'a@b.org' }, { t: 'close', id: 1, src: '}' }]
     expect(inkSpansOf(coloured)).toEqual(spansOf(coloured as never, new Map([[1, 0x7a7f80]])))
     expect(spansOf(coloured as never)).toEqual([['1', { cmd: 'textcolor' }]])
-    for (const s of ['plain', latin1View('Física'), 'wide \u4e2d', 3]) expect(inkUnicodeOf(s)).toBe(unicodeOf(s))
+    expect(['plain', latin1View('Física'), 'wide \u4e2d', 3].map(inkUnicodeOf)).toEqual(['plain', 'Física', 'wide \u4e2d', ''])
   })
 })

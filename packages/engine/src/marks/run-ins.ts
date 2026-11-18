@@ -1,4 +1,4 @@
-// A unit's run-in labels, stated `must` (interfaces/translate DECISION: "the PDF's source reader marks links and run-in labels";
+// A unit's run-in labels, stated `must` (the translate decision: "the PDF's source reader marks links and run-in labels";
 // the translate contract's Piece: a `must` span comes back exactly once or the reply is refused). The markers wire (Microsoft's,
 // the server's first translator) sends a span that is not `must` on no wire, its words the sentence's and its style lost:
 // staging, 2026-11-08, 1810.04805v2 p8's "\noindent\textbf{No NSP}: ..." and 2010.11929v2 p5's "\textbf{Training \& Fine-tuning.}"

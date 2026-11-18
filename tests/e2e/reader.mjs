@@ -1469,7 +1469,7 @@ try {
     control('a page loaded again loses its mark: the check of in place fails there', await (async () => { const q = track(await context.newPage()); await q.goto(page.url()); await q.waitForFunction(() => !!window.__reader, null, { timeout: 30_000 }).catch(() => undefined); const kept = await q.evaluate(() => window.__kept === true); await q.close(); return { ok: kept, detail: `the mark after a load: ${kept}` } })())
     // the new target's service fails (its key refused, no free service to fall back on): the pages still in French show the
     // original's page, the failure told
-    await setConfig({ targetLanguage: 'spa', provider: 'svc-e2efail0', fallback: { enabled: false } })
+    await setConfig({ targetLanguage: 'spa', provider: 'svc-e2efail0', providerChosen: true, fallback: { enabled: false } })
     const dropped = await page.waitForFunction(() => { const place = document.querySelector('#right .axt-place[data-page-number="1"]'); return !place?.querySelector('.axt-place-view > .axt-layer') && !!place?.querySelector('.axt-place-view > .page canvas') }, null, { timeout: 30_000 }).then(() => true, () => false)
     const failed = await page.waitForFunction(() => window.__reader.controller.getState().failure !== null, null, { timeout: 30_000 }).then(() => true, () => false)
     const st = await page.evaluate(() => { const s = window.__reader.controller.getState(); return { phase: s.phase, failure: s.failure } })

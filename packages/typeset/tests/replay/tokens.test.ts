@@ -1,7 +1,7 @@
 // B.tokens and B.measure replayed on the tap's sample: tokensOf2's inputs as today's run made them (B.tokens:in), the
 // elements' fills and colours by the layout unit (U.elements:in's lu and kOf, as texParts makes them), the faces today's
 // faceOf gave, now B.faces' port's (tests/replay/faces.test.ts holds the two equal), each rendering's runs of one fill and faked
-// small capitals (lanes/L3/replay/B.tokens.json.gz), the pieces' classes (lanes/L3/replay/U.breaks.json.gz); measured from the pair's recorded widths (the table adapter). Against the
+// small capitals (lane L3's derived B.tokens), the pieces' classes (lane L3's derived U.breaks); measured from the pair's recorded widths (the table adapter). Against the
 // tokens today measured (B.tokens:out), every field.
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'

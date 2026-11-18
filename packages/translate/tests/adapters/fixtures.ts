@@ -1,6 +1,6 @@
 // The adapters' fixture units and recorded replies. The replies marked "as it came" are Microsoft's, quoted from the
 // repository's own tests (tests/pdf-reader/mt-wire.test.ts, the comparison of 2026-10-05 over 2610.02069 and of
-// 2026-10-07 over 1706.03762; readarxiv-web worker/tests/mt.test.ts's reading table); none is fetched here.
+// 2026-10-07 over 1706.03762; the reading table of the website's own tests); none is fetched here.
 import type { UnitIn } from '../../src/contract.ts'
 import { el, quiet, span, t, unit } from '../pieces.ts'
 

@@ -25,13 +25,13 @@
 // none of these. Offline: a static server on 127.0.0.1 serves the page and the
 // slices, the browser aborts any other request. Lab-data stays where it is: nothing is written. Run from the worktree's root,
 // in the machine's browser slot:
-//   /Users/cheongzhiyan/Developer/readarxiv-lab-data/bin/heavy-slot.sh e2e -- node lab/typeset/metrics-browser.mjs
+//   <the lab's heavy-slot.sh> e2e -- node lab/typeset/metrics-browser.mjs
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { FACES } from '../../packages/typeset/src/data/faces.ts'
 import { readGz, TAP } from '../../packages/typeset/tests/replay/tap.ts'
-import { hasServed, SLICES, servedMetrics, TABLES } from './served-metrics.mjs'
+import { CJK, faceOf, hasServed, inRanges, parse, SLICES, servedMetrics, TABLES } from './served-metrics.mjs'
 
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3)
 const DRY = process.argv.includes('--dry')
@@ -67,32 +67,6 @@ function catalogue() {
     families.set(f.family, list)
   }
   return families
-}
-
-/** CSS's face matching within a family (served-metrics.mjs faceOf, copied: not exported) */
-function faceOf(list, weight, style) {
-  const styled = list.filter((f) => f.style === style)
-  const pool = styled.length ? styled : list.filter((f) => f.style === 'normal').length ? list.filter((f) => f.style === 'normal') : list
-  const exact = pool.find((f) => f.weight === weight)
-  if (exact) return exact
-  const lighter = pool.filter((f) => f.weight < weight).sort((a, b) => b.weight - a.weight)
-  const heavier = pool.filter((f) => f.weight > weight).sort((a, b) => a.weight - b.weight)
-  return (weight <= 500 ? [...lighter, ...heavier] : [...heavier, ...lighter])[0]
-}
-
-/** a canvas font string read (served-metrics.mjs parse, copied: not exported) */
-function parse(font) {
-  const m = /^(italic )?(small-caps )?(?:(\d+) |(bold) )?([\d.]+)px (.+)$/.exec(font)
-  if (!m) throw new Error(`a font string of another shape: ${font}`)
-  const families = [...m[6].matchAll(/"([^"]+)"|([^,\s][^,]*)/g)].map((x) => (x[1] ?? x[2]).trim())
-  return { style: m[1] ? 'italic' : 'normal', caps: !!m[2], weight: m[3] ? Number(m[3]) : m[4] ? 700 : 400, px: Number(m[5]), families }
-}
-
-/** a character of the CJK scripts, set unkerned in a run of its own (served-metrics.mjs CJK and inRanges, copied) */
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
-const inRanges = (r, cp) => {
-  for (let i = 0; i < r.length; i += 2) if (cp >= r[i] && cp <= r[i + 1]) return true
-  return false
 }
 
 /** a text's runs in a font (servedMetrics' runsOf, copied: not exported): each a slice's characters, CJK apart; a blank no

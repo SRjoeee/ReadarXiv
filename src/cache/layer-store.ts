@@ -7,6 +7,7 @@
 // has not answered within its budget resolves as one, its late answer let go), and of a write, nothing kept: the store is
 // never a reason a paper does not open. Its own database, so that no other store's schema or migrations touch it.
 import Dexie, { type DexieOptions, type Table } from 'dexie'
+import { copyOf, digestOf, within } from './paper-store'
 
 /** the store's bytes at most (the plan's 200 MB: about 400 papers' layers at 0.5 MB, or fewer with copies of originals) */
 export const LAYER_STORE_BYTES = 200 * 2 ** 20
@@ -56,19 +57,6 @@ export interface LayerStore {
   /** the paper versions kept and their bytes, for the settings page */
   usage(): Promise<{ count: number; bytes: number }>
   clear(): Promise<void>
-}
-
-const hexOf = (b: ArrayBuffer) => { let s = ''; for (const x of new Uint8Array(b)) s += x.toString(16).padStart(2, '0'); return s }
-async function digestOf(bytes: Uint8Array): Promise<string> {
-  return hexOf(await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>))
-}
-const copyOf = (b: Uint8Array): ArrayBuffer => b.slice().buffer as ArrayBuffer
-/** a promise's answer, or `miss` once `ms` have gone by (its late answer let go) */
-function within<T, M>(p: Promise<T>, ms: number, miss: M): Promise<T | M> {
-  return new Promise(resolve => {
-    const t = setTimeout(() => resolve(miss), ms)
-    p.then(v => { clearTimeout(t); resolve(v) }, () => { clearTimeout(t); resolve(miss) })
-  })
 }
 
 export function createLayerStore(o: { db?: LayerDatabase; maxBytes?: number; budgetMs?: number; now?: () => number } = {}): LayerStore {

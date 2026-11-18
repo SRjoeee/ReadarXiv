@@ -1,4 +1,4 @@
-// A side read before the pair is located (the website's early-scroll defect, readarxiv-web PR #23, in the shared
+// A side read before the pair is located (the website's early-scroll defect, in the shared
 // reader): the sync follows nothing until both sides are anchored (syncFrom, alignTop and arm go by the anchors), so a
 // scroll whose every step and whose rest came before that had nothing to level the pair by, and the pair stood apart
 // until the next scroll's rest. Once located, the pair is levelled by the side read, as at a rest (session.mjs

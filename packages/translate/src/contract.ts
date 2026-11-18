@@ -1,4 +1,4 @@
-// The translator contract (interfaces/translate/DECISION.md): what a host learns, what an adapter's author learns. Types and
+// The translator contract (the translate decision): what a host learns, what an adapter's author learns. Types and
 // the one error class; no I/O. The platform's own types (AbortSignal, fetch, Response) are not visible to a Node package
 // with no DOM library, so the few members the package uses are stated here, structurally: the hosts' real objects fit them.
 
@@ -233,6 +233,18 @@ export interface Translator {
   /** pure and total: the raw reply read back as content, or null where it cannot be read; it may be tolerant */
   read(unit: UnitIn, raw: string): { content: OutPiece[]; sentences?: Sentences } | null
 }
+
+/** this package's adapters, each by the name its translators' identities begin with (adapters/microsoft.ts, google.ts,
+ *  chrome.ts: `<name>:<16 hex>`) */
+export type Adapter = 'microsoft' | 'google' | 'chrome'
+/** an identity one of this package's adapters makes: its name, then the 16 hex of its digest (tests/index.test.ts holds each
+ *  adapter's own identity to it) */
+const ADAPTER_IDENTITY = /^(microsoft|google|chrome):[0-9a-f]{16}$/
+/** the adapter whose translator an identity names, whatever its digest (one endpoint, every identity it is asked under), or
+ *  null for one no adapter of this package makes (a host's own translator): what a host keys a limit it shares among its
+ *  translators by, such as the `Gate` it is asked through, which the chain asks by identity */
+export const adapterOf = (identity: string): Adapter | null =>
+  (ADAPTER_IDENTITY.exec(identity)?.[1] as Adapter | undefined) ?? null
 
 /** What the chain does next with a request that failed. The adapter decides, from its endpoint's behaviour */
 export type Remedy =

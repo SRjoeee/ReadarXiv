@@ -1,6 +1,6 @@
 # Read arXiv: architecture audit against "fundamental, general, simple" (2026-10-23)
 
-Read-only. Engine: public repo `origin/next` at `c9c5576e` (#432). Web: readarxiv-web `origin/main` at `883473d3` (#70).
+Read-only. Engine: public repo `origin/next` at `c9c5576e` (#432). Web: the website's main line of the same day.
 Every `file:line` below is at those refs (`git show <ref>:<path>`). Engine paths are relative to `src/pdf-reader/engine/`
 unless they start with `src/`. Inputs: the lane notes `route/design.md`, `route/delta.md`, `route/delta-measure.md`,
 `route/layer-side.md`, `route/host-side.md`, `route/p8b-brief.md`, `c299-lookahead.md`, `residuals/*.md`, and the in-flight
@@ -164,7 +164,7 @@ CITE_SRC and REF_SRC; density's tables; tex-kernel.
 - `source/paper-meta.mjs:92` compilerGuessed: fontspec means xelatex, EPS only means latex, otherwise pdflatex.
 - `:61` main file by preferred names (`main|ms|paper|manuscript|arxiv`), then by longest body. `:65`: with several
   sources, by code-unit order.
-- `container/src/sandbox.ts:48-51`: dvipdfmx gets `-p` from arXiv's page 1 (#70). arXiv makes latex papers with dvips and
+- The website's compile sandbox: dvipdfmx gets `-p` from arXiv's page 1. arXiv makes latex papers with dvips and
   ps2pdf; we use dvipdfmx.
 - `layout/carry.mjs:31-36` LINE_PLACE = 0.5 is justified by "dvipdfmx's DVI against arXiv's dvips and ps2pdf sets words up
   to 0.42 pt apart (2608.22687: 70.7 % whole lines)".
@@ -309,7 +309,7 @@ proposes.
 - `translate/mt.mjs:20`: markers of the form `@a#`.
 - `:658-660`: the STRAY and STRAY_PAIR repairs in tolerant rehydrate.
 - `:1024,1063-1095`: the "runs" fallback, which translates each stretch between placeholders on its own.
-- Web `worker/src/mt/chain.ts`: markersIntact, else the next engine.
+- The website's chain: markersIntact, else the next engine.
 - Sentence alignment comes from Microsoft's `sentLen` only; Google's comes from injected markers (`src/providers/alignment.ts`).
 - A second Microsoft client, `mt.mjs:906` translateMicrosoft, exists beside `src/providers/microsoft.ts`.
 - 106 colour rows are a "Microsoft limit": the engine flattens style groups (`residuals/attributes-report.md`).
@@ -396,14 +396,14 @@ fallback throws away context instead of verifying and retrying precisely.
   file holds TeX's column points (stream.mjs `bs`/`be`, MARK_NAME `c1`/`c2`); read those.
 - **Borrowed pages**: before laying, the right pane borrows the left's document (`view/places.mjs`). With the delta,
   unreplaced pages are the same bytes, so this comes free.
-- **MT gate**: per isolate, polling every 50 ms (`worker/src/mt/gate.ts:34`). The Durable Object queue planned as B7 would
+- **MT gate**: per isolate, polling every 50 ms (the website's pacing gate). The Durable Object queue planned as B7 would
   wake waiters instead.
 
 **Cost.** S each. **Status.** The delta and p8b are in progress; the rest are open.
 
 ## 13. The title stamp, matched twice
 
-**Where.** `view/reader-view.mjs:26` ARXIV_STAMP and web `web/src/reader/controller.ts:79` STAMP are different patterns.
+**Where.** `view/reader-view.mjs:26` ARXIV_STAMP and the website controller's own stamp are different patterns.
 The extension still takes the PDF's Info Title first (`reader-view.mjs:433`).
 
 **Fundamental alternative.** arXiv's metadata (the relay, or the abstract page) is authoritative in both hosts. The PDF's
@@ -433,8 +433,8 @@ artefact, plus its schema. Then a behaviour change can never go unkeyed or colli
 - `pipeline/live.mjs` (1,259 lines) imports typeset/*, scripts, kept, groups and cache, yet still exports six live helpers
   that `layout/paper.mjs:25` imports: `DRAFT_OPTION`, `listsMissing`, `notFound`, `originalFiles`, `probeFiles`, `ranThrough`.
 - latex-front.mjs carries compiled-path TeX: FIT_DEF `:1980`, BALANCE_DEF `:1978`, NO_OVERFLOW `:1943`, XETEX_SHIM `:2153`.
-- Web: `worker/src/jobs/translation-compiled.ts`, `container/src/run/job.ts`, `container/src/run/geometry.ts` (392 lines),
-  the translation half of `worker/src/wake.ts`, and the typesetting and geometry entries in the run versions.
+- Web: the compiled translation's job, the container's job and geometry runs (392 lines of geometry), the translation half
+  of the Worker's wake, and the typesetting and geometry entries in the run versions.
 
 **Fundamental alternative.** Move the six live helpers to `layout/` and delete the parked path; git keeps it.
 

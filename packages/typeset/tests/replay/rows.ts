@@ -1,4 +1,4 @@
-// The translations the baseline's reader laid (baseline/tools/reader.mjs rowsOf): a pair's door rows, by today's unit ord. A
+// The translations the baseline's reader laid (the baseline's reader tool rowsOf): a pair's door rows, by today's unit ord. A
 // staging pair's are the release's stored rows (the sweep cache's `papers/<paper>-<target>/open.json` manifest, its row
 // objects in order, a later row of an id replacing an earlier); a pack pair's the gate pack's carried rows
 // (baseline/pack-rows/<paper>-<target>.rows.json). A door row is today's: [ord, pieces (a string a translated text, a number

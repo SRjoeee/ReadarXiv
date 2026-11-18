@@ -8,7 +8,7 @@
 // of the process tree; real beside it) and TeX passes.
 //
 // It is also the reference host of the compile contract's CM fields (live.d.mts CompileRequest `draft`, `files`;
-// Compiled `files`, `passes`), as the web's container sandbox answers them (container/src/sandbox.ts texCommand,
+// Compiled `files`, `passes`), as the web's container sandbox answers them (its TeX command,
 // bibCommand, runCompile): a one-pass compile is `<engine> -no-shell-escape -interaction=nonstopmode ./<main>`, XeLaTeX's
 // through `xdvipdfmx -q -E -z 3`; `draft` adds -draftmode (pdfLaTeX), -no-pdf with no driver (XeLaTeX), --draftmode
 // (LuaLaTeX), -draftmode (latex, arXiv's DVI compiler, whose one-pass compile is made a PDF by `dvipdfmx -q` after its pass);
@@ -79,13 +79,13 @@ const TEX_ENV = {
 /** each engine's binary and its draft flag (an engine the host does not know is pdfLaTeX's, as the lab's compiles take it); latexmk's
  *  arguments are latexmkEngine's: a latex paper is never checked with pdfLaTeX */
 const ENGINES = { pdflatex: ['pdflatex', '-draftmode'], xelatex: ['xelatex', '-no-pdf'], lualatex: ['lualatex', '--draftmode'], latex: ['latex', '-draftmode'] }
-/** the sandbox's one-pass XeLaTeX driver (sandbox.ts DRAFT_DRIVER) */
+/** the sandbox's one-pass XeLaTeX driver (the sandbox's draft driver) */
 const DRIVER = 'xdvipdfmx -q -E -z 3'
 /** what `files` leaves out: the compile's outputs and the tools' logs */
 const OUTPUTS = /\.(?:pdf|xdv|dvi|log|blg|ilg|glg|fls|fdb_latexmk)$|\.synctex\.gz$/
-/** the host's bound on `files` (the web's: budget.ts FILES_MAX and SMALL_FILES) */
+/** the host's bound on `files` (the web's budget of files) */
 const FILES_MAX = 256, BYTES_MAX = 8 * 2 ** 20
-/** the seeded files' time and the marker's, a minute later (the web's jail.sh in files mode): whatever the clock's
+/** the seeded files' time and the marker's, a minute later (the web's jail in files mode): whatever the clock's
  *  granularity, a file written after the seeding is newer than the marker */
 const SEEDED = 946684800, MARKER = SEEDED + 60
 const WORK = join(OUT, 'work'), BUILD = join(WORK, 'build'), SHIMS = join(WORK, 'bin')

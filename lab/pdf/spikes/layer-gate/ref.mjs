@@ -18,9 +18,10 @@ import { basename, join, sep } from 'node:path'
 
 export const REF_SCHEMA = 1
 const UNIT_KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation']
-/** the approved prototype's geometry (iteration 2's data, outside the repository); LAYER_GEOMETRY another (the same
- *  carried to another cut of the units: spikes/layer-cut.mjs) */
-export const PROTO_GEOMETRY = process.env.LAYER_GEOMETRY ?? join(homedir(), 'Developer/readarxiv-research/2026-10-06-plan8/instant-layer/iteration-2/data')
+/** the approved prototype's geometry (iteration 2's data, outside the repository): LAYER_GEOMETRY, no default (unset, a path
+ *  no machine holds, under /dev/null, a file, so that a read of it fails naming the variable); the same data or the same
+ *  carried to another cut of the units: spikes/layer-cut.mjs */
+export const PROTO_GEOMETRY = process.env.LAYER_GEOMETRY ?? '/dev/null/LAYER_GEOMETRY-unset'
 /**
  * A local path as a record keeps it, with no user's name or machine's directory in it: relative to `base` where under it
  * ('.' for itself), `<scratch>/<its last name>` under a temporary directory, `~/…` under the home directory, else

@@ -8,11 +8,9 @@
 // (UNIT_CLASS), which the bundle's units carry, so the server and every reader tell it alike.
 // An original module (no port statement). Imports nothing.
 
-/** the reader's toggles, in the order the settings list them: `always` and `never` are no toggle */
-export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'references', 'names', 'never'] as const)
-
 /**
- * Each class: `toggle` (TOGGLES); `state`, what exists today — `built` (translated and drawn: the source's units, and the ink
+ * Each class: `toggle`, the reader's toggle that shows it (`always`, one of the five a reader turns on or off, or `never`; the
+ * readers' own list of them is packages/format's); `state`, what exists today — `built` (translated and drawn: the source's units, and the ink
  * units layout/ink-units.mjs and layout/figure-text.mjs make of the glyphs no source unit owns, stages 2, 3 and 5 of
  * docs/route/orphan-text.md), `planned` (accounted for by the ledger, no path yet), `never` (kept as the original's ink by
  * design), which the lab's ledger reads (lab/pdf/spikes/ledger.mjs builtShare: the letters of the built classes); `glyphs`, whether the ledger can give a glyph this

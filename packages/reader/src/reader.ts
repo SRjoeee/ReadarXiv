@@ -1,4 +1,4 @@
-// openReader (interfaces/host DECISION: A's host, B's session): a reader in `root` for one paper, over a host that gives the
+// openReader (the host decision: A's host, B's session): a reader in `root` for one paper, over a host that gives the
 // network, where arXiv's bytes are read first, the preferences, and optionally the rows made here. Everything else is the
 // reader's own and the same in both hosts: the byte store, PDF.js and its workers, the v2 client, the objects, composing, the
 // highlight. A reader owns all it makes (no state outside a reader): its marks are on `root`, its sheets and faces in it, its
@@ -176,8 +176,8 @@ export interface ReaderState {
    *  (machine.ts linkSaid, PDF-READER §8.1). A view that waits for nothing is told nothing */
   network: boolean
   /** `lost`: a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice), its
-   *  passages drawn in their fallback until the page is loaded again (a host may say so: the website's faces-lost); null
-   *  while none is */
+   *  passages drawn in their fallback until the page is loaded again (the chrome says so once, for every host: UI.md S-R-28,
+   *  chrome/events.ts); null while none is */
   faces: 'lost' | null
   crashed: boolean
 }
@@ -1131,8 +1131,8 @@ export function openReader(
   const onOnline = () => rt.input({ i: 'env.online', on: true }),
     onOffline = () => rt.input({ i: 'env.online', on: false })
   // (the page put away into the back-forward cache, and shown from it again: the session put away meanwhile, our server neither
-  // followed nor asked, no timer live, and followed anew on return, the panes as they were (today's web session/job.ts putAway,
-  // shown). A pagehide that is not persisted is the host's to close the reader on)
+  // followed nor asked, no timer live, and followed anew on return, the panes as they were (as today's website session puts a
+  // paper away and shows it again). A pagehide that is not persisted is the host's to close the reader on)
   const onHide = (e: PageTransitionEvent) => {
     if (e.persisted) rt.input({ i: 'env.away', on: true })
   }

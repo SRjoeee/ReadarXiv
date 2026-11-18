@@ -13,7 +13,8 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const LAB = process.env.AXT_LAB_DATA ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data'
+// (AXT_LAB_DATA the lab-data directory, none by default: unset, a path no machine holds, and the tests skip)
+const LAB = process.env.AXT_LAB_DATA ?? '/dev/null/AXT_LAB_DATA-unset'
 const BASE = join(LAB, 'refactor-2026-11', 'baseline')
 const hasBaseline = existsSync(join(BASE, 'tap', 'ledgers'))
 

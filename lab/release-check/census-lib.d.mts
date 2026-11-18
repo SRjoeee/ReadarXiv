@@ -10,7 +10,8 @@ export interface Facts {
   parsed: boolean
   thresholds?: Threshold[]
   lists?: { line: number; name: string | null; size: number; form: 'list' | 'regex'; sample: string[]; class: 'defined' | 'listed'; cites: string | null }[]
-  vocabularies?: { line: number; name: string | null; size: number; form: 'list'; sample: string[]; class: 'vocabulary' }[]
+  /** the lists whose members the code types over (census.mjs DEFINITIONS.lists), `by` what */
+  vocabularies?: { line: number; name: string | null; size: number; form: 'list'; sample: string[]; class: 'vocabulary'; by: string }[]
   papers?: { id: string; line: number }[]
   texFiles?: { name: string; line: number }[]
   versions?: { name: string; value: string | number; line: number; schema: boolean }[]
@@ -37,4 +38,8 @@ export declare function factsOf(path: string, text: string, options?: { tokens?:
 export declare function lineKinds(text: string, comments: [number, number][]): ('code' | 'comment' | 'blank')[]
 export declare function thresholdOf(t: { value: number; raw: string; name: string | null; comment: string; line: number; context: string }): Threshold
 export declare function alternativesOf(pattern: string): string[]
+/** each list of `files` (by key) classed by use, DEFINITIONS.lists: `resolve` an import's key, `only` the keys classed */
+export declare function listsByUse(files: Map<string, Facts>, resolve: (from: string, spec: string) => string | null, only?: Set<string> | null): void
+/** the lists of a tree that pins another classed again with the pinned tree's types in reach */
+export declare function listsAcross(scans: Scan[]): void
 export declare function scanTree(repo: string, root: string, profile: Profile, options?: { tokens?: boolean; nodes?: ((path: string) => boolean) | null }): Scan

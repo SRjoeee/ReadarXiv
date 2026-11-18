@@ -2112,6 +2112,10 @@ export function regionMask(regions: readonly InkRegion[] | null | undefined, n: 
   for (const r of regions ?? []) if (r.kind === kind) out.fill(1, Math.max(0, r.from), Math.min(n, r.to))
   return out
 }
+/** whether ink lies in a display TeX stated, by its glyphs: `inside` of its `all` glyphs inside a display region and not in its
+ *  text mode (a page's regionMask 'display' and displayTextMask), one at least and at least half. The one test of it: the ledger's
+ *  reading of a line as a display's formula (locate/ink.ts), and the instrument's of a piece's ink (texDisplaysOf) */
+export const inDisplay = (inside: number, all: number): boolean => inside > 0 && inside >= 0.5 * all
 /** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or
  *  'timedOut' (past the walk's backstop). What such a reading holds is a prefix of the page, or nothing: every reader keeps
  *  the page the original's (no unit located, owned or removed there) and never reads the prefix as the page */

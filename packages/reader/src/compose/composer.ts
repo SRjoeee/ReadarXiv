@@ -1,4 +1,4 @@
-// Composing the right pane (design §4.5 "composing a page"; interfaces/page design-a §2.2, §2.3): what each slot of the right
+// Composing the right pane (design §4.5 "composing a page"; the page design A §2.2, §2.3): what each slot of the right
 // stack shows, from the documents open and the pages laid. Today's layer side (src/pdf-reader/engine/view/layer-side.mjs at
 // baf2083e0, docs/PDF-READER.md §11.8) carried over the stack: each behaviour with the reason it was found.
 //
@@ -27,7 +27,7 @@
 //   it lit or hit); one the new generation lays with nothing, or fails, the original's; the drawings kept off the view, the
 //   generation before's, let go. The left pane is not touched. A row stated again otherwise (our server's run on the source's
 //   units, begun before the bundle states which units are cut into sentences, replaced mid-way by one on the layer's, which
-//   states the same ids again with their sentences: readarxiv-web worker v2 machine.ts wanted, startRecent; format.ts fits)
+//   states the same ids again with their sentences: our server's units wanted and its recent run; format.ts fits)
 //   lays again the pages that read it, as any landing that changes what a page read: laid once for good, a page lit its units
 //   whole in the tab that watched its rows arrive, and by sentence after a reload (staging, 2026-11-11: 1706.03762v7 p2,
 //   2610.21312v1 p1).
@@ -40,6 +40,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { ClassName } from '../prefs.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Clock } from '../stack/clock.ts'
+import { onOf } from '../listeners.ts'
 import type { PageContent, SlotAt, Stack } from '../stack/stack.ts'
 import { kindShown, sameClasses } from './classes.ts'
 import type { Faces } from './faces.ts'
@@ -1036,12 +1037,7 @@ export function createComposer(o: ComposerOptions): Composer {
     },
     settled: (n) => settledOriginal(n),
     member: (ord) => members.get(ord) ?? null,
-    on(type, f) {
-      const set = listeners.get(type) ?? new Set()
-      listeners.set(type, set)
-      set.add(f as (e: unknown) => void)
-      return () => set.delete(f as (e: unknown) => void)
-    },
+    on: onOf<ComposerEvents>(listeners),
     timings: () => timings,
     probe() {
       return {

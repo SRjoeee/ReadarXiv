@@ -368,6 +368,7 @@ const R: Locale['R'] = {
     goToArxiv: 'arXiv へ移動',
     unreadable: '設定を読み込めなかったため、既定の設定を使用しています',
     unreadableHint: '設定を読み込めませんでした',
+    facesLost: '一部のフォントを読み込めませんでした。ページを再読み込みして再試行してください',
   },
 }
 

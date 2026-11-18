@@ -1,4 +1,4 @@
-// S.figures replayed against the baseline's reader dumps (baseline/FORMAT.md §4 `figures`: each figure text of the pages laid,
+// S.figures replayed against the baseline's reader dumps (the baseline's dump spec §4 `figures`: each figure text of the pages laid,
 // drawn or why not, and where its markup drew it): every page's figure units as today's bundle holds them (today-figures.ts),
 // each unit's row as the door gave it, its faces by B.faces' port over the run's roles and the paper's designs (the ledger's
 // `info.paper`), its widths and inks from the pair's metrics table, the target's rules. Each outcome projected as the dump

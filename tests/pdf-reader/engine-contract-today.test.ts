@@ -199,6 +199,22 @@ describe('the transition paths of the moved front half', () => {
     expect(importers.filter(f => f.startsWith(`${ENGINE}/`)).length).toBeGreaterThan(0)
     expect(strays).toEqual([])
   })
+
+  it("re-export through them only names the package's module exports (an old path's `export { … } from` resolves whole)", async () => {
+    const missing: string[] = []
+    let names = 0
+    for (const file of trackedFiles().filter((f: string) => f.startsWith(`${ENGINE}/`) && code(f))) {
+      for (const m of readFileSync(file, 'utf8').matchAll(/export\s*\{([^}]*)\}\s*from\s*'@readarxiv\/engine\/today\/([^']+)'/g)) {
+        const mod = (await import(`../../packages/engine/src/${m[2]}`)) as Record<string, unknown>
+        for (const n of m[1]!.split(',').map(s => s.trim().split(/\s+as\s+/)[0]!).filter(Boolean)) {
+          names++
+          if (!(n in mod)) missing.push(`${file}: ${n}`)
+        }
+      }
+    }
+    expect(names).toBeGreaterThan(0)
+    expect(missing).toEqual([])
+  })
 })
 
 describe('what nothing reaches', () => {

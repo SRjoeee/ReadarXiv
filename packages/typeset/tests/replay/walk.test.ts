@@ -1,4 +1,4 @@
-// X.walk replayed whole at today's smallest composite (TAP.md §4: layoutCut at F2, with B.slots, B.break, B.place, B.cuts,
+// X.walk replayed whole at today's smallest composite (the tap's spec §4: layoutCut at F2, with B.slots, B.break, B.place, B.cuts,
 // X.cut, X.at and X.lastLines inside it), on every laid round of every unit the tap's samples name: the walk's inputs from
 // the ledger, the tokens file and the metrics table (fit-input.ts); its layout against F2's slot, every field the tap
 // summarizes. The whole corpus: lab/typeset/replay-fit.mjs.

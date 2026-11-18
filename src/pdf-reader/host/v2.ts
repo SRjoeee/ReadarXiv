@@ -1,5 +1,5 @@
-// The reader package whole behind the one chrome (AXT_READER 'v2'): `openReader` with the extension's Host (interfaces/host
-// DECISION, design-a §2 caller 2). The host gives the network (our server and arXiv, nothing else; no credentials, no
+// The reader package whole behind the one chrome (AXT_READER 'v2'): `openReader` with the extension's Host (the host
+// decision, design-a §2 caller 2). The host gives the network (our server and arXiv, nothing else; no credentials, no
 // referrer), where arXiv's bytes are read (the tab's own PDF), the preferences over the extension's configuration, and the
 // rows made here through the background; the reader's state is told to the chrome as the chrome's events (the package's
 // `eventsOf`), and the chrome's commands are the reader's.
@@ -9,7 +9,7 @@ import type { SurfaceConfig } from '@/shared/surface-config'
 import type { TranslationTransport } from '@/providers/transport'
 import { prefsOf, withPrefs } from './prefs'
 import { storedFetch } from './stored-fetch'
-import { hostTranslate } from './translate'
+import { hostTranslate, readerTransport } from './translate'
 
 /** the network as the reader may use it: our server (a path, resolved against it) and arXiv, by https; a server on this
  *  machine where the build allows one (a probe's stand-in); anything else refused before a request goes out. Never the
@@ -152,10 +152,9 @@ export function surfaceStore(surface: Pick<SurfaceConfig, 'state' | 'subscribe' 
 /** the v2 reader's pieces for the extension's page: the configuration surface (one store for the preferences and the slots),
  *  the Host, the chrome's `open` */
 export async function startV2(o: { params: URLSearchParams; paper: string }) {
-  const [{ createSurfaceConfig }, { localeStale }, { createMessageTransport }, { READER_API, LOOPBACK_ALLOWED, readerAddresses }, { createPaperStore }] = await Promise.all([
+  const [{ createSurfaceConfig }, { localeStale }, { READER_API, LOOPBACK_ALLOWED, readerAddresses }, { createPaperStore }] = await Promise.all([
     import('@/shared/surface-config'),
     import('@/ui/locale-stale'),
-    import('@/shared/transport'),
     import('../addresses'),
     import('@/cache/paper-store'),
   ])
@@ -165,7 +164,7 @@ export async function startV2(o: { params: URLSearchParams; paper: string }) {
   const mode = o.params.get('mode')
   const visit = mode === 'original' || mode === 'bilingual' || mode === 'translation' ? { display: mode as Prefs['display'] } : undefined
   const prefs = hostPrefs(surface, { askedToTranslate: !visit && o.params.get('ask') === 'translate' })
-  const host = extensionHost({ api: READER_API, loopback: LOOPBACK_ALLOWED, pdf, prefs, transport: createMessageTransport(), paper: o.paper, store: createPaperStore() })
+  const host = extensionHost({ api: READER_API, loopback: LOOPBACK_ALLOWED, pdf, prefs, transport: readerTransport(), paper: o.paper, store: createPaperStore() })
   const store = surfaceStore(surface)
   return { store, open: v2Open({ host, paper: o.paper, visit, original: pdf(o.paper) }) }
 }

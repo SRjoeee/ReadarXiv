@@ -160,7 +160,7 @@ nowhere. (A TikZ picture's texts, which the front end cuts into units of kind `f
 | 8 (built) | reader toggles in the web and the extension | the extension's configuration v21 (no engine version: no toggle is a translation's input) | 2 |
 | 9 (built) | kept blocks: the text no unit owns still (listings, folios, an address alone, an uncut bibliography), ink units of the KEPT flag, never translated, lit as any unit (`ink-units.mjs` rule 10, PDF-READER §17.1) | PIPELINE 41 (a copy of 40 carries every unit); no layout field, no group, the ledger as it was | 0.5 |
 
-About 23 agent-days in all. The web sweep reads invariant (o) once the engine is pinned (`scripts/sweep/invariants.mjs`), and the
+About 23 agent-days in all. The web sweep reads invariant (o) once the engine is pinned (its sweep of invariants), and the
 container stores `wrapFinal`'s `ledger` in the record (a web change). This design touches `latex-front.mjs` only in stages 4 and
 7; the heading-argument PR's owner is told first.
 

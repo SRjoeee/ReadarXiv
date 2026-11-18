@@ -1,6 +1,6 @@
 // The left pane while it is PDF.js's viewer (design §4.5: the stack goes under the left only if it matches today's left; until
-// then, and if it does not, the left keeps PDFViewer). What the website measured PDFViewer needs, carried from W pdfjs.ts
-// (0bf496b5) into the reader so that both hosts run it: `quietRoot` (PDF.js's write of its container's height on the root
+// then, and if it does not, the left keeps PDFViewer). What the website measured PDFViewer needs, carried from its
+// own PDF.js set-up into the reader so that both hosts run it: `quietRoot` (PDF.js's write of its container's height on the root
 // restyled every element of the page, 41 to 54 ms in one task), `eagerPages` (with autoFetch off PDF.js lays every undrawn page at
 // page 1's size: a landscape page in a letter box) and `aheadHeld`, whose hold is now the reader's own (it was a module
 // variable). Each patches a class or the document's root, idempotent, holding no reader's state.
@@ -52,7 +52,7 @@ type ViewerClass = abstract new (...a: any[]) => ViewerLike
 
 /**
  * PDF.js's viewer with every page set up at its own size once the first has been drawn, as PDF.js does for a document whose
- * autoFetch is on; once every page is set up, `pagesloaded` is told again (W pdfjs.ts:115-151)
+ * autoFetch is on; once every page is set up, `pagesloaded` is told again (as the website's set-up did)
  */
 export function eagerPages<T extends ViewerClass>(Base: T): T {
   abstract class Eager extends Base {
@@ -104,7 +104,7 @@ export function letAheadGo(h: AheadHold): void {
     }
   }
 }
-/** PDF.js's viewer with its pages ahead of the view held while `hold.on`: only when, never what (W pdfjs.ts:169-197) */
+/** PDF.js's viewer with its pages ahead of the view held while `hold.on`: only when, never what (as the website's set-up did) */
 export function aheadHeld<T extends ViewerClass>(Base: T, hold: AheadHold): T {
   abstract class Held extends Base {
     // biome-ignore lint/suspicious/noExplicitAny: a class's constructor, whatever it takes (PDF.js's viewer's options)

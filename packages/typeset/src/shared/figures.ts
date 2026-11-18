@@ -9,6 +9,7 @@
 // paintFigures RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs
 // figureRuns, figureRunsWidth L2:4824-4836 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face not
 // loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
+import { readFontName } from '@readarxiv/text'
 import { hangOf, leadOf } from '../breaker/break.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
@@ -94,22 +95,12 @@ type FiguresInput = {
 }
 
 // ---- fonts.mjs classifyFont: the family, weight and slant a font's name tells (what figures read of it)
-const bare = (name: string) => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
-const MATH =
-  /^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex|mib|syb)|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i
-const MONO =
-  /mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|beramono|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i
-const SANS =
-  /sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|^cmssbx|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i
-const BOLD =
-  /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmbxti|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i
-const ITALIC =
-  /italic|ital\b|ital$|oblique|slant|kursiv|inclined|^(cm|lm)ti|^cmsl|^sfti|^sfsl|^sfsi|^sfbi|^cmbxti|^cmbxsl|^cmssi|^cmitt|^cmsltt|^cmmi|-it$|-bi$|linlibertineti|linlibertinetbi|linbiolinumti|-ita?$|italicmt|obliquemt/i
-/** a font's family (serif, sans, mono, math), weight and slant by its name (fonts.mjs:42 classifyFont, no PDF.js guess) */
+/** a font's family (serif, sans, mono, math), weight and slant by its name (fonts.mjs:42 classifyFont, no PDF.js guess: held
+ *  once in @readarxiv/text, readFontName), its small capitals and design left out: a figure's style takes them from its
+ *  class's own or the paper's (styleOf below) */
 export function fontClassOf(name: string): { fam: 'serif' | 'sans' | 'mono' | 'math'; bold: boolean; italic: boolean } {
-  const n = bare(name)
-  const fam = MATH.test(n) || /math|symbol/i.test(n) ? 'math' : MONO.test(n) ? 'mono' : SANS.test(n) ? 'sans' : 'serif'
-  return { fam, bold: BOLD.test(n), italic: ITALIC.test(n) }
+  const { fam, bold, italic } = readFontName(name)
+  return { fam, bold, italic }
 }
 
 /** a figure's translation in its runs by script, each in its face (L2:4825 figureRuns); and by style, where its characters

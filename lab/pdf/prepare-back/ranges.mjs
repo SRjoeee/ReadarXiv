@@ -1,4 +1,4 @@
-// lab/pdf/prepare-back/ranges.mjs: the add-on read by ranges (interfaces/page/DECISION.md, "from C" 2; stage 1a's exit): the
+// lab/pdf/prepare-back/ranges.mjs: the add-on read by ranges (the page decision, "from C" 2; stage 1a's exit): the
 // composed document (arXiv's bytes followed by the add-on's) opened by PDF.js over a range transport that serves and records
 // every range it asks (no auto-fetch, no stream, 64 KiB chunks, as a reader over the network), page 1 drawn's worth read (its
 // operator list with the add-on's optional content set); the bytes it read of the add-on and of arXiv's file, against the

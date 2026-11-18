@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// lab/rules/record.mjs: the rule ledger's commands (design-reduction-2026-11-13.md §3c, R4). Not shipped.
+// lab/rules/record.mjs: the rule ledger's commands (the reduction design §3c, R4). Not shipped.
 //
 //   node lab/rules/record.mjs sites [--out=<dir>] [--web-profile=<file>]
 //       the site map of this checkout (sites.mjs) into <dir>/sites.json (default lab/rules/out): every rule of the rule
@@ -32,7 +32,6 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { graphOf, scanTree } from '../release-check/census-lib.mjs'
@@ -180,10 +179,11 @@ export function remapOf(from, to) {
 if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
   const [cmd, ...rest] = process.argv.slice(2)
   const opt = n => rest.find(a => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
-  const labData = process.env.AXT_LAB_DATA ?? join(homedir(), 'Developer', 'readarxiv-lab-data')
+  // (AXT_LAB_DATA the lab-data directory, no default: unset, the website's profile is read only where --web-profile names it)
+  const labData = process.env.AXT_LAB_DATA ?? ''
   if (cmd === 'sites') {
     const out = resolve(opt('out') ?? join(ROOT, 'lab/rules/out'))
-    const profileFile = opt('web-profile') ?? join(labData, 'refactor-2026-11', 'verification', 'census-web.json')
+    const profileFile = opt('web-profile') ?? (labData && join(labData, 'refactor-2026-11', 'verification', 'census-web.json'))
     const webProfile = existsSync(profileFile) ? JSON.parse(readFileSync(profileFile, 'utf8')) : null
     const t0 = performance.now()
     const map = siteMapOfCheckout(resolve(opt('root') ?? ROOT), { webProfile })

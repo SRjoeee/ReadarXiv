@@ -4,8 +4,7 @@
 // record: merge.mjs counts it as the corpus, not as a case someone wrote (design-reduction §8.9). Not shipped.
 import fs from 'node:fs'
 import { syncBuiltinESMExports } from 'node:module'
-import { homedir } from 'node:os'
-import { join, relative, resolve } from 'node:path'
+import { relative, resolve } from 'node:path'
 import { afterAll, beforeAll, beforeEach, expect } from 'vitest'
 import { install } from './recorder.mjs'
 
@@ -13,8 +12,9 @@ import { install } from './recorder.mjs'
 const rec = install({ input: 'tests' })
 const fileOf = () => relative(process.cwd(), expect.getState().testPath ?? '')
 
-/** the lab's data: its folder, its archive on the external disks, the corpus folders of lab/pdf/data */
-const LAB_ROOTS = [process.env.AXT_LAB_DATA ?? join(homedir(), 'Developer', 'readarxiv-lab-data'), '/Volumes/SanDisk_Dev/readarxiv-lab-archive', '/Volumes/readarxiv-archive', resolve('lab/pdf/data')].map(p => `${resolve(p)}/`)
+/** the lab's data: its folder (AXT_LAB_DATA), its archives on the external disks (AXT_LAB_ARCHIVES, folders joined by ':'),
+ *  the corpus folders of lab/pdf/data; the first two have no default */
+const LAB_ROOTS = [process.env.AXT_LAB_DATA, ...(process.env.AXT_LAB_ARCHIVES ?? '').split(':'), resolve('lab/pdf/data')].filter(Boolean).map(p => `${resolve(p)}/`)
 let labRead = false
 const isLab = p => {
   try {

@@ -57,7 +57,7 @@ export const NEAR = {
    *  reader compares two layouts by, but the precision both are stated at, the hundredth, as the lay tests a line against its
    *  foot (breaker/break.mjs: a line under its foot by more than 0.05 fails). The stated bottom sits on the lines TeX set on it
    *  to that precision: of s88's 1,987 paragraph runs ending within 3 pt of it, 1,751 within 0.05 (0.00 on 1,696), the rest
-   *  0.16 pt or more off (room TeX left, or a line TeX set past it) (lanes/borrow-ink.md) */
+   *  0.16 pt or more off (room TeX left, or a line TeX set past it) (lane borrow-ink's record) */
   room: 0.05,
   /** the text's darkness: a share of the original text's own darkness */
   weight: 0.05,
@@ -1069,7 +1069,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const todayGroups = (rec.today.figures ?? []).map((g) => ({ id: g.id, box: spanOf(g.lines.filter((l) => l.n > 0).map(band)) })).filter((x) => x.box)
   const todayFigs = [...prepByOrd.values()].filter((u) => /figure/.test(u.kind ?? '')).map((u) => ({ id: u.ord, box: figBox(u) })).filter((x) => x.box)
   const linesOfMember = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], size: l[10] ?? facts.get(ord).style?.size ?? 0 }))
-  for (const t of mutualBest(todayGroups, todayFigs).values()) {
+  for (const t of bestPairs(todayGroups, todayFigs).values()) {
     const ls = (prepByOrd.get(t)?.lines ?? []).filter((l) => l.page === n && !l.rot)
     if (!ls.length) continue
     const on = figDrawn.filter((u) => {
@@ -2072,25 +2072,6 @@ function drawnLabelOf(lines, label) {
 /** the box a list of boxes {x0, y0, x1, y1} spans, or null */
 const spanOf = (bs) =>
   bs.length ? { x0: Math.min(...bs.map((b) => b.x0)), y0: Math.min(...bs.map((b) => b.y0)), x1: Math.max(...bs.map((b) => b.x1)), y1: Math.max(...bs.map((b) => b.y1)) } : null
-const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0))
-/** each a of `as` paired with the b of `bs` its box overlaps most, where that a is also the one b's box overlaps most */
-function mutualBest(as, bs) {
-  const best = (x, ys) => {
-    let at = -1,
-      most = 0
-    ys.forEach((y, i) => {
-      const o = overlap(x.box, y.box)
-      if (o > most) [at, most] = [i, o]
-    })
-    return at
-  }
-  const out = new Map()
-  as.forEach((a, i) => {
-    const j = best(a, bs)
-    if (j >= 0 && best(bs[j], as) === i) out.set(a.id, bs[j].id)
-  })
-  return out
-}
 
 /**
  * The figure texts both sides translate on page n, v2's member ord → today's unit ord: today's own groups (g[data-f], drawn
@@ -2109,9 +2090,9 @@ function figuresMatched(groups, prep, facts, n) {
     .filter((m) => figure(m.kind))
     .map((m) => ({ id: m.ord, box: spanOf(m.lines.filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))) }))
     .filter((x) => x.box)
-  const groupOf = new Map([...mutualBest(g, t)].map(([gid, tid]) => [tid, gid]))
+  const groupOf = new Map([...bestPairs(g, t)].map(([gid, tid]) => [tid, gid]))
   const out = new Map()
-  for (const [today, ord] of mutualBest(t.filter((x) => groupOf.has(x.id)), v)) out.set(ord, groupOf.get(today))
+  for (const [today, ord] of bestPairs(t.filter((x) => groupOf.has(x.id)), v)) out.set(ord, groupOf.get(today))
   return out
 }
 

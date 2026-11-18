@@ -2,7 +2,7 @@
 // the chrome subscribes to, and the chrome's commands passed on to the session. pdfslick's per-viewer store, adopted: the
 // session's events drive the store, and nothing reads the viewers back. Either session feeds it: the extension's run of a
 // paper on its layer (its own events) or the reader's (openReader's state, told as these events); the chrome is the same.
-import type { ProviderErrorKind } from '@readarxiv/ui'
+import { type ProviderErrorKind, R } from '@readarxiv/ui'
 import type { Prefs, PrefsPatch } from '../prefs.ts'
 import { GOES_ON as GOES_ON_STOPS, LASTING as PAPERS } from '../session/machine.ts'
 import { LAYER_WHY } from './events.ts'
@@ -60,6 +60,9 @@ export interface Toast {
 }
 /** how long a toast stands when its host names no time, ms (the website's TOAST_MS); unmeasured */
 export const TOAST_MS = 3000
+/** how long the chrome's notice of a face lost stays, ms (S-R-28): how long a notice stays, the value the website gives its two
+ *  "lost" notices, which the owner has looked at on the site; a reading time chosen, which nothing was weighed to give */
+export const FACES_LOST_MS = 8000
 export type SessionEvent =
   /** a write of the settings by this page that went through: a refusal before it is mended */
   | { type: 'saved' }
@@ -127,6 +130,9 @@ export type SessionEvent =
   /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again); `network`: the
    *  network failed while the run is waited for (none where a session does not say: the extension's today session) */
   | { type: 'link'; reconnecting: boolean; network?: boolean }
+  /** a face the translation is set in could not be had this visit (the reader's `faces`), its passages drawn in their fallback
+   *  until the page is loaded again: the chrome's own toast says so (S-R-28), in the catalogue's one sentence, for every host */
+  | { type: 'faces' }
 /** what a session is given: the panes it draws into, and where it tells its events */
 export interface SessionHost {
   left: HTMLElement
@@ -153,7 +159,7 @@ export interface ReaderState {
   /** the translation has begun this visit: a prepare still under way after it is no longer the phase (its polls would
    *  take the phase back from the translation, and the line and the status region with it) */
   begun: boolean
-  /** the translation done before a page of the layer is laid where the translation shows (the web's `laying`, swaps.ts): the
+  /** the translation done before a page of the layer is laid where the translation shows (the website's laying state): the
    *  right pane is the original's yet, so its end is held (the phase translating, the line on) until a page is laid or shown as
    *  arXiv's by the rule (the layer's `original`: nothing to lay there), the layer is refused, or the original alone is shown */
   laying: boolean
@@ -407,7 +413,7 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
       // a service's failure left with nothing laid keeps its card
       const failed = next.failures.service !== null && !drawn(next) && state.phase === 'failed'
       // (a prepare told while the original loaded, the translation not begun: its phase now, the original on screen; the
-      // website's page told it again after the open, readarxiv-web v2/open.ts)
+      // website's page told it again after the open)
       const ready = state.preparing !== null && !state.begun ? 'preparing' : 'ready'
       return {
         ...next,
@@ -644,6 +650,8 @@ export function createController({
   const listeners = new Set<() => void>()
   let session: Promise<Session> | null = null
   const emit = (event: SessionEvent) => {
+    // (a face lost: the chrome's own words in the toast's place, as a host's are shown, nothing of the state's; S-R-28)
+    if (event.type === 'faces') return toast({ words: R.status.facesLost, icon: 'info', ms: FACES_LOST_MS })
     const next = reduce(state, event)
     if (next === state) return
     state = next
@@ -676,6 +684,12 @@ export function createController({
     const icon = top.t.icon ?? 'info'
     if (state.toast?.words !== top.t.words || state.toast.icon !== icon) set({ toast: { words: top.t.words, icon } })
     toastTimer = setTimeout(showToast, top.until - now)
+  }
+  const toast = (t: Toast) => {
+    if (!t.words) return
+    toasts = toasts.filter((x) => x.t.words !== t.words)
+    toasts.push({ t, until: Date.now() + (t.ms ?? TOAST_MS) })
+    showToast()
   }
   return {
     getState: () => state,
@@ -728,12 +742,7 @@ export function createController({
       set({ narrow: on })
       later((s) => s.setNarrow(on))
     },
-    toast(t) {
-      if (!t.words) return
-      toasts = toasts.filter((x) => x.t.words !== t.words)
-      toasts.push({ t, until: Date.now() + (t.ms ?? TOAST_MS) })
-      showToast()
-    },
+    toast,
     async download(which) {
       const s = await session
       // the original: arXiv's, the browser's own download, nothing of it read here

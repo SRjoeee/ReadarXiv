@@ -24,6 +24,6 @@
    "before": "26ebc7f4",
    "after": "8a74b1a2"
   },
-  "crops": "~/Downloads/readarxiv-test/route-ocg-cover-evidence/1810.04805v2-zh-p7-arxiv-old-new.png: left arXiv's own page 7 of 1810.04805v2 rendered from the fixture's arxiv.pdf by pdftoppm (sha256 5692a5514787a8c6 in its label), middle the old build (next 695190d2) over our page, right the new (feat/ocg-cover) over our page wrapped"
+  "crops": "the maintainer's crop, outside the repository: left arXiv's own page 7 of 1810.04805v2 rendered from the fixture's arxiv.pdf by pdftoppm (sha256 5692a5514787a8c6 in its label), middle the old build (next 695190d2) over our page, right the new (feat/ocg-cover) over our page wrapped"
  }
 }

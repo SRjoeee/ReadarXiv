@@ -1,4 +1,4 @@
-// lab/rules/sites.mjs: the rule ledger's instrument, its static half (design-reduction-2026-11-13.md §3c, R4). The rules are
+// lab/rules/sites.mjs: the rule ledger's instrument, its static half (the reduction design §3c, R4). The rules are
 // the census's own (lab/release-check/census-lib.mjs factsOf, read with its `nodes` option): every threshold of class tuned
 // or borderline and every name list of a product file in RULE_AREAS. For each rule, the places where it decides at run time
 // (its sites), and for each file the edits that wrap them in a call of the recorder (recorder.mjs), applied at load time by
@@ -16,9 +16,10 @@ import { scanTree, graphOf } from '../release-check/census-lib.mjs'
 import { entriesOf } from './pattern.mjs'
 
 export const SITES_FORMAT = 'readarxiv/rule-sites 1'
-/** the areas whose rules the ledger holds: the census's debt areas (the prepare, today's and the packages', and the
- *  typesetter) and the translate package (R5d's area, outside the census's headline) */
-export const RULE_AREAS = ['today-engine', 'pkg:engine', 'pkg:typeset', 'pkg:translate']
+/** the areas whose rules the ledger holds: the census's debt areas (the prepare, today's and the packages', the
+ *  typesetter, and @readarxiv/text, where the font tables both read are held) and the translate package (R5d's area, outside
+ *  the census's headline) */
+export const RULE_AREAS = ['today-engine', 'pkg:engine', 'pkg:typeset', 'pkg:text', 'pkg:translate']
 /** the threshold classes the ledger records: a budget (R5e's), a conversion, a structural number and a code are not rules */
 const RULE_CLASSES = new Set(['tuned', 'borderline'])
 const REL = { '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge' }
@@ -613,7 +614,9 @@ export function sitesOf(scan, graph, { alive = null, areas = RULE_AREAS, keysOnl
   // (`JSON.stringify(L)`, `structuredClone(L)`, `Object.values(L)` and Object's and Reflect's other readers but freeze,
   // `X.concat(L)`, a method borrowed onto it (`Array.prototype.includes.call(L, x)`, `.apply(L, …)`), a pattern made of it
   // (`new RegExp(L)`). Each such read of a list's binding (its module's, and through every import of it) or of the literal
-  // itself is noted on the rule (`unseen`): its entries cannot be judged by their hits (ledger.mjs: not judged)
+  // itself is noted on the rule (`unseen`): its entries cannot be judged by their hits (ledger.mjs: not judged). A copy by
+  // structuredClone of a list no binding names (a table's, read by a key known at run time) is recorded where it runs
+  // (recorder.mjs install: the global handed on, each list it copies read)
   const unseenOf = (ref, ps) => {
     let child = ref
     let i = ps.length - 1

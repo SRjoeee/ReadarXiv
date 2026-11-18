@@ -1,5 +1,5 @@
 // lab/rules/register.mjs: `node --import ./lab/rules/register.mjs [--import tsx] <script>`: the rule ledger's instrument
-// in a Node process (design-reduction-2026-11-13.md §3c): the recorder installed (recorder.mjs; AXT_RULES_SITES the site
+// in a Node process (the reduction design §3c): the recorder installed (recorder.mjs; AXT_RULES_SITES the site
 // map, AXT_RULES_OUT where the record goes, AXT_RULES_PAPER or the script's `--id=` the paper, AXT_RULES_INPUT the input,
 // AXT_RULES_ROOT the tree the map is of where it is not this checkout), the load hook registered
 // (hook.mjs: every module the site map names is loaded instrumented), the record written when the process exits. Import

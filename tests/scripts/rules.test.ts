@@ -1,5 +1,5 @@
 // @vitest-environment node
-// The rule ledger's instrument (lab/rules/: design-reduction-2026-11-13.md §3c, R4) on a tree written here: a package
+// The rule ledger's instrument (lab/rules/: the reduction design §3c, R4) on a tree written here: a package
 // module of rules (a constant compared through a product, a table entry, a literal comparison, a Math.min, a set, a list,
 // a regular expression of alternatives, a constant read only as a factor, a parameter that shadows a constant), a module
 // that imports two of them (by name and through a namespace) and makes a set of one, and a runner. The site map counts
@@ -249,6 +249,16 @@ describe('a recording', () => {
     r.context({ test: null, paper: '2401.00002v1-zh', page: 3 })
     r.lt(id, 3.9, 4)
     expect(must(r.snapshot().sites[id], 'the record').near?.[1]).toMatchObject({ eff: 3.9, paper: '2401.00002v1-zh', page: 3 })
+  })
+  it('reads a list the platform copies (structuredClone) as read whole, wherever in the value it stands', () => {
+    // (a table's list read by a key known at run time and copied: the typesetter's rule set, rules-for.ts copy)
+    const r = recorderOf(map, { paper: null })
+    const id = must(sitesOfRule('::MARKS#1')[0], 'MARKS').id
+    const marks = r.ls(id, ['dagger', 'ddagger', 'star'])
+    r.cloned({ Hans: { order: marks, lead: 1.3 }, again: [marks] })
+    r.cloned(marks)
+    r.cloned(['dagger', 'ddagger', 'star'])
+    expect(must(r.snapshot().sites[id], 'the record')).toMatchObject({ n: 0, reads: { structuredClone: 2 } })
   })
   it("reads a test file that read the lab's data as the corpus", () => {
     const out = join(dir, 'records-tests')

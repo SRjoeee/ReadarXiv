@@ -26,7 +26,8 @@ const enc = (s: string): Uint8Array => {
   for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255
   return b
 }
-const concat = (parts: Uint8Array[]): Uint8Array => {
+/** the parts' bytes, one after another (the wrap's writing takes it too: wrap.ts) */
+export const concat = (parts: Uint8Array[]): Uint8Array => {
   let n = 0
   for (const p of parts) n += p.length
   const out = new Uint8Array(n)

@@ -1,6 +1,6 @@
 // lab/pdf/prepare-back/pieces.mjs: a unit's content (the instrument's and the bundle's nested pieces) as the prepare dump's flat
-// pieces (readarxiv-lab-data baseline FORMAT.md §2-3: text, ph, open, close, nested, each its `k` by its place), and where each
-// of its elements stands among them. The dump states an element's `k` as its piece's k (FORMAT.md §3), which the lab's readers of
+// pieces (the baseline's dump spec §2-3: text, ph, open, close, nested, each its `k` by its place), and where each
+// of its elements stands among them. The dump states an element's `k` as its piece's k (the dump spec §3), which the lab's readers of
 // a dump join an element to its piece by (stated.mjs, the differential's sameEl). A content's element ids are not those places:
 // the instrument numbers a piece by the front end's own piece index (pipeline/instrument.mjs piecesOf), and drops a group that
 // carries nothing, a face switch first in a bare group, and joins the texts on either side: after any such piece the two differ

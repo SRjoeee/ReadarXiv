@@ -197,6 +197,11 @@ async function placedOf(
   }
 }
 
+/** the most pages arXiv's PDF may have: a paper past it is refused `too-large` as soon as its page count is read, before its
+ *  tree is decided and before anything is compiled, nothing of it made. A budget, unmeasured: the value the engine's first
+ *  layout reader held a document's pages to, kept as it was; nothing states why 10,000 */
+const PAGES_MAX = 10_000
+
 /** what a prepare is handed, once: the source's files, A and, where a compile of the same original made them, the instrument's
  *  five objects (TeX does not run then) */
 export interface PrepareInputs {
@@ -301,6 +306,10 @@ async function frontOf(
     if (isMemoryError(e)) throw e
     return { ok: false, why: 'corrupt', detail: `arXiv's PDF cannot be read: ${short(e)}` }
   }
+  // (the page bound, at the first point the page count is known: a paper past it is refused before its tree, so that no host
+  // of another tree takes it up only to refuse it, and before the source's files are handed to any compile)
+  if (facts.pages > PAGES_MAX)
+    return { ok: false, why: 'too-large', detail: `arXiv's PDF has ${facts.pages} pages, past ${PAGES_MAX}` }
   lap('original')
   // ---- the tree, once: the paper's own declaration, else arXiv's banner, else the default
   const tree = treeOf({ files, banner: facts.banner, served: host.tree.served, fallback: host.tree.fallback })

@@ -19,11 +19,11 @@
 //               <lab data>/refactor-2026-11/lanes/L12/private-gates.json); a private gate is named, never run here, and a
 //               result recorded at another commit than this checkout's is stale (NO-GO, both commits named)
 //   --min-free  a gate that writes corpus outputs is skipped under this many GiB free (default 12, the lab runners' own floor)
-// Environment: AXT_LAB_DATA the lab-data directory (default ~/Developer/readarxiv-lab-data); RELEASE_CHECK_BASE the base
-// worktree of the speed check.
+// Environment: AXT_LAB_DATA the lab-data directory (no default: unset, every gate that reads the lab's data is skipped, and
+// the run says so); RELEASE_CHECK_BASE the base worktree of the speed check.
 import { execFileSync, spawn } from 'node:child_process'
 import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
-import { arch, availableParallelism, homedir, platform, totalmem } from 'node:os'
+import { arch, availableParallelism, platform, totalmem } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GATES, INVARIANTS, RETIRED, TIERS } from './gates.mjs'
@@ -41,7 +41,8 @@ if (!TIERS.includes(tier)) {
   console.error(`release-check: --tier ${TIERS.join('|')} (given: ${tier ?? 'none'})`)
   process.exit(2)
 }
-const labData = process.env.AXT_LAB_DATA ?? join(homedir(), 'Developer', 'readarxiv-lab-data')
+const labData = process.env.AXT_LAB_DATA ?? ''
+if (!labData) console.error('release-check: AXT_LAB_DATA unset: the gates that read the lab-data directory are skipped')
 const out = resolve(opt('out') ?? join(ROOT, 'lab/release-check/out', tier))
 const ctx = {
   root: ROOT,

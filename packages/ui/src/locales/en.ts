@@ -367,6 +367,7 @@ const R: Locale['R'] = {
     goToArxiv: 'Go to arXiv',
     unreadable: 'The settings could not be read, so the defaults are in use',
     unreadableHint: 'The settings could not be read',
+    facesLost: "Some fonts didn't load. Reload to try again.",
   },
 }
 

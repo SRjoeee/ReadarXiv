@@ -24,7 +24,7 @@ const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', 
  * migration from a shape no v19 ever held. v18 stored the same `preload` and `image`, and no `pdfReader`
  */
 function v19Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
-  const { theme: _v20, ...rest } = DEFAULT_CONFIG
+  const { theme: _v20, ...rest } = v21Stored()
   return {
     ...rest, version: 19,
     preload: { margin: 1000, threshold: 0 },
@@ -33,9 +33,14 @@ function v19Stored(over: Record<string, unknown> = {}): Record<string, unknown> 
     ...over,
   }
 }
-/** What v20 stored: today's shapes but the reader's "What to translate" (`pdfReader.classes`, v21) */
+/** What v20 stored: v21's shapes but the reader's "What to translate" (`pdfReader.classes`, v21) */
 function v20Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
-  return { ...DEFAULT_CONFIG, version: 20, pdfReader: { ...DEFAULT_PDF_READER }, ...over }
+  return { ...v21Stored(), version: 20, pdfReader: { ...DEFAULT_PDF_READER }, ...over }
+}
+/** What v21 stored: today's shapes but the mark of a translator chosen (`providerChosen`, v22) */
+function v21Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
+  const { providerChosen: _v22, ...rest } = DEFAULT_CONFIG as Config & { providerChosen?: boolean }
+  return { ...rest, version: 21, ...over }
 }
 /** what migration 21 writes for a reader whose image switch was `figures` */
 const v21Classes = (figures: boolean) => ({ figures, tables: true, heads: true, references: false, names: false })
@@ -542,12 +547,13 @@ describe('provider selection', () => {
     const stripped = await import('@/config/storage')
     expect(await stripped.getConfig()).toEqual(DEFAULT_CONFIG)
     expect((await stripped.readConfig()).fallbackReason).toMatchObject({ kind: 'invalid', where: 'services.0.thinking' })
-    // A v13 value with both present migrates unchanged, apart from what later versions add: v16's `reading.openIn`
-    const full = { ...DEFAULT_CONFIG, version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }], preload: { margin: 1000, threshold: 0 } }
+    // A v13 value with both present migrates unchanged, apart from what later versions add: v16's `reading.openIn`, and
+    // v22's mark of the service the reader picked
+    const full = { ...v21Stored(), version: 13, reading: { sentenceHighlight: false }, provider: SVC.id, services: [{ ...SVC, thinking: 'enabled' as const }], preload: { margin: 1000, threshold: 0 } }
     await fakeBrowser.storage.local.set({ config: full, config$: { v: 13 } })
     vi.resetModules()
     const again = await (await import('@/config/storage')).getConfig()
-    expect(again).toEqual({ ...full, version: CONFIG_VERSION, reading: { sentenceHighlight: false, openIn: 'new-tab' }, preload: 'on-demand' })
+    expect(again).toEqual({ ...full, version: CONFIG_VERSION, reading: { sentenceHighlight: false, openIn: 'new-tab' }, preload: 'on-demand', providerChosen: true })
   })
 
   it('no field of the stored shape, at any depth, carries a zod default: the version alone says what is in storage (DESIGN §9)', () => {
@@ -858,6 +864,66 @@ describe('provider selection', () => {
   it('a preload that is neither of the two choices is refused by the schema', async () => {
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: 'some' as never })).rejects.toThrow()
     await expect(setConfig({ ...DEFAULT_CONFIG, preload: { margin: 1000, threshold: 0 } as never })).rejects.toThrow()
+  })
+})
+
+// The mark of a translator chosen (v22; the owner's ruling of 2026-11-19): the PDF reader of a reader who never chose asks the
+// website's chain (providers/translators.ts readerTranslatorsOf). What a v21 value says of it is its provider alone: the
+// install writes `microsoft` (the default since c57dbcc4d, 2026-09-10, before the first release, 0.4.0 of 2026-09-17), so a
+// stored `microsoft` may be nobody's pick; Google's and Chrome's ids were never a default, and a service's id is written by
+// an add or a pick (migration 12 made one of v11's `openai-compat`, a default of builds before any release, never shipped)
+describe('the translator chosen, v21 to v22', () => {
+  beforeEach(() => {
+    fakeBrowser.reset()
+  })
+  const climb = async (v21: Record<string, unknown>) => {
+    await fakeBrowser.storage.local.set({ config: v21, config$: { v: 21 } })
+    vi.resetModules()
+    const fresh = await import('@/config/storage')
+    return fresh.readConfig()
+  }
+
+  it('a stored Microsoft is chosen by nobody: the install wrote it, and nothing tells it from a pick', async () => {
+    const reading = await climb(v21Stored({ mode: 'only', targetLanguage: 'jpn' }))
+    expect(reading.fallbackReason).toBeNull()
+    // the whole value, so that "nothing else" is held
+    expect(reading.config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', providerChosen: false })
+  })
+
+  it("Google's, Chrome's and a service of the reader's own are picks, kept: the install never wrote one", async () => {
+    for (const [provider, services] of [['google-web', []], ['chrome-builtin', []], [SVC.id, [SVC]]] as const) {
+      const reading = await climb(v21Stored({ provider, services }))
+      expect(reading.fallbackReason, provider).toBeNull()
+      expect(reading.config, provider).toEqual({ ...DEFAULT_CONFIG, provider, services, providerChosen: true })
+      fakeBrowser.reset()
+    }
+  })
+
+  it('a value from before v21 climbs through both: a stored Microsoft nobody chose, a stored Google chosen', async () => {
+    for (const [provider, chosen] of [['microsoft', false], ['google-web', true]] as const) {
+      await fakeBrowser.storage.local.set({ config: v20Stored({ provider }), config$: { v: 20 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      const reading = await fresh.readConfig()
+      expect(reading.fallbackReason).toBeNull()
+      expect([reading.config.version, reading.config.provider, reading.config.providerChosen]).toEqual([CONFIG_VERSION, provider, chosen])
+      fakeBrowser.reset()
+    }
+  })
+
+  it('a hand-edited provider is not repaired: passed on, it fails the schema and the fallback names it, never the mark', async () => {
+    const reading = await climb(v21Stored({ provider: 42 }))
+    expect(reading.config).toEqual(DEFAULT_CONFIG)
+    expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where: 'provider' })
+  })
+
+  it('the defaults, a new install and a reset choose nothing', async () => {
+    expect(DEFAULT_CONFIG.providerChosen).toBe(false)
+    expect(await chooseFirstTarget(() => 'jpn')).toBe(true)
+    expect((await getConfig()).providerChosen).toBe(false)
+    await setConfig({ ...DEFAULT_CONFIG, provider: 'google-web', providerChosen: true })
+    await resetConfig()
+    expect(await getConfig()).toEqual(DEFAULT_CONFIG)
   })
 })
 

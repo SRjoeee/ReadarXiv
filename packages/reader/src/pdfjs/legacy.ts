@@ -1,5 +1,5 @@
 // PDF.js's legacy build, for a host that serves browsers below the modern build's floor (builds.ts): handed to openReader as
-// `pdfjs: LEGACY` (interfaces/host design-a §1.1: the build plugin's `legacy: true` serves its worker at
+// `pdfjs: LEGACY` (the host design A §1.1: the build plugin's `legacy: true` serves its worker at
 // `pdfjs/<version>/legacy/`). An entry of its own (`@readarxiv/reader/pdfjs-legacy`), so that a host that never runs it (the
 // extension) bundles none of it: the package's entry names no legacy module. The data files and the viewer's sheet are the
 // modern build's (the same bytes in pdfjs-dist 6.3.289).

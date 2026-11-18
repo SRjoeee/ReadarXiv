@@ -55,7 +55,7 @@ const doc = (rev: number, o: Partial<Doc> = {}): Doc =>
     targets: {},
     ...o,
   })
-/** a target's run as our server's document names it (worker v2 machine.ts docOf): `none`, made by an open and not started */
+/** a target's run as our server's document names it: `none`, made by an open and not started */
 const run = (state: 'none' | 'running' | 'done' | 'failed', o: Partial<NonNullable<Doc['targets'][string]>> = {}) =>
   runOf({ state, why: state === 'failed' ? 'unavailable' : null, attempt: state === 'none' ? 0 : 1, ...o })
 /** a paper being prepared for the target an open made (its run started once the prepare tells its units) */
@@ -672,7 +672,7 @@ describe("the session: our server's pacing (today's run)", () => {
     expect(m.s.link).toMatchObject({ retryAt: 5 + 72_000_000 + 1000 })
   })
   it("the visitor's new papers spent: the time said is the instant our server names (its period's end), never its wait added to the viewer's clock; the session asks again once both that wait has passed and the viewer's clock reads the time said (a viewer's clock 90 s ahead, 90 s behind, on time)", () => {
-    // (our server's clock at the answer: 20:17:10 at Shanghai; its hour ends at 21:00:00; its wait, as admission.ts rounds it)
+    // (our server's clock at the answer: 20:17:10 at Shanghai; its hour ends at 21:00:00; its wait, as our server rounds it)
     const server = Date.UTC(2026, 10, 11, 12, 17, 10)
     const end = Date.UTC(2026, 10, 11, 13, 0, 0)
     const wait = Math.ceil((end - server) / 1000) * 1000

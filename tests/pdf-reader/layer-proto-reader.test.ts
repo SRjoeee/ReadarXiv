@@ -738,6 +738,8 @@ describe('the door reaches no server-only module', () => {
         else if (spec.startsWith(TRANSITION)) todo.push(fileOf(f, resolve('packages/engine/src', spec.slice(TRANSITION.length))))
         // (the faces and patterns moved into the engine package, which today's old paths re-export: walked as the engine's own)
         else if (spec === '@readarxiv/engine/fonts') todo.push(resolve('packages/engine/src/fonts/index.ts'))
+        // (and the role table's tables, held once in @readarxiv/text since, which those fonts re-export: walked as theirs)
+        else if (spec === '@readarxiv/text') todo.push(resolve('packages/text/src/index.ts'))
         else others.set(spec, [...(others.get(spec) ?? []), f])
       }
       for (const m of text.matchAll(DYNAMIC)) dynamic.push(`${f}|${text.slice(m.index, m.index + 40)}`)

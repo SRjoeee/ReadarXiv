@@ -1,12 +1,13 @@
 // lab/typeset/served-metrics.mjs: a Metrics (design-a §1.2, packages/typeset/src/types.ts) that measures in Node what the
 // reader's canvas measures in the browser: the same faces, the same shaping. The faces are the files the reader is served
-// (the web's static faces' tables, `web/src/fonts/static/*.json`: each face's slices by code point; the slices' woff2 files,
-// the sweep cache's), each slice registered as a typeface of its own; the shaping is Skia's canvas (@napi-rs/canvas, pdfjs-
-// dist's optional dependency: Skia with HarfBuzz, the canvas Chrome draws and measures with). A text in a canvas font string
-// (today's fontString: style, weight, size, a list of families) is measured as Chrome measures it: each character set in the
-// first family of the list whose face for that weight and style (CSS's matching: the style, then the nearest weight) holds a
-// slice with the character, a run of characters in one slice shaped and measured alone, the runs' advances summed; its ink
-// the runs' highest ascent, deepest descent and furthest right. Deterministic: the same files, the same library. Its numbers
+// (the website build's static faces' tables, AXT_FACE_TABLES: each face's slices by code point; the slices' woff2 files,
+// AXT_FACE_SLICES, the sweep cache's; neither has a default, and `hasServed` is false without them), each slice registered
+// as a typeface of its own; the shaping is Skia's canvas (@napi-rs/canvas, pdfjs-dist's optional dependency: Skia with
+// HarfBuzz, the canvas Chrome draws and measures with). A text in a canvas font string (today's fontString: style, weight,
+// size, a list of families) is measured as Chrome measures it: each character set in the first family of the list whose
+// face for that weight and style (CSS's matching: the style, then the nearest weight) holds a slice with the character, a
+// run of characters in one slice shaped and measured alone, the runs' advances summed; its ink the runs' highest ascent,
+// deepest descent and furthest right. Deterministic: the same files, the same library. Its numbers
 // against the reader's own (the tap's metrics tables, every first measure of a run): lab/typeset/served-check.mjs. Lab only:
 // the package's Metrics adapters are the table and the host's canvas.
 import { existsSync, readFileSync } from 'node:fs'
@@ -18,8 +19,8 @@ const ROOT = join(import.meta.dirname, '..', '..')
 const require = createRequire(join(ROOT, 'node_modules/.pnpm/pdfjs-dist@6.3.289/node_modules/pdfjs-dist/package.json'))
 const { createCanvas, GlobalFonts } = require('@napi-rs/canvas')
 
-export const TABLES = process.env.AXT_FACE_TABLES ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/refactor-read/web/src/fonts/static'
-export const SLICES = (process.env.AXT_FACE_SLICES ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/static-fonts:/Users/cheongzhiyan/Developer/readarxiv-web-wt/rate-limit/web/public/static-fonts').split(':')
+export const TABLES = process.env.AXT_FACE_TABLES ?? '/dev/null/AXT_FACE_TABLES-unset'
+export const SLICES = (process.env.AXT_FACE_SLICES ?? '/dev/null/AXT_FACE_SLICES-unset').split(':')
 export const hasServed = existsSync(join(TABLES, 'index.json')) && SLICES.some((d) => existsSync(d))
 
 /** a text no served face holds (Chrome would draw it in a system font: no measure of the reader's own) */
@@ -57,7 +58,7 @@ function catalogue() {
 
 /** CSS's face matching within a family: the style asked (italic, else normal), then the weight asked, else the nearest
  *  lighter one first for 500 and under, heavier first over 500 */
-function faceOf(list, weight, style) {
+export function faceOf(list, weight, style) {
   const styled = list.filter((f) => f.style === style)
   const pool = styled.length ? styled : list.filter((f) => f.style === 'normal').length ? list.filter((f) => f.style === 'normal') : list
   const exact = pool.find((f) => f.weight === weight)
@@ -68,7 +69,7 @@ function faceOf(list, weight, style) {
 }
 
 /** a canvas font string read: its style, weight, size in px and families (today's fontString's two forms) */
-function parse(font) {
+export function parse(font) {
   const m = /^(italic )?(small-caps )?(?:(\d+) |(bold) )?([\d.]+)px (.+)$/.exec(font)
   if (!m) throw new Error(`a font string of another shape: ${font}`)
   const families = [...m[6].matchAll(/"([^"]+)"|([^,\s][^,]*)/g)].map((x) => (x[1] ?? x[2]).trim())
@@ -78,8 +79,8 @@ function parse(font) {
 /** a character of the CJK scripts, which Chrome's canvas sets unkerned (the kana's pairs a served face kerns, haranoaji's
  *  bold, it measures at their full advances: 17 of 17 such runs of the tap's tables), Skia's kerned: measured with kerning
  *  off, in runs of their own */
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
-const inRanges = (r, cp) => {
+export const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
+export const inRanges = (r, cp) => {
   for (let i = 0; i < r.length; i += 2) if (cp >= r[i] && cp <= r[i + 1]) return true
   return false
 }

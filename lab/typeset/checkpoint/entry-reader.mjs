@@ -19,11 +19,18 @@ import { join } from 'node:path'
 import { build } from 'vite'
 import { startServer } from '../../../packages/reader/e2e/server.mjs'
 import { bundlesDir, bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
+import { offlineRoute } from '../offline-route.mjs'
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const ROOT = join(import.meta.dirname, '..', '..', '..')
-// (the lab's data, the paper catalogue and the bundles: AXT_LAB, AXT_PAPERS, AXT_L1_BUNDLES, each defaulting to this machine's)
-const LAB = process.env.AXT_LAB ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
+// (the lab's data, the paper catalogue and the bundles: AXT_LAB_REFACTOR, the lab-data directory's refactor-2026-11, with no
+// default (a name of its own: the tests read AXT_LAB as a lab/pdf directory); AXT_PAPERS and AXT_L1_BUNDLES, each defaulting
+// to its files)
+const LAB = process.env.AXT_LAB_REFACTOR
+if (!LAB && !(process.env.AXT_PAPERS && process.env.AXT_L1_BUNDLES)) {
+  console.error("entry-reader.mjs: set AXT_LAB_REFACTOR to the lab-data directory's refactor-2026-11, or AXT_PAPERS and AXT_L1_BUNDLES")
+  process.exit(2)
+}
 const PAIR = arg('pair')
 // (--turned=<page>:<runs>[,…]: the turned runs each named page is to hold, so that a page meant to exercise them fails where the
 // entry lays none there, rather than passing with nothing checked)
@@ -39,11 +46,11 @@ const OUT = arg('out', join(ROOT, 'packages/reader/e2e/.entry-out'))
 const id = PAIR.split('-')[0]
 const target = PAIR.split('-')[1].split('.')[0]
 // (the bundles: AXT_L1_BUNDLES, which must be a bundles folder holding the pair where set, else lanes/L7's; named in the log)
-const BUNDLES = bundlesDir(process.env, join(LAB, 'lanes/L7/prepare/bundles'))
+const BUNDLES = bundlesDir(process.env, join(LAB ?? '', 'lanes/L7/prepare/bundles'))
 console.log(bundlesLine(BUNDLES))
 headsFor([PAIR], BUNDLES)
 const bundle = join(BUNDLES.dir, id)
-const catalogue = process.env.AXT_PAPERS ?? join(LAB, 'baseline/corpora/papers.json')
+const catalogue = process.env.AXT_PAPERS ?? join(LAB ?? '', 'baseline/corpora/papers.json')
 const paper = JSON.parse(readFileSync(catalogue, 'utf8')).papers.find((p) => p.id === id)
 if (!paper) throw new Error(`${id}: not in the paper catalogue ${catalogue} (AXT_PAPERS)`)
 const pdf = join(paper.dir, 'arxiv.pdf')
@@ -133,12 +140,7 @@ const pw = await import('playwright')
 const browser = await pw.chromium.launch({ args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'] })
 const refused = []
 const context = await browser.newContext({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 1 })
-await context.route('**/*', (route) => {
-  const u = route.request().url()
-  if (u.startsWith(server.origin) || u.startsWith('data:') || u.startsWith('blob:')) return route.continue()
-  refused.push(u)
-  return route.abort()
-})
+await context.route('**/*', offlineRoute(server, refused))
 const page = await context.newPage()
 const errors = []
 page.on('pageerror', (x) => errors.push(String(x)))

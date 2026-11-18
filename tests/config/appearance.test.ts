@@ -1,3 +1,4 @@
+import { BUILT_IN_BANDS } from '@readarxiv/ui/bands'
 import { describe, expect, it } from 'vitest'
 import { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, PALETTE, activeHighlight, activeStyle, appearanceSchema, resetBuiltIns } from '@/config/appearance'
 import { DEFAULT_CONFIG } from '@/config/schema'
@@ -9,6 +10,16 @@ describe('appearance profiles', () => {
     expect(DEFAULT_CONFIG.appearance.activeStyle).toBe('follow')
     expect(DEFAULT_CONFIG.appearance.activeHighlight).toBe('soft-green')
     expect(PALETTE).toHaveLength(8)
+  })
+  it("the built-in bands are the ones every host offers (@readarxiv/ui/bands), each under the name a saved configuration holds for it, as they shipped", () => {
+    expect(BUILT_IN_HIGHLIGHTS.map(h => ({ id: h.id, colour: h.color, opacity: h.opacity }))).toEqual(BUILT_IN_BANDS.map(b => ({ ...b })))
+    // (a saved configuration holds these: hard rule 7, nothing of them moves without a migration)
+    const stored = ['柔和绿', '淡黄', '淡蓝']
+    expect(BUILT_IN_HIGHLIGHTS).toEqual([
+      { id: 'soft-green', name: stored[0], color: 'oklch(0.693 0.17 162.48)', opacity: 0.22 },
+      { id: 'sand', name: stored[1], color: 'oklch(0.85 0.12 85)', opacity: 0.3 },
+      { id: 'sky', name: stored[2], color: 'oklch(0.75 0.12 240)', opacity: 0.25 },
+    ])
   })
   it('falls back to the first built-in when the active id is gone', () => {
     const a = { ...DEFAULT_CONFIG.appearance, activeStyle: 'deleted', activeHighlight: 'deleted' }

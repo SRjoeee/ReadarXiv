@@ -84,9 +84,12 @@ const DISPLAY_STOP =
   /\\(?:text|mbox|textrm|textnormal|mathrm|hbox)\s*\{\s*([.,;:])\s*\}$|(?<!\\(?:right|middle|left|[bB]igg?[lrm]?)\s*)(?<!\\)([.,;:])$/
 /** the punctuation a display's source sets at its end, which is its sentence's (`x = y.\label{e}\end{equation}`), or null;
  *  read in its last 2,000 characters, where a display's end lies whatever its length, past at most 64 of the things
- *  DISPLAY_TAIL reads off that end: UTF-16 code units and a count of matches, both unmeasured */
-export function displayStop(src: unknown): string | null {
-  if (typeof src !== 'string' || !DISPLAY.test(src)) return null
+ *  DISPLAY_TAIL reads off that end: UTF-16 code units and a count of matches, both unmeasured (a display ending in 65 such
+ *  things: packages/engine/tests/front/source-bounds.test.ts). `display`: whether the source is
+ *  a display's, its spelling's reading (DISPLAY) where none is given; the instrument gives TeX's statement (texDisplaysOf: a
+ *  paper's `\\be x = y. \\end{equation}` is a display's source whatever its first command) */
+export function displayStop(src: unknown, display = typeof src === 'string' && DISPLAY.test(src)): string | null {
+  if (typeof src !== 'string' || !display) return null
   let s = src.length > 2000 ? src.slice(-2000) : src
   for (let n = 0; n < 64; n++) {
     const m = DISPLAY_TAIL.exec(s)

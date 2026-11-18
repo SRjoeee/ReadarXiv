@@ -5,7 +5,7 @@
 # Unicode cmap subtable does not map (OpenType's character map, the subtable fontTools' getBestCmap picks); whether its GSUB
 # table has the `smcp` feature (OpenType's small capitals). Written as JSON, one entry a face; nothing judged here. A file
 # missing from the folder is written so, never skipped. The fonts folder holds every face's file under its reference name, as
-# lab/typeset/marks-data.py's does (readarxiv-web's scripts/fetch-font-files.mjs fills one; no font file is in this
+# lab/typeset/marks-data.py's does (the website's build fills one; no font file is in this
 # repository).
 #
 #   python3 lab/typeset/face-tables.py <fonts dir> <out.json>    exit 0 written; 2 usage, a reference it cannot read, or

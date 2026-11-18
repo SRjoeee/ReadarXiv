@@ -479,7 +479,7 @@ export function corpusLogOf(file) {
   return out
 }
 
-/** the candidate's prepare dumps (baseline FORMAT.md §3): units drawn by group, and the papers refused whole (no source
+/** the candidate's prepare dumps (the baseline's dump spec §3): units drawn by group, and the papers refused whole (no source
  *  unit drawn), as baseline/tools/acceptance.mjs counts them; `within` a directory of dumps (the baseline's): only the papers
  *  it holds a dump of, so that a count stands beside the baseline's own (a paper the corpus gained after it is left out) */
 export function drawnOf(dir, within = null) {
@@ -615,9 +615,9 @@ const runRowsDir = ctx => join(ctx.work, 'reader-parts', 'google-rows')
 // Today's side of the display gates, FROZEN before the cut-over deleted today's engine (design amendment 8.3, lane c1-freeze):
 // each pair's readings and shots of today's drawing under each toggles (lab/typeset/parity/frozen.mjs) and production's row
 // path's answers (production-rows.json), read in place of drawing today's side and running today's engine. AXT_TODAY_FROZEN,
-// else SanDisk's today-frozen/frozen; the steps hand it on in their environment (render.mjs and production-rows.mjs read it
+// none by default (unset, the gates that read it are skipped, naming it); the steps hand it on in their environment (render.mjs and production-rows.mjs read it
 // where no flag is given)
-const TODAY_FROZEN = process.env.AXT_TODAY_FROZEN ?? '/Volumes/SanDisk_Dev/readarxiv-lab-archive/today-frozen/frozen'
+const TODAY_FROZEN = process.env.AXT_TODAY_FROZEN ?? ''
 const frozenEnv = { AXT_TODAY_FROZEN: TODAY_FROZEN }
 
 // The parity's steps over some pairs (lab/typeset/parity/: v2's lay, the drawing, the measures and the verdict), into `dir`;
@@ -683,7 +683,7 @@ export function displayJudge(steps, planned, modes, rows) {
 export const GATES = [
   // ---------------------------------------------------------------- unit (hosted CI, every pull request)
   { id: 'typecheck', title: 'the type check (the extension, the packages, the website\'s calls in tests/contract/website-use.tsx)', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('typecheck')] },
-  { id: 'lint', title: 'Biome, the packages\' format, the English, boundary and review-citation gates', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('lint')] },
+  { id: 'lint', title: 'Biome, the packages\' format, the English, boundary, review-citation and machine-path gates', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('lint')] },
   {
     id: 'test',
     title: "the unit tests: the extension's and every package's (the typeset replays read the tap where the machine has it)",
@@ -1175,9 +1175,9 @@ export const RETIRED = [
 /** the website's tree NEW's reader is built in: PERF_WEB, a website worktree whose HEAD is the website's side (its pin of
  *  vendor/readarxiv replaced by this commit); none by default, so that no build stands in for the head's */
 const perfWeb = () => process.env.PERF_WEB ?? ''
-/** TODAY's reader's build and tree (production's: the website at 0bf496b5 with the engine 065c1d973), which perf-release
- *  measures against: PERF_TODAY_BUILD, else where the lab's performance lane built it */
-const todayPerfBuild = () => process.env.PERF_TODAY_BUILD ?? '/Volumes/SanDisk_Dev/readarxiv-lab-archive/perf-check/build'
+/** TODAY's reader's build and tree (production's: the website's release with the engine 065c1d973), which perf-release
+ *  measures against: PERF_TODAY_BUILD, where the lab's performance lane built it; none by default, as PERF_WEB */
+const todayPerfBuild = () => process.env.PERF_TODAY_BUILD ?? ''
 /** NEW's reader built from this commit into `build` (the lab's perf/tools/build-new.sh: the website's HEAD exported with this
  *  commit as vendor/readarxiv, installed from the store, built as staging builds it, into new-web and new-dist-web) */
 const buildNew = (ctx, build) => ({ cmd: ['bash', lab(ctx, 'perf/tools/build-new.sh'), 'HEAD', 'HEAD'], slot: 'test', env: { PERF_BUILD: build, PERF_WEB_REPO: perfWeb(), PERF_ENGINE_REPO: ctx.root }, fresh: build, as: 'build' })

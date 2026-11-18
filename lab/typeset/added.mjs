@@ -26,7 +26,9 @@ export const ADDED = Object.freeze(['2111.09276v1-zh', '2611.03953v2-zh'])
 export const ADDED_HEADING = 'THE ADDED PAIRS, REPORTED APART FROM THE SET:'
 export const isAdded = (pair) => ADDED.includes(pair)
 
-const LAB = process.env.AXT_LAB_DATA ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data'
+// (AXT_LAB_DATA the lab-data directory, none by default: unset, a path no machine holds, under /dev/null, a file, so that
+// addedEnv's refusal names the variable)
+const LAB = process.env.AXT_LAB_DATA ?? '/dev/null/AXT_LAB_DATA-unset'
 /** lab-data's folder of the added pairs' today's side (`prepare/`, `reader/`, `tap/{ledgers,metrics,tokens}/`, `cache`, `pairs.txt`,
  *  `papers.tsv`) */
 export const ADDED_DIR = join(LAB, 'refactor-2026-11', 'baseline', 'added')

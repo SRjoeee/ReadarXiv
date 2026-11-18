@@ -8,7 +8,7 @@
 // (view/links.mjs linkLayer), in `.axt-layer` under the engine's own sheet (view/engine.css) and its text-rendering decision
 // (view/text-rendering.mjs applyLayerText). arXiv's own page drawn beside it by PDF.js (the original). What is read back is
 // what was drawn: each character of the SVG where the browser placed it, in the face, weight, style and size it was set in.
-// Two choices are not the product's, both the baseline's (NOTES.md §4): `fillsMs: Infinity` and `records: true`.
+// Two choices are not the product's, both the baseline's (its notes, §4): `fillsMs: Infinity` and `records: true`.
 // Both pages stand in a page box as PDF.js's page view sizes one (its viewer's page div, which today's place is): the page's
 // size at the scale floored to whole CSS px, the canvas that box at the device ratio, drawn at the page's exact scale from its
 // top-left corner and cut at the box (pdf_viewer.mjs PDFPageView draw: floorToDivide, outputScale). A canvas shown in a box of
