@@ -265,6 +265,23 @@ describe('read and write', () => {
       FormatError,
     )
   })
+  it('a cell states where TeX stands its lines in its row (`stand`, m or b, §18.92), or not at all; a fifth member of `cell` refused', () => {
+    const p = part()
+    const m = p.flows[0]![0]!
+    for (const stand of ['m', 'b'] as const) {
+      const stated: Part = { ...p, flows: [[{ ...m, cell: [3, 0, 1, 0], stand }]] }
+      const { bytes, digest } = write('part', stated)
+      expect(read('part', bytes, digest)).toEqual(stated)
+    }
+    const plain: Part = { ...p, flows: [[{ ...m, cell: [3, 0, 1, 0] }]] }
+    expect(fromUtf8(write('part', plain).bytes)).not.toContain('stand')
+    // (no other class: p's lines stand from its first line, where every cell's are laid; c, l and r are no paragraph's)
+    expect(() => read('part', utf8(JSON.stringify({ ...p, flows: [[{ ...m, stand: 'p' }]] })))).toThrow(FormatError)
+    // (a field of its own: a fifth member of `cell`'s tuple is refused, by this schema and by every one before it)
+    expect(() => read('part', utf8(JSON.stringify({ ...p, flows: [[{ ...m, cell: [3, 0, 1, 0, 3] }]] })))).toThrow(
+      FormatError,
+    )
+  })
   it('writes canonical bytes: keys sorted, -0 as 0, the same for the same value however built', () => {
     expect(canonical({ b: 1, a: [-0, 1.5], c: undefined })).toBe('{"a":[0,1.5],"b":1}')
     const p = part()

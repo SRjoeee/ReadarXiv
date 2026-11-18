@@ -644,6 +644,8 @@ export function adapt(i: AdaptInput): Adapted {
     measure: i.measure,
     patterns: i.patterns,
     ...(seg ? { words: true } : {}),
+    // (a cell of an m or a b column: its laid lines stood in its row where TeX stands them, X.stand, §18.92)
+    ...(m.stand ? { stand: m.stand } : {}),
   } as FitParams
   const numberCropOf: NumberCrop | null =
     decor.numbered && label ? numberCrop(label.chars, label.text, blocks[0]!) : null

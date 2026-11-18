@@ -245,6 +245,8 @@ function placedOf(
     const c = unit.cell
     p.cell = [c.row, c.col, c.span ?? 1, c.head ? 1 : 0]
     if (mem.plain === undefined) p.plain = textOfPieces(unit.content)
+    // (where TeX stands its lines in its row, a cell of an m or a b column: Placed.stand, §18.92)
+    if (c.stand) p.stand = c.stand
   }
   if (mem.tail?.length) p.tail = mem.tail
   if (mem.read.length) p.read = [...new Set(mem.read)]

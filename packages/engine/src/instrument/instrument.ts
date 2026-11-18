@@ -21,6 +21,7 @@ import {
   readBodies,
   readBoxAlign,
   readCellBoxes,
+  readCellStands,
   readGlues,
   readHeads,
   readMeasures,
@@ -2153,6 +2154,8 @@ export async function instrumentOf({
   // (a cell's class where TeX set its text in its column template's own box, no paragraph of its own: what its column's box is
   // read by, locate/columns.ts)
   const cellBoxes = readCellBoxes(lastTexLog(log))
+  // (where TeX stands a cell's lines in its row, a cell of an m or a b column: Placed.stand, §18.92)
+  const cellStands = readCellStands(lastTexLog(log))
   // (each colour piece's fill as TeX set its run, by unit and piece index: marks.mjs readColours over the marked compile's log)
   const colours = new Map<number, Map<number, number>>()
   for (const [i, k, rgb] of readColours(log)) (colours.get(i) ?? colours.set(i, new Map()).get(i)!).set(k, rgb)
@@ -2217,6 +2220,7 @@ export async function instrumentOf({
               ...(u.cell.span ? { span: u.cell.span } : {}),
               ...(u.cell.head ? { head: true } : {}),
               ...(cellBoxes.has(i) ? { boxed: cellBoxes.get(i) } : {}),
+              ...(cellStands.has(i) ? { stand: cellStands.get(i) } : {}),
             },
           }
         : {}),
