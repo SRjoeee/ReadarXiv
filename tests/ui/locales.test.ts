@@ -138,6 +138,11 @@ describe('locale packs', () => {
     expect(LOCALE_CODES).toEqual(['zh-CN', 'zh-TW', 'ja', 'ko', 'en'])
   })
 
+  it("a lost font face is told in the owner's words, verbatim, in Simplified Chinese and English: one sentence the website and the extension share (UI.md S-R-28, 2026-11-19)", () => {
+    expect(LOCALES['zh-CN'].R.status.facesLost).toBe('部分字体加载失败，请刷新页面重试')
+    expect(LOCALES.en.R.status.facesLost).toBe("Some fonts didn't load. Reload to try again.")
+  })
+
   it('after setLocale every state of the popup changes language, not one sentence left in the previous pack', () => {
     setLocale('en')
     expect(localeInUse()).toBe('en')

@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createController,
+  FACES_LOST_MS,
   INITIAL,
   reduce,
   type Session,
   type SessionEvent,
   type SessionHost,
 } from '../../src/chrome/model.ts'
-import { R } from '@readarxiv/ui'
+import { LOCALES, R, setLocale } from '@readarxiv/ui'
 import { plain } from '../../src/chrome/capsule-words.ts'
 import { PARTS } from '../../src/chrome/parts.tsx'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '../../src/chrome/status.ts'
@@ -900,6 +901,43 @@ describe("a host's toast (ReaderController.toast: the website's share menu's wor
       expect(capsuleOf(s, SEEN, PARTS.languages)?.kind).not.toBe('toast')
     }
     expect(capsuleOf({ ...INITIAL, phase: 'ready', toast }, SEEN, PARTS.languages)?.words.prefix).toBe('Link copied')
+  })
+  it("a face lost is the chrome's own toast, for every host (UI.md S-R-28): the catalogue's one sentence in the interface's language, the information sign, for 8 s, no action", async () => {
+    vi.useFakeTimers()
+    try {
+      const told: { emit?: SessionHost['emit'] } = {}
+      const controller = createController({
+        open: async (host) => {
+          told.emit = host.emit
+          return fakeSession()
+        },
+        paper: '2600.00001v1',
+        defaults: DEFAULTS,
+      })
+      await controller.attach({ left: document.createElement('div'), right: document.createElement('div') })
+      setLocale('zh-CN')
+      told.emit?.({ type: 'faces' })
+      expect(controller.getState().toast).toEqual({ words: LOCALES['zh-CN'].R.status.facesLost, icon: 'info' })
+      expect(capsuleOf(controller.getState(), SEEN, PARTS.languages)).toMatchObject({ kind: 'toast', icon: 'info' })
+      expect(FACES_LOST_MS).toBe(8000)
+      vi.advanceTimersByTime(FACES_LOST_MS - 1)
+      expect(controller.getState().toast?.words).toBe(LOCALES['zh-CN'].R.status.facesLost)
+      vi.advanceTimersByTime(1)
+      expect(controller.getState().toast).toBeNull()
+      // (a host's own toast over it stands its time, and the lost face's comes back after it for the time it has left)
+      setLocale('en')
+      told.emit?.({ type: 'faces' })
+      expect(controller.getState().toast?.words).toBe(LOCALES.en.R.status.facesLost)
+      vi.advanceTimersByTime(1000)
+      controller.toast({ words: 'Link copied', icon: 'check' })
+      vi.advanceTimersByTime(3000)
+      expect(controller.getState().toast).toEqual({ words: LOCALES.en.R.status.facesLost, icon: 'info' })
+      vi.advanceTimersByTime(4000)
+      expect(controller.getState().toast).toBeNull()
+    } finally {
+      setLocale('en')
+      vi.useRealTimers()
+    }
   })
 })
 

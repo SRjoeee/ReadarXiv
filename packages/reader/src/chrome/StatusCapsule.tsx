@@ -4,7 +4,8 @@
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
 // words are said here; a host that words a run's stages (the website's) has the capsule say them too, with the spinner, once
 // the wait has lasted WAIT_SHOWN_MS (a wait the reader cannot perceive is not announced).
-// A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone, for their time.
+// A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone, for their time, and so
+// do the chrome's own for a face lost (S-R-28).
 // A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
 // for a reason a retry mends
 // (status.ts capsuleOf); the sentence for a write storage refused (S-R-22) is one of them, an error that stays until it

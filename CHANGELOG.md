@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, when some of the fonts a translation is drawn in cannot be loaded, a short notice now says so and asks you to reload the page. Those passages had been drawn in a fallback font with nothing said; the Read arXiv website said it in words of its own, and both now say the same sentence.
 - Fixed: a number the paper prints right against a formula, such as the "32" of "32×32", the "0.016" of "−0.016" or the "6" and "+2" of "6n+2", stays exactly as printed beside the formula, in the PDF reader and on arXiv's HTML pages with every service but Microsoft. It had been sent to the translator apart from the formula, which could lose it, change it or put a word between it and the formula.
 - Fixed: in the PDF reader on the Read arXiv website, what had already arrived while the page was held up, as on a busy computer, is used: a part of the translation, a page's layout or a font. It could be dropped, and some pages then stayed in English until they were scrolled away and back or the page was reloaded.
 - Fixed: in the PDF reader on the Read arXiv website, a part of a translation that could not be fetched no longer ends the translation as failed: it is fetched again by itself, a second later, then two, four, up to half a minute apart, and the translation is finished once every part is in. A translation could be counted as failed, with nothing to retry, until the page was reloaded.

@@ -237,4 +237,15 @@ describe("the reader's state as the chrome's", () => {
     // (the extension's today session tells the sync with no word of it)
     expect(reduce({ ...INITIAL, syncAvailable: false }, { type: 'sync', on: false }).syncAvailable).toBe(true)
   })
+  it('a face lost is told once, as the reader keeps it lost for the visit; none lost, nothing told (UI.md S-R-28)', () => {
+    const lost = { ...open, faces: 'lost' as const }
+    const faces = (es: readonly { type: string }[]) => es.filter((e) => e.type === 'faces')
+    expect(faces(eventsOf(open, lost))).toEqual([{ type: 'faces' }])
+    // (a first state already lost tells it too: the host's first tell may come after the loss)
+    expect(faces(eventsOf(null, lost))).toEqual([{ type: 'faces' }])
+    // (the reader's later states, the face still lost: nothing told again)
+    expect(faces(eventsOf(lost, { ...lost, view: { ...lost.view, scale: 2 } }))).toEqual([])
+    expect(faces(eventsOf(null, open))).toEqual([])
+    expect(faces(eventsOf(base, open))).toEqual([])
+  })
 })
