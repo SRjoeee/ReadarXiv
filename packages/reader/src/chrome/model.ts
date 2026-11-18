@@ -61,7 +61,7 @@ export interface Toast {
 /** how long a toast stands when its host names no time, ms (the website's TOAST_MS); unmeasured */
 export const TOAST_MS = 3000
 /** how long the chrome's notice of a face lost stays, ms (S-R-28): how long a notice stays, the value the website gives its two
- *  "lost" notices, which the owner has looked at on the site; a reading time chosen, not a measured budget */
+ *  "lost" notices, which the owner has looked at on the site; a reading time chosen, which nothing was weighed to give */
 export const FACES_LOST_MS = 8000
 export type SessionEvent =
   /** a write of the settings by this page that went through: a refusal before it is mended */
