@@ -1255,6 +1255,18 @@ only how it meets the rest of the extension.
   travels whole and plain, and the translation carries no style from the group. A `must` group (a link, a run-in label,
   every pair of the HTML page) stays as its host states it. A case of the chain's digest (`CHAIN_DIGEST`, §9). Over the 88
   corpus papers 47 of 15,408 groups (17 units, 13 papers): the tags wire moves in those 17 units, the markers wire in none.
+- **A number set flush against an inline formula goes on no wire** (lane flush-hold, 2026-11-18, PDF-READER §18.47). An
+  author types `32$\times$32`, `$-$0.016`, `6$n$+2` with the number outside the math; sent beside the formula's placeholder,
+  the number came back broken (a counter or a noun put between, digits lost). The same module (`words.ts`, the second arm of
+  its rule for what is glued to an element) holds off the wire, beside an element of kind `math`, the run of the unit's text
+  that touches it as far as white space, its far edge's sentence punctuation, quotes and unpaired bracket aside (one statement
+  with the identifier's, `@readarxiv/text` `edgeMark`), where it holds a digit and no letter, and puts it back literally
+  beside the formula. The HTML page's blocks reach it on the tags wire: LaTeXML writes such a number as text right beside a
+  `<math>`, which the rule file states `math` (`elementKindOf`), and the unit read from the tags wire holds it flush (the
+  fixture 2507.00150.html: 11 such junctions in its prose; the rest of its 126 stand in numeric cells, never sent). Not on the
+  markers wire: there the protector sets a space of its own between a marker and the word or number it touches (§6.2, taken
+  off again as the translation is filled back), so the unit states no number flush against the formula, and the rule is not
+  widened to reach it. A case of the chain's digest (`CHAIN_DIGEST`).
 - **A group a reply did not bring back is placed where the translation states it** (lane style-spans, 2026-11-10). A
   group's style (its weight, slant or colour: its command's, `SpanAt.colour` from TeX's log, `SpanAt.style` read off its
   glyphs) is drawn only where the reply holds the group. The tags wire carries every group (Google keeps tags); the markers

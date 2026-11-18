@@ -4,7 +4,7 @@
 // element in its place (hard rule 1's DOM, the decision's "a Result becomes what the renderer takes today")
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { accept, asOut, type Fetch, google, microsoft } from '@readarxiv/translate'
+import { accept, asOut, chainOf, type Fetch, type FetchInit, type FetchReply, google, microsoft, type Piece, type Result, type UnitIn } from '@readarxiv/translate'
 import { describe, expect, it } from 'vitest'
 import { extract } from '@/core/extractor'
 import type { Segment } from '@/core/pipeline/batches'
@@ -106,6 +106,102 @@ describe('a segment of the page as a unit (pipeline/units.ts)', () => {
     expect(ms.read(pdf, reply('The norm of @a is small.'))).not.toBeNull()
     // a doubled `#` is the marker's (#320), on the page as before
     expect(ms.read(page, reply('The norm of @a## is small.'))?.content).toEqual([{ t: 'text', s: 'The norm of ' }, { t: 'el', id: 'x1' }, { t: 'text', s: ' is small.' }])
+  })
+})
+
+/** the junctions of a number and an inline formula the fixture 2507.00150.html holds on the tags wire (the test's own reading) */
+const JUNCTIONS_2507 = 11
+
+// (a number an author sets flush against an inline formula, `32$\times$32`, is held off the wire with the formula and put back
+// beside it: packages/translate words.ts, PDF-READER §18.47. The page's tags wire reaches the rule: LaTeXML writes such a number
+// as text right beside a `<math>`, which the rule file states `math`, the kind the rule reads. Its markers wire does not: the
+// protector sets a space of its own between a marker and a word or a number it touches (serialize.ts makeTracker, DESIGN §6.2,
+// taken off again as the translation is filled back), so the unit states "32 ⟦×⟧ 32", no number flush: another shape, which the
+// rule is not widened to)
+describe('a number set flush against an inline formula goes on no wire and comes back beside it, on the page’s tags wire', () => {
+  /** the unit through the chain with one translator over an endpoint that echoes: the units the translator was handed, the
+   *  wires, and the row */
+  const viaChain = async (unit: UnitIn, format: WireFormat) => {
+    const sent: string[] = []
+    const fetch = (async (_url: string, init: FetchInit) => {
+      const body = format === 'markers'
+        ? JSON.stringify((JSON.parse(init.body) as string[]).map(w => (sent.push(w), { translations: [{ text: w, to: 'zh-Hans' }] })))
+        : JSON.stringify([(JSON.parse(init.body) as [[string[]]])[0][0].map(w => (sent.push(w), w))])
+      return { ok: true, status: 200, headers: { get: () => null }, text: async () => body } satisfies FetchReply
+    }) as Fetch
+    const t = format === 'markers' ? microsoft({ fetch }) : google({ fetch })
+    const handed: UnitIn[] = []
+    const translator = { ...t, write: (u: UnitIn, target: string) => (handed.push(u), t.write(u, target)) }
+    const results: Result[] = []
+    for await (const r of chainOf().translate([unit], 'zh-Hans', { translators: [translator] })) results.push(r)
+    return { handed, sent, result: results[0] }
+  }
+  const plain = (html: string) => html.replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ')
+  it('a block of our own (`32<math>×</math>32`): the tags wire holds the formula alone; the markers wire sends the protector’s spaced number; each row written back is the block', async () => {
+    const target = el('<p class="ltx_p">The inputs are 32<math class="ltx_Math"><mo>×</mo></math>32 images.</p>')
+    for (const format of ['markers', 'tags'] as const) {
+      const p = serialize(target, format)
+      const from = unitOfSegment({ id: 'b', text: p.text, block: { id: 'b', kind: 'text', el: target, unit: 'p' } as never, protected: p }, format)
+      const { sent, result } = await viaChain(from.unit, format)
+      expect(sent).toEqual([format === 'markers' ? 'The inputs are 32 @a# 32 images.' : 'The inputs are <b translate=no>x1</b> images.'])
+      if (!result?.ok) throw new Error(`not translated: ${JSON.stringify(result)}`)
+      expect(plain(htmlOf(rehydrate(wireOfContent(result.content, from).wire, p, target.ownerDocument)))).toBe(plain(htmlOf(rehydrate(p.text, p, target.ownerDocument))))
+    }
+  })
+  it('2507.00150.html: at every junction of a number and an inline formula the translator is handed no digit beside the formula, and each block comes back whole', async () => {
+    const doc = new DOMParser().parseFromString(readFileSync(join(FIXTURES, '2507.00150.html'), 'utf8'), 'text/html')
+    /** each formula and side where the text beside it, up to white space, holds a digit and no letter: what the rule holds */
+    const junctionsOf = (content: readonly Piece[]) => {
+      const out: [string, 'before' | 'after'][] = []
+      const run = (s: string) => /\p{N}/u.test(s) && !/[\p{L}\p{M}]/u.test(s)
+      const walk = (ps: readonly Piece[]) => {
+        for (const [i, q] of ps.entries()) {
+          if (q.t === 'span') walk(q.content)
+          if (q.t !== 'el' || q.kind !== 'math') continue
+          const before = ps[i - 1]
+          const after = ps[i + 1]
+          if (before?.t === 'text' && run(/\S*$/u.exec(before.s)?.[0] ?? '')) out.push([q.id, 'before'])
+          if (after?.t === 'text' && run(/^\S*/u.exec(after.s)?.[0] ?? '')) out.push([q.id, 'after'])
+        }
+      }
+      walk(content)
+      return out
+    }
+    /** what stands right beside element `id` on a side in a unit's content: a text's character, '' at an edge or an element */
+    const besideOf = (content: readonly Piece[], id: string, side: 'before' | 'after'): string | null => {
+      for (const [i, q] of content.entries()) {
+        if (q.t === 'span') {
+          const got = besideOf(q.content, id, side)
+          if (got !== null) return got
+        } else if (q.t === 'el' && q.id === id) {
+          const n = content[side === 'before' ? i - 1 : i + 1]
+          return n?.t === 'text' ? (side === 'before' ? n.s.slice(-1) : n.s.slice(0, 1)) : ''
+        }
+      }
+      return null
+    }
+    let junctions = 0
+    for (const b of extract(doc)) {
+      const targets = b.kind === 'text' ? [b.el] : b.cells.flatMap(c => (c.numeric ? [] : [c.el]))
+      for (const target of targets) {
+        const p = serialize(target, 'tags')
+        const from = unitOfSegment({ id: 'b', text: p.text, block: b, protected: p }, 'tags')
+        const held = junctionsOf(from.unit.content)
+        if (!held.length) continue
+        junctions += held.length
+        const { handed, result } = await viaChain(from.unit, 'tags')
+        expect(handed.length, target.id).toBeGreaterThan(0)
+        for (const u of handed)
+          for (const [id, side] of held) {
+            const beside = besideOf(u.content, id, side)
+            expect(beside, `${target.id} ${id}: handed`).not.toBeNull()
+            expect(/\p{N}/u.test(beside ?? ''), `${target.id} ${id} ${side}`).toBe(false)
+          }
+        if (!result?.ok) throw new Error(`${target.id}: not translated`)
+        expect(plain(htmlOf(rehydrate(wireOfContent(result.content, from).wire, p, doc))), target.id).toBe(plain(htmlOf(rehydrate(p.text, p, doc))))
+      }
+    }
+    expect(junctions).toBe(JUNCTIONS_2507)
   })
 })
 

@@ -4477,7 +4477,8 @@ On staging (round 8 B2b) 2608.25210v2's prompt name `llm_equal_human` came back 
   underscores (snake_case), the whole token (`CallbackBase.host_label(result)`, `test_parser.py`, `--view_range`), its leading
   and trailing sentence punctuation aside: a stop, a comma, a semicolon, a colon, a question or exclamation mark, a quote, and a
   bracket at an edge that no bracket of its pair inside the token answers (`(see conv5_x)` loses the `)`; `[sentence_1]`,
-  `{root_question}`, `host_label(result)` keep theirs). Its syntax alone: no list, no camelCase, nothing dotted without an
+  `{root_question}`, `host_label(result)` keep theirs; one statement of it, `@readarxiv/text` `edgeMark`, which §18.47's flush
+  number reads too). Its syntax alone: no list, no camelCase, nothing dotted without an
   underscore ("e.g." is prose; `__init__`, `_x`, `x _ y` are no identifier). The source reads a unit's pieces as TeX sets them
   (`keepRead`, the address groups' reader made general: `\_` and `\textunderscore` an underscore, the spaces after a control word
   none, a bare `_` TeX's subscript, which 2610.21377v1's formulas the walker read as text hold), each identifier one placeholder
@@ -5598,6 +5599,45 @@ words; the translator translated what it was given.
   letters after `\figref` 8, a size's unit after `\OlCrossTok` and its kin 8, plurals after `\oursfull` 6, the
   highlighted words' "s" 2. `CHAIN_DIGEST` moves (the chain's case table gains `glued`, a case only this rule decides: a held
   letter, the digit after it and a possessive offered).
+- **A number set flush against an inline formula is held with it** (the same rule's second arm, lane flush-hold, 2026-11-18,
+  on lane flush-digits' probe and the coordinator's rulings of that day). An author types `32$\times$32`, `$-$0.016`, `0$.$5`,
+  `2$n$`, `6$n$+2`, `10$^{-3}$`, the number outside the math and flush against it; sent beside the formula's tag, the number
+  came back broken: a counter or a noun put between the digits and the formula, digits lost or changed (over the stored rows,
+  Microsoft zh 28 of 436 such junctions, ja 8 of 75, ko 9 of 51, es and fr 7 of 51; Google zh 25 of 486; staging's 1512.03385v1
+  in Korean, Google, both 32s of "32×32" gone and a verb drawn beside the ×). For an element of kind `math` (an inline formula;
+  a display is `display`), on each side, the run of the unit's text that touches it, as far as white space, in the text piece
+  beside it and in no group that does not hold it (the first arm's own condition), less the sentence punctuation, quotes and
+  unpaired bracket at its far edge, is offered to no translator where it holds a digit and no letter or mark, and comes back
+  beside the formula literally, wherever the reply set the formula, as held letters do: a translator is sent the formula alone
+  where the paper prints one expression, and the row has the number exactly as typed at its side. The far edge is the
+  identifier's (§18.25), stated once: `@readarxiv/text` `edgeMark`, which the source reader's `identifiersIn` calls too (a
+  move of a pure function: the source units of the 88 papers and of the sample-1 fixture byte for byte before and after). A
+  run that holds a letter goes on the wire (`$i$-th`, `$d$-dimensional`, `J1744$-$`: words the translators translate well);
+  `2.5$\mu$m` holds the 2.5 and sends the m; a run between two formulas is the first's (`$\sim$15$\%$`); a number against an
+  element of another kind goes through as written (`0.58\pp`), and the first arm never reads a formula (a formula states no
+  `text`). The glue (DESIGN §6.2) reads the unit as sent: beside a held run the sent text is white space, no side is glued, and
+  the run is put back flush, so `6$n$+2` no longer comes back "6n + 2" (the glue takes a reply's space back only before a
+  letter, a digit or a mark, and "+" is none). Two formulas left side by side once their numbers are held (`$p$=5 $n$=20`) go
+  as one marker on Microsoft's wire, as any two touching elements, each number back beside its own; a style group of a number
+  and its formula alone goes on no wire and comes back around them. Its reach, by the rule's syntax whatever unit holds it
+  (the coordinator's ruling: no list of unit kinds), over the lab's 245 papers (chain y2's stored units, 84,724; 76,889 the
+  chain sends): source units 1,212 junctions in 449 units of 72 papers (and 15 in 14 kept units, never sent); the ink units'
+  formulas too, 122 junctions in 38 units of 7 papers, a formula's own roman digits the ink reader read as text
+  (2610.20030v1's "⟦v0⟧ = 0⟦.⟧5", which Google's Chinese row broke into a 0, a comma and "⟦.⟧= 5"); and the HTML page's
+  inline `<math>` on its tags wire (DESIGN §6.2). Each adapter's wire (Google's, Microsoft's, the built-in translator's) moves in exactly those
+  487 units of 78 papers, every other wire byte for byte; each moved wire is the one before less the held characters (and the
+  markers' own spaces beside them), but where formulas left side by side join in one marker (Microsoft's, 87 units, their
+  markers lettered again) and where a style group held a number and its formula alone (one Google unit of 2610.30854v1, the
+  group on no wire). Two cases read worse than today, the rule's cost by the coordinator's ruling: an ordinal typed as a
+  superscript (`September 14$^{\text{th}}$`, 1 caption of 2610.19159v1: the translator, sent "September ⟦⟧", cannot write the
+  day as its language does, where both translators wrote the day with its counter today) and a note's mark on a count
+  (`$^{\rm a}$13 fallbacks`, 4 in a caption of 2607.24653v2: a translator that moves the count moves the mark with it). Where
+  a reply separates two formulas the source sets as one expression (`$\sim$15$\%$`), the glue reads them as joined and takes
+  the reply's space beside them, as it would for the two set flush: 34 such runs over the corpus, unmeasured on the rows. What moves:
+  `CHAIN_DIGEST` (the case table gains a `glued` case of a number; the old cases' outcomes are the same under the rule), so
+  every row is made again, a stored reply answering every unit whose wire did not move, and the 487 units' wires are asked
+  again per target and translator. No unit, id, `PIPELINE_VERSION`, `FORMAT` or `LAYOUT` moves; no number for the wire
+  (CLAUDE.md rule 4), and today's engine's own wire is not this package (`TRANSLATE_VERSION` stays).
 
 ### 18.48 A full-width mark's blank half is its face's, and the drawing is what the layout measured (2026-11-12)
 
