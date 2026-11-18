@@ -21,8 +21,8 @@
 // larger list removes 5 cuts and adds none, and all 5 are journal abbreviations in bibliographies
 // (`Theor. Comput. Sci.`, `J. Fac. Sci. Univ. Tokyo`, `Sci. Rep. 14`).
 
-// (relative, and from the tokens module alone: the reader's engine imports this module, so its closure stays alias-free and
-// reaches nothing else of the protector; scripts/check-boundary.mjs, ENGINE_ALLOW)
+// (relative, and from the tokens module alone: the old reader's engine imported this module by relative path, and its
+// closure stayed alias-free, reaching nothing else of the protector)
 import { fromAlpha, type WireFormat } from '../protector/tokens.ts'
 
 /**

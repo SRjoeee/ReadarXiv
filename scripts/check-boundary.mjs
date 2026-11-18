@@ -119,37 +119,6 @@ export function platformImportsOf(file, text) {
   return out
 }
 
-/** The reader's engine (src/pdf-reader/engine) is the contract the web imports. The web's build loads it through its pin, a
- *  plain browser page loads it as it stands and plain node loads its server and translation entries, so an engine file
- *  names a module by relative path to the engine's own files or to four modules of the core, or by `node:`, or, in rules/,
- *  by the layout rules' validator, and in no other way: not by an alias, which only a bundler's configuration resolves, nor
- *  a build setting's name, a root-absolute path or a URL, nor a package out of place, nor a computed specifier. It is a
- *  whitelist over every file of the engine (modules, TypeScript and declaration files, stylesheets) and every form that names
- *  a module or a file, a type-only import and a triple-slash reference included: a consumer's build resolves a type as it
- *  resolves a value. */
-export const ENGINE = /^src\/pdf-reader\/engine\//
-
-/** The four modules of the core an engine file may import, by their path with no extension or index file (the
- *  placeholder wire's tokens, the sentence splitter, the figure-name test, the runs of a formula split across inline
- *  formulas). Nothing deeper in the core: a sibling of one of them is another module. The closure of each holds those four
- *  alone, by relative path (a test holds it), so the web's pin, a plain page and plain node load it as the engine's own files */
-export const ENGINE_ALLOW = ['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs']
-
-/** The packages an engine file may import, by name and under which directory. The engine imports no PDF library: the
- *  layout maker is handed it (`PL`). The engine's modules that moved into the engine package (packages/engine) are imported
- *  from its entry, `@readarxiv/engine`, by every engine file that names one */
-export const ENGINE_PACKAGES = [{ name: 'zod', under: 'src/pdf-reader/engine/rules/' }, { name: '@readarxiv/engine', under: 'src/pdf-reader/engine/' }]
-
-/** Files of the engine that belong to the extension alone and so import what the rule forbids, and modules outside the
- *  engine that move into it, each named so that the lint stays green until the move lands and the list is the work left.
- *  Both are empty since Stage 5, Task 4 moved session.mjs and engine.mjs out of the engine and src/cache/pdf-record.ts in
- *  (as pipeline/record.ts); a test holds any entry to still being a violation, and the lint fails on one that is not listed */
-export const ENGINE_MOVE_OUT = []
-export const ENGINE_MOVE_IN = []
-
-/** Whether a violation is one that a move named in ENGINE_MOVE_OUT or ENGINE_MOVE_IN removes */
-export const movesPending = v => ENGINE_MOVE_OUT.includes(v.file) || ENGINE_MOVE_IN.includes(resolveSpecifier(v.file, v.spec))
-
 /** What a file states of its origin, the web's rule for its bundles: the words saying it was taken from a reference
  *  project or a scoped package, followed by the source's path. Matched against the text with its line-leading comment
  *  markers off and every run of white space made one space, so that a statement wrapped across comment lines, set mid-file,
@@ -244,40 +213,8 @@ export function stylesheetModulesOf(text) {
     .map(({ spec }) => ({ spec: /^(?:[a-z][a-z0-9+.-]*:|\/|\.)/i.test(spec) ? spec : `./${spec}` }))
 }
 
-/** Why an engine file may not name a module so, or null: it is a `node:` module, a relative path that stays inside the
- *  engine or reaches one of ENGINE_ALLOW, or a package ENGINE_PACKAGES lets its directory hold. Anything else is refused:
- *  an alias, a build setting's name (`#imports`), a root-absolute path, a URL, a package out of place */
-function whyRefused(file, spec) {
-  if (spec.startsWith('node:')) return null
-  if (spec.startsWith('./') || spec.startsWith('../')) {
-    const target = dropExtension(norm(relative('.', resolve(dirname(file), spec.replace(QUERY, '')))))
-    return ENGINE.test(`${target}/`) || ENGINE_ALLOW.includes(target) ? null : `a module outside the engine, and not one of ${ENGINE_ALLOW.join(', ')}`
-  }
-  if (ALIASES.some(([prefix]) => spec.startsWith(prefix)) || EXACT.has(spec)) return 'an alias: an engine file imports by relative path, which the web\'s pin, a plain page and plain node all resolve'
-  const name = packageOf(spec)
-  if (name === null) return 'neither a relative path, a node: module nor a package: the engine names a module by one of those alone'
-  return ENGINE_PACKAGES.some(p => p.name === name && file.startsWith(p.under)) ? null : 'a package in the engine, but the layout rules\' validator in rules/'
-}
 const norm = p => p.split('\\').join('/')
 
-/** What the engine files among `files` name that the engine may not. A whitelist: every module a file of the engine names,
- *  in a value import or a type one, in a module, a TypeScript file or a declaration file, by a statement, a call or a
- *  `new URL(…, import.meta.url)`, is a relative path inside the engine or to ENGINE_ALLOW, a `node:` module or an
- *  ENGINE_PACKAGES package under its directory; a module named by a computed specifier is refused, since nothing can say
- *  where it leads. Every file is read from `root` (the repository, by default) */
-export function engineViolations(files, { root = '.' } = {}) {
-  const out = []
-  for (const file of files) {
-    if (!ENGINE.test(file) || !(CODE.test(file) || STYLESHEET.test(file))) continue
-    const text = readFileSync(resolve(root, file), 'utf8')
-    for (const { spec, display, why: given } of STYLESHEET.test(file) ? stylesheetModulesOf(text) : namedModulesOf(text)) {
-      if (spec === null) { out.push({ file, spec: display, why: given ?? 'a module named by a computed specifier: the engine\'s imports are literal, so that where they lead can be told' }); continue }
-      const why = whyRefused(file, spec)
-      if (why !== null) out.push({ file, spec, why })
-    }
-  }
-  return out
-}
 
 /** The workspace packages (packages/<name>, `@readarxiv/<name>`) and the other packages each may import: the directions
  *  of the design (§4.8), one way. A package is listed here when it is created; a directory under packages/ that is not
@@ -373,19 +310,13 @@ function sourceOf(path, root) {
   return [bare, ...EXTENSIONS.map(e => bare + e), ...twins].find(c => isFile(root, c)) ?? null
 }
 
-/** The transition paths of the front half that moved from the engine into the engine package (packages/engine/package.json's
- *  `./today/…` exports, each one moved module's): an old path of the engine re-exports its module through one, so a closure
- *  follows it to the module, which is the engine's own code at its new place. Deleted at the cut-over with the old paths */
-export const TRANSITION = '@readarxiv/engine/today/'
-
-/** The files `file` imports for their values that the repository holds: aliases, relative paths and the transition paths, no
- *  other package */
+/** The files `file` imports for their values that the repository holds: aliases and relative paths, no package */
 function importsOf(file, root) {
   let text
   try { text = readFileSync(resolve(root, file), 'utf8') } catch { return [] }
   const out = []
   for (const spec of valueImportsOf(text)) {
-    const local = spec.startsWith(TRANSITION) ? `packages/engine/src/${spec.slice(TRANSITION.length)}` : localPath(file, spec.replace(QUERY, ''))
+    const local = localPath(file, spec.replace(QUERY, ''))
     const found = local === null ? null : sourceOf(local, root)
     if (found !== null) out.push(found)
   }
@@ -393,8 +324,7 @@ function importsOf(file, root) {
 }
 
 /** The entries and every file their value imports reach, once each. A stylesheet or a data file reached is in the closure
- *  and imports nothing; a package (but a module reached by a transition path, TRANSITION) and a `node:` module are not in it.
- *  Throws for an entry the repository does not hold */
+ *  and imports nothing; a package and a `node:` module are not in it. Throws for an entry the repository does not hold */
 export function closureOf(entries, { root = '.' } = {}) {
   const seen = new Set()
   const todo = entries.map(entry => {
@@ -417,32 +347,14 @@ export function portedInClosure(entries, { root = '.' } = {}) {
   return [...closureOf(entries, { root })].filter(file => statesPort(readFileSync(resolve(root, file), 'utf8'))).sort()
 }
 
-const OUTSIDE = /^(?:src|lab)\//
 export const trackedFiles = (root = '.') => execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8', maxBuffer: 1 << 26 }).split('\0').filter(Boolean)
 
-/** The engine's modules (code files, no declaration files) that nothing live reaches: neither the closure of the entries, nor
- *  that of the gates, nor that of any file outside the engine, in src/ or lab/, that imports an engine module. That is the
- *  shipped extension and EVERY file of the lab, its bench and its spikes as well as its kept gates: wider than Ruling 33a's
- *  "kept lab gates", since a spike that imports a module keeps it alive for as long as the spike is in the tree. Tests and
- *  scripts are not roots: a module only they reach is parked with its tests.
- *  `files` is the repository's files, by default the ones git tracks. Throws for an entry or a gate the repository does not
- *  hold, so that a typo is not everything unreached */
-export function unreached(entries, gates, { root = '.', files = trackedFiles(root) } = {}) {
-  const modules = files.filter(f => ENGINE.test(f) && CODE.test(f) && !DECLARATION.test(f))
-  const importers = files.filter(f => OUTSIDE.test(f) && !ENGINE.test(f) && CODE.test(f) && !DECLARATION.test(f) && importsOf(f, root).some(g => ENGINE.test(g)))
-  const reached = closureOf([...entries, ...gates, ...importers], { root })
-  return modules.filter(m => !reached.has(m)).sort()
-}
 
 export const coreFiles = () => execFileSync('git', ['ls-files', '-z', 'src'], { encoding: 'utf8' })
   .split('\0')
   .filter(f => f && /\.(m|c)?tsx?$/.test(f) && CORE.some(re => re.test(f)))
 
 export const packageFiles = () => execFileSync('git', ['ls-files', '-z', 'packages'], { encoding: 'utf8' }).split('\0').filter(Boolean)
-
-export const engineFiles = () => execFileSync('git', ['ls-files', '-z', 'src/pdf-reader/engine'], { encoding: 'utf8' })
-  .split('\0')
-  .filter(f => f && (CODE.test(f) || STYLESHEET.test(f)))
 
 // (the program's path made a URL by node, as the other scripts do: joined to `file://` by hand it equals this module's
 // address only for a path a URL spells unchanged, and from a checkout under one with a space in it the gate read nothing
@@ -456,16 +368,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1)
   }
   console.log(`boundary check: ${files.length} core files import no platform module`)
-  const engine = engineFiles()
-  const found = engineViolations(engine)
-  const unexpected = found.filter(v => !movesPending(v))
-  if (unexpected.length > 0) {
-    console.error(`The engine imports what it may not (an engine file imports the engine, ${ENGINE_ALLOW.join(', ')}, node: modules and, in rules/, the layout rules' validator):`)
-    for (const v of unexpected) console.error(`  ${v.file}: imports ${v.spec} (${v.why})`)
-    process.exit(1)
-  }
-  const tolerated = found.length > 0 ? ` (${found.length} imports tolerated until ${[...ENGINE_MOVE_OUT.map(f => `${f} leaves`), ...ENGINE_MOVE_IN.map(m => `${m} enters`)].join(', ')})` : ''
-  console.log(`boundary check: ${engine.length} engine files import only the engine, ${ENGINE_ALLOW.length} core modules and the layout rules' validator, by relative path${tolerated}`)
   const packages = packageFiles()
   const stray = packageViolations(packages)
   if (stray.length > 0) {

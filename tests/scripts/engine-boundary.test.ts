@@ -1,25 +1,19 @@
-// The engine's boundary (scripts/check-boundary.mjs, ENGINE): what a file of src/pdf-reader/engine may import, which ported
-// files its entries reach, and which of its modules nothing reaches. Every case is a small tree written in a temporary
-// directory, so that the rule is judged on what it is given and not on what the engine holds today; the last group reads
-// the repository's own tree for the three things that must stay true of it.
+// The boundary gate's port and closure rules (scripts/check-boundary.mjs): what a file states of its origin, and which ported
+// files the closure of an entry reaches (the licence of what a reader's build would carry: tests/pdf-reader/engine-contract.test.ts).
+// Its rules for today's engine (src/pdf-reader/engine) went with that engine at the cut-over. Every case is a small tree
+// written in a temporary directory, so that the rule is judged on what it is given.
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   closureOf,
-  ENGINE,
-  ENGINE_ALLOW,
-  ENGINE_PACKAGES,
-  engineViolations,
   PORT_STATEMENT,
   portedInClosure,
   statesPort,
-  unreached,
   // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 } from '../../scripts/check-boundary.mjs'
 
-type Violation = { file: string; spec: string; why: string }
 const E = 'src/pdf-reader/engine'
 
 const roots: string[] = []
@@ -34,175 +28,6 @@ function tree(files: Record<string, string>) {
   }
   return { root, files: Object.keys(files) }
 }
-/** the specifiers of the engine file `file` (holding `text`) that the rule refuses */
-function violationsOf(text: string, file = `${E}/pipeline/x.mjs`) {
-  const t = tree({ [file]: text })
-  return (engineViolations([file], { root: t.root }) as Violation[]).map(v => v.spec)
-}
-
-describe('what an engine file may import', () => {
-  it('refuses the extension\'s messaging by its alias, and the UI by a relative path', () => {
-    expect(violationsOf("import { send } from '@/shared/messages'\n")).toEqual(['@/shared/messages'])
-    expect(violationsOf("import { S } from '../../ui/strings'\n", `${E}/x.mjs`)).toEqual(['../../ui/strings'])
-  })
-  it('says why, and which file', () => {
-    const t = tree({ [`${E}/x.mjs`]: "import { S } from '../../ui/strings'\n" })
-    const [v] = engineViolations([`${E}/x.mjs`], { root: t.root }) as Violation[]
-    expect(v).toEqual({ file: `${E}/x.mjs`, spec: '../../ui/strings', why: expect.stringContaining('src/core/sentences') })
-  })
-  it('lets src/core/sentences, src/core/protector/tokens, src/core/names and src/core/protector/math-runs through by a relative path, however the module is spelled', () => {
-    expect(violationsOf("import { splitSentences } from '../../../core/sentences'\n")).toEqual([])
-    expect(violationsOf("import { splitSentences } from '../../../core/sentences/index.ts'\n")).toEqual([])
-    expect(violationsOf("import { toAlpha } from '../../../core/protector/tokens'\nimport { n } from '../../../core/protector/tokens.ts'\n")).toEqual([])
-    expect(violationsOf("import { isName } from '../../../core/names'\nexport * from '../../../core/names.ts'\n")).toEqual([])
-    expect(violationsOf("import { balancedRuns } from '../../../core/protector/math-runs.ts'\n")).toEqual([])
-  })
-  it('refuses an alias for its spelling, even to a module the engine may import or to the engine itself: only a bundler resolves it', () => {
-    expect(violationsOf("import { toAlpha } from '@/core/protector/tokens'\n")).toEqual(['@/core/protector/tokens'])
-    expect(violationsOf("import { toAlpha } from '~/core/protector/tokens.ts'\n")).toEqual(['~/core/protector/tokens.ts'])
-    expect(violationsOf("import { a } from '@/pdf-reader/engine/layout/file.mjs'\n")).toEqual(['@/pdf-reader/engine/layout/file.mjs'])
-    const t = tree({ [`${E}/x.mjs`]: "import { a } from '@/pdf-reader/engine/layout/file.mjs'\n" })
-    expect((engineViolations([`${E}/x.mjs`], { root: t.root }) as Violation[])[0]?.why).toMatch(/alias/)
-  })
-  it('judges the destination of a relative path: a forbidden module is refused, however it is spelled', () => {
-    expect(violationsOf("import { serialize } from '../../../core/protector/serialize'\n")).toEqual(['../../../core/protector/serialize'])
-    expect(violationsOf("import { serialize } from '@/core/protector'\n")).toEqual(['@/core/protector'])
-  })
-  it('allows those four modules and no other of the core: a sibling of one is another module', () => {
-    expect(violationsOf("import { x } from '../../../core/sentences/other'\n")).toEqual(['../../../core/sentences/other'])
-    expect(violationsOf("import { x } from '../../../core/text'\n")).toEqual(['../../../core/text'])
-    expect(violationsOf("import { x } from '../../../core/namesake'\n")).toEqual(['../../../core/namesake'])
-  })
-  it('lets the engine import itself, from any depth, and node: modules', () => {
-    expect(violationsOf("import { a } from './a.mjs'\nimport { b } from '../layout/b.mjs'\nimport { c } from '../../../pdf-reader/engine/c.mjs'\n")).toEqual([])
-    expect(violationsOf("import { readFileSync } from 'node:fs'\n", `${E}/node-files.mjs`)).toEqual([])
-  })
-  it('refuses the engine importing itself back out through its own directory\'s parent', () => {
-    expect(violationsOf("import { a } from '../a.mjs'\n", `${E}/x.mjs`)).toEqual(['../a.mjs'])
-    expect(violationsOf("import { controller } from '../controller'\n", `${E}/x.mjs`)).toEqual(['../controller'])
-  })
-  it('catches every form an import takes: re-exports, dynamic imports, require, a bare side-effect import', () => {
-    expect(violationsOf("export * from '@/ui/strings'\n")).toEqual(['@/ui/strings'])
-    expect(violationsOf("export { S } from '@/ui/strings'\n")).toEqual(['@/ui/strings'])
-    expect(violationsOf("const s = await import('@/ui/strings')\n")).toEqual(['@/ui/strings'])
-    expect(violationsOf("const s = require('@/ui/strings')\n")).toEqual(['@/ui/strings'])
-    expect(violationsOf("import '@/ui/strings'\n")).toEqual(['@/ui/strings'])
-  })
-  it('reads a comment that names an import as no import', () => {
-    expect(violationsOf("// import { S } from '@/ui/strings'\n/* import x from '@/shared/messages' */\nexport const a = 1\n")).toEqual([])
-  })
-  it('reads quoted data that the tolerant import matcher takes for a specifier as no import', () => {
-    // as latex-front.mjs's tables: `export … from '`, a quote and a stretch of data up to the next quote
-    expect(violationsOf("export const NAMES = [\n  ['title', 'comes from', true],\n  ['author', false],\n]\n")).toEqual([])
-  })
-  it('judges the engine alone: a file outside it is none of this rule\'s', () => {
-    const t = tree({ 'src/core/x.ts': "import { S } from '@/ui/strings'\n", 'src/pdf-reader/session/y.mjs': "import { S } from '@/ui/strings'\n" })
-    expect(engineViolations(['src/core/x.ts', 'src/pdf-reader/session/y.mjs'], { root: t.root })).toEqual([])
-  })
-})
-
-describe('every way a module is named is judged: the rule is a whitelist', () => {
-  it('refuses a specifier that is not a relative path, a node: module or an allowed package: a build setting\'s, a root-absolute path, a URL', () => {
-    expect(violationsOf("import { browser } from '#imports'\n")).toEqual(['#imports'])
-    expect(violationsOf("import { S } from '/src/ui/strings.ts'\n")).toEqual(['/src/ui/strings.ts'])
-    expect(violationsOf("import { x } from 'https://example.com/x.js'\n")).toEqual(['https://example.com/x.js'])
-    expect(violationsOf("export * from '#imports'\n")).toEqual(['#imports'])
-    expect(violationsOf("import '#imports'\n")).toEqual(['#imports'])
-    expect(violationsOf("const m = await import('/src/ui/strings.ts')\n")).toEqual(['/src/ui/strings.ts'])
-  })
-  it('judges a dynamic import written as a template literal, and refuses one whose specifier is computed', () => {
-    expect(violationsOf("const m = await import(`../../../ui/strings.ts`)\n")).toEqual(['../../../ui/strings.ts'])
-    expect(violationsOf("const m = await import(`./a.mjs`)\n")).toEqual([])
-    expect(violationsOf("const m = await import(`./${name}.mjs`)\n")).toEqual(['import(`./${name}.mjs`)'])
-    expect(violationsOf("const m = await import(name)\n")).toEqual(['import(name)'])
-    expect(violationsOf("const m = require(path)\n")).toEqual(['require(path)'])
-    expect(violationsOf("const m = await import(  'node:fs'  )\n")).toEqual([])
-  })
-  it('judges new URL(…, import.meta.url): it must stay inside the engine, and its path must be a literal', () => {
-    expect(violationsOf("const u = new URL('../../../ui/strings.ts', import.meta.url)\n")).toEqual(['../../../ui/strings.ts'])
-    expect(violationsOf("const u = new URL('./layout-rules.json', import.meta.url)\n", `${E}/rules/layout.mjs`)).toEqual([])
-    expect(violationsOf("const u = new URL(path, import.meta.url)\n")).toEqual(['new URL(path, import.meta.url)'])
-    // (a URL that is not made of the module's own address is the host's business, not a way into the engine)
-    expect(violationsOf("const u = new URL(value)\nconst v = new URL(url, site)\n")).toEqual([])
-  })
-  it('judges a type-only import and a type-only export as it judges a value one: a consumer\'s build resolves it', () => {
-    expect(violationsOf("import type { Provider } from '@/providers/types'\n")).toEqual(['@/providers/types'])
-    expect(violationsOf("export type { Row } from '@/shared/messages'\n")).toEqual(['@/shared/messages'])
-    expect(violationsOf("import type { S } from '../../../ui/strings'\n")).toEqual(['../../../ui/strings'])
-    expect(violationsOf("import { type S } from '../../../ui/strings'\n")).toEqual(['../../../ui/strings'])
-    expect(violationsOf("type T = import('@/ui/strings').S\n")).toEqual(['@/ui/strings'])
-    expect(violationsOf("type T = typeof import('../../../ui/strings.ts')\n")).toEqual(['../../../ui/strings.ts'])
-    expect(violationsOf("import type { A } from './a.mjs'\nexport type { B } from '../layout/b.mjs'\n")).toEqual([])
-  })
-  it('judges the declaration files and the TypeScript files of the engine as it judges its modules', () => {
-    expect(violationsOf("import type { S } from '@/ui/strings'\n", `${E}/pipeline/x.d.mts`)).toEqual(['@/ui/strings'])
-    expect(violationsOf("export { S } from '../../../ui/strings'\n", `${E}/pipeline/x.d.mts`)).toEqual(['../../../ui/strings'])
-    expect(violationsOf("import type { A } from './a.mjs'\nexport declare const x: number\n", `${E}/pipeline/x.d.mts`)).toEqual([])
-    expect(violationsOf("import type { ZodMiniType } from 'zod/mini'\n", `${E}/rules/layout.d.mts`)).toEqual([])
-    expect(violationsOf("import type { ZodMiniType } from 'zod/mini'\n", `${E}/pipeline/x.d.mts`)).toEqual(['zod/mini'])
-    expect(violationsOf("import { S } from '@/ui/strings'\n", `${E}/view/outline.ts`)).toEqual(['@/ui/strings'])
-    expect(violationsOf("import { S } from '@/ui/strings'\n", `${E}/view/x.tsx`)).toEqual(['@/ui/strings'])
-  })
-  it('reads the form a statement has, not any text that holds `from` and a quote (a table\'s data is no import)', () => {
-    expect(violationsOf("export const NAMES = [\n  ['title', 'comes from', true],\n  ['author', false],\n]\n")).toEqual([])
-    expect(violationsOf("import {\n  a,\n  b,\n} from './ab.mjs'\nimport x, { y } from './xy.mjs'\nimport z, * as w from './zw.mjs'\nimport def from './def.mjs'\n")).toEqual([])
-    expect(violationsOf("import{S}from'@/ui/strings'\nexport*from'#imports'\n")).toEqual(['@/ui/strings', '#imports'])
-  })
-})
-
-describe('the other ways an engine file reaches outside itself', () => {
-  it('judges a triple-slash reference path like any specifier, and refuses a reference to types or a lib', () => {
-    expect(violationsOf('/// <reference path="../../../ui/strings.d.ts" />\nexport declare const a: number\n', `${E}/pipeline/x.d.mts`)).toEqual(['../../../ui/strings.d.ts'])
-    expect(violationsOf('/// <reference path="/src/ui/strings.d.ts" />\n', `${E}/pipeline/x.d.mts`)).toEqual(['/src/ui/strings.d.ts'])
-    expect(violationsOf('/// <reference path="./a.d.mts" />\n/// <reference path="b.d.mts" />\n', `${E}/pipeline/x.d.mts`)).toEqual([])
-    expect(violationsOf('/// <reference types="node" />\n', `${E}/pipeline/x.d.mts`)).toEqual(['/// <reference types="node" />'])
-    expect(violationsOf('/// <reference lib="dom" />\n', `${E}/pipeline/x.d.mts`)).toEqual(['/// <reference lib="dom" />'])
-    expect(violationsOf('/// <reference no-default-lib="true" />\n', `${E}/pipeline/x.d.mts`)).toEqual(['/// <reference no-default-lib="true" />'])
-    // (the single-quoted form, a TypeScript file, and the directive's place among comments)
-    expect(violationsOf("// a comment\n/// <reference types='vite/client' />\n", `${E}/view/outline.ts`)).toEqual(["/// <reference types='vite/client' />"])
-  })
-  it('refuses import.meta.glob and import.meta.resolve, whatever they are given', () => {
-    expect(violationsOf("const files = import.meta.glob('./*.mjs')\n")).toEqual(["import.meta.glob('./*.mjs')"])
-    expect(violationsOf("const f = import.meta.resolve('../../../ui/strings.ts')\n")).toEqual(["import.meta.resolve('../../../ui/strings.ts')"])
-    expect(violationsOf("const f = import.meta.resolve('./a.mjs')\n")).toEqual(["import.meta.resolve('./a.mjs')"])
-  })
-  it('judges what a stylesheet of the engine imports or loads: @import and url() that leave it are refused', () => {
-    const css = `${E}/view/engine.css`
-    expect(violationsOf("@import url('../../../ui/x.css');\n.a { color: red }\n", css)).toEqual(['../../../ui/x.css'])
-    expect(violationsOf('@import "https://example.com/y.css";\n', css)).toEqual(['https://example.com/y.css'])
-    expect(violationsOf('.a { background: url(/fonts/a.woff2) }\n', css)).toEqual(['/fonts/a.woff2'])
-    expect(violationsOf('@font-face { src: url("../../../x.woff") format("woff"), url(\'../../y.woff\') }\n', css)).toEqual(['../../../x.woff', '../../y.woff'])
-    expect(violationsOf('@import "./b.css";\n.a { background: url(./a.png); mask: url(font.svg#m) }\n', css)).toEqual([])
-    // (a data URL holds its own bytes, a fragment names an element of the document, a comment says nothing)
-    expect(violationsOf('.a { background: url(data:image/png;base64,AAAA); filter: url(#blur) }\n/* @import "/x.css"; url(/y.png) */\n', css)).toEqual([])
-    expect(violationsOf('.a { content: "url(not a call" }\n', css)).toEqual([])
-  })
-})
-
-describe('the engine\'s packages', () => {
-  it('refuses @cantoo/pdf-lib outside layout/, and in layout/ too: the layout maker is handed it as `PL`, it imports none', () => {
-    expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/pipeline/x.mjs`)).toEqual(['@cantoo/pdf-lib'])
-    expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/view/x.mjs`)).toEqual(['@cantoo/pdf-lib'])
-    expect(violationsOf("import * as PL from '@cantoo/pdf-lib'\n", `${E}/layout/wrap.mjs`)).toEqual(['@cantoo/pdf-lib'])
-  })
-  it('keeps the layout rules\' validator: zod in rules/ alone, as the rules-as-data plan allowed', () => {
-    expect(ENGINE_PACKAGES).toEqual([{ name: 'zod', under: `${E}/rules/` }, { name: '@readarxiv/engine', under: `${E}/` }])
-    expect(violationsOf("import * as z from 'zod/mini'\n", `${E}/rules/layout.mjs`)).toEqual([])
-    expect(violationsOf("import * as z from 'zod/mini'\n", `${E}/layer-proto/run.mjs`)).toEqual(['zod/mini'])
-  })
-  it('refuses any other package, whatever it is, wherever it is', () => {
-    expect(violationsOf("import PDF from 'pdfjs-dist'\n")).toEqual(['pdfjs-dist'])
-    expect(violationsOf("const m = await import('lodash')\n", `${E}/rules/layout.mjs`)).toEqual(['lodash'])
-  })
-})
-
-describe('the exported rule', () => {
-  it('scopes to src/pdf-reader/engine/ and allows the four core modules by path', () => {
-    expect(ENGINE.test(`${E}/mt.mjs`)).toBe(true)
-    expect(ENGINE.test('src/pdf-reader/controller.ts')).toBe(false)
-    expect(ENGINE_ALLOW).toEqual(['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs'])
-  })
-})
 
 describe('a port statement', () => {
   const states = (text: string) => PORT_STATEMENT.test(text.replace(/^[ \t]*(?:\/\/+|\/\*+|\*+\/?)/gm, '').replace(/\s+/g, ' '))
@@ -283,63 +108,6 @@ describe('portedInClosure: the licence of what an entry reaches', () => {
   })
 })
 
-describe('unreached: the engine modules no entry and no gate reaches', () => {
-  const engineTree = (extra: Record<string, string> = {}) => tree({
-    [`${E}/view.mjs`]: "export * from './view/a.mjs'\n",
-    [`${E}/view/a.mjs`]: "import { b } from './b.mjs'\nexport const a = b\n",
-    [`${E}/view/b.mjs`]: 'export const b = 1\n',
-    [`${E}/view/orphan.mjs`]: 'export const orphan = 1\n',
-    [`${E}/view/orphan.d.mts`]: 'export declare const orphan: number\n',
-    [`${E}/layout/gated.mjs`]: 'export const gated = 1\n',
-    [`${E}/layout/used.mjs`]: 'export const used = 1\n',
-    [`${E}/layout/typed.mjs`]: 'export const typed = 1\n',
-    [`${E}/rules/data.json`]: '{}\n',
-    'lab/pdf/spikes/gate.mjs': "import { gated } from '../../../src/pdf-reader/engine/layout/gated.mjs'\nconsole.log(gated)\n",
-    ...extra,
-  })
-  const listing = (t: { root: string; files: string[] }) => ({ root: t.root, files: t.files })
-
-  it('names a module no entry and no gate imports, and only that, beside none of the entry\'s own closure', () => {
-    const t = engineTree()
-    expect(unreached([`${E}/view.mjs`], ['lab/pdf/spikes/gate.mjs'], listing(t))).toEqual([`${E}/layout/used.mjs`, `${E}/layout/typed.mjs`, `${E}/view/orphan.mjs`].sort())
-  })
-  it('counts a module a gate imports as reached, whether or not the gate is in the listing', () => {
-    const t = engineTree()
-    const files = t.files.filter(f => f !== 'lab/pdf/spikes/gate.mjs')
-    expect(unreached([`${E}/view.mjs`], ['lab/pdf/spikes/gate.mjs'], { root: t.root, files })).not.toContain(`${E}/layout/gated.mjs`)
-    expect(unreached([`${E}/view.mjs`], [], { root: t.root, files })).toContain(`${E}/layout/gated.mjs`)
-  })
-  it('takes every file outside the engine, in src/ and lab/, that imports an engine module as a root too, and no test, script or parked file', () => {
-    const t = engineTree({
-      'src/pdf-reader/session/session.mjs': "import { used } from '../engine/layout/used.mjs'\nexport const s = used\n",
-      'lab/pdf/layer-lab/lab.mjs': "import { orphan } from '../../../src/pdf-reader/engine/view/orphan.mjs'\nexport const l = orphan\n",
-      'tests/pdf-reader/typed.test.ts': "import { typed } from '@/pdf-reader/engine/layout/typed.mjs'\nexport const t = typed\n",
-      'scripts/make.mjs': "import { typed } from '../src/pdf-reader/engine/layout/typed.mjs'\nexport const m = typed\n",
-      'parked/engine/x.mjs': "import { typed } from '../../src/pdf-reader/engine/layout/typed.mjs'\nexport const x = typed\n",
-    })
-    // (a module only a test, a script or parked code reaches is parked with its tests: unreached)
-    expect(unreached([`${E}/view.mjs`], ['lab/pdf/spikes/gate.mjs'], listing(t))).toEqual([`${E}/layout/typed.mjs`])
-  })
-  it('follows an importer outside the engine to the engine modules it reaches in turn', () => {
-    const t = engineTree({
-      'src/pdf-reader/session/session.mjs': "import { helper } from './helper.mjs'\nexport const s = helper\n",
-      'src/pdf-reader/session/helper.mjs': "import { used } from '../engine/layout/used.mjs'\nexport const helper = used\n",
-    })
-    expect(unreached([`${E}/view.mjs`], ['lab/pdf/spikes/gate.mjs'], listing(t))).not.toContain(`${E}/layout/used.mjs`)
-  })
-  it('reaches nothing through a type-only import, and counts neither declaration files nor data files as modules', () => {
-    const t = engineTree({ 'src/pdf-reader/session/types.ts': "import type { typed } from '../engine/layout/typed.mjs'\nexport type T = typeof typed\n" })
-    const out = unreached([`${E}/view.mjs`], ['lab/pdf/spikes/gate.mjs'], listing(t))
-    expect(out).toContain(`${E}/layout/typed.mjs`)
-    expect(out.some((f: string) => f.endsWith('.d.mts') || f.endsWith('.json'))).toBe(false)
-  })
-  it('names an entry or a gate that is not there, rather than calling everything unreached', () => {
-    const t = engineTree()
-    expect(() => unreached([`${E}/absent.mjs`], [], listing(t))).toThrow(/absent\.mjs/)
-    expect(() => unreached([`${E}/view.mjs`], ['lab/absent.mjs'], listing(t))).toThrow(/lab\/absent\.mjs/)
-  })
-})
-
 describe('closureOf', () => {
   it('is the entries and every file their value imports reach, resolved to files, once each', () => {
     const t = tree({
@@ -349,18 +117,5 @@ describe('closureOf', () => {
       'src/unrelated.mjs': 'export const u = 1\n',
     })
     expect([...closureOf(['src/a.mjs'], { root: t.root })].sort()).toEqual(['src/a.mjs', 'src/b.mjs', 'src/c.ts'])
-  })
-  it('follows a transition path to the moved module and on from it, and no other package', () => {
-    const t = tree({
-      'src/pdf-reader/engine/source/old.mjs': "export { x } from '@readarxiv/engine/today/source/old.mjs'\nimport '@readarxiv/engine'\n",
-      'packages/engine/src/source/old.mjs': "import { y } from '../memory.mjs'\nexport const x = y\n",
-      'packages/engine/src/memory.mjs': 'export const y = 1\n',
-      'packages/engine/src/index.ts': 'export const z = 1\n',
-    })
-    expect([...closureOf(['src/pdf-reader/engine/source/old.mjs'], { root: t.root })].sort()).toEqual([
-      'packages/engine/src/memory.mjs',
-      'packages/engine/src/source/old.mjs',
-      'src/pdf-reader/engine/source/old.mjs',
-    ])
   })
 })

@@ -232,7 +232,7 @@ a gate is named by its id there. The rows after them are this repository's own.
 | Display: no page drawn worse than today's reader draws it, a difference only where nearer A | `display` (`lab/typeset/parity/`: both drawn beside A's page with the same rows) | |
 | I11: every box of a lit unit painted whole on both panes, as the reader's painter draws it | the reader gate's entry (`lab/typeset/gate-l1.mjs` with `--entry`, `lab/typeset/painted.mjs`: a box not painted whole fails its run), so `reader-parts` and `sentence-cover`; `packages/reader/tests/highlight-display-rows.test.ts`; `tests/lab/parity-paint-binds.test.ts` (the display gate's paint model the painter's outlines) | the release check counts no I11 of its own (`lab/release-check/gates.mjs` `entryRunOf` reads the run's exit): a run that also exits 1 for what it states, as the door's rows do for the added pairs' paragraph points, would pass a box not painted whole |
 | A package imports only the packages `PACKAGES` allows, by entry; nothing of the extension | `scripts/check-boundary.mjs` (`pnpm lint`) | |
-| The core is platform-free (today's engine, which `ENGINE_ALLOW` and `ENGINE_PACKAGES` held, went at the cut-over) | `scripts/check-boundary.mjs` | |
+| The core is platform-free (today's engine and the gate's rules for it went at the cut-over) | `scripts/check-boundary.mjs` | |
 | A transition path is imported by an old path or the lab alone | `tests/pdf-reader/engine-contract.test.ts` | |
 | Every module the website imports by path stays at it, with every name it takes | `tests/contract/website-imports.test.ts`, `tests/contract/website-use.tsx` (type-checked) | |
 | No code ported from a GPL project is reached by an extension entry | `tests/contract/no-gpl.test.ts` | |
