@@ -49,7 +49,7 @@ export const DEFINITIONS = {
   history: "A history comment line, in the packages (product code and style sheets under a profile's workspace directories), is a line whose comment text says today's, holds a date (yyyy-mm-dd) that names no measurement (a date beside 'measured' or 'measurement' is kept), or names a reviewer (Codex, Devin, Copilot, CodeRabbit), a round (`round B14`) or a plan or task (`Plan 8b`, `Task 5`); each line counted once.",
   duplicates: 'A duplicated rule is a function of 60 tokens or more (comments and white space aside, names and literals as written) whose tokens equal a function\'s in another file of product, lab or tooling code, counted at the outermost such function; a copy note is a file whose first 12 lines say COPIED or "copied from".',
   dead: "A dead module is a product module no build's entry point reaches, a type-only import counted (the website's builds counted where its tree is given); a dead export is an exported name of a product module (not an entry) that no module of either tree imports, through re-exports followed; `tests only` where only tests, the lab or tooling import it. A namespace import (`import * as N`) imports the members its module reads of it (`N.x`, `N.T`, `typeof N.x`), and so does a dynamic import's or a require's module object (the members a declaration destructures of it, one read off it, or those read of the name it is bound to); where the namespace escapes whole (passed on, re-exported, read by a computed member, its type taken whole, a module object not awaited into a name) it imports every member, as a re-exported namespace (`export * as`), a star re-export, a whole module's type (`import('…')` with no member), a page's script and a file named by its URL do: each import that takes every export of a product module is listed with why.",
-  rules: "A rule (a tuned threshold or a name list of the debt areas) is unexplained where its comment cites no definition (a borderline threshold, a defined list) and the rule ledger (lab/rules/ledger.json, keyed by file without extension, enclosing function, signature and ordinal: lab/rules/sites.mjs) holds no row whose verdict gives it a reason (lab/rules/ledger.mjs VERDICTS); a magnitude with no stated source and a list whose entries are not judged are reported apart, not counted; with no ledger, every tuned threshold and every list citing no definition is unexplained.",
+  rules: "A rule (a tuned threshold or a name list of the debt areas) is unexplained where its comment cites no definition (a borderline threshold, a defined list) and the rule ledger (lab/rules/ledger.json, keyed by file without extension, enclosing function, signature and ordinal: lab/rules/sites.mjs) holds no row whose verdict gives it a reason (lab/rules/ledger.mjs VERDICTS); a magnitude with no stated source, a list whose entries are not judged and a bound the ledger reads a budget (a quantity the code grows itself whose passing only stops the work: listed beside the unmeasured budgets, design §3c's class of its own) are reported apart, not counted; with no ledger, every tuned threshold and every list citing no definition is unexplained.",
   cutover: "What the cut-over deletes: the product files the builds' entry points (each build's shared and old-arm entries, and its new-arm ones) reach now and no longer reach from its shared and new-arm entries once each build's old-arm modules (the profile's `cut.seeds`, from the design's \"what goes\") are taken out of the graph; with them, every test, lab or tooling file that imports one of them.",
 }
 
@@ -384,20 +384,21 @@ export function debtOf(view, rulesLedger = null) {
   for (const g of mirrors) g.sort((a, b) => (a.repo === b.repo ? a.at.localeCompare(b.at) : a.repo === 'engine' ? -1 : 1)).slice(1).forEach(v => (v.mirror = true))
   // (a group's constant and its mirrors number one thing: a schema number where any of them says so)
   for (const g of mirrors) if (g.some(v => v.schema)) for (const v of g) v.schema = true
-  // (DEFINITIONS.rules: a rule the ledger gives no reason; a magnitude and a list not judged by entry reported apart)
+  // (DEFINITIONS.rules: a rule the ledger gives no reason; a magnitude, a list not judged by entry and a budget reported apart)
   const verdictOf = x => (x.key ? (rulesLedger?.rules?.[x.key]?.verdict ?? null) : null)
   const candidates = [...thresholds.filter(t => t.headline && t.class === 'tuned'), ...lists.filter(l => l.headline && l.class === 'listed')]
-  const rules = { ledger: Boolean(rulesLedger), recorded: rulesLedger?.recorded?.commit ?? null, unexplained: [], magnitudes: [], notJudged: [] }
+  const rules = { ledger: Boolean(rulesLedger), recorded: rulesLedger?.recorded?.commit ?? null, unexplained: [], magnitudes: [], notJudged: [], budgets: [] }
   for (const x of candidates) {
     const v = verdictOf(x)
     const reason = v ? VERDICTS[v]?.reason : false
     if (reason === true) continue
     if (v === 'magnitude') rules.magnitudes.push(x)
     else if (v === 'not judged') rules.notJudged.push(x)
+    else if (v === 'budget') rules.budgets.push(x)
     else rules.unexplained.push(x)
   }
   return {
-    rules: { ledger: rules.ledger, recorded: rules.recorded, unexplained: rules.unexplained.length, magnitudes: rules.magnitudes.length, notJudged: rules.notJudged.length, list: rules.unexplained.map(x => ({ at: x.at, key: x.key ?? null, repo: x.repo, file: x.file, line: x.line })) },
+    rules: { ledger: rules.ledger, recorded: rules.recorded, unexplained: rules.unexplained.length, magnitudes: rules.magnitudes.length, notJudged: rules.notJudged.length, budgets: rules.budgets.length, list: rules.unexplained.map(x => ({ at: x.at, key: x.key ?? null, repo: x.repo, file: x.file, line: x.line })) },
     thresholds: {
       all: count(thresholds, t => t.class),
       headline: count(thresholds.filter(t => t.headline), t => t.class),
@@ -796,7 +797,7 @@ export function headlineOf(c) {
     { id: 'gpl', measure: 'Ported GPL files, and those a build reaches', values: v(t => `${t.gpl.length}; ${t.gpl.filter(g => g.reachedBy.length).length}`), target: '0 reached (design stage 4: no ported request code remains)' },
     { id: 'thresholds', measure: 'Tuned thresholds in the engine and typesetter, budgets apart (borderline; with no reason)', values: v(t => `${n(t.debt.thresholds.headline.tuned ?? 0)} (${n(t.debt.thresholds.headline.borderline ?? 0)}; ${n(t.debt.thresholds.headlineTunedNoReason)})`), target: 'each one left listed with its reason (baseline about 150 in the maker)' },
     { id: 'budgets', measure: 'Budgets, product code (unmeasured; in the engine and typesetter)', values: v(t => `${n(t.debt.budgets.count)} (${n(t.debt.budgets.unmeasured)}; ${n(t.debt.budgets.headline)})`), target: 'each with its unit and a measurement or a platform limit on record' },
-    { id: 'rules', measure: 'Rules with no reason: tuned thresholds and name lists citing no definition that the rule ledger gives no reason (magnitudes with no stated source; lists whose entries are not judged)', values: v(t => `${n(t.debt.rules.unexplained)} (${n(t.debt.rules.magnitudes)}; ${n(t.debt.rules.notJudged)})${t.debt.rules.ledger ? '' : ', no ledger'}`), target: '0 (design §3c): a citation or recorded cases' },
+    { id: 'rules', measure: 'Rules with no reason: tuned thresholds and name lists citing no definition that the rule ledger gives no reason (magnitudes with no stated source; lists whose entries are not judged; bounds the ledger reads a budget)', values: v(t => `${n(t.debt.rules.unexplained)} (${n(t.debt.rules.magnitudes)}; ${n(t.debt.rules.notJudged)}; ${n(t.debt.rules.budgets)})${t.debt.rules.ledger ? '' : ', no ledger'}`), target: '0 (design §3c): a citation or recorded cases' },
     { id: 'lists', measure: 'Name lists in the engine and typesetter, vocabularies apart (entries)', values: v(t => `${n(sum(Object.values(t.debt.lists.headline)))} (${n(t.debt.lists.headlineEntries)})`), target: 'each one left listed with its reason (baseline about 100 name tables)' },
     { id: 'vocabularies', measure: 'Vocabularies, product code (in the engine and typesetter)', values: v(t => `${t.debt.vocabularies.count} (${t.debt.vocabularies.headline})`), target: null },
     { id: 'special', measure: 'Per-paper literals; per-package (.sty/.cls) literals, product code', values: v(t => `${t.debt.papers.length}; ${t.debt.texFiles.length}`), target: null },
@@ -947,6 +948,7 @@ export function numbersOf(c) {
     rulesLedger: T.AFTER.debt.rules.recorded,
     magnitudesAfter: T.AFTER.debt.rules.magnitudes,
     notJudgedAfter: T.AFTER.debt.rules.notJudged,
+    ruleBudgetsAfter: T.AFTER.debt.rules.budgets,
     budgetsAfter: T.AFTER.debt.budgets.count,
     budgetsUnmeasuredAfter: T.AFTER.debt.budgets.unmeasured,
     vocabulariesAfter: T.AFTER.debt.vocabularies.count,

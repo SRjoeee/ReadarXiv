@@ -257,4 +257,11 @@ describe("the census's reading of the ledger", () => {
     const read = await census({ today: null, now: scan(), rulesLedger })
     expect(read.trees.NOW.debt.rules).toMatchObject({ ledger: true, recorded: 'c0ffee', unexplained: 1, magnitudes: 1, notJudged: 0 })
   })
+  it('reports a bound the ledger reads a budget apart, beside the magnitudes, never as a rule with no reason (VERDICTS.budget)', async () => {
+    const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: p => p.startsWith('packages/engine/src/') })]
+    const rulesLedger = { recorded: { commit: 'c0ffee' }, rules: { 'packages/engine/src/index::(top)::GAP': { verdict: 'magnitude' }, 'packages/engine/src/index::(top)::KINDS#1': { verdict: 'decides' }, 'packages/engine/src/index::far::>4#1': { verdict: 'budget' } } }
+    const read = await census({ today: null, now: scan(), rulesLedger })
+    expect(read.trees.NOW.debt.rules).toMatchObject({ ledger: true, unexplained: 0, magnitudes: 1, notJudged: 0, budgets: 1 })
+    expect(read.trees.NOW.debt.rules.list).toEqual([])
+  })
 })

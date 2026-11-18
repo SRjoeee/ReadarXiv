@@ -9,7 +9,7 @@ export interface Tree {
   chains: { count: number; orders: number; chains: { file: string; kinds: string[]; builds: string[]; implementation: string[] }[]; implementations: { id: string; file: string; hosts: string[] }[] }
   gpl: { file: string; repo: string; path: string; code: number; role: string; reachedBy: { build: string; path: string[] }[] }[]
   debt: {
-    rules: { ledger: boolean; recorded: string | null; unexplained: number; magnitudes: number; notJudged: number; list: { at: string; key: string | null; repo: string; file: string; line: number }[] }
+    rules: { ledger: boolean; recorded: string | null; unexplained: number; magnitudes: number; notJudged: number; budgets: number; list: { at: string; key: string | null; repo: string; file: string; line: number }[] }
     thresholds: { all: Counts; headline: Counts; headlineTunedNoReason: number; list: { class: string; name: string | null; unit?: string; source?: string | null; at: string }[] }
     budgets: { count: number; unmeasured: number; headline: number; headlineUnmeasured: number; byUnit: Counts; bySource: Counts }
     vocabularies: { count: number; headline: number; list: { form: string; size: number; name: string | null; at: string; repo: string; headline: boolean; by: string }[] }
