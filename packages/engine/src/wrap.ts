@@ -38,7 +38,7 @@ import { at } from './bounded-reads.ts'
 import { isMemoryError } from './memory.ts'
 import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.ts'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover, vOf } from './remove.ts'
-import { appendSection } from './section.ts'
+import { appendSection, concat } from './section.ts'
 import { startxrefOf } from './tail.ts'
 import { openObjects } from './xref.ts'
 import type { WrapStats } from './delta-wire.ts'
@@ -195,17 +195,6 @@ const equalBytes = (a: Uint8Array, b: Uint8Array) => {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
   return true
-}
-const concat = (parts: Uint8Array[]): Uint8Array => {
-  let n = 0
-  for (const p of parts) n += p.length
-  const out = new Uint8Array(n)
-  let o = 0
-  for (const p of parts) {
-    out.set(p, o)
-    o += p.length
-  }
-  return out
 }
 const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'))
 const hex = (b: Uint8Array) => {
