@@ -4652,8 +4652,11 @@ bug? The original sets "Figure 1." at 47 in the margin and every line of its tex
   hung caption's indent is its label box's width, the label and its separator (`\hangindent`): the original's text edge is a
   consequence of "Figure 1." being that wide, not a position of its own. Where every text line of a member starts at one x past
   the label's end and the label stands at its first line's measure start (Line x0 and m0, Label.ink; two text lines at least),
+  or, where TeX states the hang, where the later text lines of the first line's frame state one measure (Line m0) right of the
+  first line's and stand at it, the first line's text begins at it and the label at the first line's measure start, each within
+  what a line's ink differs by under one measure (§18.94: the ink to 0.01 missed a protruded first glyph by 0.31 pt),
   the label drawn anew keeps its place, its separator and the space TeX set after it (the original's gap from the label's ink to
-  its text, `hangGap`, at the state's scale), and its text hangs at that width: the first text after the label starts at the
+  its text, `hangGap`, or to the hang TeX states, at the state's scale), and its text hangs at that width: the first text after the label starts at the
   drawn label's end and that space, and every later line of the block starts at that edge, its measure from there to the
   original's right edge. A narrower label (Chinese "Figure 1.") hangs its text nearer, a wider one ("Abbildung 1.") farther. The
   label and its space neither stretch nor shrink, a box as TeX's hang is (the breaker counts no space of the label's as one that
@@ -7444,8 +7447,11 @@ bytes it was.
     makes one: a row of other members' ink whose hull happens to stand about the middle read centred where it is a theorem's head
     beside its first line, a list item's label beside its last, a table's row header beside a cell, two subcaptions side by side;
     a line nothing told is read by its own ink as before), and a member's room below its last
-    block. The paragraph's lay (`packages/typeset/src/unit/blocks.ts` measuresOf, which guesses a change of measure from the lines'
-    edges) is not changed here: the lay lane deletes that guessing and reads `Line[7..8]` (rebuild/google-lay stays unmerged).
+    block. The paragraph's lay reads `Line[7]` where a label drawn anew hangs its text (§18.94, H1 (a)); `measuresOf`
+    (`packages/typeset/src/unit/blocks.ts`) still reads a change of measure off the lines' edges, and no line's lay reads its
+    stated measure otherwise: the part does not say which lines TeX stated and which take their frame's, and read for every
+    line it would move 748 members a store that are laid right today (lane para-shape, 2026-11-18; rebuild/google-lay stays
+    unmerged).
 - **The forced break's line** (`marks.ts` BREAKS_TEX; the point class `forced-break`, optional; `ink.ts` FORCED_BREAK, kept apart
   as `breaks` with `fm<n>`'s and `qe<n>`'s, so that no reader of the marks' points meets it; `facts-pass.ts` readElements).
   LaTeX's `\@gnewline` (every `\\` and `\newline` in a paragraph) sets a point `kb<n>` after its own `\unskip`, before
@@ -8102,6 +8108,65 @@ for every syllable (`metrics/table.ts`), 2.36 million times over the four papers
 font and text (`lab/typeset/served-metrics.mjs`, 586134804: the four papers' page lay in the gate p50 87 to 22 ms, every dump
 byte-identical). The reader measures a syllable once a visit (`packages/reader/src/compose/served.ts`, its measures by font and
 text).
+
+### 18.94 A translated paragraph keeps the hang TeX gave its original (the coordinator's ruling of 2026-11-18)
+
+(Numbered 18.94: the fix batch's integration numbers 18.92 and 18.93.) The owner on the compile batch's acceptance page,
+2610.20266v1 p1: the abstract's translation does not take the space its original takes; was a general rule missed, or is there
+no clean way? siamart sets its abstract by `\@hangfrom{Abstract. }` (`@abssec`; LaTeX's `\@hangfrom`: `\hangindent` the label
+box's width, `\hangafter` 1): "Abstract." at the measure's start and every later line of its text hung at the label's width,
+eleven lines at 112.44. The reader drew the Chinese label, the first line after it, and every later line from the label's
+start, 71.69, at the full width. A label drawn anew is its first line's, its rectangle widened to it (§18.29), and a block's
+edge was its leftmost line's (`unit/blocks.ts`), so the later lines ran under the label; §18.29's hang, which would have hung
+them, reads the original's ink to 0.01 and missed by 0.31 pt: microtype protrudes the first glyph of the label and of the text.
+A rule of TeX's was missed, the lay's. The marked compile states the hang already (§18.77: `AXT-MEASURE` records `\hangindent`
+and `\hangafter`, each stated line's measure its `Line[7..8]`: line 0's m0 72, lines 1 to 10's 112.44).
+
+- **H1: a hang TeX states is kept** (`lay/adapt.ts`, the label's widening; `unit/blocks.ts`, the block's edge). Where the later
+  text lines of a member's first frame state one left measure right of its first line's and stand at it, the translation's lines
+  after the first are hung, however many they are: a line past the original's last goes on with the hang, as TeX's does. (a)
+  Where a label is drawn anew at the first line's measure start and the original's text begins at the hang (`\@hangfrom`: the
+  hang is the label's width), at the drawn label's width, §18.29's rule, its test reading TeX's statement (the first line's
+  text at the hang, the label at the first line's measure start, each within `ONE_EDGE`), the space after the label from its
+  ink's end to the hang TeX states. §18.29's ink test stays before it, so that what it hangs is hung as before: of the 22
+  captions a store it hangs, three state no hang (their measure their frame's; a caption set in a box of another `\hsize` states
+  none, §18.77). (b) Else at the hang: the block's edge, below.
+- **H2: a label in the margin stays in the margin** (`unit/blocks.ts` apartEdge). Where a member's first line stands left of one
+  edge its later text lines share, by more than a line's ink differs by under one measure, each later line within that of the
+  leftmost, the member set justified or flush left: its first block's edge is that edge and its first line's indent is signed,
+  so that the first line starts where it starts and every later line, and every line past the original's last, at the edge
+  (B.slots' measure of a line after the first is the block's). It holds a list item TeX sets its first line left of the list's
+  measure (natbib's `\bibhang`, `\itemindent -\leftmargin`: every line's measure from the hang), a label set in the margin left
+  of the measure every line states (2610.21201v1's captions: "Figure 1:" at 90, every line's measure from 138.36; the label
+  drawn anew starts the first line, and the measure, no label's width, stays), a stated hang no drawn label hangs (H1 (b)), and
+  lines the part states nothing of TeX's for, where the lines show it (a contents entry TeX set that no unit owns, its measure
+  the frame's: 2307.16209v1 p12, the first line at 84.95, the later ones at 149.06).
+- **H3: what is not a hang is laid as before.** A first line right of the rest (`\parindent`: the indent rule as before); one its
+  protruded first glyph alone sets left (within `ONE_EDGE`); later lines that share no edge (content set at its own starts, an
+  algorithm's); a measure `measuresOf` reads changing after the first line again (a wrapped figure's shape, by height); a centred
+  or flush-right member; a member of one original line, which has no later line to read: a label drawn anew still widens its
+  line, and a line it grows to starts at the label. The part does not state its hang: TeX's `\hangindent` and `\hangafter` for
+  that paragraph are the instrument's alone (`Instrument.tex.measures`), each line's measure the part's.
+- **H4: the right edge** is a block's rightmost line's, as before: no line's ink sets it by this rule.
+- **The tolerance, `ONE_EDGE`, 0.25 em of the line's size** (`unit/blocks.ts`): what two lines' ink starts differ by under one
+  measure, a glyph's side bearing and microtype's protrusion, measured over the 245 papers' parts (lane cell-vert's v1 chain).
+  Of 190,155 text lines past a member's first (justified or flush left), the ink of 175,833 stands within 0.125 em of the measure
+  TeX states for it, 159 within 0.125 to 0.2 em, then 7 to 26 lines a 0.025 em bin up to 0.4 em (the trough), and the next
+  masses at 0.43, 0.68 and 0.93 to 1.05 em (indents, content); within 0.25 em, the distance's q0.9999 is 0.211 em, and that of
+  the step between two consecutive lines of one stated measure (140,320 pairs) 0.240 em. A hang or a label in the margin stands
+  1 em and more apart.
+- **What the part does not tell.** It states each line's measure, not the primitive that made it: a wrapped figure's
+  `\parshape` that narrows every line after the first to the paragraph's end reads as a hang, and its translation keeps the
+  narrower measure past the figure where TeX's would widen again (as built, those lines had started at the first line's start,
+  over the figure). Not read here: a line's stated measure for every line (§18.77), and the engine's references whose last line
+  states its frame's measure (lane para-shape: 1,108 in 174 papers), which H2 reads by the later lines' ink, at the hang.
+
+Tests: `packages/typeset/tests/unit/para-hang.test.ts` (red first on the base: `\@hangfrom` with a label drawn anew and TeX's
+hang stated 0.31 off the ink, every later line at the drawn label's width with more and fewer lines than the original; a
+`\hangindent` with no label; natbib's `\bibhang`; a caption's label in the margin of its measure; a contents entry; the block's
+signed edge. Laid as before: a `\parindent`, a protruded first line, a wrapped shape, lines that share no edge, a member of one
+line, a one-line heading grown to two, a one-line caption whose label is drawn anew). `label-hang.test.ts`, §18.29's, unchanged.
+The versions: none moves; a rule of the lay (ARCHITECTURE.md §5): nothing stored, no unit, row or digest.
 
 ## 19. The engine's contract
 

@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a passage the paper sets with its later lines hung to the right of its first keeps that shape in the translation: an abstract or a caption whose text the paper sets beside "Abstract." or "Figure 1:", every later line under the start of its text, now under the translated label's end; a contents entry or a reference whose first line starts further left than the rest. Its later lines had run back under the label, at the full width.
 - Changed: in the PDF reader, a figure's or a table's caption keeps its own line spacing, as the paper sets it, and leaves any room it does not need under it. A caption whose translation is shorter than the original had been spread to fill the original's height, its lines pulled apart or its letters spaced out.
 - Changed: in the PDF reader in Korean, a line may end between two syllables of a word, as Korean typesetting does, and every line of a paragraph but its last reaches the column's edge. A Korean line had ended only at a space, and a line whose next word did not fit had been left short, about one line in three in a narrow column.
 - Fixed: in the PDF reader in Chinese and Japanese, a title an author sets at the start of a paragraph with no full stop after it, such as "**Global Matching** We leverage …", is kept apart from the sentence after it by one character's width. It had run flush into it. The translation is asked for as before.
