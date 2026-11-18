@@ -1,6 +1,6 @@
 // The extension's two framed pages, the PDF reader and the popup, in a real browser and with no network (DESIGN §4.0c,
 // PDF-READER §11.1): every way the extension itself opens them still works, and a page that frames them gets nothing.
-// The paper is the repository's sample (tests/fixtures/pdf/sample-1/), served at arXiv's addresses by one route table that
+// The paper is the reader package's fixture (s1-columns, lib/v2-api.mjs), served at arXiv's addresses by one route table that
 // is also the guard (lib/route-table.mjs); our server is its stand-in of /api/v2 (lib/v2-api.mjs), translation the echo
 // endpoint (lib/echo-endpoint.mjs).
 //
@@ -106,7 +106,7 @@ const setReader = change => worker.evaluate(async change => {
 }, change)
 /** the session's dynamic addresses of the two pages, as `runtime.getURL` gives them */
 const dynamic = await worker.evaluate(() => ({ reader: chrome.runtime.getURL('/pdf-reader.html'), popup: chrome.runtime.getURL('/popup.html') }))
-/** our server's answers for the sample so far: a run asks it (the rebuilt reader's open and follow; the old reader's layer) */
+/** our server's answers for the sample so far: a run asks it (the rebuilt reader's open and follow) */
 const layerAsks = () => api.requests.filter(r => r.path === '/api/v2/open' || r.path.startsWith('/api/v2/papers/')).length
 
 /** the reader over a PDF page: its frame's address, whether it acts (its controller), the sample's pages, its run */
