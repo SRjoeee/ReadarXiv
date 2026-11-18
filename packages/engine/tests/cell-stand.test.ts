@@ -43,8 +43,8 @@ describe('readCellStands: the cells TeX set in an m or a b column', () => {
 })
 
 // ---------------------------------------------------------------- through locate and the bundle, on a page made by hand
-/** a table's row of four cells, each a unit of one line: an m cell, a b cell, a p cell and an l cell, its column's class `stand`
- *  where the instrument states one; every glyph its line's unit's text */
+/** four cells of a table, each a row of its own and a unit of one line: an m cell, a b cell, a p cell and an l cell, its column's
+ *  class `stand` where the instrument states one; every glyph its line's unit's text */
 const B = docOf([
   {
     lines: [
@@ -55,13 +55,13 @@ const B = docOf([
     ],
   },
 ])
-const cellOf = (s: string, col: number, stand?: 'm' | 'b'): InstrumentUnit => {
+const cellOf = (s: string, row: number, stand?: 'm' | 'b'): InstrumentUnit => {
   const content: Piece[] = [{ t: 'text', s }]
   return {
     id: unitId('cell', content),
     kind: 'cell',
     content,
-    cell: { table: 0, row: col, col: 0, ...(stand ? { stand } : {}) },
+    cell: { table: 0, row, col: 0, ...(stand ? { stand } : {}) },
   }
 }
 const units: InstrumentUnit[] = [
