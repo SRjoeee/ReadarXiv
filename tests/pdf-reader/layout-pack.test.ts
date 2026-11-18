@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { GLYPH_COLUMNS, type Glyph, packGlyphs, pageInk } from '@readarxiv/engine'
-import { STREAM_COLUMNS } from '@/pdf-reader/engine/layout/stream.mjs'
+import { STREAM_COLUMNS } from '../../packages/engine/src/own/stream.ts'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
 // The marks read and the layout maker keep a page's glyphs packed as columns (packGlyphs), not as a Glyph object each (the

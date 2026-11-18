@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { DVI_MARK_DEF, lastTexLog, MARK_DEF, dviEngine } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { DVI_LAYOUT_TEX, DVI_POINTS_TEX, LAYOUT_CLASSES, LAYOUT_TEX, POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
-import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import type { Compiled, CompileRequest } from '@/pdf-reader/engine/pipeline/live.mjs'
-import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
+import { DVI_MARK_DEF, lastTexLog, MARK_DEF, dviEngine } from '../../packages/engine/src/source/latex-front.ts'
+import { DVI_LAYOUT_TEX, DVI_POINTS_TEX, LAYOUT_CLASSES, LAYOUT_TEX, POINTS_TEX } from '../../packages/engine/src/marks/marks.ts'
+import { openPaper, originalFiles, probeFiles } from '../../packages/engine/src/compile/live.ts'
+import { markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import type { Compiled, CompileRequest } from '../../packages/engine/src/compile/live.ts'
+import type { SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
+import type { UnitLines } from '../../packages/engine/src/compile/tex-errors.ts'
 
 // A paper arXiv compiles with `latex` (its 00README's compiler: pdfTeX in DVI mode, \pdfoutput 0, the DVI made a PDF by
 // dvipdfmx here): the marks as xdvipdfmx's specials, a `pdf:dest` and a `pdf:code` point, after the marks' own TeX, so that a

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
-import { bibliographyKept, madeBibliography, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
-import { openPaper, originalFiles, type CompileRequest } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { type CompileRequest, openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
+import { bibliographyKept, madeBibliography, markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { bundleUnitsOf } from '../../packages/engine/src/instrument/units.ts'
+import { LAYOUT_CLASSES } from '../../packages/engine/src/marks/marks.ts'
 
 // A bibliography BibTeX makes (PDF-READER §19.13; the owner's ruling of 2026-10-28: a .bbl the compile makes is a shipped one):
 // a paper that ships a .bib and no .bbl (102 of the 195 local sources) had no entry units, the front end reading only the .bbl
@@ -15,8 +15,9 @@ const doc = (body: string, pre = '') => `\\documentclass{article}\n${pre}\n\\beg
 const BODY = '\\section{Intro}\nAttention needs normalization \\cite{ba2016}.\n\\begin{theorem}A claim.\\end{theorem}\n\nThe second paragraph runs into the bibliography.\n\\bibliographystyle{plain}\n\\bibliography{refs}'
 const PRE = '\\newtheorem{theorem}{Theorem}\n\\newtheorem{conjecture}{Conjecture}'
 const BIB = '@article{ba2016, author={Jimmy Lei Ba}, title={Layer normalization}, year={2016}}\n'
-const BBL = '\\begin{thebibliography}{1}\n\n\\bibitem{ba2016}\nJimmy~Lei Ba.\n\\newblock Layer normalization.\n\\newblock 2016.\n\n\\end{thebibliography}\n'
 const paperOf = (files: Record<string, string>) => openPaper(new Map(Object.entries(files).map(([k, v]) => [k, enc(v)])))
+
+const BBL = '\\begin{thebibliography}{1}\n\n\\bibitem{ba2016}\nJimmy~Lei Ba.\n\\newblock Layer normalization.\n\\newblock 2016.\n\n\\end{thebibliography}\n'
 const source = (more: Record<string, string> = {}) => paperOf({ 'main.tex': doc(BODY, PRE), 'refs.bib': BIB, ...more })
 /** a host's compile of the draft with BibTeX: TeX ran through (AXT-END), and the files the pass and BibTeX wrote */
 const host = (files: Record<string, string>, { ok = true, end = true, returned = true } = {}) => {
@@ -30,11 +31,27 @@ const host = (files: Record<string, string>, { ok = true, end = true, returned =
 const AUX = '\\relax\n\\citation{ba2016}\n\\bibstyle{plain}\n\\bibdata{refs}\n'
 const kinds = (p: ReturnType<typeof paperOf>) => (p.units as unknown as { kind: string }[]).map(u => u.kind)
 
-describe('\\bibliography ends the paragraph before it, with the job\'s .bbl and without', () => {
+describe('\\bibliography inside the group of a command the role table does not know: read where TeX reads it', () => {
+  // (2608.06007v1: `\\balance{ \\bibliographystyle{unsrt} \\bibliography{ref} }`, balance.sty's \\balance taking no argument,
+  // its group TeX's. Read as the command's argument, one placeholder, the walk never met the \\bibliography: no .bbl was
+  // made, the printed bibliography no unit's, kept blocks never translated, the References toggle dead on it)
+  it('a \\bibliography a comment holds in the group is none', () => {
+    const p = paperOf({ 'main.tex': doc(BODY.replace('\\bibliographystyle{plain}\n\\bibliography{refs}', '\\balance{%\\bibliography{refs}\n}'), PRE), 'refs.bib': BIB })
+    expect(p.project.bibliography).toEqual([])
+  })
+})
+
+// (held here since lane c1-rewrites: madeBibliography is the engine package's (compile/paper.ts), which today's
+// layout/paper.mjs only wrapped to give the paper opened again today's name rule's `kept` (pipeline/live.mjs withNames); the
+// cases below are today's half's (made-bibliography-today.test.ts), run on the package's madeBibliography, openPaper and
+// bundleUnitsOf, the kept set stated: none, the rebuilt engine keeping no unit by its words)
+const kept = null
+
+describe('\\bibliography ends the paragraph before it, with the job\'s .bbl and without (the package\'s openPaper and bundleUnitsOf, no unit kept)', () => {
   it('cuts the same source units whether the package holds the .bbl or not: none of them moves when BibTeX writes it', () => {
     const without = source(), withBbl = source({ 'main.bbl': BBL })
     const n = without.units.length
-    expect(JSON.stringify(bundleUnitsOf(withBbl).slice(0, n))).toBe(JSON.stringify(bundleUnitsOf(without).slice(0, n)))
+    expect(JSON.stringify(bundleUnitsOf(withBbl, kept).slice(0, n))).toBe(JSON.stringify(bundleUnitsOf(without, kept).slice(0, n)))
     // (the paragraph before it holds no placeholder of \\bibliography's; the entry after every other unit)
     expect(kinds(withBbl).slice(n)).toEqual(['reference'])
     expect(JSON.stringify(without.units.at(-1))).not.toContain('bibliography{')
@@ -42,7 +59,7 @@ describe('\\bibliography ends the paragraph before it, with the job\'s .bbl and 
   })
 })
 
-describe('\\bibliography inside the group of a command the role table does not know: read where TeX reads it', () => {
+describe('\\bibliography inside the group of a command the role table does not know: read where TeX reads it, and made (the package\'s madeBibliography)', () => {
   // (2608.06007v1: `\\balance{ \\bibliographystyle{unsrt} \\bibliography{ref} }`, balance.sty's \\balance taking no argument,
   // its group TeX's. Read as the command's argument, one placeholder, the walk never met the \\bibliography: no .bbl was
   // made, the printed bibliography no unit's, kept blocks never translated, the References toggle dead on it)
@@ -54,22 +71,18 @@ describe('\\bibliography inside the group of a command the role table does not k
     expect(bibliographyKept(without)).toBeNull()
     const withBbl = wrapped({ 'main.bbl': BBL }), n = without.units.length
     expect(kinds(withBbl).slice(n)).toEqual(['reference'])
-    expect(JSON.stringify(bundleUnitsOf(withBbl).slice(0, n))).toBe(JSON.stringify(bundleUnitsOf(without).slice(0, n)))
+    expect(JSON.stringify(bundleUnitsOf(withBbl, kept).slice(0, n))).toBe(JSON.stringify(bundleUnitsOf(without, kept).slice(0, n)))
     // (the entries the bibliography written bare has; the call no unit's: the paragraph before ends where it begins)
-    const entries = (p: ReturnType<typeof paperOf>) => JSON.stringify(bundleUnitsOf(p).filter(u => u[0] === 'reference'))
+    const entries = (p: ReturnType<typeof paperOf>) => JSON.stringify(bundleUnitsOf(p, kept).filter(u => u[0] === 'reference'))
     expect(entries(withBbl)).toBe(entries(source({ 'main.bbl': BBL })))
-    expect(JSON.stringify(bundleUnitsOf(withBbl))).not.toContain('balance')
+    expect(JSON.stringify(bundleUnitsOf(withBbl, kept))).not.toContain('balance')
     const { compile } = host({ 'main.aux': AUX, 'main.bbl': BBL })
     const r = await madeBibliography(without, { compile })
     expect('made' in r && r.made.path).toBe('main.bbl')
   })
-  it('a \\bibliography a comment holds in the group is none', () => {
-    const p = paperOf({ 'main.tex': doc(BODY.replace('\\bibliographystyle{plain}\n\\bibliography{refs}', '\\balance{%\\bibliography{refs}\n}'), PRE), 'refs.bib': BIB })
-    expect(p.project.bibliography).toEqual([])
-  })
 })
 
-describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first pass, the paper opened again with it', () => {
+describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first pass, the paper opened again with it (the engine package\'s, no unit kept)', () => {
   it('asks one draft of the unmarked original with BibTeX, its files, and opens the paper with the .bbl it wrote: its entries last', async () => {
     const paper = source(), { asked, compile } = host({ 'main.aux': AUX, 'main.bbl': BBL })
     const r = await madeBibliography(paper, { compile })
@@ -81,7 +94,7 @@ describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first
     if (!('paper' in r)) throw new Error('no paper')
     const again = r.paper, n = paper.units.length
     // (every unit before the entries and every name after them the bundle's as before, byte for byte; the entry after them)
-    const was = bundleUnitsOf(paper), now = bundleUnitsOf(again)
+    const was = bundleUnitsOf(paper, kept), now = bundleUnitsOf(again, kept)
     expect(JSON.stringify(now.slice(0, n))).toBe(JSON.stringify(was.slice(0, n)))
     expect(JSON.stringify(now.slice(n + 1))).toBe(JSON.stringify(was.slice(n)))
     expect(now[n]?.[0]).toBe('reference')

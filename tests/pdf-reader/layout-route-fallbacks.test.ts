@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { LAYOUT_CLASSES, layoutMarking } from '@/pdf-reader/engine/layout/marks.mjs'
-import { markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { LAYOUT_CLASSES, layoutMarking } from '../../packages/engine/src/marks/marks.ts'
+import { markedOfPaper } from '../../packages/engine/src/compile/paper.ts'
+import { type Compiled, type CompileRequest, openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { fallbackDefinition } from '../../packages/engine/src/source/arg-roles.ts'
-import { latin1Bytes, type SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { latin1Bytes, type SourceUnit } from '../../packages/engine/src/source/latex-front.ts'
 
 // The whole-paper fallbacks of the layer route's release sweep (2026-10-22), each by its general rule: a Latin-1 source's
 // marked original keeps the paper's own bytes (2610.20581); no mark of ours stands inside an argument TeX reads verbatim, and

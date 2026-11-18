@@ -43,7 +43,7 @@ const PINS = JSON.parse(readFileSync(join(ROOT, 'lab/pdf/compile-images.json'), 
 const { LITE } = await import(pathToFileURL(join(ROOT, 'lab/pdf/spikes/lite-pdfjs.mjs')).href)
 // (layer2.mjs makes a measuring canvas at its load: a stub, nothing here measures)
 globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () => ({ width: 0 }), font: '' } } }
-const tar = await import(pathToFileURL(join(ROOT, 'src/pdf-reader/engine/source/tar.mjs')).href)
+const tar = await import(pathToFileURL(join(ROOT, 'packages/engine/src/source/tar.ts')).href)
 const NM = join(ROOT, 'node_modules/pdfjs-dist/')
 // (--warnings: PDF.js's warnings, the channel its recover branches tell on (a page's list ended early, a font read as none, …),
 // kept by the step whose documents were being read: arXiv's PDF for the front half (`front`), the compiles' PDFs the front half

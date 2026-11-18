@@ -7,7 +7,6 @@ import { chainOf, type FetchInit, type FetchReply, google, microsoft, type Trans
 import { fakeClock, scriptedFetch } from '@readarxiv/translate/testing'
 import { MockLanguageModelV4 } from 'ai/test'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
-import { FIRST_BATCH as ENGINE_FIRST_BATCH, NEXT_BATCH as ENGINE_NEXT_BATCH } from '@/pdf-reader/engine/translate.mjs'
 import { FIRST_BATCH, hostTranslate, NEXT_BATCH, WHY_OF } from '@/pdf-reader/host/translate'
 import { llmTranslator } from '@/providers/llm'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
@@ -69,17 +68,6 @@ describe('the reader host translate through the background', () => {
     // the scope withdrawn once the units are given
     expect(cancelled).toContain(asked[0]!.scope)
   })
-  it("a 3-page open goes as production's batches of plain source: the first call 2,500 characters, then 12,000 a call, one call at a time (10 calls in series before, production's 3)", async () => {
-    const { transport, asked } = fake()
-    const rows = await all(hostTranslate({ transport, paper: 'p' })(threePages(), 'de', { signal: new AbortController().signal }))
-    expect(rows.length).toBe(48)
-    expect(asked.map(a => a.units.length)).toEqual([7, 34, 7])
-    const chars = asked.map(a => a.units.reduce((n, u) => n + text(u).length, 0))
-    expect(chars[0]).toBeLessThanOrEqual(FIRST_BATCH)
-    expect(chars[1]).toBeLessThanOrEqual(NEXT_BATCH)
-    // the names production gives them, and its values (the PDF engine's own, mt.mjs)
-    expect([FIRST_BATCH, NEXT_BATCH]).toEqual([ENGINE_FIRST_BATCH, ENGINE_NEXT_BATCH])
-  })
   it('the units a reader is looking at are served first: page 1 opens the first call answered, and no unit of a farther page is answered before every unit of a nearer one was asked', async () => {
     const events: string[] = []
     const { transport } = fake({ delayMs: 5, events })
@@ -96,6 +84,16 @@ describe('the reader host translate through the background', () => {
         for (let p = 1; p < page; p++) for (let k = 0; k < 16; k++) expect(asked.has(`p${p}-${k}`)).toBe(true)
       }
     }
+  })
+  it("a 3-page open goes as production's batches of plain source, by this case's own numbers: the first call at most 2,500 characters, then at most 12,000 a call, one call at a time (7, 34 and 7 units)", async () => {
+    expect([FIRST_BATCH, NEXT_BATCH]).toEqual([2500, 12000])
+    const { transport, asked } = fake()
+    const rows = await all(hostTranslate({ transport, paper: 'p' })(threePages(), 'de', { signal: new AbortController().signal }))
+    expect(rows.length).toBe(48)
+    expect(asked.map(a => a.units.length)).toEqual([7, 34, 7])
+    const chars = asked.map(a => a.units.reduce((n, u) => n + text(u).length, 0))
+    expect(chars[0]).toBeLessThanOrEqual(2500)
+    expect(chars[1]).toBeLessThanOrEqual(12000)
   })
   it('a unit the chain refused is given as refused, the page\'s words about it left behind', async () => {
     const { transport } = fake({ refuse: 'u2' })

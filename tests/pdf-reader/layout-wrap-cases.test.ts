@@ -7,7 +7,8 @@ import { deltaOf, proveDelta } from '@/pdf-reader/engine/layout/delta.mjs'
 import { pageInk } from '@readarxiv/engine'
 import { alignOf, wrapOf } from '@readarxiv/engine'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { deflate, DOCUMENT_OPTIONS, inflate, markedSample, pixelsApart, renderPage, SAMPLE_1, wrapped } from './helpers/ocg-pdfs'
+import { deflate, DOCUMENT_OPTIONS, inflate, markedSample, pixelsApart, renderPage, SAMPLE_1 } from './helpers/ocg-pdfs'
+import { wrapped } from './helpers/ocg-wrapped'
 
 // The erasure's remaining synthetic cases and gates (design docs/route/ocg-erasure.md §7): S2 (300 groups), S5 (forms), S8
 // (Type 3), the refused splits (a vertical font, a Type 3 font without widths), G3 (containment), G4 (a toggle on a kept

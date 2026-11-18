@@ -12,7 +12,14 @@
 // (`rowsAgainst`). A row it moves, drops, adds or holds is a row production would not have stored. Prints a line a pair and the totals; exit 1 where a
 // pair's rows are not production's or cannot be read, 2 on a usage error. Pairs default to the parity's 22 (pairs.mjs).
 //   AXT_SWEEP_CACHE=<cache> AXT_TODAY=<today's engine> node lab/typeset/parity/production-rows.mjs [<pair>…]
-import { existsSync, readFileSync } from 'node:fs'
+// Frozen (amendment 8.3: today's answers written once before the cut-over deletes today's engine): `--freeze=<dir>` answers as
+// above and records each pair's answer in <dir>/production-rows.json under the digest of what it was read from (the catalog,
+// its units chunks, the stored rows' manifest and their row objects: frozenInputsOf); `--today-frozen=<dir>`, or
+// AXT_TODAY_FROZEN where neither flag is given (the release check's display gates set it), reads each pair's answer there
+// in place of running today's engine: the same lines, a pair whose inputs differ from those recorded, or which has no
+// recorded answer, not read. The answer is one fact of fixed inputs: whether today's own row path gives the stored rows back.
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { todayFile } from '../../../packages/typeset/tests/replay/tap.ts'
@@ -60,13 +67,43 @@ export function lineOf(pair, c) {
   return `${pair}: ${isProduction(c) ? "production's" : 'NOT production\'s'}: ${c.rows} stored rows, ${c.same} given back; moved ${moved}; differ ${few(c.differ)}; missing ${few(c.missing)}; extra ${few(c.extra)}; held ${few(c.held)}`
 }
 
+export const FROZEN_ROWS_FORMAT = 'readarxiv-production-rows 1'
+/** the frozen answers' file in a frozen folder */
+export const frozenRowsFile = (dir) => join(dir, 'production-rows.json')
+
+/** the SHA-256 of what a pair's answer is read from, in `cache`: the release's catalog, each units chunk it names, the stored rows'
+ *  manifest and each row object it names, each by its name and bytes; null where the catalog or the manifest is not there */
+export function frozenInputsOf(cache, pair) {
+  const paper = paperOf(pair)
+  const open = join(cache, 'papers', pair, 'open.json')
+  const cat = join(cache, 'papers', paper, 'catalog.json')
+  if (!existsSync(open) || !existsSync(cat)) return null
+  const h = createHash('sha256')
+  const add = (name, bytes) => {
+    h.update(`${name}\n${bytes.length}\n`)
+    h.update(bytes)
+  }
+  const catBytes = readFileSync(cat)
+  add('catalog', catBytes)
+  for (const r of JSON.parse(catBytes.toString('utf8')).units) add(`units ${r.sha256}`, readFileSync(join(cache, 'objects', r.sha256)))
+  const openBytes = readFileSync(open)
+  add('open', openBytes)
+  for (const ref of JSON.parse(openBytes.toString('utf8')).body.manifest.rows) add(`rows ${ref.sha256}`, readFileSync(join(cache, 'objects', ref.sha256)))
+  return h.digest('hex')
+}
+
 if (process.argv[1] === import.meta.filename) {
-  const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
-  if (process.argv.slice(2).some((a) => a.startsWith('--'))) {
-    console.error('production-rows.mjs [<pair>…]')
+  const argv = process.argv.slice(2)
+  const flag = (n) => argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
+  const asked = argv.filter((a) => !a.startsWith('--'))
+  const FREEZE = flag('freeze')
+  const FROZEN = flag('today-frozen') ?? (FREEZE ? null : (process.env.AXT_TODAY_FROZEN ?? null))
+  if (argv.some((a) => a.startsWith('--') && !a.startsWith('--freeze=') && !a.startsWith('--today-frozen=')) || (FREEZE && flag('today-frozen'))) {
+    console.error('production-rows.mjs [--freeze=<dir> | --today-frozen=<dir>] [<pair>…]')
     process.exit(2)
   }
   const pairs = asked.length ? asked : PAIRS
+  if (FROZEN) process.exit(frozenRun(pairs, FROZEN))
   const engine = (f) => import(pathToFileURL(todayFile(f)).href)
   const { readCatalog, readUnitsChunk } = await engine('layer-proto/format.mjs')
   const { layerRows, unitOf } = await engine('layer-proto/rows.mjs')
@@ -74,6 +111,8 @@ if (process.argv[1] === import.meta.filename) {
   const obj = (sha) => new Uint8Array(readFileSync(join(CACHE, 'objects', sha)))
   let bad = 0
   const total = { pairs: 0, rows: 0, same: 0 }
+  /** the answers to record (--freeze): the file's, with this run's added */
+  const record = FREEZE ? readFrozenRows(FREEZE) ?? { format: FROZEN_ROWS_FORMAT, pairs: {} } : null
   for (const pair of pairs) {
     const paper = paperOf(pair)
     const target = pair.slice(paper.length + 1)
@@ -113,11 +152,66 @@ if (process.argv[1] === import.meta.filename) {
       total.rows += c.rows
       total.same += c.same
       if (!isProduction(c)) bad++
+      if (record) {
+        const inputs = frozenInputsOf(CACHE, pair)
+        const was = record.pairs[pair]
+        if (was && (was.inputs !== inputs || JSON.stringify(was.result) !== JSON.stringify(c))) throw new Error(`its answer is recorded already, over other inputs or another answer (${frozenRowsFile(FREEZE)})`)
+        record.pairs[pair] = { inputs, result: c }
+      }
     } catch (e) {
       console.log(`${pair}: not read: ${e?.message ?? e}`)
       bad++
     }
   }
   console.log(`production's rows: ${pairs.length - bad} of ${pairs.length} pairs; ${total.same} of ${total.rows} stored rows given back by production's own path`)
+  if (record) {
+    record.recorded = { engine: todayFile(''), at: new Date().toISOString() }
+    mkdirSync(FREEZE, { recursive: true })
+    const f = frozenRowsFile(FREEZE)
+    writeFileSync(`${f}.${process.pid}.tmp`, `${JSON.stringify(record)}\n`)
+    renameSync(`${f}.${process.pid}.tmp`, f)
+    console.log(`recorded: ${Object.keys(record.pairs).length} pairs' answers in ${f}`)
+  }
   process.exit(bad ? 1 : 0)
+}
+
+/** a frozen folder's recorded answers, or null where it holds none */
+function readFrozenRows(dir) {
+  const f = frozenRowsFile(dir)
+  if (!existsSync(f)) return null
+  const r = JSON.parse(readFileSync(f, 'utf8'))
+  if (r.format !== FROZEN_ROWS_FORMAT) throw new Error(`${f}: format ${r.format}, this reader reads ${FROZEN_ROWS_FORMAT}`)
+  return r
+}
+
+/** each pair's answer read from the frozen folder `dir` in place of today's engine, printed as a run of it prints it: its exit */
+function frozenRun(pairs, dir) {
+  const record = readFrozenRows(dir)
+  if (!record) {
+    console.error(`production-rows.mjs: no recorded answers in ${frozenRowsFile(dir)}`)
+    return 2
+  }
+  console.log(`production's row path: its answers recorded in ${frozenRowsFile(dir)} (today's engine at ${record.recorded?.engine ?? '?'}, ${record.recorded?.at ?? '?'}); the rows of ${CACHE}`)
+  let bad = 0
+  const total = { pairs: 0, rows: 0, same: 0 }
+  for (const pair of pairs) {
+    const inputs = frozenInputsOf(CACHE, pair)
+    const was = record.pairs[pair]
+    if (!inputs) {
+      const cat = join(CACHE, 'papers', paperOf(pair), 'catalog.json')
+      console.log(`${pair}: not read: ${existsSync(cat) ? 'no stored rows' : 'no catalog'} in the cache`)
+    } else if (!was) console.log(`${pair}: not read: no answer of production's path recorded for it`)
+    else if (was.inputs !== inputs) console.log(`${pair}: not read: its catalog or stored rows are not those production's path was recorded on`)
+    else {
+      const c = was.result
+      console.log(lineOf(pair, c))
+      total.pairs++
+      total.rows += c.rows
+      total.same += c.same
+      if (isProduction(c)) continue
+    }
+    bad++
+  }
+  console.log(`production's rows: ${pairs.length - bad} of ${pairs.length} pairs; ${total.same} of ${total.rows} stored rows given back by production's own path`)
+  return bad ? 1 : 0
 }

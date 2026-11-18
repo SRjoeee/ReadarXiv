@@ -21,11 +21,9 @@ describe('the marks’ measure', () => {
   it('holds every CJK face of the catalogue, measured in the files the engine binds', () => {
     const cjk = Object.keys(FACES).filter((id) => /^axt-(shs-|mincho$|fandolkai$|bkai00mp$)/.test(FACES[id]!.family))
     expect(Object.keys(MARK_INK).sort()).toEqual(cjk.sort())
-    // (each file's SHA-256 the engine's binding one: rules/font-coverage.mjs METRICS, read as the generator reads it)
-    const coverage = readFileSync(
-      join(import.meta.dirname, '../../../../src/pdf-reader/engine/rules/font-coverage.mjs'),
-      'utf8',
-    )
+    // (each file's SHA-256 the engine's binding one: packages/engine/src/fonts/font-coverage.ts METRICS, read as the generator
+    // reads it)
+    const coverage = readFileSync(join(import.meta.dirname, '../../../engine/src/fonts/font-coverage.ts'), 'utf8')
     const bound = Object.fromEntries(
       [...coverage.matchAll(/'([a-z0-9-]+)': Object\.freeze\(\{ unitsPerEm: [^}]*?sha256: '([0-9a-f]{64})' \}\)/g)].map(
         (m) => [m[1], m[2]],

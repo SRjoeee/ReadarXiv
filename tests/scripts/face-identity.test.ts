@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { compareTrees, readFound, treeFaces, yearsOf } from '../../lab/pdf/spikes/face-identity.mjs'
-import { METRICS } from '../../src/pdf-reader/engine/rules/font-coverage.mjs'
-import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
+import { METRICS } from '../../packages/engine/src/fonts/font-coverage.ts'
+import { FACES } from '../../packages/engine/src/fonts/font-roles.ts'
 
 // The face-identity check (lab/pdf/spikes/face-identity.mjs): the role table's TeX Live faces against the hosted bytes, in each
 // pinned tree. The reading of a container's lines and the comparison, on synthetic answers; the containers are the maintainer's

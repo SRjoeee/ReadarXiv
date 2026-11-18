@@ -37,12 +37,15 @@ function codeLines(text: string): string[] {
 const violations = (file: string, text: string) => codeLines(text).flatMap((line, i) => (COMPARES.test(line) || BY_NAME.test(line) ? [`${file}:${i + 1}: ${line.trim().slice(0, 120)}`] : []))
 
 const modules = [...readdirSync(join(ENGINE, 'layer-proto')).filter(f => f.endsWith('.mjs')).map(f => join('layer-proto', f)), 'rules/font-roles.mjs']
+/** the role table and the TeX patterns' reading as they moved into the engine package (rules/font-roles.mjs and part of
+ *  layer-proto/hyph.mjs re-export them): held by the same rule where they are */
+const MOVED = ['packages/engine/src/fonts/font-roles.ts', 'packages/engine/src/fonts/hyph.ts']
 
 describe('no drawing module names a target', () => {
   it('layer-proto/ and rules/font-roles.mjs compare no target with a string literal and tell no script or CJK-ness by a language\'s name', () => {
     expect(modules.length).toBeGreaterThan(8)
     for (const m of ['layer-proto/layer2.mjs', 'layer-proto/run.mjs', 'layer-proto/layer1.mjs', 'layer-proto/hyph.mjs', 'layer-proto/fonts.mjs', 'rules/font-roles.mjs']) expect(modules, m).toContain(m)
-    const found = modules.flatMap(m => violations(m, readFileSync(join(ENGINE, m), 'utf8')))
+    const found = [...modules.flatMap(m => violations(m, readFileSync(join(ENGINE, m), 'utf8'))), ...MOVED.flatMap(m => violations(m, readFileSync(m, 'utf8')))]
     expect(found).toEqual([])
   })
 

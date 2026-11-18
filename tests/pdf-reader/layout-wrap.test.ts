@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { DOCUMENT_OPTIONS, markedSample, pixelsApart, renderPage, SAMPLE_1, wrapped } from './helpers/ocg-pdfs'
+import { DOCUMENT_OPTIONS, markedSample, pixelsApart, renderPage, SAMPLE_1 } from './helpers/ocg-pdfs'
+import { wrapped } from './helpers/ocg-wrapped'
 
 // Our final pass wrapped by optional content (layout/wrap.mjs, layout/own.mjs; design docs/route/ocg-erasure.md §2, §3, §7):
 // sample-1's pages with points written in, wrapped, proved, and rendered by PDF.js in Node

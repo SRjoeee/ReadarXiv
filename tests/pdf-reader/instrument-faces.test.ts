@@ -4,24 +4,29 @@
 // heads are the paper's `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}` (staging, 2026-11-09: back regular, the stop
 // lost); words of our own.
 import { describe, expect, it } from 'vitest'
-import { marksOf, piecesOf, spansOf, textGlyphsOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { marksOf, piecesOf, spansOf, textGlyphsOf } from '../../packages/engine/src/instrument/instrument.ts'
+import type { SourcePiece } from '../../packages/engine/src/source/latex-front.ts'
 
 const BOLD = 'LinLibertineTB'
 const REGULAR = 'LinLibertineT'
 /** a text as TeX sets it: a glyph for each character that is no white space, in one font */
 const set = (s: string, base: string) =>
   [...s].filter((c) => !/\s/.test(c)).map((u) => ({ u, base, size: 8.97, fill: -1 }))
-const head = (open: string, text: string, after: string) => [
+/** pieces as the cases write them: a group's open and close without the pair's number the front end gives them, which
+ *  piecesOf and spansOf do not read (a piece's id is its place), typed as the front end's pieces */
+type Written = { t: 'text'; s: string } | { t: 'open' | 'close' | 'ph'; src: string }
+const written = (ps: Written[]) => ps as SourcePiece[]
+const head = (open: string, text: string, after: string) => written([
   { t: 'open', src: open },
   { t: 'text', s: text },
   { t: 'close', src: '}' },
   { t: 'text', s: after },
-]
+])
 
 describe('a unit’s groups as TeX set them, stated by the adapter', () => {
   it('a paper’s macro TeX set bold with a stop of its own: its face and stop stated, a run-in head kept', () => {
     const pieces = head('\\topic{', 'Current methods are not reliable', '  \nTo infer the source, one could rank sentences.')
-    const content = piecesOf(pieces) as { must?: number; style: string; stop?: string }[]
+    const content = piecesOf(pieces)
     const glyphs = [
       ...set('Current methods are not reliable.', BOLD),
       ...set('To infer the source, one could rank sentences.', REGULAR),
@@ -32,27 +37,27 @@ describe('a unit’s groups as TeX set them, stated by the adapter', () => {
   })
   it('as before where the macro is not read: no glyphs, the group no style group, nothing stated', () => {
     const pieces = head('\\topic{', 'Current methods are not reliable', '  \nTo infer the source.')
-    const content = piecesOf(pieces) as { must?: number; style: string }[]
+    const content = piecesOf(pieces)
     expect(marksOf(content, [], spansOf(pieces))).toEqual([['0', { cmd: 'topic' }]])
     expect(content[0]).toMatchObject({ style: 'other' })
     expect(content[0]).not.toHaveProperty('must')
   })
   it('no face read for a group whose command the tables name (\\textbf), nor for a bare group a face switch opens: its switch its style and command', () => {
     const named = head('\\textbf{', 'Setup', '  \nWe use eight GPUs.')
-    const c1 = piecesOf(named) as { must?: number; style: string }[]
+    const c1 = piecesOf(named)
     const g1 = [...set('Setup', BOLD), ...set('We use eight GPUs.', REGULAR)]
     expect(marksOf(c1, g1, spansOf(named))).toEqual([['0', { cmd: 'textbf' }]])
     expect(c1[0]).toMatchObject({ style: 'bold', must: 1 })
     // (a bare group a face switch opens: the switch its style and command, no element of its text (switchesOf); one with no
     // declaration of its own is no group, instrument-groups.test.ts)
-    const bare = [{ t: 'text', s: 'It holds. ' }, { t: 'open', src: '{' }, { t: 'ph', src: '\\bfseries' }, { t: 'text', s: 'Remark' }, { t: 'close', src: '}' }, { t: 'text', s: ' it also holds.' }]
-    const c2 = piecesOf(bare) as unknown[]
+    const bare = written([{ t: 'text', s: 'It holds. ' }, { t: 'open', src: '{' }, { t: 'ph', src: '\\bfseries' }, { t: 'text', s: 'Remark' }, { t: 'close', src: '}' }, { t: 'text', s: ' it also holds.' }])
+    const c2 = piecesOf(bare)
     expect(marksOf(c2, [...set('It holds.', REGULAR), ...set('Remark', BOLD), ...set('it also holds.', REGULAR)], spansOf(bare))).toEqual([['1', { cmd: 'bfseries' }]])
     expect(c2[1]).toMatchObject({ style: 'bold', content: [{ t: 'text', s: 'Remark' }] })
   })
   it('a paper’s macro TeX set in the face around it: nothing stated, no style group (\\revised{…} inside a sentence)', () => {
-    const pieces = [{ t: 'text', s: 'One could leverage ' }, ...head('\\revised{', 'retrieval approaches', ' ranking them.')]
-    const content = piecesOf(pieces) as unknown[]
+    const pieces: SourcePiece[] = [{ t: 'text', s: 'One could leverage ' }, ...head('\\revised{', 'retrieval approaches', ' ranking them.')]
+    const content = piecesOf(pieces)
     const glyphs = set('One could leverage retrieval approaches ranking them.', REGULAR)
     expect(marksOf(content, glyphs, spansOf(pieces))).toEqual([['1', { cmd: 'revised' }]])
     expect(content[1]).toMatchObject({ style: 'other' })

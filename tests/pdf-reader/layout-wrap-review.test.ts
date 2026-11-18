@@ -4,7 +4,8 @@ import { deflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { deltaOf, proveDelta } from '@/pdf-reader/engine/layout/delta.mjs'
-import { DOCUMENT_OPTIONS, markedSample, pixelsApart, renderPage, wrapped } from './helpers/ocg-pdfs'
+import { DOCUMENT_OPTIONS, markedSample, pixelsApart, renderPage } from './helpers/ocg-pdfs'
+import { wrapped } from './helpers/ocg-wrapped'
 
 // The adversarial review of the wrap and its proof (2026-10-23, at 651bef45): each finding's case, failing before its fix.
 // B1 a page's reads bounded; B2 optional content matched by identity in the delta; B3 a page's own /Properties kept; S1 a

@@ -1,9 +1,8 @@
 import * as PL from '@cantoo/pdf-lib'
 import { readFileSync } from 'node:fs'
 import { deflateSync, inflateSync } from 'node:zlib'
-import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { lex } from '@readarxiv/engine'
-import { wrapFinal } from '@/pdf-reader/engine/layout/wrap-final.mjs'
 
 // The synthetic marked compiles of the per-unit erasure's tests (layout/own.mjs, layout/wrap.mjs; design docs/route/
 // ocg-erasure.md §7.2): sample-1's own pages (tests/fixtures/pdf/sample-1, CC0) with points written into their content streams
@@ -87,8 +86,6 @@ export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null |
 export const DOCUMENT_OPTIONS = { verbosity: 0, useSystemFonts: false, isEvalSupported: false, fontExtraProperties: true }
 export const deflate = (b: Uint8Array) => new Uint8Array(deflateSync(b, { level: 6 }))
 export const inflate = (b: Uint8Array, limit: number) => new Uint8Array(inflateSync(b, { maxOutputLength: limit + 1 }))
-/** wrapFinal over bytes, the test's way: no marking's `follows` unless given (`follows: undefined` asks wrapFinal to make it of the units) */
-export const wrapped = (bytes: Uint8Array, o: { units?: unknown[] | null; follows?: unknown; texts?: readonly string[] | null; inkless?: readonly string[] | null; names?: readonly string[] | null; bounds?: { groupsPage?: number; sequencesPage?: number; groupsDoc?: number } } = {}) => wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: (o.units ?? null) as never, texts: o.texts ?? null, inkless: o.inkless ?? null, names: o.names ?? null, ...('follows' in o ? { follows: o.follows as never } : { follows: null }), deflate, inflate, ...(o.bounds ? { bounds: o.bounds } : {}) } as never)
 
 /** a page rendered by PDF.js in Node at `scale`, groups `off(name)` hidden: its RGBA pixels */
 export async function renderPage(bytes: Uint8Array, p: number, { off = null as null | ((name: string) => boolean), scale = 2 } = {}) {

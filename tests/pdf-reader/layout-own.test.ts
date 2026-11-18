@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { followsOf, INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
-import { isLabelForm, labelFormOf, lineRulesOf, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
+import { followsOf, INK_ANY } from '../../packages/engine/src/marks/marks.ts'
+import { isLabelForm, labelFormOf } from '../../packages/engine/src/marks/label-form.ts'
+import { lineRulesOf, type OwnUnit, ownOf } from '../../packages/engine/src/own/own.ts'
+import { spellOf } from '../../packages/engine/src/own/stream.ts'
+import type { SourcePiece } from '../../packages/engine/src/source/latex-front.ts'
 
 // Each unit's own ink by its marks in stream order (layout/own.mjs; design docs/route/ocg-erasure.md §1): the rules MR 1–6 on
 // pages written as a stream of points and glyphs, the spell check and the label kept
@@ -26,7 +29,7 @@ function page(items: Item[]) {
     else if ('pt' in it) points.push({ name: it.pt, glyph: glyphs.length, box: boxes.length / 4 })
     else { boxes.push(...it.rule); paths.push(paths.length) }
   }
-  return { glyphs, points, boxes, paths, boxAt, view: [0, 0, 612, 792] }
+  return { glyphs, points, boxes, paths, boxAt, view: [0, 0, 612, 792] as const }
 }
 const units = (...texts: string[]) => texts.map(t => ({ src: t }))
 /** the text of each group on the pages */
@@ -261,8 +264,8 @@ describe('a paper\'s macro at a unit\'s head, its point \\axthpk\'s (marks.mjs l
     // (1810.04805v2 p1's `\\bert is conceptually simple`: "BERT" between p3.0a and 3s, the piece's ink, no label's; a list item's
     // "1." before the point the label, by TeX's point, not by a word's form)
     const pages = [page([{ pt: '2e' }, '\n', { pt: 'p3.0a' }, 'BERT', { dx: 3 }, { pt: '3s' }, 'is simple', { pt: '3e' }, '\n', '1.', { dx: 3 }, { pt: 'p4.0a' }, 'BERT', { dx: 3 }, { pt: '4s' }, 'wins', { pt: '4e' }])]
-    const head = { t: 'ph', src: '\\bert' }
-    const us = [{ src: 'x' }, { src: 'x' }, { src: 'x' }, { kind: 'para', pieces: [head, { t: 'text', s: ' is simple' }] }, { kind: 'para', pieces: [head, { t: 'text', s: ' wins' }] }]
+    const head: SourcePiece = { t: 'ph', src: '\\bert' }
+    const us: OwnUnit[] = [{ src: 'x' }, { src: 'x' }, { src: 'x' }, { kind: 'para', pieces: [head, { t: 'text', s: ' is simple' }] }, { kind: 'para', pieces: [head, { t: 'text', s: ' wins' }] }]
     // (the marking's follows, as the adapter hands them: the opening alone reads to its next point, the start, and finds the text
     // after it past that point, so claims nothing; the label's walk is what owns these glyphs)
     const follows = followsOf(us as never, new Set(pages[0]!.points.map(x => x.name)))
@@ -275,7 +278,7 @@ describe('the points a reader of its own reads alone: a caption\'s label point, 
   // (2406.06525v1 p6: a cell's superscript, its opening point alone after the cell's end mark, read to the next point; the
   // caption's label point `ka<k>` now stood there first, and the reading lost its ink. `ka<k>` is read by the label's walk
   // (MR 5) alone and `fn<n>` by the ledger alone: every other reading passes over them as over a bracket)
-  const us = [{ kind: 'para', pieces: [{ t: 'text', s: 'OAI' }, { t: 'ph', src: '\\textsuperscript{ukn.}' }] }, { kind: 'caption', src: 'Comparison' }]
+  const us: OwnUnit[] = [{ kind: 'para', pieces: [{ t: 'text', s: 'OAI' }, { t: 'ph', src: '\\textsuperscript{ukn.}' }] }, { kind: 'caption', src: 'Comparison' }]
   const at = (extra: { pt: string }[]) => page([{ pt: '0s' }, 'OAI', { pt: '0e' }, { pt: 'p0.1a' }, 'ukn.', { dx: 3 }, '4-0', ...extra, '\n', 'Table 4: ', { pt: '1s' }, 'Comparison', { pt: '1e' }])
   it('gives an opening alone the same reading with the points as without them, the label aside', () => {
     const without = [at([])]
@@ -293,7 +296,7 @@ describe('the points a reader of its own reads alone: a caption\'s label point, 
 describe('a display its unit opens with, which the marking passes over (stream.mjs headInk)', () => {
   // (2501.14787v1 p24u193: \\[ vec f'(A)[dA] = … \\] after a blank line, then "In order to understand …"; no point of its own, its
   // ink between 192e and 193s in no group, made three kept blocks by the ink units, and lit with its unit's first sentence on the left)
-  const opens = [{ src: 'after vectorization to' }, { pieces: [{ t: 'text', s: '\n' }, { t: 'ph', src: '\\[\nvec f=Mx.\n\\]' }, { t: 'text', s: '\nIn order to' }] }]
+  const opens: OwnUnit[] = [{ src: 'after vectorization to' }, { pieces: [{ t: 'text', s: '\n' }, { t: 'ph', src: '\\[\nvec f=Mx.\n\\]' }, { t: 'text', s: '\nIn order to' }] }]
   const pages = [page([{ pt: 'bs1' }, { pt: '0s' }, 'after vectorization to', { pt: '0e' }, ':', '\nvecf=Mx', '\nunder.', { pt: '1s' }, '\nIn order to', { pt: '1e' }, { pt: 'be1' }])]
   it('leaves its ink in no group, the wrap as before, and gives it to its unit for the ledger (`leads`)', () => {
     const follows = followsOf(opens as never, new Set(['0s', '0e', '1s', '1e']))
@@ -373,7 +376,7 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     // "Study of pulse jitter characteristics of PSR J1744{−}1134{:} Towards …": the point before the end mark is the title's own
     // placeholder's closing point; the author before it (u0) keeps its own ink
     const pages = [page([{ pt: '0s' }, 'Jose', { pt: '0e' }, { pt: 'bs1' }, 'Study J1744', { pt: 'p1.1a' }, '-', { pt: 'p1.1b' }, '1134', { pt: 'p1.3a' }, ':', { pt: 'p1.3b' }, 'Towards', { pt: 'h1e' }])]
-    const title = { kind: 'heading', pieces: [{ t: 'text', s: 'Study J1744' }, { t: 'ph', src: '$-$' }, { t: 'text', s: '1134' }, { t: 'ph', src: '$:$' }, { t: 'text', s: ' Towards' }] }
+    const title: OwnUnit = { kind: 'heading', pieces: [{ t: 'text', s: 'Study J1744' }, { t: 'ph', src: '$-$' }, { t: 'text', s: '1134' }, { t: 'ph', src: '$:$' }, { t: 'text', s: ' Towards' }] }
     const r = ownOf(pages, { units: [{ src: 'Jose' }, title] })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Jose', u1: 'Study J17441134Towards', 'u1.p': '-:' })
     expect(r.units.get(1)?.unhidden).toBe(null)
@@ -392,7 +395,7 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     // it, so the header line TeX set before it is released, the title its own, 2609.20976v1 u0; not said, the original's as
     // before)
     const bold = [page([{ pt: 'bs2' }, 'Prepared for submission to JCAP\n', 'Comparing the Detectability', { pt: '0e' }])]
-    const boldmath = [{ kind: 'heading', pieces: [{ t: 'ph', src: '\\boldmath' }, { t: 'text', s: 'Comparing the Detectability' }] }]
+    const boldmath: OwnUnit[] = [{ kind: 'heading', pieces: [{ t: 'ph', src: '\\boldmath' }, { t: 'text', s: 'Comparing the Detectability' }] }]
     const released = ownOf(bold, { units: boldmath, inkless: new Set(['\\boldmath']) })
     expect(groupsOf(released, bold)).toEqual({ u0: 'Comparing the Detectability' })
     expect(released.units.get(0)?.unhidden).toBe(null)
@@ -414,7 +417,7 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     // "Completion cap | \\CompletionTokenCap{} tokens per request": TeX set the macro's "1,024" after the cell before's end and
     // before this cell's start mark; the marking's probe said the macro sets "1,024" (marks.mjs readInkTexts)
     const pages = [page([{ pt: 't0s' }, 'Completion cap', { pt: 't0e' }, { dx: 30 }, '1,024 ', { pt: 't1s' }, 'tokens per request', { pt: 't1e' }])]
-    const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Completion cap' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\CompletionTokenCap{}' }, { t: 'text', s: ' tokens per request ' }] }]
+    const cells: OwnUnit[] = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Completion cap' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\CompletionTokenCap{}' }, { t: 'text', s: ' tokens per request ' }] }]
     const r = ownOf(pages, { units: cells, texts: new Map([['\\CompletionTokenCap{}', '1,024']]) })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Completion cap', u1: 'tokens per request', 'u1.p': '1,024 ' })
     expect([r.units.get(0)?.unhidden, r.units.get(1)?.unhidden]).toEqual([null, null])
@@ -431,7 +434,7 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
   it('splits a cell\'s lead of a macro and a text symbol: the symbol with the text, the macro\'s ink its placeholder (Codex on #456)', () => {
     // \\bert\\# Steps: the layer draws the "#" as its character; the macro's ink is cropped where the maker found it
     const pages = [page([{ pt: 't0s' }, 'Model', { pt: 't0e' }, { dx: 30 }, 'BERT#', { pt: 't1s' }, 'Steps', { pt: 't1e' }])]
-    const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Model' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bert' }, { t: 'ph', src: '\\#' }, { t: 'text', s: ' Steps' }] }]
+    const cells: OwnUnit[] = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Model' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bert' }, { t: 'ph', src: '\\#' }, { t: 'text', s: ' Steps' }] }]
     const r = ownOf(pages, { units: cells, texts: new Map([['\\bert', 'BERT']]) })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Model', u1: '#Steps', 'u1.p': 'BERT' })
     expect(r.units.get(1)?.unhidden).toBe(null)
@@ -439,13 +442,13 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
   it('owns a cell\'s lead of inline code or a formula by the text the probe read (MARKS_SCHEMA 10: 2610.21098v1 p13u138, 2610.21176v1 p13u88)', () => {
     // "Cap parameter | \\texttt{max\\_tokens} on Chat Completions routes", T1's underscore a glyph of its own
     const code = [page([{ pt: 't0s' }, 'Cap parameter', { pt: 't0e' }, { dx: 30 }, 'max_tokens', { pt: 't1s' }, 'on Chat routes', { pt: 't1e' }])]
-    const codeCells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Cap parameter' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\texttt{max\\_tokens}' }, { t: 'text', s: ' on Chat routes' }] }]
+    const codeCells: OwnUnit[] = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Cap parameter' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\texttt{max\\_tokens}' }, { t: 'text', s: ' on Chat routes' }] }]
     const c = ownOf(code, { units: codeCells, texts: new Map([['\\texttt{max\\_tokens}', 'max_tokens']]) })
     expect(groupsOf(c, code)).toEqual({ u0: 'Cap parameter', u1: 'on Chat routes', 'u1.p': 'max_tokens' })
     expect(c.units.get(1)?.unhidden).toBe(null)
     // "Prop. 1 | \\dprime{} tracks the gap": $d'$, a math italic d and a prime the probe spells as no character (INK_ANY, one glyph)
     const prime = [page([{ pt: 't0s' }, 'Prop. 1', { pt: 't0e' }, { dx: 30 }, 'd\u2032', { pt: 't1s' }, 'tracks the gap', { pt: 't1e' }])]
-    const lead = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Prop. 1' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\dprime{}' }, { t: 'text', s: ' tracks the gap' }] }]
+    const lead: OwnUnit[] = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Prop. 1' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\dprime{}' }, { t: 'text', s: ' tracks the gap' }] }]
     const texts = new Map([['\\dprime{}', `d${INK_ANY}`]])
     const p = ownOf(prime, { units: lead, texts })
     expect(groupsOf(p, prime)).toEqual({ u0: 'Prop. 1', u1: 'tracks the gap', 'u1.p': 'd\u2032' })
@@ -459,19 +462,19 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     // (a footnote's call among the lead's pieces sets its mark between them and the start: a glyph read as the formula's would be
     // that mark's, so the cell is the original's — here the call's "1" would spell the prime)
     const call = [page([{ pt: 't0s' }, 'Prop. 1', { pt: 't0e' }, { dx: 30 }, 'd1', { pt: 't1s' }, 'tracks the gap', { pt: 't1e' }])]
-    const noted = [lead[0]!, { kind: 'cell', pieces: [{ t: 'ph', src: '\\dprime{}' }, { t: 'ph', src: '\\footnotemark' }, { t: 'text', s: ' tracks the gap' }] }]
+    const noted: OwnUnit[] = [lead[0]!, { kind: 'cell', pieces: [{ t: 'ph', src: '\\dprime{}' }, { t: 'ph', src: '\\footnotemark' }, { t: 'text', s: ' tracks the gap' }] }]
     expect(ownOf(call, { units: noted, texts }).units.get(1)?.unhidden).toBe('marks')
   })
   it('spells a cell whose lead is a letter symbol with the letter it sets (\\O, \\ss: Devin on #456)', () => {
     const pages = [page([{ pt: 't0s' }, 'Name', { pt: 't0e' }, { dx: 30 }, '\u00d8', { pt: 't1s' }, 'stergaard', { pt: 't1e' }])]
-    const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Name' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\O' }, { t: 'text', s: 'stergaard' }] }]
+    const cells: OwnUnit[] = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Name' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\O' }, { t: 'text', s: 'stergaard' }] }]
     const r = ownOf(pages, { units: cells })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Name', u1: '\u00d8stergaard' })
     expect(r.units.get(1)?.unhidden).toBe(null)
   })
   it('never takes a neighbour cell\'s ink for a cell\'s lead, however close the columns (the neighbour check; the review of b479095e)', () => {
     // an unmarked number cell ("80.8") 0.4 em before the macro's ink (\\tabcolsep 2pt): the macro's text ends the run
-    const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Ours' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bert' }, { t: 'text', s: ' (Single)' }] }]
+    const cells: OwnUnit[] = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Ours' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bert' }, { t: 'text', s: ' (Single)' }] }]
     const texts = new Map([['\\bert', 'BERT']])
     const near = [page([{ pt: 't0s' }, 'Ours', { pt: 't0e' }, { dx: 4 }, '80.8', { dx: 4 }, 'BERT ', { pt: 't1s' }, '(Single)', { pt: 't1e' }])]
     const n = ownOf(near, { units: cells, texts })
@@ -501,7 +504,7 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
   })
   it('reads a text symbol of no mark of its own as its character in the source (2610.21037v1 p3u28: F\\o lner)', () => {
     const pages = [page([{ pt: '0s' }, 'a Følner sequence', { pt: '0e' }])]
-    const unit = { pieces: [{ t: 'text', s: 'a F' }, { t: 'ph', src: '\\o' }, { t: 'text', s: ' lner sequence' }] }
+    const unit: OwnUnit = { pieces: [{ t: 'text', s: 'a F' }, { t: 'ph', src: '\\o' }, { t: 'text', s: ' lner sequence' }] }
     const r = ownOf(pages, { units: [unit] })
     expect(r.units.get(0)?.unhidden).toBe(null)
     // (one with marks of its own too: the layer draws a text symbol as its character, never from a crop, so its glyph is the text's,
@@ -512,14 +515,14 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(m.units.get(0)?.unhidden).toBe(null)
   })
   it("gives a text symbol's own glyph to its unit's text, marks or not: the layer draws it as its character, so in the placeholders' group it stood under the drawing wherever no other piece of the unit moved (2610.19159v1 p153u1701's \\textless{})", () => {
-    const unit = { pieces: [{ t: 'text', s: 'seed STD ' }, { t: 'ph', src: '\\textless{}' }, { t: 'text', s: ' 0.05 floor' }] }
+    const unit: OwnUnit = { pieces: [{ t: 'text', s: 'seed STD ' }, { t: 'ph', src: '\\textless{}' }, { t: 'text', s: ' 0.05 floor' }] }
     const pages = [page([{ pt: '0s' }, 'seed STD ', { pt: 'p0.1a' }, '<', { pt: 'p0.1b' }, ' 0.05 floor', { pt: '0e' }])]
     const r = ownOf(pages, { units: [unit] })
     expect(groupsOf(r, pages)).toEqual({ u0: 'seed STD < 0.05 floor' })
     expect(r.units.get(0)?.unhidden).toBe(null)
     // (its own glyph alone: a text symbol sets its character and nothing else, so what a reading took past it is no one's —
     // 2610.21477v1 u42's closing `\\}`, an opening alone at its unit's end, whose reading ran on to the next box's title)
-    const alone = { pieces: [{ t: 'text', s: 'code ' }, { t: 'ph', src: '\\}' }] }
+    const alone: OwnUnit = { pieces: [{ t: 'text', s: 'code ' }, { t: 'ph', src: '\\}' }] }
     const run = [page([{ pt: '0s' }, 'code ', { pt: '0e' }, { pt: 'p0.1a' }, '}', ' (3) Title', { pt: '1s' }, 'next', { pt: '1e' }])]
     const g = groupsOf(ownOf(run, { units: [alone, { pieces: [{ t: 'text', s: 'next' }] }] }), run)
     expect(g.u0).toBe('code }')
@@ -527,14 +530,14 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(g.u1).toBe('next')
   })
   it("gives the text symbols a unit opens with, set before its start mark, to its text: an affiliation's `\\{kahe, …\\}` (1512.03385v1 u321, whose \"{\" stood under its drawing in its placeholders' group)", () => {
-    const aff = { kind: 'affiliation', pieces: [{ t: 'ph', src: '\\normalsize' }, { t: 'text', s: '\n' }, { t: 'ph', src: '\\{' }, { t: 'text', s: 'kahe, jian' }, { t: 'ph', src: '\\}' }, { t: 'text', s: '@ms.com' }] }
+    const aff: OwnUnit = { kind: 'affiliation', pieces: [{ t: 'ph', src: '\\normalsize' }, { t: 'text', s: '\n' }, { t: 'ph', src: '\\{' }, { t: 'text', s: 'kahe, jian' }, { t: 'ph', src: '\\}' }, { t: 'text', s: '@ms.com' }] }
     const pages = [page([{ pt: 'bs1' }, '{', { pt: '0s' }, 'kahe, jian}@ms.com', { pt: '0e' }, { pt: 'be1' }])]
     const r = ownOf(pages, { units: [aff] })
     expect(groupsOf(r, pages)).toEqual({ u0: '{kahe, jian}@ms.com' })
     expect(r.units.get(0)?.unhidden).toBe(null)
   })
   it('lets a wrapper set words of its own before its argument (2610.20266v1 p1u0: siamart\'s \\funding)', () => {
-    const unit = { kind: 'footnote', pieces: [{ t: 'text', s: 'Submitted 10/2026.\n' }, { t: 'open', id: 1, src: '\\funding{' }, { t: 'text', s: 'Funded by the DFG.' }, { t: 'close', id: 1, src: '}' }] }
+    const unit: OwnUnit = { kind: 'footnote', pieces: [{ t: 'text', s: 'Submitted 10/2026.\n' }, { t: 'open', id: 1, src: '\\funding{' }, { t: 'text', s: 'Funded by the DFG.' }, { t: 'close', id: 1, src: '}' }] }
     const pages = [page([{ pt: '0s' }, 'Submitted 10/2026. Funding: Funded by the DFG.', { pt: '0e' }])]
     expect(ownOf(pages, { units: [unit] }).units.get(0)?.unhidden).toBe(null)
     // (words past a wrapper's, or anywhere else, are still refused)
@@ -544,7 +547,7 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(ownOf(elsewhere, { units: [unit] }).units.get(0)?.unhidden).toBe('spell')
     // (the slots are read a part at a time, never by a backtracking search: seven \emph{a} and a "z" against fifty a's and an
     // "x" are refused at once — a regular expression took over a second, Codex on #462)
-    const pieces = [...Array.from({ length: 7 }, (_, i) => [{ t: 'open', id: i + 1, src: '\\emph{' }, { t: 'text', s: 'a' }, { t: 'close', id: i + 1, src: '}' }]).flat(), { t: 'text', s: 'z' }]
+    const pieces: SourcePiece[] = [...Array.from({ length: 7 }, (_, i): SourcePiece[] => [{ t: 'open', id: i + 1, src: '\\emph{' }, { t: 'text', s: 'a' }, { t: 'close', id: i + 1, src: '}' }]).flat(), { t: 'text', s: 'z' }]
     const many = [page([{ pt: '0s' }, `${'a'.repeat(50)}x`, { pt: '0e' }])]
     const t0 = performance.now()
     expect(ownOf(many, { units: [{ pieces }] }).units.get(0)?.unhidden).toBe('spell')
@@ -557,9 +560,9 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     const pages = [page([{ pt: '0s' }, 'Surhud More,', { pt: '0e' }, { pt: 'p0.1a' }, 'cd\n', 'Department of Physics\n', 'surhud at iucaa\n', 'Abstract. ', { pt: '1s' }, 'The amplitude', { pt: '1e' }, '\nand more of it here\nand its last line'])]
     // (the skip: the names' line apart from the lines below by two of the page's pitches)
     pages[0]!.glyphs.forEach(g => { if (g.y < 700) { g.y -= 12; g.top -= 12; g.bottom -= 12 } })
-    const authors = [{ kind: 'author', pieces: [{ t: 'text', s: 'Surhud More,' }, { t: 'ph', src: '\\orcidlink{0000-0002-2986-2371}' }] }, { kind: 'abstract', pieces: [{ t: 'text', s: 'The amplitude' }] }]
+    const authors: OwnUnit[] = [{ kind: 'author', pieces: [{ t: 'text', s: 'Surhud More,' }, { t: 'ph', src: '\\orcidlink{0000-0002-2986-2371}' }] }, { kind: 'abstract', pieces: [{ t: 'text', s: 'The amplitude' }] }]
     // (the marking's follows, as the wrap makes them of the units and the points read)
-    const marked = (pgs: ReturnType<typeof page>[], us: unknown[]) => ownOf(pgs, { units: us, follows: followsOf(us as never, new Set(pgs.flatMap(p => p.points.map(x => x.name)))) })
+    const marked = (pgs: ReturnType<typeof page>[], us: OwnUnit[]) => ownOf(pgs, { units: us, follows: followsOf(us as never, new Set(pgs.flatMap(p => p.points.map(x => x.name)))) })
     const g = groupsOf(marked(pages, authors), pages)
     expect(g['u0.p']).toBe('cd')
     expect([g.u0, g.u1]).toEqual(['Surhud More,', 'The amplitude'])
@@ -571,7 +574,7 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     // (at the page's leading the lines are still its, whatever they hold: a reference's \\Eprint wrapped over two lines, its
     // entry's full stop on a third, and an entry TeX gave no unit, 2307.16209v1 p138 u487 and p147 u777: none left no one's)
     const wrapped = [page([{ pt: '0s' }, 'See the paper', { pt: '0e' }, { pt: 'p0.1a' }, 'arXiv:gr-qc/0511111\n', '[gr-qc]\n', '.\n', '[167] https://github.com/strings\n', { pt: '1s' }, 'Next one', { pt: '1e' }, '\nand a line\nand another'])]
-    const eprint = [{ kind: 'reference', pieces: [{ t: 'text', s: 'See the paper' }, { t: 'ph', src: '\\Eprint {http://arxiv.org/abs/gr-qc/0511111} {arXiv:gr-qc/0511111 [gr-qc]}' }] }, { pieces: [{ t: 'text', s: 'Next one' }] }]
+    const eprint: OwnUnit[] = [{ kind: 'reference', pieces: [{ t: 'text', s: 'See the paper' }, { t: 'ph', src: '\\Eprint {http://arxiv.org/abs/gr-qc/0511111} {arXiv:gr-qc/0511111 [gr-qc]}' }] }, { pieces: [{ t: 'text', s: 'Next one' }] }]
     expect(groupsOf(marked(wrapped, eprint), wrapped)['u0.p']).toBe('arXiv:gr-qc/0511111[gr-qc].[167] https://github.com/strings')
     // (a display there owns its lines, as before: TeX sets one over many)
     const display = [page([{ pt: '0s' }, 'We have', { pt: '0e' }, { pt: 'p0.1a' }, 'E = mc\n', '+ more\n', { pt: '1s' }, 'Next one', { pt: '1e' }])]
@@ -596,7 +599,7 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(ownOf(unmarked, { units: [{ pieces: [{ t: 'text', s: 'We have ' }, { t: 'ph', src: '\\[E=mc^2\\]' }, { t: 'text', s: ' here.' }] }] }).units.get(0)?.unhidden).toBe('spell')
     // (a macro TeX said sets no ink, \\boldmath, is no such placeholder: the note's line released, as the maker reads it)
     const bold = [page([{ pt: '0s' }, 'This is a very\n', 'hard thing\n', '\n*d25062@iitmandi.ac.in\n', { dx: 300 }, 'to achieve.', { pt: '0e' }])]
-    const boldUnit = [{ pieces: [{ t: 'text', s: 'This is a very ' }, { t: 'ph', src: '\\boldmath' }, { t: 'text', s: 'hard thing to achieve.' }] }]
+    const boldUnit: OwnUnit[] = [{ pieces: [{ t: 'text', s: 'This is a very ' }, { t: 'ph', src: '\\boldmath' }, { t: 'text', s: 'hard thing to achieve.' }] }]
     expect(ownOf(bold, { units: boldUnit, inkless: new Set(['\\boldmath']) }).units.get(0)?.unhidden).toBe(null)
     expect(ownOf(bold, { units: boldUnit }).units.get(0)?.unhidden).toBe('spell')
     // (a page's folio after a footnote run on to the next page (2a): released)
@@ -610,7 +613,7 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     // and the lead placeholder's opening point after that mark (patch writes the start mark before the marks that open the
     // piece; written after them, the opening mark waited in vertical mode and the heading's own \axtpmm set it at its $\cand$)
     const pages = [page([{ pt: 'h0s' }, 'What ', { pt: 'p0.1a' }, 'V', { pt: 'p0.1b' }, ' is.', { pt: 'h0e' }, { pt: '1s' }, { pt: 'p1.0a' }, 'V(q)', { pt: 'p1.0b' }, ' rest', { pt: '1e' }])]
-    const us = [{ kind: 'heading', pieces: [{ t: 'text', s: 'What ' }, { t: 'ph', src: '$V$' }, { t: 'text', s: ' is.' }] }, { pieces: [{ t: 'ph', src: '$V(q)$' }, { t: 'text', s: ' rest' }] }]
+    const us: OwnUnit[] = [{ kind: 'heading', pieces: [{ t: 'text', s: 'What ' }, { t: 'ph', src: '$V$' }, { t: 'text', s: ' is.' }] }, { pieces: [{ t: 'ph', src: '$V(q)$' }, { t: 'text', s: ' rest' }] }]
     const r = ownOf(pages, { units: us })
     expect(groupsOf(r, pages)).toEqual({ u0: 'What  is.', 'u0.p': 'V', 'u1.p': 'V(q)', u1: ' rest' })
     expect([r.units.get(0)?.unhidden, r.units.get(1)?.unhidden]).toEqual([null, null])
@@ -664,7 +667,7 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     const big = page([{ pt: 'h0s' }, 'Bound ', { pt: 'p0.1a' }, 'X', { pt: 'p0.1b' }, { pt: 'h0e' }, { dx: 3 }, ')', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])
     const X = big.glyphs.find(g => g.u === 'X')!
     Object.assign(X, { size: 30, top: X.y + 21, bottom: X.y - 6 })
-    const units2 = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Bound ' }, { t: 'ph', src: '$X$' }] }, { kind: 'theorem', src: 'Every x' }]
+    const units2: OwnUnit[] = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Bound ' }, { t: 'ph', src: '$X$' }] }, { kind: 'theorem', src: 'Every x' }]
     expect(groupsOf(ownOf([big], { units: units2 }), [big])).toEqual({ u0: 'Bound ', 'u0.p': 'X', u1: 'Every x' })
   })
   it('takes a head of a name the paper defines as its unit\'s label, as a standard name\'s (2501.14787v1 p10u78: thmtools\' "Recall")', () => {

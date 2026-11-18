@@ -14,6 +14,11 @@
 // 12 GiB free. The run's manifest (<work>/raw/run.json) says what it was asked and what it drew: written at the start (not
 // done), its pairs not drawn and why as they come, done at the end; each pair's raw file names the run and the v2.mjs file it
 // drew from, so that measure.mjs judges this run's drawing alone and the whole of it.
+// Today's side frozen (frozen.mjs, amendment 8.3): `--freeze-today=<dir>` draws it as always and writes into <dir>, once, what
+// it drew and read of each pair (its readings, its four shots a page, its sentence boxes, its page errors); `--today-frozen=<dir>`
+// reads that in place of drawing it: today's engine is neither bundled nor opened, and everything after (v2's side, the pixels,
+// the raw files, the images) is made as before from the same readings and shots.
+import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -30,6 +35,7 @@ import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse, boxesOf, strays } from './analyse.mjs'
 import { DEVICE_PT, inPlace, vacatedOf } from './fidelity.mjs'
+import { getShot, inputsOf, pageOf, putShot, readRecord, recordFile, staleOf, writeRecord } from './frozen.mjs'
 import { bundleCheck, bundleOf, hyphFileOf, pdfOf, putsInPlace, whyNot } from './inputs.mjs'
 import { PAIRS } from './pairs.mjs'
 
@@ -44,6 +50,11 @@ const PAGES = arg('pages')?.split(',').map(Number) ?? null
  *  the same (v2.mjs --toggles) */
 const TOGGLES = arg('toggles') === 'on' ? 'on' : 'defaults'
 const CLASSES_ON = { figures: true, tables: true, heads: true, references: true, names: true }
+/** today's side drawn and frozen into a folder, or read from one (frozen.mjs: --today-frozen, or AXT_TODAY_FROZEN where neither
+ *  flag is given, which the release check's display gates set); neither: drawn */
+const FREEZE = arg('freeze-today') ?? null
+if (FREEZE && arg('today-frozen')) throw new Error('render.mjs: --freeze-today=<dir> draws and writes today\'s side, --today-frozen=<dir> reads it: one or the other')
+const FROZEN = arg('today-frozen') ?? (FREEZE ? null : (process.env.AXT_TODAY_FROZEN ?? null))
 const asked = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const pairs = asked.length ? asked : PAIRS
 // (the bundles served, named in the log; a pair asked that a named folder lacks is an error, bundles.ts)
@@ -61,20 +72,32 @@ if (Math.abs(DEVICE_PT - 1 / (SCALE * DPR)) > 1e-9) throw new Error(`DEVICE_PT $
 const MIN_FREE_GIB = 12
 mkdirSync(join(WORK, 'raw'), { recursive: true })
 mkdirSync(join(OUT, 'img'), { recursive: true })
+if (FREEZE) mkdirSync(FREEZE, { recursive: true })
 /** the GiB free on the volume an existing path is on (statfs: the blocks an unprivileged writer may use, on any platform) */
 const freeGiBOf = (path) => {
   const st = statfsSync(path)
   return (st.bavail * st.bsize) / 2 ** 30
 }
-/** the least free of the volumes the run writes to: the raw files' (work) and the images' (out) */
-const freeGiB = () => Math.min(...[WORK, OUT].map(freeGiBOf))
+/** the least free of the volumes the run writes to: the raw files' (work), the images' (out) and today's frozen side's */
+const freeGiB = () => Math.min(...[WORK, OUT, ...(FREEZE ? [FREEZE] : [])].map(freeGiBOf))
 if (freeGiB() < MIN_FREE_GIB) throw new Error(`disk: ${freeGiB().toFixed(1)} GiB free, under ${MIN_FREE_GIB}`)
 const json = (f) => JSON.parse(readFileSync(f, 'utf8'))
 const sha = (b) => createHash('sha256').update(b).digest('hex')
 /** today's prepare dumps read so far, by paper (prepOf) */
 const preps = new Map()
 // (the manifest, written before anything is drawn: a run that stops or fails leaves it not done)
-const RUN = { id: `${new Date().toISOString()}-${process.pid}`, at: new Date().toISOString(), pairs, pages: PAGES, toggles: TOGGLES, done: false, stopped: null, missing: [] }
+const RUN = {
+  id: `${new Date().toISOString()}-${process.pid}`,
+  at: new Date().toISOString(),
+  pairs,
+  pages: PAGES,
+  toggles: TOGGLES,
+  // (where today's side came from, named only where it was not drawn alone: a plain run's manifest is as before)
+  ...(FROZEN ? { today: { read: FROZEN } } : FREEZE ? { today: { drawn: true, frozen: FREEZE } } : {}),
+  done: false,
+  stopped: null,
+  missing: [],
+}
 const manifest = () => writeFileSync(join(WORK, 'raw', 'run.json'), `${JSON.stringify(RUN, null, 1)}\n`)
 manifest()
 // ---------------------------------------------------------------- today's page: esbuild over today's engine and the web
@@ -102,24 +125,28 @@ const aliases = {
     b.onResolve({ filter: /vendor\/readarxiv\/src\// }, (a) => ({ path: join(TODAY, 'src', a.path.split('vendor/readarxiv/src/')[1]) }))
   },
 }
-const todayJs = (
-  await esbuild({
-    entryPoints: [join(HERE, 'today', 'entry.mjs')],
-    bundle: true,
-    write: false,
-    format: 'esm',
-    platform: 'browser',
-    target: 'es2022',
-    external: ['pdfjs-dist'],
-    plugins: [aliases, standIn],
-    loader: { '.json': 'json' },
-    logLevel: 'warning',
-    nodePaths: [MODS, join(TODAY, 'node_modules')],
-    absWorkingDir: join(WEB),
-    tsconfig: join(WEB, 'tsconfig.json'),
-  })
-).outputFiles[0].text
-const engineCss = readFileSync(join(TODAY, 'src/pdf-reader/engine/view/engine.css'))
+// (today's side read from its frozen record: nothing of today's engine or the web's tree is read)
+const todayJs = FROZEN
+  ? null
+  : (
+      await esbuild({
+        entryPoints: [join(HERE, 'today', 'entry.mjs')],
+        bundle: true,
+        write: false,
+        format: 'esm',
+        platform: 'browser',
+        target: 'es2022',
+        external: ['pdfjs-dist'],
+        plugins: [aliases, standIn],
+        loader: { '.json': 'json' },
+        logLevel: 'warning',
+        nodePaths: [MODS, join(TODAY, 'node_modules')],
+        absWorkingDir: join(WEB),
+        tsconfig: join(WEB, 'tsconfig.json'),
+      })
+    ).outputFiles[0].text
+const engineCss = FROZEN ? null : readFileSync(join(TODAY, 'src/pdf-reader/engine/view/engine.css'))
+console.log(FROZEN ? `today's side: read from its frozen records in ${FROZEN}` : FREEZE ? `today's side: drawn, and frozen into ${FREEZE}` : "today's side: drawn")
 
 // ---------------------------------------------------------------- v2's page: the reader through Vite, the lay seam replaced
 const TYPESET = /export async function typesetLay\(o(?::[^)]*)?\)(?::[^{]*)?\{\n/g
@@ -159,6 +186,11 @@ const missing = []
 // (the v2 files laid over other bundles than the ones served here, and those of before the guard: inputs.mjs bundleCheck)
 const refusedBundles = []
 RUN.warnings = []
+// (today's side of each pair: its frozen record, read (--today-frozen) or to be written (--freeze-today: the inputs it is drawn
+// from, and a pair already frozen, which stops the run before any page is drawn: a frozen side is written once))
+const frozenOf = new Map()
+const inputsAt = new Map()
+const frozenAlready = []
 for (const pair of pairs) {
   const paper = paperOf(pair)
   const target = /-([a-z]{2,3})$/.exec(pair)?.[1]
@@ -194,6 +226,22 @@ for (const pair of pairs) {
     missing.push({ pair, why: `v2.mjs laid it under the toggles ${v2.toggles ?? 'defaults'}, the drawing is asked ${TOGGLES}` })
     todayDesc.delete(pair)
     continue
+  }
+  if (FROZEN || FREEZE) {
+    const inputs = inputsOf(todayDesc.get(pair), files.get(`/rows/${pair}.json`), readFileSync(pdfOf.get(paper)))
+    if (FREEZE) {
+      if (existsSync(recordFile(FREEZE, TOGGLES, pair))) frozenAlready.push(recordFile(FREEZE, TOGGLES, pair))
+      inputsAt.set(pair, inputs)
+    } else {
+      const record = readRecord(FROZEN, TOGGLES, pair)
+      const stale = record ? staleOf(record, TOGGLES, inputs) : `today's side is not frozen in ${FROZEN} (${recordFile(FROZEN, TOGGLES, pair)})`
+      if (stale) {
+        missing.push({ pair, why: stale })
+        todayDesc.delete(pair)
+        continue
+      }
+      frozenOf.set(pair, record)
+    }
   }
   // (its pages against the bundles' composed document it was laid over, never another's: the reader unwraps whatever the
   // served document's groups do not hold, half a page drawn as the original's)
@@ -249,9 +297,10 @@ const routes = [
   {
     prefix: '/h/',
     handle(_req, res, url) {
-      if (url.pathname === '/h/page.html') return send(res, readFileSync(join(HERE, 'today', 'index.html')), 'text/html; charset=utf-8')
-      if (url.pathname === '/h/entry.js') return send(res, todayJs, TYPES['.js'])
-      if (url.pathname === '/h/engine.css') return send(res, engineCss, 'text/css')
+      // (today's page: none where today's side is read from its frozen records)
+      if (!FROZEN && url.pathname === '/h/page.html') return send(res, readFileSync(join(HERE, 'today', 'index.html')), 'text/html; charset=utf-8')
+      if (!FROZEN && url.pathname === '/h/entry.js') return send(res, todayJs, TYPES['.js'])
+      if (!FROZEN && url.pathname === '/h/engine.css') return send(res, engineCss, 'text/css')
       if (url.pathname === '/h/blank.html') return send(res, '<!doctype html><meta charset="utf-8"><body></body>', 'text/html')
       return false
     },
@@ -342,6 +391,13 @@ if (refusedBundles.length) {
   console.error('render.mjs: a v2 file is drawn only against the bundles it was laid over (AXT_L1_BUNDLES): nothing drawn')
   process.exit(2)
 }
+if (frozenAlready.length) {
+  RUN.stopped = `today's side frozen already: ${frozenAlready.join(', ')}`
+  manifest()
+  for (const f of frozenAlready) console.error(`render.mjs: refused, today's side is frozen already in ${f}`)
+  console.error('render.mjs: a frozen side is written once (--freeze-today): nothing drawn')
+  process.exit(2)
+}
 if (!RUN.warnings.length) delete RUN.warnings
 manifest()
 const server = await startServer({ out: BUILD, objects, routes })
@@ -388,14 +444,26 @@ for (const pair of pairs) {
   const v2Bytes = readFileSync(join(WORK, 'v2', `${pair}.json`))
   const v2 = JSON.parse(v2Bytes.toString('utf8'))
   const errors = { today: [], v2: [] }
-  // (today's context: the original and today's drawing, one page at a time on a stage the page's size)
-  const tc = await browser.newContext({ viewport: { width: 1000, height: 1200 }, deviceScaleFactor: DPR })
-  await guard(tc)
-  const tp = await tc.newPage()
-  tp.on('pageerror', (x) => errors.today.push(String(x).slice(0, 200)))
-  await tp.goto(`${server.origin}/h/page.html`)
-  await tp.waitForFunction(() => !!globalThis.todayReady)
-  const opened = await tp.evaluate((d) => globalThis.today.open(d), todayDesc.get(pair))
+  // (today's context: the original and today's drawing, one page at a time on a stage the page's size; or its frozen record,
+  // what it said on opening and the page errors it raised)
+  const frozen = frozenOf.get(pair) ?? null
+  let tc = null
+  let tp = null
+  let opened
+  if (frozen) {
+    errors.today.push(...frozen.errors)
+    opened = frozen.opened
+  } else {
+    tc = await browser.newContext({ viewport: { width: 1000, height: 1200 }, deviceScaleFactor: DPR })
+    await guard(tc)
+    tp = await tc.newPage()
+    tp.on('pageerror', (x) => errors.today.push(String(x).slice(0, 200)))
+    await tp.goto(`${server.origin}/h/page.html`)
+    await tp.waitForFunction(() => !!globalThis.todayReady)
+    opened = await tp.evaluate((d) => globalThis.today.open(d), todayDesc.get(pair))
+  }
+  // (what this run freezes of the pair: each page's side as drawn, its shots by digest)
+  const freezing = FREEZE ? [] : null
   // (v2's context: the reader on its v2 document, the entry's pages through the lay seam)
   current = pair
   const vc = await browser.newContext({ viewport: { width: 1100, height: 1300 }, deviceScaleFactor: DPR })
@@ -421,28 +489,17 @@ for (const pair of pairs) {
   const shots = new Map()
   for (const n of expected) {
     const rec = { page: n }
-    try {
-      // the original
-      const o = await tp.evaluate(([k, s]) => globalThis.today.original(k, s), [n, SCALE])
-      const clip = { x: 0, y: 0, width: o.size[0], height: o.size[1] }
-      const A = await shot(tp, clip)
-      rec.view = o.view
-      rec.original = { links: o.links, bordered: o.bordered, linkBoxes: o.linkBoxes, runs: o.runs, fonts: o.fonts }
-      // today's
-      await tp.evaluate(() => globalThis.today.textOnly(false))
-      const t = await tp.evaluate(([k, s]) => globalThis.today.page(k, s), [n, SCALE])
-      await frames(tp)
-      const T = await shot(tp, clip)
-      await tp.evaluate(() => globalThis.today.textOnly(true))
-      await frames(tp)
-      const Tt = await shot(tp, clip)
-      await tp.evaluate(() => globalThis.today.textOnly(false))
-      // (its drawing without its text: the copy, the original's ink it keeps, its crops and pastes)
-      await tp.evaluate(() => globalThis.today.copyOnly(true))
-      await frames(tp)
-      const Tc = await shot(tp, clip)
-      await tp.evaluate(() => globalThis.today.copyOnly(false))
-      rec.today = t
+    // arXiv's page and today's, drawn (todaySide) or read from the frozen record: their readings, in the record in the order
+    // they are drawn in, and their four shots; a step of today's that failed fails the page there, v2's side not drawn
+    const f = frozen ? frozenSide(frozen, n) : await todaySide(tp, n)
+    if (freezing) freezing.push(frozenOfSide(f))
+    if (f.view) rec.view = f.view
+    if (f.original) rec.original = f.original
+    if (f.error) rec.error = f.error
+    else try {
+      const { A, T, Tt, Tc } = f.shots
+      const o = { view: f.view }
+      rec.today = f.today
       // v2's
       await vp.evaluate((k) => globalThis.__p.textOnly(false) && globalThis.__p.go(k), n)
       await wait(300)
@@ -521,12 +578,22 @@ for (const pair of pairs) {
   shots.clear()
   // (today's sentence boxes of each page drawn, read once every page is: a unit's sentences are known once all its pages are told,
   // as in a reading session; today/entry.mjs litBoxes)
+  // (frozen: each page's as the freezing run read them, or its error; a page whose boxes that run did not read fails here)
   for (const rec of out.pages) {
     if (rec.error || !rec.today?.committed || rec.today.shownOriginal) continue
+    if (frozen) {
+      const fp = pageOf(frozen, rec.page)
+      if (fp.litError) rec.error = fp.litError
+      else if (fp.litBoxes) rec.today.litBoxes = fp.litBoxes
+      else rec.error = `today's sentence boxes: not frozen for page ${rec.page}`
+      continue
+    }
     try {
       rec.today.litBoxes = await tp.evaluate(([k, s]) => globalThis.today.litBoxes(k, s), [rec.page, SCALE])
+      if (freezing) freezing.find((p) => p.page === rec.page).litBoxes = rec.today.litBoxes
     } catch (e) {
       rec.error = `today's sentence boxes: ${String(e?.message ?? e).slice(0, 280)}`
+      if (freezing) freezing.find((p) => p.page === rec.page).litError = rec.error
     }
   }
   // (the fresh rule's second look: the pages v2.mjs's re-lay changed (v2 laid with today's own text in v2's unit, relay.mjs),
@@ -587,8 +654,42 @@ for (const pair of pairs) {
   out.errors = errors
   writeFileSync(join(WORK, 'raw', `${pair}.json`), `${JSON.stringify(out)}\n`)
   console.log(`${pair}: ${out.pages.length} pages in ${((Date.now() - t0) / 1000).toFixed(0)} s; page errors today ${errors.today.length}, v2 ${errors.v2.length}${errors.v2.length ? ` (${errors.v2.slice(0, 2).join(' | ')})` : ''}${relayAt.length ? `; re-lay ${relayAt.length} pages in ${(out.relayMs / 1000).toFixed(0)} s, errors ${errors.relay.length}` : ''}`)
-  await tp.evaluate(() => globalThis.today.dispose())
-  await tc.close()
+  if (freezing) {
+    // (today's page errors as the raw file holds them; then the sentence boxes of the pages whose boxes this drawing did not read
+    // because v2's side failed there, read after the raw file is written so that nothing it holds moves: today's side whole)
+    const todayErrors = [...errors.today]
+    for (const fp of freezing) {
+      if (fp.error || !fp.today?.committed || fp.today.shownOriginal || fp.litBoxes || fp.litError) continue
+      try {
+        fp.litBoxes = await tp.evaluate(([k, s]) => globalThis.today.litBoxes(k, s), [fp.page, SCALE])
+      } catch (e) {
+        fp.litError = `today's sentence boxes: ${String(e?.message ?? e).slice(0, 280)}`
+      }
+    }
+    writeRecord(FREEZE, TOGGLES, pair, {
+      pair,
+      paper,
+      target,
+      toggles: TOGGLES,
+      inputs: inputsAt.get(pair),
+      drawn: {
+        run: RUN.id,
+        raw: join(WORK, 'raw', `${pair}.json`),
+        today: gitHead(TODAY),
+        web: gitHead(WEB),
+        chromium: browser.version(),
+        scale: SCALE,
+        dpr: DPR,
+      },
+      opened,
+      errors: todayErrors,
+      pages: freezing,
+    })
+  }
+  if (tp) {
+    await tp.evaluate(() => globalThis.today.dispose())
+    await tc.close()
+  }
   await vp.evaluate(() => globalThis.__p.close())
   await vc.close()
 }
@@ -601,6 +702,67 @@ await browser.close()
 await server.close()
 // (the built page is made again on every run: not kept in the work directory)
 rmSync(BUILD, { recursive: true, force: true })
+
+/**
+ * Today's side of page n drawn in today's context: arXiv's page (its readings and its shot A), then today's pane whole (T), its
+ * translated text alone (Tt) and its drawing without its text (Tc), and what today's page read back of its drawing (`today`).
+ * A step that fails ends the side there with its error, the readings taken before it kept: as the page's record kept them
+ */
+async function todaySide(tp, n) {
+  const f = { page: n, shots: {} }
+  try {
+    // the original
+    const o = await tp.evaluate(([k, s]) => globalThis.today.original(k, s), [n, SCALE])
+    const clip = { x: 0, y: 0, width: o.size[0], height: o.size[1] }
+    f.size = o.size
+    f.shots.A = await shot(tp, clip)
+    f.view = o.view
+    f.original = { links: o.links, bordered: o.bordered, linkBoxes: o.linkBoxes, runs: o.runs, fonts: o.fonts }
+    // today's
+    await tp.evaluate(() => globalThis.today.textOnly(false))
+    const t = await tp.evaluate(([k, s]) => globalThis.today.page(k, s), [n, SCALE])
+    await frames(tp)
+    f.shots.T = await shot(tp, clip)
+    await tp.evaluate(() => globalThis.today.textOnly(true))
+    await frames(tp)
+    f.shots.Tt = await shot(tp, clip)
+    await tp.evaluate(() => globalThis.today.textOnly(false))
+    // (its drawing without its text: the copy, the original's ink it keeps, its crops and pastes)
+    await tp.evaluate(() => globalThis.today.copyOnly(true))
+    await frames(tp)
+    f.shots.Tc = await shot(tp, clip)
+    await tp.evaluate(() => globalThis.today.copyOnly(false))
+    f.today = t
+  } catch (e) {
+    f.error = String(e?.message ?? e).slice(0, 300)
+  }
+  return f
+}
+
+/** a drawn side as its record keeps it: its readings as drawn (a copy: the run's later steps add to the page's own), its shots
+ *  stored by digest (frozen.mjs putShot) */
+function frozenOfSide(f) {
+  const { shots, ...readings } = f
+  return { ...structuredClone(readings), shots: Object.fromEntries(Object.entries(shots).map(([k, b64]) => [k, putShot(FREEZE, b64)])) }
+}
+
+/** today's side of page n read from the pair's frozen record: its readings and its shots as drawn, or the error the drawing met;
+ *  a shot missing or altered fails the page */
+function frozenSide(record, n) {
+  const fp = pageOf(record, n)
+  if (fp.error) return fp
+  try {
+    return { ...fp, shots: Object.fromEntries(Object.entries(fp.shots).map(([k, d]) => [k, getShot(FROZEN, d)])) }
+  } catch (e) {
+    return { page: n, error: String(e?.message ?? e).slice(0, 300) }
+  }
+}
+
+/** a tree's commit (the record says what today's side was drawn with), or null */
+function gitHead(dir) {
+  const r = spawnSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' })
+  return r.status === 0 ? r.stdout.trim() : null
+}
 
 /** today's prepare dump of a paper (the original's lines and elements of today's units), read once (`preps`) */
 function prepOf(paper) {

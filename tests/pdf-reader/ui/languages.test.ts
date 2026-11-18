@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { LANG_CODE_TO_LOCALE_NAME, LANG_CODES, toBcp47 } from '@/config/languages'
-import { TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
 import { chromeLanguages, languageItems, ownName, READER_LANGUAGES } from '@/pdf-reader/host/languages'
 import { languageKeywords } from '@/ui/language-keywords'
+// (the rebuilt typesetter's own list of the targets it sets: packages/typeset's entry exports it, src/index.ts `LANGUAGES`)
+import { LANGUAGES } from '../../../packages/typeset/src/data/rules/index.ts'
 
 describe('the languages the reader offers (the reader\'s design, §6.7)', () => {
-  it('are the ones the layer sets (the engine\'s TARGETS), and every one of them', () => {
-    expect(READER_LANGUAGES).toHaveLength(TARGETS.length)
-    expect([...READER_LANGUAGES].sort()).toEqual(LANG_CODES.filter(c => (TARGETS as readonly string[]).includes(toBcp47(c))).sort())
+
+  it('are the ones the rebuilt typesetter sets (packages/typeset LANGUAGES), and every one of them', () => {
+    expect(READER_LANGUAGES).toHaveLength(Object.keys(LANGUAGES).length)
+    expect([...READER_LANGUAGES].sort()).toEqual(LANG_CODES.filter(c => Object.hasOwn(LANGUAGES, toBcp47(c))).sort())
   })
 
   it('are named each in its own language, by script (CJK in the design\'s order, Latin, Cyrillic), the current one selected', () => {

@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { relayOf, todaySaid } from '../../lab/typeset/parity/relay.mjs'
-import { piecesOf } from '../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { piecesOf } from '../../packages/engine/src/instrument/instrument.ts'
+import type { SourcePiece } from '../../packages/engine/src/source/latex-front.ts'
 
 type P = { kind: string; s?: string; src?: string }
 const today = (pieces: P[]) => ({ ord: 7, id: null, kind: 'para', text: '', pieces, lines: [] })
@@ -53,7 +54,7 @@ describe("today's door row said in v2's unit", () => {
     // italic, its white space and text one, no element). Red before: the switch was read only first at the group's open, so the
     // walk met it after the white space: "cut otherwise". Today's row cites the white space and the switch: "siehe " " " \em " Buch")
     const ps = [{ kind: 'text', s: 'see ' }, { kind: 'open', src: '{' }, { kind: 'text', s: ' ' }, { kind: 'ph', src: '\\em' }, { kind: 'text', s: ' Book' }, { kind: 'close', src: '}' }]
-    const stated = (q: P[]) => ({ content: piecesOf(q.map((p) => ({ t: p.kind, s: p.s, src: p.src }))) })
+    const stated = (q: P[]) => ({ content: piecesOf(q.map((p) => ({ t: p.kind, s: p.s, src: p.src })) as SourcePiece[]) })
     expect(stated(ps).content).toEqual([text('see '), { t: 'span', id: '1', style: 'italic', open: '{', close: '}', content: [text('  Book')] }])
     expect(todaySaid([7, ['siehe ', 2, 3, ' Buch'], 'whole', 'ms'], today(ps), stated(ps))).toEqual({ content: [{ t: 'text', s: 'siehe   Buch' }] })
     // (still cut otherwise: the same group whose letters differ; a switch after white space of another face than v2's group's)
