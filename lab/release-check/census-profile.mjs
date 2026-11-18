@@ -34,8 +34,9 @@ export const ENGINE_PROFILE = {
   /** the areas the design's "engine" names (§7: 64,000 lines, about 30,000 estimated): today's engine and the packages that
    *  replace it (the interface package `ui` apart: the extension's controls) */
   engineAreas: ['today-engine', 'pkg:engine', 'pkg:typeset', 'pkg:format', 'pkg:text', 'pkg:translate', 'pkg:reader'],
-  /** the areas the rule debt is headlined for: the prepare and the typesetter, today's and the packages' */
-  debtAreas: ['today-engine', 'pkg:engine', 'pkg:typeset'],
+  /** the areas the rule debt is headlined for: the prepare and the typesetter, today's and the packages', and the package the
+   *  two share (`@readarxiv/text`), where a table both read is held once: a list moved there is still theirs, and counted */
+  debtAreas: ['today-engine', 'pkg:engine', 'pkg:typeset', 'pkg:text'],
   builds: [
     {
       name: 'extension',

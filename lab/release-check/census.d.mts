@@ -41,6 +41,8 @@ export interface Census {
 }
 export declare const DEFINITIONS: Record<string, string>
 export declare function census(trees: { today: Scan[] | null; now: Scan[]; rulesLedger?: { recorded?: { commit?: string | null }; rules: Record<string, { verdict: string }> } | null }): Promise<Census>
+/** a view's rule debt: its thresholds, budgets, vocabularies and lists, each in the debt areas' headline or not */
+export declare function debtOf(view: { label: string; scans: Scan[]; files: { id: string; repo: string; path: string; f: unknown; scan: Scan }[]; keys?: Map<unknown, string> | null }, rulesLedger?: unknown): Tree['debt']
 export declare function headlineOf(c: Census): { id: string; measure: string; values: unknown[]; target: string | null }[]
 export declare function numbersOf(c: Census): Record<string, unknown>
 type Judged = { current: { NOW: Part; AFTER: Part | null }; lines: Line[] }
