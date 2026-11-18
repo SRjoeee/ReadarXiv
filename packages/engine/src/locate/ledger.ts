@@ -1027,29 +1027,6 @@ function textOf(gs: readonly LedgerGlyph[]): string {
   return s.replace(/\s+/g, ' ').trim()
 }
 
-/** the orphans a head lists at most, and an orphan's text there at most (the web contract, docs/route/orphan-text.md §8) */
-const HEAD_ORPHANS = 64,
-  HEAD_TEXT = 120
-
-/** the ledger as a head holds it, flat (a head nests four deep at most): `classes` [class, glyphs, letters, …] for each class
- *  that has a glyph, the document's `letters` and its `orphanLetters`, and its first HEAD_ORPHANS orphans, `orphans` [page,
- *  letters, text cut at HEAD_TEXT, …] */
-function ledgerSummary(ledger: TodayLedger) {
-  const classes: (string | number)[] = []
-  for (const id of CLASS_IDS) {
-    const c = ledger.counts[id]
-    if (c.glyphs) classes.push(id, c.glyphs, c.letters)
-  }
-  return {
-    classes,
-    letters: ledger.letters,
-    orphanLetters: ledger.orphanLetters,
-    orphans: ledger.orphans
-      .slice(0, HEAD_ORPHANS)
-      .flatMap((o) => [o.page, o.letters, o.text.replace(/\p{Cc}/gu, ' ').slice(0, HEAD_TEXT)]),
-  }
-}
-
 /** the ledger once the ink units own what they own (layout/ink-units.mjs claimInk): its orphans the orphan glyphs no unit owns
  *  still, counted and listed again; its classes as they were (an ink unit's glyph keeps its line's class). `own` ownOf's,
  *  claimed; `pages` the ledger's */
@@ -1080,60 +1057,4 @@ export function inkLeft(
       })
   }
   return { ...ledger, orphanLetters, orphans }
-}
-
-/** the sweep's invariant (o), no orphan letters: a row a listed orphan line, in the sweep's shape (scripts/sweep/invariants.mjs
- *  of the web), every row a violation */
-const orphanRows = (ledger: TodayLedger, { paper }: { paper: string }) =>
-  ledger.orphans.map((o) => ({
-    inv: 'o',
-    sev: 'violation',
-    paper,
-    page: o.page,
-    unit: null,
-    what: 'orphan text',
-    text: o.text,
-    detail: { letters: o.letters, x0: o.x0, x1: o.x1, y: o.y },
-  }))
-
-/** invariant (o) from a head (its base's `ledger`, ledgerSummary's): a row a listed orphan, and one for the orphan letters the head
- *  does not list; none for a head with no ledger (an older engine's) */
-function orphanRowsOfHead(
-  head:
-    | { readonly base?: { readonly ledger?: { readonly orphans?: unknown; readonly orphanLetters?: number } } }
-    | null
-    | undefined,
-  { paper }: { paper: string },
-) {
-  const l = head?.base?.ledger
-  if (!l || !Array.isArray(l.orphans)) return []
-  const rows: {
-    inv: string
-    sev: string
-    paper: string
-    page: number | null
-    unit: null
-    what: string
-    text: string
-    detail: { letters: number }
-  }[] = []
-  let listed = 0
-  for (let j = 0; j + 2 < l.orphans.length; j += 3) {
-    const [page, letters, text] = l.orphans.slice(j, j + 3)
-    rows.push({ inv: 'o', sev: 'violation', paper, page, unit: null, what: 'orphan text', text, detail: { letters } })
-    listed += letters
-  }
-  // (`!`: a number, Number.isInteger's)
-  if (Number.isInteger(l.orphanLetters) && l.orphanLetters! > listed)
-    rows.push({
-      inv: 'o',
-      sev: 'violation',
-      paper,
-      page: null,
-      unit: null,
-      what: 'orphans not listed',
-      text: '',
-      detail: { letters: l.orphanLetters! - listed },
-    })
-  return rows
 }
