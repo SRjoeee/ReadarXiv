@@ -8128,12 +8128,14 @@ and `\hangafter`, each stated line's measure its `Line[7..8]`: line 0's m0 72, l
   Where a label is drawn anew at the first line's measure start and the original's text begins at the hang (`\@hangfrom`: the
   hang is the label's width), at the drawn label's width, §18.29's rule, its test reading TeX's statement (the first line's
   text at the hang, the label at the first line's measure start, each within `ONE_EDGE`), the space after the label from its
-  ink's end to the hang TeX states. §18.29's ink test stays before it, so that what it hangs is hung as before: of the 22
-  captions a store it hangs, three state no hang (their measure their frame's; a caption set in a box of another `\hsize` states
-  none, §18.77). (b) Else at the hang: the block's edge, below.
+  ink's end to the hang TeX states. §18.29's ink test stays before it, so that what it hangs is hung as before: of the 19
+  captions a store it hangs, three state no hang (2307.16209v1 t86 and t384, 2610.21201v1 t48: their measure their frame's; a
+  caption set in a box of another `\hsize` states none, §18.77). (b) Else at the hang: the block's edge, below.
 - **H2: a label in the margin stays in the margin** (`unit/blocks.ts` apartEdge). Where a member's first line stands left of one
   edge its later text lines share, by more than a line's ink differs by under one measure, each later line within that of the
-  leftmost, the member set justified or flush left: its first block's edge is that edge and its first line's indent is signed,
+  leftmost, two later lines or more, or one that stands at the measure TeX states for it (one line shares no edge: a paragraph's
+  second line that is a display's row, 2608.04473v1 p7, or a line set far right, stays as before), the member set justified or
+  flush left: its first block's edge is that edge and its first line's indent is signed,
   so that the first line starts where it starts and every later line, and every line past the original's last, at the edge
   (B.slots' measure of a line after the first is the block's). It holds a list item TeX sets its first line left of the list's
   measure (natbib's `\bibhang`, `\itemindent -\leftmargin`: every line's measure from the hang), a label set in the margin left
@@ -8163,9 +8165,11 @@ and `\hangafter`, each stated line's measure its `Line[7..8]`: line 0's m0 72, l
 
 Tests: `packages/typeset/tests/unit/para-hang.test.ts` (red first on the base: `\@hangfrom` with a label drawn anew and TeX's
 hang stated 0.31 off the ink, every later line at the drawn label's width with more and fewer lines than the original; a
-`\hangindent` with no label; natbib's `\bibhang`; a caption's label in the margin of its measure; a contents entry; the block's
-signed edge. Laid as before: a `\parindent`, a protruded first line, a wrapped shape, lines that share no edge, a member of one
-line, a one-line heading grown to two, a one-line caption whose label is drawn anew). `label-hang.test.ts`, §18.29's, unchanged.
+`\hangindent` with no label; natbib's `\bibhang`, of three lines and of two (its one later line at the measure TeX states); a
+caption's label in the margin of its measure; a contents entry; the block's signed edge. Laid as before: a `\parindent`, a
+protruded first line, a wrapped shape, one later line TeX states nothing for (a display's row), lines that share no edge, a
+member of one line, a one-line heading grown to two, a one-line caption whose label is drawn anew). `label-hang.test.ts`,
+§18.29's, unchanged.
 The versions: none moves; a rule of the lay (ARCHITECTURE.md §5): nothing stored, no unit, row or digest.
 
 ## 19. The engine's contract

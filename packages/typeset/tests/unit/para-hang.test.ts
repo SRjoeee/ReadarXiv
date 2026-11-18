@@ -152,6 +152,14 @@ describe('a label in the margin stays in the margin (H2)', () => {
     expect(startOf(lines[0]!)).toBeCloseTo(84.95, 1)
     for (const l of lines.slice(1)) expect(startOf(l)).toBeCloseTo(149.06, 1)
   })
+  it('lays a list item of two lines at the measure TeX states for its one later line', () => {
+    // (a natbib entry of two lines: its second line at 82.91, TeX's measure for it; the first 10.91 left of it)
+    const m = member('reference', [ln(0, 72, 300, 82.91), ln(1, 82.91, 150, 82.91)])
+    const lines = layOf(m, zh.repeat(3))
+    expect(lines.length).toBeGreaterThan(1)
+    expect(startOf(lines[0]!)).toBeCloseTo(72, 1)
+    for (const l of lines.slice(1)) expect(startOf(l)).toBeCloseTo(82.91, 1)
+  })
 })
 
 describe('what is not a hang is laid as before (H3)', () => {
@@ -176,6 +184,12 @@ describe('what is not a hang is laid as before (H3)', () => {
     )
     const lines = layOf(m, zh.repeat(6))
     for (const l of lines) expect(startOf(l)).toBeCloseTo(72, 1)
+  })
+  it('keeps one later line TeX states nothing for: no edge is shared by one line (a paragraph’s second line a display’s row)', () => {
+    // (2608.04473v1 p7: "… gives:" then a display's row at 102.62, every line's measure the frame's from 54)
+    const lines = layOf(member('para', [ln(0, 54, 300, 54), ln(1, 102.62, 250, 54)]), zh.repeat(3))
+    expect(lines.length).toBeGreaterThan(1)
+    for (const l of lines) expect(startOf(l)).toBeCloseTo(54, 1)
   })
   it('keeps later lines that share no edge: content set at its own starts', () => {
     const lines = layOf(member('para', [ln(0, 72, 300, 72), ln(1, 92, 300, 72), ln(2, 112, 250, 72)]), zh.repeat(3))

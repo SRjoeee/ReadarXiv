@@ -371,6 +371,7 @@ export function adapt(i: AdaptInput): Adapted {
       file: true,
       j,
       frame: frames[j]!,
+      m0: l[7],
     }
     lineInfo.set(rectKey(rects[j]!), info)
     lineInfo.set(rectKeyNoX0(rects[j]!), info)
