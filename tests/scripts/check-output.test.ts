@@ -128,9 +128,8 @@ describe('a build\'s style sheets', () => {
     const SHEET = 'node_modules/pdfjs-dist/web/pdf_viewer.css'
     put('node_modules/pdfjs-dist/package.json', '{"name":"pdfjs-dist","version":"6.3.289"}\n')
     put(SHEET, '.annotationLayer .popupAnnotation{position:absolute}\n')
-    // today's reader (AXT_READER=today): the sheet bundled into the page's sheet, and no copy of it beside
+    // the sheet bundled into the page's sheet, and no copy of it beside
     put(`${OUT}/assets/pdf-reader.css`, '.annotationLayer{position:absolute}.annotationLayer .popupAnnotation{color:red}\n')
-    expect(verdict(OWN, { AXT_READER: 'today' })).toBe('✓')
     expect(verdict(OWN)).toBe('✓')
     // the reader package's: a copy at `pdfjs/<version>/` besides
     put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer .popupAnnotation{position:absolute}\n')
@@ -139,7 +138,7 @@ describe('a build\'s style sheets', () => {
     put(SHEET, '.annotationLayer{position:absolute}\n')
     expect(verdict(OWN)).toBe('✗')
     rmSync(join(root, OUT, 'pdfjs'), { recursive: true })
-    expect(verdict(OWN, { AXT_READER: 'today' })).toBe('✗')
+    expect(verdict(OWN)).toBe('✗')
     // and with no package's sheet to read, no class is PDF.js's
     rmSync(join(root, 'node_modules'), { recursive: true })
     put(`${OUT}/pdfjs/6.3.289/pdf_viewer.css`, '.annotationLayer .popupAnnotation{position:absolute}\n')
@@ -155,26 +154,15 @@ describe('a build\'s style sheets', () => {
 // LaTeX front end; the host permissions exactly the release's, staging's only in a staging build, and no staging host named
 // anywhere in a production one; the web-accessible resources and the offscreen document as they were
 describe('the layer reader\'s package', () => {
-  const VIEW = `${OUT} holds the reading view, the reader`
   const PACKAGE_VIEW = `${OUT} holds the reader package's, not today's reading view`
   const NO_TEX = `${OUT} names no TeX page`
   const HOSTS = 'the host permissions are exactly'
   const NO_STAGING = 'a production build names no staging host'
   const RELEASE = ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*', 'https://readarxiv.com/*']
-  it('a build of today\'s reader (AXT_READER=today) holds the reading view: its places\' code in a chunk, not only their rule in the style sheet', () => {
-    const today = { AXT_READER: 'today' }
-    put(`${OUT}/assets/pdf-reader.css`, '.axt-place-view{position:absolute;inset:0}\n')
-    expect(verdict(VIEW, today)).toBe('✗')
+  it('a build is the rebuilt reader\'s, held to its checks: none of today\'s reading view', () => {
+    expect(verdict(PACKAGE_VIEW)).toBe('✓')
     put(`${OUT}/chunks/host-Ab12.js`, "const holder = document.createElement('div'); holder.className = 'axt-place-view'\n")
-    expect(verdict(VIEW, today)).toBe('✓')
-  })
-  it('a build that names no reader is the rebuilt reader\'s (wxt.config.ts readerPath\'s default), held to its checks: none of today\'s reading view', () => {
-    const unnamed = { AXT_READER: undefined }
-    expect(verdict(PACKAGE_VIEW, unnamed)).toBe('✓')
-    expect(verdict(VIEW, unnamed)).toBeUndefined()
-    put(`${OUT}/chunks/host-Ab12.js`, "const holder = document.createElement('div'); holder.className = 'axt-place-view'\n")
-    expect(verdict(PACKAGE_VIEW, unnamed)).toBe('✗')
-    expect(verdict(PACKAGE_VIEW, { AXT_READER: 'v2' })).toBe('✗')
+    expect(verdict(PACKAGE_VIEW)).toBe('✗')
   })
   it('names no TeX page and holds nothing of the LaTeX front end', () => {
     expect(verdict(NO_TEX)).toBe('✓')

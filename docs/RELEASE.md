@@ -44,7 +44,7 @@ rebuild line, where staging serves another round behind a tester gate a fresh pr
 
 ## Going back a version: the reader's stores
 
-The first release whose PDF reader is the rebuilt one (`AXT_READER` `v2`, the build's default since 2026-11-13) steps two
+The first release whose PDF reader is the rebuilt one (the build's one reader since the cut-over; its default since 2026-11-13) steps two
 of the reader's stores in IndexedDB. What a reader who goes back to the version before it (0.5.2) finds, measured with Dexie
 4.4 (`tests/cache/paper-store.test.ts`, `tests/cache/translate-store.test.ts`; PDF-READER §9.3):
 

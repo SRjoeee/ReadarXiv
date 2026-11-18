@@ -66,21 +66,6 @@ function apiOf(mode: string): string {
   return api
 }
 
-/**
- * Which reader the PDF page runs (stage 5a): `v2`, the build's default (lane V5, 2026-11-13), the reader package whole
- * (`openReader` with the extension's Host, our server's v2 documents, the reader's own typesetter), which also takes the
- * package's PDF.js data files; `today`, today's session (the engine's reading view, its run on our server's v1 layer, today's
- * typesetter) under the reader package's chrome, the reader the released extension still reads with. `AXT_READER=today pnpm
- * build` makes that one, so that a fix to it before the cut-over is built and tested (the e2e scripts choose by the build they
- * are given); it goes with the cut-over (the stage's deletion list)
- */
-const READERS = ['today', 'v2'] as const
-function readerPath(): (typeof READERS)[number] {
-  const named = process.env.AXT_READER ?? 'v2'
-  if (!(READERS as readonly string[]).includes(named)) throw new Error(`AXT_READER names ${named}: ${READERS.join(' or ')}`)
-  return named as (typeof READERS)[number]
-}
-
 // The WXT project configuration.
 export default defineConfig({
   srcDir: 'src',
@@ -89,7 +74,7 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   // In extension pages <link rel="modulepreload" crossorigin> triggers Chrome's "cross-world extension resource mismatch" warning (harmless but noisy); preloading is off
   // The recogniser's worker (entrypoints/ocr) is a build of its own, and what it bundles goes into the same notices
-  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages(), ...(readerPath() === 'v2' ? [readerAssets()] : [])], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)), __AXT_LOOPBACK__: JSON.stringify(env.mode !== 'production'), __AXT_READER__: JSON.stringify(readerPath()) } }),
+  vite: env => ({ build: { modulePreload: false }, plugins: [tailwindcss(), noteBundledPackages(), readerAssets()], worker: { format: 'es', plugins: () => [noteBundledPackages()] }, define: { __AXT_BUILD_REF__: JSON.stringify(buildRef()), __AXT_READER_API__: JSON.stringify(apiOf(env.mode)), __AXT_LOOPBACK__: JSON.stringify(env.mode !== 'production') } }),
   hooks: {
     'entrypoints:found': (wxt, infos) => {
       if (wxt.config.mode !== 'production') return

@@ -1,6 +1,6 @@
 // The old reader's store of layers as the released extension (0.5.2) keeps it, frozen for the version step's tests
 // (paper-store.test.ts, hard rule 7): `axt-layer` at version 4, its schema and the rows its writes leave, copied from
-// src/cache/layer-store.ts, which is v0.5.2's unchanged and goes with today's reader at the cut-over. The step to version 5
+// src/cache/layer-store.ts, which was v0.5.2's unchanged and went with today's reader at the cut-over. The step to version 5
 // and the way back (PDF-READER §9.3, docs/RELEASE.md) are proved against this schema, not against whatever the old store
 // becomes. Only what those tests call: an object kept and read back by its digest, a catalog kept, the usage; the cap and
 // its eviction, the read budget, and the product's silence on a failed write are left out (a fixture's write that fails

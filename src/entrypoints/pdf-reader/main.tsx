@@ -17,11 +17,6 @@ import { answeredBy, firstReadTime } from '@/ui/first-read'
  */
 export const TOP_LEVEL_READER_KEY = 'axt_top_level_reader'
 
-declare const __AXT_READER__: 'today' | 'v2' | undefined
-/** which reader the page runs (wxt.config.ts AXT_READER): the reader package whole, the one reader left since the cut-over
- *  deleted today's session */
-const READER = typeof __AXT_READER__ === 'string' ? __AXT_READER__ : 'v2'
-
 // The settings once, before the first paint, for the language and for the chrome (ui/first-read.ts): the page gives the
 // read 1,500 ms and paints the defaults, said to be unreadable, if it has not answered (S-R-21). The reader package, a heavy
 // module (PDF.js among it), starts on that reading and follows the settings from there.
@@ -40,9 +35,9 @@ if (vouched !== null && (vouched.framed || topLevel)) {
   // the chrome over the reader package (host/v2.ts), opened once the panes are there (the chrome's App attach); the
   // extension's configuration as the one preference model
   const paper = paperOf(params)
-  const v2 = READER === 'v2' ? await (await import('@/pdf-reader/host/v2')).startV2({ params, paper }) : null
-  const store = v2!.store
-  const controller = createController({ open: v2!.open, paper, first: firstOf(reading), defaults: DEFAULT_PREFS() })
+  const v2 = await (await import('@/pdf-reader/host/v2')).startV2({ params, paper })
+  const store = v2.store
+  const controller = createController({ open: v2.open, paper, first: firstOf(reading), defaults: DEFAULT_PREFS() })
   // the focus rings are the keyboard's (modality.ts)
   trackModality()
   const probes = window as unknown as { __reader?: object }

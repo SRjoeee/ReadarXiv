@@ -1,4 +1,4 @@
-// The registration of a laid page on a build of the rebuilt reader (AXT_READER=v2), in a real browser, on the reader package's
+// The registration of a laid page on a build of the rebuilt reader, in a real browser, on the reader package's
 // CC0 fixture s1-columns and with no network, as reader-v2.mjs runs it (one route table, the stand-in of our server's /api/v2,
 // the echo endpoint as the extension's own service).
 //
@@ -15,7 +15,7 @@
 // pixel, is the old reader's mechanism; the rebuilt reader's laid page far and back is its very drawing: the reader package's
 // e2e, "port: a laid page far and back is its very drawing".)
 //
-// Usage: pnpm build && pnpm e2e:registration     (AXT_READER's default, v2)
+// Usage: pnpm build && pnpm e2e:registration
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1.1,1.8 runs those ratios alone.
 import { readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'

@@ -1,4 +1,4 @@
-// The PDF reader's browser checks on a build of the rebuilt reader (AXT_READER=v2: the reader package whole behind the
+// The PDF reader's browser checks on a build of the rebuilt reader (the reader package whole behind the
 // extension's host, src/pdf-reader/host/v2.ts), on a paper of our own and with no network. The paper is the reader package's
 // CC0 fixture s1-columns (packages/reader/e2e/fixtures/): `https://arxiv.org/pdf/2600.00002` is answered with its stand-in of
 // arXiv's PDF, and our server's hosts with the stand-in of our server's /api/v2 routes (lib/v2-api.mjs) serving the bundle its
@@ -19,7 +19,7 @@
 // papers this machine keeps, opened with our server out of reach, counted and cleared on the settings page; what the run
 // did not do.
 //
-// Usage: pnpm build && pnpm e2e:reader     (AXT_READER's default, v2; first time: npx playwright install chromium)
+// Usage: pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -35,7 +35,7 @@ const HERE = fileURLToPath(new URL('.', import.meta.url))
 const BUILD = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
 const EXT = `${HERE}.ext-reader-v2`
 const SHOTS = `${HERE}.shots`
-if (!existsSync(join(BUILD, 'pdfjs'))) throw new Error(`${BUILD} is no build of the rebuilt reader (no pdfjs/ of the reader package's): pnpm build, AXT_READER v2 (the default)`)
+if (!existsSync(join(BUILD, 'pdfjs'))) throw new Error(`${BUILD} is no build of the rebuilt reader (no pdfjs/ of the reader package's): pnpm build`)
 
 // ---- the paper, and the stand-in of our server over it
 const fixture = loadFixture('s1-columns')

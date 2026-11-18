@@ -1,4 +1,4 @@
-// The extension as the reader package's host (AXT_READER 'v2'): host conformance as interfaces/host design-a §5 names it,
+// The extension as the reader package's host: host conformance as interfaces/host design-a §5 names it,
 // for the members whose adapters are the extension's (fetch, prefs; translate in host-translate.test.ts), and the reader's
 // state told to the chrome as its events
 import { describe, expect, it, vi } from 'vitest'

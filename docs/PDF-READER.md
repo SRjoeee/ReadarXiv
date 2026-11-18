@@ -970,7 +970,7 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
 - **数据** gains a line for the PDF translations kept on this machine, `{n} 篇 · {size}`, and 清除 through the existing
   `Confirm` (two presses; it disarms after 4 s), beside the HTML translations' line (the maintainer: 「其他暂时这样」 on
   the proposal). The settings page is on the extension's origin and calls the store's `usage()` and `clear()` directly: the
-  store of the reader the build runs (`AXT_READER`), never the other's.
+  reader's papers (`cache/paper-store.ts`).
 - **The papers this machine keeps** (the rebuilt reader, `packages/reader` behind the extension's host): the owner's rule of
   2026-10-08, offline nothing new is drawn and a paper kept still opens. The store is the reader's network seen through this
   machine (`host/stored-fetch.ts` over `cache/paper-store.ts`, at the Host's one seam, its `fetch`): what never changes at its

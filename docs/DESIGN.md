@@ -1023,9 +1023,9 @@ only how it meets the rest of the extension.
   stays arXiv's, and the reader's way back leaves the browser's viewer with the floating button. The popup on an
   abstract or PDF page offers the HTML and the PDF entries side by side (UI.md S-P-50b). While the reader is open the
   popup is the reader's (S-P-03c), and acts on it through the settings alone.
-- **Two readers behind one chrome** (the rebuild's stage 5a; `AXT_READER` in `wxt.config.ts`). The chrome — the toolbar,
+- **The reader behind one chrome** (the rebuild's stage 5a; one reader since the cut-over). The chrome — the toolbar,
   the capsule, the menus, the two panes' scrollers — is the reader package's (`mountChrome`, `@readarxiv/reader`), given its
-  settings, slots and words by the extension's host (`src/pdf-reader/host/`). Behind it the build chooses the reader:
+  settings, slots and words by the extension's host (`src/pdf-reader/host/`). Behind it the reader,
   `v2`, the default since 2026-11-13 (lane V5: every feature of today's reader present, its browser checks ported, PDF-READER
   §9.3, §11), is the reader package whole, `openReader(root, { host, paper })` with the extension's `Host` (`host/v2.ts`,
   the package's `openSession` glue): the network as the reader may use it (our server and arXiv, by https, never the
@@ -1033,7 +1033,8 @@ only how it meets the rest of the extension.
   first (`host/stored-fetch.ts`, `cache/paper-store.ts`), the preferences over the extension's configuration (a write is a
   patch on the latest stored), and the rows made through the background's chain (§8), laid by the reader's own typesetter.
   `today`, the session the bullets below describe (`session/`, the engine's reading view, our server's v1 layer), the reader
-  the released extension (0.5.2) reads with, went with today's engine at the cut-over (C1): the bullets below are its record.
+  the released extension (0.5.2) reads with, went with today's engine at the cut-over (C1), and the build's switch between the
+  two (`AXT_READER`) with it: its last home is the line before the cut-over. The bullets below are its record.
 - **The typesetter** (`@readarxiv/typeset`) is pure functions of data and the translated text. Its entry, the one the reader
   calls, is `layPage(part, rows, rules, metrics)` (`packages/typeset/src/lay/entry.ts`): one page laid from its own part
   alone and the rows by unit id, giving what is drawn, line by line. Under it, `layFlowPrepared(members, rules)` lays a
@@ -1423,7 +1424,7 @@ only how it meets the rest of the extension.
   chain (§8.0, `session/translate.mjs`), the units the page in view waits for first, each batch's rows taken by the layer
   as they come. A retry opens the layer's door again, takes the rows held at once and runs again, the background's
   segment cache answering what was translated.
-- **Its store** (`src/cache/layer-store.ts`): the layer's objects by digest, the last catalog of each paper version and
+- **Its store** (`c7e44a94b:src/cache/layer-store.ts`): the layer's objects by digest, the last catalog of each paper version and
   our copies of arXiv's PDF, in an IndexedDB of their own (`axt-layer`), each object checked against its digest before it
   is kept and each time it is read (a mismatch is a miss, dropped), capped at 200 MB with the papers opened least recently
   going first (an object held by two papers, one digest, goes only with the last of them: who holds one is its `refs`); a

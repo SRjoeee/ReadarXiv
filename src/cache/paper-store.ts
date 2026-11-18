@@ -10,7 +10,7 @@
 // (a read that has not answered within its budget resolves as one, its late answer let go), and of a write, nothing kept: the
 // store is never a reason a paper does not open.
 //
-// The database is the old reader's (`axt-layer`, cache/layer-store.ts), at version 5: the step deletes the old reader's three
+// The database is the old reader's (`axt-layer`: its store, release 0.5.2's, frozen in tests/cache/layer-v4.ts), at version 5: the step deletes the old reader's three
 // tables (its layers' objects by digest, its catalogs, who held what), which no address of the rebuilt reader's reaches, once,
 // on the first open by this build (hard rule 7: a named step, tests/cache/paper-store.test.ts opens a database made by
 // version 4's schema; the way back to a build of version 4: PDF-READER §9.3).

@@ -8,9 +8,6 @@ import { basename, join, relative, sep } from 'node:path'
 import { contentScriptsRunningOn } from './site-isolation.mjs'
 
 const OUT = '.output/chrome-mv3'
-/** a build of the reader package's page (wxt.config.ts AXT_READER, `v2` its default), not today's reader (AXT_READER=today):
- *  the stage-5a build constant */
-const V2 = (process.env.AXT_READER ?? 'v2') === 'v2'
 const CONTENT_DIR = join(OUT, 'content-scripts')
 
 const isNoncharacter = code =>
@@ -156,8 +153,8 @@ for (const [what, ok] of [
   [`${OUT} names no loopback TeX page${loopbackNamed.length > 0 ? ` (${loopbackNamed.join(', ')})` : ''}`, loopbackNamed.length === 0],
   [`${OUT} holds no class that no product file names (the style sheets are made from the product's own files)${pdfjsSheet ? '' : ` (PDF.js's sheet, pdfjs-dist/web/pdf_viewer.css, is not found from ${process.cwd()})`}${unnamedClasses.length > 0 ? ` (${unnamedClasses.join(', ')})` : ''}`, unnamedClasses.length === 0],
   [`${OUT} holds no BusyTeX or texlyre file${compilerNamed.length > 0 ? ` (${compilerNamed.join(', ')})` : ''}`, compilerNamed.length === 0],
-  // (a build of the reader package, AXT_READER=v2: wxt.config.ts, holds none of today's reading view: the package is its reader)
-  ...(V2 ? [[`${OUT} holds the reader package's, not today's reading view${viewNamed.length > 0 ? ` (${viewNamed.join(', ')})` : ''}`, viewNamed.length === 0]] : [[`${OUT} holds the reading view, the reader${viewNamed.length > 0 ? ` (${viewNamed.join(', ')})` : ''}`, viewNamed.length > 0]]),
+  // (the build holds none of today's reading view: the reader package is its reader)
+  [`${OUT} holds the reader package's, not today's reading view${viewNamed.length > 0 ? ` (${viewNamed.join(', ')})` : ''}`, viewNamed.length === 0],
   [`the host permissions are exactly ${HOSTS.join(', ')} (${staging ? 'a staging build' : 'production'})`, sameList(manifest.host_permissions ?? [], HOSTS)],
   [`${OUT} names no TeX page${texNamed.length > 0 ? ` (${texNamed.join(', ')})` : ''}, and holds nothing of the LaTeX front end${frontNamed.length > 0 ? ` (${frontNamed.join(', ')})` : ''}`, texNamed.length === 0 && frontNamed.length === 0],
   [`a production build names no staging host${stagingNamed.length > 0 ? ` (${stagingNamed.join(', ')})` : ''}`, stagingNamed.length === 0],
@@ -199,11 +196,11 @@ const MODELS = {
 // reader's, not the recogniser's, and are not counted by the recogniser's rules below. The directory, separator and
 // all: its page, `pdf-reader.html`, and any file whose name begins so are the build's own
 const READER_DATA = join(OUT, 'pdf-reader') + sep
-// the reader package's (AXT_READER=v2): PDF.js's files at `pdfjs/<version>/`, its build plugin's (packages/reader vite.ts)
+// the reader package's: PDF.js's files at `pdfjs/<version>/`, its build plugin's (packages/reader vite.ts)
 const PACKAGE_DATA = join(OUT, 'pdfjs') + sep
-const built = filesUnder(OUT).filter(path => !path.startsWith(READER_DATA) && !(V2 && path.startsWith(PACKAGE_DATA)))
+const built = filesUnder(OUT).filter(path => !path.startsWith(READER_DATA) && !path.startsWith(PACKAGE_DATA))
 // a build without the directory is reported by the checks below (✗ pdf-reader/pdfjs/ is incomplete), not a stack trace
-const readerData = [...(existsSync(join(OUT, 'pdf-reader')) ? filesUnder(join(OUT, 'pdf-reader')) : []), ...(V2 && existsSync(join(OUT, 'pdfjs')) ? filesUnder(join(OUT, 'pdfjs')) : [])]
+const readerData = [...(existsSync(join(OUT, 'pdf-reader')) ? filesUnder(join(OUT, 'pdf-reader')) : []), ...(existsSync(join(OUT, 'pdfjs')) ? filesUnder(join(OUT, 'pdfjs')) : [])]
 const wasm = built.filter(path => path.endsWith('.wasm'))
 const carriers = built.filter(path => path.endsWith('.js') && readFileSync(path, 'utf8').includes('ort-wasm-simd-threaded'))
 for (const [what, ok, detail] of [
@@ -211,7 +208,7 @@ for (const [what, ok, detail] of [
   ['one WebAssembly file, ONNX Runtime\'s', wasm.length === 1 && /ort-wasm-simd-threaded/.test(wasm[0]), wasm.join(', ') || 'none'],
   ['only the recogniser\'s worker carries the runtime', carriers.length === 1 && /assets[\\/]worker-/.test(carriers[0]), carriers.join(', ') || 'none'],
   ['the PDF reader\'s page is built', existsSync(join(OUT, 'pdf-reader.html')), 'pdf-reader.html is missing'],
-  ...(V2 ? [['the reader package\'s PDF.js files are in the build (its worker, character maps, fonts, decoders)', existsSync(join(OUT, 'pdfjs')) && readdirSync(join(OUT, 'pdfjs')).some(v => ['pdf.worker.min.mjs', 'cmaps/78-EUC-H.bcmap', 'standard_fonts/FoxitSerif.pfb', 'wasm/openjpeg.wasm'].every(f => existsSync(join(OUT, 'pdfjs', v, f)))), 'pdfjs/<version>/ is incomplete']] : []),
+  ['the reader package\'s PDF.js files are in the build (its worker, character maps, fonts, decoders)', existsSync(join(OUT, 'pdfjs')) && readdirSync(join(OUT, 'pdfjs')).some(v => ['pdf.worker.min.mjs', 'cmaps/78-EUC-H.bcmap', 'standard_fonts/FoxitSerif.pfb', 'wasm/openjpeg.wasm'].every(f => existsSync(join(OUT, 'pdfjs', v, f)))), 'pdfjs/<version>/ is incomplete'],
   ['PDF.js\'s character maps, fonts and decoders are in the build', ['pdfjs/cmaps/78-EUC-H.bcmap', 'pdfjs/standard_fonts/FoxitSerif.pfb', 'pdfjs/standard_fonts/LICENSE_FOXIT', 'pdfjs/wasm/openjpeg.wasm'].every(file => existsSync(join(OUT, 'pdf-reader', file))), 'pdf-reader/pdfjs/ is incomplete'],
   // only PDF.js's scripting sandbox loads QuickJS, and the reader loads no sandbox (it runs no script a PDF carries):
   // its two files are 468 KB of every install for nothing (#299, Part 1)
