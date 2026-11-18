@@ -195,7 +195,8 @@ function slotsAt(blocks: readonly FitBlock[], st: FitState, P: FitParams, s: num
     // \lineskip rule opened closed to the pitch, blocks2's `E`)
     const G = onGrid && b.E ? b.E : (b.G ?? b.B)
     // (400 slots a block at most, a count of lines: the loop ends under the block's foot by its break, and the bound ends it
-    // where it would not, a pitch of 0 or none; a page of 792 pt holds 66 lines at 12 pt. Unmeasured, no document states it)
+    // where it would not, a pitch of 0 or none; a page of 792 pt holds 66 lines at 12 pt. Unmeasured, no document states it. A
+    // block of one line at a size of 0, its pitch 0: packages/typeset/tests/unit/slots-bound.test.ts)
     for (let k = 0; k < 400; k++) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
