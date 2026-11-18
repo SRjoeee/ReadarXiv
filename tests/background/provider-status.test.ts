@@ -11,7 +11,8 @@ import { REQUEST_TIMEOUT_ERROR_NAME } from '@/providers/types'
 const chainOf = (provider: string): TranslationTransport => ({
   translate: async () => ({ ok: true as const, results: [], cached: 0 }),
   cancel: async () => 0,
-  status: async () => ({ providerId: provider, chosen: provider, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', revision: provider, chain: [provider], demotions: [], identity: '', engine: { id: provider } }),
+  // (the PDF reader's chain answers as its own: `surface`, v22)
+  status: async (_scope?: string, options?: { surface?: 'pdf' }) => ({ providerId: options?.surface ? `${provider}:pdf` : provider, chosen: provider, available: true, maxBatchChars: 1, maxBatchItems: 1, renderPath: 'tags' as const, targetLanguage: 'cmn', promptId: 'default', revision: provider, chain: [provider], demotions: [], identity: '', engine: { id: provider } }),
 })
 
 function harness() {
@@ -102,6 +103,15 @@ describe('providerStatus', () => {
     expect((await providerStatus(h.deps, { scope: 's1' })).providerId).toBe('pinned')
     h.save({ ...DEFAULT_CONFIG, provider: 'google-web' })
     expect((await providerStatus(h.deps, { scope: 's1', fresh: true })).providerId).toBe('google-web')
+  })
+
+  it("the PDF reader asks about its own chain (`surface`), its session's and the chain in force's alike; the others as before (v22)", async () => {
+    const h = harness()
+    h.sessions.set('s1', chainOf('pinned'))
+    expect((await providerStatus(h.deps, { scope: 's1', surface: 'pdf' })).providerId).toBe('pinned:pdf')
+    expect((await providerStatus(h.deps, { scope: 's-new', fresh: true, surface: 'pdf' }, 7)).providerId).toBe(`${DEFAULT_CONFIG.provider}:pdf`)
+    expect((await providerStatus(h.deps, { surface: 'pdf' })).providerId).toBe(`${DEFAULT_CONFIG.provider}:pdf`)
+    expect((await providerStatus(h.deps, {})).providerId).toBe(DEFAULT_CONFIG.provider)
   })
 })
 

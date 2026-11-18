@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import type { Config } from '@/config/schema'
-import { translatorsOf } from '@/providers/translators'
+import { readerTranslatorsOf, translatorsOf } from '@/providers/translators'
 import { WIRE_FORMATS } from '@/providers/wire-formats'
 
 const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'sk-x', model: 'x/y', thinking: 'disabled' as const }
@@ -40,5 +40,33 @@ describe('the translators of a configuration (DESIGN §8.5)', () => {
     expect(await t.translators[0]?.supports('bs')).toBe(false)
     const zh = translatorsOf(DEFAULT_CONFIG, deps)
     expect(await zh.translators[0]?.supports('zh')).toBe(true)
+  })
+})
+
+// The PDF reader's translators (the owner's ruling of 2026-11-19): a reader who never chose a translator (`providerChosen`,
+// v22) asks the website's chain, Google's then Microsoft's, each writing its own wire (the package's chain), whatever the
+// page's wire rule says; a reader who chose one keeps the page's chain, as before
+describe("the PDF reader's translators of a configuration", () => {
+  const reader = (c: Partial<Config>) => {
+    const t = readerTranslatorsOf({ ...DEFAULT_CONFIG, ...c } as Config, deps)
+    return { chain: t.translators.map(x => t.answerers.get(x.identity)?.id), primary: t.primary.id }
+  }
+  it("chosen by nobody: Google's, then Microsoft's, as the website asks them; the page's chain the same as before", () => {
+    expect(reader({})).toEqual({ chain: ['google-web', 'microsoft'], primary: 'google-web' })
+    expect(ids({})).toEqual({ chain: ['microsoft', 'google-web'], renderPath: 'markers', primary: 'microsoft' })
+    // (the switch of the automatic fallback is an LLM service's, which nobody who never chose has: the website's chain whole)
+    expect(reader({ fallback: { enabled: false } }).chain).toEqual(['google-web', 'microsoft'])
+  })
+  it("chosen: the page's chain, Microsoft's, Google's, Chrome's or a service of the reader's own first", () => {
+    for (const c of [{ provider: 'microsoft' }, { provider: 'google-web' }, { provider: 'chrome-builtin' }, { provider: SVC.id, services: [SVC] }, { provider: SVC.id, services: [SVC], fallback: { enabled: false } }]) {
+      const page = ids({ ...c, providerChosen: true })
+      expect(reader({ ...c, providerChosen: true }), c.provider).toEqual({ chain: page.chain, primary: page.primary })
+    }
+    expect(reader({ provider: 'microsoft', providerChosen: true }).chain).toEqual(['microsoft', 'google-web'])
+  })
+  it("the website's two are the package's adapters, as the page's chain makes them: the same identities", () => {
+    const site = readerTranslatorsOf(DEFAULT_CONFIG, deps)
+    const page = translatorsOf(DEFAULT_CONFIG, deps)
+    expect(site.translators.map(t => t.identity)).toEqual([...page.translators].reverse().map(t => t.identity))
   })
 })

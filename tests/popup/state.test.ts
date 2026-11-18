@@ -354,7 +354,8 @@ describe('a settings change restarts a page that is on, in place, once the backg
     expect(p.sent('axt:translate-page')).toEqual([])
     p.popup.actions.chooseService(SVC.id)
     await until(() => p.sent('axt:translate-page').length === 1)
-    expect((await getConfig()).provider).toBe(SVC.id)
+    // (a pick is recorded: the PDF reader follows it, v22)
+    expect([(await getConfig()).provider, (await getConfig()).providerChosen]).toEqual([SVC.id, true])
     p.stop()
   })
 

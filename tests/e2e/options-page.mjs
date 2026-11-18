@@ -118,7 +118,8 @@ export async function seedService(worker, service, { choose = true } = {}) {
   const full = { kind: 'openai-compat', thinking: 'disabled', apiKey: '', ...service }
   await worker.evaluate(async ({ full, choose }) => {
     const { config } = await chrome.storage.local.get('config')
-    await chrome.storage.local.set({ config: { ...config, services: [...config.services.filter(s => s.id !== full.id), full], ...(choose ? { provider: full.id } : {}) } })
+    // (chosen as the settings page chooses it: the pick recorded, v22, which the PDF reader follows)
+    await chrome.storage.local.set({ config: { ...config, services: [...config.services.filter(s => s.id !== full.id), full], ...(choose ? { provider: full.id, providerChosen: true } : {}) } })
   }, { full, choose })
   await sleep(300)
   return full.id

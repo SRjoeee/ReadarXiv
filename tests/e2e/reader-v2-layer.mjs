@@ -139,7 +139,7 @@ export async function layerChecks(t) {
     await t.worker.evaluate(async url => {
       const { config } = await chrome.storage.local.get('config')
       // (the automatic fallback to the free service off: its failure is the service's own, told, and no request leaves the table)
-      await chrome.storage.local.set({ config: { ...config, fallback: { enabled: false }, services: [...config.services.filter(s => s.id !== 'svc-e2efail0'), { id: 'svc-e2efail0', kind: 'openai-compat', name: 'refused', baseURL: url, model: 'local-echo', apiKey: 'sk-refused', thinking: 'disabled' }], provider: 'svc-e2efail0' } })
+      await chrome.storage.local.set({ config: { ...config, fallback: { enabled: false }, services: [...config.services.filter(s => s.id !== 'svc-e2efail0'), { id: 'svc-e2efail0', kind: 'openai-compat', name: 'refused', baseURL: url, model: 'local-echo', apiKey: 'sk-refused', thinking: 'disabled' }], provider: 'svc-e2efail0', providerChosen: true } })
     }, echo.failingURL)
     const failing = await openReader({ mode: 'bilingual' })
     await paperOpened(failing)
@@ -147,7 +147,7 @@ export async function layerChecks(t) {
     const card = await failing.locator('div.card[data-card]').innerText().catch(() => '')
     check('a service whose key is refused: nothing translated, the card says the key is invalid (the key\'s words), with the settings', failed && /API Key/.test(card) && !/\u5c1a\u672a\u914d\u7f6e/.test(card), `${(await readerState(failing)).failure}; “${card.replace(/\s+/g, ' ').slice(0, 80)}”`)
     const postsBefore = echo.seen.post
-    await setConfig({ provider: 'svc-e2eecho0' })
+    await setConfig({ provider: 'svc-e2eecho0', providerChosen: true })
     const mended = (await laid(failing, 1, 30_000)) && (await echoed(failing))
     const where = await failing.evaluate(() => {
       const s = window.__reader.reader.state()

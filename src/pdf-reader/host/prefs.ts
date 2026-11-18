@@ -7,7 +7,7 @@
 //   highlight    reading.sentenceHighlight, appearance.activeHighlight
 //   ui           uiLanguage ('auto': the browser's languages, as the pages pick their pack)
 //   bands        appearance.highlights, each its colour and opacity (a built-in band under its shipped name: null, the reader names it)
-//   links        reading.openIn              translator   the chain's revision (config/revision.ts), opaque
+//   links        reading.openIn              translator   the chain's revision (config/revision.ts) and providerChosen, opaque
 import type { Prefs, PrefsPatch, UiLanguage } from '@readarxiv/reader'
 import { pickLocale } from '@readarxiv/ui'
 import { BUILT_IN_HIGHLIGHTS } from '@/config/appearance'
@@ -36,7 +36,10 @@ export function prefsOf(config: Config, o: { revision?: string | null; languages
     ui: pickLocale(config.uiLanguage, o.languages ?? globalThis.navigator?.languages ?? []) as UiLanguage,
     bands: config.appearance.highlights.map(h => ({ id: h.id, colour: h.color, opacity: h.opacity, name: shipped.get(h.id) === h.name ? null : h.name })),
     links: config.reading.openIn,
-    translator: o.revision ?? null,
+    // (the chain the PDF reader asks: the page's revision, the website's chain apart where nobody picked a translator, v22;
+    // providers/translators.ts readerTranslatorsOf. A pick that changes only that is another translator, which asks again
+    // what stopped short, §9.1)
+    translator: o.revision == null ? null : config.providerChosen ? o.revision : `${o.revision}|website`,
   }
 }
 

@@ -7,7 +7,7 @@ import { chainOf, type FetchInit, type FetchReply, google, microsoft, type Trans
 import { fakeClock, scriptedFetch } from '@readarxiv/translate/testing'
 import { MockLanguageModelV4 } from 'ai/test'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
-import { FIRST_BATCH, hostTranslate, NEXT_BATCH, WHY_OF } from '@/pdf-reader/host/translate'
+import { FIRST_BATCH, hostTranslate, NEXT_BATCH, readerTransport, WHY_OF } from '@/pdf-reader/host/translate'
 import { llmTranslator } from '@/providers/llm'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport, type TranslationTransport } from '@/providers/transport'
@@ -238,5 +238,38 @@ describe('the reader host through the background\'s transport and chain: request
     expect(r.requests).toBe(25)
     expect(r.rounds).toEqual([4, 8, 8, 1, 4])
     ordered(r.events)
+  })
+})
+
+// The PDF reader's own transport (v22; the owner's ruling of 2026-11-19): the extension's message transport, each call and
+// each ask of the status marked the PDF reader's, which the background answers from the PDF reader's chain (the website's
+// for a reader who never chose a translator); the page's transport is not this one, and sends no mark
+describe("the PDF reader's transport", () => {
+  it("marks every call and every ask of the status the PDF reader's; a scope is withdrawn as the page's transport withdraws one", async () => {
+    const sent: unknown[] = []
+    const send = (async (m: { type: string }) => {
+      sent.push(m)
+      return m.type === 'axt:translate' ? { ok: true, results: [], cached: 0 } : m.type === 'axt:cancel-scope' ? { cancelled: 0 } : status()
+    }) as unknown as Parameters<typeof readerTransport>[0]
+    const t = readerTransport(send)
+    await t.status('axt-pdf-1', { fresh: true })
+    await t.translate({ units: [], target: 'deu', scope: 'axt-pdf-1' })
+    await t.cancel('axt-pdf-1')
+    expect(sent).toEqual([
+      { type: 'axt:provider-status', scope: 'axt-pdf-1', fresh: true, surface: 'pdf' },
+      { type: 'axt:translate', units: [], target: 'deu', scope: 'axt-pdf-1', surface: 'pdf' },
+      { type: 'axt:cancel-scope', scope: 'axt-pdf-1' },
+    ])
+  })
+  it("through the background's transport: a reader who never chose is answered by Google's, then Microsoft's for a unit Google refuses", async () => {
+    // (Microsoft gives each text back; Google loses the tag of a unit's element, which the chain refuses)
+    const fetch = scriptedFetch((url, init) => (url.includes('microsoft') ? microsoftEcho(url, init) : { status: 200, body: JSON.stringify([(JSON.parse(init.body) as [[string[]]])[0][0].map(t => (t.includes('<') ? 'lost the tag' : t))]) }))
+    const local = await createLocalTransport(DEFAULT_CONFIG, { chain: chainOf({ clock: fakeClock() }), probe: chainOf(), fetch: fetch.fetch, chromeApi: null, cancelled: new CancelledScopeRegistry() })
+    // (the background's dispatch: the PDF reader's mark carried to the transport, as handlers.ts and provider-status.ts carry it)
+    const send = (async (m: { type: string; scope?: string; surface?: 'pdf' }) =>
+      m.type === 'axt:translate' ? local.translate(m as never) : m.type === 'axt:cancel-scope' ? { cancelled: 0 } : local.status(m.scope, { surface: m.surface })) as unknown as Parameters<typeof readerTransport>[0]
+    const units = [unit('u1', [{ t: 'text', s: 'Plain words.' }]), unit('u2', [{ t: 'text', s: 'Let ' }, { t: 'el', id: 'x1', kind: 'math', src: '$x$' }, { t: 'text', s: ' be a graph.' }])]
+    const got = await all(hostTranslate({ transport: readerTransport(send), paper: '2601.00001v1' })(units, 'zh', { signal: new AbortController().signal }))
+    expect(got.map(r => (r.ok ? `${r.id}:${r.by.split(':')[0]}` : `${r.id}:${r.why.kind}`))).toEqual(['u1:google', 'u2:microsoft'])
   })
 })

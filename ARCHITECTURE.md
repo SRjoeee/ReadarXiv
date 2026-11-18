@@ -191,8 +191,10 @@ prepare is the private repository's and not described here.
 4. The layer's units are the `Units` objects the head names (`layerUnitsOf`, `packages/reader/src/session/machine.ts`), read
    once: the contents, the kept units and the rows come from them, never from the document's `layer.units`, which is our
    server's word for what its own run was given. The rows are made here: `Host.translate` (`src/pdf-reader/host/translate.ts`,
-   each unit through `unitInOf`) sends them to the background, whose transport (`src/providers/transport.ts`) runs them through
-   the one chain (`chainOf`, made once in `src/entrypoints/background/index.ts`), the page in view first. The background keeps
+   each unit through `unitInOf`) sends them to the background, marked the PDF reader's (`readerTransport`), whose transport
+   (`src/providers/transport.ts`) runs them through the one chain (`chainOf`, made once in `src/entrypoints/background/index.ts`)
+   with the PDF reader's translators (`readerTranslatorsOf`, `src/providers/translators.ts`: Google's then Microsoft's, the
+   website's order, until the reader picks a service; the HTML page's chain once one is picked), the page in view first. The background keeps
    each accepted raw reply (the chain's store) and each row (`src/cache/translate-store.ts`).
 5. Each page's part is read as the page comes near, and the composer (`packages/reader/src/compose/composer.ts`) lays it with the
    reader's typesetter (`packages/reader/src/compose/typeset.ts`, `layPage`) once every row and face the page waits for is in. A laid page

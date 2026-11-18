@@ -62,7 +62,7 @@ The table gives the Chinese word; Traditional Chinese, Japanese and Korean say t
 | reading typography (#47) | **排版** | Kept apart from “译文样式” (decoration): typography covers font size, line height, width, spacing |
 | split view (#83) | **分栏** | Experimental |
 | hosted free LLM (#97) | **免费 AI 翻译** | Candidate; alongside the reader's own LLM services (own key) |
-| `microsoft` (#98, implemented) | **Microsoft 翻译** | Free; chosen by hand only, never in the automatic fallback list (DESIGN §8.5). Links and formulas survive; what is lost is inline styling such as italics (a leading label is restored, #150) |
+| `microsoft` (#98, implemented) | **Microsoft 翻译** | Free; the HTML page's default, never in its automatic fallback list (DESIGN §8.5); on the PDF reader of a reader who has not picked a service, Google's fallback, as on the website. Links and formulas survive; what is lost is inline styling such as italics (a leading label is restored, #150) |
 | `reading.sentenceHighlight` (#105 / #141) | **对照高亮** | The sentence under the pointer lights up; in translation-only mode, dwelling brings the original up |
 
 ## 3. Copy tables [implemented; marked 2026-09-13]
@@ -110,7 +110,7 @@ Redrawn 2026-09-27 (the redesign's §5, §10.1).
 | S-P-43 | Service menu · Chrome item subtitle · ready | 浏览器内置，无需联网 | |
 | S-P-44 | Service menu · Microsoft / Google subtitle | 免费 | Microsoft with an unsupported target: 不支持所选语言, greyed |
 | S-P-45 | Service menu · LLM subtitle | {模型名} / 尚未配置 API Key / API Key 已失效 | An item of two lines, the name and its hint (the redesign's §5.3). Selectable without a key and with a refused one; the note S-P-31 / S-P-32 and its 设置 button follow |
-| S-P-46 | Service menu · names and order | Microsoft 翻译 · Google 翻译 · LLM · Chrome 翻译 | [decided] 2026-09-10; Microsoft is the shipped default |
+| S-P-46 | Service menu · names and order | Microsoft 翻译 · Google 翻译 · LLM · Chrome 翻译 | [decided] 2026-09-10; Microsoft is the shipped default, the HTML page's. Until the reader picks a service (`providerChosen`, v22), the PDF reader asks Google's, then Microsoft's, as the website does (the owner, 2026-11-19; DESIGN §8.5), while this menu, in the popup and in the reader, checks Microsoft and its value (S-P-11) names it: an open question, §9 item 5. A pick here, Microsoft's included, is recorded, and the PDF reader asks the page's chain from then on |
 | S-P-47 | Prompt row | 提示词 / {名称} | Only while the LLM is chosen; opens the prompt menu, which ends with S-P-49. A built-in prompt is named by the pack in the interface's language (默认 · 精准改写, S-O-61c), one's own as stored |
 | S-P-48 | Service menu · last row | 管理翻译服务… | Not a service: opens the settings page at `options.html#translate/services` (S-O-06), in a tab of its own (`openOptionsPage` passes no hash); in the floating button's panel the popup closes after it. The reader's service menu ends with it too |
 | S-P-49 | Prompt menu · last row | 管理提示词… | As S-P-48, at `options.html#translate/prompts`: every menu whose list the reader can change ends with its 「管理…」 row, the language menu has none (the redesign's §5.3) |
@@ -576,7 +576,7 @@ Every feature added on the main line is registered here first; a feature without
 | **Reading typography** (font size / line height / width / spacing / colour / presets / reset) | #47 | decided, not built | Settings · 阅读 · typography card | — (no id yet; S-O-47 names the custom declarations) |
 | Split-view dragging | #83 | experimental | in-page handle; one “恢复居中” in settings | S-I-05 (the settings entry has no id yet) |
 | Free AI translation (hosted) | #97 | candidate | fourth item of the service list | — (no ids yet) |
-| Microsoft translation | #98 | done | the service list (the shipped default) | S-P-32c / 44 / 46, S-O-10 |
+| Microsoft translation | #98 | done | the service list (the HTML page's shipped default; the PDF reader's second, after Google's, until the reader picks a service: DESIGN §8.5, 2026-11-19) | S-P-32c / 44 / 46, S-O-10 |
 | Hover highlight (sentence highlight on hover + the original floating up in translation-only mode) | #105 / #141 | done | the popup's foot switch; Settings · 外观 | S-P-80…81, S-O-49 |
 | Image translation switch | §15 | done (2026-09-10) | the popup's foot switch; Settings · 阅读 | S-P-85, S-O-24 |
 | What the PDF reader translates | PDF-READER §9.1; `docs/route/orphan-text.md` stage 8 | done (2026-10-29, config v21) | the reader's reading options; Settings · 阅读 | S-R-27, S-O-56 |
@@ -597,5 +597,6 @@ Every feature added on the main line is registered here first; a feature without
 2. Whether to build the in-page "switched" notice (S-I-03); without it the reader learns that the service changed only by opening the popup.
 3. The field range and preset names of the typography card (#47), against the issue's acceptance items, if it is built.
 4. Whether to bundle Manrope (about 60 KB woff2, Latin glyphs only); the system font stack today.
+5. What says which translator the PDF reader asks while the reader has picked none (2026-11-19): it asks Google's, then Microsoft's (DESIGN §8.5), while its own service menu (S-P-10, S-P-11, S-P-46, PDF-READER §6.7) and the popup over it (S-P-03c) name and check Microsoft, the HTML page's default; nothing on a page names the translator of a passage. The owner's to decide; nothing is built.
 
 Decided and shipped, for the record: the product name (Read arXiv; DESIGN §3), the paused state's two buttons (S-P-52 / S-P-53), the searchable language list (S-P-22 / S-P-23).

@@ -50,7 +50,8 @@ describe('the extension host prefs over the configuration surface', () => {
     const s = surface(null)
     const p = hostPrefs(s as never).read()
     expect(s.start).toHaveBeenCalled()
-    s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
+    s.land({ ...DEFAULT_CONFIG, theme: 'dark', providerChosen: true })
+    // (the translator: the chain's revision, a service picked; host-prefs.test.ts names the website's chain apart, v22)
     await expect(p).resolves.toMatchObject({ theme: 'dark', translator: 'r1' })
   })
   it('stored and unreadable (the surface fell back to the defaults): told as null, the read too; a readable landing after it told as values', async () => {
