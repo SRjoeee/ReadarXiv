@@ -413,11 +413,13 @@ export function adapt(i: AdaptInput): Adapted {
         text[0]![2] > m.label.ink[3] &&
         Math.abs(m.label.ink[1] - lines[0]![7]) <= 0.01
       // (and where TeX states the hang, read from its statement (docs/PDF-READER.md §18.94, H1 (a)): the later text lines of the
-      // first line's frame state one left measure (Line[7]), right of the first line's, and stand at it; the first line's text
-      // begins at it and the label at the first line's measure start, each within what a line's ink differs by under one measure
-      // (ONE_EDGE: a protruded first glyph, 2610.20266v1 p1's abstract 0.31 left of what TeX states, which the ink test reads to
-      // 0.01 and misses). \@hangfrom: the label box hung from the measure's start, \hangindent its width, \hangafter 1. The space
-      // TeX set after the label, from its ink's end to the stated hang)
+      // first line's frame stand at the left measure the first of them states (Line[7]), that measure right of the first
+      // line's; the first line's text begins at it and the label at the first line's measure start; each within what a line's
+      // ink differs by under one measure (ONE_EDGE: a protruded first glyph, 2610.20266v1 p1's abstract 0.31 left of what TeX
+      // states, which the ink test reads to 0.01 and misses). A later line standing at a measure of its own more than ONE_EDGE
+      // away fails it: a shape that changes again; one nearer is the same edge by that tolerance. \@hangfrom: the label box
+      // hung from the measure's start, \hangindent its width, \hangafter 1. The space TeX set after the label, from its ink's end
+      // to the stated hang)
       const f0 = lines[0]!
       const later = text.filter((l) => l !== f0 && l[0] === f0[0] && l[1] === f0[1])
       const M = later[0]?.[7]
@@ -427,7 +429,7 @@ export function adapt(i: AdaptInput): Adapted {
         !!m.label &&
         text[0] === f0 &&
         M !== undefined &&
-        later.every((l) => Math.abs(l[7] - M) <= 0.01 && Math.abs(l[2] - M) <= ONE_EDGE * sizeOf(l, m)) &&
+        later.every((l) => Math.abs(l[2] - M) <= ONE_EDGE * sizeOf(l, m)) &&
         M > f0[7] + tol &&
         Math.abs(f0[2] - M) <= tol &&
         f0[2] > m.label.ink[3] &&

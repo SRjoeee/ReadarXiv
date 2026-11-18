@@ -4692,9 +4692,10 @@ bug? The original sets "Figure 1." at 47 in the margin and every line of its tex
   hung caption's indent is its label box's width, the label and its separator (`\hangindent`): the original's text edge is a
   consequence of "Figure 1." being that wide, not a position of its own. Where every text line of a member starts at one x past
   the label's end and the label stands at its first line's measure start (Line x0 and m0, Label.ink; two text lines at least),
-  or, where TeX states the hang, where the later text lines of the first line's frame state one measure (Line m0) right of the
-  first line's and stand at it, the first line's text begins at it and the label at the first line's measure start, each within
-  what a line's ink differs by under one measure (§18.94: the ink to 0.01 missed a protruded first glyph by 0.31 pt),
+  or, where TeX states the hang, where the later text lines of the first line's frame stand at the measure the first of them
+  states (Line m0), right of the first line's, the first line's text begins at it and the label at the first line's measure
+  start, each within what a line's ink differs by under one measure (§18.94: the ink to 0.01 missed a protruded first glyph by
+  0.31 pt),
   the label drawn anew keeps its place, its separator and the space TeX set after it (the original's gap from the label's ink to
   its text, `hangGap`, or to the hang TeX states, at the state's scale), and its text hangs at that width: the first text after the label starts at the
   drawn label's end and that space, and every later line of the block starts at that edge, its measure from there to the
@@ -8350,12 +8351,14 @@ A rule of TeX's was missed, the lay's. The marked compile states the hang alread
 and `\hangafter`, each stated line's measure its `Line[7..8]`: line 0's m0 72, lines 1 to 10's 112.44).
 
 - **H1: a hang TeX states is kept** (`lay/adapt.ts`, the label's widening; `unit/blocks.ts`, the block's edge). Where the later
-  text lines of a member's first frame state one left measure right of its first line's and stand at it, the translation's lines
-  after the first are hung, however many they are: a line past the original's last goes on with the hang, as TeX's does. (a)
-  Where a label is drawn anew at the first line's measure start and the original's text begins at the hang (`\@hangfrom`: the
-  hang is the label's width), at the drawn label's width, §18.29's rule, its test reading TeX's statement (the first line's
-  text at the hang, the label at the first line's measure start, each within `ONE_EDGE`), the space after the label from its
-  ink's end to the hang TeX states. §18.29's ink test stays before it, so that what it hangs is hung as before: of the 19
+  text lines of a member's first frame stand at a left measure right of its first line's, the translation's lines after the
+  first are hung, however many they are: a line past the original's last goes on with the hang, as TeX's does. (a) Where a
+  label is drawn anew at the first line's measure start and the original's text begins at the hang (`\@hangfrom`: the hang is
+  the label's width), at the drawn label's width, §18.29's rule, its test reading TeX's statement (the later text lines at the
+  measure the first of them states, the first line's text at it, the label at the first line's measure start, each within
+  `ONE_EDGE`: a later line at a measure of its own more than `ONE_EDGE` away fails it, a shape that changes again, and one
+  nearer is the same edge by that tolerance), the space after the label from its ink's end to the hang TeX states. §18.29's
+  ink test stays before it, so that what it hangs is hung as before: of the 19
   captions a store it hangs, three state no hang (2307.16209v1 t86 and t384, 2610.21201v1 t48: their measure their frame's; a
   caption set in a box of another `\hsize` states none, §18.77). (b) Else at the hang: the block's edge, below.
 - **H2: a label in the margin stays in the margin** (`unit/blocks.ts` apartEdge). Where a member's first line stands left of one
