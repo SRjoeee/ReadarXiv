@@ -64,3 +64,60 @@ describe('clustersOf and charsOf: a text’s characters, each a grapheme cluster
     expect(charsOf(text)).toBe([...text].length)
   })
 })
+
+describe('charsOf, clustersOf and mayJoin: the same answers wherever in a text a joiner stands, however often it is read', () => {
+  // (each text's clusters counted and walked as the platform's segmenter gives them, and whether it may join: a joiner first,
+  // inside, last; a base with marks; conjoining jamo; a code point beyond the BMP with a joiner and without; a lone surrogate.
+  // The Han characters and the Hangul syllables written as escapes)
+  const cases: [string, string, number, boolean][] = [
+    ['an emoji ZWJ sequence after Han characters', '\u{4f7f}\u{7528}👩\u{200d}💻', 3, true],
+    ['a ZWJ between two letters, joined to the first', 'a\u{200d}b', 2, true],
+    ['a base with two marks, then a letter', 'e\u{301}\u{323}x', 2, true],
+    ['a mark first, a cluster of its own', '\u{301}ab', 3, true],
+    ['a mark last', 'abc\u{301}', 3, true],
+    ['a Han character and an ideographic tone mark', '\u{5b57}\u{302a}\u{5b57}', 2, true],
+    ['conjoining jamo: L V T, then L V', '\u{1112}\u{1161}\u{11ab}\u{1100}\u{1161}', 2, true],
+    ['conjoining jamo after composed syllables', '\u{d55c}\u{ad6d}\u{1100}\u{1161}', 3, true],
+    ['L L V, one cluster', '\u{1100}\u{1100}\u{1161}', 1, true],
+    ['a leading consonant alone', '\u{1100}', 1, true],
+    ['CR LF between two letters', 'a\r\nb', 3, true],
+    ['a Prepend before a digit', '\u{600}1', 1, true],
+    ['a Thai consonant and SARA AM', '\u{e01}\u{e33}', 1, true],
+    ['a character beyond the BMP alone', '\u{20000}', 1, false],
+    ['a character beyond the BMP among Han characters', '\u{5b57}\u{20000}\u{5b57}', 3, false],
+    ['a flag of two regional indicators', '🇯🇵', 1, true],
+    ['two flags', '🇯🇵🇰🇷', 2, true],
+    ['an emoji and its skin tone', '👍\u{1f3fd}', 1, true],
+    ['a Han character and a selector beyond the BMP', '\u{8fbb}\u{e0100}', 1, true],
+    ['composed Hangul syllables', '\u{d55c}\u{ad6d}\u{c5b4}', 3, false],
+    ['a Cyrillic word', 'слово', 5, false],
+    ['a lone high surrogate before a letter', '\u{d800}a', 2, false],
+    ['a lone low surrogate after a letter', 'a\u{dc00}', 2, false],
+  ]
+  for (const [name, text, n, joins] of cases)
+    it(name, () => {
+      for (let read = 0; read < 2; read++) {
+        expect(charsOf(text)).toBe(n)
+        expect(graphemesOf(text)).toHaveLength(n)
+        expect([...clustersOf(text)]).toEqual(graphemesOf(text))
+        expect(mayJoin(text)).toBe(joins)
+      }
+    })
+  it('every assigned code point, alone and beside others: counted and walked as the platform’s segmenter', {
+    timeout: 120_000,
+  }, () => {
+    const skip = /[\p{Cn}\p{Co}\p{Cs}]/u
+    const apart: string[] = []
+    for (let cp = 0; cp <= 0x10ffff; cp++) {
+      if (cp >= 0xd800 && cp <= 0xdfff) continue
+      const c = String.fromCodePoint(cp)
+      if (skip.test(c)) continue
+      for (const text of [c, `a${c}`, `${c}a`, `\u{5b57}${c}\u{5b57}`, `${c}${c}`]) {
+        const g = graphemesOf(text),
+          w = [...clustersOf(text)]
+        if (charsOf(text) !== g.length || w.length !== g.length || w.some((x, k) => x !== g[k])) apart.push(text)
+      }
+    }
+    expect(apart).toEqual([])
+  })
+})
