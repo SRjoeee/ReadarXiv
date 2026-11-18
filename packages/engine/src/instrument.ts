@@ -87,8 +87,18 @@ export interface InstrumentUnit {
   /** a table's cell: its table, row and column, and the columns and rows it spans, whether it is a header's; `boxed` the class
    *  its column's template set its text by in the template's own box (marks/channels.ts readCellBoxes: c, l or r), none where
    *  its text is a paragraph of its own (a p, m, b or X column, a \parbox) or no template of LaTeX's set it: what its column's
-   *  box is read by (locate/columns.ts, Room.column); the bundle does not carry it */
-  cell?: { table: number; row: number; col: number; span?: number; rows?: number; head?: true; boxed?: 'c' | 'l' | 'r' }
+   *  box is read by (locate/columns.ts, Room.column); the bundle does not carry it. `stand` where its column's class is m or b
+   *  (marks/channels.ts readCellStands), where TeX stands its lines in its row: the bundle carries it, Placed.stand (§18.92) */
+  cell?: {
+    table: number
+    row: number
+    col: number
+    span?: number
+    rows?: number
+    head?: true
+    boxed?: 'c' | 'l' | 'r'
+    stand?: 'm' | 'b'
+  }
   /** a caption's float type, LaTeX's \@captype where its \caption runs (its float environment's, \captionof's): the part's
    *  Label.float */
   float?: string

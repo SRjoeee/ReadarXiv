@@ -87,9 +87,10 @@ export const KEY_VERSION = 't1'
  *  refusal kept the next translator's answers as rows); a group that is not `must` with an edge inside a word offered to no
  *  translator, its words whole and plain: words.ts; the letters and marks that touch the text TeX set for an element
  *  (its `text`), in no group that does not hold it, offered to no translator, put back beside it in the row, the row's
- *  sentences in the unit's projection: words.ts. A change to them that changes an outcome moves it, and every row with it
+ *  sentences in the unit's projection, and so a number set flush against an inline formula, its far edge's punctuation
+ *  aside: words.ts. A change to them that changes an outcome moves it, and every row with it
  *  (identityOf); a change that changes none leaves it */
-export const CHAIN_DIGEST = 'c41af40231946bd7d56c7d72358b64f149d063a471f6583617428697dda17cbe'
+export const CHAIN_DIGEST = '39268ab1645fffaffdfabbfb7389961d6ea0b02a87350f236ee5f76f981e8023'
 
 // ---------------------------------------------------------------- the platform's timers and controllers, by structure
 

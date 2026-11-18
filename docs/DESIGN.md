@@ -752,10 +752,13 @@ decision: clearing it costs a re-translation and nothing else.
   sent one (`src/providers/llm.ts`), so a change to what the model is sent is another identity by itself and its answers
   and rows are new: an answer stored under the identity before is never read again, as after a raised version
   (`tests/providers/llm.test.ts`).
-- **The rows** (`rows`): a unit's accepted result, `r1 | identityOf(the chain's translators) | target | sha256 of the
-  unit (every field of the contract's unit but its id, a label: its kind, content, whether it lights by sentence, whether a
-  reply must bring each element back whole, whether it is a bibliography entry; a field the contract adds is a type error in
-  the key until it is keyed) | the context's digest where a translator reads it`, its glossary
+- **The rows** (`rows`): a unit's accepted result, `r1 | identityOf(the chain's translators) | target | the digest of the
+  unit's statement (`askedOf`, the package's, `packages/translate/src/bundle.ts`: the sha256 of every field of the contract's
+  unit but its id, a label: its kind, content, whether it lights by sentence, whether a reply must bring each element back
+  whole, whether it is a bibliography entry; each piece's fields in the contract's order, so no order of an object's keys
+  moves it; a field the contract adds is a type error in it until it is read; the digest our server's rows name their
+  statement by, format's `Row.asked`, and the hash the key held before it, unit for unit, `tests/providers/row-key.test.ts`)
+  | the context's digest where a translator reads it`, its glossary
   the entries the unit's wires use (`rowContextOf`, the package's: the unit as the chain sends it)
   (`src/providers/transport.ts`). Two units of one content that a wire writes apart (an entry is cut at its blocks, one
   that is none at its stops) never share a row. A page opened again reads its units' rows before anything is asked, and sends nothing for
@@ -1252,6 +1255,18 @@ only how it meets the rest of the extension.
   travels whole and plain, and the translation carries no style from the group. A `must` group (a link, a run-in label,
   every pair of the HTML page) stays as its host states it. A case of the chain's digest (`CHAIN_DIGEST`, §9). Over the 88
   corpus papers 47 of 15,408 groups (17 units, 13 papers): the tags wire moves in those 17 units, the markers wire in none.
+- **A number set flush against an inline formula goes on no wire** (lane flush-hold, 2026-11-18, PDF-READER §18.47). An
+  author types `32$\times$32`, `$-$0.016`, `6$n$+2` with the number outside the math; sent beside the formula's placeholder,
+  the number came back broken (a counter or a noun put between, digits lost). The same module (`words.ts`, the second arm of
+  its rule for what is glued to an element) holds off the wire, beside an element of kind `math`, the run of the unit's text
+  that touches it as far as white space, its far edge's sentence punctuation, quotes and unpaired bracket aside (one statement
+  with the identifier's, `@readarxiv/text` `edgeMark`), where it holds a digit and no letter, and puts it back literally
+  beside the formula. The HTML page's blocks reach it on the tags wire: LaTeXML writes such a number as text right beside a
+  `<math>`, which the rule file states `math` (`elementKindOf`), and the unit read from the tags wire holds it flush (the
+  fixture 2507.00150.html: 11 such junctions in its prose; the rest of its 126 stand in numeric cells, never sent). Not on the
+  markers wire: there the protector sets a space of its own between a marker and the word or number it touches (§6.2, taken
+  off again as the translation is filled back), so the unit states no number flush against the formula, and the rule is not
+  widened to reach it. A case of the chain's digest (`CHAIN_DIGEST`).
 - **A group a reply did not bring back is placed where the translation states it** (lane style-spans, 2026-11-10). A
   group's style (its weight, slant or colour: its command's, `SpanAt.colour` from TeX's log, `SpanAt.style` read off its
   glyphs) is drawn only where the reply holds the group. The tags wire carries every group (Google keeps tags); the markers

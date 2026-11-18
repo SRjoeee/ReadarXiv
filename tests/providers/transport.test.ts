@@ -2,7 +2,7 @@
 // the background's chain, the rows a page opened again reads, what the popup is told of the engine that answers, the
 // connection test, and the session router's contract (cancel, retire). Engines are the package's own adapters over a
 // scripted fetch: Microsoft's endpoint, Google's, and the reader's LLM service as a fake on the tags wire
-import { chainOf, Fault, type FetchInit, type FetchReply, type Store, tagsWire, type Translator, type UnitIn } from '@readarxiv/translate'
+import { askedOf, chainOf, Fault, type FetchInit, type FetchReply, type Store, tagsWire, type Translator, type UnitIn } from '@readarxiv/translate'
 import { describe, expect, it, vi } from 'vitest'
 import type { KeyValues } from '@/cache/translate-store'
 import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
@@ -231,6 +231,8 @@ describe('the rows: a page opened again (stage 4b deliverable 4)', () => {
     expect(stores.rows.entries.size).toBe(1)
     const [key] = [...stores.rows.entries.keys()]
     expect(key).toMatch(/^r1\|[0-9a-f]{32}\|zh\|[0-9a-f]{64}\|-$/)
+    // (the unit's part: the digest of its statement, the package's, which our server's rows name theirs by)
+    expect(key?.split('|')[3]).toBe(askedOf(unit('a')))
     const other = await harness({ provider: 'google-web' }, {}, stores).make()
     const g = await other.translate({ units: [unit('a')], target: 'cmn' })
     expect(g.ok && g.cached).toBe(0)

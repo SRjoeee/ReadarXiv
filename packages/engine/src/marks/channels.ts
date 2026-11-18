@@ -13,7 +13,8 @@ const alignCode = (lo: number, ls: number, ro: number, rs: number, po: number, p
   return L ? 'r' : R ? 'l' : 'j'
 }
 /** LaTeX's column classes by their \@chnum (latex.ltx's \@testpach numbers c, l, r 0 to 2, array.sty's c, l, r, m, p, b 0 to
- *  5), as the alignment they set a cell's line by, read by that number; m, p and b's lines are a paragraph's */
+ *  5), as the alignment they set a cell's line by, read by that number; m, p and b's lines are a paragraph's (where m and b
+ *  stand them in the row: readCellStands) */
 const CELL_CLASS: readonly ('c' | 'l' | 'r' | undefined)[] = ['c', 'l', 'r']
 /**
  * Each unit's alignment as its end mark states it (AXT-ALIGN, its 79-column wrap joined, in the order TeX set the paragraphs):
@@ -90,6 +91,28 @@ export function readCellBoxes(log: string): Map<number, 'c' | 'l' | 'r'> {
   }
   return new Map([...out].sort((a, b) => a[0] - b[0]))
 }
+/**
+ * Each table cell whose column template LaTeX built from an m or a b (AXT-CELL <i> <class>, the cell's first: array.sty's \@chnum
+ * 3 or 5), as where TeX stands the cell's lines in its row: an m cell's box lowered by half its height past the strut's
+ * (array.sty's \ar@align@mcell), the middle of its first and last baselines on the row's baseline; a b cell's a \vbox, its last
+ * line on it. None for c, l and r (a line of the template's own box), for p (a \vtop, its first line on the row's, where a cell's
+ * lines start), and for a cell no template of LaTeX's set (a plain \halign states no class): Placed.stand, docs/PDF-READER.md
+ * §18.92
+ */
+export function readCellStands(log: string): Map<number, 'm' | 'b'> {
+  const seen = new Set<number>()
+  const out = new Map<number, 'm' | 'b'>()
+  for (const m of log.matchAll(/^AXT-CELL (\d{1,9}) ([0-5]) *$/gm)) {
+    const id = Number(m[1])
+    if (seen.has(id)) continue
+    seen.add(id)
+    const code = CELL_STAND[Number(m[2])]
+    if (code) out.set(id, code)
+  }
+  return new Map([...out].sort((a, b) => a[0] - b[0]))
+}
+/** where TeX stands a cell's lines in its row by its column's \@chnum (array.sty's c, l, r, m, p, b 0 to 5): m and b alone */
+const CELL_STAND: readonly ('m' | 'b' | undefined)[] = [undefined, undefined, undefined, 'm', undefined, 'b']
 /**
  * The alignment the skips in force state of each unit TeX set only in boxes (its every AXT-ALIGN record an \hbox's, `h`: ICML's
  * \icmlauthor sets each name in \mbox{\bf #1}), where they stretch on a side: c, l or r (alignCode, as a paragraph's). The box is

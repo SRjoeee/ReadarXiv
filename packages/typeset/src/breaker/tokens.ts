@@ -1,5 +1,6 @@
 // B.tokens (design-b §1.5): a unit's row as the breaker's tokens, unmeasured, each in the face it is set in (T39, E21):
-// the style stack over the row's groups and switches, script chunks, glue, the line-break marks, UAX 14's kept pairs,
+// the style stack over the row's groups and switches, script chunks (cut between grapheme clusters, docs/PDF-READER.md §18.93),
+// glue, the line-break marks, UAX 14's kept pairs,
 // CJK–Latin autospace, punctuation's compression, hyphenation's language, the layer's own small capitals, TeX's explicit glue
 // as kerns, crops, the control tokens (a forced break's newline, a kept region's blockTo), the marks dropped after a display or
 // a held line's mark and the class's tail marks (U.marks' decisions, T16, T17: unit/marks.ts, called where today decides them,
@@ -21,7 +22,7 @@
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
-import { cjkClassRe, fullWidthPunctOf, kinsokuOf, keptPair, markOf, noStart, SPACELESS } from './script.ts'
+import { cjkLeadRe, clustersOf, fullWidthPunctOf, kinsokuOf, keptPair, markOf, noStart, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
@@ -506,7 +507,7 @@ export function tokens(i: TokensInput): Tokens {
   }
   const { keepAll, cjkQuotes, latinPatterns: latinLang, cyrillicPatterns: cyrLang } = P
   const minWord = P.hyphenation.minWord
-  const cjkRe = cjkClassRe(cjkQuotes)
+  const cjkLead = cjkLeadRe(cjkQuotes)
   const kinsoku = kinsokuOf(P.noStart, P.noEnd)
   /** a character no line opens with: UAX 14's (no-start.mjs) or the target's rules' (P.noStart): break.ts `barred`'s */
   const barredChar = (ch: string) => noStart(ch) || kinsoku.starts(ch)
@@ -578,8 +579,12 @@ export function tokens(i: TokensInput): Tokens {
       const parts: { cls: 'cjk' | 'latin'; s: string; off: number }[] = []
       let cur: { cls: 'cjk' | 'latin'; s: string; off: number } | null = null,
         off = 0
-      for (const ch of chunk) {
-        const cls = cjkRe.test(ch) ? 'cjk' : 'latin'
+      // (the chunk walked by its grapheme clusters, what a reader sees as one character (UAX #29: script.ts clustersOf, its code
+      // points where none joins another), each classed by its first code point: a run that breaks between its characters is cut
+      // between clusters, never inside one: a decomposed Hangul syllable, a kana and its voiced mark, a character and its
+      // variation selector stay one token, measured whole (PR #649's review). Each part's offset its first unit's, as before)
+      for (const ch of clustersOf(chunk)) {
+        const cls = cjkLead.test(ch) ? 'cjk' : 'latin'
         if (cls === 'cjk' && !keepAll) {
           cur = null
           parts.push({ cls, s: ch, off })

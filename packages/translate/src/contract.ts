@@ -12,7 +12,9 @@ export const SOURCE: Lang = 'en'
  *  `note-mark`, `other`, …). A wire reads it for three things only: what the element reads as to a sentence cutter where the
  *  host says nothing (`reads`); for `display`, that it keeps a marker of its own (`alone`); and whether it can stand inside a
  *  word, its characters the word's (one that reads as a word: a formula, a macro, an escaped character; never `other`, the
- *  kind of an element its reader states nothing of, nor a display, a space, a break, a reference or an annotation) */
+ *  kind of an element its reader states nothing of, nor a display, a space, a break, a reference or an annotation). The chain
+ *  reads one more, before any wire: a number set flush against an inline formula, `math`, is held off the wire with it
+ *  (words.ts) */
 export type ElKind = string
 /** A span's style: an open string (`bold`, `italic`, `mono`, `link`, `label`, …). The wire reads `must`, never the style */
 export type SpanStyle = string

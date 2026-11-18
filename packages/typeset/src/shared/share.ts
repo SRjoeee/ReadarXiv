@@ -3,6 +3,7 @@
 // inkEndOf, shareOf, keepsShare; moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript), held by the chain's
 // and the fill's replays on the corpus. Its ink measures are the call's (`m`).
 import type { FitMeasure } from '../breaker/measure.ts'
+import { charsOf } from '../breaker/script.ts'
 import type { FitBlock, LaidLine, Layout } from '../fit/types.ts'
 
 /** the shared row as a unit's layout leaves it */
@@ -46,10 +47,10 @@ export function inkEndOf(line: LaidLine, L: Layout, m: FitMeasure): number {
   const S = (line.seg ?? L) as Sized,
     f = S.f,
     k = (t.sup ? 0.62 : 1) * (t.sc ?? 1)
-  // (a word's tracking, drawn as letter spacing after each of its characters, stands before its last one's ink; a CJK character
-  // laid alone carries its own after it, in its advance)
+  // (a word's tracking, drawn as letter spacing after each of its characters (each a grapheme cluster, script.ts charsOf), stands
+  // before its last one's ink; a CJK character laid alone carries its own after it, in its advance)
   const track = t.sup ? 0 : ((t.cls === 'cjk' ? S.state?.track : S.state?.trackLatin) ?? 0)
-  let x = it.x! + (r * k * f) / 100 + track * f * Math.max(0, [...t.s!].length - 1)
+  let x = it.x! + (r * k * f) / 100 + track * f * Math.max(0, charsOf(t.s!) - 1)
   // (an oblique face skews its glyphs about the baseline: its ink's top-right corner stands its height times the slant further on)
   if (t.face!.oblique)
     x +=

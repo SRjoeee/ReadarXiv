@@ -6,6 +6,7 @@
 // what they draw, in PDF units on A.
 import type { Face, Token } from '../breaker/tokens.ts'
 import { fontString } from '../breaker/measure.ts'
+import { charsOf, clustersOf } from '../breaker/script.ts'
 import type { FitState, LaidItem, LaidLine, Layout } from '../fit/types.ts'
 import type { FaceId, Item } from '../types.ts'
 
@@ -34,6 +35,10 @@ export type LineRun = TextRun | { crop: number }
 /** a face as the drawing tells two apart (L2:4627 faceKey) */
 const faceKey = (face: Face) => `${face.family}|${face.weight}|${face.style}|${face.caps ? 1 : 0}`
 type T = Token & { hyphenated?: boolean }
+/** a CJK token of one grapheme cluster of several code points (B.tokens cuts a CJK run between clusters): drawn as a run of its
+ *  own (lineRuns) */
+const clusterToken = (t: Token): boolean =>
+  t.cls === 'cjk' && !t.sup && typeof t.s === 'string' && t.s.length > 1 && [...t.s].length > 1 && charsOf(t.s) === 1
 
 /**
  * A laid line's runs in order (L2:4633 lineRuns): single CJK characters of one face share a run, each at its own place; a word
@@ -68,6 +73,11 @@ export function lineRuns(line: LaidLine, L: Layout): LineRun[] {
       return
     }
     const s = t.s ?? ''
+    // (a CJK token of one code point joins a run of characters each at its own place; a token of one grapheme cluster of several
+    // code points (B.tokens: a decomposed Hangul syllable, a kana and its voiced mark, a character and its selector) is a run of its
+    // own at its own place, glued to nothing, its text drawn whole: a run of characters places each code point, which would draw
+    // the cluster apart, and a run glued of several would lose the spacing the breaker sets between them (a justified CJK line's
+    // slack, its squeeze))
     const single = t.cls === 'cjk' && [...s].length === 1 && !t.sup
     const cur = run as TextRun | null
     const sameFace =
@@ -96,7 +106,9 @@ export function lineRuns(line: LaidLine, L: Layout): LineRun[] {
         !prev?.t.kern &&
         !prev?.kern &&
         prev?.t.cls === t.cls &&
-        !t.brk
+        !t.brk &&
+        !clusterToken(t) &&
+        !(prev && clusterToken(prev.t))
       if (!glued) {
         flush()
         run = {
@@ -145,7 +157,9 @@ export function runEdge(
   const before = run.text.slice(0, at)
   const LF = segOf(line, L).f,
     f = LF * (run.sup ? 0.62 : 1) * (run.sc ?? 1)
-  return run.xs[0]! + (w100(before, run.face) * f) / 100 + (run.track ? run.track * LF * [...before].length : 0)
+  // (the tracking after each character a reader sees before the edge, a grapheme cluster, as the breaker measures it (tokW) and
+  // the drawing's letter spacing sets it)
+  return run.xs[0]! + (w100(before, run.face) * f) / 100 + (run.track ? run.track * LF * charsOf(before) : 0)
 }
 
 /** a run of text as it is drawn: design-a's Item, with what the drawing sets beside it (its raise, tracking, slant) */
@@ -182,9 +196,12 @@ export function inkLines<L extends readonly [number, number, number, readonly It
   lines: readonly L[],
   cjk: RegExp,
 ): L[] {
+  // (each character a reader sees, a grapheme cluster (script.ts clustersOf), classed by its first code point, as the breaker
+  // classes it: a character and its variation selector, a kana and its voiced mark, are the CJK character's)
   const isCjk = (s: string) => {
     let any = false
-    for (const ch of s) {
+    for (const g of clustersOf(s)) {
+      const ch = g.length === 1 ? g : String.fromCodePoint(g.codePointAt(0)!)
       if (/\s/u.test(ch)) continue
       if (!cjk.test(ch)) return false
       any = true

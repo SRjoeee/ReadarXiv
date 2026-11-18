@@ -2,7 +2,8 @@
 // none beside, the line-break marks (UAX 14's no-start class and the rule set's lists). Ported from engine 065c1d973:
 // rules/script.mjs (CJK_BLOCKS, CJK, cjkClassWith, SPACELESS), layer-proto/no-start.mjs (NO_START, noStart, keptPair),
 // layer-proto/layer1.mjs:197-219 (lastOf, kinsokuOf), layer-proto/layer2.mjs:2096-2104 (PUNCT_CLOSE, PUNCT_OPEN, cjkClassRe).
-// A mark's blank half is its face's measure (markOf, lane cjk-punct), no longer today's class by character.
+// A mark's blank half is its face's measure (markOf, lane cjk-punct), no longer today's class by character. A character is a
+// grapheme cluster (graphemesOf, clustersOf, charsOf; docs/PDF-READER.md §18.93), its class its first code point's (cjkLeadRe).
 import { MARK_INK } from '../data/marks.ts'
 
 /** Unicode's CJK blocks, Hangul's among them, and its full-width forms (rules/script.mjs) */
@@ -37,6 +38,43 @@ const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7]
 const CJK_CLASS = [CJK, cjkClassWith(CJK_QUOTES)] as const
 /** `quotes` (the rules' cjkQuotes): whether the curly quotes, dashes, ellipsis and middle dot are CJK's too (L2:2104) */
 export const cjkClassRe = (quotes: boolean) => CJK_CLASS[quotes ? 1 : 0]
+const CJK_LEAD = CJK_CLASS.map((re) => new RegExp(`^${re.source}`, 'u'))
+/** cjkClassRe held to a text's first code point: the class of a grapheme cluster, which is its first code point's */
+export const cjkLeadRe = (quotes: boolean) => CJK_LEAD[quotes ? 1 : 0]!
+
+/** the platform's grapheme clusters (UAX #29's extended grapheme clusters, as the runtime's ICU gives them), made once */
+const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
+/** a text's grapheme clusters, each a string: what a reader sees as one character (a letter and the marks over it, a decomposed
+ *  Hangul syllable, a kana and its voiced mark, a character and its variation selector, an emoji sequence, a flag) */
+export const graphemesOf = (t: string): string[] => Array.from(GRAPHEMES.segment(t), (g) => g.segment)
+/**
+ * The code points that may stand in a grapheme cluster beside another: those whose Grapheme_Cluster_Break (UAX #29) lets them
+ * join a neighbour, CR and LF, Extend (Grapheme_Extend, Emoji_Modifier), ZWJ, SpacingMark, Prepend, Regional_Indicator and the
+ * conjoining jamo L, V and T (their three blocks), every pair UAX #29 keeps together holding one of them (LV and LVT join only
+ * beside an L, V or T). Written in the properties ECMAScript names (a mark, a format character among them every
+ * Prepended_Concatenation_Mark), and the letters (Lo) of those classes no such property names, as Unicode 17 classes them: Thai's
+ * and Lao's SARA AM (SpacingMark), the Prepend letters of Indic_Syllabic_Category Consonant_Preceding_Repha and
+ * Consonant_Prefixed, Kirat Rai's vowel signs. A text that holds none is its code points, each a cluster of its own; held to the
+ * platform's own segmenter over every assigned code point by packages/typeset/tests/unit/graphemes.test.ts
+ */
+const JOINS =
+  /[\r\n\p{M}\p{Grapheme_Extend}\p{Emoji_Modifier}\p{Regional_Indicator}\p{Cf}\u{1100}-\u{11ff}\u{a960}-\u{a97f}\u{d7b0}-\u{d7ff}\u{d4e}\u{e33}\u{eb3}\u{111c2}\u{111c3}\u{113d1}\u{1193f}\u{11941}\u{11a84}-\u{11a89}\u{11d46}\u{11f02}\u{16d63}\u{16d67}-\u{16d6a}]/u
+/** whether a text may hold a grapheme cluster of two code points or more (JOINS: none where it holds no such code point) */
+export const mayJoin = (t: string): boolean => JOINS.test(t)
+/** a text's grapheme clusters, walked as `for (const g of clustersOf(t))`: the text itself (its code points, each its own
+ *  cluster) where it holds no code point that joins another (mayJoin), else the platform's clusters (graphemesOf) */
+export const clustersOf = (t: string): Iterable<string> => (JOINS.test(t) ? graphemesOf(t) : t)
+/** how many characters a reader sees in a text: its grapheme clusters (clustersOf), counted without a list where each code point
+ *  is one */
+export function charsOf(t: string): number {
+  if (JOINS.test(t)) return graphemesOf(t).length
+  let n = 0
+  for (let i = 0; i < t.length; i++) {
+    const c = t.charCodeAt(i)
+    if (c < 0xdc00 || c > 0xdfff || i === 0 || t.charCodeAt(i - 1) < 0xd800 || t.charCodeAt(i - 1) > 0xdbff) n++
+  }
+  return n
+}
 const PUNCT_CLOSE =
   /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/

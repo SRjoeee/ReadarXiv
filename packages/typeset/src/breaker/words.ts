@@ -14,7 +14,7 @@ const made = new Map<string, Intl.Segmenter>()
  * The target's word segmenter, or null where the platform has none: runtime feature detection, the typesetter being handed no
  * segmenter by its host. Its null side is a platform below every host's floor (the reader's legacy build requires
  * Intl.Segmenter, packages/reader/src/pdfjs/builds.ts legacyRuns, as the website's floor does; the breaker makes a grapheme one
- * at load, break.ts): there a merged cell is filled as before
+ * at load, script.ts): there a merged cell is filled as before
  */
 export function wordSegmenter(tag: string): Intl.Segmenter | null {
   const S = (globalThis as { Intl?: { Segmenter?: typeof Intl.Segmenter } }).Intl?.Segmenter

@@ -134,9 +134,10 @@ const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
 const verdicts = new Map(), examples = new Map(), classes = new Map(), classEx = new Map()
 const I5by = new Map(), byPaper = new Map(), below = []
 const inv = { laid: 0, lines: 0, I3: 0, I4: 0, I5: 0 }, invEx = { I3: [], I4: [], I5: [] }
-// (the spacing rule's four lines, spacing-gate.ts: every failing member named; AXT_GATE_SPACING=<file>: every member read, a line
-// of its facts, its pair first, appended (the added pairs' run apart appends to the set's))
-const spacing = { read: new Map(), floatSpread: [], floatHeld: 0, takenSpread: [], unfilled: [], underFloor: [], stepped: [], explained: new Map(), by: new Map() }
+// (the spacing rule's four lines, spacing-gate.ts: every run of every member read, every failing member named with the runs that
+// fail; AXT_GATE_SPACING=<file>: every run read, a line of its facts, its pair first and its run (`<k>/<n>`) last, appended (the
+// added pairs' run apart appends to the set's))
+const spacing = { read: new Map(), runs: new Map(), runsRead: 0, unmatched: [], floatSpread: [], floatHeld: 0, takenSpread: [], unfilled: [], underFloor: [], stepped: [], explained: new Map(), by: new Map() }
 const SPACING = process.env.AXT_GATE_SPACING
 const pageMs = []
 let adaptMs = 0, readMs = 0
@@ -180,7 +181,9 @@ for (const pair of pairs) {
   judging = pair
   try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept, ...(ENTRY ? { leave: LEAVE, laid: paintOf(pair) } : {}), ...(SPACING ? { spacing: (line) => appendFileSync(SPACING, `${pair}\t${line}\n`) } : {}) }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
   for (const [k, n] of g.spacing.read) add(spacing.read, k, n)
-  for (const k of ['floatSpread', 'takenSpread', 'unfilled', 'underFloor', 'stepped']) for (const x of g.spacing[k]) spacing[k].push(`${pair} ${x}`)
+  for (const [k, n] of g.spacing.runs) add(spacing.runs, k, n)
+  spacing.runsRead += g.spacing.runsRead
+  for (const k of ['unmatched', 'floatSpread', 'takenSpread', 'unfilled', 'underFloor', 'stepped']) for (const x of g.spacing[k]) spacing[k].push(`${pair} ${x}`)
   spacing.floatHeld += g.spacing.floatHeld
   // (the size steps a stated cause explains, by the pair's target: the evening's (§18.57) and the ties' (§18.64), printed beside)
   for (const [k, n] of g.spacing.explained) add(spacing.explained, `${pair.replace(/^.*-([a-z]{2,3})(\.pack)?$/, '$1')} ${k}`, n)
@@ -288,9 +291,10 @@ console.log(`under the fit's floor (X.further's shrink): ${below.length} members
 // the run failed)
 {
   const byLine = (n) => [...spacing.by].filter(([k]) => k.startsWith(`(${n}) `)).map(([k, v]) => `${v} ${k.slice(n.length + 3)}`).join(', ')
-  console.log(`F28 the spacing rule over the members read (${top(spacing.read)}): (i) a float's member above its rule-1 pitch ${spacing.floatSpread.length}${spacing.floatSpread.length ? ` (${byLine('i')}; ${spacing.floatHeld} of them holding room it took)` : ''}; (ii) a body member (a note too) the fill lays above its page's target and band ${spacing.takenSpread.length}${spacing.takenSpread.length ? ` (${byLine('ii')})` : ''} (beside: ${spacing.unfilled.length} the fill lays not, kept at its fit); (iii) under its script's floor ${spacing.underFloor.length}${spacing.underFloor.length ? ` (${byLine('iii')})` : ''}; (iv) a step smaller though it sets whole at its size, no stated cause ${spacing.stepped.length}${spacing.stepped.length ? ` (${byLine('iv')})` : ''}; beside, the size steps a stated cause explains (the evening's §18.57, a size tie's §18.64), by target: ${top(spacing.explained) || 'none'}`)
+  const runsOf = [...spacing.runs.values()].reduce((a, b) => a + b, 0)
+  console.log(`F28 the spacing rule over the members read (${top(spacing.read)}; ${runsOf} of them of two runs or more, a display splitting them, each of their ${spacing.runsRead} runs read${runsOf ? `: ${top(spacing.runs)}` : ''}${spacing.unmatched.length ? `; ${spacing.unmatched.length} runs no run of their unit's lay holds, read with their unit's facts` : ''}): (i) a float's member above its rule-1 pitch ${spacing.floatSpread.length}${spacing.floatSpread.length ? ` (${byLine('i')}; ${spacing.floatHeld} of them holding room it took)` : ''}; (ii) a body member (a note too) the fill lays above its page's target and band ${spacing.takenSpread.length}${spacing.takenSpread.length ? ` (${byLine('ii')})` : ''} (beside: ${spacing.unfilled.length} the fill lays not, kept at its fit); (iii) under its script's floor ${spacing.underFloor.length}${spacing.underFloor.length ? ` (${byLine('iii')})` : ''}; (iv) a step smaller though it sets whole at its size, no stated cause ${spacing.stepped.length}${spacing.stepped.length ? ` (${byLine('iv')})` : ''}; beside, the size steps a stated cause explains (the evening's §18.57, a size tie's §18.64), by target: ${top(spacing.explained) || 'none'}`)
   const LIMIT = Number(process.env.AXT_GATE_SPACING_LIST ?? 40)
-  for (const [n, k] of [['i', 'floatSpread'], ['ii', 'takenSpread'], ['ii, the fill lays it not', 'unfilled'], ['iii', 'underFloor'], ['iv', 'stepped']]) {
+  for (const [n, k] of [['a run no run of its unit\'s lay holds', 'unmatched'], ['i', 'floatSpread'], ['ii', 'takenSpread'], ['ii, the fill lays it not', 'unfilled'], ['iii', 'underFloor'], ['iv', 'stepped']]) {
     for (const x of spacing[k].slice(0, LIMIT)) console.log(`F28 (${n}) ${x}`)
     if (spacing[k].length > LIMIT) console.log(`F28 (${n}) … and ${spacing[k].length - LIMIT} more`)
   }

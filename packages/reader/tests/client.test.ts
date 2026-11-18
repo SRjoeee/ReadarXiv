@@ -43,6 +43,42 @@ const stalled = (first: Uint8Array, init?: RequestInit) =>
 const settle = async (n = 6) => {
   for (let i = 0; i < n; i++) await flush()
 }
+/** a part of a body the network delivers (and its end): to a body already let go (its ask aborted), nothing */
+function delivered(body: ReadableStreamDefaultController<Uint8Array> | null, s: string, end = false) {
+  try {
+    if (s) body?.enqueue(enc(s))
+    if (end) body?.close()
+  } catch {
+    // (the body errored by the ask's abort: what comes after is the network's to drop)
+  }
+}
+/** timers on a page whose thread is held: `hold` moves the time on and runs nothing (a long task: what falls due waits for
+ *  it), `run` runs what is due now, in the order it fell due (the timers' task, after the tasks queued before it) */
+function heldTimers() {
+  let now = 0,
+    next = 1
+  const due = new Map<number, { at: number; f: () => void }>()
+  return {
+    later(f: () => void, ms: number) {
+      const id = next++
+      due.set(id, { at: now + ms, f })
+      return id
+    },
+    clear(id: unknown) {
+      due.delete(id as number)
+    },
+    hold(ms: number) {
+      now += ms
+    },
+    run() {
+      for (const [id, t] of [...due].sort((a, b) => a[1].at - b[1].at))
+        if (t.at <= now && due.has(id)) {
+          due.delete(id)
+          t.f()
+        }
+    },
+  }
+}
 const DOC = paperDoc({
   epoch: 'e',
   rev: 3,
@@ -187,6 +223,90 @@ describe('the client: every ask bounded and asked once more', () => {
     timers.advance(1)
     await expect(p).rejects.toMatchObject({ why: 'network' })
     expect(asks).toBe(1)
+  })
+  it("an answer that came while the page's thread was held past the bound is read, not failed by the reader's own timer (Chromium 153: the answer's task runs first, the bound's after it, the body's last; staging A, 2026-11-17)", async () => {
+    const clock = heldTimers()
+    let answer: ((r: Response) => void) | null = null
+    let body: ReadableStreamDefaultController<Uint8Array> | null = null
+    let asks = 0
+    const p = request(
+      {
+        fetch: (_u, init) => {
+          asks++
+          return new Promise<Response>((resolve) => {
+            answer = resolve
+            init?.signal?.addEventListener('abort', () => body?.error(init.signal?.reason), { once: true })
+          })
+        },
+        timers: clock,
+      },
+      '/x',
+      {},
+      (r) => bodyWithin(r, 1000),
+    )
+    p.catch(() => {})
+    await settle()
+    // the thread held past the bound while the answer and its body came; then the answer's task, the bound's timer due during
+    // the hold, and the body's task, in that order
+    clock.hold(REQUEST_MS + 1000)
+    ;(answer as unknown as (r: Response) => void)(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start: (c) => {
+            body = c
+          },
+        }),
+      ),
+    )
+    await settle()
+    clock.run()
+    await settle()
+    delivered(body, '{"a":1}', true)
+    expect(new TextDecoder().decode(await p)).toBe('{"a":1}')
+    expect(asks).toBe(1)
+  })
+  it('a body read part by part is bounded by its silence: parts within 30 s of each other are read whatever it takes in all; 30 s with none after the last is out of reach', async () => {
+    const timers = manualTimers()
+    let body: ReadableStreamDefaultController<Uint8Array> | null = null
+    const ask = () =>
+      request(
+        {
+          fetch: async (_u, init) =>
+            new Response(
+              new ReadableStream<Uint8Array>({
+                start: (c) => {
+                  body = c
+                  init?.signal?.addEventListener('abort', () => c.error(init.signal?.reason), { once: true })
+                },
+              }),
+            ),
+          timers,
+        },
+        '/x',
+        {},
+        (r) => bodyWithin(r, 1000),
+      )
+    const part = (s: string) => delivered(body, s)
+    const p = ask()
+    p.catch(() => {})
+    await settle()
+    for (const s of ['{"a"', ':', '1', '}']) {
+      timers.advance(REQUEST_MS - 1)
+      part(s)
+      await settle()
+    }
+    delivered(body, '', true)
+    expect(new TextDecoder().decode(await p)).toBe('{"a":1}')
+    const q = ask()
+    q.catch(() => {})
+    await settle()
+    timers.advance(REQUEST_MS - 1)
+    part('{"a"')
+    await settle()
+    timers.advance(REQUEST_MS - 1)
+    await settle()
+    timers.advance(1)
+    await expect(q).rejects.toMatchObject({ why: 'network' })
   })
   it("the caller's abort is the caller's, never asked again", async () => {
     const timers = manualTimers()

@@ -4,6 +4,7 @@
 import { gapsOf, hangOf, inWord, latinishOf, lineExtent, squeezable, tabOf } from './break.ts'
 import { inFlow, slotsAt } from './slots.ts'
 import { toLastLines } from '../fit/last-lines.ts'
+import { toStand } from '../fit/stand.ts'
 import type { FitBlock, FitParams, FitState, LaidLine, Layout } from '../fit/types.ts'
 import type { Broken } from './break.ts'
 import type { Token } from './tokens.ts'
@@ -137,6 +138,9 @@ function laidOut(
   P._compress = st.compress
   if (P.lastLines && !clipped)
     toLastLines(r.lines, blocks, P.halfLead?.below, f, () => slotsAt(blocks, { ...st, lead: 1, box: undefined }, P, s))
+  // (a cell of an m or a b column stood in its row where TeX stands it, X.stand: every layout the fit and the page fill make
+  // passes here before it is settled into its bands, §18.92)
+  if (P.stand && !clipped) toStand(r.lines, blocks, P.stand)
   placeItems(r.lines, f, P, st.scale)
   boxLines(r.lines, blocks, f, P)
   const count = (t: Token) => (t.s ? [...t.s].length : t.crop ? 1 : 0)

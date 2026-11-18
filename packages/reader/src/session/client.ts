@@ -3,8 +3,13 @@
 // bytes), over the host's fetch alone: one implementation for both hosts (interfaces/host DECISION: `follow`, `object` and the
 // server's rows are the reader's over `fetch`).
 //
-// Every ask is today's (R session/server.ts `fetched`, `bodyWithin`): bounded at REQUEST_MS, its answer and its body together (a
-// connection taken and never answered, or a body that stops, would otherwise hold the reader for good); a network that fails, a
+// Every ask is bounded by the network's silence (docs/PDF-READER.md §8.1, the coordinator's R6 of 2026-11-18): REQUEST_MS with
+// nothing from the network, counted from the ask, then from its answer and from each part of its body as it is read (a
+// connection taken and never answered, or a body that stops, would otherwise hold the reader for good). Never one deadline over
+// the answer and its body: after a stall of the page's own thread across it, Chromium runs the answer's task first, the
+// deadline's timer next and the body's last, so an answer whose every byte had come was failed by the reader's own clock, one
+// request answered 200 in the page's list (staging, 2026-11-17, 2608.28692v1's rows; Chromium 153 on the loopback, the bound at
+// 2 s and the thread held 4 s from the ask: 16 reads of 30 failed so, none of 20 under this bound). A network that fails, a
 // 5xx or nothing in time asked once more after RETRY_MS, and a second failure is told by its cause: the network itself (the
 // fetch rejected, nothing in time, a body that broke: `Refused('network')`) or our server at fault (a 5xx: `Refused('server')`);
 // the caller's abort is the caller's, never asked again. An object is read within its bound and held to its digest before
@@ -14,8 +19,9 @@ import { BOUNDS, OpenAnswer, PaperDoc } from '@readarxiv/format'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
 import { type Doc, FORMATS, type PaperRef, type Ref, WAIT_MAX_MS } from './machine.ts'
 
-/** how long one ask may take, its answer and its body together; how long a stream may be silent (the server beats every 15 s)
- *  (R server.ts REQUEST_MS: thirty seconds bring the largest object at 64 kbit/s) */
+/** how long an ask may hear nothing of the network: from the ask to its answer, and between the parts of its body as they are
+ *  read; how long a stream may be silent (the server beats every 15 s) (R server.ts REQUEST_MS: thirty seconds bring the largest
+ *  object at 64 kbit/s) */
 export const REQUEST_MS = 30_000
 /** how long after a network failure, a 5xx or nothing in time an ask is made once more (R server.ts RETRY_MS); the least a
  *  follow waits before it asks again after a stream that ended */
@@ -72,11 +78,24 @@ const sleep = (ms: number, a: Ask) =>
     a.signal?.addEventListener('abort', stop, { once: true })
   })
 
+/** `r` with each part of its body told as it is read (`heard`); one with no body as it is */
+function partsHeard(r: Response, heard: () => void): Response {
+  if (!r.body) return r
+  const told = new TransformStream<Uint8Array, Uint8Array>({
+    transform(part, out) {
+      heard()
+      out.enqueue(part)
+    },
+  })
+  return new Response(r.body.pipeThrough(told), { status: r.status, statusText: r.statusText, headers: r.headers })
+}
+
 /**
- * `url` asked and its answer read by `read`, the two within REQUEST_MS; the network, a 5xx or nothing in time asked once more
- * after RETRY_MS, a second failure `Refused('network')`; an answer under 500 the caller names (`askAgain`: the wait it gives)
- * asked once more after that wait, the one more ask's answer read as it is. A body that breaks or stops is the server out of
- * reach at once (today's rule: the answer came, so asking again is no better). An abort of the caller's is thrown as it is
+ * `url` asked and its answer read by `read`, neither silent for REQUEST_MS (the bound counted again when the answer comes and
+ * at each part of its body read); the network, a 5xx or nothing in time asked once more after RETRY_MS, a second failure
+ * `Refused('network')`; an answer under 500 the caller names (`askAgain`: the wait it gives) asked once more after that wait,
+ * the one more ask's answer read as it is. A body that breaks or stops is the server out of reach at once (today's rule: the
+ * answer came, so asking again is no better). An abort of the caller's is thrown as it is
  */
 export async function request<T>(
   a: Ask,
@@ -92,8 +111,17 @@ export async function request<T>(
     const stop = () => ac.abort(a.signal?.reason)
     if (a.signal?.aborted) throw a.signal.reason
     a.signal?.addEventListener('abort', stop, { once: true })
-    const timer = timers.later(() => ac.abort(new Error(`nothing within ${REQUEST_MS / 1000} s`)), REQUEST_MS)
+    // (the bound: REQUEST_MS of the network's silence, counted again whenever it is heard; nothing once the ask is over)
+    let timer: unknown = null,
+      over = false
+    const heard = () => {
+      if (over) return
+      timers.clear(timer)
+      timer = timers.later(() => ac.abort(new Error(`nothing within ${REQUEST_MS / 1000} s`)), REQUEST_MS)
+    }
+    heard()
     const done = () => {
+      over = true
       timers.clear(timer)
       a.signal?.removeEventListener('abort', stop)
     }
@@ -107,6 +135,8 @@ export async function request<T>(
       await sleep(RETRY_MS, a)
       continue
     }
+    // (the answer heard: its task runs before a bound that fell due while the page's thread was held, which is let go here)
+    heard()
     if (r.status >= 500) {
       done()
       void r.body?.cancel().catch(() => {})
@@ -122,7 +152,7 @@ export async function request<T>(
       continue
     }
     try {
-      return await read(r)
+      return await read(partsHeard(r, heard))
     } catch (e) {
       if (a.signal?.aborted) throw e
       if (e instanceof Refused) throw e

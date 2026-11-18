@@ -388,7 +388,9 @@ const newer = (held: Doc | null, d: Doc) => fold(held, d) === d && d !== held
 const sameRefs = (a: readonly Ref[], b: readonly Ref[]) =>
   a.length === b.length && a.every((x, i) => x.sha256 === b[i]?.sha256)
 
-const backoff = (tries: number) => Math.min(BACKOFF_MAX_MS, BACKOFF_MS * 2 ** Math.max(0, tries - 1))
+/** the session's pace for asking again by itself after a failure, its `tries`-th wait: a second, doubled to BACKOFF_MAX_MS (the
+ *  look the network stopped; our server's rows an object of which could not be read, reader.ts) */
+export const backoff = (tries: number) => Math.min(BACKOFF_MAX_MS, BACKOFF_MS * 2 ** Math.max(0, tries - 1))
 /**
  * A failed prepare's `why`, as our server's document names it, to the layer's refusal, each named: the paper's own (lasting:
  * no bilingual version, the HTML one offered where there is one), our server's admission (the queue, the visitor's limit), and
@@ -446,8 +448,10 @@ function layerOfDoc(s: State, d: Doc): LayerRegion {
 /** the rows as a document read for their target states them. Rows that ended are taken again (those held kept, the missing
  *  alone asked: reader.ts rows) for a run our server started again (a retry, a prepare's new units), whether it is heard running
  *  or only ended (frames coalesce, a follow asked again lands after the end): the target's run running, or another attempt or
- *  rows than the document before named (`was`). Rows made here are the host's, of the layer's units: those that ended are taken
- *  again where the layer is now of other units than the one before (`before`: a stale layer's replacement) */
+ *  rows than the document before named (`was`); so are rows that wait out a time to ask an object of our server's again (an
+ *  object they could not read, reader.ts: `unavailable` with its time), at once, the wait not waited out. Rows made here are
+ *  the host's, of the layer's units: those that ended are taken again where the layer is now of other units than the one before
+ *  (`before`: a stale layer's replacement) */
 function rowsOfDoc(s: State, d: Doc, was: Doc['targets'][string] | undefined, before: LayerRegion): RowsRegion {
   const r = s.rows
   if (s.here) {
@@ -457,7 +461,9 @@ function rowsOfDoc(s: State, d: Doc, was: Doc['targets'][string] | undefined, be
   if (s.docFor !== r.target) return r
   const t = d.targets[r.target]
   if (!t) return r
-  const ended = r.s === 'complete' || (r.s === 'failed' && r.why.kind === 'server')
+  const ended =
+    r.s === 'complete' ||
+    (r.s === 'failed' && (r.why.kind === 'server' || (r.why.kind === 'unavailable' && r.retryAt !== null)))
   const again =
     t.state === 'running' ||
     !was ||

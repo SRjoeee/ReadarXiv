@@ -115,6 +115,9 @@ export type FitParams = {
    *  words of the target's text first, the tokens' `midWord` and `wordEnds` (breaker/words.ts), a word no line holds failing
    *  the state; where no state of the size sets it so, those states as before (FitState.split, fit/walk.ts triesOf) */
   words?: boolean
+  /** a table cell of an m or a b column (lay/adapt.ts, Placed.stand, docs/PDF-READER.md §18.92): where TeX stands its lines in its
+   *  row, which its laid lines are stood by once laid (B.place laidOut, X.stand toStand) */
+  stand?: 'm' | 'b'
   [more: string]: unknown
 }
 /** a laid item: its token, width, place and what the placing set on it */
