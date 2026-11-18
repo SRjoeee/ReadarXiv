@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { deflateSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
-import type { Part, Piece, Placed, Unit } from '@readarxiv/format'
+import { LINE_FLAG, type Part, type Piece, type Placed, type Unit } from '@readarxiv/format'
 import { google, microsoft, unitInOf } from '@readarxiv/translate'
 import { scriptedFetch } from '@readarxiv/translate/testing'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
@@ -134,7 +134,7 @@ async function prepared(tex: string): Promise<Made> {
     note: () => {},
     now: () => performance.now(),
   })
-  if (!end.ok) throw new Error(`the prepare refused the paper: ${JSON.stringify(end).slice(0, 300)}`)
+  if (!('ok' in end) || !end.ok) throw new Error(`the prepare refused the paper: ${JSON.stringify(end).slice(0, 300)}`)
   return made
 }
 
@@ -151,9 +151,9 @@ const membersOf = (m: Made, id: string): Placed[] => {
   const seen = new Set<number>()
   return m.parts.flatMap((p) => p.flows.flat().filter((x) => x.text === id && !seen.has(x.ord) && !!seen.add(x.ord)))
 }
-/** a unit's KEPT lines (Line[9]), each [page, x0, x1, baseline] */
+/** a unit's KEPT lines (Line[9]'s LINE_FLAG.KEPT bit), each [page, x0, x1, baseline] */
 const keptOf = (m: Made, id: string) =>
-  membersOf(m, id).flatMap((x) => x.lines.filter((l) => l[9] === 1).map((l) => [l[0], l[2], l[3], l[4]]))
+  membersOf(m, id).flatMap((x) => x.lines.filter((l) => (l[9] & LINE_FLAG.KEPT) !== 0).map((l) => [l[0], l[2], l[3], l[4]]))
 /** an element's kind as the part states it, by its unit and its piece id */
 const elKindOf = (m: Made, id: string, piece: string) =>
   membersOf(m, id)
