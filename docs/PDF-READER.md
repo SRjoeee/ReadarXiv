@@ -8015,7 +8015,11 @@ acceptable; nothing within the normal range is touched; a size step is the last 
   each run apart, `shared/fill-pass.ts`), and the joined layout's own state and scale are its first run's alone; so each run its
   lines carry (`LaidLine.seg`) is read once, in order, with that run's own fill leading, parameters, tokens and blocks
   (`FillLaid.runs`), a member of one run as before, and a failing member's entry names each run that fails the line
-  (`run 2 of 3`), as the record (`AXT_GATE_SPACING`) names the run of each line it writes.
+  (`run 2 of 3`), as the record (`AXT_GATE_SPACING`) names the run of each line it writes. Read so over the 92 pairs and the
+  two added (2026-11-17, the lays byte for byte as before): 1,989 members of two runs or more on each store under the recorded
+  rule set (paragraphs and theorems; no caption, no note), 76 (door) and 73 (Google) under the package's; every line 0 as when
+  each member was read by its first run; beside, the size steps a tie states 4 runs more on the door's rows and 6 on Google's
+  (2608.16117v1-de ords 57 and 115, 2610.21084v1-zh ord 326, 2610.22197v1-zh ord 74), and the member the fill lays not the same.
 - **The display gate's ruling FM** (`lab/typeset/parity/rulings.mjs`, his verdict on the captions laid by the rule and his
   general words above, the coordinator's ruling of 2026-11-17): a caption the rule sets in fewer lines than today's reader, which
   letter-spaced it onto more, at its script's pitch from its first line with the slack under it, is the rule's own look and no
@@ -8162,7 +8166,13 @@ rows: none (both translators answer composed; below). It is fixed because the cu
   rising to 134): the base's walk 25,793 ms (door) and 34,212 (Google); the segmenter on every chunk 27,932 (+8.3 %) and 40,327
   (+17.9 %), a pair's median +22.5 %; the class's test first, the segmenter only where a chunk holds a joiner, 23,713 (-8.1 %) and
   33,385 (-2.4 %), a pair's median -0.5 %. The second form is built. Over the 293,506 calls both forms answered as the base, and
-  no token's text held a code point of the class.
+  no token's text held a code point of the class. Measured again on the built form (2026-11-18, the same run from this head: the
+  base's tokenizer, the head's and the segmenter on every chunk on every call's input, four readings, the stores alternating,
+  the 1-minute load read at each pair, 10 to 184): the head's against the base's +0.3 % and +0.7 % (door), +0.6 % and -3.6 %
+  (Google) in all, each call's ratio's median 1.000 in every reading, the head quicker on 43 to 52 % of the calls: no difference,
+  under the base's own spread between two readings of a store (its total 57 % and 18 %, a call's median 10 % and 5 %); the
+  segmenter on every chunk +28.4 %, +22.6 %, +25.6 %, +23.0 %, each call's ratio's median 1.33 to 1.37, quicker on 5 to 6 % of
+  the calls in every reading.
 - The versions: none moves. A page is laid when it is read; the units (PIPELINE), what a translator is sent (TRANSLATE), the
   chain's digests and today's layout file (LAYOUT) are untouched.
 
