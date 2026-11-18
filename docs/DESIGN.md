@@ -1062,7 +1062,9 @@ only how it meets the rest of the extension.
   (`lab/pdf/prepare-back/run.mjs`), so that the lab makes a paper through the product's door. It takes the inputs once
   (`take`: the source's files, arXiv's PDF and, where a compile of the same original made them, the instrument's five
   stored objects), reads what arXiv's PDF says (`originalFactsOf`: its page count, its day, its
-  banner's TeX Live year), decides the tree (`treeOf`: the paper's declaration, else the banner's year, else the default)
+  banner's TeX Live year), refuses a paper whose PDF is past the page bound there (`PAGES_MAX`, 10,000 pages: `too-large`,
+  the reason every host already words for a paper too large, before its tree and before anything is compiled; a budget,
+  the value the engine's first layout reader held a document to, which nothing measured), decides the tree (`treeOf`: the paper's declaration, else the banner's year, else the default)
   and answers a paper of another tree before anything is compiled, runs the front half (`prepareFront`: the
   bibliography, the source's units handed out before any compile of the marks, the marked compile and its final pass,
   the instrument; or the instrument made again from the stored objects with no TeX, where the original's facts are the

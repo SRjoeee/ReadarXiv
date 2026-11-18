@@ -1,5 +1,5 @@
-// The prepare's one entry (src/prepare.ts `prepare`) and its front half (src/front.ts): what arXiv's PDF says read once; the
-// tree decided once, before anything is compiled; the source's units handed out before any compile of the marks, as the bundle
+// The prepare's one entry (src/prepare.ts `prepare`) and its front half (src/front.ts): what arXiv's PDF says read once; a paper
+// past the page bound refused as its page count is read; the tree decided once, before anything is compiled; the source's units handed out before any compile of the marks, as the bundle
 // states them; a stored instrument taken only for the original it was made with, its plan handing instrumentOf every option the
 // marked compile gave and the .bbl it was opened with; the frames: what the front half is handed and makes beside the
 // instrument is let go before the back half begins; and the back half given the front half's own classesOf. The marked compile
@@ -473,6 +473,39 @@ describe('the prepare: the tree before any compile, refusals as reasons, and the
     )
     expect(corrupt).toMatchObject({ ok: false, why: 'corrupt' })
   })
+  test('a paper whose original is past the page bound is refused `too-large` as soon as its page count is read: no tree, no compile; one at the bound goes on', async () => {
+    // (the bound a reader is promised: a paper of up to 10,000 pages is prepared, one past it is too large)
+    const PAGES_MAX = 10_000
+    /** a prepare of a paper whose original has `pages` pages: what it ends with, and what the host was told meanwhile */
+    const run = async (pages: number, front: FrontHalf) => {
+      const told: string[] = []
+      const original = await pdfOf(pages, null)
+      const end = await prepare(
+        () => ({ files: files({ 'main.tex': PAPER }), original, stored: null }),
+        host({
+          note: (n) => told.push(`note ${n}`),
+          stage: (s) => told.push(`stage ${s}`),
+          handFiles: async () => {
+            told.push('files handed')
+          },
+        }),
+        front,
+      )
+      return { end, told }
+    }
+    // (past it: the paper's own reason, the size's, which every host already words; nothing decided, handed or compiled)
+    const past = await run(PAGES_MAX + 1, never)
+    expect(past.end).toEqual({
+      ok: false,
+      why: 'too-large',
+      detail: `arXiv's PDF has ${PAGES_MAX + 1} pages, past ${PAGES_MAX}`,
+    })
+    expect(past.told).toEqual([])
+    // (at it: the tree decided and the front half run, which ends here as its own refusal)
+    const at = await run(PAGES_MAX, async () => ({ ok: false, why: 'cannot-typeset', detail: 'the front half ran' }))
+    expect(at.end).toEqual({ ok: false, why: 'cannot-typeset', detail: 'the front half ran' })
+    expect(at.told).toEqual(['note tree'])
+  }, 120_000)
   /** which of the files the front half was handed and the objects it made beside the instrument are still reached as the
    *  back half begins, after a full collection; `keep` holds the named ones on purpose (the control) */
   async function reachedAtBack(keep: ReadonlySet<'files' | 'made'> = new Set()): Promise<string[]> {

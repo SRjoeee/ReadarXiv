@@ -157,8 +157,9 @@ compiles. What the host owns enters as `host`: the compile, PDF.js and its optio
 it serves, where each object goes.
 
 1. A's facts (`originalFactsOf`: its page count, its day, the TeX Live year its banner names) and the tree (`treeOf`: the
-   paper's declaration, else the banner's year, else the default). A paper of another tree is answered with that tree before
-   anything is compiled.
+   paper's declaration, else the banner's year, else the default). A paper whose A is past the page bound (`PAGES_MAX` in
+   `packages/engine/src/prepare.ts`, 10,000 pages) is refused `too-large` as soon as its page count is read, before its tree;
+   a paper of another tree is answered with that tree before anything is compiled.
 2. The front half, `prepareFront` (`packages/engine/src/front.ts`), in a frame of its own so that the source's files are let go
    before the back half begins. Its stored half, `compiledOf` (`packages/engine/src/compiled.ts`), opens the paper with the
    source reader (`packages/engine/src/source/latex-front.ts`), makes the bibliography where TeX must, hands the source's units
@@ -244,7 +245,7 @@ a gate is named by its id there. The rows after them are this repository's own.
 | A unit's id is its kind and its pieces' source, nothing else | `packages/format/tests/format.test.ts` | |
 | One writer of A's ownership; the members' lists agree with it | `packages/engine/tests/helpers/locate.ts` (every locate test fails on a disagreement not carried) | over the corpus the lab's runner writes the findings (`ownership/<id>.json`) and its exit does not take them |
 | A unit is located only where every glyph it owns on B has a partner on A | `packages/engine/tests/locate.test.ts` | |
-| The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
+| The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none; a paper whose A is past the page bound is refused `too-large` before its tree and any compile | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
 | What a host takes ahead of the reader or around it is the packages' own, through entries that reach no package or no pack: the original's first ask and the look (`@readarxiv/reader/early`), the interface's languages and the built-in bands (`@readarxiv/ui/languages`, `@readarxiv/ui/bands`) | `packages/reader/tests/early.test.ts`, `packages/ui/tests/host-entries.test.ts` | |
 | Each behaviour digest is the hash of its case table's outcomes | `packages/translate/tests/digests.test.ts`, `packages/translate/tests/chain-digest.test.ts`, `tests/providers/prompt.test.ts`; `pnpm digests` | |
 | A translator is sent no field of identity (`src`, `keys`, `open`, `close`, `depth`, `of`) | `packages/translate/tests/bundle.test.ts` | |
