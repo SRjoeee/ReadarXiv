@@ -176,8 +176,8 @@ export interface ReaderState {
    *  (machine.ts linkSaid, PDF-READER §8.1). A view that waits for nothing is told nothing */
   network: boolean
   /** `lost`: a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice), its
-   *  passages drawn in their fallback until the page is loaded again (a host may say so: the website's faces-lost); null
-   *  while none is */
+   *  passages drawn in their fallback until the page is loaded again (the chrome says so once, for every host: UI.md S-R-28,
+   *  chrome/events.ts); null while none is */
   faces: 'lost' | null
   crashed: boolean
 }

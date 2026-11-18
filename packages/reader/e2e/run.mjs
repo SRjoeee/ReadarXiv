@@ -3941,23 +3941,37 @@ await check(
   },
 )
 await check(
-  "reader: a face that cannot be had is the reader's state, the pages laid in its fallback (L11 second round, gap 6)",
+  "reader: a face that cannot be had is the reader's state, the pages laid in its fallback (L11 second round, gap 6), and the chrome's capsule says so in the catalogue's sentence (UI.md S-R-28)",
   async () => {
     const { page, context, errors } = await chromeLaid('s1-columns', { faces: 'missing' })
     await waitFor(page, () => window.__c.reader.state().faces === 'lost', null, 10_000)
+    // (the chrome's toast, its words told whole to a screen reader: the catalogue's sentence in the page's language, English)
+    await waitFor(page, () => !!document.querySelector('.capsule[data-kind="toast"]'), null, 5_000)
     const st = await page.evaluate(() => ({
       faces: window.__c.reader.state().faces,
       laid: window.__c.reader.probe().laidPages,
+      said: document.querySelector('.capsule[data-kind="toast"] .sr-only')?.textContent ?? null,
     }))
     const fine = await chromeLaid('s1-columns', {})
-    const other = await fine.page.evaluate(() => window.__c.reader.state().faces)
+    await fine.page.waitForTimeout(600)
+    const other = await fine.page.evaluate(() => ({
+      faces: window.__c.reader.state().faces,
+      toast: !!document.querySelector('.capsule[data-kind="toast"]'),
+    }))
     await context.close()
     await fine.context.close()
     assert(
       !errors.filter((e) => !/status of 404/.test(e)).length && !fine.errors.length,
       [...errors, ...fine.errors].join('; '),
     )
-    assert(st.faces === 'lost' && st.laid > 0 && other === null, `faces ${JSON.stringify({ st, other })}`)
+    assert(
+      st.faces === 'lost' &&
+        st.laid > 0 &&
+        st.said === "Some fonts didn't load. Reload to try again." &&
+        other.faces === null &&
+        !other.toast,
+      `faces ${JSON.stringify({ st, other })}`,
+    )
     return { ...st, other }
   },
 )

@@ -2,7 +2,7 @@
 // the chrome subscribes to, and the chrome's commands passed on to the session. pdfslick's per-viewer store, adopted: the
 // session's events drive the store, and nothing reads the viewers back. Either session feeds it: the extension's run of a
 // paper on its layer (its own events) or the reader's (openReader's state, told as these events); the chrome is the same.
-import type { ProviderErrorKind } from '@readarxiv/ui'
+import { type ProviderErrorKind, R } from '@readarxiv/ui'
 import type { Prefs, PrefsPatch } from '../prefs.ts'
 import { GOES_ON as GOES_ON_STOPS, LASTING as PAPERS } from '../session/machine.ts'
 import { LAYER_WHY } from './events.ts'
@@ -60,6 +60,9 @@ export interface Toast {
 }
 /** how long a toast stands when its host names no time, ms (the website's TOAST_MS); unmeasured */
 export const TOAST_MS = 3000
+/** how long the chrome's toast for a face lost stands, ms (S-R-28): the time the website gave it when it told it itself, kept
+ *  so that nothing a website reader sees changes; unmeasured */
+export const FACES_LOST_MS = 8000
 export type SessionEvent =
   /** a write of the settings by this page that went through: a refusal before it is mended */
   | { type: 'saved' }
@@ -127,6 +130,9 @@ export type SessionEvent =
   /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again); `network`: the
    *  network failed while the run is waited for (none where a session does not say: the extension's today session) */
   | { type: 'link'; reconnecting: boolean; network?: boolean }
+  /** a face the translation is set in could not be had this visit (the reader's `faces`), its passages drawn in their fallback
+   *  until the page is loaded again: the chrome's own toast says so (S-R-28), in the catalogue's one sentence, for every host */
+  | { type: 'faces' }
 /** what a session is given: the panes it draws into, and where it tells its events */
 export interface SessionHost {
   left: HTMLElement
@@ -644,6 +650,8 @@ export function createController({
   const listeners = new Set<() => void>()
   let session: Promise<Session> | null = null
   const emit = (event: SessionEvent) => {
+    // (a face lost: the chrome's own words in the toast's place, as a host's are shown, nothing of the state's; S-R-28)
+    if (event.type === 'faces') return toast({ words: R.status.facesLost, icon: 'info', ms: FACES_LOST_MS })
     const next = reduce(state, event)
     if (next === state) return
     state = next
@@ -676,6 +684,12 @@ export function createController({
     const icon = top.t.icon ?? 'info'
     if (state.toast?.words !== top.t.words || state.toast.icon !== icon) set({ toast: { words: top.t.words, icon } })
     toastTimer = setTimeout(showToast, top.until - now)
+  }
+  const toast = (t: Toast) => {
+    if (!t.words) return
+    toasts = toasts.filter((x) => x.t.words !== t.words)
+    toasts.push({ t, until: Date.now() + (t.ms ?? TOAST_MS) })
+    showToast()
   }
   return {
     getState: () => state,
@@ -728,12 +742,7 @@ export function createController({
       set({ narrow: on })
       later((s) => s.setNarrow(on))
     },
-    toast(t) {
-      if (!t.words) return
-      toasts = toasts.filter((x) => x.t.words !== t.words)
-      toasts.push({ t, until: Date.now() + (t.ms ?? TOAST_MS) })
-      showToast()
-    },
+    toast,
     async download(which) {
       const s = await session
       // the original: arXiv's, the browser's own download, nothing of it read here

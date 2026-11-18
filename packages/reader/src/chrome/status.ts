@@ -30,7 +30,8 @@ export type Capsule =
   /** a write of the settings that storage refused (S-R-22): the settings page's one sentence for a failed save, until it
    *  is closed, or a later write lands; closable */
   | { kind: 'saveFailed'; words: CapsuleWords }
-  /** a host's passing words (ReaderController.toast: the website's "copied"), in its words and sign, for their time */
+  /** a host's passing words (ReaderController.toast: the website's "copied"), in its words and sign, for their time; the chrome's
+   *  own for a face lost likewise (S-R-28, model.ts `faces`) */
   | { kind: 'toast'; words: CapsuleWords; icon: 'check' | 'info' }
   /** a run under way, in the host's words where it gives them (the website's): with the spinner, its count a part of its own;
    *  none where the host words none (the progress line alone shows it, the maintainer's of 2026-09-25). `show`: the chip that

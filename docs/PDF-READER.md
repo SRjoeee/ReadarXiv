@@ -676,6 +676,7 @@ No state that tells the reader nothing is shown (no "done").
 | No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
+| A font lost | a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice: the reader's `faces`), its passages drawn in their fallback until the page is loaded again | the chrome's own toast, once a visit, for 8 s, with the information sign and no action: 部分字体加载失败，请刷新页面重试 (UI.md S-R-28, the owner's words, 2026-11-19), on both hosts in the catalogue's one sentence; the website no longer words it |
 
 - **The website's words** (its reader's own table, given to the chrome as `StateWords` by its
   v2 page; zh-TW, ja and ko in the same table). The extension gives none and keeps the catalogue's above. A run's

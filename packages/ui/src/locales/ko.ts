@@ -369,6 +369,7 @@ const R: Locale['R'] = {
     goToArxiv: 'arXiv로 이동',
     unreadable: '설정을 읽을 수 없어 기본 설정 사용 중',
     unreadableHint: '설정을 읽을 수 없음',
+    facesLost: '일부 글꼴을 불러오지 못했습니다. 페이지를 새로고침한 후 다시 시도하세요.',
   },
 }
 

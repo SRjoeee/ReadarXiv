@@ -145,6 +145,8 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
     })
   if (!!p?.reconnecting !== !!next.reconnecting || !!p?.network !== !!next.network)
     out.push({ type: 'link', reconnecting: !!next.reconnecting, network: !!next.network })
+  // a face lost, told once: the reader keeps it lost for the visit (reader.ts `faces`), and the chrome says so (S-R-28)
+  if (next.faces === 'lost' && p?.faces !== 'lost') out.push({ type: 'faces' })
   // the translation under way is what the view shown waits for (reader.ts `waits`, session/rows.ts viewOf), counted over the layer
   // it shows: rows read of a run done, a run that restates rows held, one on units of a layer not shown, are told by their end
   // alone. The view's wait over while the rows still come (every unit shown holds its translation) is its end
