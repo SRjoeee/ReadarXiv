@@ -5,121 +5,12 @@
 // Unchanged in behaviour: the changes are the module paths, CJK characters written as \u escapes (the English gate),
 // imports nothing uses left out, and what is named below. The prototype's own description follows.
 //
-// Iteration 1's helpers the layer v0 still calls: the median, the units' blocks, the placeholders' classes and plain text,
-// the words and their alignment, the CJK line-break marks. Iteration 1's own measuring, fit and paint (pageChars,
+// Iteration 1's helpers the layer v0 still called: the median, the units' blocks, the placeholders' classes and plain text,
+// the words and their alignment, the CJK line-break marks; of them the placeholders' alone are read since the cut-over
+// (instrument.ts). Iteration 1's own measuring, fit and paint (pageChars,
 // resolvePlaceholders, tokensOf, layoutUnit, paintPart) are left out: v0 is iteration 2 and 3 (layer2.mjs), which
 // replaced them.
 import { textArgsOf, textless } from '../source/arg-roles.ts'
-
-// ---- the units' blocks
-
-/** a line rectangle on the original: [page, x0, y0 (its foot), x1, y1 (its top)], PDF units, y up */
-export type Rect = [page: number, x0: number, y0: number, x1: number, y1: number]
-/** a page's view box, [x0, y0, x1, y1] */
-type View = readonly [x0: number, y0: number, x1: number, y1: number]
-/** a run of a unit's line rectangles on one page and column, each below the last: its extent, its lines' median height and
- *  pitch, its first line's indent, and whether its lines are centred */
-export interface Block {
-  page: number
-  rects: Rect[]
-  x0: number
-  x1: number
-  top: number
-  bottom: number
-  h: number
-  pitch: number
-  indent: number
-  centred: boolean
-}
-/** a block while blocksOf measures it: its page and lines, then the rest the loop over the blocks sets */
-type Draft = Pick<Block, 'page' | 'rects'> & Partial<Omit<Block, 'page' | 'rects'>>
-/** a word of a run of characters: its letters and digits, the characters it spans, whether a hyphen at a line's end joins it */
-export interface Word {
-  w: string
-  start: number
-  end: number
-  hyphen?: boolean
-}
-/** a character of a run, or a line's end between two (`sep`) */
-type Char = { ch: string; sep?: boolean }
-/** the line-break marks of a rule set: whether a token begins with a character no line starts with, or ends with one no line
- *  ends with */
-type Kinsoku = { starts(s: string): boolean; ends(s: string): boolean }
-
-export const median = (xs: readonly number[]): number => {
-  const s = [...xs].sort((a, b) => a - b)
-  return s.length ? s[Math.floor(s.length / 2)]! : 0
-}
-/** a unit's line rectangles as blocks: one per run of lines on one page, in one column, each below the last */
-export function blocksOf(
-  rects: readonly Rect[],
-  pageViews: readonly View[],
-  keep: ReadonlySet<string> | null = null,
-): Block[] {
-  const blocks: Draft[] = []
-  let cur: Draft | null = null
-  for (const [page, x0, y0, x1, y1] of rects) {
-    const prev = cur?.rects.at(-1)
-    const pitchSoFar =
-      cur && cur.rects.length > 1 ? cur.rects.at(-2)![4] - prev![4] : prev ? (prev[4] - prev[2]) * 1.4 : 0
-    const follows =
-      cur &&
-      cur.page === page &&
-      x0 < prev![3] &&
-      x1 > prev![1] &&
-      y1 < prev![4] &&
-      prev![2] - y1 < Math.max(pitchSoFar, (prev![4] - prev![2]) * 1.4) * 0.9
-    if (!follows) {
-      cur = { page, rects: [] }
-      blocks.push(cur)
-    }
-    cur!.rects.push([page, x0, y0, x1, y1])
-  }
-  for (const b of blocks) {
-    const rs = b.rects
-    b.x0 = Math.min(...rs.map((r) => r[1]))
-    b.x1 = Math.max(...rs.map((r) => r[3]))
-    b.top = Math.max(...rs.map((r) => r[4]))
-    b.bottom = Math.min(...rs.map((r) => r[2]))
-    b.h = median(rs.map((r) => r[4] - r[2]))
-    b.pitch = rs.length > 1 ? median(rs.slice(1).map((r, i) => rs[i]![4] - r[4])) : b.h * 1.38
-    // a first line that starts far in is a line whose start the anchors did not take (a URL, a formula): the whole line
-    b.indent = Math.max(0, rs[0]![1] - b.x0)
-    if (b.indent > 0.25 * (b.x1 - b.x0)) {
-      b.indent = 0
-      rs[0] = [rs[0]![0], b.x0, rs[0]![2], rs[0]![3], rs[0]![4]]
-    }
-    const centres = rs.map((r) => (r[1] + r[3]) / 2)
-    const view = pageViews[b.page - 1]
-    const pageCentre = view ? (view[0] + view[2]) / 2 : 306
-    const widthsVary = Math.max(...rs.map((r) => r[3] - r[1])) - Math.min(...rs.map((r) => r[3] - r[1])) > 6
-    b.centred =
-      rs.length > 1
-        ? Math.max(...centres) - Math.min(...centres) < 3 && widthsVary
-        : Math.abs(centres[0]! - pageCentre) < 3 && b.x1 - b.x0 < 0.8 * (view ? view[2] - view[0] : 612)
-  }
-  if (!keep?.size) return blocks as Block[]
-  // lines kept as the original's (a formula set apart): each block split around them, its column's width kept
-  return blocks.flatMap((b) => {
-    const runs: Draft[] = []
-    let run: Draft | null = null
-    b.rects.forEach((r, i) => {
-      if (keep.has(`${r[0]}|${r.slice(1).join()}`)) run = null
-      else {
-        if (!run) {
-          run = { ...b, rects: [], indent: i === 0 ? b.indent : 0 }
-          runs.push(run)
-        }
-        run.rects.push(r)
-      }
-    })
-    for (const r of runs) {
-      r.top = Math.max(...r.rects.map((x) => x[4]))
-      r.bottom = Math.min(...r.rects.map((x) => x[2]))
-    }
-    return runs as Block[]
-  })
-}
 
 // ---- placeholders
 
@@ -139,15 +30,15 @@ const ZERO =
 // (a control space is a backslash and any white space, a tab or a line's end as well as a space: rules/tex-kernel.mjs counts
 // all three, and \<newline> read as 'zero' drew nothing where the original has a space: "vs.\<newline>answer")
 const SPACE = /^(?:~|\\,|\\;|\\:|\\\s|\\quad|\\qquad|\\\\(?:\[[^\]]*\])?|\\And|\\and|\\AND|\\enspace|\\thinspace)$/
-export const CITE =
+const CITE =
   /^\\(?:cite|citep|citet|citealp|citealt|citeauthor|citeyear|parencite|textcite|autocite)\*?(?:\[[^\]]*\])*\{/
-export const NUM = /^\\(?:ref|eqref|autoref|cref|Cref|pageref|footnotemark)\*?(?:\[[^\]]*\])?\{?/
+const NUM = /^\\(?:ref|eqref|autoref|cref|Cref|pageref|footnotemark)\*?(?:\[[^\]]*\])?\{?/
 // (step 3: the engine's displayed environments, layout/marks.mjs DISPLAY's: v0 knew six, and read a subequations, an
 // alignat or a flalign display as an inline formula, drawn as its source's or its page's text in the line, too long for
 // any of the unit's lines and clipped: 2307.16209's units 74 and 240)
-export const DISPLAY =
+const DISPLAY =
   /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
-export const MACROS: Readonly<Record<string, string>> = {
+const MACROS: Readonly<Record<string, string>> = {
   '\\ie': 'i.e.',
   '\\eg': 'e.g.',
   '\\etal': 'et al.',
@@ -273,7 +164,7 @@ const SYMBOLS: Readonly<Record<string, string>> = {
   textregistered: '®',
   degree: '°',
 }
-export const SUP: Readonly<Record<string, string>> = {
+const SUP: Readonly<Record<string, string>> = {
   0: '⁰',
   1: '¹',
   2: '²',
@@ -395,104 +286,4 @@ export function phClass(src: string) {
     .replace(/\\[A-Za-z]+/g, '')
     .replace(/[^A-Za-z0-9]/g, '')
   return bare ? 'other' : 'symbol'
-}
-
-export const norm = (ch: string): string =>
-  ch
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-/** the words of a run of characters, letters and digits only, each with the characters it spans; a word broken by a
- *  hyphen at a line's end is one word */
-export function wordsOf(chars: readonly Char[], joined: ReadonlySet<string> | null = null): Word[] {
-  const out: Word[] = []
-  let cur: Word | null = null
-  chars.forEach((c, i) => {
-    const n = c.sep ? '' : norm(c.ch)
-    if (n) {
-      if (!cur) {
-        cur = { w: '', start: i, end: i }
-        out.push(cur)
-      }
-      cur.w += n
-      cur.end = i
-    } else if (
-      cur &&
-      /[-‐]/.test(c.ch) &&
-      chars[i + 1]?.sep &&
-      chars[i + 2] &&
-      norm(chars[i + 2]!.ch) &&
-      joins(chars, i, cur, joined)
-    ) {
-      // "con-" at a line's end, where the source has "converging": the word goes on after the line break
-      cur.hyphen = true
-    } else if (cur?.hyphen && c.sep) {
-      // the line break inside such a word
-    } else cur = null
-  })
-  return out
-}
-/** whether a word hyphenated at a line's end is one word: the source has it whole ("converging"), not as two
- *  ("rewriting-based") */
-function joins(chars: readonly Char[], i: number, cur: Word, joined: ReadonlySet<string> | null) {
-  if (!joined) return true
-  let next = ''
-  for (let q = i + 2; q < chars.length && norm(chars[q]!.ch); q++) next += norm(chars[q]!.ch)
-  return joined.has(cur.w + next)
-}
-/** which of S's words each of O's is in a longest common subsequence of the two: its index in S, or -1 */
-export function lcsPairs(S: readonly string[], O: readonly string[]): Int32Array {
-  const n = S.length,
-    m = O.length,
-    W = m + 1
-  const L = new Uint16Array((n + 1) * W)
-  for (let i = 1; i <= n; i++)
-    for (let j = 1; j <= m; j++)
-      L[i * W + j] =
-        S[i - 1] === O[j - 1] ? L[(i - 1) * W + j - 1]! + 1 : Math.max(L[(i - 1) * W + j]!, L[i * W + j - 1]!)
-  const pair = new Int32Array(m).fill(-1)
-  let i = n,
-    j = m
-  while (i > 0 && j > 0) {
-    if (S[i - 1] === O[j - 1] && L[i * W + j] === L[(i - 1) * W + j - 1]! + 1) {
-      pair[j - 1] = i - 1
-      i--
-      j--
-    } else if (L[i * W + j - 1]! >= L[(i - 1) * W + j]!) j--
-    else i--
-  }
-  return pair
-}
-/** which of O's words a longest common subsequence with S's takes */
-export function lcsMatched(S: readonly string[], O: readonly string[]): Uint8Array {
-  return Uint8Array.from(lcsPairs(S, O), (s) => (s >= 0 ? 1 : 0))
-}
-
-// ---- the line-break marks
-
-const kinsoku = new Map<string, Kinsoku>()
-/** the code point a string ends with, -1 for none */
-const lastOf = (s: string) => {
-  const n = s.length
-  if (n === 0) return -1
-  const c = s.charCodeAt(n - 1),
-    hi = n > 1 ? s.charCodeAt(n - 2) : 0
-  return c >= 0xdc00 && c <= 0xdfff && hi >= 0xd800 && hi <= 0xdbff ? s.codePointAt(n - 2) : c
-}
-/**
- * The line-break marks as a rule set gives them: `noStart` and `noEnd`, the characters no line starts or ends with (the
- * layout rules' own lists, rules/layout.mjs), as { starts(s), ends(s) }: whether a token begins with one, or ends with one.
- * A set of code points, not a pattern, so that nothing a set holds is read as syntax; made once for a pair of lists
- */
-export function kinsokuOf(noStart: string, noEnd: string): Kinsoku {
-  const key = JSON.stringify([noStart, noEnd])
-  let k = kinsoku.get(key)
-  if (!k) {
-    const start = new Set([...noStart].map((ch) => ch.codePointAt(0))),
-      end = new Set([...noEnd].map((ch) => ch.codePointAt(0)))
-    k = { starts: (s: string) => start.has(s.codePointAt(0)), ends: (s: string) => end.has(lastOf(s)) }
-    kinsoku.set(key, k)
-  }
-  return k
 }

@@ -35,7 +35,7 @@ export const MARKER_RE = /@@|@([a-z]+)#/g
  * marker may be the paper's, moved. The marker set is the same either way — the closer takes only `#`, spaces and tabs,
  * none of which begins a marker — so validation (`tokenize`, MARKER_RE) needs no reading of its own.
  */
-export const MARKER_CLOSER = '#(?:[ \\t]*#)*'
+const MARKER_CLOSER = '#(?:[ \\t]*#)*'
 
 export interface MarkerReading {
   /** The source's text holds no `#` of its own (`isHashFree`): a `#` the reply sets right after a marker is the marker's */

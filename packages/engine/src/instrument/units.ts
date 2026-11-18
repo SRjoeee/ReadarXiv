@@ -13,12 +13,12 @@ const TEXT = 0,
 /** an open's fourth value, what its pair sets over what it holds where the front end read it from the command's definition
  *  (latex-front.mjs identityPair, the piece's `sets`): 0, nothing — the command sets its argument alone (revtex's `\bibinfo`).
  *  An open of three values says nothing of it */
-export const SETS_NOTHING = 0
+const SETS_NOTHING = 0
 /** a string as the engine's text holds it: its UTF-8 bytes read latin1 (mt.mjs plainSource decodes it), as a source unit's
  *  text piece is */
 const engineText = (s: string) => (/^[\t\n\r -~]*$/.test(s) ? s : String.fromCharCode(...new TextEncoder().encode(s)))
 /** the display edges a unit may have (mt.mjs displayEdges), in their order */
-export const EDGES = Object.freeze(['lead', 'trail', 'inner'] as const)
+const EDGES = Object.freeze(['lead', 'trail', 'inner'] as const)
 /** a structural name's unit (bundleUnitsOf): no page's ink, a word of the target's for the layer */
 export const NAME_KIND = 'name'
 /** a table cell as a unit states it and the bundle copies it: its table, row and column, its span, whether it is a head */
@@ -137,4 +137,3 @@ export function bundleUnitsOf(
     ...names,
   ]
 }
-export { TEXT, PH, OPEN, CLOSE, NESTED, pieceOf }

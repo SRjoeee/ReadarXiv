@@ -10,7 +10,7 @@ const text = (b: Uint8Array, from: number, to: number): string => {
 const octal = (b: Uint8Array, from: number, to: number): number => parseInt(text(b, from, to).trim() || '0', 8)
 
 /** gzip's inflate (the platform's DecompressionStream) */
-export async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
+async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
   const stream = new Blob([bytes as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream('gzip'))
   return new Uint8Array(await new Response(stream).arrayBuffer())
 }

@@ -17,14 +17,14 @@
 import { isMemoryError } from '../memory.ts'
 
 /** a mark's place in two compiles of one page is the same within this, PDF units (the design's 0.01 pt) */
-export const MARK_TOL = 0.01
+const MARK_TOL = 0.01
 /** a page box's corner in two PDFs is the same within this, PDF units */
-export const BOX_TOL = 0.01
+const BOX_TOL = 0.01
 /** the marks' destinations' prefix (marks.mjs MARK_DEF's \pdfdest names) */
 const PREFIX = 'axt-'
 
 /** what the checks read of a PDF.js document (PDFDocumentProxy's members they call): every one of them is called, its
- *  metadata's too (creationEpochOf, prefixDoc), a document without it then read as having none where a check catches the
+ *  metadata's too (creationEpochOf), a document without it then read as having none where a check catches the
  *  error */
 export interface PdfLike {
   numPages: number
@@ -96,7 +96,7 @@ export async function marksOfPdf(doc: PdfLike) {
 }
 
 /** each page's box as PDF.js reads it, [x0, y0, x1, y1, rotate, userUnit] (its view: the CropBox within the MediaBox) */
-export async function boxesOfPdf(doc: PdfLike) {
+async function boxesOfPdf(doc: PdfLike) {
   const out: PageBox[] = []
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p)
@@ -173,28 +173,6 @@ export async function boxesCheck(
     : { equal: false, pages: [a.length, b.length], why }
 }
 
-/**
- * Our base page's M pages followed by arXiv's pages past them, as one PDF.js document (`numPages` arXiv's N): the composed
- * document a delta over arXiv's PDF makes of a paper of several toplevel sources whose first is compiled alone (the pages past
- * ours are the original's by construction), for the base page's checks and the maker to read as they read a whole base. With
- * `replaced` (a Set of pages), only those of our M are ours and every other is arXiv's: the composed document a delta that
- * replaces those pages makes. Its destinations, page indices and metadata are ours (the marks are our compile's)
- */
-export function prefixDoc(
-  ours: PdfLike,
-  arxiv: PdfLike,
-  m: number,
-  replaced: ReadonlySet<number> | null = null,
-): PdfLike {
-  return {
-    numPages: arxiv.numPages,
-    getPage: (p: number) => (p <= m && (replaced === null || replaced.has(p)) ? ours.getPage(p) : arxiv.getPage(p)),
-    getDestinations: () => ours.getDestinations(),
-    getPageIndex: (ref: unknown) => ours.getPageIndex(ref),
-    getMetadata: () => ours.getMetadata(),
-  }
-}
-
 /** a mark of ours printed as text: a mark macro's name (\axt…, or TeX's \axt@… inside a package's own) */
 const MARK_TEXT = /(?:\\|\u201c)axt@?[a-z]+\s*(?:\{|\u2013)[^{}\u2013\u02dd\s]{1,64}(?:\}|\u02dd)/
 /** the same, each mark's name (its argument) captured */
@@ -249,16 +227,6 @@ export function markTextBeyond(
     ours,
     (page, hit) => !(typeof theirs?.[page - 1] === 'string' && (theirs[page - 1] as string).includes(hit)),
   )
-}
-
-/** a page's text as markTextOf reads it, page p of a PDF.js document; none where it cannot be read */
-export async function pageTextAt(doc: PdfLike, p: number) {
-  try {
-    return pageTextOf(await (await doc.getPage(p)).getTextContent())
-  } catch (e) {
-    if (isMemoryError(e)) throw e
-    return ''
-  }
 }
 
 /**
