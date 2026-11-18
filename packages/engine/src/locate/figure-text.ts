@@ -408,7 +408,7 @@ interface Evidence {
 /** a unit's band's ascent and descent at most, in em: past it no glyph stands at the size the unit is drawn at, so a run a glyph of
  *  which stands further from its baseline is no unit (below). The value is the reader's, which holds a figure row's band to it:
  *  today's src/pdf-reader/engine/layer-proto/figure-rows.mjs:37 BAND_MAX (checkFigures) (its copy in deps.mjs until 2026-11-14) */
-export const BAND_MAX = 4
+const BAND_MAX = 4
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
 /** …and the second at most this many of its sizes past the run's end along it (a word's space is a third; a legend's columns,
@@ -422,7 +422,7 @@ export const SPACE_GAP = 0.15
 export const ANCHOR_REACH = 1.5
 /** …where the ink on one side of it is nearer than the other side's by this ratio at least (a line sample right before a legend's
  *  entry, an axis right after a tick's word; none on a side is as far as can be) */
-export const ANCHOR_RATIO = 2
+const ANCHOR_RATIO = 2
 /** the band a translation is drawn in, descent and ascent in em, at the least: a unit is crowded where other ink meets it */
 export const DRAW_BAND = Object.freeze([-0.15, 0.88] as const)
 /** CHANGED: the band's height, in sizes (figure-lines' BAND_EM) */
@@ -434,22 +434,22 @@ const CROWD_PAD = 0.04
 const SUBSET_TAG = /^[A-Z]{6}\+/
 /** two runs of one figure, one size and one direction share an edge (a column's start, end or middle) where theirs lie on one
  *  line within this share of their size (a legend's entries, an axis's labels set against it) */
-export const ALIGN_TOL = 0.08
+const ALIGN_TOL = 0.08
 /** a level unit's column: the text lines within this many of its sizes above and below its baseline (columnAnchorOf) */
-export const COLUMN_REACH = 3
+const COLUMN_REACH = 3
 /** a unit's room, the free line before and after its box that a longer translation may take: at most this many of its sizes a
  *  side, and this share of its size short of other ink (a translation never touches another's ink) */
-export const ROOM_MAX = 6,
+const ROOM_MAX = 6,
   ROOM_CLEAR = 0.15
 /** a path's segment is told as far as its box shows it, within this many PDF units (its segments are single floats) */
 const SHOWN_SLACK = 0.05
 /** the runs that spell a word a page may read as figures' text, at most, and a paper, shown whole or not (past them the rest are
  *  no figure unit, counted) */
-export const FIGURE_UNITS_PAGE = 400,
+const FIGURE_UNITS_PAGE = 400,
   FIGURE_UNITS_DOC = 4000
 /** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's);
  *  unmeasured */
-export const FIGURE_TEXT_MAX = 400
+const FIGURE_TEXT_MAX = 400
 /** the group of figure unit `k` (wrap.ts ocgName names it `axt:f<k>`) */
 export const figureGroup = (k: number): string => `f${k}`
 

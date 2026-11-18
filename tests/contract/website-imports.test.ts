@@ -22,12 +22,12 @@ import { describe, expect, it } from 'vitest'
  *
  * At the cut-over (package C1) the 32 paths the website's old reader and Worker took (the controller, the old reader's
  * interface under pdf-reader/ui, the locale packs, the controls, the Worker's providers and today's sheet) went with today's
- * engine; the website's own cut-over stops importing them. The seven here are what its kept code may still take.
+ * engine; the website's own cut-over stops importing them. The six here are what its kept code may still take (the
+ * seventh, core/rules/latexml, went with RULES_VERSION, which no key reads: design 3d, R7).
  */
 const WEBSITE_IMPORTS: readonly { path: string; names: readonly string[] }[] = [
   { path: 'config/appearance', names: ['BUILT_IN_HIGHLIGHTS', 'DEFAULT_APPEARANCE', 'HL_OPACITY_MAX', 'HL_OPACITY_MIN', 'lookOf'] },
   { path: 'core/renderer/style-preset', names: ['appearanceRule'] },
-  { path: 'core/rules/latexml', names: ['RULES_VERSION'] },
   { path: 'entrypoints/pdf-reader/reader.css', names: [] },
   { path: 'pdf-reader/support', names: ['readerRuns'] },
   { path: 'styles/image.css', names: [] },

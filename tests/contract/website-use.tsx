@@ -11,7 +11,6 @@
 // cut-over stops making them); the calls below are the website's into the paths it may still take.
 import { BUILT_IN_HIGHLIGHTS, DEFAULT_APPEARANCE, HL_OPACITY_MAX, HL_OPACITY_MIN, lookOf } from '@/config/appearance'
 import { appearanceRule } from '@/core/renderer/style-preset'
-import { RULES_VERSION } from '@/core/rules/latexml'
 import { readerRuns } from '@/pdf-reader/support'
 import { languageName, profileName, R, S, setLocale } from '@/ui/strings'
 
@@ -35,13 +34,11 @@ export function websiteReader(chosen: Parameters<typeof setLocale>[0]) {
   return { view, build, read, names, highlights }
 }
 
-/** the website's tests of the pin's appearance and versions (web/tests/highlights.test.ts, tests/vendor-engine.test.ts) */
+/** the website's tests of the pin's appearance (web/tests/highlights.test.ts) */
 export function websiteAppearanceTests(): unknown[] {
   // highlights.test.ts:9, :12, :18, :26
   const keys = BUILT_IN_HIGHLIGHTS.map(h => Object.keys(h).sort())
   const rule: string = appearanceRule(lookOf({ appearance: { ...DEFAULT_APPEARANCE, activeHighlight: DEFAULT_APPEARANCE.activeHighlight } }))
   const bounds = [HL_OPACITY_MIN * 100, HL_OPACITY_MAX * 100]
-  // vendor-engine.test.ts:24
-  const rules: string = RULES_VERSION
-  return [keys, rule, bounds, rules]
+  return [keys, rule, bounds]
 }

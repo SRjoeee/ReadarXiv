@@ -183,29 +183,29 @@ interface ListWord {
 type Family = ReturnType<typeof classifyFont>['fam']
 
 /** two glyphs on one line: their baselines within this share of the larger size (a superscript, a subscript) */
-export const LINE_DY = 0.6
+const LINE_DY = 0.6
 /** two glyphs on one line: the second no more than this many of its sizes right of the line's end (a word space, a tab stop) */
-export const LINE_GAP = 4
+const LINE_GAP = 4
 /** the foot stands this many of its sizes below every other glyph of its page, at least (stream.mjs FOLIO_GAP's: \\footskip) */
-export const FOOT_GAP = 1.5
+const FOOT_GAP = 1.5
 /** a formula's line: a math face's glyph, fewer than MATH_WORDS words of three letters in the text faces, and math faces this
  *  share of the line or a relation */
-export const MATH_WORDS = 4,
+const MATH_WORDS = 4,
   MATH_SHARE = 0.15
 /** …or a display's line, its operators' names in a text face: a relation, DISPLAY_WORDS words at most and math faces this share */
-export const DISPLAY_WORDS = 5,
+const DISPLAY_WORDS = 5,
   DISPLAY_SHARE = 0.1
 const RELATION = /[=<>≤≥≈≠∈∉⊂⊆→←↦∼≃≡∝]/u
 /** a code line: typewriter faces this share of its glyphs, at least */
-export const MONO_SHARE = 0.6
+const MONO_SHARE = 0.6
 /** an included graphic's line: glyphs inside a form XObject this share of it, at least */
-export const FORM_SHARE = 0.5
+const FORM_SHARE = 0.5
 /** a float's bracket (layout/marks.mjs POINTS_TEX `fs<n>`, `fe<n>`) and the point that says its type has no counter (`fn<n>`) */
 const FLOAT_BRACKET = /^f([se])(\d+)$/
 const FLOAT_UNCOUNTED = /^fn\d+$/
 /** the orphan lines a ledger lists, at most (all are counted): a count of lines, the ledger's bound (PDF-READER §18.45);
  *  unmeasured */
-export const ORPHAN_LINES_MAX = 200
+const ORPHAN_LINES_MAX = 200
 /** ADDED: a float's caption type that is an algorithm's (latex-front.mjs FLOAT_ENVS `algorithm`, every float the walk reads an
  *  algorithm's by, algorithm.sty's and algorithm2e's alike: its body's lines are the original's, PSEUDOCODE), and a table's
  *  (FLOAT_ENVS' table, table*, wraptable and sidewaystable: floatTypeOf) */
@@ -215,7 +215,7 @@ const ALGORITHM_FLOAT = 'algorithm',
  *  float an algorithm's; `cells` its float holds a cell, none of which owns it (a row label, a header, a cell no unit is);
  *  `nocells` its float a table's that holds no cell (a table the front end read as none: a tabular inside a command whose
  *  argument it does not walk); `other` the rest (a figure's text no reading took, a sub-caption of a package not read) */
-export const FLOAT_WHY = Object.freeze(['code', 'cells', 'nocells', 'other'] as const)
+const FLOAT_WHY = Object.freeze(['code', 'cells', 'nocells', 'other'] as const)
 /** why no unit owns a float line (FLOAT_WHY) */
 export type FloatWhy = (typeof FLOAT_WHY)[number]
 /** an orphan line's text as listed, at most, UTF-16 code units; unmeasured */
@@ -1028,13 +1028,13 @@ function textOf(gs: readonly LedgerGlyph[]): string {
 }
 
 /** the orphans a head lists at most, and an orphan's text there at most (the web contract, docs/route/orphan-text.md §8) */
-export const HEAD_ORPHANS = 64,
+const HEAD_ORPHANS = 64,
   HEAD_TEXT = 120
 
 /** the ledger as a head holds it, flat (a head nests four deep at most): `classes` [class, glyphs, letters, …] for each class
  *  that has a glyph, the document's `letters` and its `orphanLetters`, and its first HEAD_ORPHANS orphans, `orphans` [page,
  *  letters, text cut at HEAD_TEXT, …] */
-export function ledgerSummary(ledger: TodayLedger) {
+function ledgerSummary(ledger: TodayLedger) {
   const classes: (string | number)[] = []
   for (const id of CLASS_IDS) {
     const c = ledger.counts[id]
@@ -1084,7 +1084,7 @@ export function inkLeft(
 
 /** the sweep's invariant (o), no orphan letters: a row a listed orphan line, in the sweep's shape (scripts/sweep/invariants.mjs
  *  of the web), every row a violation */
-export const orphanRows = (ledger: TodayLedger, { paper }: { paper: string }) =>
+const orphanRows = (ledger: TodayLedger, { paper }: { paper: string }) =>
   ledger.orphans.map((o) => ({
     inv: 'o',
     sev: 'violation',
@@ -1098,7 +1098,7 @@ export const orphanRows = (ledger: TodayLedger, { paper }: { paper: string }) =>
 
 /** invariant (o) from a head (its base's `ledger`, ledgerSummary's): a row a listed orphan, and one for the orphan letters the head
  *  does not list; none for a head with no ledger (an older engine's) */
-export function orphanRowsOfHead(
+function orphanRowsOfHead(
   head:
     | { readonly base?: { readonly ledger?: { readonly orphans?: unknown; readonly orphanLetters?: number } } }
     | null
