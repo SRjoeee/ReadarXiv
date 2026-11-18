@@ -8330,6 +8330,47 @@ rows: none (both translators answer composed; below). It is fixed because the cu
 - The versions: none moves. A page is laid when it is read; the units (PIPELINE), what a translator is sent (TRANSLATE), the
   chain's digests and today's layout file (LAYOUT) are untouched.
 
+### 18.95 A display is a display where TeX set one, whatever the source spells (the coordinator's ruling of 2026-11-18)
+
+(§18.94 is lane hang's, on its branch.) An element's class was read from its source's spelling: a regex that needs `\[`, `$$`
+or `\begin{<display environment>}` at the piece's start (`marks.ts` classOf, `layer1.ts` phClass, `mt.ts` DISPLAY and
+displayStop). A display a paper sets through a macro of its own, `\newcommand{\be}{\begin{equation}}` then `\be … \ee`, or
+`\newcommand{\al}[1]{\begin{align}{#1}\end{align}}` then `\al{…}`, was a piece of kind `macro` and an element of kind `other`:
+locate cut its rows into ordinary lines of its unit (`geometry.ts` rowsKept reads the piece's kind), the translation was laid
+over them, two rows as one line past the column (2608.10322v2 p4, 2608.23517v1 p5), and the wire sent it as a marker inside a
+stretch, no break and no stop of its own. Five papers of the 245 write displays so.
+
+TeX states each display it sets: the marks' `dps<n>` and `dpe<n>` around its formula (§18.19), read on B as a display region.
+**The one statement** (`instrument/instrument.ts` texDisplaysOf, made once B's glyphs are owned): a piece is a display where
+TeX's display region holds its ink by the one test of ink in a display (`ink.ts` inDisplay, the ledger's reading of a line as
+a display's formula since §18.19: of the glyphs B's owners give it, at least half inside a display and not in its text mode)
+and begins at the piece, right where its opening mark `p<u>.<k>a` stands, no glyph shown between; or where the piece has no
+opening mark of its own (the piece after another display, after a macro that may look ahead). Its ink as well as its mark: a
+paper's `\def\iffa{\iffalse}` skips what follows it to its `\fi`, the display after the `\fi` (its piece unmarked, the piece
+after a macro that may look ahead) starts right at the `\iffa` piece's mark, and the `\iffa` owns none of it (2608.23517v1,
+two pieces; two more there own no ink of their display). Every reader after the compile reads that statement
+(`stateDisplays`): the piece's kind in the units objects, which locate reads for the rows it holds where TeX set them, the
+run-ins read, and the wire (a display is a break of its sentence, its own marker); the element's class, the part's `El.kind`,
+which the typesetter lays a kept display by; and the stop the source sets at the display's end, read by `displayStop` as a
+spelled display's (`\be x = y. \end{equation}`: `.`). Where the spelling and TeX agree nothing moves.
+
+TeX states a display, never that a piece is none: a display the pass before did not set at its place gets no point (§18.19), a
+`$$` display no region, a display after another no mark. So a piece TeX states none at keeps the class its marks read, how it
+was marked: the marking (`marks.ts` classOf) and the ownership that reads the marks as the marking set them (`followsOf`,
+`headsOf`) run before TeX's statement is read, and the statement is made of what they own. The units handed out before the
+compile (`front.ts` sourceUnitsOf) are the source's alone: a unit holding such a display is sent again once the bundle's
+twin states it.
+
+- **Not done: the stop before the paper's own end macro.** `\be x = y, \ee` ends with the paper's `\ee`, which `displayStop`
+  does not read off as it reads `\end{equation}`: the stop stays unread there (the wire's `displayEnds` still gives a display
+  followed by a capital its full stop). The source reader knows the paper's end macros (`latex-front.ts` envMacros), but only
+  inside its walk; stating them for a reader after the compile changes the source reader's code, which the website keys a
+  stored instrument by (the marks' closure: 488,756 bytes to 488,766), so every stored paper would compile once more. Left to
+  the coordinator.
+- **Not done: a display a unit opens with written through a paper's macro.** The marking passes over a display at a unit's
+  head by its class (`headsOf`), so `\be` there has no mark and no ink of its own on B: kept as the original's by its place,
+  as before (2608.09746v1, 2608.04473v1: 9 elements).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

@@ -13,7 +13,7 @@ import { type Piece, type Style, unitId } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph, DocPoint } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
-import { displayTextMask, type PageInk, regionMask } from '../ink.ts'
+import { displayTextMask, inDisplay, type PageInk, regionMask } from '../ink.ts'
 import type { Instrument, InstrumentUnit, PieceClass, SpanClass } from '../instrument.ts'
 import { keptAsWritten, paperNamesOf } from '../instrument/language.ts'
 import { runIns } from '../marks/run-ins.ts'
@@ -632,7 +632,8 @@ export function inkOf(o: InkInput): {
     })
   }
   for (const x of made) x.text.sort((a, b) => a - b)
-  // (the lines the ledger read as a display's formula: its glyphs in a display, not in the display's text mode, at least half)
+  // (the lines the ledger read as a display's formula: its glyphs in a display, not in the display's text mode, at least half:
+  // inDisplay, the one test, which the instrument reads a piece's ink by too)
   const displays: DisplayLine[] = []
   const masks = carried.map((c, i) => {
     const n = inkA.pages[i]!.glyphs.length
@@ -651,7 +652,7 @@ export function inkOf(o: InkInput): {
       bottom = Math.min(bottom, G[g]!.bottom)
       top = Math.max(top, G[g]!.top)
     }
-    if (k > 0 && k >= 0.5 * L.gs.length) {
+    if (inDisplay(k, L.gs.length)) {
       // (the display holding most of its glyphs)
       const ds = displayRegions[L.page - 1]!
       const held = ds.map((r) => L.gs.filter((g) => g >= r.from && g < r.to).length)

@@ -61,7 +61,8 @@ import { DECLARATION_WORDS } from '../source/tex-kernel.ts'
 import { displayStop, isInkless } from './mt.ts'
 import { keptAsWritten, namesOfBlocks, paperNamesOf, RUNNING } from './language.ts'
 import type { Piece } from '@readarxiv/format'
-import type { InkPoint, PageInk, Shape } from '../ink.ts'
+import { displayTextMask, inDisplay, regionMask } from '../ink.ts'
+import type { InkPoint, InkRegion, PageInk, Shape } from '../ink.ts'
 import type { Box4 } from '../ink-args.ts'
 import type { Instrument, InstrumentUnit, Owners, PieceClass, Role, SpanClass } from '../instrument.ts'
 import type { PdfJs } from '../read.ts'
@@ -1985,6 +1986,86 @@ export function textsOf(texts: unknown): Map<string, string> | null {
   )
 }
 
+/** a piece's opening mark on B, `p<u>.<k>a` (marks.ts MARK_DEF's; a footnote's call, `n<u>.<k>a`, is no element's) */
+const OPENING_MARK = /^p(\d+)\.(\d+)a$/
+/**
+ * TeX's statement of the displays it set at the units' pieces (PDF-READER §18.95), read off B: by unit index, the ids of the pieces
+ * TeX set a display at. TeX states every display whose place it knew from the pass before (marks.ts POINTS 'display': `dps<n>`
+ * before its formula, `dpe<n>` its last thing; pageInk's display regions, read by points pageInk keeps out of a page's `points`).
+ * Such a display is a piece's where its region holds the piece's ink by the one test of ink in a display (ink.ts inDisplay: of the
+ * glyphs B's owners give the piece, ROLE.element, at least half inside a display and not in its text mode), and where it begins
+ * at the piece: its first glyph the glyph the piece's opening mark stands at (TeX's start directly after the mark, nothing shown
+ * between), or the piece has no opening mark of its own (the piece after another display, after a macro that may look ahead,
+ * marks.ts:1814). Whatever the source spells there: a paper's macro for an environment (`\\be … \\ee`), one with a parameter
+ * whose body is one (`\\al{…}`). Its ink, not its mark alone: a paper's `\\iffalse` macro (2608.23517v1's `\\iffa`) skips what
+ * follows it to its `\\fi`, and the display after the `\\fi`, its piece unmarked, starts right at the macro's mark; the macro
+ * owns no glyph of it. TeX states a display, never that a piece is none: one the pass before did not set at its place gets no
+ * point (marks.ts:2115), a `$$` display no region (ink.ts regionsOfPoints); a piece TeX states none at keeps its marks' class
+ * (classOf, how it was marked)
+ */
+export function texDisplaysOf(
+  pages: readonly { points: readonly InkPoint[]; regions?: readonly InkRegion[] | null | undefined }[],
+  owners: readonly Owners[],
+): Map<number, Set<string>> {
+  const marked = new Set<string>(),
+    atStart = new Set<string>(),
+    ink = new Map<string, [inside: number, all: number]>()
+  pages.forEach((pg, p) => {
+    const O = owners[p]
+    const n = O?.unit.length ?? 0
+    const starts = new Set((pg.regions ?? []).filter((r) => r.kind === 'display').map((r) => r.from))
+    for (const x of pg.points) {
+      const m = OPENING_MARK.exec(x.name)
+      if (!m) continue
+      const key = `${m[1]}.${m[2]}`
+      marked.add(key)
+      if (starts.has(x.glyph)) atStart.add(key)
+    }
+    if (!O) return
+    const display = regionMask(pg.regions, n, 'display'),
+      text = displayTextMask(pg.regions, n)
+    for (let j = 0; j < n; j++) {
+      if (O.role[j] !== ROLE.element || O.unit[j]! < 0) continue
+      const key = `${O.unit[j]}.${O.piece[j]}`
+      const x = ink.get(key) ?? ink.set(key, [0, 0]).get(key)!
+      if (display[j] && !text[j]) x[0]++
+      x[1]++
+    }
+  })
+  const out = new Map<number, Set<string>>()
+  for (const [key, [inside, all]] of ink) {
+    if (!inDisplay(inside, all) || (marked.has(key) && !atStart.has(key))) continue
+    const [u, k] = key.split('.') as [string, string]
+    ;(out.get(Number(u)) ?? out.set(Number(u), new Set()).get(Number(u))!).add(k)
+  }
+  return out
+}
+/**
+ * A unit's content and classes as TeX's statement of its displays has them (texDisplaysOf, `ids`): each element TeX set a display
+ * at whose marks' class is another (a paper's `\\be … \\ee`, `macro`) stated `display`, in the content (the units objects' piece
+ * kind, which locate, the run-ins and the wire read) and in its class (the part's El.kind: PieceClass.cls), with the stop its
+ * source sets at its end read as a display's is (mt.ts displayStop given the statement); the class's readings of another kind
+ * gone (a formula's `unknown`, a symbol's drawing, a macro's texts). In place; `pieces` the source unit's, by index
+ */
+export function stateDisplays(
+  content: Piece[],
+  ids: ReadonlySet<string>,
+  pieces: readonly SrcPiece[],
+  classes: ReadonlyMap<string, PieceClass> | undefined,
+): void {
+  for (const p of content) {
+    if (p.t === 'span') stateDisplays(p.content, ids, pieces, classes)
+    if (p.t !== 'el' || !ids.has(p.id) || p.kind === 'display') continue
+    p.kind = 'display'
+    const stop = displayStop(pieces[Number(p.id)]?.src, true)
+    if (stop) p.stop = stop
+    const c = classes?.get(p.id)
+    if (!c) continue
+    c.cls = 'display'
+    for (const f of ['unknown', 'sym', 'text', 'told'] as const) delete c[f]
+  }
+}
+
 /**
  * The Instrument of today's marked compile. `paper` live.mjs openPaper's (its bibliography made); `finalPdf` our marked final
  * pass's bytes; `options` the marks file's (`texts`, `inkless`); `log` the marked compile's last pass's log; `pdfjs` { getDocument,
@@ -2323,6 +2404,12 @@ export async function instrumentOf({
     }
   }
   for (const { unit, piece } of tail.unfound) delete classesBy[unit]!.get(piece)!.text
+  // (the displays TeX set at the units' pieces, once B's glyphs are owned: texDisplaysOf, the one statement every reader after the
+  // compile reads of whether an element is a display (the content's kind, the class, the stop; through them locate's held rows,
+  // the run-ins below, the part's El.kind, the wire). The ownership above read the marks' class, how each piece was marked: the
+  // statement is made of what it owns)
+  for (const [i, ids] of texDisplaysOf(pages, glyphs))
+    if (i < units.length) stateDisplays(out[i]!.content, ids, units[i]!.pieces, classesBy[i])
   // (each source unit's groups as TeX set them, read off its text glyphs on B, and its run-in labels: marksOf. The unit's id is
   // its source's, none of these)
   const textGlyphs = textGlyphsOf(read.doc, glyphs)
