@@ -1,5 +1,5 @@
-// The reader's rows made here (its Host's `translate`, interfaces/host design-a §1.1) through the background: the one function of
-// the extension's reader host that knows the messages (shared/transport.ts; their shapes, lanes/L4-reader.md 5a.5b).
+// The reader's rows made here (its Host's `translate`, the host design A §1.1) through the background: the one function of
+// the extension's reader host that knows the messages (shared/transport.ts; their shapes, lane L4-reader's record, 5a.5b).
 // `axt:provider-status` binds a scope to the chain built from the settings as stored; `axt:translate` takes a call's units and
 // answers one result a unit, the chain's (packages/translate: the translators, their fall-through and acceptance, the rows and
 // the store are the background's); `axt:cancel-scope` withdraws the scope, on the reader's abort and when the page goes (an

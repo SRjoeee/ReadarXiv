@@ -9,7 +9,7 @@ import type { UnitIn } from '../../packages/translate/src/index.ts'
 export type TexPiece = { t: string; s?: string; src?: string; id?: number; sets?: number }
 export type Rec = { src: 'pdf' | 'html' | 'web'; format: 'markers' | 'tags'; wire: string; reply: string; today: boolean; reason?: string | null; kind?: string | null; pieces?: TexPiece[]; test?: string | null; file?: string | null }
 
-/** the web repository's reading table (readarxiv-web worker/tests/mt.test.ts, "an answer the reading takes": mt.mjs readsBack
+/** the web repository's reading table (its Worker's tests, "an answer the reading takes": mt.mjs readsBack
  *  over each wire, the Workflow's accepts), its wires typed as the HTML page's are: its engine is not run here (the web
  *  worktree's submodule is not checked out), so its verdicts are quoted */
 const WEB: [string, string, boolean][] = [

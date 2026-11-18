@@ -33,7 +33,7 @@ export interface ReaderState {
   /** the translation has begun this visit: a prepare still under way after it is no longer the phase (its polls would
    *  take the phase back from the translation, and the line and the status region with it) */
   begun: boolean
-  /** the translation done before a page of the layer is laid where the translation shows (the web's `laying`, swaps.ts): the
+  /** the translation done before a page of the layer is laid where the translation shows (the website's laying state): the
    *  right pane is the original's yet, so its end is held (the phase translating, the line on) until a page is laid or shown as
    *  arXiv's by the rule (the layer's `original`: nothing to lay there), the layer is refused, or the original alone is shown */
   laying: boolean

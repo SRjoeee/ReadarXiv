@@ -89,7 +89,7 @@ function lineFewer(d, x) {
   return { u, size, tr, vr, orow, tEnd: tr.at(-1), vEnd: vr.at(-1), tPitch: pitchOf(tr), vPitch: pitchOf(vr), oPitch: pitchOf(orow) }
 }
 
-/** the harness's own pairing of a drawn line with a lay's line: one page, baselines within this (baseline/tools/reader.mjs: each
+/** the harness's own pairing of a drawn line with a lay's line: one page, baselines within this (the baseline's reader tool: each
  *  laid line's SVG text found so); no bound of a ruling's own */
 const PAIRED = 0.05
 /**

@@ -312,15 +312,14 @@ found by grep in the route-delta engine and the web repo's delta-web worktree:
 - **engine/view/:** `drawn.mjs` (capture), `layer-side.mjs` (drawnSource, K_SLACK, the copy path), `lighting.mjs`
   (scaleOf/drawing uses).
 - **pipeline:** `pipeline/page-pass.mjs` (tails out, wrapped bytes in).
-- **web:** `container/` (maker child → `wrapOf`/`deltaOf`; no remover child), `worker/src/layer/*` (no tails, TAIL_CAP gone),
-  `web/src/layer/index.ts` (the removal and erase uses), `web/src/layer/transport.ts` and `web/src/ranges.ts` (`composedRange`
-  without tails).
+- **web:** the container (maker child → `wrapOf`/`deltaOf`; no remover child), the Worker's layer (no tails, TAIL_CAP
+  gone), the reader's layer (the removal and erase uses), its transport and its byte source (`composedRange` without tails).
 - **extension:** `session/run.ts` (renders), `session/base.ts` (delta binding).
 
 **Web lane owns** (prefetch and the unified text layer):
-- **prefetch:** `web/src/ranges.ts` (priority gate, prefetch wrapper), `web/src/session/run.mjs` (idle hooks); extension
+- **prefetch:** the website's byte source (priority gate, prefetch wrapper), its session (idle hooks); extension
   `session/ranges.ts` and `session/run.ts`.
-- **text layer:** `web/src/layer/door.ts` (host DOM from `textOf`); `engine/view/places.mjs` and `view/reader-view.mjs` (the
+- **text layer:** the website's layer door (host DOM from `textOf`); `engine/view/places.mjs` and `view/reader-view.mjs` (the
   page's DOM slot, `textLayerMode`); `engine/layer-proto/run.mjs` `textOf` (built 2026-10-24, `PDF-READER.md` §11.11: the
   engine's `textOf` and the shared view's host, both hosts passing PDF.js's `TextLayerBuilder`).
 
@@ -331,11 +330,11 @@ found by grep in the route-delta engine and the web repo's delta-web worktree:
 | `engine/view/layer-side.mjs` | drawnSource, K_SLACK, copy path deleted; renders wired | `noLayoutPage` / `originalPageOf` (prefetch's idle test and text-layer "original" pages read them) | pipeline first; `noLayoutPage` keeps its signature |
 | `engine/layer-proto/run.mjs` | renders A/B/C, commit, deleted erase-and-restore | `textOf`; the `prefetched` pixel-task path (~2458) | pipeline first; `textOf` reads the layout file (§9) and never `getTextContent` on a wrapped page |
 | `engine/view/places.mjs`, `view/reader-view.mjs` | place content as laid (A + SVG) | text-layer DOM slot | `swap(n, …)` in places.mjs is the place's content swap, not the erasure swap, and stays |
-| `web/src/ranges.ts` (+ extension `session/ranges.ts`) | `composedRange` without tails | priority gate and prefetch wrapper | web lane first (prefetch is planned before); pipeline rebases |
-| `session/run.ts` (extension), `web/src/session/run.mjs` | renders and host wiring | idle hooks, text-layer hosting | split by function; one PR per lane per merge window |
+| the website's byte source (+ extension `session/ranges.ts`) | `composedRange` without tails | priority gate and prefetch wrapper | web lane first (prefetch is planned before); pipeline rebases |
+| `session/run.ts` (extension), the website's session | renders and host wiring | idle hooks, text-layer hosting | split by function; one PR per lane per merge window |
 
-Name collisions that are not erasure: the panes' "swapped" preference (`session/host.ts`, `web/src/session/run.mjs`) and
-`web/src/session/swaps.ts` (layer states).
+Name collisions that are not erasure: the panes' "swapped" preference (`session/host.ts`, the website's session) and
+the website's swaps (layer states).
 
 ## 11. The two numbers
 
@@ -356,7 +355,7 @@ Name collisions that are not erasure: the panes' "swapped" preference (`session/
   So on staging today, 75 pages are laid on ours and **0 on arXiv**. The other 50 papers answer `b8` 404 `not-prepared`. All
   53 answer `b7` (the sweep's CTAG) 404 `unknown-versions`: no image-set-3 catalog is served any more.
 - **The sweep's own catalogs** (2026-10-22, read by the sweep under CTAG b7-j6.3.289 and cached in
-  `readarxiv-web-wt/sweep/sweep-data/cache/papers/*/catalog.json`; all of image set 3, catalog bundle 8, `versions.image = '3'`):
+  the sweep's cache, a catalog a paper; all of image set 3, catalog bundle 8, `versions.image = '3'`):
 
 | Base source | Papers | Pages laid |
 |---|---:|---:|

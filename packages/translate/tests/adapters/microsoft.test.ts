@@ -421,7 +421,7 @@ describe('microsoft: a run-in label after a forced break begins its sentence', (
 // 2608.25210v2 p2 on staging (2026-11-09): `\topic{Current approaches to infer provenance are not reliable}`, the paper's
 // `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}`, its stop the macro's: kept as two markers with no stop between
 // them, Microsoft ran the head into the next sentence and wrote none (4 of 4 heads asked); with the stop written before the
-// close, the head came back a sentence of its own, its stop inside the group (4 of 4, live-html.ts, lanes/runin-stop.md)
+// close, the head came back a sentence of its own, its stop inside the group (4 of 4, live-html.ts, lane runin-stop's record)
 describe('microsoft: a stop TeX sets at a group’s end', () => {
   it('reads the reply’s stop inside the kept group, our space before its close taken back', () => {
     const r = readMicrosoft(

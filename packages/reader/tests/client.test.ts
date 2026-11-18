@@ -472,7 +472,7 @@ describe('the client: the follow and the open', () => {
       follow({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: null, onDoc: () => {} }).catch(
         (e) => e as Refused,
       )
-    // (the visitor's rate of asks, as our server answers it: its body's word, worker v2 routes.ts `rate-limited`)
+    // (the visitor's rate of asks, as our server answers it: its body's word `rate-limited`)
     const rate = await at(
       new Response(JSON.stringify({ error: 'rate-limited', retryAfterS: 60 }), {
         status: 429,
@@ -543,7 +543,7 @@ describe('the client: the follow and the open', () => {
 })
 
 /**
- * Our server's follow as its paper object answers it (worker v2 paper.ts `fetch`, `#tell`, contract.ts `frameOf`): a stream
+ * Our server's follow as its paper object answers it: a stream
  * whose first frame names `retry: 1000` while something runs for the view and `retry: 60000` when nothing does; a document in
  * which nothing runs is its stream's last frame; a beat every 15 s. The document runs until `doneAt` (ms on `timers`), then is
  * done. Past `cap` asks it answers nothing more, so that a follow that asks without end is counted, not run for ever

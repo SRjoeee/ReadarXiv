@@ -2,7 +2,7 @@
 // from its recorded inputs with today's own code (engine 065c1d973, read-only; its private functions by hook.mjs). Run:
 //   node --import ./lab/typeset/register.mjs lab/typeset/derive.mjs
 // Each is a value today's reader works out from the page's characters before it typesets, which lane L1 is moving into the part
-// (stage1a2-facts.md); a port takes it from here until the part states it, and the file says which field will. Written to
+// (stage 1a-2's contract); a port takes it from here until the part states it, and the file says which field will. Written to
 // lab-data (`lanes/L3/replay/<name>.json.gz`): they hold licensed papers' text, and are never committed.
 //
 // - `U.breaks`: for every sampled round with a reading (U.elements:in), the lines each source piece's words stand on as the
@@ -19,10 +19,16 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync, gzipSync } from 'node:zlib'
 
-const LAB = process.env.AXT_LAB_DATA ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data'
+// (AXT_LAB_DATA the lab-data directory, no default: needed where the tap or the output is not given; AXT_TODAY today's
+// engine, else the worktree `refactor-read` beside this repository's)
+const LAB = process.env.AXT_LAB_DATA
+if (!LAB && !(process.argv[2] && process.argv[3])) {
+  console.error('derive.mjs: set AXT_LAB_DATA to the lab-data directory, or give the tap and the output')
+  process.exit(2)
+}
 const TAP = process.argv[2] ?? join(LAB, 'refactor-2026-11/baseline/tap')
 const OUT = process.argv[3] ?? join(LAB, 'refactor-2026-11/lanes/L3/replay')
-const TODAY = process.env.AXT_TODAY ?? '/Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/refactor-read'
+const TODAY = process.env.AXT_TODAY ?? join(import.meta.dirname, '..', '..', '..', 'refactor-read')
 globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () => { throw new Error('no measuring in a derivation') }, font: '' } } }
 const E = `${TODAY}/src/pdf-reader/engine/layer-proto/`
 const L2 = await import(`${E}layer2.mjs`), TEX = await import(`${E}tex.mjs`)

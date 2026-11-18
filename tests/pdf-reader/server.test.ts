@@ -1,5 +1,5 @@
 // What the extension asks our server (session/server.ts; Stage 5 Task 9's B1 to B4 on the client, and the layer API v1's
-// shapes as the web names them, src/shared/layer-api.ts): every request over a recording fetch, every answer read within its
+// shapes as the web names them): every request over a recording fetch, every answer read within its
 // bounds and by its status's shape, only the paper's id and version leaving the machine
 import { describe, expect, it, vi } from 'vitest'
 import { CATALOG_CAP, CTAG5, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'

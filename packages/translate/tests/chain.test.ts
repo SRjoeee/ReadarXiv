@@ -1,5 +1,5 @@
 // The chain's rules, each a test through the interface with fakes (design-a §5, design-b §5.3). Each describe names the
-// row of interfaces/translate/DECISION.md's table, or the contract's rule, it holds.
+// row of the translate decision's table, or the contract's rule, it holds.
 import { describe, expect, it } from 'vitest'
 import { ACCEPT_DIGEST, projectionOf } from '../src/accept.ts'
 import { ATTEMPTS, BREAKER, chainOf, identityOf, keyOf } from '../src/chain.ts'

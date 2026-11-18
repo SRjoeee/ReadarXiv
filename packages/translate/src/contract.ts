@@ -1,4 +1,4 @@
-// The translator contract (interfaces/translate/DECISION.md): what a host learns, what an adapter's author learns. Types and
+// The translator contract (the translate decision): what a host learns, what an adapter's author learns. Types and
 // the one error class; no I/O. The platform's own types (AbortSignal, fetch, Response) are not visible to a Node package
 // with no DOM library, so the few members the package uses are stated here, structurally: the hosts' real objects fit them.
 

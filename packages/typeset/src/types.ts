@@ -1,5 +1,5 @@
-// The typesetter's entry and its result, as decided (interfaces/page/DECISION.md: the objects and the entry are design A's,
-// design-a.md §1.2; the inside and the ledger are design B's, design-b.md §1.5 to §1.7). Types only: the composition
+// The typesetter's entry and its result, as decided (the page decision: the objects and the entry are design A's,
+// design-a §1.2; the inside and the ledger are design B's, design-b §1.5 to §1.7). Types only: the composition
 // (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
 import type { Box, Id, Ink, Link, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 import type { ScriptRules } from './data/rules/types.ts'
@@ -230,7 +230,7 @@ export type Step =
 /** a JSON value: what a slot holds (numbers as JSON prints them, non-finite as strings: the tap's rule) */
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 /**
- * One rule applied to one member, in step order: the tap's slot (baseline/tap/TAP.md §3), so that the gate compares the
+ * One rule applied to one member, in step order: the tap's slot (the tap's spec §3), so that the gate compares the
  * port's ledger with today's slot by slot and names the first rule whose value differs. `round`: the member's lay (today a
  * unit laid again is a round of its own; 0 for the slots before any lay)
  */

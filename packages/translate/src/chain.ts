@@ -1,7 +1,7 @@
-// The chain (interfaces/translate/DECISION.md): one object a host makes once, `chainOf(ports)`, which owns the queue, the
+// The chain (the translate decision): one object a host makes once, `chainOf(ports)`, which owns the queue, the
 // pacing, the cooldowns and the breaker of every translator it is handed; no module state. Carried from the server's chain
-// (readarxiv-web worker/src/mt/chain.ts, gate.ts, global-gate.ts, egress-deps.ts, answers.ts) as the decision's table
-// says, with the PDF engine's loop (mt.mjs translateUnits) merged in: write, key, store read, requests cut by limits and
+// (its engines' order, its pacing gate, its breaker shared by every isolate, its egress, its store of answers) as the
+// decision's table says, with the PDF engine's loop (mt.mjs translateUnits) merged in: write, key, store read, requests cut by limits and
 // equal wires sent once, send, read, accept, fall through per unit, the re-ask, the runs floor.
 import { ACCEPT_DIGEST, accept, asOut, hasLetter, validSentences } from './accept.ts'
 import {
@@ -31,7 +31,7 @@ import { runsOf } from './runs.ts'
 import { sha256Hex } from './sha256.ts'
 import { wholeWordsOf } from './words.ts'
 
-// ---------------------------------------------------------------- the fixed policy (design-a §1.5; chain.ts, global-gate.ts)
+// ---------------------------------------------------------------- the fixed policy (design-a §1.5; the server's chain and breaker)
 
 /** tries of a request a transient failure is worth, the first included (chain.ts `attempts`) */
 export const ATTEMPTS = 3
@@ -52,13 +52,13 @@ export const LAST_WAITS = 2
  *  twice, held a call two hours, in an extension's background that is a service worker). The cooldown itself stays the
  *  endpoint's: the translator is asked nothing until it ends */
 const patienceOf = (t: Translator): number => ATTEMPTS * t.limits.callMs
-/** the breaker (global-gate.ts GATE_DEFAULTS): opens when OPEN_AT of at least MIN_OUTCOMES of the last WINDOW outcomes
+/** the breaker (the server's breaker's defaults): opens when OPEN_AT of at least MIN_OUTCOMES of the last WINDOW outcomes
  *  failed; skips its translator for BREAKER_MS, then lets one probe through; never skips the chain's last */
 export const BREAKER = { window: 50, minOutcomes: 20, openAt: 0.5, coolMs: 5 * 60_000 } as const
-/** a store read answers within this, ms, or is all misses (answers.ts GET 2 s): a hanging store is a miss, never waited on
+/** a store read answers within this, ms, or is all misses (the server's store read, 2 s): a hanging store is a miss, never waited on
  *  to translate (DESIGN §9, the translation cache); a ruling, unmeasured */
 const STORE_READ_MS = 2_000
-/** a store write is given this long, ms (answers.ts PUT 5 s): DESIGN §9's ruling, unmeasured */
+/** a store write is given this long, ms (the server's store write, 5 s): DESIGN §9's ruling, unmeasured */
 const STORE_WRITE_MS = 5_000
 /** buffered store writes go out at this many entries, and at the end of a call */
 export const WRITE_EVERY = 200
@@ -68,7 +68,7 @@ export const VALUE_MAX = 64 * 1024
 /** `supports` answers within this, ms, or the translator is passed over: the probes' deadline (DESIGN §8.5, `PROBE_MS`
  *  2 s); a ruling, unmeasured */
 const SUPPORTS_MS = 2_000
-/** a gate's answer within this, ms, or the request goes through without it (global-gate.ts GLOBAL_CALL_MS: fails open);
+/** a gate's answer within this, ms, or the request goes through without it (the server's breaker's call bound: fails open);
  *  unmeasured */
 export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
@@ -376,7 +376,7 @@ export function chainOf(ports: Ports = {}): Chain {
     return p
   }
 
-  // ---- the breaker, per identity, in memory (global-gate.ts GlobalGateCore's rule)
+  // ---- the breaker, per identity, in memory (the server's breaker's rule)
   const record = (lane: Lane, ok: boolean | null) => {
     const b = lane.breaker
     if (ok === null || b.state === 'open') return

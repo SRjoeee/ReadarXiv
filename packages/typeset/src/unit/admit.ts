@@ -4,7 +4,7 @@
 // recorded as U.admit's second verdict of the round (`at: 'layOnce'`). Ported from engine 065c1d973: translated RUN:844,
 // shapely and refusalOf RUN:1173-1188, decide RUN:1196-1214, judge RUN:827-831, locatedWhole TEX:66-80, kOfPieces TEX:35-46,
 // placeByFile's pages and cut RUN:834-843 (texRects TEX:269), unhiddenOf RUN:737, unanchoredOf RUN:854, account RUN:3104.
-// The verdict is the tap's U.admit slot (baseline/tap/TAP.md §3 L1).
+// The verdict is the tap's U.admit slot (the tap's spec §3 L1).
 //
 // Its inputs, and the field each comes from once lane L1 states it (until then the tap's recorded values):
 // - `row`: the translated row as today's unit holds it (rows.mjs unitOf) ← format's Row with the unit's pieces

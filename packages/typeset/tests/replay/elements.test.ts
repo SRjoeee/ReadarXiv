@@ -1,5 +1,5 @@
 // U.elements replayed on the tap: every sampled reading (U.elements:in and :out of every rule's sample), each placeholder's
-// reading derived from the recorded inputs with today's code (lab/typeset/derive.mjs: lanes/L3/replay/U.elements.json.gz).
+// reading derived from the recorded inputs with today's code (lab/typeset/derive.mjs: lane L3's derived U.elements).
 // Its resolutions, the lines kept and the unproven placeholder against prepareUnit's recorded answer. What the comparison
 // leaves to other rules: a resolution's fields finishUnit sets after it (region, brk, room, brkAt: U.breaks; origAfter,
 // heldAfter, heldMarks and a display's inPlace: U.marks' facts); a rendering is compared by what it carries (text, lines,

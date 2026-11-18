@@ -1,4 +1,4 @@
-// Open measurement 1 of interfaces/translate/DECISION.md: the cost of reading a whole paper's stored replies again (design
+// Open measurement 1 of the translate decision: the cost of reading a whole paper's stored replies again (design
 // A's first doubt: raw replies are the only cache, judged again on every use). A paper's units are translated once to fill
 // a store (from a dump of a real store where given: JSONL of [key, raw], e.g. staging's), then again with every reply in
 // the store: the second pass must send nothing, and its time is the cost asked about (keys, the store read, every read and

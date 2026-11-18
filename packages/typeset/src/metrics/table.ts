@@ -1,7 +1,7 @@
 // The table adapter of Metrics (design-b §4 `recordedMetrics`, design-a §4 `tableMetrics`): every measure answered from a
 // table of measures made at 100 px, as today's canvas made them (layer2.mjs w100, ink100, inkRight100 measure each run at
 // 100 px and scale). The tap writes one such table per (paper, target): every first measure of a (canvas font, text) of
-// today's run (baseline/tap/TAP.md §5, `metrics/<pair>.metrics.json.gz`), so that a port measures today's exact widths in
+// today's run (the tap's spec §5, `metrics/<pair>.metrics.json.gz`), so that a port measures today's exact widths in
 // Node. A measure the table lacks is a failure of the replay, never a guess: it throws MissingMeasure.
 import type { FaceId, Metrics } from '../types.ts'
 

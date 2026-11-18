@@ -102,7 +102,7 @@ const manifest = () => writeFileSync(join(WORK, 'raw', 'run.json'), `${JSON.stri
 manifest()
 // ---------------------------------------------------------------- today's page: esbuild over today's engine and the web
 const standIn = {
-  // (run.mjs opened with `records` and kept, as baseline/tools/reader.mjs's stand-in: the crops' audit; the drawing the same)
+  // (run.mjs opened with `records` and kept, as the baseline's reader tool's stand-in: the crops' audit; the drawing the same)
   name: 'run-stand-in',
   setup(b) {
     b.onResolve({ filter: /^\.\/run\.mjs$/ }, (a) =>

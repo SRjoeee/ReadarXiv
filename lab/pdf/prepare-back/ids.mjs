@@ -1,7 +1,7 @@
-// lab/pdf/prepare-back/ids.mjs <prepare dumps dir>: every unit of the baseline's prepare dumps (FORMAT.md §3, their pieces the flat
+// lab/pdf/prepare-back/ids.mjs <prepare dumps dir>: every unit of the baseline's prepare dumps (the dump spec §3, their pieces the flat
 // list of §2) given its id again by @readarxiv/format's unitId (the engine's re-export) over the pieces made a Piece tree again (an open a span to its
 // close, a close with no open a span of nothing but its close, an open with no close a span to the unit's end): the ids
-// against the dumps', which the baseline computed by FORMAT.md's rule (baseline/tools/unit-id.mjs). Not shipped.
+// against the dumps', which the baseline computed by the dump spec's rule (the baseline's own unit-id tool). Not shipped.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { unitId } from '@readarxiv/engine'

@@ -40,8 +40,9 @@ const objects = new Map(Object.entries(papers).map(([id, f]) => [`/api/v2/o/arxi
 // never laid from another run's data in their place. Each one's A, its bundle's objects under our server's paths, its dumps
 // and rows
 const FIX = join(HERE, 'fixtures')
-const LAB = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
-const L1_BUNDLES = join(LAB, 'lanes/L1-out4/bundles')
+// (the lab-data directory: AXT_LAB_DATA, no default; only the corpus fixtures read it, and they stop without it)
+const LAB = process.env.AXT_LAB_DATA ? join(process.env.AXT_LAB_DATA, 'refactor-2026-11') : null
+const L1_BUNDLES = LAB && join(LAB, 'lanes/L1-out4/bundles')
 const RUN_BUNDLES = process.env.AXT_L1_BUNDLES ?? null
 const RUN_ROWS = process.env.AXT_LAB_ROWS ?? null
 if (RUN_BUNDLES && !RUN_ROWS) {
@@ -85,7 +86,14 @@ function runRowsOf(bundle, file) {
   return { identity, asked: asked.size, missing, extra, byId, rows: { format: 1, rows: [...got.values()] } }
 }
 const notBelonging = []
-for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)) {
+const labFixtures = (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
+if (labFixtures.length > 0 && !LAB) {
+  console.log(
+    'FAIL fixtures: AXT_LAB_FIXTURES without AXT_LAB_DATA: set it to the lab-data directory the papers are read from',
+  )
+  process.exit(1)
+}
+for (const id of labFixtures) {
   const papersJson = JSON.parse(readFileSync(join(LAB, 'baseline/corpora/papers.json'), 'utf8'))
   const p = papersJson.papers.find((x) => x.id === id)
   if (!p) throw new Error(`no corpus paper ${id}`)
@@ -379,7 +387,7 @@ const rowsLess = (seg, t, page) => {
   rowsObjects.set(`/api/v2/o/${path}`, bytes)
   return { path, sha256, bytes: bytes.length }
 }
-/** a paper of a stale layer once opened (worker v2 machine.ts): prepared again, the old layer served meanwhile, the target's
+/** a paper of a stale layer once opened (as our server treats it): prepared again, the old layer served meanwhile, the target's
  *  work made by the open and not started (none of the wanted units told yet) */
 const staleOpened = (d, target) => ({
   ...d,
@@ -623,17 +631,20 @@ const v2Route = {
 }
 /** our site's static files the reader's own typesetter reads (compose/served.ts): the faces' tables, their slices and the
  *  hyphenation patterns, where this machine has them (the website's build's, read in place: licensed faces are never copied
- *  here); none, the checks that need them say so and pass nothing */
+ *  here): AXT_FACE_TABLES the tables' directory, AXT_FACE_SLICES the slices' directories joined by ':', AXT_HYPH the
+ *  patterns' directory, none by default; none, the checks that need them say so and pass nothing */
 const SITE = {
-  tables:
-    process.env.AXT_FACE_TABLES ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/refactor-read/web/src/fonts/static',
-  slices: (
-    process.env.AXT_FACE_SLICES ??
-    '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/static-fonts:/Users/cheongzhiyan/Developer/readarxiv-web-wt/rate-limit/web/public/static-fonts'
-  ).split(':'),
-  hyph: process.env.AXT_HYPH ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/hyph',
+  tables: process.env.AXT_FACE_TABLES ?? null,
+  slices: (process.env.AXT_FACE_SLICES ?? '').split(':').filter(Boolean),
+  hyph: process.env.AXT_HYPH ?? null,
 }
-const siteHas = existsSync(join(SITE.tables, 'index.json')) && SITE.slices.some((d) => existsSync(d))
+const siteHas =
+  SITE.tables !== null && existsSync(join(SITE.tables, 'index.json')) && SITE.slices.some((d) => existsSync(d))
+/** why the checks that need the served faces pass nothing: the directory that lacks them, or the variables to set */
+const siteNone =
+  SITE.tables === null
+    ? 'no served faces: AXT_FACE_TABLES and AXT_FACE_SLICES unset'
+    : `no served faces at ${SITE.tables}`
 const siteLog = []
 const siteRoute = {
   prefix: '/',
@@ -644,10 +655,10 @@ const siteRoute = {
     if (!table && !slice && !hyph) return false
     siteLog.push(url.pathname + url.search)
     const file = table
-      ? join(SITE.tables, `${table}.json`)
+      ? SITE.tables && join(SITE.tables, `${table}.json`)
       : slice
         ? SITE.slices.map((d) => join(d, slice)).find((f) => existsSync(f))
-        : join(SITE.hyph, `${hyph}.json`)
+        : SITE.hyph && join(SITE.hyph, `${hyph}.json`)
     if (!file || !existsSync(file)) {
       res.writeHead(404)
       return res.end()
@@ -1256,7 +1267,7 @@ async function typesetLinks(page, n) {
 await check(
   "compose: a laid page's links through the reader's own typesetter, every part link drawn by its fate and an anchor each: out of the paper through the host, inside it on the right, one no member owns at its own box (s1-columns)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
     await page.evaluate(() => window.__h.layer('s1-columns', { typeset: true }))
@@ -1321,7 +1332,7 @@ await check(
 await check(
   "compose: a turned page's link through the reader's own typesetter, drawn by its fate, an anchor over its box, out of the paper through the host (s3-turned)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s3-turned'].original)
     await page.evaluate(() => window.__h.layer('s3-turned', { typeset: true }))
@@ -1346,7 +1357,7 @@ await check(
 await check(
   "compose: a note the source ties to the author block follows the names option through the reader's own typesetter: off as printed, on its variant with the block's name, never its own row; off and on again the same two drawings (s4-author, ICML's footnote shape; the owner's ruling of 2026-11-13, PDF-READER §18.71)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const OFF = { figures: true, tables: true, heads: true, references: false, names: false }
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s4-author'].original)
@@ -2162,7 +2173,7 @@ async function typesetLaid(name, target, o = {}) {
 await check(
   "reader: no engine given, the reader's own typesetter: the fixture's pages laid by layPage over our site's faces and patterns, the translation drawn; a toggle lays them again (the coordinator's priority of 2026-11-07)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const { page, context, errors, p, drawn, asked } = await typesetLaid('s1-columns', 'de')
     // (a toggle: the pages laid again, under the rules that leave what it leaves)
     const laysBefore = Number(p.lays ?? 0)
@@ -2200,7 +2211,7 @@ for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n))
   await check(
     `reader: no engine given, the reader's own typesetter on a corpus paper (${name}, zh): laid, drawn`,
     async () => {
-      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      if (!siteHas) return { skipped: siteNone }
       const { context, errors, p, drawn, asked } = await typesetLaid(name, 'zh')
       await context.close()
       assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
@@ -2221,7 +2232,7 @@ for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n))
   await check(
     `reader: the typesetter's first page while the target's rows arrive (${name}, zh, ${DELTAS} deltas): laid before the last row is in`,
     async () => {
-      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      if (!siteHas) return { skipped: siteNone }
       const seg = indexOf[name].seg
       const every = Number(process.env.AXT_DELTA_MS ?? 1000)
       modes[seg] = { kind: 'deltas', every }
@@ -2438,7 +2449,7 @@ async function linesInk(page, target, lines = null) {
 await check(
   "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink, the PDF's black, a CJK run today's #141414: geometricPrecision, or auto where the reader's fixed probe in a served face lays out alike under both, decided once a reader (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const out = {}
     const corpus = Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n)))
     for (const [name, target] of [['s1-columns', 'de'], ...corpus.map((n) => [n, 'zh'])]) {
@@ -2518,7 +2529,7 @@ await check(
 await check(
   "compose: the weight check measures page 1's own overlay, the same element at every step, when page 2's is drawn first (s1-columns, de: the rows of the units page 1 alone holds come 8 s after the first follow; lane harness-weight, 2026-11-13: on 2609.26457v1 page 2 was drawn first, and the check chose page 2's running head and measured page 1's title in its place)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const seg = indexOf['s1-columns'].seg
     modes[seg] = { kind: 'late-page', page: 1, after: 8000 }
     try {
@@ -3312,7 +3323,7 @@ await check(
 )
 /** a host's sheet that takes a pane out of the display at no width, laid out still (as the package takes its left pane out:
  *  styles.ts, chrome/reader.css), read off the display's marks that the host mirrors onto <html> in a mutation observer's
- *  callback. The right's slots stay near and in view through it, so no observer tells them anything (lanes/switch-blank) */
+ *  callback. The right's slots stay near and in view through it, so no observer tells them anything (lane switch-blank's record) */
 const ZERO_WIDTH_PANES = `:root[data-axt-pdf-mode="original"] .pane[data-side="right"],
 :root[data-axt-pdf-mode="translation"] .pane[data-side="left"],
 :root[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] {
@@ -4204,7 +4215,7 @@ for (const host of ['web', 'ext'])
   await check(
     `reader: a part of the layer answered gone once its head was read asks the document once, and the layer our server serves now is laid without a reload (${host}'s host)`,
     async () => {
-      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      if (!siteHas) return { skipped: siteNone }
       const name = 's1-columns'
       const seg = indexOf[name].seg
       modes[seg] = { kind: 'moved', switched: false }
@@ -4300,7 +4311,7 @@ await check(
 )
 
 // ---------------------------------------------------------------- stage 5a, deliverable 2 part A: today's behaviours over the stack
-// (each check names the rows of lanes/L4/list-b.md and list-a.md it holds; docs/PDF-READER.md §11.7-§11.11, §17)
+// (each check names the rows of lane L4's lists B and A it holds; docs/PDF-READER.md §11.7-§11.11, §17)
 const S1 = indexOf['s1-columns'].original,
   SAMPLE = '/api/v2/o/arxiv/2600_00001v1.pdf'
 const drawnOn = (page, side, n, key) =>
@@ -5638,7 +5649,7 @@ for (const target of PUNCT_TARGETS)
   await check(
     `compose: full-width punctuation as its face draws it (s1-columns, ${target}): no mark's ink on a neighbour's, one place in its box a character in a face, every run drawn at the layout's advance (docs/PDF-READER.md §18.48)`,
     async () => {
-      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      if (!siteHas) return { skipped: siteNone }
       const { page, context, errors } = await newPage({ viewport: { width: 5000, height: 900 } })
       try {
         await page.evaluate(() => {

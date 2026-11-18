@@ -17,7 +17,6 @@
 // here), 2 on a usage error.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { cyclesOf, graphOf, listsAcross, pathTo, reach, scanTree, typeCheckedOf } from './census-lib.mjs'
@@ -989,10 +988,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const a = argv.find(x => x.startsWith(`--${name}=`))
     return a ? a.slice(name.length + 3) : null
   }
-  const labData = process.env.AXT_LAB_DATA ?? join(homedir(), 'Developer', 'readarxiv-lab-data')
+  // (AXT_LAB_DATA the lab-data directory, no default: unset, the website's profile is read only where --web-profile names it)
+  const labData = process.env.AXT_LAB_DATA ?? ''
   const nowDir = resolve(opt('now') ?? ROOT)
   const todayDir = argv.includes('--no-today') ? null : (opt('today') ?? process.env.AXT_TODAY ?? join(ROOT, '..', 'refactor-read'))
-  const webProfileFile = opt('web-profile') ?? join(labData, 'refactor-2026-11', 'verification', 'census-web.json')
+  const webProfileFile = opt('web-profile') ?? (labData && join(labData, 'refactor-2026-11', 'verification', 'census-web.json'))
   // (the rule ledger: its rows give the debt areas' rules their reasons, design §3c)
   const rulesLedgerFile = resolve(opt('rules-ledger') ?? join(ROOT, 'lab/rules/ledger.json'))
   const rulesLedger = existsSync(rulesLedgerFile) ? JSON.parse(readFileSync(rulesLedgerFile, 'utf8')) : null

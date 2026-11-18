@@ -1,6 +1,6 @@
 // U.admit replayed on the tap's sample: decide's inputs as today's run held them (U.admit:in: the row, the file's unit, the
 // units file's pieces, the bundle's kind and group, the wrap's verdict, the toggles', the pages shown), each row piece's
-// class (lanes/L3/replay/U.admit.json.gz); against the verdict today recorded (U.admit:out).
+// class (lane L3's derived U.admit); against the verdict today recorded (U.admit:out).
 import { describe, expect, it } from 'vitest'
 import { type AdmitInput, type Admission, admit, refusalOf, type V0Row } from '../../src/unit/admit.ts'
 import { derived, firstDifference, hasDerived, hasTap, roundsOf, sample } from './tap.ts'

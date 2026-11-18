@@ -1,6 +1,8 @@
-// The replay's access to the tap (baseline/tap/TAP.md §6): today's reader's recorded inputs and outputs of each rule, kept in
+// The replay's access to the tap (the tap's spec §6): today's reader's recorded inputs and outputs of each rule, kept in
 // lab-data and never committed (they hold licensed papers' text). A replay test reads them by path and is skipped where the
-// path is absent (hosted CI, a fresh clone): AXT_LAB_DATA names the lab-data directory, else the maintainer's.
+// path is absent (hosted CI, a fresh clone): AXT_LAB_DATA names the lab-data directory, none by default (unset, LAB is a
+// path no machine holds, under /dev/null, a file: every replay test skips, and a lab tool that reads or writes under it fails
+// with the variable's name in the path it names).
 // Every replay test states its own timeout, 120 s: the package's config sets none, so vitest's 5 s applied, and a replay that
 // takes 3 s alone (round.test.ts at load 40) passed it under the whole suite's workers.
 import { existsSync, readFileSync } from 'node:fs'
@@ -8,13 +10,14 @@ import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
 import { CJK, punctOf } from '../../src/breaker/script.ts'
 
-export const LAB = process.env.AXT_LAB_DATA ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data'
+export const LAB = process.env.AXT_LAB_DATA ?? '/dev/null/AXT_LAB_DATA-unset'
 export const TAP = join(LAB, 'refactor-2026-11', 'baseline', 'tap')
 /** the inputs lane L3's lab tools derive from the tap with today's own code (lab/typeset/), beside the tap */
 export const DERIVED = join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'replay')
 export const hasTap = existsSync(join(TAP, 'samples'))
-/** today's engine (065c1d973), read-only: its data files (the rule set, tex-names.json) until Rules' own data files exist */
-export const TODAY = process.env.AXT_TODAY ?? '/Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/refactor-read'
+/** today's engine (065c1d973), read-only (AXT_TODAY, else the worktree `refactor-read` beside this repository's): its data
+ *  files (the rule set, tex-names.json) until Rules' own data files exist */
+export const TODAY = process.env.AXT_TODAY ?? join(import.meta.dirname, '../../../../..', 'refactor-read')
 export const todayFile = (path: string) => join(TODAY, 'src', 'pdf-reader', 'engine', path)
 export const hasToday = existsSync(todayFile('rules/tex-names.json'))
 export const hasDerived = (name: string) => existsSync(join(DERIVED, `${name}.json.gz`))
@@ -320,7 +323,7 @@ export type Sample = { rule: string; branches: Record<string, { count: number; s
 export const sample = (rule: string): Sample => readGz(join(TAP, 'samples', `${rule}.json.gz`)) as Sample
 export const derived = <T>(name: string): T => readGz(join(DERIVED, `${name}.json.gz`)) as T
 
-/** a pair's ledger (TAP.md §5): every unit's slots of every round, the fill passes, the table groups */
+/** a pair's ledger (the tap's spec §5): every unit's slots of every round, the fill passes, the table groups */
 export type Ledger = {
   pair: string
   target: string
@@ -336,7 +339,7 @@ export const ledger = (pair: string): Ledger => {
 }
 /**
  * The ledger's round of a capture's round. A sample entry's captures are numbered by pass 2's own lays, a round given up on
- * NeedPixels among them; the ledger leaves those out and numbers the rest again (TAP.md §2, its NOTES.md: the entry's
+ * NeedPixels among them; the ledger leaves those out and numbers the rest again (the tap's spec §2, its notes: the entry's
  * `rounds`). Where the two counts agree a round is its own; where the ledger holds one round it is the last lay's, and an
  * earlier capture's round was given up (null); otherwise the round cannot be told (undefined)
  */

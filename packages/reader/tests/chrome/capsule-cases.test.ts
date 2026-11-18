@@ -32,7 +32,7 @@ import { layerOf, paperDoc, prepareOf, runOf } from '../helpers/doc.ts'
 
 const ZH = 'zh-Hans'
 const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: ZH }
-/** the website's words for a run's stages (its v2 words.ts: the first making's words, the bare word before a count) */
+/** the website's words for a run's stages (its own reader's words: the first making's words, the bare word before a count) */
 const FIRST = 'translating, the first time takes 1-2 minutes'
 const WORDS: StateWords = {
   queued: 'queued',

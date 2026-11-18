@@ -2,7 +2,7 @@
 // docs/PDF-READER.md §11.11): the engine's text layer data made into PDF.js's own text layer, one span an item in reading order,
 // its translated spans in the target's language (TV1-TV3); over the fake door, built after the commit at idle, between the SVG and
 // the links, the SVG then out of the accessibility tree, kept with a drawing kept off the view or laid ahead, and let go with the drawing it belongs to (TS1-TS10). The real PDF.js's
-// placement, selection, copy and search are the browsers' (pnpm e2e:reader; the web's layer.mjs)
+// placement, selection, copy and search are the browsers' (pnpm e2e:reader; the website's own end-to-end check of the layer)
 import { describe, expect, it } from 'vitest'
 import type { TextLayerData } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import { ITEMS_MAX, SOURCE_LANG, STR_MAX, textContentOf, textItems, textLayer } from '@/pdf-reader/engine/view/text-layer.mjs'

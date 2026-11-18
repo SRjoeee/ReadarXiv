@@ -1,6 +1,6 @@
 // The reader's network through this machine's store of papers (cache/paper-store.ts): the owner's rule of 2026-10-08, offline
 // nothing new is drawn and a paper this machine keeps still opens (PDF-READER §9.3), kept at the Host's one seam, its fetch
-// (interfaces/host DECISION: the host resolves our server's paths). Of our server's answers:
+// (the host decision: the host resolves our server's paths). Of our server's answers:
 //   - what never changes at its address (an object or a range of one, `/api/v2/o/…`; a face's file, `/static-fonts/<16 hex>.woff2`)
 //     is read here first, then asked, and kept as it is read through (a whole object whose address names its digest only where
 //     its bytes are that object);

@@ -1,4 +1,4 @@
-// What a host gives the chrome besides its session (interfaces/host design-a §1.1 Slots): its own controls in their approved
+// What a host gives the chrome besides its session (the host design A §1.1 Slots): its own controls in their approved
 // places, and the words that are its own. The extension's service menu goes before the reading options, its download, settings
 // and way back after them (in the bar, and as the reading options' first rows in a narrow window); its "open the settings"
 // stands under a failure's card. The target languages are named by the host's own tables (the extension's are ported from
@@ -109,7 +109,7 @@ export interface Parts {
   languages: Languages
   /** the host's words for the capsule's and the cards' states; none: the catalogue's */
   words?: StateWords
-  /** the narrow window's rule, where side by side shows the translation alone (interfaces/host design-a §6, one of the
+  /** the narrow window's rule, where side by side shows the translation alone (the host design A §6, one of the
    *  host-divergent behaviours): `told` (the extension's, the default) keeps side by side chosen on the display switch and
    *  says so in the capsule (S-R-14); `shown` (the website's: its owner's rule of 2026-11-03) shows the translation chosen
    *  with side by side greyed (the stored side by side kept for a wider window), and says so only where a window that showed

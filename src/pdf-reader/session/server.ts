@@ -1,4 +1,4 @@
-// What the extension asks our server, and only that (Stage 5 Task 9; the layer API v1, the web's src/shared/layer-api.ts
+// What the extension asks our server, and only that (Stage 5 Task 9; the layer API v1, as the website defines it,
 // recorded by tests/pdf-reader/server.test.ts): a paper version's layer by the reader's CTAG — its catalog, or the prepare
 // under way with the objects made so far, or why there is none, or a wait —, its prepare, each object of it by its digest,
 // our copy of arXiv's PDF of the version, and, where a layer is laid over our own compile (the layer route, design §3.2), that
@@ -12,7 +12,7 @@
 //   GET  /api/v1/base/<id>v<n>/<sha256>             200 application/pdf, or 206 for a range: our base page, where a head says it is ours
 //
 // The catalog's and each object's answer name the original the layer was made over (BASE_ETAG_HEADER: our copy's entity-tag,
-// which the server binds to the head's base as it commits the layer, the web's worker/src/layer/base.ts), so that our copy
+// which the server binds to the head's base as it commits the layer), so that our copy
 // can be read by ranges, every answer held to that tag and the base's length, with no whole read hashed first (ranges.ts).
 //
 // Only the paper's id and version leave the machine, in the address: no query, no body but `{}` on the prepare, no header of
@@ -83,7 +83,7 @@ export function paperSegment(p: Paper): string {
 export const layerPath = (api: string, p: Paper) => `${api}${API_ROOT}layer/${paperSegment(p)}/${CTAG5}`
 export const objectPath = (api: string, p: Paper, sha256: string) => `${layerPath(api, p)}/o/${sha256}`
 /** our base as a delta over arXiv's PDF, by its digest: the object route with the delta's own suffix, as the web serves it (its
- *  src/shared/layer-api.ts deltaPath; the engine's deltaKey names it so). The bare digest of a delta is a 404 there */
+ *  path of a delta; the engine's deltaKey names it so). The bare digest of a delta is a 404 there */
 export const deltaPath = (api: string, p: Paper, sha256: string) => `${objectPath(api, p, sha256)}.delta`
 export const originalPath = (api: string, p: Paper) => `${api}${API_ROOT}original/${paperSegment(p)}`
 /** our base page of the version, where a head says its base is ours: the final pass of our compile, named by the SHA-256 of its

@@ -1,5 +1,5 @@
 // A reader made into the chrome's session, for every host that mounts the chrome over the reader package (the extension's
-// page and the website's: interfaces/host DECISION, the review of 2026-11-12's S3): `openReader` on the page's <body> with the
+// page and the website's: the host decision, the review of 2026-11-12's S3): `openReader` on the page's <body> with the
 // host's Host, its state told to the chrome as the chrome's events (eventsOf) at each change, the chrome's commands the
 // reader's. A host gives only what differs: its Host, its paper (now, or once the panes are there), the address's visit, the
 // typesetter's seam and the PDF.js build where it has its own, the events it tells otherwise (`tell`), what it watches of the

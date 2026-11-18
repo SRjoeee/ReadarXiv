@@ -54,7 +54,7 @@ const KEEP_PDF = process.argv.includes('--keep-pdf')
 const OUT = CHECK ? mkdtempSync(join(tmpdir(), 'sample-bundle-out-')) : (argOf('out') ?? FIXTURE)
 
 /** the sample's identity: an identifier no arXiv paper has (there is no month 00), its first version, and the compiler
- *  image's name the web's prepare names (container/image.json) */
+ *  image's name the web's prepare names (its container's image) */
 const PAPER = { id: '2600.00001', version: 1 }
 const IMAGE = '1'
 /** every compile's date, as the lab pins it (2026-10-06) */

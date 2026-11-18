@@ -124,7 +124,7 @@ export function runOf(s: State): {
 /**
  * Our server's work for the view without the reader's acting, as the document read for the target states it (PDF-READER §8, the
  * coordinator's R3 of 2026-11-12; never a time): its prepare running (`prepare.state`: a layer lands at its end, and the target's
- * run over its units follows, started by our server on units it has not run, worker v2 machine.ts startRecent, or asked by this
+ * run over its units follows, started by our server on units it has not run (its recent run), or asked by this
  * session's open, needsOf); or a need of the visit (needsOf: the prepare of a stale `layer`, the target `done` on other `units`
  * than the layer's) that the session asks: its open under way, or not yet asked with no wait named for it. The target's attempt
  * covers the layer where its `units` are the layer's own (needsOf's comparison by digest). Whether that work goes on is the

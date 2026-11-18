@@ -1,5 +1,5 @@
-// An object read by ranges through the host's fetch (interfaces/host DECISION: one implementation, from the website's
-// `rangeSource`, readarxiv-web web/src/ranges.ts at 0bf496b5): every answer held to the object's length and validator, a read
+// An object read by ranges through the host's fetch (the host decision: one implementation, carried from the
+// website's own range source): every answer held to the object's length and validator, a read
 // bounded by its progress and never by its length, and, for arXiv's PDF, every whole chunk held to the digest the layer's head
 // names for it.
 //
@@ -12,7 +12,7 @@
 //   website's gateway grants 16 file requests a window). A read made before the length was known ends at the object's last byte
 //   where it asks past it, each of its answers held to its own length (L11 third round, gap 6).
 // - **One URL a chunk on our server.** Chromium lets one request at a time write a URL's HTTP-cache entry, so that the ranges of
-//   one URL were read one after the other (8 chunks: 1.3 to 1.5 s against 0.35 to 0.5 s a URL each, W ranges.ts:478-488); our
+//   one URL were read one after the other (8 chunks: 1.3 to 1.5 s against 0.35 to 0.5 s a URL each, measured on the website); our
 //   server reads the path alone. arXiv's URL is asked as it is, with `cache: 'no-store'` (unverified, host design-a §1.5).
 // - **Digests.** The head carries each 64 KiB chunk's digest of the original the layer was made over (format's `chunkDigests`).
 //   Every whole chunk fetched is digested as it comes, a chunk the store let go and fetched again too; once the digests are known
@@ -26,7 +26,7 @@
 import { toBase64Url, sha256 } from '@readarxiv/format'
 import { CHUNK, type ChunkStore } from './store.ts'
 
-/** how long a read may go with nothing from the server before it is taken for stalled (W ranges.ts:16-29: a live link's silences
+/** how long a read may go with nothing from the server before it is taken for stalled (the website measured: a live link's silences
  *  are its round trip, a lossy one's TCP's backoff, 6.2 to 7 s; the one stall measured that came back lasted 9.5 s) */
 export const STALL_MS = 10_000
 /** how many times a range is asked, at most, where the network fails it, but by an owner that keeps reading */

@@ -1,6 +1,6 @@
 // The facts today's reader works out from the page's characters before it typesets (most of prepareUnit, and the readers the
-// run calls around a lay: interfaces/typeset-inputs.md §1B-§1F), read once by the prepare on arXiv's page with exact ownership
-// (stage 1a-2, contract stage1a2-facts.md). Each reading is pure, over a member's own glyphs and lines and the page's other
+// run calls around a lay: the typesetter's inventory of its inputs, §1B-§1F), read once by the prepare on arXiv's page with
+// exact ownership (stage 1a-2's contract). Each reading is pure, over a member's own glyphs and lines and the page's other
 // ink; where today's rule had a threshold that only guarded its re-derivation of ownership, ownership answers instead and the
 // threshold is gone; a threshold that is a typographic fact stays, named, with its source. File:line: today's engine at
 // 065c1d973 (`L2` layer-proto/layer2.mjs, `RUN` run.mjs, `TEX` tex.mjs, `MAKE` layout/make.mjs).

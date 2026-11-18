@@ -1,9 +1,11 @@
 // lab/typeset/hook.mjs: a Node module hook (register it with `node --import ./lab/typeset/register.mjs …`) that lets lane L3's
 // derivation tools call today's typesetting functions the engine does not export, without changing a file: as the engine at
-// 065c1d973 (`AXT_TODAY`, default the read-only worktree `.worktrees/refactor-read`) is loaded, one export line is appended to
+// 065c1d973 (`AXT_TODAY`, default the read-only worktree `refactor-read` beside this repository's) is loaded, one export line is appended to
 // the source of each module named below (EXPOSE), and a function named in WATCH reports its answers to the tool. Nothing else
 // of any module is touched; resolution is Node's own.
-const TODAY = process.env.AXT_TODAY ?? '/Users/cheongzhiyan/Developer/ArxivTranslate/.worktrees/refactor-read'
+import { join } from 'node:path'
+
+const TODAY = process.env.AXT_TODAY ?? join(import.meta.dirname, '..', '..', '..', 'refactor-read')
 /** the private functions exposed, by module under the engine's layer-proto/ */
 const EXPOSE = {
   'layer2.mjs': ['drawnAs', 'unbracketed', 'unbracketedParts', 'displayLines', 'leadMark', 'bracketed', 'renderingClass', 'symbolDrawn', 'resolvePlaceholders', 'finishUnit'],

@@ -1,7 +1,7 @@
-// The byte store one reader holds (interfaces/host design-a §1.5): whole chunks of the objects its sources read, shared by
+// The byte store one reader holds (the host design A §1.5): whole chunks of the objects its sources read, shared by
 // every source of the same object (the left's document of arXiv's PDF and the composed document read the same chunks of it),
 // one ask a chunk at most in flight, a run of chunks asked at once kept to CHUNKS_IN_FLIGHT, the least recently read let go
-// past its bound. Carried from the website's `chunkStore` (readarxiv-web web/src/ranges.ts, 0bf496b5) without the read gate,
+// past its bound. Carried from the website's own chunk store without the read gate,
 // the prefetch's budget and its release, which the rebuild drops (reader-hosts-data §16: the prefetch is not built).
 //
 // A chunk enters only from an answer its source checked, under the object's name the source gives (its address, entity-tag and
@@ -10,7 +10,7 @@
 /** PDF.js's own chunk, which every document here is opened with: every range a document asks is whole chunks of it */
 export const CHUNK = 65_536
 /** the most the store holds (bytes): 64 MiB is past a heavy paper's reads for a jump with both documents (2608.16117v1: the
- *  layer's 15 MB and the left's 4.5 to 5.6 MB, W ranges.ts) */
+ *  layer's 15 MB and the left's 4.5 to 5.6 MB, measured on the website) */
 const STORE_BYTES = 64 * 2 ** 20
 /** the chunks asked of the network at once, at most: 1 MiB in flight fills a 10 Mbit/s line and a 100 Mbit/s one at 80 ms */
 export const CHUNKS_IN_FLIGHT = 16

@@ -6,7 +6,7 @@
 // text goes on from line to line by a fact of the text: TeX's hyphen at a line's end, or a justified block (its full lines'
 // spaces stretched: unlike between them, or unlike its short last line's natural ones), the line reaching its right edge. A
 // line that opens with an item's enumerator (a list's, figure-lines.ts listed) begins an item of its own. Ragged lines are
-// joined by no guess from their shape: stacked legend entries read so (lanes/fig-text/img/ragged); the lines a closed shape
+// joined by no guess from their shape: stacked legend entries read so (lane fig-text's ragged images); the lines a closed shape
 // holds alone are F3's next step (the coordinator's decisions of 2026-11-10 and 2026-11-11).
 
 import { oneFamily } from './facts.ts'
