@@ -12,7 +12,7 @@
 //     moved: the same boxes are a PDF-only offset (pdfTeX's virtual-font drift after a whatsit), a difference is TeX's,
 //     and the mark nearest it says whose (attribute);
 //   - verdictOf: the row's verdict.
-import { classOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { classOf } from '../../../packages/engine/src/marks/marks.ts'
 
 /** the brief's position tolerance */
 export const ITEM_TOL = 0.01

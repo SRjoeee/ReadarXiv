@@ -265,42 +265,6 @@ describe("the typesetter's data", () => {
   })
 })
 
-describe('the speed check', () => {
-  const speed = GATES.find(g => g.id === 'speed')!
-  const ctx: Ctx = { root: '/repo', labData: null, refactor: '/lab', work: '/work', online: false, minFree: 12 }
-  const run = (exit: number, text = ''): StepRun => ({ cmd: ['x'], exit, ms: 0, log: '', text })
-
-  it("runs its zsh driver with zsh, then the analysis over the driver's logs", () => {
-    process.env.RELEASE_CHECK_BASE = '/base'
-    try {
-      const steps = speed.steps!(ctx)
-      expect(steps.map(s => s.cmd.slice(0, 2))).toEqual([['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh'], ['node', 'lab/pdf/spikes/layer-gate/speed.mjs']])
-      expect(steps[0]?.env?.SPEED_LOGS).toBe(steps[1]?.cmd[2])
-      expect(steps[0]?.cmd.slice(2, 4)).toEqual(['/repo', '/base'])
-    } finally {
-      delete process.env.RELEASE_CHECK_BASE
-    }
-  })
-
-  it('measures against the released tree, today\'s engine at 065c1d973, where no base is given', () => {
-    const today = process.env.AXT_TODAY
-    delete process.env.AXT_TODAY
-    try {
-      expect(speed.steps!(ctx)[0]?.cmd.slice(2, 4)).toEqual(['/repo', '/refactor-read'])
-      expect(speed.needs!(ctx)[0]?.path).toBe('/refactor-read/src/pdf-reader/engine')
-    } finally {
-      if (today !== undefined) process.env.AXT_TODAY = today
-    }
-  })
-
-  it("passes on the analysis's verdict alone: FAIL and INCOMPARABLE fail, a measurement with no analysis is no pass", () => {
-    expect(speed.judge!(ctx, [run(0), run(0, 'PASS')]).pass).toBe(true)
-    expect(speed.judge!(ctx, [run(0), run(1, 'FAIL')])).toMatchObject({ pass: false, note: 'the analysis: FAIL' })
-    expect(speed.judge!(ctx, [run(0), run(2, 'INCOMPARABLE')])).toMatchObject({ pass: false, note: 'the analysis: INCOMPARABLE' })
-    expect(speed.judge!(ctx, [run(0)]).pass).toBe(false)
-  })
-})
-
 describe('the equivalence gates, in either shape of their tools', () => {
   const gate = (id: string) => GATES.find(g => g.id === id)!
   const run = (exit: number, text = ''): StepRun => ({ cmd: ['x'], exit, ms: 0, log: '', text })
@@ -522,27 +486,6 @@ describe("today's rows, the way back and the head's own builds", () => {
     // (a row it would not make, one it makes that is not stored, one it holds back, one it writes otherwise)
     expect(rowsAgainst([whole(1, 'a'), whole(3, 'c')], [whole(1, 'b'), whole(4, 'd')], [3])).toMatchObject({ same: 0, differ: [1], held: [3], extra: [4] })
     expect(rowsAgainst([whole(5, 'e')], [])).toMatchObject({ missing: [5] })
-  })
-
-  it("builds today's reader apart and runs today's own checks on it, never the rebuilt reader's in their place", () => {
-    expect(gate('build-today').steps!(ctx)[0]).toMatchObject({ cmd: ['bash', 'lab/release-check/today-build.sh', '/repo', '/work/today-reader'], slot: 'test' })
-    for (const script of ['e2e:reader', 'e2e:registration']) {
-      const g = gate(`${script}-today`)
-      expect([g.tier, g.after]).toEqual(['full', ['build-today']])
-      expect(g.steps!(ctx)[0]).toMatchObject({ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_EXT_DIR: '/work/today-reader/.output/chrome-mv3' } })
-    }
-    const work = mkdtempSync(join(tmpdir(), 'release-check-today-'))
-    dirs.push(work)
-    const today = gate('e2e:reader-today')
-    const at = { ...ctx, work }
-    mkdirSync(join(work, 'today-reader/.output/chrome-mv3'), { recursive: true })
-    expect(today.judge!(at, [run(0, '159/159 passed (30 controls), 5 note(s)')])).toEqual({ pass: true, numbers: { passed: 159, checks: 159 } })
-    // (a seeded fault: the build the gate reads is the rebuilt reader's, whose 81 checks would pass in today's place)
-    mkdirSync(join(work, 'today-reader/.output/chrome-mv3/pdfjs'))
-    expect(today.judge!(at, [run(0, '81/81 passed')])).toMatchObject({ pass: false, note: expect.stringMatching(/carries the rebuilt reader/) })
-    // (the fast tier's two scripts run the rebuilt reader's checks on the default build, and say so)
-    expect(gate('e2e:reader').title).toMatch(/rebuilt reader/)
-    expect(gate('e2e:registration').title).toMatch(/rebuilt reader/)
   })
 
   it('builds the reader the performance gates measure from this commit, in the website tree PERF_WEB names, and never measures without it', () => {

@@ -1,5 +1,5 @@
-// The languages the reader offers (the reader's design, §6.7): the ones the layer sets (the engine's rules TARGETS,
-// tests/pdf-reader/ui/languages.test.ts holds the two equal), each named in its own language: by script (CJK in the design's
+// The languages the reader offers (the reader's design, §6.7): the ones the rebuilt typesetter sets (packages/typeset
+// LANGUAGES, tests/pdf-reader/ui/languages.test.ts holds the two equal), each named in its own language: by script (CJK in the design's
 // order, then Latin, then Cyrillic), each alphabet's languages in the order of their own names
 import type { MenuItem } from '@/ui/menu-item'
 import { LANG_CODE_TO_LOCALE_NAME, type LangCode, toBcp47 } from '@/config/languages'

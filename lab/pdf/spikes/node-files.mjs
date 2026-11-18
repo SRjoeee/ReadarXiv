@@ -1,6 +1,5 @@
-// A directory under Node as a project's file system (latex-front.mjs inMemory's shape): the spikes' roots. Node only: the
-// reader's modules (latex-front.mjs, paper-meta.mjs, and what the layer's door reaches) hold no `node:` specifier, so
-// nothing a browser loads imports this one.
+// A directory under Node as a project's file system (the package's latex-front.ts inMemory's shape): the spikes' roots. Node
+// only (moved here from today's engine at the cut-over): the package's modules hold no `node:` specifier.
 import { readdirSync, readFileSync } from 'node:fs'
 
 /** a directory under Node, as a project's file system: { list(): relative paths, read(path): bytes or null } */

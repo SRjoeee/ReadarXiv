@@ -10,25 +10,17 @@ import {
   closureOf,
   ENGINE,
   ENGINE_ALLOW,
-  ENGINE_MOVE_IN,
-  ENGINE_MOVE_OUT,
   ENGINE_PACKAGES,
-  engineFiles,
   engineViolations,
-  movesPending,
   PORT_STATEMENT,
   portedInClosure,
-  resolveSpecifier,
   statesPort,
   unreached,
-  valueImportsOf,
   // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 } from '../../scripts/check-boundary.mjs'
 
 type Violation = { file: string; spec: string; why: string }
 const E = 'src/pdf-reader/engine'
-/** the destination of a violation's import, repository-relative, without an extension */
-const resolveFor = (v: Violation) => resolveSpecifier(v.file, v.spec) as string
 
 const roots: string[] = []
 afterEach(() => { for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true }) })
@@ -155,12 +147,6 @@ describe('every way a module is named is judged: the rule is a whitelist', () =>
     expect(violationsOf("export const NAMES = [\n  ['title', 'comes from', true],\n  ['author', false],\n]\n")).toEqual([])
     expect(violationsOf("import {\n  a,\n  b,\n} from './ab.mjs'\nimport x, { y } from './xy.mjs'\nimport z, * as w from './zw.mjs'\nimport def from './def.mjs'\n")).toEqual([])
     expect(violationsOf("import{S}from'@/ui/strings'\nexport*from'#imports'\n")).toEqual(['@/ui/strings', '#imports'])
-  })
-  it('names every file of the repository\'s engine, the declaration files included', () => {
-    const files = engineFiles() as string[]
-    expect(files.some(f => f.endsWith('.d.mts'))).toBe(true)
-    expect(files.some(f => f.endsWith('.ts') && !f.endsWith('.d.mts'))).toBe(true)
-    expect(files.some(f => f.endsWith('.mjs'))).toBe(true)
   })
 })
 
@@ -376,27 +362,5 @@ describe('closureOf', () => {
       'packages/engine/src/source/old.mjs',
       'src/pdf-reader/engine/source/old.mjs',
     ])
-  })
-})
-
-// ---- the repository's own tree
-describe('the repository\'s engine today', () => {
-  it('has only the violations of the modules Task 4b moves out, named, and the one import of a module it moves in', () => {
-    const found = engineViolations(engineFiles()) as Violation[]
-    expect(found.filter(v => !movesPending(v))).toEqual([])
-  })
-  it('names in the move-out list only engine files that still violate, and in the move-in list only modules that are still imported', () => {
-    const found = engineViolations(engineFiles()) as Violation[]
-    for (const file of ENGINE_MOVE_OUT) expect(found.some(v => v.file === file), `${file} no longer violates: take it off the list`).toBe(true)
-    for (const target of ENGINE_MOVE_IN) expect(found.some(v => resolveFor(v) === target), `${target} is no longer imported from the engine: take it off the list`).toBe(true)
-  })
-  it('has a closure behind the four core modules it may import that is alias-free and holds nothing but those four', () => {
-    const allowed = new Set<string>()
-    for (const module of ENGINE_ALLOW as string[]) for (const file of closureOf([module]) as Set<string>) allowed.add(file)
-    for (const file of allowed) {
-      for (const spec of valueImportsOf(readFileSync(file, 'utf8')) as string[]) expect(spec.startsWith('.'), `${file} imports ${spec}`).toBe(true)
-      expect((ENGINE_ALLOW as string[]).includes(resolveSpecifier('src/x.ts', file)), `${file} is not one of the four`).toBe(true)
-    }
-    expect(allowed.size).toBe(4)
   })
 })

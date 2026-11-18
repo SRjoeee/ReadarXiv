@@ -1,10 +1,10 @@
-// PDF.js's worker without the images' pixels for the lab's ink reads (src/pdf-reader/engine/layout/pdf-lite.mjs). A spike that opens
+// PDF.js's worker without the images' pixels for the lab's ink reads (packages/engine/src/compile/pdf-lite.ts). A spike that opens
 // arXiv's PDF or a marked compile to read its ink imports this and spreads LITE into getDocument; AXT_STOCK_PDFJS=1 makes both a
 // no-op (the stock reading, to compare). A spike that renders keeps stock PDF.js and does not import this.
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { float32Outlines, LINK_TEXT_PIXELS, liteWorkerSource, NO_IMAGE_PIXELS } from '../../../src/pdf-reader/engine/layout/pdf-lite.mjs'
+import { float32Outlines, LINK_TEXT_PIXELS, liteWorkerSource, NO_IMAGE_PIXELS } from '../../../packages/engine/src/compile/pdf-lite.ts'
 
 const require = createRequire(import.meta.url)
 const stock = process.env.AXT_STOCK_PDFJS === '1'

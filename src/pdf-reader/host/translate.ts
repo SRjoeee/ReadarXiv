@@ -32,8 +32,8 @@ export const WHY_OF: Readonly<Record<ProviderErrorKind, Why>> = {
 const failed = (id: string, kind: string): Result => ({ id, ok: false, why: WHY_OF[kind as ProviderErrorKind] ?? { kind: 'unavailable' } })
 
 /**
- * The characters of plain source a call holds at most, as production's reader batches a paper (its names and values, the PDF
- * engine's mt.mjs FIRST_BATCH and NEXT_BATCH, layer-proto/rows.mjs runRows): the first small, so that it comes back soon,
+ * The characters of plain source a call holds at most, as production's reader batches a paper (its names and values: the
+ * FIRST_BATCH and NEXT_BATCH of the wire of release 065c1d973 and its rows' runRows, deleted here at the cut-over): the first small, so that it comes back soon,
  * then larger. A call goes once the one before it has answered, in the reader's order (the page in view, then outward):
  * one call is out at a time, so the order calls are issued in is the order the nearest are served in, and the chain cuts
  * each into its translators' requests in array order, as many in flight as each allows (production's queue: 8 for
@@ -43,8 +43,8 @@ const failed = (id: string, kind: string): Result => ({ id, ok: false, why: WHY_
 export const FIRST_BATCH = 2500
 export const NEXT_BATCH = 12000
 
-/** a unit's plain source, by whose length a call is planned: its text, an element a space, white space collapsed (mt.mjs
- *  plainSource) */
+/** a unit's plain source, by whose length a call is planned: its text, an element a space, white space collapsed (as
+ *  production's wire's plainSource) */
 const plainOf = (pieces: UnitIn['content']): string => pieces.map(p => (p.t === 'text' ? p.s : p.t === 'span' ? plainOf(p.content) : ' ')).join('')
 const plainLength = (pieces: UnitIn['content']): number => plainOf(pieces).replace(/\s+/g, ' ').trim().length
 
@@ -63,7 +63,7 @@ export function hostTranslate(o: { transport: TranslationTransport; paper: strin
         return
       }
       // calls of FIRST_BATCH then NEXT_BATCH characters, in the reader's order (the nearest first), a unit never split and a
-      // call never empty (mt.mjs batchOf): each call's results are given as it answers; a later call of the reader's (a new
+      // call never empty (as production's wire's batchOf): each call's results are given as it answers; a later call of the reader's (a new
       // reading place's) the chain puts first
       const calls: UnitIn[][] = []
       let cur: UnitIn[] = [], n = 0

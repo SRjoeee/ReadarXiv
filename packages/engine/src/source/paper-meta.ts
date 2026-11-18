@@ -1,8 +1,8 @@
 // What arXiv would compile, and the features a failure might hang on. The main file and compiler come from arXiv's own
 // 00README.json when the package carries one (arXiv writes it on submission); otherwise from the same heuristics as
 // arXiv's preflight, in simplified form.
-// Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
-// a directory under Node, which the spikes' paper-meta.mjs hands in).
+// Runs in Node and in the browser alike: `fsys` is a file system of latex-front.ts (inMemory), or of the lab's node-files.mjs
+// (folder: a directory under Node, which the spikes' paper-meta.mjs hands in).
 import { isMemoryError } from '../memory.ts'
 import type { Fsys } from './latex-front.ts'
 import { jobName, normalizePath, texText } from './latex-front.ts'

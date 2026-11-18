@@ -21,9 +21,9 @@ import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { openPaper } from '../src/pdf-reader/engine/pipeline/live.mjs'
-import { markedOfPaper } from '../src/pdf-reader/engine/layout/paper.mjs'
-import { DRIVER_OUTPUT_MARK, textOfPdf } from '../src/pdf-reader/engine/layout/base.mjs'
+import { openPaper } from '../packages/engine/src/compile/live.ts'
+import { markedOfPaper } from '../packages/engine/src/compile/paper.ts'
+import { DRIVER_OUTPUT_MARK, textOfPdf } from '../packages/engine/src/compile/base.ts'
 import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from '../lab/pdf/spikes/compile-image.mjs'
 
 const run = promisify(execFile)

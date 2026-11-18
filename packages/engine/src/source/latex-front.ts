@@ -3,7 +3,7 @@
 // second addendum): patch source ranges in place, mask math, citations, references and unknown commands, send whole
 // paragraphs. Not a parser: a scanner that knows which constructs carry prose and treats everything else as opaque.
 // Runs the same in Node (the spikes) and in the browser (the reader): a project's files come as a file system of two
-// operations (`inMemory` for an unpacked source; node-files.mjs `folder`, which only Node loads, for a directory), and bytes
+// operations (`inMemory` for an unpacked source; the lab's lab/pdf/spikes/node-files.mjs `folder`, which only Node loads, for a directory), and bytes
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
@@ -6721,7 +6721,7 @@ function storedBodies(
   for (const [name, us] of made) if (timesOf(name, new Set()) === 1) for (const u of us) u.once = true
 }
 
-/** `fsys`: a file system (inMemory, or node-files.mjs folder under Node) */
+/** `fsys`: a file system (inMemory, or the lab's node-files.mjs folder under Node) */
 export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
   // each file's text read once: the package's TeX (.tex, .sty, .cls) is read by several of the passes below
   const texts = new Map<string, string>(),
