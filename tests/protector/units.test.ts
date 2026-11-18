@@ -125,13 +125,13 @@ describe('a number set flush against an inline formula goes on no wire and comes
     const sent: string[] = []
     const fetch = (async (_url: string, init: FetchInit) => {
       const body = format === 'markers'
-        ? JSON.stringify((JSON.parse(init.body) as string[]).map(w => (sent.push(w), { translations: [{ text: w, to: 'zh-Hans' }] })))
-        : JSON.stringify([(JSON.parse(init.body) as [[string[]]])[0][0].map(w => (sent.push(w), w))])
+        ? JSON.stringify((JSON.parse(init.body) as string[]).map(w => { sent.push(w); return { translations: [{ text: w, to: 'zh-Hans' }] } }))
+        : JSON.stringify([(JSON.parse(init.body) as [[string[]]])[0][0].map(w => { sent.push(w); return w })])
       return { ok: true, status: 200, headers: { get: () => null }, text: async () => body } satisfies FetchReply
     }) as Fetch
     const t = format === 'markers' ? microsoft({ fetch }) : google({ fetch })
     const handed: UnitIn[] = []
-    const translator = { ...t, write: (u: UnitIn, target: string) => (handed.push(u), t.write(u, target)) }
+    const translator = { ...t, write: (u: UnitIn, target: string) => { handed.push(u); return t.write(u, target) } }
     const results: Result[] = []
     for await (const r of chainOf().translate([unit], 'zh-Hans', { translators: [translator] })) results.push(r)
     return { handed, sent, result: results[0] }
