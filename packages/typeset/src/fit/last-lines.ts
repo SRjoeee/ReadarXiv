@@ -55,7 +55,14 @@ export function toLastLines(
     if (!at || Math.abs(at.baseline - y) > 0.5 * (at.pitch as number) || at.x1 < l.x1 - 0.05) return
     if (i > 0 ? Math.abs(at.x0 - l.x0) > 0.05 : !b.centred && b.start === undefined && l.x0 > at.x0 + 0.05) return
   }
-  // (each line's target the original's line it now stands on, where it does: the record's drift reads it)
+  moveOnto(lines, B, by)
+}
+
+/**
+ * The laid lines moved by `by`, every line by the same, each line's target the original's line (of the block's baselines `B`)
+ * it now stands on, where it does: the record's drift reads it. X.lastLines' step, and X.stand's (fit/stand.ts)
+ */
+export function moveOnto(lines: LaidLine[], B: readonly number[], by: number): void {
   for (const l of lines) {
     l.baseline += by
     const t = B.findIndex((v) => Math.abs(v - l.baseline) < 0.05)

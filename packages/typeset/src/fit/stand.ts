@@ -1,4 +1,5 @@
 // X.stand (docs/PDF-READER.md §18.92): a table cell of an m or a b column stood in its row where TeX stands it (Placed.stand).
+import { moveOnto } from './last-lines.ts'
 import type { FitBlock, LaidLine } from './types.ts'
 
 /**
@@ -14,7 +15,7 @@ import type { FitBlock, LaidLine } from './types.ts'
  * Only a member of one block, every laid line its own (its lines one cell's: a unit the source walk ran on past its row's end into
  * the next row's cell, its lines in two blocks, is laid as before). The lines are moved in place, before they are placed across
  * (B.place) and settled into their bands (S.settle, which clears a line standing on one of the original's baselines and none
- * other); each line's target the original's line it now stands on, where it does (X.lastLines' way)
+ * other); each line's target the original's line it now stands on, where it does (moveOnto, X.lastLines' step)
  */
 export function toStand(lines: LaidLine[], blocks: readonly FitBlock[] | null | undefined, stand: 'm' | 'b'): void {
   if (blocks?.length !== 1 || !lines.length || lines.some((l) => l.block !== 0)) return
@@ -25,9 +26,5 @@ export function toStand(lines: LaidLine[], blocks: readonly FitBlock[] | null | 
       ? (Math.max(...B) + Math.min(...B)) / 2 - (Math.max(...ys) + Math.min(...ys)) / 2
       : Math.min(...B) - Math.min(...ys)
   if (Math.abs(by) < 1e-9) return
-  for (const l of lines) {
-    l.baseline += by
-    const t = B.findIndex((v) => Math.abs(v - l.baseline) < 0.05)
-    l.target = t >= 0 ? t : null
-  }
+  moveOnto(lines, B, by)
 }
