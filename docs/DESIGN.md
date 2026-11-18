@@ -752,10 +752,13 @@ decision: clearing it costs a re-translation and nothing else.
   sent one (`src/providers/llm.ts`), so a change to what the model is sent is another identity by itself and its answers
   and rows are new: an answer stored under the identity before is never read again, as after a raised version
   (`tests/providers/llm.test.ts`).
-- **The rows** (`rows`): a unit's accepted result, `r1 | identityOf(the chain's translators) | target | sha256 of the
-  unit (every field of the contract's unit but its id, a label: its kind, content, whether it lights by sentence, whether a
-  reply must bring each element back whole, whether it is a bibliography entry; a field the contract adds is a type error in
-  the key until it is keyed) | the context's digest where a translator reads it`, its glossary
+- **The rows** (`rows`): a unit's accepted result, `r1 | identityOf(the chain's translators) | target | the digest of the
+  unit's statement (`askedOf`, the package's, `packages/translate/src/bundle.ts`: the sha256 of every field of the contract's
+  unit but its id, a label: its kind, content, whether it lights by sentence, whether a reply must bring each element back
+  whole, whether it is a bibliography entry; each piece's fields in the contract's order, so no order of an object's keys
+  moves it; a field the contract adds is a type error in it until it is read; the digest our server's rows name their
+  statement by, format's `Row.asked`, and the hash the key held before it, unit for unit, `tests/providers/row-key.test.ts`)
+  | the context's digest where a translator reads it`, its glossary
   the entries the unit's wires use (`rowContextOf`, the package's: the unit as the chain sends it)
   (`src/providers/transport.ts`). Two units of one content that a wire writes apart (an entry is cut at its blocks, one
   that is none at its stops) never share a row. A page opened again reads its units' rows before anything is asked, and sends nothing for

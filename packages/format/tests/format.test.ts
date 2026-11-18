@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import {
   canonical,
   chunkDigests,
@@ -14,6 +15,7 @@ import {
   PaperDoc,
   type Part,
   type Piece,
+  Row,
   read,
   sha256Hex,
   type Units,
@@ -346,6 +348,31 @@ describe('the rows object', () => {
     const { bytes } = write('rows', { format: 1, rows: [row] })
     expect(read('rows', bytes).rows).toHaveLength(1)
     expect(() => read('rows', utf8(JSON.stringify({ format: 1, rows: [row, row] })))).toThrow(/a unit id twice/)
+  })
+  it('a row names the statement it answered (`asked`, a digest) on both arms, or not at all; a reader of before strips it', () => {
+    const asked = '5'.repeat(64)
+    const answer = { id: ID, ok: true as const, content: [{ t: 'text' as const, s: 'x' }], by: 'test', asked }
+    const outcome = { id: '3'.repeat(64), ok: false as const, why: { kind: 'refused' as const }, asked }
+    const { bytes, digest } = write('rows', { format: 1, rows: [answer, outcome] })
+    expect(read('rows', bytes, digest).rows).toEqual([answer, outcome])
+    const { asked: _a, ...plain } = answer
+    expect(read('row', write('row', plain).bytes)).toEqual(plain)
+    expect(fromUtf8(write('row', plain).bytes)).not.toContain('asked')
+    expect(() => read('row', utf8(JSON.stringify({ ...answer, asked: 'x' })))).toThrow(FormatError)
+    // (the schema of before is this one without the field: its objects are not strict, so a row that names its statement
+    // reads as the same row with nothing named, both arms, the rows object whole)
+    const before = z.discriminatedUnion('ok', [
+      (Row.options[0] as z.ZodObject).omit({ asked: true }),
+      (Row.options[1] as z.ZodObject).omit({ asked: true }),
+    ])
+    const rowsBefore = z.object({ format: z.literal(1), rows: z.array(before) })
+    const { asked: _o, ...plainOutcome } = outcome
+    expect(before.parse(answer)).toStrictEqual(plain)
+    expect(before.parse(outcome)).toStrictEqual(plainOutcome)
+    expect(rowsBefore.parse(JSON.parse(fromUtf8(bytes) as string))).toStrictEqual({
+      format: 1,
+      rows: [plain, plainOutcome],
+    })
   })
 })
 

@@ -6,7 +6,7 @@
 // - createLocalTransport (this file), in the background;
 // - createMessageTransport (src/shared/transport.ts): every method a message, in content scripts and extension pages.
 import { kindOfWhy } from '@readarxiv/format'
-import { type Chain, Fault, identityOf, type Note, type PaperContext, type Result, rowContextOf, sha256Hex, type Translator, type UnitIn, type Why } from '@readarxiv/translate'
+import { askedOf, type Chain, Fault, identityOf, type Note, type PaperContext, type Result, rowContextOf, sha256Hex, type Translator, type UnitIn, type Why } from '@readarxiv/translate'
 import { chainRevision } from '@/config/revision'
 import type { Config } from '@/config/schema'
 import { chosenService, serviceOf, serviceRuns, type Service } from '@/config/services'
@@ -243,19 +243,13 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     lastDemoted = { id: a.id, kind: 'auth', message: 'the endpoint refused this key before' }
   }
 
-  // (the unit as its row is keyed: every field of the contract's UnitIn but its id, a label, so that two units a wire writes
-  // apart never share a row (a bibliography entry's `entry` cuts it at its blocks, hard rule 4); a field the contract adds
-  // is a type error here until it is keyed)
-  const unitKeyOf = (u: UnitIn): string => {
-    const { id: _id, kind, content, sentences, strict, entry, ...rest } = u
-    const unkeyed: Record<string, never> = rest
-    void unkeyed
-    return sha256Hex(JSON.stringify([kind ?? null, content, sentences === true, strict === true, entry === true]))
-  }
-  // (the context as the unit's answers depend on it: its glossary the entries the unit's wires use, #637; without a glossary
-  // the context itself, the key as before)
+  // (the unit as its row is keyed: the digest of its statement, the package's `askedOf`, every field of the contract's UnitIn
+  // but its id, a label, so that two units a wire writes apart never share a row (a bibliography entry's `entry` cuts it at
+  // its blocks, hard rule 4); the same digest our server's rows name their statement by. The context as the unit's answers
+  // depend on it: its glossary the entries the unit's wires use, #637; without a glossary the context itself, the key as
+  // before)
   const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
-    `${ROWS}|${chainId}|${lang}|${unitKeyOf(u)}|${usesContext && context ? sha256Hex(JSON.stringify(rowContextOf(translators, u, lang, context))) : '-'}`
+    `${ROWS}|${chainId}|${lang}|${askedOf(u)}|${usesContext && context ? sha256Hex(JSON.stringify(rowContextOf(translators, u, lang, context))) : '-'}`
 
   /** one call of `chain` with `order`: results by unit, the rows read first and written after. `own`: only a translator's
    *  own answer is one (the connection test's) */
