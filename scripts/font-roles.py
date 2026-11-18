@@ -1,7 +1,7 @@
 # The font role table's measured data (packages/engine/src/fonts/font-coverage.ts), from the very files: each face's code
 # points as ranges (start, end, inclusive; its cmap's, but controls and private use: drawn below) and its metrics (units per em, hhea's ascent and descent, whether GSUB has small
-# capitals, the file's SHA-256), and each source's release. The faces are font-roles.ts's FACE_TABLE, read here as text so
-# that one table names them for both. Prints the module, or writes it with --out (only on success):
+# capitals, the file's SHA-256), and each source's release. The faces are the role table's FACE_TABLE (packages/text/src/
+# font-faces.ts, which the engine's fonts/font-roles.ts re-exports), read here as text so that one table names them for both. Prints the module, or writes it with --out (only on success):
 #   python3 scripts/font-roles.py lab/pdf/data/fonts > packages/engine/src/fonts/font-coverage.ts
 #   python3 scripts/font-roles.py lab/pdf/data/fonts --out packages/engine/src/fonts/font-coverage.ts
 # The fonts folder (git-ignored: no font file is committed) holds every face's file under its table name, and
@@ -28,7 +28,7 @@ from pathlib import Path
 from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parent.parent
-ROLES = ROOT / 'packages/engine/src/fonts/font-roles.ts'
+ROLES = ROOT / 'packages/text/src/font-faces.ts'
 COVERAGE_PATH = 'packages/engine/src/fonts/font-coverage.ts'
 FREE_MIN = 10 * 1024 ** 3
 RELEASE_FORM = {'texlive': re.compile(r'^texlive/texlive@sha256:[0-9a-f]{64}$'), 'source-han-serif': re.compile(r'^\d+\.\d+R?$'),

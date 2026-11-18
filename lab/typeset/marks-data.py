@@ -1,5 +1,5 @@
 # lab/typeset/marks-data.py <fonts dir> [--check]: writes packages/typeset/src/data/marks.ts, the ink of the full-width marks
-# of every CJK face of the role table (packages/engine/src/fonts/font-roles.ts FACE_TABLE, read as text as
+# of every CJK face of the role table (packages/text/src/font-faces.ts FACE_TABLE, read as text as
 # scripts/font-roles.py reads it), measured in the very files the website subsets and serves: each mark's default glyph (its
 # cmap's, no feature applied: the glyph the reader draws, its sheet turning `locl` off, docs/PDF-READER.md §18.48), its ink's
 # left and right edges as thousandths of its advance, the left rounded down and the right up so that the stored box holds
@@ -27,7 +27,7 @@ from fontTools.pens.boundsPen import BoundsPen
 from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-ROLES = ROOT / 'packages/engine/src/fonts/font-roles.ts'
+ROLES = ROOT / 'packages/text/src/font-faces.ts'
 COVERAGE = ROOT / 'packages/engine/src/fonts/font-coverage.ts'
 OUT = ROOT / 'packages/typeset/src/data/marks.ts'
 BLOCKS = [(0x3000, 0x303F), (0xFF00, 0xFFEF)]

@@ -151,7 +151,7 @@ describe('the faces', () => {
     expect(new Set(files).size).toBe(files.length)
     const keys = Object.values(FACES).map(f => `${f.family}|${f.weight}|${f.style}`)
     expect(new Set(keys).size).toBe(keys.length)
-    for (const file of ['packages/engine/src/fonts/font-roles.ts', 'packages/engine/src/fonts/font-coverage.ts']) {
+    for (const file of ['packages/engine/src/fonts/font-roles.ts', 'packages/text/src/font-faces.ts', 'packages/engine/src/fonts/font-coverage.ts']) {
       expect(readFileSync(file, 'utf8'), file).not.toMatch(/local\(/)
     }
   })

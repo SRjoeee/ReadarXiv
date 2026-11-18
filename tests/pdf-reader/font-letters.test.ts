@@ -2,15 +2,15 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { COVERAGE, METRICS } from '../../packages/engine/src/fonts/font-coverage.ts'
-import { HOLDS, SMCP } from '../../packages/engine/src/fonts/font-letters.ts'
-import { LETTER_SETS } from '../../packages/engine/src/fonts/font-roles.ts'
+import { LETTER_SETS } from '../../packages/text/src/font-faces.ts'
+import { HOLDS, SMCP } from '../../packages/text/src/font-letters.ts'
 
-// What a reader reads of each face's coverage (packages/engine/src/fonts/font-letters.ts: which alphabets a face holds every letter of, and which
-// faces set small capitals of their own), made from the coverage table (font-coverage.ts, which scripts/font-roles.py makes from
+// What a reader reads of each face's coverage (packages/text/src/font-letters.ts: which alphabets a face holds every letter of, and which
+// faces set small capitals of their own), made from the coverage table (packages/engine/src/fonts/font-coverage.ts, which scripts/font-roles.py makes from
 // the face files), so that the table itself is no part of a reader's bundle. The file is written by this test and held to the
 // table by it: WRITE_FONT_LETTERS=1 pnpm vitest run tests/pdf-reader/font-letters.test.ts writes it again.
 
-const FILE = resolve('packages/engine/src/fonts/font-letters.ts')
+const FILE = resolve('packages/text/src/font-letters.ts')
 /** whether a face's coverage (sorted, disjoint inclusive ranges, start and end in turn) holds a code point */
 const holds = (r: readonly number[], cp: number) => {
   let lo = 0, hi = r.length / 2 - 1
@@ -26,12 +26,17 @@ const made = () => {
   const ids = Object.keys(COVERAGE).sort()
   const holdsOf = (id: string) => Object.keys(LETTER_SETS).filter(a => [...LETTER_SETS[a]!].every(ch => holds(COVERAGE[id as keyof typeof COVERAGE] as readonly number[], ch.codePointAt(0)!)))
   const smcp = Object.keys(METRICS).filter(id => (METRICS as Record<string, { smcp: boolean }>)[id]!.smcp).sort()
-  return `// packages/engine/src/fonts/font-letters.ts
-// Made from the coverage table (font-coverage.ts) by tests/pdf-reader/font-letters.test.ts, which holds the two equal
-// (WRITE_FONT_LETTERS=1 writes it again): what a reader reads of each face's coverage, so that the table itself is no part of
-// a reader's bundle. Not edited by hand.
+  return `// packages/text/src/font-letters.ts
+// Made from the coverage table (packages/engine/src/fonts/font-coverage.ts) by tests/pdf-reader/font-letters.test.ts, which
+// holds the two equal (WRITE_FONT_LETTERS=1 writes it again): what a reader reads of each face's coverage, so that the table
+// itself is no part of a reader's bundle; the engine's role table and the typesetter's B.faces both read it. Not edited by hand.
+// HOLDS and SMCP mirror the face files: an alphabet is held where the file's cmap table (its best Unicode subtable) maps every
+// letter of it, the letters as font-faces.ts LETTER_SETS states them; a face sets small capitals where its file's GSUB table
+// has the \`smcp\` feature. Held to the files by the release check's \`face-files\` gate (lab/typeset/face-tables.py reads
+// them, face-files.mjs judges), whose own reference, lab/typeset/face-files.json, holds each face's file, each alphabet's
+// letters and each file's binding SHA-256.
 
-/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters):
+/** each face's alphabets whose every letter it holds (font-faces.ts LETTER_SETS: a language's own, and a script's bare letters):
  *  its file's cmap, the OpenType character map (its best Unicode subtable), as the coverage table holds it */
 export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
 ${ids.map(id => `  ${JSON.stringify(id)}: Object.freeze(${JSON.stringify(holdsOf(id))}),`).join('\n')}
@@ -49,7 +54,7 @@ describe('the faces\' letters a reader reads (rules/font-letters.mjs)', () => {
   })
   // (each face's row read as a reader reads it, by membership: an alphabet is in it exactly where the face's coverage, its file's
   // cmap, maps every letter of it; a CJK face's row, Latin Modern Math's and the caps face's among them, which no style of a
-  // Latin group asks (font-roles.ts styled): the table is the files', whoever reads it)
+  // Latin group asks (font-faces.ts styled): the table is the files', whoever reads it)
   it('lists an alphabet in a face\'s row exactly where its coverage holds every letter of it, face by face', () => {
     for (const id of Object.keys(COVERAGE))
       for (const a of Object.keys(LETTER_SETS)) {

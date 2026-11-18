@@ -5,6 +5,7 @@
 // threshold is gone; a threshold that is a typographic fact stays, named, with its source. File:line: today's engine at
 // 065c1d973 (`L2` layer-proto/layer2.mjs, `RUN` run.mjs, `TEX` tex.mjs, `MAKE` layout/make.mjs).
 import type { Ink, Line, Piece, Style } from '@readarxiv/format'
+import { bareFontName as bare, readFontName as classifyFont, type FontNameClass } from '@readarxiv/text'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { isInk, r2 } from './lines.ts'
@@ -48,50 +49,12 @@ export function fixedFacesOf(glyphs: Iterable<DocGlyph>): Set<string> {
   return new Set([...faces].filter(([, f]) => f.one && f.letters).map(([face]) => face))
 }
 
-// ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont, ported as it is)
-/** the PostScript name without its subset tag */
-const bare = (name: string) => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
-export interface FontClass {
-  fam: 'serif' | 'sans' | 'mono' | 'math'
-  bold: boolean
-  italic: boolean
-  caps: boolean
-}
+// ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont: @readarxiv/text's)
 /** a PDF font's class, weight, slant and small capitals from its PostScript name: today's classifyFont
- *  (layer-proto/fonts.mjs:42 at 065c1d973), its `design` and PDF.js's fallback guess left out (no rule of the part reads them) */
-export function classifyFont(name: string): FontClass {
-  const n = bare(name)
-  let fam: FontClass['fam'] = 'serif'
-  if (
-    /^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex|mib|syb)|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i.test(
-      n,
-    ) ||
-    /math|symbol/i.test(n)
-  )
-    fam = 'math'
-  else if (
-    /mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|beramono|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i.test(
-      n,
-    )
-  )
-    fam = 'mono'
-  else if (
-    /sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|^cmssbx|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i.test(
-      n,
-    )
-  )
-    fam = 'sans'
-  const bold =
-    /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmbxti|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i.test(
-      n,
-    )
-  const italic =
-    /italic|ital\b|ital$|oblique|slant|kursiv|inclined|^(cm|lm)ti|^cmsl|^sfti|^sfsl|^sfsi|^sfbi|^cmbxti|^cmbxsl|^cmssi|^cmitt|^cmsltt|^cmmi|-it$|-bi$|linlibertineti|linlibertinetbi|linbiolinumti|-ita?$|italicmt|obliquemt/i.test(
-      n,
-    )
-  const caps = /caps|^cmcsc|^sfcc|^sfxc|smallcap|-sc$|sc\d*$|^cmtcsc|^lmromancaps/i.test(n) && !/^cmsc/i.test(n)
-  return { fam, bold, italic, caps }
-}
+ *  (layer-proto/fonts.mjs:42 at 065c1d973), held once in @readarxiv/text (readFontName), its `design` and PDF.js's fallback
+ *  guess left out (no rule of the part reads them) */
+export type FontClass = FontNameClass
+export { classifyFont }
 
 /**
  * A font's family keys as its PostScript name tells them, subset tag off: the name before its first hyphen (DejaVuSans and
