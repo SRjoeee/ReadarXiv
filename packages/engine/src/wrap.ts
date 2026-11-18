@@ -1326,7 +1326,10 @@ function sameOps(a: LexOp[], b: LexOp[]): string | null {
         for (const [w, v] of want) {
           if (b[j]?.op !== w) return `operator ${i}: a split show's ${w} missing`
           const a0 = b[j]!.args[0]
-          if (v !== null && !(typeof v === 'number' && typeof a0 === 'number' && Math.abs(a0 - v) < 5e-7))
+          // (the page's own number, the very one: the split writes it in full (fmtOf, exact: String's shortest decimal, which
+          // ECMAScript's Number::toString makes read back as the number it was written of) and the lexer reads a decimal to its
+          // nearest number, as it read the page's (remove.ts numberAt)
+          if (v !== null && !(typeof v === 'number' && typeof a0 === 'number' && a0 === v))
             return `operator ${i}: a split show's ${w} not its own`
           j++
         }

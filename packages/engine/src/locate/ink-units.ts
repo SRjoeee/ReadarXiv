@@ -269,11 +269,11 @@ export const BLOCK_DY = 1.75
 export const PARA_DY = 3
 /** a line at a paragraph's first line's edge, within this many of its size across, is the next item of a list, not the paragraph's
  *  next line: more than a digit's width (a right-aligned label's: [9] and [10] start half a size apart, 2610.20266v1 p21), less
- *  than an em (the narrowest indent) */
+ *  than an em (the narrowest indent); a line at the edge and a hanging one, packages/engine/tests/ink-units-list.test.ts */
 export const EDGE = 0.75
 /** and a line further across than this many of its size from the paragraph's first starts no line of it: past the widest hanging
  *  label or number measured (a bibliography's [26], 4 sizes; a list of figures' 2.3em), short of where a centred heading's list
- *  starts (2610.20266v1 p21's "REFERENCES", 20 sizes) */
+ *  starts (2610.20266v1 p21's "REFERENCES", 20 sizes); a line past it, packages/engine/tests/ink-units-list.test.ts */
 export const INDENT = 6
 /** two glyphs one word: closer than this share of their size */
 const WORD_GAP = 0.12
