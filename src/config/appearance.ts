@@ -1,5 +1,6 @@
 // Appearance profiles (DESIGN §7.5): the reader's own list of translation styles and hover bands.
 // The built-ins are ordinary entries with fixed ids, so they can be edited, deleted and restored.
+import { BUILT_IN_BANDS } from '@readarxiv/ui/bands'
 import { z } from 'zod'
 import { COLOR_MAX, OPACITY_MAX, OPACITY_MIN, sanitizeColor, sanitizeCustomCss } from '@/core/renderer/style-values'
 import type { Config } from './schema'
@@ -70,15 +71,22 @@ export const BUILT_IN_STYLES: readonly StyleProfile[] = [
   style('muted', '淡一档', { opacity: 0.7 }),
   style('blur', '模糊', { blur: true }),
 ]
-/** A built-in band's `name` is the one every saved configuration holds for it, and the website's copy of these three
- *  (in its reader's highlights): it tells the band not renamed (`profileName`), and is shown nowhere,
- *  since a band is never renamed nor copied. What a reader sees is the pack's name (`O.reading.builtInHighlights`), which
- *  changed on 2026-11-03 while these stayed, so that no stored band reads as one renamed (UI.md S-O-49) */
-export const BUILT_IN_HIGHLIGHTS: readonly HighlightProfile[] = [
-  { id: 'soft-green', name: '柔和绿', color: GREEN, opacity: 0.22 },
-  { id: 'sand', name: '淡黄', color: 'oklch(0.85 0.12 85)', opacity: 0.3 },
-  { id: 'sky', name: '淡蓝', color: 'oklch(0.75 0.12 240)', opacity: 0.25 },
-]
+/** A built-in band's `name` is the one every saved configuration holds for it: it tells the band not renamed
+ *  (`profileName`), and is shown nowhere, since a band is never renamed nor copied. What a reader sees is the pack's name
+ *  (`O.reading.builtInHighlights`), which changed on 2026-11-03 while these stayed, so that no stored band reads as one
+ *  renamed (UI.md S-O-49) */
+const STORED_NAMES: Readonly<Record<string, string>> = {
+  'soft-green': '柔和绿',
+  sand: '淡黄',
+  sky: '淡蓝',
+}
+/** The built-in bands, each its colour and strength as every host offers it (`@readarxiv/ui/bands`), under its stored name */
+export const BUILT_IN_HIGHLIGHTS: readonly HighlightProfile[] = BUILT_IN_BANDS.map(b => ({
+  id: b.id,
+  name: STORED_NAMES[b.id] ?? b.id,
+  color: b.colour,
+  opacity: b.opacity,
+}))
 /** Eight swatches for text and bands, readable on both arXiv backgrounds */
 export const PALETTE: readonly string[] = [
   GREEN, 'oklch(0.62 0.15 250)', 'oklch(0.7 0.14 70)', 'oklch(0.6 0.18 25)',

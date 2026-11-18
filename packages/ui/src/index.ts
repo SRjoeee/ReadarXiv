@@ -25,3 +25,5 @@ export * from './locales/spacing.ts'
 export * from './strings.ts'
 // the design tokens
 export * from './tokens.ts'
+// the highlight's built-in bands (also `@readarxiv/ui/bands`, with no pack and no control)
+export * from './bands.ts'

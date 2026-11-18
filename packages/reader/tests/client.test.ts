@@ -3,7 +3,7 @@
 // out of reach. An object read within its bound, never by a content-length, held to its digest, fetched once while wanted. The
 // follow's and the open's answers read as the session reads them; the follow at our server's pace, counted over minutes against a
 // stand-in of its paper object, and one follow for a visit whatever the session's state does.
-import type { Head } from '@readarxiv/format'
+import { FORMATS, type Head, OpenAsk } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { DEFAULTS } from '../src/prefs.ts'
 import {
@@ -517,6 +517,19 @@ describe('the client: the follow and the open', () => {
     ).toMatchObject({ refused: { why: 'rate', afterMs: 60_000 }, doc: null })
     await expect(at(new Response('', { status: 426 }))).rejects.toMatchObject({ why: 'update' })
     await expect(at(new Response('', { status: 404 }))).rejects.toMatchObject({ why: 'not-found' })
+  })
+  it("the open names the formats format's FORMATS states, as they are (what a host that opens a paper ahead of the reader sends)", async () => {
+    const sent: unknown[] = []
+    await open({
+      fetch: async (_url, init) => {
+        sent.push(JSON.parse(String(init?.body)))
+        return new Response(JSON.stringify({ doc: DOC, follow: null }))
+      },
+      paper: { id: '2401.01234', version: null },
+      target: null,
+    })
+    expect(sent).toEqual([{ paper: '2401.01234', target: null, formats: [...FORMATS], view: 1 }])
+    expect(OpenAsk.parse(sent[0])).toEqual(sent[0])
   })
   it("a refusal's time as our server names it: the instant its period ends (`retryAt`, its clock's), read as it is, and the wait beside it", async () => {
     const at = (r: Response) => open({ fetch: async () => r, paper: { id: '2401.01234', version: 1 }, target: 'ja' })
