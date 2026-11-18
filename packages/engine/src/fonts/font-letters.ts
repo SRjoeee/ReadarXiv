@@ -3,7 +3,8 @@
 // (WRITE_FONT_LETTERS=1 writes it again): what a reader reads of each face's coverage, so that the table itself is no part of
 // a reader's bundle. Not edited by hand.
 
-/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters) */
+/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters):
+ *  its file's cmap, the OpenType character map (its best Unicode subtable), as the coverage table holds it */
 export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   "biolinum-bold": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
   "biolinum-bolditalic": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),

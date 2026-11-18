@@ -69,6 +69,67 @@ describe('the family of a paper', () => {
   })
 })
 
+// The names no paper of the corpus is set in: each pattern of the names' table (DESIGNS: its NFSS family names, as a package's
+// font definition files declare them, and its PostScript names, as a font file names itself) and of the style and class words,
+// read on a name of its own and on one of another's. Any paper may set its body, its code or its math in such a face
+describe('the names no paper of the corpus is set in', () => {
+  it('reads each PostScript name by its design\'s pattern', () => {
+    const rows: [string, Partial<FontClass>][] = [
+      // (AMS's symbols and blackboard bold: amsfonts' msam10 and msbm10; Euler's script; the math of Latin Modern and STIX Two)
+      ['MSAM10', { cls: 'math', design: 'cm', known: true }],
+      ['MSBM10', { cls: 'math', design: 'cm', known: true }],
+      ['EUSM10', { cls: 'math', design: 'cm', known: true }],
+      ['LatinModernMath-Regular', { cls: 'math', design: 'other', known: true }],
+      ['STIXTwoMath-Regular', { cls: 'math', design: 'other', known: true }],
+      ['DejaVuSansMono-Bold', { cls: 'mono', design: 'beramono', bold: true, known: true }],
+      ['LibertinusSans-Regular', { cls: 'sans', design: 'biolinum', bold: false, known: true }],
+      ['LibertinusSerif-Bold', { cls: 'serif', design: 'libertine', bold: true, known: true }],
+      ['EBGaramond-Italic', { cls: 'serif', design: 'garamond', italic: true, known: true }],
+    ]
+    for (const [name, want] of rows) expect(cls(name), name).toMatchObject(want)
+    // (and a name of none of them: a design of no table, its class by its words)
+    expect(cls('Calluna-Regular')).toMatchObject({ cls: 'serif', design: 'other', known: false })
+  })
+
+  it('reads a probe\'s body by a text family\'s NFSS names, a mono or sans body keeping its roman\'s family', () => {
+    // (Courier (psnfss's pcr), Bera Mono (fvm), Latin Modern's typewriter (lmtt), Biolinum (libertine's LinuxBiolinumT-TLF): no
+    // text family's name, so the paper's family is its roman's; no name of theirs is a text family's)
+    const body = (b: string, rm: string) => ({ rm, sf: 'phv', tt: 'pcr', body: b })
+    expect(familyOfProbe(body('pcr', 'ptm'))).toBe('times')
+    expect(familyOfProbe(body('fvm', 'cmr'))).toBe('cm')
+    expect(familyOfProbe(body('lmtt', 'ppl'))).toBe('palatino')
+    expect(familyOfProbe(body('LinuxBiolinumT-TLF', 'LinuxLibertineT-TLF'))).toBe('libertine')
+    expect(familyOfProbe(body('foo', 'bar'))).toBe('other')
+    // (the mono and sans families' NFSS names, as their font definition files declare them: none is read as a text family)
+    const monoSans = ['pcr', 'qcr', 'txtt', 'ucr', 'zco', 'NimbusMono-TLF', 'TeXGyreCursor(0)', 'fvm', 'BeraSansMono', 'DejaVuSansMono-TLF', 'zi4', 'Inconsolata-TLF', 'cmtt', 'lmtt', 'cmvtt', 'phv', 'qhv', 'txss', 'uhv', 'zhv', 'NimbusSans-TLF', 'TeXGyreHeros(0)', 'cmss', 'lmss', 'LinuxBiolinumT-TLF', 'fxb', 'LibertinusSans-TLF']
+    for (const name of monoSans) expect(familyOfProbe(body(name, 'cmr')), name).toBe('cm')
+  })
+
+  it('reads small capitals and an unknown face\'s class by their words', () => {
+    expect(cls('Foo-SmallCaps')).toMatchObject({ caps: true, known: false })
+    expect(cls('Foo-Regular')).toMatchObject({ caps: false, cls: 'serif', known: false })
+    expect(cls('Menlo-Regular')).toMatchObject({ cls: 'mono', design: 'other', known: false })
+    expect(cls('Verdana-Bold')).toMatchObject({ cls: 'sans', design: 'other', bold: true, known: false })
+    expect(cls('OpenSymbol')).toMatchObject({ cls: 'math', design: 'other', known: false })
+  })
+
+  it('answers a target\'s face the same past the targets it remembers', () => {
+    // (more targets than any rule set names, each a language's with a region: the alphabet each is read by is its language's,
+    // whatever was asked before it)
+    const languages = ['de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'cs', 'sv', 'ru', 'uk', 'id', 'ms', 'bg', 'en']
+    const regions = ['AT', 'BE', 'BR', 'CA', 'CH', 'DE', 'ES', 'FR', 'GB', 'IN', 'IT', 'MX', 'NL', 'PL', 'RU', 'SE', 'US']
+    const run = { script: 'latin' as const, cls: 'serif' as const, bold: true, italic: true, caps: false, design: 'libertine' as const }
+    const own = new Map(languages.map((l) => [l, faceFor(rolesFor(l, 'libertine'), run)]))
+    let asked = 0
+    for (const r of regions)
+      for (const l of languages) {
+        expect(faceFor(rolesFor(`${l}-${r}`, 'libertine'), run), `${l}-${r}`).toBe(own.get(l))
+        asked++
+      }
+    expect(asked).toBeGreaterThan(256)
+  })
+})
+
 describe('the faces', () => {
   it('no face is the system\'s', () => {
     const GENERIC = /^(serif|sans-serif|monospace|cursive|fantasy|system-ui|ui-serif|ui-sans-serif|ui-monospace|ui-rounded|math|emoji|fangsong|-apple-system|BlinkMacSystemFont)$/i

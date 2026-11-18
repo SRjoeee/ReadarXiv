@@ -31,7 +31,8 @@ const made = () => {
 // (WRITE_FONT_LETTERS=1 writes it again): what a reader reads of each face's coverage, so that the table itself is no part of
 // a reader's bundle. Not edited by hand.
 
-/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters) */
+/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters):
+ *  its file's cmap, the OpenType character map (its best Unicode subtable), as the coverage table holds it */
 export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
 ${ids.map(id => `  ${JSON.stringify(id)}: Object.freeze(${JSON.stringify(holdsOf(id))}),`).join('\n')}
 })
@@ -45,6 +46,20 @@ describe('the faces\' letters a reader reads (rules/font-letters.mjs)', () => {
     const want = made()
     if (process.env.WRITE_FONT_LETTERS === '1') writeFileSync(FILE, want)
     expect(readFileSync(FILE, 'utf8')).toBe(want)
+  })
+  // (each face's row read as a reader reads it, by membership: an alphabet is in it exactly where the face's coverage, its file's
+  // cmap, maps every letter of it; a CJK face's row, Latin Modern Math's and the caps face's among them, which no style of a
+  // Latin group asks (font-roles.ts styled): the table is the files', whoever reads it)
+  it('lists an alphabet in a face\'s row exactly where its coverage holds every letter of it, face by face', () => {
+    for (const id of Object.keys(COVERAGE))
+      for (const a of Object.keys(LETTER_SETS)) {
+        const all = [...LETTER_SETS[a]!].every(ch => holds(COVERAGE[id as keyof typeof COVERAGE] as readonly number[], ch.codePointAt(0)!))
+        expect(HOLDS[id]!.includes(a), `${id} ${a}`).toBe(all)
+      }
+    // (the rows no style asks, each with an alphabet in it and one not)
+    expect(HOLDS['shs-sc-regular']!.includes('Latn')).toBe(true)
+    expect(HOLDS['shs-sc-regular']!.includes('fr')).toBe(false)
+    expect(HOLDS['lm-math']!.includes('Cyrl')).toBe(false)
   })
   it('names every face of the table, and some alphabets of each that sets text', () => {
     expect(Object.keys(HOLDS).sort()).toEqual(Object.keys(COVERAGE).sort())
