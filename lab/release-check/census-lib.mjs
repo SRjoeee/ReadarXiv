@@ -225,7 +225,7 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
     const comments = kind === 'style' ? commentsByScan(text, true) : kind === 'html' ? [...text.matchAll(/<!--[\s\S]*?-->/g)].map(m => [m.index, m.index + m[0].length]) : []
     f.lines = countLines(lineKinds(text, comments))
     if (kind === 'style') f.history = historyIn(text, comments.map(([s, e]) => ({ start: s, value: text.slice(s, e) })))
-    f.imports = kind === 'html' ? [...text.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(m => ({ spec: m[1].startsWith('.') || m[1].startsWith('/') ? (m[1].startsWith('/') ? `.${m[1]}` : m[1]) : `./${m[1]}`, names: ['*'], type: false, line: 1 })) : kind === 'style' ? [...withoutRanges(text, comments).matchAll(/@import\s+(?:url\()?["']([^"')]+)["']/g)].map(m => ({ spec: m[1], names: ['*'], type: false, line: 1 })) : []
+    f.imports = kind === 'html' ? [...text.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(m => ({ spec: m[1].startsWith('.') || m[1].startsWith('/') ? (m[1].startsWith('/') ? `.${m[1]}` : m[1]) : `./${m[1]}`, names: ['*'], type: false, line: 1, whole: "a page's script" })) : kind === 'style' ? [...withoutRanges(text, comments).matchAll(/@import\s+(?:url\()?["']([^"')]+)["']/g)].map(m => ({ spec: m[1], names: ['*'], type: false, line: 1, whole: "a style sheet's import" })) : []
     return f
   }
   let ast
@@ -303,29 +303,46 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
   f.llm = false
   f.barrel = ast.program.body.length > 0 && ast.program.body.every(s => s.type === 'ImportDeclaration' || (s.type === 'ExportNamedDeclaration' && (s.source || !s.declaration)) || s.type === 'ExportAllDeclaration')
 
-  const addImport = (spec, names, type, node) => {
-    if (typeof spec === 'string') f.imports.push({ spec, names, type, line: lineAt[node.start] })
+  // (an import that takes every export of its module, `names` holding '*': why, for the dead exports' list; a namespace import's
+  // '*' is replaced after the walk by the members its module reads, DEFINITIONS.dead)
+  const addImport = (spec, names, type, node, whole = null) => {
+    if (typeof spec === 'string') f.imports.push({ spec, names, type, line: lineAt[node.start], ...(names.includes('*') && whole ? { whole } : {}) })
   }
   const exportName = (name, type, node) => f.exports.push({ name, type, line: lineAt[node.start] })
+  // (each namespace's local name: its imports (a dynamic import's module object may be bound to one name in several
+  // functions: a read is each one's), the members read of it and where it escapes whole)
+  const namespaces = new Map()
+  const addNamespace = (local, im) => {
+    const ns = { im, members: new Set(), escapes: [] }
+    namespaces.set(local, [...(namespaces.get(local) ?? []), ns])
+    return ns
+  }
   for (const s of ast.program.body) {
     if (s.type === 'ImportDeclaration') {
       const allType = s.importKind === 'type' || (s.specifiers.length > 0 && s.specifiers.every(x => x.importKind === 'type'))
       const names = s.specifiers.map(x => (x.type === 'ImportDefaultSpecifier' ? 'default' : x.type === 'ImportNamespaceSpecifier' ? '*' : nameOf(x.imported)))
       addImport(s.source.value, names, allType, s)
       f.imports.at(-1).locals = s.specifiers.filter(x => x.importKind !== 'type' && x.type !== 'ImportNamespaceSpecifier').map(x => [x.local.name, x.type === 'ImportDefaultSpecifier' ? 'default' : nameOf(x.imported)])
+      // (every name it binds, a type's among them: what a type or a `typeof` names is followed through it)
+      f.imports.at(-1).bound = s.specifiers.filter(x => x.type !== 'ImportNamespaceSpecifier').map(x => [x.local.name, x.type === 'ImportDefaultSpecifier' ? 'default' : nameOf(x.imported)])
+      for (const x of s.specifiers)
+        if (x.type === 'ImportNamespaceSpecifier') {
+          f.imports.at(-1).nsLocal = x.local.name
+          addNamespace(x.local.name, f.imports.at(-1))
+        }
       if (s.source.value === 'ai' && names.some(n => n === 'generateText' || n === 'streamText')) f.llm = true
     } else if (s.type === 'ExportAllDeclaration') {
       if (s.exported) {
-        addImport(s.source.value, ['*'], s.exportKind === 'type', s)
+        addImport(s.source.value, ['*'], s.exportKind === 'type', s, 'a namespace re-exported')
         exportName(nameOf(s.exported), s.exportKind === 'type', s)
       } else {
-        addImport(s.source.value, ['*'], s.exportKind === 'type', s)
+        addImport(s.source.value, ['*'], s.exportKind === 'type', s, 'every name re-exported (export *)')
         f.reexports.push({ star: true, spec: s.source.value })
       }
     } else if (s.type === 'ExportNamedDeclaration') {
       const type = s.exportKind === 'type'
       if (s.source) {
-        addImport(s.source.value, s.specifiers.map(x => (x.type === 'ExportNamespaceSpecifier' ? '*' : nameOf(x.local))), type || s.specifiers.every(x => x.exportKind === 'type'), s)
+        addImport(s.source.value, s.specifiers.map(x => (x.type === 'ExportNamespaceSpecifier' ? '*' : nameOf(x.local))), type || s.specifiers.every(x => x.exportKind === 'type'), s, 'a namespace re-exported')
         for (const x of s.specifiers) {
           if (x.type === 'ExportNamespaceSpecifier') exportName(nameOf(x.exported), type, s)
           else f.reexports.push({ spec: s.source.value, local: nameOf(x.local), exported: nameOf(x.exported), type: type || x.exportKind === 'type' })
@@ -342,6 +359,20 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
   const opening = ast.comments.filter(c => c.end <= (ast.program.body[0]?.start ?? text.length))
   const tops = ast.program.body.flatMap(s => (s.type === 'ExportNamedDeclaration' && s.declaration ? [{ s, d: s.declaration }] : [{ s, d: s }]))
   const constNodes = new Set()
+  // (the module's own values and the types declared for them, `declare const` in a declaration file among them: what a
+  // `typeof` or a schema's enum names, and a JavaScript module's lists as its declaration types them, DEFINITIONS.lists)
+  const values = new Set()
+  const valueTypes = new Map()
+  const enumValues = new Set()
+  for (const { d } of tops) {
+    if (d.type === 'VariableDeclaration')
+      for (const v of d.declarations) {
+        for (const id of idsOf(v.id)) values.add(id)
+        if (v.id?.type === 'Identifier' && v.id.typeAnnotation) valueTypes.set(v.id.name, typeDescOf(v.id.typeAnnotation.typeAnnotation))
+        if (v.id?.type === 'Identifier' && v.init?.type === 'CallExpression' && v.init.callee?.type === 'MemberExpression' && nameOf(v.init.callee.property) === 'enum') enumValues.add(v.id.name)
+      }
+    else if (d.id?.type === 'Identifier' && /^(?:FunctionDeclaration|ClassDeclaration|TSEnumDeclaration|TSDeclareFunction)$/.test(d.type)) values.add(d.id.name)
+  }
   for (const { s, d } of tops) {
     if (d.type !== 'VariableDeclaration' || d.kind !== 'const') continue
     for (const v of d.declarations) {
@@ -403,8 +434,88 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
   // the walk: comparisons, lists, literals, functions
   const fnStack = []
   const stmtStack = []
+  // (the nodes from the program down to the one walked: a list's declaration is read up from its literal)
+  const anc = []
+  // (every list in the order met, each with how it is typed (`typing`, not enumerable): classed by listsByUse)
+  const cands = []
+  // (the module's types: each type it declares, the types it names and how often, the values a `typeof` reads, the values
+  // handed to a schema's enum)
+  const typeDecls = new Map()
+  const typeRefs = new Map()
+  const typeQueries = []
+  const enumArgs = []
+  const refOf = n => (n?.type === 'Identifier' ? [n.name, null] : n?.type === 'TSQualifiedName' && n.left?.type === 'Identifier' ? [n.left.name, n.right.name] : n?.type === 'MemberExpression' && !n.computed && n.object?.type === 'Identifier' ? [n.object.name, nameOf(n.property)] : null)
+  // (a reference to a namespace import's local name: a member read, or the namespace escaping whole, DEFINITIONS.dead)
+  const namespaceUse = (node, parent) => {
+    const all = namespaces.get(node.name)
+    const member = m => all.forEach(ns => ns.members.add(m))
+    const escape = why => all.forEach(ns => ns.escapes.push({ line: lineAt[node.start], why }))
+    // (a declaration of the name: another binding, not a use)
+    if ((parent?.type === 'VariableDeclarator' && parent.id === node) || parent?.params?.includes(node)) return
+    switch (parent?.type) {
+      case 'ImportNamespaceSpecifier':
+      case 'ImportSpecifier':
+      case 'ImportDefaultSpecifier':
+      case 'LabeledStatement':
+      case 'BreakStatement':
+      case 'ContinueStatement':
+        return
+      case 'MemberExpression':
+      case 'OptionalMemberExpression':
+        if (parent.object === node) {
+          const m = !parent.computed ? nameOf(parent.property) : stringOf(parent.property)
+          if (m != null) member(m)
+          else escape('a namespace read by a computed member')
+        } else if (parent.computed) escape('a namespace passed on whole')
+        return
+      case 'TSQualifiedName':
+        if (parent.left === node) member(parent.right.name)
+        return
+      case 'JSXMemberExpression':
+        if (parent.object === node) member(parent.property.name)
+        return
+      case 'ObjectProperty':
+      case 'ObjectMethod':
+      case 'ClassProperty':
+      case 'ClassPrivateProperty':
+      case 'ClassMethod':
+      case 'TSPropertySignature':
+      case 'TSMethodSignature':
+        if (parent.key === node && !parent.computed && !parent.shorthand) return
+        break
+      case 'ExportSpecifier':
+        escape('a namespace re-exported')
+        return
+      case 'TSTypeQuery':
+        escape("a namespace's type taken whole")
+        return
+    }
+    escape('a namespace passed on whole')
+  }
+  // (a dynamic import's or a require's module object, read as a namespace is: the members a declaration destructures of it or
+  // one member read off it; bound to a name, the members read of that name; anything else, every member)
+  const moduleObject = (call, why) => {
+    const spec = stringOf(call.arguments[0])
+    if (typeof spec !== 'string') return
+    const at = anc.length - 1
+    const held = anc[at - 1]?.type === 'AwaitExpression' && anc[at - 1].argument === call ? at - 1 : why === 'a require' ? at : -1
+    const p = held >= 0 ? anc[held - 1] : null
+    const value = anc[held]
+    if (p?.type === 'VariableDeclarator' && p.init === value && p.id?.type === 'ObjectPattern' && p.id.properties.every(x => x.type === 'ObjectProperty' && !x.computed)) return addImport(spec, p.id.properties.map(x => nameOf(x.key)), false, call)
+    if ((p?.type === 'MemberExpression' || p?.type === 'OptionalMemberExpression') && p.object === value && !p.computed) return addImport(spec, [nameOf(p.property)], false, call)
+    addImport(spec, ['*'], false, call, why)
+    if (p?.type === 'VariableDeclarator' && p.init === value && p.id?.type === 'Identifier') {
+      const im = f.imports.at(-1)
+      im.names = []
+      delete im.whole
+      im.nsLocal = p.id.name
+      addNamespace(p.id.name, im)
+    }
+  }
   const walk = (node, parent, test = false) => {
     if (!node || typeof node.type !== 'string') return
+    anc.push(node)
+    if ((node.type === 'Identifier' || node.type === 'JSXIdentifier') && namespaces.has(node.name)) namespaceUse(node, parent)
     const isStmt = /Statement$|Declaration$/.test(node.type)
     if (isStmt) stmtStack.push(node)
     let fn = null
@@ -431,22 +542,45 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
         if (c?.type === 'Identifier') f.calls.add(c.name)
         if (c?.type === 'MemberExpression' && c.object?.name === 'Math' && ['min', 'max'].includes(c.property?.name))
           for (const a of node.arguments) if (isNumberLiteral(a) && !constNodes.has(a)) f.thresholds.push(keep(thresholdOf({ value: numberOf(a), raw: textOf(text, a), name: null, comment: near(node), line: lineAt[a.start], context: `Math.${c.property.name}` }), { literal: a, site: node, comment: near(node) }))
-        if (c?.type === 'Import' || c?.name === 'require') addImport(stringOf(node.arguments[0]), ['*'], false, node)
+        if (c?.type === 'Import' || c?.name === 'require') moduleObject(node, c?.type === 'Import' ? 'a dynamic import' : 'a require')
         if (c?.type === 'MemberExpression' && ((c.object?.name === 'Translator' && c.property?.name === 'create') || c.property?.name === 'createTranslator')) f.endpoints.push({ kind: 'chrome', line: lineAt[node.start] })
+        // (a list handed to a schema's enum by its name, DEFINITIONS.lists)
+        if (c?.type === 'MemberExpression' && nameOf(c.property) === 'enum' && refOf(node.arguments[0])) enumArgs.push(refOf(node.arguments[0]))
         break
       }
       case 'ImportExpression':
-        addImport(stringOf(node.source), ['*'], false, node)
+        addImport(stringOf(node.source), ['*'], false, node, 'a dynamic import')
         break
       case 'NewExpression':
         if (node.callee?.type === 'Identifier') f.calls.add(node.callee.name)
         if (node.callee?.name === 'URL' && node.arguments[1]?.type === 'MemberExpression' && textOf(text, node.arguments[1]) === 'import.meta.url') {
           const s = stringOf(node.arguments[0])
-          if (s) addImport(s.startsWith('.') ? s : `./${s}`, ['*'], false, node)
+          if (s) addImport(s.startsWith('.') ? s : `./${s}`, ['*'], false, node, 'a file named by its URL')
         }
         break
-      case 'TSImportType':
-        addImport(stringOf(node.argument?.literal ?? node.argument), ['*'], true, node)
+      case 'TSImportType': {
+        // (`import('./x').T`: the type T of the module; with no member named, the module's every type)
+        let q = node.qualifier
+        while (q?.type === 'TSQualifiedName') q = q.left
+        addImport(stringOf(node.argument?.literal ?? node.argument), q?.type === 'Identifier' ? [q.name] : ['*'], true, node, 'a type import of the whole module')
+        break
+      }
+      case 'TSTypeAliasDeclaration':
+        typeDecls.set(node.id.name, typeDescOf(node.typeAnnotation))
+        break
+      case 'TSInterfaceDeclaration':
+        typeDecls.set(node.id.name, { k: 'obj', p: propsOf(node.body?.body) })
+        break
+      case 'TSEnumDeclaration':
+        typeDecls.set(node.id.name, { k: 'lits', v: [] })
+        break
+      case 'TSTypeReference': {
+        const r = refOf(node.typeName)
+        if (r) typeRefs.set(refKey(r), (typeRefs.get(refKey(r)) ?? 0) + 1)
+        break
+      }
+      case 'TSTypeQuery':
+        if (refOf(node.exprName)) typeQueries.push(refOf(node.exprName))
         break
       case 'TSAnyKeyword':
         f.any++
@@ -472,16 +606,13 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
         if (strings.length >= 3 && strings.every(s => s != null && s.length <= 40) && !citationNodes.has(node)) {
           const owner = parent?.type === 'VariableDeclarator' ? nameOf(parent.id) : parent?.type === 'NewExpression' ? nameOf(stmtDeclName(stmt)) : nameOf(stmtDeclName(stmt))
           const l = listOf({ entries: strings, line: lineAt[node.start], name: owner, comment: near(node), form: 'list' })
-          // (our own vocabulary: declared `as const`, its type the literal's, or a schema's enum: not a name list)
-          const vocabulary = ((parent?.type === 'TSAsExpression' || parent?.type === 'TSTypeAssertion') && isConst(parent.typeAnnotation)) || (parent?.type === 'CallExpression' && parent.arguments[0] === node && parent.callee?.type === 'MemberExpression' && nameOf(parent.callee.property) === 'enum')
-          if (vocabulary) f.vocabularies.push({ ...l, class: 'vocabulary' })
-          else f.lists.push(keep(l, { literal: node, parent, entries: strings, comment: near(node) }))
+          cands.push(Object.defineProperty(keep(l, { literal: node, parent, entries: strings, comment: near(node) }), 'typing', { value: typingOf(anc) }))
         }
         break
       }
       case 'RegExpLiteral': {
         const words = alternativesOf(node.pattern)
-        if (words.length >= 3) f.lists.push(keep(listOf({ entries: words, line: lineAt[node.start], name: nameOf(stmtDeclName(stmt)), comment: near(node), form: 'regex' }), { literal: node, parent, entries: words, comment: near(node) }))
+        if (words.length >= 3) cands.push(keep(listOf({ entries: words, line: lineAt[node.start], name: nameOf(stmtDeclName(stmt)), comment: near(node), form: 'regex' }), { literal: node, parent, entries: words, comment: near(node) }))
         if (ARXIV_ID.test(node.pattern.replace(/\\\./g, '.'))) f.papers.push({ id: ARXIV_ID.exec(node.pattern.replace(/\\\./g, '.'))[0], line: lineAt[node.start] })
         break
       }
@@ -511,9 +642,23 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
     }
     if (fn) fnStack.pop()
     if (isStmt) stmtStack.pop()
+    anc.pop()
   }
   walk(ast.program, null)
   if (f.llm) f.endpoints.push({ kind: 'llm', line: 1 })
+  // (a namespace import imports the members read of it; one that escapes whole, every member: '*', with why)
+  for (const ns of [...namespaces.values()].flat()) {
+    ns.im.names = [...ns.im.names.filter(n => n !== '*'), ...ns.members, ...(ns.escapes.length ? ['*'] : [])]
+    if (ns.escapes.length) ns.im.whole = ns.escapes[0].why
+    ns.im.namespace = { members: [...ns.members].sort(), escapes: ns.escapes }
+  }
+  // (the module's types and lists, kept out of every enumeration: listsByUse reads them; each list classed here by what this
+  // module alone shows of it, and again by scanTree over the whole tree)
+  Object.defineProperties(f, {
+    listCands: { value: cands },
+    types: { value: { decls: typeDecls, refs: typeRefs, queries: typeQueries, enumArgs, values, valueTypes, enumValues } },
+  })
+  listsByUse(new Map([[path, f]]), () => null)
 
   // each function's token digest: its tokens, comments and white space aside, names and literals as written
   if (tokens && ast.tokens) {
@@ -581,6 +726,346 @@ const sentencesOf = value =>
     .split(/(?<=[.;])\s+/)
     .filter(Boolean)
 const isConst = n => n?.type === 'TSTypeReference' && n.typeName?.type === 'Identifier' && n.typeName.name === 'const'
+const refKey = r => (r[1] ? `${r[0]}.${r[1]}` : r[0])
+
+// ---------------------------------------------------------------- lists by use (DEFINITIONS.lists)
+
+const OPEN_TYPES = new Set(['TSStringKeyword', 'TSNumberKeyword', 'TSBooleanKeyword', 'TSBigIntKeyword', 'TSSymbolKeyword', 'TSObjectKeyword', 'TSAnyKeyword', 'TSUnknownKeyword', 'TSTemplateLiteralType'])
+/** a type written in the source, as listsByUse reads it: `lits` (string or number literals), `none` (null, undefined, never),
+ *  `open` (a primitive: string, number, a template), `union`, `keyof`, `arr` (an array or a tuple, its element `e`), `ref`
+ *  (a named type, `n`, through a namespace `ns`, its arguments `a`), `idx` (an indexed access: a property's name or
+ *  '[number]'), `query` (`typeof` a value), `obj` (an object type, its properties `p`), `other` */
+const typeDescOf = t => {
+  if (!t) return null
+  switch (t.type) {
+    case 'TSParenthesizedType':
+    case 'TSOptionalType':
+      return typeDescOf(t.typeAnnotation)
+    case 'TSNullKeyword':
+    case 'TSUndefinedKeyword':
+    case 'TSNeverKeyword':
+    case 'TSVoidKeyword':
+      return { k: 'none' }
+    case 'TSLiteralType':
+      return t.literal?.type === 'TemplateLiteral' ? { k: 'open' } : { k: 'lits' }
+    case 'TSUnionType':
+      return { k: 'union', u: t.types.map(typeDescOf) }
+    case 'TSIntersectionType':
+      return { k: 'inter', u: t.types.map(typeDescOf) }
+    case 'TSTypeOperator':
+      return t.operator === 'keyof' ? { k: 'keyof', of: typeDescOf(t.typeAnnotation) } : typeDescOf(t.typeAnnotation)
+    case 'TSArrayType':
+      return { k: 'arr', e: typeDescOf(t.elementType) }
+    case 'TSTupleType':
+      return { k: 'arr', e: { k: 'union', u: t.elementTypes.map(x => typeDescOf(x.type === 'TSNamedTupleMember' ? x.elementType : x)) } }
+    case 'TSTypeReference': {
+      const r = refOfType(t.typeName)
+      return r ? { k: 'ref', n: r[1] ?? r[0], ns: r[1] ? r[0] : null, a: (t.typeParameters?.params ?? []).map(typeDescOf) } : { k: 'other' }
+    }
+    case 'TSIndexedAccessType':
+      return { k: 'idx', of: typeDescOf(t.objectType), key: t.indexType?.type === 'TSNumberKeyword' ? '[number]' : t.indexType?.type === 'TSLiteralType' ? String(t.indexType.literal?.value) : null }
+    case 'TSTypeQuery': {
+      const r = refOfType(t.exprName)
+      return r ? { k: 'query', n: r[1] ?? r[0], ns: r[1] ? r[0] : null } : { k: 'other' }
+    }
+    case 'TSTypeLiteral':
+      return { k: 'obj', p: propsOf(t.members) }
+    default:
+      return OPEN_TYPES.has(t.type) ? { k: 'open' } : { k: 'other' }
+  }
+}
+const refOfType = n => (n?.type === 'Identifier' ? [n.name, null] : n?.type === 'TSQualifiedName' && n.left?.type === 'Identifier' ? [n.left.name, n.right.name] : null)
+const propsOf = members => {
+  const p = {}
+  for (const m of members ?? []) if (m.type === 'TSPropertySignature' && !m.computed && nameOf(m.key) != null) p[nameOf(m.key)] = typeDescOf(m.typeAnnotation?.typeAnnotation)
+  return p
+}
+/** how a list's literal is typed where it stands, read up from it through what keeps its value (parentheses, Object.freeze, a
+ *  Set) and the arrays and tables it is a row of, to what types it: `asConst`; `enum`, handed to a schema's enum; `type`, the
+ *  type it stands under (a declaration's, a `satisfies`', a Set's type argument), `path` the steps from that type down to
+ *  the list's element ('elem', or a table's property `{ prop }`); `top`, the name it is declared under. A cast (`as T`, not
+ *  `as const`) checks no member of it: no type */
+const typingOf = anc => {
+  let cur = anc.at(-1)
+  const out = { asConst: false, enum: false, type: null, path: ['elem'], top: null }
+  for (let i = anc.length - 2; i >= 0; i--) {
+    const p = anc[i]
+    const arg = (p.type === 'CallExpression' || p.type === 'NewExpression') && p.arguments[0] === cur
+    // (a method's name, or a function's: `Object.freeze(…)`, a module's own `freeze(…)`)
+    const method = arg ? (p.callee?.type === 'MemberExpression' ? nameOf(p.callee.property) : p.callee?.type === 'Identifier' && p.callee.name === 'freeze' ? 'freeze' : null) : null
+    if ((p.type === 'TSAsExpression' || p.type === 'TSTypeAssertion') && p.expression === cur) {
+      if (!isConst(p.typeAnnotation)) return out
+      out.asConst = true
+    } else if (p.type === 'TSSatisfiesExpression' && p.expression === cur) {
+      out.type = typeDescOf(p.typeAnnotation)
+      return out
+    } else if (p.type === 'ParenthesizedExpression' || p.type === 'TSNonNullExpression' || (arg && method === 'freeze')) {
+      // (its value kept as it is)
+    } else if (arg && method === 'enum') {
+      out.enum = true
+      return out
+    } else if (arg && p.type === 'NewExpression' && /^(?:Readonly)?Set$/.test(p.callee?.name ?? '')) {
+      const given = p.typeParameters?.params?.[0]
+      if (given) {
+        out.type = typeDescOf(given)
+        out.path = out.path.slice(1)
+        return out
+      }
+    } else if (p.type === 'ArrayExpression') out.path.unshift('elem')
+    else if (p.type === 'ObjectProperty' && p.value === cur) out.path.unshift({ prop: nameOf(p.key) ?? stringOf(p.key) })
+    else if (p.type === 'ObjectExpression') {
+      // (a table: its property stepped through above)
+    } else if (p.type === 'VariableDeclarator' && p.init === cur) {
+      out.type = typeDescOf(p.id?.typeAnnotation?.typeAnnotation)
+      out.top = p.id?.type === 'Identifier' ? p.id.name : null
+      return out
+    } else return out
+    cur = p
+  }
+  return out
+}
+/** the types that only wrap another: their first argument read in their place */
+const WRAPPERS = new Set(['Exclude', 'Extract', 'NonNullable', 'Readonly', 'Uppercase', 'Lowercase', 'Capitalize', 'Uncapitalize'])
+
+/**
+ * Each list of a tree classed by use (census.mjs DEFINITIONS.lists): a vocabulary where the code types over its members, a
+ * name list otherwise. The code types over a list's members where a type of the code holds them: a type read off the list
+ * (`typeof X`, in its module or another that imports it, its members kept literal: `as const`, or a closed type it is
+ * declared of), a schema's enum made of it (in place or by its name), or a closed type of the code it is declared an array
+ * or a set of (a union of literals, `keyof` a type, a type read off a vocabulary; written in its declaration, a `satisfies`,
+ * a Set's type argument, or a JavaScript module's declaration file) that some other type of the code names too. A regular
+ * expression is a name list. `files`: the facts by key (a path, or `<repo>:<path>` across trees; factsOf's: each list's
+ * `typing`, the module's `types`); `resolve`: (from, spec) -> a key of `files` or null; `only`: the keys whose lists are
+ * classed (all where null). Rewrites each such file's `lists` and `vocabularies` from its list candidates; a vocabulary says
+ * `by` what.
+ */
+export function listsByUse(files, resolve, only = null) {
+  const product = f => (f.role ?? 'product') === 'product'
+  const declFile = p => {
+    const d = p.replace(/\.(m|c)?js$/, (_, m) => `.d.${m ?? ''}ts`)
+    return d !== p && files.has(d) ? d : null
+  }
+  // (a name a module binds -> the module that declares it, a value or a type: through its imports and re-exports, and a
+  // JavaScript module's declaration file)
+  const memo = new Map()
+  const declaring = (path, name, depth = 0) => {
+    const key = `${path}\u0000${name}`
+    if (memo.has(key)) return memo.get(key)
+    memo.set(key, null)
+    const out = find(path, name, depth)
+    memo.set(key, out)
+    return out
+  }
+  const find = (path, name, depth) => {
+    const f = files.get(path)
+    if (!f || depth > 24) return null
+    if (f.types?.decls.has(name) || f.types?.values.has(name)) return { path, name }
+    const d = declFile(path)
+    const fromDecl = d ? declaring(d, name, depth + 1) : null
+    if (fromDecl) return fromDecl
+    for (const im of f.imports ?? [])
+      for (const [local, imported] of im.bound ?? [])
+        if (local === name) {
+          const to = resolve(path, im.spec)
+          return to ? declaring(to, imported, depth + 1) : null
+        }
+    for (const r of f.reexports ?? [])
+      if (!r.star && r.exported === name) {
+        const to = resolve(path, r.spec)
+        return to ? declaring(to, r.local, depth + 1) : null
+      }
+    for (const r of f.reexports ?? [])
+      if (r.star) {
+        const to = resolve(path, r.spec)
+        const x = to ? declaring(to, name, depth + 1) : null
+        if (x) return x
+      }
+    return null
+  }
+  const viaNamespace = (path, ns, member) => {
+    const im = (files.get(path)?.imports ?? []).find(i => i.nsLocal === ns)
+    const to = im ? resolve(path, im.spec) : null
+    return to ? declaring(to, member) : null
+  }
+  const named = (path, root, member) => (member ? viaNamespace(path, root, member) : declaring(path, root))
+  const typeAt = (path, d) => {
+    const at = d.ns ? viaNamespace(path, d.ns, d.n) : declaring(path, d.n)
+    const desc = at ? files.get(at.path)?.types?.decls.get(at.name) : null
+    return desc ? { path: at.path, name: at.name, desc } : null
+  }
+  // (the members a type of the code holds: closed where it is a set of literals the code wrote)
+  const closed = (d, path, depth = 0) => {
+    if (!d || depth > 24) return false
+    switch (d.k) {
+      case 'lits':
+      case 'none':
+      case 'keyof':
+        return true
+      case 'union':
+        return d.u.some(x => x?.k !== 'none') && d.u.every(x => closed(x, path, depth + 1))
+      // (an intersection holds no member its closed part does not)
+      case 'inter':
+        return d.u.some(x => closed(x, path, depth + 1))
+      case 'ref': {
+        if (!d.ns && WRAPPERS.has(d.n)) return closed(d.a[0], path, depth + 1)
+        // (a schema's type, z.infer<typeof S>: closed where S is a schema's enum)
+        if (d.ns && /^(?:infer|input|output)$/.test(d.n) && d.a[0]?.k === 'query') return enumValue(path, d.a[0])
+        const x = typeAt(path, d)
+        return x ? closed(x.desc, x.path, depth + 1) : false
+      }
+      case 'idx': {
+        if (d.key === '[number]' && d.of?.k === 'query') return kept(path, d.of)
+        const o = d.key && d.key !== '[number]' ? objectOf(d.of, path, depth + 1) : null
+        const p = o?.desc.p?.[d.key]
+        return p ? closed(p, o.path, depth + 1) : false
+      }
+      default:
+        return false
+    }
+  }
+  const objectOf = (d, path, depth = 0) => {
+    if (!d || depth > 24) return null
+    if (d.k === 'obj') return { desc: d, path }
+    if (d.k === 'ref') {
+      if (!d.ns && WRAPPERS.has(d.n)) return objectOf(d.a[0], path, depth + 1)
+      const x = typeAt(path, d)
+      return x ? objectOf(x.desc, x.path, depth + 1) : null
+    }
+    if (d.k === 'idx' && d.key && d.key !== '[number]') {
+      const o = objectOf(d.of, path, depth + 1)
+      const p = o?.desc.p?.[d.key]
+      return p ? objectOf(p, o.path, depth + 1) : null
+    }
+    return null
+  }
+  // (a type's element, and a table type's entry: through arrays, sets, Readonly, Record and object types, and aliases)
+  const elemOf = (d, path, depth = 0) => {
+    if (!d || depth > 24) return null
+    if (d.k === 'arr') return { desc: d.e, path }
+    if (d.k === 'union') {
+      const some = d.u.filter(x => x?.k !== 'none')
+      return some.length === 1 ? elemOf(some[0], path, depth + 1) : null
+    }
+    if (d.k !== 'ref') return null
+    if (!d.ns && /^(?:Readonly)?(?:Array|Set)$/.test(d.n)) return d.a[0] ? { desc: d.a[0], path } : null
+    if (!d.ns && d.n === 'Readonly') return elemOf(d.a[0], path, depth + 1)
+    const x = typeAt(path, d)
+    return x ? elemOf(x.desc, x.path, depth + 1) : null
+  }
+  const entryOf = (d, key, path, depth = 0) => {
+    if (!d || depth > 24) return null
+    if (d.k === 'obj') return d.p[key] ? { desc: d.p[key], path } : null
+    if (d.k !== 'ref') return null
+    if (!d.ns && d.n === 'Record') return d.a[1] ? { desc: d.a[1], path } : null
+    if (!d.ns && /^(?:Readonly|Partial|Required)$/.test(d.n)) return entryOf(d.a[0], key, path, depth + 1)
+    const x = typeAt(path, d)
+    return x ? entryOf(x.desc, key, x.path, depth + 1) : null
+  }
+  // (a list's element type: its own typing's, else, for a JavaScript module's list, its declaration file's)
+  const elementOf = (l, path) => {
+    const t = l.typing
+    let at = t.type ? { desc: t.type, path } : null
+    const d = !at && t.top ? declFile(path) : null
+    if (d && files.get(d)?.types?.valueTypes.has(t.top)) at = { desc: files.get(d).types.valueTypes.get(t.top), path: d }
+    for (const step of t.path) at = at && (step === 'elem' ? elemOf(at.desc, at.path) : entryOf(at.desc, step.prop, at.path))
+    return at
+  }
+  const listIn = (path, name) => (files.get(path)?.listCands ?? []).find(l => l.typing?.top === name && l.typing.path.length === 1)
+  // (a value whose members a type read off it holds: a list `as const`, or of a closed type)
+  const kept = (path, q) => {
+    const at = named(path, q.ns ?? q.n, q.ns ? q.n : null)
+    const l = at ? listIn(at.path, at.name) : null
+    if (!l) return false
+    const e = elementOf(l, at.path)
+    return l.typing.asConst || (e ? closed(e.desc, e.path) : false)
+  }
+  const enumValue = (path, q) => {
+    const at = named(path, q.ns ?? q.n, q.ns ? q.n : null)
+    return at ? Boolean(files.get(at.path)?.types?.enumValues.has(at.name)) : false
+  }
+  // (the outermost type of the code an element type names: its declaration's key, '' for a type read off a list)
+  const namedOf = (d, path) => {
+    if (!d) return null
+    if (d.k === 'ref') {
+      if (!d.ns && WRAPPERS.has(d.n)) return namedOf(d.a[0], path)
+      const x = typeAt(path, d)
+      return x ? `${x.path}#${x.name}` : null
+    }
+    if (d.k === 'keyof' || d.k === 'idx') return d.k === 'idx' && d.of?.k === 'query' ? '' : namedOf(d.of, path)
+    if (d.k === 'union' || d.k === 'inter') return d.u.map(x => namedOf(x, path)).find(x => x != null) ?? null
+    return null
+  }
+  // the code's uses, product modules alone: each type's references, the values a type is read off, those a schema's enum is
+  // made of (by their declaration; a name read in its own module also by the name)
+  const refs = new Map()
+  const typeReads = new Set()
+  const enumReads = new Set()
+  for (const [path, f] of files) {
+    if (!f.types || !product(f)) continue
+    for (const [name, n] of f.types.refs) {
+      const [a, b] = name.split('.')
+      const at = named(path, a, b ?? null)
+      if (at) refs.set(`${at.path}#${at.name}`, (refs.get(`${at.path}#${at.name}`) ?? 0) + n)
+    }
+    for (const [into, uses] of [
+      [typeReads, f.types.queries],
+      [enumReads, f.types.enumArgs],
+    ])
+      for (const [root, member] of uses) {
+        if (!member) into.add(`${path}#${root}`)
+        const at = named(path, root, member)
+        if (at) into.add(`${at.path}#${at.name}`)
+      }
+  }
+  const typedOver = (l, path) => {
+    const t = l.typing
+    if (!t || l.form !== 'list') return null
+    if (t.enum) return "a schema's enum"
+    const own = t.top && t.path.length === 1
+    if (own && enumReads.has(`${path}#${t.top}`)) return "a schema's enum"
+    const e = elementOf(l, path)
+    const typed = e ? closed(e.desc, e.path) : false
+    // (a JavaScript module's list: a type read off its declaration file's value is read off it)
+    const read = typeReads.has(`${path}#${t.top}`) || (declFile(path) != null && typeReads.has(`${declFile(path)}#${t.top}`))
+    if (own && (t.asConst || typed) && read) return 'a type read off it'
+    if (!typed) return null
+    const n = namedOf(e.desc, e.path)
+    if (n === '') return 'a type read off a vocabulary'
+    return n && (refs.get(n) ?? 0) >= 2 ? `declared of ${n.slice(n.indexOf('#') + 1)}` : null
+  }
+  for (const [key, f] of files) {
+    if (!f.listCands || (only && !only.has(key))) continue
+    const lists = []
+    const vocabularies = []
+    for (const l of f.listCands) {
+      const by = typedOver(l, key)
+      if (by) vocabularies.push({ ...l, class: 'vocabulary', by })
+      else lists.push(l)
+    }
+    f.lists = lists
+    f.vocabularies = vocabularies
+  }
+}
+
+/** the lists of a tree that pins another (a profile's `pin`: the website's, over this repository's packages), classed again
+ *  with the pinned tree's types in reach (a list the website declares of a package's type): `scans` one checkout of each
+ *  repository, as graphOf takes them; every other tree's lists are as its own scan classed them */
+export function listsAcross(scans) {
+  const others = {}
+  for (const s of scans) {
+    others[s.repo] = new Set(s.files.keys())
+    others[`${s.repo}:packages`] = [...s.files.keys()].filter(f => /^packages\/[^/]+\/package\.json$/.test(f)).map(p => ({ path: p, json: JSON.parse(readFileSync(join(s.root, p), 'utf8')) }))
+  }
+  const all = new Map()
+  for (const s of scans) for (const [p, f] of s.files) all.set(`${s.repo}:${p}`, f)
+  const resolvers = new Map(scans.map(s => [s.repo, resolverOf(s.repo, [...s.files.keys()], { ...s.profile, root: s.root }, others)]))
+  const resolve = (from, spec) => {
+    const i = from.indexOf(':')
+    const r = resolvers.get(from.slice(0, i))?.(from.slice(i + 1), spec)
+    return r?.path && all.has(`${r.repo}:${r.path}`) ? `${r.repo}:${r.path}` : null
+  }
+  for (const s of scans) if (s.profile.pin) listsByUse(all, resolve, new Set([...s.files.keys()].map(p => `${s.repo}:${p}`)))
+}
 const idsOf = p => (!p ? [] : p.type === 'Identifier' ? [p.name] : p.type === 'ObjectPattern' ? p.properties.flatMap(x => idsOf(x.value ?? x.argument)) : p.type === 'ArrayPattern' ? p.elements.flatMap(idsOf) : p.type === 'AssignmentPattern' ? idsOf(p.left) : p.type === 'RestElement' ? idsOf(p.argument) : [])
 const stmtDeclName = s => (s?.type === 'VariableDeclaration' ? s.declarations[0]?.id : (s?.type === 'ExportNamedDeclaration' || s?.type === 'ExportDefaultDeclaration') && s.declaration ? stmtDeclName(s.declaration) : (s?.id ?? null))
 const countLines = kinds => ({ code: kinds.filter(k => k === 'code').length, comment: kinds.filter(k => k === 'comment').length, blank: kinds.filter(k => k === 'blank').length })
@@ -737,7 +1222,7 @@ export function graphOf(scans) {
     for (const [path, f] of s.files)
       for (const im of f.imports ?? []) {
         const r = resolve(path, im.spec)
-        if (r?.path) edges.push({ from: `${s.repo}:${path}`, to: `${r.repo}:${r.path}`, spec: im.spec, names: im.names, type: im.type, line: im.line })
+        if (r?.path) edges.push({ from: `${s.repo}:${path}`, to: `${r.repo}:${r.path}`, spec: im.spec, names: im.names, type: im.type, line: im.line, ...(im.whole ? { whole: im.whole } : {}), ...(im.namespace ? { namespace: im.namespace } : {}) })
         else if (!r) unresolved.push({ from: `${s.repo}:${path}`, spec: im.spec })
       }
   }
@@ -939,7 +1424,14 @@ export function scanTree(repo, root, profile, { tokens = true, nodes = null } = 
     const f = factsOf(path, text, { tokens, nodes: Boolean(nodes?.(path)) })
     const kept = { ...f, ...placeOf(path, profile) }
     if (f.ast) Object.defineProperties(kept, { ast: { value: f.ast }, text: { value: text } })
+    if (f.listCands) Object.defineProperties(kept, { listCands: { value: f.listCands }, types: { value: f.types } })
     files.set(path, kept)
   }
+  // (each list classed again by the uses the whole tree shows of it: DEFINITIONS.lists)
+  const resolve = resolverOf(repo, [...files.keys()], { ...profile, root })
+  listsByUse(files, (from, spec) => {
+    const r = resolve(from, spec)
+    return r?.path && r.repo === repo && files.has(r.path) ? r.path : null
+  })
   return { repo, root, profile, files }
 }
