@@ -40,6 +40,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { ClassName } from '../prefs.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Clock } from '../stack/clock.ts'
+import { onOf } from '../listeners.ts'
 import type { PageContent, SlotAt, Stack } from '../stack/stack.ts'
 import { kindShown, sameClasses } from './classes.ts'
 import type { Faces } from './faces.ts'
@@ -1036,12 +1037,7 @@ export function createComposer(o: ComposerOptions): Composer {
     },
     settled: (n) => settledOriginal(n),
     member: (ord) => members.get(ord) ?? null,
-    on(type, f) {
-      const set = listeners.get(type) ?? new Set()
-      listeners.set(type, set)
-      set.add(f as (e: unknown) => void)
-      return () => set.delete(f as (e: unknown) => void)
-    },
+    on: onOf<ComposerEvents>(listeners),
     timings: () => timings,
     probe() {
       return {

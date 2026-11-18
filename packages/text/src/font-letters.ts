@@ -1,9 +1,14 @@
-// packages/engine/src/fonts/font-letters.ts
-// Made from the coverage table (font-coverage.ts) by tests/pdf-reader/font-letters.test.ts, which holds the two equal
-// (WRITE_FONT_LETTERS=1 writes it again): what a reader reads of each face's coverage, so that the table itself is no part of
-// a reader's bundle. Not edited by hand.
+// packages/text/src/font-letters.ts
+// Made from the coverage table (packages/engine/src/fonts/font-coverage.ts) by tests/pdf-reader/font-letters.test.ts, which
+// holds the two equal (WRITE_FONT_LETTERS=1 writes it again): what a reader reads of each face's coverage, so that the table
+// itself is no part of a reader's bundle; the engine's role table and the typesetter's B.faces both read it. Not edited by hand.
+// HOLDS and SMCP mirror the face files: an alphabet is held where the file's cmap table (its best Unicode subtable) maps every
+// letter of it, the letters as font-faces.ts LETTER_SETS states them; a face sets small capitals where its file's GSUB table
+// has the `smcp` feature. Held to the files by the release check's `face-files` gate (lab/typeset/face-tables.py reads
+// them, face-files.mjs judges), whose own reference, lab/typeset/face-files.json, holds each face's file, each alphabet's
+// letters and each file's binding SHA-256.
 
-/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters):
+/** each face's alphabets whose every letter it holds (font-faces.ts LETTER_SETS: a language's own, and a script's bare letters):
  *  its file's cmap, the OpenType character map (its best Unicode subtable), as the coverage table holds it */
 export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   "biolinum-bold": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),

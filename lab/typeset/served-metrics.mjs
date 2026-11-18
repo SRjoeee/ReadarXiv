@@ -58,7 +58,7 @@ function catalogue() {
 
 /** CSS's face matching within a family: the style asked (italic, else normal), then the weight asked, else the nearest
  *  lighter one first for 500 and under, heavier first over 500 */
-function faceOf(list, weight, style) {
+export function faceOf(list, weight, style) {
   const styled = list.filter((f) => f.style === style)
   const pool = styled.length ? styled : list.filter((f) => f.style === 'normal').length ? list.filter((f) => f.style === 'normal') : list
   const exact = pool.find((f) => f.weight === weight)
@@ -69,7 +69,7 @@ function faceOf(list, weight, style) {
 }
 
 /** a canvas font string read: its style, weight, size in px and families (today's fontString's two forms) */
-function parse(font) {
+export function parse(font) {
   const m = /^(italic )?(small-caps )?(?:(\d+) |(bold) )?([\d.]+)px (.+)$/.exec(font)
   if (!m) throw new Error(`a font string of another shape: ${font}`)
   const families = [...m[6].matchAll(/"([^"]+)"|([^,\s][^,]*)/g)].map((x) => (x[1] ?? x[2]).trim())
@@ -79,8 +79,8 @@ function parse(font) {
 /** a character of the CJK scripts, which Chrome's canvas sets unkerned (the kana's pairs a served face kerns, haranoaji's
  *  bold, it measures at their full advances: 17 of 17 such runs of the tap's tables), Skia's kerned: measured with kerning
  *  off, in runs of their own */
-const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
-const inRanges = (r, cp) => {
+export const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
+export const inRanges = (r, cp) => {
   for (let i = 0; i < r.length; i += 2) if (cp >= r[i] && cp <= r[i + 1]) return true
   return false
 }

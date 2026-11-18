@@ -41,6 +41,7 @@
 //   never a page the other pane still shows, engine-view-host §16).
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import type { PDFPageView } from 'pdfjs-dist/web/pdf_viewer.mjs'
+import { onOf } from '../listeners.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Clock } from './clock.ts'
 import type { Job, Scheduler } from './scheduler.ts'
@@ -1330,12 +1331,7 @@ export function createStack(o: StackOptions): Stack {
     get held() {
       return aheadHeld
     },
-    on(type, f) {
-      const set = listeners.get(type) ?? new Set()
-      listeners.set(type, set)
-      set.add(f as (e: unknown) => void)
-      return () => set.delete(f as (e: unknown) => void)
-    },
+    on: onOf<StackEvents>(listeners),
     probe() {
       let views = 0,
         nearN = 0,

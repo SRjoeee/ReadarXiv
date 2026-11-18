@@ -9,6 +9,7 @@
 // to it as it changes (`scalechanging`, a zoom's step delay with it), as the places followed it.
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { EventBus, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs'
+import { onOf } from '../listeners.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { OwnedClock } from '../stack/clock.ts'
 import type { Scheduler } from '../stack/scheduler.ts'
@@ -1576,12 +1577,7 @@ export function createPanes(o: PanesOptions): Panes {
     get aheadHeld() {
       return right.held
     },
-    on(type, f) {
-      const set = listeners.get(type) ?? new Set()
-      listeners.set(type, set)
-      set.add(f as (e: unknown) => void)
-      return () => set.delete(f as (e: unknown) => void)
-    },
+    on: onOf<PaneEvents>(listeners),
     probe() {
       const d = follower.driver()
       return {

@@ -36,7 +36,7 @@
 // Votes of glyphs and inequalities, no threshold.
 import type { Piece, Style } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
-import { classifyFont, type StyleGlyph, styleOf, unitSize } from './facts.ts'
+import { classifyFont, fold, mostOf, type StyleGlyph, styleOf, unitSize } from './facts.ts'
 
 type El = Extract<Piece, { t: 'el' }>
 type Span = Extract<Piece, { t: 'span' }>
@@ -54,13 +54,6 @@ interface GroupStyle {
   face: { own: Face | undefined; groups: [id: string, style: Style][]; apart: boolean }
 }
 
-const LETTER = /[\p{L}\p{N}]/u
-/** a character's letters as both sides are compared: decomposed, marks off, lower case, its letters and digits alone (a
- *  ligature its letters) */
-const fold = (ch: string): number[] =>
-  [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
-    .filter((c) => LETTER.test(c))
-    .map((c) => c.codePointAt(0) as number)
 /** the steps an alignment may take, per letter of the two sides: a resource bound (myers.ts `work`), never a decision about
  *  content; past it the letters not reached are not read */
 const WORK_PER_LETTER = 256
@@ -70,22 +63,6 @@ const WORK_PER_LETTER = 256
 const NO_FACE = new Set(['other', 'link', 'colour', 'underline'])
 /** whether a group style (the group table's, or a paper's macro's read face) names a face */
 export const namesFace = (style: string): boolean => !NO_FACE.has(style)
-
-/** the value most of `xs` hold, a tie to the one met first; undefined for none */
-const mostOf = <T>(xs: readonly T[]): T | undefined => {
-  const n = new Map<T, number>()
-  let best: T | undefined
-  let k = 0
-  for (const x of xs) {
-    const c = (n.get(x) ?? 0) + 1
-    n.set(x, c)
-    if (c > k) {
-      k = c
-      best = x
-    }
-  }
-  return best
-}
 
 /** whether a unit's content has a scope a fill or a face may be set in apart from its own: a group, or a switch */
 export function hasScopes(content: readonly Piece[], switches: (el: El) => boolean): boolean {

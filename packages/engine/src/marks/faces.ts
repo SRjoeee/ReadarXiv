@@ -23,7 +23,7 @@
 // a digit there is TeX's prose (a macro's own words), no stop.
 import type { Piece, Style } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
-import { changeOf, classifyFont, faceKeyOf, type StyleGlyph, styleOf, unitSize } from '../locate/facts.ts'
+import { changeOf, classifyFont, faceKeyOf, fold, mostOf, type StyleGlyph, styleOf, unitSize } from '../locate/facts.ts'
 
 type Span = Extract<Piece, { t: 'span' }>
 
@@ -35,35 +35,15 @@ export interface GroupFact {
   stop?: string
 }
 
-const LETTER = /[\p{L}\p{N}]/u
 const SPACE = /\s/u
 /** the punctuation that ends a sentence or a clause (Unicode's Terminal_Punctuation: `.` `,` `;` `:` `!` `?` and every
  *  script's own), never a bracket or a quote, which a macro sets around its argument (`\ctk{0.5k}`: "[0.5k]", its opening
  *  bracket no stop of the group before, its closing one half a pair whose other half no wire writes) */
 const TERMINAL = /^\p{Terminal_Punctuation}+$/u
-/** a character's letters as both sides are compared: decomposed, marks off, lower case, its letters and digits alone */
-const fold = (ch: string): number[] =>
-  [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
-    .filter((c) => LETTER.test(c))
-    .map((c) => c.codePointAt(0) as number)
 /** the steps an alignment may take, per letter of the two sides: a resource bound (myers.ts `work`), never a decision about
  *  content; past it the letters not reached are not matched, and their groups state nothing */
 const WORK_PER_LETTER = 256
 
-const mostOf = <T>(xs: readonly T[]): T | undefined => {
-  const n = new Map<T, number>()
-  let best: T | undefined
-  let k = 0
-  for (const x of xs) {
-    const c = (n.get(x) ?? 0) + 1
-    n.set(x, c)
-    if (c > k) {
-      k = c
-      best = x
-    }
-  }
-  return best
-}
 /** the face most of glyphs are set in, a math font's glyphs aside where others are there */
 const faceOf = (gs: readonly StyleGlyph[]): string | undefined => {
   const text = gs.filter((g) => classifyFont(g.base).fam !== 'math')

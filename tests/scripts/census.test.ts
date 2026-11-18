@@ -675,3 +675,37 @@ describe('lists by use, exports by what is read', () => {
     ])
   })
 })
+
+// The repository's own profile (census-profile.mjs): the debt areas the owner's measure reads are the prepare's and the
+// typesetter's code, today's and the packages', and the package the two share, @readarxiv/text, where a table both read is held
+// once: a list moved there from the engine or the typesetter is still theirs, and still counted.
+describe("the repository's debt areas", () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'census-areas-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('package.json', JSON.stringify({ name: 'e3' }))
+    put('packages/engine/src/a.ts', "export const DESIGNS = ['Figure', 'Table', 'Algorithm']\n")
+    put('packages/typeset/src/b.ts', "export const WORDS = ['Mono', 'Courier', 'Typewriter']\n")
+    put('packages/text/src/c.ts', "export const MOVED = ['Sans', 'Gothic', 'Grotesk']\n")
+    put('packages/translate/src/d.ts', "export const OTHER = ['Times', 'Helvetica', 'Courier']\n")
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    execFileSync('git', ['add', '-A'], { cwd: root })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('counts a list held in @readarxiv/text in the headline, as one held in the engine or the typesetter', async () => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const { debtOf } = await import('../../lab/release-check/census.mjs')
+    const scan = scanTree('engine', root, ENGINE_PROFILE)
+    const files = [...scan.files].map(([path, f]) => ({ id: `engine:${path}`, repo: 'engine', path, f, scan }))
+    const d = debtOf({ label: 'AFTER', scans: [scan], files })
+    const headline = (name: string) => d.lists.list.find((l) => l.name === name)?.headline
+    expect([headline('DESIGNS'), headline('WORDS'), headline('MOVED')]).toEqual([true, true, true])
+    // (a package the two do not share is no debt area of theirs)
+    expect(headline('OTHER')).toBe(false)
+  })
+})
