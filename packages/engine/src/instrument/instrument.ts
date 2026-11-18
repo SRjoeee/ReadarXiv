@@ -1506,7 +1506,7 @@ function spelledRun(
   return n === want.length ? got : null
 }
 /**
- * The ink TeX set for a unit's tail pieces past its end point (lanes/past-end.md). The marking sets a unit's end point after its last
+ * The ink TeX set for a unit's tail pieces past its end point (lane past-end's record). The marking sets a unit's end point after its last
  * text, so a piece of ink after that text with no closing point of its own — a paper's macro that may read ahead, its opening point
  * alone (2608.25210v2 u8's `doi:\\vldbdoi`), or a piece no mark may stand before (an e-mail after `\\\\`, which reads ahead:
  * 2610.21313v1's affiliations) — sets ink that no reading of the ownership's gives anyone (own.mjs reads an opening alone to its
@@ -1605,7 +1605,7 @@ export function tailInkOf(
 }
 
 /**
- * The ink of a piece TeX gave its opening point alone and of the one unmarked piece after it (lanes/past-end.md): a paper's macro
+ * The ink of a piece TeX gave its opening point alone and of the one unmarked piece after it (lane past-end's record): a paper's macro
  * that may read ahead has no closing point, and where the piece right after it is one no mark may stand before (`\\sys\\footnote{…}`:
  * nothing of ours may stand between a macro that reads ahead and what it may read), neither has a point between them. own.mjs parts
  * the two by the macro's text only where its next mark is the unit's own next one (stream.mjs ownedOf's `split`); where the unit
@@ -1698,7 +1698,7 @@ export function splitInkOf(
 
 /**
  * The ink of a piece TeX set with no point of its own, or with its opening point alone, that no reading before found
- * (lanes/soul-locate.md). The marking leaves a paper's macro glued to the word before it unmarked (a mark would part the word's
+ * (lane soul-locate's record). The marking leaves a paper's macro glued to the word before it unmarked (a mark would part the word's
  * hyphenation and kerns), and the piece right after a paper's macro that may read ahead (marks.mjs LOOKS_AHEAD: the probe asks
  * TeX of no paper's macro there, AHEAD_FOLLOWS, which "is found by the text TeX sets for it"); own.mjs reads such a piece by the
  * probe's text where it has one (MR 4, the split). Where the probe gave none (readInkTexts refuses a listing of a rule: soul's
