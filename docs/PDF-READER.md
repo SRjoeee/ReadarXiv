@@ -8362,6 +8362,22 @@ was marked: the marking (`marks.ts` classOf) and the ownership that reads the ma
 compile (`front.ts` sourceUnitsOf) are the source's alone: a unit holding such a display is sent again once the bundle's
 twin states it.
 
+- **Measured** (lane disp-tex, the chain over the 245 papers from their stored compiles against the fix batch's): 240 papers'
+  objects byte for byte; in the five, 229 elements of 115 units stated `display`, every one of them a display TeX set through a
+  paper's macro: one with no parameter for an environment (`\be`, `\bea`, `\beqa`, `\bestar`: 151) or one with a parameter whose
+  body is one (`\al{…}`: 78); no other element moved and no unit id. Of them 190 had flowed as text lines and are held, their
+  members' KEPT lines 35 to 648 and their PINNED text lines 297 to 18; 13 kept by their place before are held as a spelled
+  display at that place is, their rows KEPT lines of their member (a separation under 7 of them); 26 are in 17 units located
+  nowhere as before ("text past its source"; of the two read, a display with no mark of its own after a paper's footnote macro,
+  its glyphs B's owners give the unit's text), stated in the units alone. Unreached: 9 displays a unit opens with; 4 pieces
+  TeX's display starts at with no ink of theirs (two a paper's `\iffalse` macro); 17 with no mark and no ink of their own (after
+  a paper's macro that may look ahead, or in a branch a paper's `\iffalse` macro skips). No element newly unfound, no member
+  newly the original's, no alignment and no line's measure moved. The wire: 62 units' wires move on each of Google's,
+  Microsoft's and Chrome's (a display a capital follows now ends its sentence); 53 units holding such a display send the same
+  bytes (between lower-case text or at the unit's end, one marker either way). Laid by the typesetter with §18.94: 2608.04473v1
+  p14's display (6.5), 2608.10322v2 p4's (2.2) and (2.3), 2608.01890v1 p13's two `eqnarray`s and 2608.23517v1 p5's (1.13) and
+  (1.14) stay where TeX set them, the translation around them; 2608.23517v1's 76-row alignment on p34 and p35, whose unit did
+  not fit and stayed English, is laid around its rows.
 - **Not done: the stop before the paper's own end macro.** `\be x = y, \ee` ends with the paper's `\ee`, which `displayStop`
   does not read off as it reads `\end{equation}`: the stop stays unread there (the wire's `displayEnds` still gives a display
   followed by a capital its full stop). The source reader knows the paper's end macros (`latex-front.ts` envMacros), but only
