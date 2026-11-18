@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader on the Read arXiv website, what had already arrived while the page was held up, as on a busy computer, is used: a part of the translation, a page's layout or a font. It could be dropped, and some pages then stayed in English until they were scrolled away and back or the page was reloaded.
 - Fixed: in the PDF reader on the Read arXiv website, a part of a translation that could not be fetched no longer ends the translation as failed: a finished translation with every passage in is finished, and where passages are still missing their part is fetched again by itself, a second later, then two, four, up to half a minute apart. A translation with every passage in could be counted as failed, with nothing to retry, until the page was reloaded.
 - Fixed: in the PDF reader on the Read arXiv website, a paper's translation is told finished once Read arXiv has finished it, every passage in. Where the end came while the reader was still fetching the last passages, the page could keep saying the translation was on its way, for as long as it stayed open, until it was reloaded.
 - Changed: in the PDF reader, a figure's or a table's caption keeps its own line spacing, as the paper sets it, and leaves any room it does not need under it. A caption whose translation is shorter than the original had been spread to fill the original's height, its lines pulled apart or its letters spaced out.

@@ -820,7 +820,7 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   the notice (it stood 150 ms); one asked again at our server's time is the notice for that wait, with no retry, giving way to
   the count when the ask begins; one nothing asks again but the reader is the notice with its retry.
   The notice closed stays closed for the visit unless more passages fail.
-- **Our server's rows, read** (the coordinator's rulings of 2026-11-18, R1 to R5, on staging's 2026-11-17: a paper's first open
+- **Our server's rows, read** (the coordinator's rulings of 2026-11-18, R1 to R6, on staging's 2026-11-17: a paper's first open
   whose rows ended failed with 143 of 143 held, its record done, nothing told and nothing offered, 2608.28692v1; another that
   stayed arriving for good with 212 of 212 held, 2608.04322v1). The reader reads every rows object our server's document names
   for the target, each held to its digest, until the document states the target's run done or failed
@@ -840,6 +840,17 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
     out;
   - a document heard while the reader reads an object is read at once, never waited for: the wait is for the next change, and
     a follow whose last document says nothing runs asks for no other (the 212 of 212);
+  - every ask of our server (the catalog, the parts, the units, the rows, the follow, the open, the served faces) is bounded by
+    the network's silence, `REQUEST_MS` from the ask, again from its answer and from each part of its body read, never by one
+    deadline over the answer and its body. After a stall of the page's own thread across such a deadline, Chromium runs the
+    answer's task first, the deadline's timer next and the body's last: a read whose every byte had come failed by the
+    reader's own clock, one request answered 200 in the page's list (Chromium 153 on the loopback, the bound at 2 s, the
+    thread held 4 s from the ask, the answer sent at once: 16 reads of 30 failed so over two runs; none of 20 with the bound on
+    the network's silence; with the thread held only once the answer was read, none of 75 under either bound; the lane's
+    `lanes/rows-end/stall-probe.mjs`). Whether a staging read met it is not shown (none failed in the 2026-11-18 recording,
+    whose machine was not starved). Such a failure had failed the rows for good, put a
+    page whose part it was back to arXiv's until it came near again, refused the layer for now where it was the catalog, made
+    a table of the served faces none for the visit, and lost a slice met twice;
   - the extension's rows, made here, keep theirs: there `unavailable` is the translators' answer.
 - **A page laid is a lay over the rows as they stand** (2026-11-13). A page laid, committed or laid with nothing of its own
   (every member without a translation: the original's by the rule), keeps every row its lay read and what it saw of it (a
