@@ -163,11 +163,16 @@ function shareOver(p: FillUnit, own: FrameLeads | null, sh: FillShare | null): F
     lead: sh.last,
     leads: sh.leads,
   })
+  // (a line of the same start, page and block as (i)'s stands on its slot. Both lays fill the same slots in turn up to the first
+  // line that differs: the share's cut sends the text on to its frame's first slot, in a later block or page than the line it
+  // leaves (breaker/break.ts pageSlot, `reaches`); and the slots stand at one leading: past `eq` above each of the share's is
+  // `lo` itself or `lo` rounded (frameShareOf: every other it tries is a hundredth off), and the unit's state carries no frame
+  // leadings of its own here (fillLeadsOf lays a fit's state: member.ts, and fill-page.ts's evenOf before its relay))
   const same =
     l.lines.length === was.lines.length &&
     l.lines.every((x, i) => {
       const y = was.lines[i]!
-      return x.from === y.from && x.page === y.page && x.block === y.block && Math.abs(x.baseline - y.baseline) < 1e-6
+      return x.from === y.from && x.page === y.page && x.block === y.block
     })
   return same ? null : sh
 }
