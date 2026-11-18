@@ -143,6 +143,10 @@ describe('locale packs', () => {
     expect(LOCALES.en.R.status.facesLost).toBe("Some fonts didn't load. Reload to try again.")
   })
 
+  it("Japanese asks to try a lost font face again with its pack's own verb, as its notice of too many requests does (UI.md S-R-28)", () => {
+    expect(LOCALES.ja.R.status.facesLost).toBe('一部のフォントを読み込めませんでした。ページを再読み込みして再試行してください')
+  })
+
   it('after setLocale every state of the popup changes language, not one sentence left in the previous pack', () => {
     setLocale('en')
     expect(localeInUse()).toBe('en')
