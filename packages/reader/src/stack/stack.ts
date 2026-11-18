@@ -41,6 +41,7 @@
 //   never a page the other pane still shows, engine-view-host §16).
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import type { PDFPageView } from 'pdfjs-dist/web/pdf_viewer.mjs'
+import { onOf } from '../listeners.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Clock } from './clock.ts'
 import type { Job, Scheduler } from './scheduler.ts'
@@ -194,17 +195,6 @@ export interface StackEvents {
   failed: { n: number; key: string }
 }
 type Listener<K extends keyof StackEvents> = (e: StackEvents[K]) => void
-
-/** the `on` of a part that tells events of map `E` to its listeners (the stack's, the composer's, the panes'): `f` added to
- *  `type`'s, and a function that takes it off again */
-export function onOf<E>(listeners: Map<keyof E, Set<(e: unknown) => void>>) {
-  return <K extends keyof E>(type: K, f: (e: E[K]) => void) => {
-    const set = listeners.get(type) ?? new Set()
-    listeners.set(type, set)
-    set.add(f as (e: unknown) => void)
-    return () => set.delete(f as (e: unknown) => void)
-  }
-}
 
 /**
  * The page boxes' rounding the reader's panes share. PDF.js floors a page box to a multiple of its canvas's pixel fraction as

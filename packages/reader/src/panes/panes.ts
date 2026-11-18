@@ -9,12 +9,12 @@
 // to it as it changes (`scalechanging`, a zoom's step delay with it), as the places followed it.
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { EventBus, PDFLinkService, PDFViewer } from 'pdfjs-dist/web/pdf_viewer.mjs'
+import { onOf } from '../listeners.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { OwnedClock } from '../stack/clock.ts'
 import type { Scheduler } from '../stack/scheduler.ts'
 import {
   createStack,
-  onOf,
   type PageContent,
   PDF_TO_CSS,
   roundingTable,
