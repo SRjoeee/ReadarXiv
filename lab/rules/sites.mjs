@@ -16,9 +16,10 @@ import { scanTree, graphOf } from '../release-check/census-lib.mjs'
 import { entriesOf } from './pattern.mjs'
 
 export const SITES_FORMAT = 'readarxiv/rule-sites 1'
-/** the areas whose rules the ledger holds: the census's debt areas (the prepare, today's and the packages', and the
- *  typesetter) and the translate package (R5d's area, outside the census's headline) */
-export const RULE_AREAS = ['today-engine', 'pkg:engine', 'pkg:typeset', 'pkg:translate']
+/** the areas whose rules the ledger holds: the census's debt areas (the prepare, today's and the packages', the
+ *  typesetter, and @readarxiv/text, where the font tables both read are held) and the translate package (R5d's area, outside
+ *  the census's headline) */
+export const RULE_AREAS = ['today-engine', 'pkg:engine', 'pkg:typeset', 'pkg:text', 'pkg:translate']
 /** the threshold classes the ledger records: a budget (R5e's), a conversion, a structural number and a code are not rules */
 const RULE_CLASSES = new Set(['tuned', 'borderline'])
 const REL = { '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge' }
