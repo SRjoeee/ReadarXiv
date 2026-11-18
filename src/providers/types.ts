@@ -38,7 +38,7 @@ export const REQUEST_TIMEOUT_ERROR_NAME = 'RequestTimeoutError'
  * pipelines' halt and the page's restart-on-hand-over decision. A new key rebuilds the transport (`chainConfigChanged`),
  * which is what clears them
  */
-export const PERMANENT_ERROR_KINDS: ReadonlySet<ProviderErrorKind> = new Set<ProviderErrorKind>(['no-key', 'auth'])
+const PERMANENT_ERROR_KINDS: ReadonlySet<ProviderErrorKind> = new Set<ProviderErrorKind>(['no-key', 'auth'])
 
 export function isPermanentErrorKind(kind: string): kind is 'no-key' | 'auth' {
   return PERMANENT_ERROR_KINDS.has(kind as ProviderErrorKind)
