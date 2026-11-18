@@ -820,7 +820,7 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   the notice (it stood 150 ms); one asked again at our server's time is the notice for that wait, with no retry, giving way to
   the count when the ask begins; one nothing asks again but the reader is the notice with its retry.
   The notice closed stays closed for the visit unless more passages fail.
-- **Our server's rows, read** (the coordinator's rulings of 2026-11-18, R1 to R6, on staging's 2026-11-17: a paper's first open
+- **Our server's rows, read** (the coordinator's rulings of 2026-11-18, R1 and R3 to R6, on staging's 2026-11-17: a paper's first open
   whose rows ended failed with 143 of 143 held, its record done, nothing told and nothing offered, 2608.28692v1; another that
   stayed arriving for good with 212 of 212 held, 2608.04322v1). The reader reads every rows object our server's document names
   for the target, each held to its digest, until the document states the target's run done or failed
@@ -828,11 +828,15 @@ spent the page said "20:26 后可以重试" at 20:16 and "20:36" at 20:26, while
   - the end is our server's to state: the rows end failed only where its document states the target failed (`server`, with
     the time it names). A read of one object that fails is a fault of that read, never the run's end;
   - an object is read once its read has succeeded: one that failed is not, and the next document asks it again;
-  - where the document states the target done and an object is unread, the rows are complete where every unit shown holds
-    its row (the units the view counts, §6.6), whatever that object would have restated; where a unit shown still lacks its
-    row, the object is asked again through the rows' wait the session has for a time (failed with its `retryAt`, its timer,
-    `againOf`): asked by itself, so the failed passages' notice stands with its time and no retry, the count when the ask
-    begins, complete once read. No state, notice or word of its own. The waits are the session's own for asking again by
+  - the end is the document's and every object it names: where the document states the target done, the rows are complete
+    only once every object it names is read; one unread is asked again through the rows' wait the session has for a time
+    (failed with its `retryAt`, its timer, `againOf`), whatever the units hold meanwhile. Never by the units shown: they follow
+    the toggles (an object unread holding the rows of units a toggle hides found none when the toggle showed them), and the
+    units read can be a layer's before while a new layer's are read (the layer before's every row held, the new one's object
+    unread). Its first ruling, complete where every unit shown held its row, was withdrawn the same day for both (the
+    coordinator's review). Asked by itself: where a unit shown lacks its row, the failed passages' notice stands with its time
+    and no retry, the count when the ask begins; where none does, nothing is told once a page is laid; complete once read. No
+    state, notice or word of its own. The waits are the session's own for asking again by
     itself (`backoff`: a second, doubled to thirty, `BACKOFF_MS` to `BACKOFF_MAX_MS`), never a constant (one object refused for
     good asked every two seconds for as long as a tab stays open is a standing load at production's scale), the tries counted
     for the run, from none again once a read of an object that had failed succeeds or the document names other objects; a

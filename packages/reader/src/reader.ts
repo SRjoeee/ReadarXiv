@@ -57,7 +57,6 @@ import {
   shownAsOriginal,
   stopOf,
   toldWait,
-  viewOf,
 } from './session/rows.ts'
 import { createRuntime, type Handlers, type Runtime } from './session/runtime.ts'
 import { ownedClock } from './stack/clock.ts'
@@ -420,20 +419,6 @@ export function openReader(
   let unitsHeld: { key: string; units: Promise<Unit[]> } | null = null
   /** the units last read: the view's count reads them (stateOf), the layer shown's once read, the layer's before it meanwhile */
   let unitsRead: readonly Unit[] | null = null
-  /** whether every unit the view shows holds its translation, as its count states it (rows.ts viewOf over the units read of the
-   *  layer shown; none read, nothing is known to be held): our server's run done with an object unread is complete where so */
-  const shownHeld = (): boolean => {
-    if (!unitsRead || rt.state.layer.s !== 'ready') return false
-    const v = viewOf({
-      units: unitsRead,
-      classes: rt.state.prefs.value.classes,
-      held: rows,
-      shown: true,
-      laid: false,
-      run: false,
-    })
-    return v.got === v.total
-  }
   const unitsOf = (list: readonly ObjectAt[]): Promise<Unit[]> => {
     const key = list.map((r) => r.sha256).join()
     if (unitsHeld?.key !== key) {
@@ -957,10 +942,11 @@ export function openReader(
           }
           // the server's rows: every ref the documents name for the target, each once read, until its run is done or failed (a
           // run not started, `none`, is no end: the prepare's units or the open start it, machine.ts needsOf; one started again
-          // after an end is the machine's to take again, rowsOfDoc). The end is our server's to state (PDF-READER §8.1, the
-          // coordinator's R1 to R4 of 2026-11-18): an object whose read failed is a fault of that read, never the run's end; it
-          // is not read (R4), so the next round asks it again; and where the run is done with one unread, the rows are complete
-          // where every unit shown holds its row (R2), else they wait, asked again at the session's pace (R3, rowsAgain)
+          // after an end is the machine's to take again, rowsOfDoc). The end is our server's document's and every object it
+          // names (PDF-READER §8.1, the coordinator's rulings of 2026-11-18): an object whose read failed is a fault of that
+          // read, never the run's end; it is not read, so the next round asks it again; and a run done is complete only once
+          // every object its document names is read, one unread asked again at the session's pace (rowsAgain), whatever the
+          // units hold meanwhile: the units shown are the toggles' and the units read can be a layer's before, never the end's
           const read1 = new Set<string>()
           for (;;) {
             const d = rt.state.doc as Doc | null
@@ -990,11 +976,11 @@ export function openReader(
               rowsDone = true
               rowsIn([])
               // (a run failed: our server's time for the next, as its document names it, the retry's; one done with an object
-              // unread and a unit shown without its row: that object asked again by the rows' own wait, the session's pace)
+              // unread: that object asked again by the rows' own wait, the session's pace)
               emit(
                 tg.state === 'failed'
                   ? { i: 'rows.failed', t, why: { kind: 'server', retryAt: tg.retryAt ?? null } }
-                  : unread && !shownHeld()
+                  : unread
                     ? { i: 'rows.failed', t, why: { kind: 'unavailable', retryAfterMs: backoff(++rowsAgain.tries) } }
                     : { i: 'rows.end', t },
               )
