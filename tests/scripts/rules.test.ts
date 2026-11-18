@@ -250,6 +250,16 @@ describe('a recording', () => {
     r.lt(id, 3.9, 4)
     expect(must(r.snapshot().sites[id], 'the record').near?.[1]).toMatchObject({ eff: 3.9, paper: '2401.00002v1-zh', page: 3 })
   })
+  it('reads a list the platform copies (structuredClone) as read whole, wherever in the value it stands', () => {
+    // (a table's list read by a key known at run time and copied: the typesetter's rule set, rules-for.ts copy)
+    const r = recorderOf(map, { paper: null })
+    const id = must(sitesOfRule('::MARKS#1')[0], 'MARKS').id
+    const marks = r.ls(id, ['dagger', 'ddagger', 'star'])
+    r.cloned({ Hans: { order: marks, lead: 1.3 }, again: [marks] })
+    r.cloned(marks)
+    r.cloned(['dagger', 'ddagger', 'star'])
+    expect(must(r.snapshot().sites[id], 'the record')).toMatchObject({ n: 0, reads: { structuredClone: 2 } })
+  })
   it("reads a test file that read the lab's data as the corpus", () => {
     const out = join(dir, 'records-tests')
     const r = recorderOf(map, { out, input: 'tests' })

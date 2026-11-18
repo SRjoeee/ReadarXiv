@@ -283,11 +283,18 @@ const CJK_GROUPS = /^axt-(shs-|mincho|fandolkai|bkai00mp)/
 export const isCjkFace = (id: string): boolean => Object.hasOwn(FACES, id) && CJK_GROUPS.test(FACES[id]!.family)
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The names. A design, its class, its NFSS family names (anchored, as \rmdefault and the rest hold them), its PostScript
-// names (a PDF font's, its subset tag stripped). Computer Modern, cm-super, Latin Modern and Libertine's names carry their
-// series and shape in codes of their own and are read apart (computerModern, latinModern, libertine); every other name's
-// weight and slant come from its style words. Mono and sans before the text families, so that DejaVu Sans Mono is mono.
-
+// The names. A design, its class, its PostScript names (a PDF font's, its subset tag stripped), and a text family's NFSS
+// family names (anchored, as \rmdefault and the rest hold them: the probe reads a paper's body family by them, and a name of
+// no text family, a sans's or a mono's among them, falls to the roman's, familyOfProbe). Computer Modern, cm-super, Latin
+// Modern and Libertine's names carry their series and shape in codes of their own and are read apart (computerModern,
+// latinModern, libertine); every other name's weight and slant come from its style words. Mono and sans before the text
+// families, so that DejaVu Sans Mono is mono.
+//
+// What a pattern decides is whether a name is one of its design's, and each name it holds is defined outside this table: an
+// NFSS family name is the one LaTeX's font selection holds for a family that a package's font definition files declare
+// (\DeclareFontFamily: psnfss's t1ptm.fd declares `ptm`) or that fontspec makes of an OpenType family; a PostScript name is
+// the name a font file gives itself (a Type 1 font's FontName, an OpenType font's name table ID 6), by which a PDF names the
+// font. A name no paper of the corpus is set in takes each pattern's either side (tests/pdf-reader/font-roles.test.ts)
 const DESIGNS: readonly { design: Design; cls: FontClass['cls']; nfss?: RegExp; ps: RegExp; bold?: RegExp }[] = [
   // math: drawn as the layer's math face, set as the paper's math in TeX
   {
@@ -304,30 +311,26 @@ const DESIGNS: readonly { design: Design; cls: FontClass['cls']; nfss?: RegExp; 
   {
     design: 'courier',
     cls: 'mono',
-    nfss: /^(?:pcr|qcr|txtt|ucr|zco|NimbusMono|TeXGyreCursor)/,
     ps: /^(?:NimbusMonL|NimbusMono|Courier|TeXGyreCursor|zco-|LiberationMono|FreeMono)/,
   },
   {
     design: 'beramono',
     cls: 'mono',
-    nfss: /^(?:fvm|BeraSansMono|DejaVuSansMono)/,
     ps: /^(?:BeraSansMono|DejaVuSansMono|BitstreamVeraSansMono|VeraSansMono)/,
   },
-  { design: 'inconsolata', cls: 'mono', nfss: /^(?:zi4|Inconsolata)/, ps: /^Inconsolata/, bold: /zi4b|Bold/ },
-  { design: 'cmtt', cls: 'mono', nfss: /^(?:cmtt|lmtt|cmvtt)$/, ps: /^CMUTypewriter/ },
+  { design: 'inconsolata', cls: 'mono', ps: /^Inconsolata/, bold: /zi4b|Bold/ },
+  { design: 'cmtt', cls: 'mono', ps: /^CMUTypewriter/ },
   // sans
   {
     design: 'helvetica',
     cls: 'sans',
-    nfss: /^(?:phv|qhv|txss|uhv|zhv|NimbusSans|TeXGyreHeros)/,
     ps: /^(?:NimbusSanL|NimbusSans|Helvetica|Arial|TeXGyreHeros|zhv-|LiberationSans|FreeSans)/,
   },
-  { design: 'cmss', cls: 'sans', nfss: /^(?:cmss|lmss)$/, ps: /^CMUSansSerif/ },
+  { design: 'cmss', cls: 'sans', ps: /^CMUSansSerif/ },
   // Biolinum, Libertine's sans (Libertinus Sans, its fork, drawn in it)
   {
     design: 'biolinum',
     cls: 'sans',
-    nfss: /^(?:LinuxBiolinum|fxb|LibertinusSans)/,
     ps: /^(?:LibertinusSans|LinBiolinum|LinuxBiolinum)/,
   },
   // text: the English families
@@ -380,10 +383,14 @@ const SERIF_DESIGN = new Set<string>(ENGLISH_FAMILIES)
 // style words: URW's Medi(um) is its bold, and its Regu, Ital and Obli abbreviations; Medium spelled out is not bold
 const BOLD = /(?:Bold|Bol(?![a-z])|Black|Heavy|Demi|Semibold|SemiBold|ExtraBold|Medi(?![a-z]))/
 const ITALIC = /(?:Italic|Ital(?![a-z])|Ita(?![a-z])|Oblique|Obli(?![a-z])|Slant|Inclined|Kursiv|It$)/
+// small capitals, by a name's words: a face named for them (SmallCaps, Caps, Capitals) or with an SC suffix
 const CAPS = /(?:SmallCaps|Caps|Capitals|[a-z]SC$|-SC$|-Sc$)/
-// a name no table holds: its class guessed from its words
+// a name no table holds: its class guessed from its words, mono's first (a typewriter's or a code face's), then sans's, then
+// math's; a name with none of them is a serif's
 const MONO_WORD = /(?:Mono|Courier|Typewriter|Consol|Code|Menlo|Monaco|Fixed)/i
+// (sans's words: Sans, Gothic, a grotesque's, and sans families' own names)
 const SANS_WORD = /(?:Sans|Gothic|Grotesk|Arial|Helvet|Verdana|Calibri|Segoe|Tahoma|Futura|Avenir|Univers|Frutiger)/i
+// (math's words: a math face's, a symbol face's, a dingbat face's)
 const MATH_WORD = /(?:Math|Symbol|Dingbat)/i
 
 const SUBSET = /^[A-Z]{6}\+/
@@ -654,6 +661,8 @@ const alphabetOf = (target: string): string => {
   if (a === undefined) {
     const language = new Intl.Locale(target).language
     a = Object.hasOwn(LETTERS, language) ? language : scriptOf(target) === 'Cyrl' ? 'Cyrl' : 'Latn'
+    // (what it remembers is bounded, a count of targets: past it the table starts again and answers the same; no rule set
+    // names so many targets, only a host asking others meets it. Unmeasured)
     if (ALPHABET_OF.size >= 256) ALPHABET_OF.clear()
     ALPHABET_OF.set(target, a)
   }

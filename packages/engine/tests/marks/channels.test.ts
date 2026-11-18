@@ -447,6 +447,19 @@ describe('readMeasures: each paragraph’s measure as TeX breaks it (STATEMENTS_
       ),
     ).toBe(true)
   })
+  it('reads no record with fewer fields than its count names, a record cut short before its count among them', () => {
+    // (a log's last line cut where TeX stopped writing: no \parshape count, or less; the record after it read as ever)
+    const m = readMeasures(
+      [
+        'AXT-MEASURE 6 469.75499pt 0.0pt 1 0.0pt 0.0pt',
+        'AXT-MEASURE 7 469.75499pt',
+        'AXT-MEASURE 8',
+        'AXT-MEASURE',
+        'AXT-MEASURE 9 469.75499pt 0.0pt 1 0.0pt 0.0pt 0',
+      ].join('\n'),
+    )
+    expect([...m.keys()]).toEqual([9])
+  })
 })
 
 describe('readParas: each unit’s paragraph by TeX’s own order (AXT-MEASURE at para/end, the unit’s AXT-ALIGN p at para/after)', () => {

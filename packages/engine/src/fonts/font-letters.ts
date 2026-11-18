@@ -3,7 +3,8 @@
 // (WRITE_FONT_LETTERS=1 writes it again): what a reader reads of each face's coverage, so that the table itself is no part of
 // a reader's bundle. Not edited by hand.
 
-/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters) */
+/** each face's alphabets whose every letter it holds (font-roles.ts LETTER_SETS: a language's own, and a script's bare letters):
+ *  its file's cmap, the OpenType character map (its best Unicode subtable), as the coverage table holds it */
 export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   "biolinum-bold": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
   "biolinum-bolditalic": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
@@ -89,5 +90,5 @@ export const HOLDS: Readonly<Record<string, readonly string[]>> = Object.freeze(
   "xcharter-italic": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
   "xcharter-regular": Object.freeze(["Latn","Cyrl","de","fr","es","pt","ru","it","nl","pl","tr","cs","sv","uk"]),
 })
-/** the faces that set small capitals of their own (GSUB smcp, the table's METRICS) */
+/** the faces that set small capitals of their own: their file's GSUB table has OpenType's `smcp` feature (the table's METRICS) */
 export const SMCP: readonly string[] = Object.freeze(["biolinum-bold","biolinum-bolditalic","biolinum-italic","biolinum-regular","cmun-mono-regular","cmun-sans-bold","cmun-sans-regular","cmun-serif-bold","cmun-serif-regular","domitian-regular","ebgaramond-bold","ebgaramond-bolditalic","ebgaramond-italic","ebgaramond-regular","erewhon-bold","erewhon-bolditalic","erewhon-italic","erewhon-regular","libertine-bold","libertine-bolditalic","libertine-italic","libertine-regular","xcharter-bold","xcharter-bolditalic","xcharter-italic","xcharter-regular"])

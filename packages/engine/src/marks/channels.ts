@@ -311,7 +311,7 @@ export function readMeasures(log: string): Map<number, ParaMeasure> {
   const out = new Map<number, ParaMeasure>()
   for (const line of taggedLines(log, 'AXT-MEASURE ')) {
     const w = line.trim().split(/ +/)
-    if (w.length < 8) continue
+    // (a record cut short before its count reads no count: Number(undefined) is no integer)
     const n = Number(w[1])
     const count = Number(w[7])
     if (!Number.isInteger(n) || out.has(n) || !Number.isInteger(count) || count < 0 || w.length !== 8 + 2 * count)
