@@ -17,6 +17,7 @@ import {
   fakedCaps,
   fillRunsOf,
   joinAccents,
+  mostOf,
   type StyleGlyph,
   sourceText,
   styleOf,
@@ -47,21 +48,6 @@ const LABEL_KIND: Record<string, Label['kind']> = {
   // (a babel name's: the number a class set right before a heading it sets itself, the wrap's `n<occ>.l` (own.mjs MR 6c),
   // a heading's number as a section's is: 2610.20967v1's "9. REFERENCES")
   name: 'head',
-}
-
-const mostOf = <T>(xs: Iterable<T>): T | undefined => {
-  const n = new Map<T, number>()
-  let best: T | undefined
-  let k = 0
-  for (const x of xs) {
-    const c = (n.get(x) ?? 0) + 1
-    n.set(x, c)
-    if (c > k) {
-      k = c
-      best = x
-    }
-  }
-  return best
 }
 
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, its glyphs' on A as the PDF wrote them */

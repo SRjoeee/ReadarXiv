@@ -20,6 +20,7 @@ import {
   INSET,
   type InkBox,
   labelParts,
+  mostOf,
   pinnedOf,
   rightToLeft,
   shortSkipLines,
@@ -82,21 +83,6 @@ interface FactsInput {
   /** the A pages whose lines' measures are TeX's frame (work.ts framesOnA): a measure there is the block's or its column's
    *  even where a line fills it */
   framed?: ReadonlySet<number>
-}
-
-const mostOf = <T>(xs: Iterable<T>): T | undefined => {
-  const n = new Map<T, number>()
-  let best: T | undefined
-  let k = 0
-  for (const x of xs) {
-    const c = (n.get(x) ?? 0) + 1
-    n.set(x, c)
-    if (c > k) {
-      k = c
-      best = x
-    }
-  }
-  return best
 }
 
 function elsOf(content: readonly Piece[], out = new Map<string, Extract<Piece, { t: 'el' }>>()) {

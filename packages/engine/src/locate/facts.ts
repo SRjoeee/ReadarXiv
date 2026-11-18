@@ -118,7 +118,8 @@ export function oneFamily(a: string, b: string): boolean {
 export const sameFamily = (a: readonly [string, string], b: readonly [string, string]) =>
   (!!a[0] && a[0] === b[0]) || (!!a[1] && a[1] === b[1])
 
-const mostOf = <T>(xs: Iterable<T>): T | undefined => {
+/** the value most of `xs` hold, a tie to the one met first; undefined for none */
+export const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   const n = new Map<T, number>()
   let best: T | undefined
   let k = 0
@@ -132,6 +133,13 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   }
   return best
 }
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
+/** a character's letters as two sides of an alignment compare them: decomposed, marks off, lower case, its letters and digits
+ *  alone (a ligature its letters) */
+export const fold = (ch: string): number[] =>
+  [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
+    .filter((c) => LETTER_OR_DIGIT.test(c))
+    .map((c) => c.codePointAt(0) as number)
 const real = (g: { u: string }) => /\S/.test(g.u)
 /** what a style is read off a glyph by: its Unicode, its font's base name, its size (up its line; `along` it, where that differs)
  *  and its fill. A glyph set level is one (DocGlyph); so is one set turned (DocTurned, a figure's turned text), whose font, size
