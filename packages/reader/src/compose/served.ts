@@ -7,8 +7,8 @@
 //   GET /hyph/<lang>.json                         a language's hyphenation patterns ({ patterns, exceptions })
 //
 // every one through the host's fetch, a path its fetch resolves against our server (the website's origin; the extension's our
-// server's). Each is asked as every ask of our server is (session/client.ts `request`): its answer and its body within
-// REQUEST_MS, the network, a 5xx or nothing in time asked once more after RETRY_MS; and any other answer but the file, a 404
+// server's). Each is asked as every ask of our server is (session/client.ts `request`): its answer and its body never silent
+// for REQUEST_MS, the network, a 5xx or nothing in time asked once more after RETRY_MS; and any other answer but the file, a 404
 // or a 410 (a 408 or 429 above all: our site's visitor limit) asked once more after its Retry-After, BUSY_MAX_MS at most
 // (RETRY_MS where it names none). A 404, a 410 or a table of another shape is not there; anything else that fails is a failure
 // for now. A table (the index, a group's, a language's patterns) is asked once a visit: one not there, or failing for now, is

@@ -26,6 +26,7 @@ import { follow, objectStore, open, Refused, segOf } from './session/client.ts'
 import { type Contents, createContents, type OutlineEntry, type Rect } from './session/contents.ts'
 import {
   againOf,
+  backoff,
   type Doc,
   dirOf,
   displayOf,
@@ -344,6 +345,11 @@ export function openReader(
   let rows = new Map<string, Row>()
   let rowsTarget = ''
   let rowsDone = false
+  /** our server's rows asked again (R3, the coordinator's ruling of 2026-11-18): for the run (`run`: the target and the objects
+   *  its document names), the tries made since a read of one that had failed last succeeded, and those whose read failed: each
+   *  wait the session's own for asking again (machine.ts backoff: a second, doubled to BACKOFF_MAX_MS), counted from none again
+   *  once a read of a failed one succeeds or the document names other objects */
+  let rowsAgain: { run: string; tries: number; failed: Set<string> } = { run: '', tries: 0, failed: new Set() }
   /** the units the paper keeps as they are (format's Unit.kept), once the head's units are read: never translated, so no page
    *  waits for a row of theirs */
   let keptIds: ReadonlySet<string> = new Set()
@@ -934,31 +940,49 @@ export function openReader(
             emit({ i: 'rows.end', t, stopped: stopOf(units, rows) })
             return
           }
-          // the server's rows: every ref the documents name for the target, each once, until its run is done or failed (a run
-          // not started, `none`, is no end: the prepare's units or the open start it, machine.ts needsOf; one started again after
-          // an end is the machine's to take again, rowsOfDoc)
+          // the server's rows: every ref the documents name for the target, each once read, until its run is done or failed (a
+          // run not started, `none`, is no end: the prepare's units or the open start it, machine.ts needsOf; one started again
+          // after an end is the machine's to take again, rowsOfDoc). The end is our server's document's and every object it
+          // names (PDF-READER §8.1, the coordinator's rulings of 2026-11-18): an object whose read failed is a fault of that
+          // read, never the run's end; it is not read, so the next round asks it again; and a run done is complete only once
+          // every object its document names is read, one unread asked again at the session's pace (rowsAgain), whatever the
+          // units hold meanwhile: the units shown are the toggles' and the units read can be a layer's before, never the end's
           const read1 = new Set<string>()
           for (;;) {
             const d = rt.state.doc as Doc | null
             const tg = d?.targets[spec.target]
+            const run = `${spec.target} ${(tg?.rows ?? []).map((r) => r.sha256).join()}`
+            if (rowsAgain.run !== run) rowsAgain = { run, tries: 0, failed: new Set() }
+            let unread = false
             for (const r of tg?.rows ?? []) {
               if (read1.has(r.sha256)) continue
+              let o2: { rows?: Row[] }
+              try {
+                o2 = JSON.parse(new TextDecoder().decode(await objectOf(r))) as { rows?: Row[] }
+              } catch {
+                unread = true
+                rowsAgain.failed.add(r.sha256)
+                continue
+              }
               read1.add(r.sha256)
-              const o2 = JSON.parse(new TextDecoder().decode(await objectOf(r))) as { rows?: Row[] }
+              if (rowsAgain.failed.delete(r.sha256)) rowsAgain.tries = 0
               rowsIn(o2.rows ?? [])
             }
-            if (
-              tg &&
-              (tg.state === 'done' || tg.state === 'failed') &&
-              (tg.rows ?? []).every((r) => read1.has(r.sha256))
-            ) {
+            // (a document held since this round began, heard while it read its objects, is read now, never waited for: the wait
+            // below is for the next change, and a follow whose last document says nothing runs asks for no other, so its run's
+            // end stayed unread with every row in, arriving for good: staging, 2026-11-17, 2608.04322v1)
+            if (rt.state.doc !== d) continue
+            if (tg && (tg.state === 'done' || tg.state === 'failed')) {
               rowsDone = true
               rowsIn([])
-              // (a run failed: our server's time for the next, as its document names it, the retry's)
+              // (a run failed: our server's time for the next, as its document names it, the retry's; one done with an object
+              // unread: that object asked again by the rows' own wait, the session's pace)
               emit(
                 tg.state === 'failed'
                   ? { i: 'rows.failed', t, why: { kind: 'server', retryAt: tg.retryAt ?? null } }
-                  : { i: 'rows.end', t },
+                  : unread
+                    ? { i: 'rows.failed', t, why: { kind: 'unavailable', retryAfterMs: backoff(++rowsAgain.tries) } }
+                    : { i: 'rows.end', t },
               )
               return
             }
