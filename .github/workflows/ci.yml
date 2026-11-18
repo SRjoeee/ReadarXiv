@@ -1,13 +1,23 @@
 name: CI
 
+# The release check's fast tier on GitHub's runners (lab/release-check/CI.md): `check` (the unit gates and the census), `reader`
+# (the reader package's browser checks) and `extension` (the extension's offline browser suites), on every pull request and on
+# every push to main and rebuild/v2. The full and release tiers read the lab's data and run on the maintainer's machine, never
+# here: this repository is public, and no job of it runs on a runner of his (CI.md, "Security"; tests/scripts/ci-workflows.test.ts
+# holds every workflow of the repository to the rules written there).
 on:
   push:
-    branches: [main]
+    branches: [main, rebuild/v2]
   pull_request:
 
 # (the token-holding job reads the repository and nothing else: no write scope on GITHUB_TOKEN, none kept in the checkout's git config)
 permissions:
   contents: read
+
+# A pull request's newer push stops its older run; every push to a branch is a group of its own, run to its end
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || format('ci-run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
@@ -68,3 +78,74 @@ jobs:
             tests/fixtures/svg/2608.29808-bounter-case.svg
             tests/fixtures/svg/2607.24653-AET_blackbox_curve.svg
       - run: pnpm test
+      # The complexity and debt census of this tree alone (gates.mjs `census`), judged by its ratchet: a measure above the value
+      # census-ledger.json records fails, naming what added to it. The measures that read the website's tree or today's engine are
+      # skipped here with their reason (neither is on GitHub's runner); 8 s on the maintainer's machine at 2ed857426
+      - name: census
+        run: node lab/release-check/census.mjs --no-today
+
+  # The reader package's browser checks on its own fixtures (gates.mjs `harness`) and today's layer's small capitals in three
+  # browsers (`e2e:small-caps`): no network but the install's and the browsers' download, no lab data. Without the website's served
+  # faces (licensed files the repository may not hold) the checks that lay with them say so and are skipped, not passed. This job,
+  # and `extension`, hold no secret, no environment and no cache of their own, and their token reads the repository alone: a fork's
+  # pull request runs them as they are, and nothing they run reaches a credential.
+  # A pinned image: the browsers draw with its libraries and fonts, which a moving label would change under the checks
+  reader:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Playwright's own builds at the lockfile's version and the system libraries they need (apt, which the runner allows)
+      - name: Browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: harness
+        run: node packages/reader/e2e/run.mjs
+      # (each check runs whatever the one before it gave, so that a failure in one hides no other's)
+      - name: e2e:small-caps
+        if: ${{ !cancelled() }}
+        run: pnpm e2e:small-caps
+
+  # The extension's offline browser suites on its default build (the rebuilt reader behind the extension's host), each behind a
+  # route table that answers every request or fails the run (gates.mjs `e2e:reader`, `e2e:framing`, `e2e:a11y`, `e2e:viewer`,
+  # `e2e:registration`). Headless Chromium of Playwright's `chromium` channel, which loads an extension
+  extension:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: corepack enable
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - id: build
+        run: pnpm build
+      # (each suite runs on the build whatever the suite before it gave, so that a failure in one hides no other's)
+      - name: e2e:reader
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: pnpm e2e:reader
+      - name: e2e:framing
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: pnpm e2e:framing
+      - name: e2e:a11y
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: pnpm e2e:a11y
+      - name: e2e:viewer
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: pnpm e2e:viewer
+      - name: e2e:registration
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: pnpm e2e:registration

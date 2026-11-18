@@ -244,7 +244,7 @@ export const TARGETS = [
     value: n => n.gplReachedNow != null && `reached now ${n.gplReachedNow}, after the cut-over ${n.gplReachedAfter}; ported files left after it ${n.gplFilesAfter}`,
     met: n => (n.partial ? null : n.gplReachedAfter === 0 && n.gplFilesAfter === 0),
   },
-  { id: 'tiers', measure: 'Tiers that run on a pull request', baseline: "unit tests, the gate's model tier", target: 'every pull-request tier of §4.9', from: null, why: 'planned in lab/release-check/CI.md; the workflows are not written yet' },
+  { id: 'tiers', measure: 'Tiers that run on a pull request', baseline: "unit tests, the gate's model tier", target: 'every pull-request tier of §4.9', from: null, why: "the fast tier on GitHub's runners (.github/workflows/ci.yml: check, reader, extension; lab/release-check/CI.md), shown by a pull request's run; the full and release tiers read the lab's data and run on the maintainer's machine by hand, recorded with the commit, never from this public repository's workflows" },
 ]
 
 // ---------------------------------------------------------------- reading a gate's output
