@@ -37,8 +37,18 @@ export type Fsys = { list(): string[]; read(path: string): Uint8Array | null }
 export type TextPiece = { t: 'text'; s: string; src?: string; tr?: boolean; bared?: boolean; opens?: boolean }
 /** what the unit keeps as the source writes it: a command, a formula, a group's edge. `brk`: a forced break of the unit's text,
  *  stated where the piece is made (phPiece) and read wherever a forced break is asked of it (forcedBreak); not enumerable, as an
- *  open piece's `sets` is, so that the unit's JSON, its hash and its marks are as they were */
-export type PhPiece = { t: 'ph'; src: string; s?: undefined; bared?: boolean; opens?: boolean; readonly brk?: true }
+ *  open piece's `sets` is, so that the unit's JSON, its hash and its marks are as they were. `closes`: where the display a paper's
+ *  own macro sets ends in the piece's source, as a spelled display's ends before its `\\end{…}` (Builder.ph, displayArgEnd): the
+ *  offset in `src` past which the paper's definition closes it; not enumerable either */
+export type PhPiece = {
+  t: 'ph'
+  src: string
+  s?: undefined
+  bared?: boolean
+  opens?: boolean
+  readonly brk?: true
+  readonly closes?: number
+}
 /** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84); LaTeX's
  *  `\\break`, which ends the line it stands in in a paragraph (the coordinator's ruling 4 of 2026-11-16: the marked compile
  *  states where, BREAKS_TEX's point; amsart's `\\hfill\\break\\indent` in 2608.03841v2's addresses) */
@@ -2818,6 +2828,32 @@ function macroArgs(s: string, i: number, macro: { params: number; opt: boolean }
   }
   return { reqs, end: k }
 }
+/**
+ * Where the display a paper's macro sets around one of its arguments ends in a call's source: the end of that argument's text, where
+ * the macro's body (`body`, the reader's own bodies, macroBodies) holds a display environment (displayEnv, the paper's own,
+ * Ctx.displayEnvs) whose content ends with that parameter, nothing after it but white space and the closing braces of the groups it
+ * stands in (`\\newcommand{\\al}[1]{\\begin{align}{#1}\\end{align}}`: TeX reads the argument last in the display, so its end is the
+ * display's, as `\\end{align}` is a spelled one's); null for any other body (one whose display ends with text of its own, one that
+ * sets none), and for an argument the call does not give (`call.reqs` holds its required ones, after an optional first)
+ */
+function displayArgEnd(
+  body: string | undefined,
+  macro: { opt: boolean },
+  call: { reqs: readonly { start: number; end: number; group: boolean }[] },
+  ctx: Pick<Ctx, 'displayEnvs'>,
+): number | null {
+  if (!body) return null
+  for (const m of body.matchAll(/\\begin\s*\{([^{}]+)\}/g)) {
+    const env = m[1]!.trim()
+    if (!displayEnv(env) && !ctx.displayEnvs.has(env)) continue
+    const from = m.index + m[0].length,
+      [contentEnd] = endOfEnv(body, from, env)
+    const k = /#([1-9])[\s}]*$/.exec(body.slice(from, contentEnd))
+    const arg = k ? call.reqs[Number(k[1]) - 1 - (macro.opt ? 1 : 0)] : undefined
+    return arg ? (arg.group ? arg.end - 1 : arg.end) : null
+  }
+  return null
+}
 /** what a paragraph cannot hold: a paragraph break, an item, a heading, a caption, or an environment other than math */
 const BLOCK =
   /\n[ \t]*\n|\\(?:par|item|part|chapter|(?:sub)*section|(?:sub)?paragraph|caption)(?![A-Za-z@])|\\begin\s*\{([^}]+)\}/g
@@ -3053,10 +3089,12 @@ class Builder<F extends WalkFile = WalkFile> {
     this.cur.pieces.push(p)
     this.cur.end = end
   }
-  /** `display`: a formula set on lines of its own (displayOutside); `brk`, a forced break the walk states (phPiece) */
-  ph(src: string, start: number, end: number, display = false, brk?: true) {
+  /** `display`: a formula set on lines of its own (displayOutside); `brk`, a forced break the walk states (phPiece); `closes`,
+   *  where in `src` the display a paper's own macro sets ends (PhPiece.closes) */
+  ph(src: string, start: number, end: number, display = false, brk?: true, closes?: number) {
     if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }
     const p = brk ? phPiece(src, true) : phPiece(src)
+    if (closes !== undefined) Object.defineProperty(p, 'closes', { value: closes })
     if (display) this.displays.add(p)
     this.cur.pieces.push(p)
     this.cur.end = end
@@ -4744,7 +4782,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       while (m && inComment(s, m.index)) m = re.exec(s)
       const stop = m && m.index < to ? m.index + m[0].length : end
       endText()
-      b.ph(s.slice(i, stop), i, stop, displayEnv(shorthand.env) || ctx.displayEnvs.has(shorthand.env))
+      // (a display's: it ends where its partner begins, as a spelled one's before its \end{…}, PhPiece.closes)
+      const display = displayEnv(shorthand.env) || ctx.displayEnvs.has(shorthand.env)
+      b.ph(s.slice(i, stop), i, stop, display, undefined, display && m && m.index < to ? m.index - i : undefined)
       i = stop
       continue
     }
@@ -5363,7 +5403,10 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       endText()
       // the call's source then goes with the command it ends in: in that command's placeholder, or before its own unit
       if (goOn(macro, call, i)) continue
-      b.ph(s.slice(i, e), i, e)
+      // (where its body ends a display environment with one of its arguments, the display ends where that argument does:
+      // displayArgEnd, PhPiece.closes)
+      const closes = displayArgEnd(ctx.bodies.get(name), macro, call, ctx)
+      b.ph(s.slice(i, e), i, e, false, undefined, closes === null ? undefined : closes - i)
       i = e
       continue
     }
