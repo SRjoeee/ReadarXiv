@@ -67,7 +67,8 @@ describe('the service menu (the reader\'s design, §6.1, §6.7)', () => {
     const option = [...container.querySelectorAll<HTMLElement>('[role="option"]')].find(o => o.textContent?.includes(mine.name))!
     option.click()
     expect(changes).toHaveLength(1)
-    expect(changes[0]!(settings).provider).toBe(mine.id)
+    // (a pick is recorded: the PDF reader follows it, v22)
+    expect([changes[0]!(settings).provider, changes[0]!(settings).providerChosen]).toEqual([mine.id, true])
     const deleted = { ...settings, services: [] }
     expect(changes[0]!(deleted)).toBe(deleted)
     expect(isOpen(container.querySelector('[popover="auto"]'))).toBe(false)

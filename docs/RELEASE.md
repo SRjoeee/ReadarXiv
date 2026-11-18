@@ -83,7 +83,7 @@ Category: Productivity. Language: English, with the Chinese description below; t
 >
 > Rest on a sentence and its counterpart lights up on the other side; in translation-only mode the original sentence floats beside the line. The words inside figures are translated and overlaid in place — vector figures read exactly, bitmaps recognised in your browser by a model that comes with the extension: nothing to install, and an image never leaves your machine.
 >
-> Microsoft's translator works out of the box with no account. Add Google's, Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 180 target languages; interface in Simplified and Traditional Chinese, Japanese, Korean and English.
+> Microsoft's and Google's translators work out of the box with no account (the PDF reader asks Google's first, as the Read arXiv website does). Add Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 180 target languages; interface in Simplified and Traditional Chinese, Japanese, Korean and English.
 >
 > Paragraphs are sent to the service you choose; Chrome's built-in translation and a local endpoint keep them on your machine. Your API keys stay in the browser's extension storage. Translations are cached locally so a paper reopens at once.
 >

@@ -6,7 +6,7 @@ import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
 import { DEFAULT_LANG_CODE, langCodeSchema } from './languages'
 
-export const CONFIG_VERSION = 21
+export const CONFIG_VERSION = 22
 
 /** The three reading modes (DESIGN §7); `mode` is shared with the image translation's mode gate */
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
@@ -66,6 +66,13 @@ export const configSchema = z.object({
   /** A built-in id or the id of one of `services` (since v12; DESIGN §8.5) */
   // The zod messages are diagnostics: the settings page's fallback notice shows the locale pack's sentence for the field (ui/strings.ts fallbackText)
   provider: z.string().refine(v => (BUILT_IN_SERVICES as readonly string[]).includes(v) || SERVICE_ID_RE.test(v), 'not a valid translation service'),
+  /**
+   * Whether `provider` is the reader's pick (v22; the owner's ruling of 2026-11-19): a pick on the settings page, in the
+   * popup or in the PDF reader's own menu writes it true; the install, a reset and the deletion of the service chosen leave
+   * it false. A reader who never chose has the PDF reader ask the website's chain (providers/translators.ts
+   * readerTranslatorsOf); the HTML page reads `provider` alone, as before
+   */
+  providerChosen: z.boolean(),
   /** The reader's own services (v12); keys stay local (CLAUDE.md hard rule 5) */
   services: z.array(serviceSchema).max(SERVICES_MAX),
   /** ISO 639-3 (since v4; languages.ts); an LLM gets the English name, Google a BCP-47 conversion */
@@ -149,6 +156,8 @@ export const DEFAULT_CONFIG: Config = {
   version: CONFIG_VERSION,
   // The free service that keeps formulas and links intact and needs no key (UI.md §2, 2026-09-10)
   provider: 'microsoft',
+  // nobody's pick (v22): the PDF reader asks the website's chain until the reader picks one
+  providerChosen: false,
   services: [],
   targetLanguage: DEFAULT_LANG_CODE,
   // Side by side is how most readers stay on a wide screen (the owner, 2026-09-11); on a narrow window the page falls

@@ -3,7 +3,8 @@
 // service's wire format: the first choice decides the format of the session (one page, one wire), so Microsoft (markers
 // only) is no fallback, and the built-in engine (tags only) none behind Microsoft. Whether a translator serves the
 // target now is its own `supports`, asked by the chain at every call and bounded there: a language pack downloaded
-// since joins without a rebuild, and a probe that never answers holds nothing.
+// since joins without a rebuild, and a probe that never answers holds nothing. That is the HTML page's chain; the PDF
+// reader's (`readerTranslatorsOf`) is the website's, Google's then Microsoft's, until the reader picks a service.
 import { chrome, type ChromeApi, type Fetch, google, type Lang, microsoft, type Translator } from '@readarxiv/translate'
 import { LANG_CODES } from '@/config/languages'
 import type { Config } from '@/config/schema'
@@ -92,5 +93,33 @@ export function translatorsOf(config: Config, deps: TranslatorDeps): Translators
     renderPath,
     maxBatchChars: first.answerer.kind === 'llm' ? LLM_LIMITS.chars : first.translator.limits.chars,
     maxBatchItems: first.answerer.kind === 'llm' ? LLM_LIMITS.units : first.translator.limits.units,
+  }
+}
+
+/**
+ * The website's chain (the owner's ruling of 2026-11-19: the extension's PDF reader asks as the website does): Google's web
+ * translator, then Microsoft's, for every target, on the package's one chain, each writing its own wire per unit: a unit Google
+ * does not answer, or whose reply is refused, goes to Microsoft alone, and a 429 cools Google and sends its units on at once.
+ * The page's one-wire rule (above) is the HTML page's render path and has no part in it
+ */
+export const WEBSITE_ORDER: readonly Engine[] = ['google-web', 'microsoft']
+
+/**
+ * The PDF reader's translators: the page's chain (translatorsOf) where the reader picked a translator (`providerChosen`, v22),
+ * else the website's (WEBSITE_ORDER), whole: the automatic fallback's switch is an LLM service's (UI.md S-O-22), which nobody
+ * who never chose has. Each engine is made as the page's chain makes it (translatorOf: the package's adapter, Microsoft not
+ * offered the three targets whose script it cannot write, none of them a target the reader sets)
+ */
+export function readerTranslatorsOf(config: Config, deps: TranslatorDeps): Translators {
+  if (config.providerChosen) return translatorsOf(config, deps)
+  const made = WEBSITE_ORDER.map(id => translatorOf(id, config, deps))
+  const first = made[0] as (typeof made)[number]
+  return {
+    translators: made.map(m => m.translator),
+    answerers: new Map(made.map(m => [m.translator.identity, m.answerer])),
+    primary: first.answerer,
+    renderPath: first.formats[0] ?? 'tags',
+    maxBatchChars: first.translator.limits.chars,
+    maxBatchItems: first.translator.limits.units,
   }
 }

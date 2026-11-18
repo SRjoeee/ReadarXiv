@@ -667,7 +667,7 @@ No state that tells the reader nothing is shown (no "done").
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
 | Loading | a large PDF is loading; the translation there, its first page being laid (a stored one read, or a run's last rows in) | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
 | Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's stage (§6.6); 正在准备 said to screen readers (S-R-23); the website's capsule says the translation the reader waits for, with the time a first one takes (§6.6) |
-| Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then. The paragraphs counted are those of the layer on screen that "What to translate" shows translated; one whose translation is already held is done, and a run that only restates them is not shown |
+| Translating | the paper's paragraphs being translated by the service chosen, or, until the reader picks one, by Google's translator, then Microsoft's, as the website asks them (DESIGN §8.5) | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then. The paragraphs counted are those of the layer on screen that "What to translate" shows translated; one whose translation is already held is done, and a run that only restates them is not shown |
 | Not to be had now | Read arXiv's website out of reach, at its limit, or the network itself down (§8.1: each cause its own words) | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24), the retry only where the session does not ask again by itself (§8.1); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps: rows that are none, or a run that ended failed and is not asked again at once (§8.1) | capsule: {n} 处翻译失败 · 重试 (where nothing asks again by itself) · close |
 | Language not supported | the shared target language is not one of the reader's | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the reader's translates |
@@ -892,10 +892,11 @@ its own toggle, below; until then the switch showed or hid it too.
   original's page where the new one's service fails or stops short with nothing translated. The line and the phase are an open's (Translating, §8). A hold
   for the language before (one the layer does not set) is lifted and the translated display shown again; a hold for the
   paper's own reason stays.
-- **Another service** (`provider` or `services` changed, here or elsewhere; most often the key the card sent the reader to
+- **Another service** (`provider`, `services` or `providerChosen` changed, here or elsewhere; until the reader picks one, the
+  reader asks the website's chain, Google's then Microsoft's, DESIGN §8.5; most often the key the card sent the reader to
   set, §8): a translation that stopped short, failed or ended with passages lost, is asked again of it at once, whatever wait
   the service before named, and only for the passages with no translation (`settings.ts` `followOf` `retry`). The rebuilt
-  reader (`packages/reader`) reads the services as the preferences' `translator`, the chain's revision (`host/prefs.ts`): a
+  reader (`packages/reader`) reads the services as the preferences' `translator`, the chain's revision and whether a service was picked (`host/prefs.ts`): a
   landing that names another one is the session's `cmd.translator` (`session/machine.ts` `askedAgain`). The website's
   preferences name none (its rows are our server's), so nothing there asks again.
 

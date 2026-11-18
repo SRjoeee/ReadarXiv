@@ -3,7 +3,7 @@ import { browser } from 'wxt/browser'
 import type { Progress } from '@/core/pipeline/run'
 import type { Mode } from '@/core/renderer'
 import type { StartResult } from '@/core/session'
-import type { ProviderStatus } from '@/providers/transport'
+import type { ProviderStatus, Surface } from '@/providers/transport'
 import type { TranslateCall, TranslateResponse } from '@/providers/transport'
 import type { EntrySettings, FloatingEntryState } from '@/shared/entry-settings'
 import type { ImageProgress, OcrCall, OcrMessageResponse, OcrRunResponse } from './ocr'
@@ -143,9 +143,10 @@ export interface AxtMessages {
    * `fresh` asks for a chain built from the configuration as stored now — what a page sends after saving a
    * setting and before restarting on it (background/provider-status.ts says how the race with the storage event
    * is closed). Both together: a session starting on freshly saved settings is **bound** to that chain, so what it
-   * records (target, revision) and what serves its requests are one chain
+   * records (target, revision) and what serves its requests are one chain. `surface`: the PDF reader's chain's status
+   * (TranslateCall `surface`, v22)
    */
-  'axt:provider-status': { request: { scope?: string; fresh?: boolean }; response: ProviderStatus }
+  'axt:provider-status': { request: { scope?: string; fresh?: boolean; surface?: Surface }; response: ProviderStatus }
   /** Clear the cache, or one paper only */
   'axt:cache-clear': { request: Record<never, never>; response: { ok: true; removed: number } | { ok: false; message: string } }
   'axt:cache-stats': { request: Record<never, never>; response: { ok: true; entries: number; bytes: number } | { ok: false; message: string } }

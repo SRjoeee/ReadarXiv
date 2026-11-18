@@ -25,6 +25,9 @@ describe('createChainHolder', () => {
     expect(nameOf(await holder.current())).toBe('build-1')
     holder.onConfig({ ...DEFAULT_CONFIG, targetLanguage: 'arb' }) // shapes the chain
     expect(nameOf(await holder.current())).toBe('build-2')
+    // the mark of a translator chosen (v22) shapes the PDF reader's chain alone, a change of the chain in force all the same
+    holder.onConfig({ ...DEFAULT_CONFIG, targetLanguage: 'arb', providerChosen: true })
+    expect(nameOf(await holder.current())).toBe('build-3')
   })
 
   it('current() answers with the build in force when it resolves, not the one in force when it was asked', async () => {

@@ -9,6 +9,23 @@ import type { Row as Result, Unit, Why } from '@readarxiv/format'
 import { type UnitIn, unitInOf } from '@readarxiv/translate'
 import type { TranslationTransport } from '@/providers/transport'
 import type { ProviderErrorKind } from '@/providers/types'
+import { sendMessage } from '@/shared/messages'
+import { createMessageTransport } from '@/shared/transport'
+
+/**
+ * The PDF reader's transport: the extension's message transport, each call and each ask of the status marked the PDF reader's
+ * (`surface`), which the background answers from the PDF reader's chain (providers/translators.ts readerTranslatorsOf: the
+ * website's, Google's then Microsoft's, for a reader who never chose a translator; the owner's ruling of 2026-11-19). The
+ * page's transport is not this one and sends no mark, so that the page translator is as it was
+ */
+export function readerTransport(send: typeof sendMessage = sendMessage): TranslationTransport {
+  const base = createMessageTransport(send)
+  return {
+    ...base,
+    translate: call => base.translate({ ...call, surface: 'pdf' }),
+    status: (scope, options) => send({ type: 'axt:provider-status', ...(scope ? { scope } : {}), ...(options?.fresh ? { fresh: true } : {}), surface: 'pdf' }),
+  }
+}
 
 /**
  * A failure the transport names by its kind (the status's demotion of the service chosen, a whole call's stop) as the `Why` a
