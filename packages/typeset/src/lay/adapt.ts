@@ -15,7 +15,7 @@ import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
 import type { Row, RowLine, RunRow } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
-import { blocks as blocksOf, type LineInfo, measureOf } from '../unit/blocks.ts'
+import { blocks as blocksOf, type LineInfo, measureOf, ONE_EDGE } from '../unit/blocks.ts'
 import type { Breaks } from '../unit/breaks.ts'
 import {
   carriedCrop,
@@ -371,6 +371,7 @@ export function adapt(i: AdaptInput): Adapted {
       file: true,
       j,
       frame: frames[j]!,
+      m0: l[7],
     }
     lineInfo.set(rectKey(rects[j]!), info)
     lineInfo.set(rectKeyNoX0(rects[j]!), info)
@@ -411,9 +412,34 @@ export function adapt(i: AdaptInput): Adapted {
         text.every((l) => Math.abs(l[2] - text[0]![2]) <= 0.01) &&
         text[0]![2] > m.label.ink[3] &&
         Math.abs(m.label.ink[1] - lines[0]![7]) <= 0.01
+      // (and where TeX states the hang, read from its statement (docs/PDF-READER.md §18.94, H1 (a)): the later text lines of the
+      // first line's frame stand at the left measure the first of them states (Line[7]), that measure right of the first
+      // line's; the first line's text begins at it and the label at the first line's measure start; each within what a line's
+      // ink differs by under one measure (ONE_EDGE: a protruded first glyph, 2610.20266v1 p1's abstract 0.31 left of what TeX
+      // states, which the ink test reads to 0.01 and misses). A later line standing at a measure of its own more than ONE_EDGE
+      // away fails it: a shape that changes again; one nearer is the same edge by that tolerance. \@hangfrom: the label box
+      // hung from the measure's start, \hangindent its width, \hangafter 1. The space TeX set after the label, from its ink's end
+      // to the stated hang)
+      const f0 = lines[0]!
+      const later = text.filter((l) => l !== f0 && l[0] === f0[0] && l[1] === f0[1])
+      const M = later[0]?.[7]
+      const tol = ONE_EDGE * sizeOf(f0, m)
+      const stated =
+        !hung &&
+        !!m.label &&
+        text[0] === f0 &&
+        M !== undefined &&
+        later.every((l) => Math.abs(l[2] - M) <= ONE_EDGE * sizeOf(l, m)) &&
+        M > f0[7] + tol &&
+        Math.abs(f0[2] - M) <= tol &&
+        f0[2] > m.label.ink[3] &&
+        Math.abs(m.label.ink[1] - f0[7]) <= tol
       if (hung && m.label) {
         hang = lx0
         hangGap = text[0]![2] - m.label.ink[3]
+      } else if (stated && m.label) {
+        hang = lx0
+        hangGap = (M as number) - m.label.ink[3]
       } else rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]]
     }
   }
@@ -442,6 +468,9 @@ export function adapt(i: AdaptInput): Adapted {
     centred: before.centredFlag,
     // (TeX's \baselineskip where the part states it: Placed.lead, read off the lines where 'lead' is read)
     pitch: (m.read ?? []).includes('lead') ? null : m.lead,
+    // (a first line TeX may have set apart from its later lines' edge: a member set justified or flush left, docs/PDF-READER.md
+    // §18.94; a centred and a flush-right member's edge its leftmost line's, as before)
+    apart: m.align === 'j' || m.align === 'l',
   }) as FitBlock[]
   // (the label's hang: on the block of the member's first line, whose first slot starts at the label, its text at the hang's end)
   if (hang !== undefined && blocks[0] && blocks[0].page === rects[0]![0] && !blocks[0].centred) {
