@@ -22,11 +22,12 @@ import { bundlesDir, bundlesLine, headsFor } from '../../../packages/typeset/tes
 
 const arg = (n, d) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? d
 const ROOT = join(import.meta.dirname, '..', '..', '..')
-// (the lab's data, the paper catalogue and the bundles: AXT_LAB, the lab-data directory's refactor-2026-11, with no default;
-// AXT_PAPERS and AXT_L1_BUNDLES, each defaulting to its files)
-const LAB = process.env.AXT_LAB
+// (the lab's data, the paper catalogue and the bundles: AXT_LAB_REFACTOR, the lab-data directory's refactor-2026-11, with no
+// default (a name of its own: the tests read AXT_LAB as a lab/pdf directory); AXT_PAPERS and AXT_L1_BUNDLES, each defaulting
+// to its files)
+const LAB = process.env.AXT_LAB_REFACTOR
 if (!LAB && !(process.env.AXT_PAPERS && process.env.AXT_L1_BUNDLES)) {
-  console.error("entry-reader.mjs: set AXT_LAB to the lab-data directory's refactor-2026-11, or AXT_PAPERS and AXT_L1_BUNDLES")
+  console.error("entry-reader.mjs: set AXT_LAB_REFACTOR to the lab-data directory's refactor-2026-11, or AXT_PAPERS and AXT_L1_BUNDLES")
   process.exit(2)
 }
 const PAIR = arg('pair')
