@@ -40,7 +40,9 @@ export type Rect = { o: [number, number]; u: [number, number]; s: [number, numbe
 /** the served faces' reading of where a text's ink starts, right of its start (served-metrics.mjs): no field of Metrics */
 export type InkLeft = { inkLeft?(face: string, size: number, text: string): number }
 type Glyphs = () => Rect[]
-type Drawn = { ord: number; r: Rect; piece?: string; glyphs?: Glyphs }
+/** a laid member's drawn ink; a crop's `pieces`, what it is cut from: its member's elements whose ink it holds, by id, or
+ *  'label' */
+type Drawn = { ord: number; r: Rect; pieces?: readonly string[]; glyphs?: Glyphs }
 type Kept = { ord: number; r: Rect; kind: Exclude<InkKind, 'drawn'>; piece?: string }
 
 /** two inks overlap where they share more than half a point on each axis (the runner's I3 measure, gate-l1.ts invariantsOf) */
@@ -123,12 +125,15 @@ export function drawnInk(
   part?: Part,
 ): { inks: Drawn[]; turned: number; unmeasured: number } {
   const out: Drawn[] = []
-  // (a crop's piece's ink on A as the part states it, by its member and piece: an element's El.ink, a label's Label.ink)
-  const pieceInk = new Map<string, Ink[]>()
-  for (const m of (part?.flows.flat() ?? []) as Placed[]) {
-    for (const [id, e] of m.els ?? []) pieceInk.set(`${m.ord}|${id}`, e.ink)
-    if (m.label) pieceInk.set(`${m.ord}|label`, [m.label.ink])
-  }
+  // (each member's pieces' ink on A as the part states it, by id: its elements' El.ink, its label's Label.ink. A crop names its
+  // piece by its place among its row's pieces (Item.piece), which the Page does not state: it is read by its ink, which the
+  // crop's rectangle holds on its page)
+  const pieceInk = new Map<number, [string, Ink][]>()
+  for (const m of (part?.flows.flat() ?? []) as Placed[])
+    pieceInk.set(m.ord, [
+      ...(m.els ?? []).flatMap(([id, e]) => e.ink.map((k): [string, Ink] => [id, k])),
+      ...(m.label ? [['label', m.label.ink] as [string, Ink]] : []),
+    ])
   let turned = 0,
     unmeasured = 0
   const inkOf = (face: string, size: number, s: string): [number, number, number] | null => {
@@ -172,9 +177,18 @@ export function drawnInk(
           // package breaks it states its whole ink on its line, its parts each a rectangle of it); where the Page states none, its
           // piece's ink on A as the part states it, inside the rectangle (the rectangle's antialiased margin is no ink); else the
           // rectangle)
-          const stated = it.ink?.length
-            ? it.ink
-            : (pieceInk.get(`${it.of ?? m.ord}|${it.piece}`) ?? []).filter((k) => k[0] === it.src[0]).map(inkBox)
+          // (its member's pieces whose ink on its page its rectangle holds, as gate-l1.ts pastInk finds a crop's ink)
+          const held = (pieceInk.get(it.of ?? m.ord) ?? []).filter(
+            ([id, k]) =>
+              (it.piece === 'label') === (id === 'label') &&
+              k[0] === it.src[0] &&
+              k[1] >= sx0 - 0.01 &&
+              k[3] <= sx1 + 0.01 &&
+              Math.min(k[2], k[4]) >= Math.min(sy0, sy1) - 0.01 &&
+              Math.max(k[2], k[4]) <= Math.max(sy0, sy1) + 0.01,
+          )
+          const pieces = it.piece === 'label' ? ['label'] : [...new Set(held.map(([id]) => id))]
+          const stated = it.ink?.length ? it.ink : held.map(([, k]) => inkBox(k))
           const inside = (b: Box) =>
             b[0] < sx1 &&
             b[2] > sx0 &&
@@ -193,7 +207,7 @@ export function drawnInk(
           for (const b of boxes)
             out.push({
               ord: it.of ?? m.ord,
-              piece: it.piece,
+              pieces,
               r: page([
                 it.x + (b[0] - sx0) * it.k,
                 y + (Math.min(b[1], b[3]) - base) * it.k,
@@ -347,8 +361,15 @@ export function inkOverlaps(
       })
     }
     for (const k of kept) {
-      // (a crop is the ink it is cut from: its own element's or label's)
-      if (k.ord === a.ord && a.piece !== undefined && k.piece === a.piece) continue
+      // (a crop drawn where the ink it is cut from stands, its own element's or label's, is that ink; drawn elsewhere while that
+      // ink stays, the two are drawn both)
+      if (
+        k.ord === a.ord &&
+        k.piece !== undefined &&
+        a.pieces?.includes(k.piece) &&
+        boxOfRect(a.r).every((v, q) => Math.abs(v - boxOfRect(k.r)[q]!) <= 0.01)
+      )
+        continue
       if (!meets(a.r, k.r)) continue
       const hit = firstMeet(glyphsOf(a), [k.r])
       if (!hit) continue

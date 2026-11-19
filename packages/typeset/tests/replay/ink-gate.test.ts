@@ -213,6 +213,10 @@ describe('I3 by ink on the page as the reader draws it: a laid unit’s ink agai
       [700, 100, 210, [{ s: '', x, src: [1, 150, 699, 160, 707, 700], k: 1, piece: 'e1' }]] as Laid['lines'][number]
     // (drawn where it stands, its group on: the same ink)
     expect(inkOverlaps(page([laid(1, [crop(150)], 1), left(2)]), p, metrics).overlaps).toEqual([])
+    // (drawn 5 pt left of where it stands while its ink stays: both drawn, over each other)
+    expect(
+      inkOverlaps(page([laid(1, [crop(145)], 1), left(2)]), p, metrics).overlaps.map((o) => [o.with, o.kind, o.piece]),
+    ).toEqual([[1, 'element', 'e1']])
     // (drawn over member 2's line)
     expect(
       inkOverlaps(page([laid(1, [crop(70)], 3), left(2)]), p, metrics).overlaps.map((o) => [o.with, o.kind]),
