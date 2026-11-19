@@ -676,7 +676,7 @@ No state that tells the reader nothing is shown (no "done").
 | No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
-| A font lost | a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice: the reader's `faces`). With the served faces, both hosts' readers' (§11.5), its passages stay the original's: a file not there or a table not to be had, until the page is loaded again; a file that failed for now, until it comes, asked again by the reader itself while a page that needs it is near, its passages then laid in place, translated. With a host's own faces (an engine's table), its passages drawn in their fallback until the page is loaded again | the chrome's own toast, once a visit, for 8 s, with the information sign and no action: 部分字体加载失败，请刷新页面重试 (UI.md S-R-28, the owner's words, 2026-11-19), on both hosts in the catalogue's one sentence; the website no longer words it |
+| A font lost | a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice: the reader's `faces`). With the served faces, both hosts' readers' (§11.5), its passages stay the original's: a file not there or not a font (a 404, a 410, a body past its bound, bytes no face is made of) or a table not to be had, until the page is loaded again; a file that failed for now, until it comes, asked again by the reader itself while a page that needs it is near, its passages then laid in place, translated. With a host's own faces (an engine's table), its passages drawn in their fallback until the page is loaded again | the chrome's own toast, once a visit, for 8 s, with the information sign and no action: 部分字体加载失败，请刷新页面重试 (UI.md S-R-28, the owner's words, 2026-11-19), on both hosts in the catalogue's one sentence; the website no longer words it |
 
 - **The website's words** (its reader's own table, given to the chrome as `StateWords` by its
   v2 page; zh-TW, ja and ko in the same table). The extension gives none and keeps the catalogue's above. A run's
@@ -1236,9 +1236,13 @@ extension's `src/pdf-reader/host/v2.ts`, open the reader with none); a host that
 (`createFaces`, a table; the harness's fixture lay) keeps its faces' own rules, a face lost drawn in its fallback.
 
 A served file that cannot be had leaves its passages the original's, never drawn in a face the layout was not made for (the
-typesetter measures nothing before its faces are there, `cover`, and leaves such a unit `served`). One not there (a 404, a
-410), or every face of a table that cannot be had, is lost for the visit, until the page is loaded again. One that fails for
-now (the network, a 5xx, nothing in time: each ask already asked once more by the request layer, §8.1) is asked again by the
+typesetter measures nothing before its faces are there, `cover`, and leaves such a unit `served`). One whose file is wrong, not
+the link (`served.ts` `lasting`: not there, a 404 or a 410; a body past its bound; bytes no face is made of: a slice is a file
+named by its content, its size and its bytes what they are, the coordinator's ruling of 2026-11-19), or every face of a table
+that cannot be had, is lost for the visit at once, until the page is loaded again. One that fails for now, the link's (the
+network, a 5xx, nothing in time: each ask already asked once more by the request layer, §8.1; another answer under 500, a 408
+or a 429 above all; a body the link cuts short, which Chromium tells as an error of the body's stream,
+`ERR_CONTENT_LENGTH_MISMATCH` where its declared length is not reached, never as a whole body) is asked again by the
 next wave that wants it, and failed again is lost for now (the coordinator's ruling of 2026-11-19, lane faces-heal: a lost
 slice of the main CJK face had left most paragraphs the original's until a reload, worse than production's reader, which draws
 them in the browser's fallback): the pages are laid with the rest, the notice told once (§8), and the reader asks the file

@@ -10,7 +10,8 @@
 // server's). Each is asked as every ask of our server is (session/client.ts `request`): its answer and its body never silent
 // for REQUEST_MS, the network, a 5xx or nothing in time asked once more after RETRY_MS; and any other answer but the file, a 404
 // or a 410 (a 408 or 429 above all: our site's visitor limit) asked once more after its Retry-After, BUSY_MAX_MS at most
-// (RETRY_MS where it names none). A 404, a 410 or a table of another shape is not there; anything else that fails is a failure
+// (RETRY_MS where it names none). A 404, a 410 or a table of another shape is not there, and so is a slice whose body passes its
+// cap or whose bytes no face is made of (the file's, `lasting`); anything else that fails is the link's, a failure
 // for now. A table (the index, a group's, a language's patterns) is asked once a visit: one not there, or failing for now, is
 // none for the visit (the faces it would give lost, told once each; the language hyphenates nothing). A slice is fetched as
 // data and made a FontFace of its face's family, weight and style, its code points as its unicode-range (never imported:
@@ -34,7 +35,7 @@
 // asked again at once.
 import { FACES, hyphenationOf, type Metrics, type Patterns } from '@readarxiv/typeset'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
-import { bodyWithin, RETRY_MS, request } from '../session/client.ts'
+import { bodyWithin, Refused, RETRY_MS, request } from '../session/client.ts'
 import { backoff } from '../session/machine.ts'
 import { type Faces, WAVE_SLOTS } from './faces.ts'
 import type { FaceId } from './page.ts'
@@ -230,8 +231,25 @@ class Answer extends Error {
     this.status = status
   }
 }
-/** a 404 or a 410: not there, and will not be (anything else may pass) */
-const lasting = (e: unknown) => e instanceof Answer && (e.status === 404 || e.status === 410)
+/** a slice's bytes no face is made of: the platform's face refused them (Chromium's FontFace rejects its load with a
+ *  SyntaxError) */
+class NoFace extends Error {
+  constructor(e: unknown) {
+    super(`no face is made of these bytes: ${String(e)}`)
+  }
+}
+/**
+ * Whether a failure says the FILE is wrong, not the link: not there (a 404, a 410), a body past its cap (`bodyWithin`'s
+ * Refused('bad')), bytes no face is made of (NoFace). A slice is a file named by its content: its size and its bytes are what
+ * they are, and will not be otherwise (the coordinator's ruling of 2026-11-19, lane faces-heal). Anything else that fails is
+ * the link's and may pass: the network, a 5xx or nothing in time (each asked once more within its ask), another answer under
+ * 500 (a 408 or a 429 above all, asked once more after its Retry-After), a body the link breaks or that stops (a declared
+ * length not reached, a stream reset: Refused('network'))
+ */
+const lasting = (e: unknown) =>
+  (e instanceof Answer && (e.status === 404 || e.status === 410)) ||
+  (e instanceof Refused && e.why === 'bad') ||
+  e instanceof NoFace
 /** an answer under 500 that is not the file and may pass (a 408 or 429 above all): the wait before its one more ask, its
  *  Retry-After (seconds or a date) at most BUSY_MAX_MS, RETRY_MS where it names none */
 function againAfter(r: Response): number | null {
@@ -457,16 +475,22 @@ export function createServed(o: {
   const healing = new Map<string, Heal>()
   let met: Set<string> | null = null
   const healers = new Set<(key: string) => void>()
-  /** a slice's file read and made a face of its face's family, weight and style; null where the reader closed meanwhile */
+  /** a slice's file read and made a face of its face's family, weight and style (NoFace where its bytes are none); null where
+   *  the reader closed meanwhile */
   const faceOfSlice = async (face: ServedFace, slice: Slice): Promise<FontFaceLike | null> => {
     asked++
     const bytes = await fileOf(`/${slice.path}`, CAPS.slice)
     if (gone) return null
-    const f = await P.face(face.family, bytes, {
-      weight: String(face.weight),
-      style: face.style,
-      unicodeRange: unicodeRangeOf(slice.ranges),
-    })
+    let f: FontFaceLike
+    try {
+      f = await P.face(face.family, bytes, {
+        weight: String(face.weight),
+        style: face.style,
+        unicodeRange: unicodeRangeOf(slice.ranges),
+      })
+    } catch (e) {
+      throw new NoFace(e)
+    }
     return gone ? null : f
   }
   const loadSlice = (face: ServedFace, slice: Slice, wanted: () => boolean, quiet = false): Promise<void> => {
@@ -496,8 +520,9 @@ export function createServed(o: {
       // (the reader closed: its asks let go, nothing told)
       if (gone) return
       o.warn?.(`the face ${face.id}'s slice ${slice.path}`, e)
-      // (not there, or a failure for now met twice: lost, its texts left the original's; else asked again next time. A
-      // failure for now met twice is lost for now: asked again by itself while a page needs it, `heal`)
+      // (the file's (`lasting`: not there, past its cap, no face), or a failure for now met twice: lost, its texts left the
+      // original's; else asked again next time. A failure for now met twice is lost for now: asked again by itself while a page
+      // needs it, `heal`)
       if (lasting(e) || failed.has(slice.key)) {
         lost.add(slice.key)
         tellLost(face.id, quiet)
@@ -520,7 +545,7 @@ export function createServed(o: {
   }
   /** a slice lost for now asked again as any slice is (a slot of the wave, an ask's bound and its one more ask), where a page
    *  that needs it wants it (none does: let be until one asks again, `heal`). Come: out of the lost, in the document alone (one
-   *  change of its fonts) and told, nothing told again; not there now (a 404, a 410), lost for the visit; failing again, asked
+   *  change of its fonts) and told, nothing told again; the file's now (`lasting`), lost for the visit; failing again, asked
    *  after a longer wait */
   const healNow = async (h: Heal) => {
     h.timer = null

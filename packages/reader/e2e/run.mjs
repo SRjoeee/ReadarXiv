@@ -675,7 +675,9 @@ const siteRoute = {
  * everything past ASCII), each slice's file PDF.js's own Liberation Sans (its bytes: the slice's code points are its
  * unicode-range), every language's patterns none. Served while a check sets `standIn`, whose `plan(k, n)` says how the n-th ask
  * (from 1) of a file of slice k answers: 'drop' (aborted in the browser, as a link that drops requests: a failure for now), 404
- * (not there), else the file; every ask of a slice logged with its time (the page's route table: newPage)
+ * (not there), 'big' (a body past the reader's bound for a slice, CAPS.slice's 4 MiB), 'nofont' (bytes of our own no face is
+ * made of), 'cut' (the file's declared length, half its bytes, then the connection closed: a body the link cuts short), else
+ * the file; every ask of a slice logged with its time (the page's route table: newPage)
  */
 const STAND_IN_SLICES = [
   [0x20, 0x61, 0x63, 0x7e],
@@ -685,11 +687,11 @@ const STAND_IN_SLICES = [
 const STAND_IN_IDS = Object.keys((await import('@readarxiv/text')).FACES)
 const STAND_IN_BYTES = readFileSync(join(REPO, 'node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf'))
 const STAND_IN_FILE = /^\/static-fonts\/([0-9a-f]{2})[0-9a-f]{14}\.woff2$/
-/** @type {{ plan: (k: number, n: number) => 'drop' | 404 | 'file', log: { path: string, at: number }[] } | null} */
+/** @type {{ plan: (k: number, n: number) => 'drop' | 404 | 'big' | 'nofont' | 'cut' | 'file', log: { path: string, at: number }[] } | null} */
 let standIn = null
 const standInRoute = {
   prefix: '/',
-  handle(_req, res, url) {
+  handle(req, res, url) {
     if (!standIn) return false
     const json = (v) => {
       res.writeHead(200, { 'content-type': 'application/json' })
@@ -717,6 +719,13 @@ const standInRoute = {
       })
     if (/^\/hyph\/[a-z-]+\.json$/.test(url.pathname)) return json({ patterns: [], exceptions: [] })
     if (!STAND_IN_FILE.test(url.pathname)) return false
+    // (cut short: its whole length declared, half its bytes sent, the connection closed)
+    if (req.headers['x-stand-in'] === 'cut') {
+      res.writeHead(200, { 'content-type': 'font/woff2', 'content-length': STAND_IN_BYTES.length })
+      res.write(STAND_IN_BYTES.subarray(0, STAND_IN_BYTES.length >> 1))
+      setTimeout(() => res.destroy(), 20)
+      return true
+    }
     res.writeHead(200, { 'content-type': 'font/woff2' })
     return res.end(STAND_IN_BYTES)
   },
@@ -751,6 +760,15 @@ async function newPage(o = {}) {
       const how = standIn.plan(Number.parseInt(slice[1], 16), n)
       if (how === 'drop') return route.abort('connectionaborted')
       if (how === 404) return route.fulfill({ status: 404, body: '' })
+      if (how === 'big')
+        return route.fulfill({ status: 200, contentType: 'font/woff2', body: Buffer.alloc(5 * 1024 * 1024) })
+      if (how === 'nofont')
+        return route.fulfill({
+          status: 200,
+          contentType: 'font/woff2',
+          body: Buffer.from('not a font: bytes of our own'),
+        })
+      if (how === 'cut') return route.continue({ headers: { ...req.headers(), 'x-stand-in': 'cut' } })
     }
     if (url.origin === server.origin) return route.continue()
     // the stand-in of arXiv's own server: its PDF by ranges, no entity-tag promised
@@ -4100,8 +4118,9 @@ const bAsks = () => {
     if (x.path.startsWith('/static-fonts/01')) by.set(x.path, [...(by.get(x.path) ?? []), x.at])
   return [...by].map(([path, at]) => ({ path, at: at.map((t) => Math.round(t - (at[0] ?? 0))) }))
 }
-/** a page's errors but the stand-in's asks aborted on purpose */
-const unplanned = (errors) => errors.filter((e) => !/ERR_CONNECTION_ABORTED|status of 404/.test(e))
+/** a page's errors but the stand-in's asks aborted or cut short on purpose */
+const unplanned = (errors) =>
+  errors.filter((e) => !/ERR_CONNECTION_ABORTED|ERR_CONTENT_LENGTH_MISMATCH|status of 404/.test(e))
 /** the timers' slack allowed under the pace, ms (a wait is never shorter than it was set; the log's clock is the harness's) */
 const SLACK_MS = 50
 await check(
@@ -4215,6 +4234,67 @@ await check(
         `the page: ${JSON.stringify({ ...st, lays0: lays })}`,
       )
       return { asks, laid: st.laid, lays: st.lays }
+    } finally {
+      standIn = null
+      await context.close()
+    }
+  },
+)
+for (const how of ['big', 'nofont']) {
+  await check(
+    `reader: a face's slice whose file is wrong (${how === 'big' ? 'a body past its bound' : 'bytes no face is made of'}; our own stand-in faces): the file's, not the link's: asked once, its units the original's for the visit, the notice told once, never asked again over 8 s (faces-heal, the coordinator's ruling)`,
+    async () => {
+      const { page, context, errors } = await standInLaid((k) => (k === 1 ? how : 'file'))
+      try {
+        await waitFor(page, () => window.__drawn.length > 0 && window.__faces.includes('lost'), null, 30_000)
+        const first = Math.min(
+          ...(standIn?.log ?? []).filter((x) => x.path.startsWith('/static-fonts/01')).map((x) => x.at),
+        )
+        await page.waitForTimeout(Math.max(0, first + 8000 - performance.now()))
+        const st = await page.evaluate(() => ({
+          faces: window.__faces,
+          drawn: window.__drawn,
+          laid: window.__h.readers[0].reader.probe().laidPages,
+        }))
+        const asks = bAsks()
+        assert(!unplanned(errors).length, unplanned(errors).join('; '))
+        assert(asks.length > 0 && asks.every((a) => a.at.length === 1), `the 'b' files' asks: ${JSON.stringify(asks)}`)
+        assert(
+          JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+          `the faces state: ${JSON.stringify(st.faces)}`,
+        )
+        assert(st.laid > 0 && !st.drawn.some((d) => d.b), `the drawings: ${JSON.stringify(st)}`)
+        return { asks, laid: st.laid, drawn: st.drawn.length }
+      } finally {
+        standIn = null
+        await context.close()
+      }
+    },
+  )
+}
+await check(
+  "reader: a face's slice whose body the link cuts short twice (its length declared, half its bytes, the connection closed; our own stand-in faces), then served: the link's: lost for now, asked again after BACKOFF_MS, laid in place (faces-heal, the coordinator's ruling)",
+  async () => {
+    const { page, context, errors } = await standInLaid((k, n) => (k === 1 && n <= 2 ? 'cut' : 'file'))
+    try {
+      await waitFor(page, () => window.__drawn.some((d) => d.b), null, 30_000)
+      await page.waitForTimeout(1500)
+      const st = await page.evaluate(() => ({ faces: window.__faces, drawn: window.__drawn }))
+      const asks = bAsks()
+      assert(!unplanned(errors).length, unplanned(errors).join('; '))
+      // (a body that breaks is not asked again within its ask: two asks, one fetch each, then the heal's)
+      assert(
+        asks.every((a) => a.at.length <= 3) &&
+          asks.some((a) => a.at.length === 3 && a.at[2] - a.at[1] >= BACKOFF_MS - SLACK_MS),
+        `the 'b' files' asks: ${JSON.stringify(asks)}`,
+      )
+      assert(
+        JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+        `the faces state: ${JSON.stringify(st.faces)}`,
+      )
+      const firstB = st.drawn.findIndex((d) => d.b)
+      assert(firstB > 0 && st.drawn.slice(0, firstB).some((d) => !d.b), `the drawings: ${JSON.stringify(st.drawn)}`)
+      return { asks, faces: st.faces, drawn: st.drawn.map((d) => (d.b ? 'b' : '-')).join('') }
     } finally {
       standIn = null
       await context.close()

@@ -1,10 +1,10 @@
 // The served faces and the reader's Metrics over them (compose/served.ts), over a fake of our site's tables and slices and a fake
 // canvas: nothing is ready before the tables are read; the slices a text needs are loaded, no other; a character no served face
 // holds is never ready; a text is measured in runs cut where its slice changes, a CJK run unkerned and cut between two
-// punctuation marks, never in small capitals; a slice not there is lost (its face told once), one that does not come in time
-// is a failure for now; a table not to be had loses its faces; a 408 or 429 is asked once more after its Retry-After; the
-// patterns read as the typesetter reads them, none where they do not come in time; a slice lost for now asked again by itself
-// at the session's pace while a page needs it.
+// punctuation marks, never in small capitals; a slice not there, past its cap or of bytes no face is made of is lost (its face
+// told once), one that does not come in time or whose body the link breaks is a failure for now; a table not to be had loses
+// its faces; a 408 or 429 is asked once more after its Retry-After; the patterns read as the typesetter reads them, none
+// where they do not come in time; a slice lost for now asked again by itself at the session's pace while a page needs it.
 import * as T from '@readarxiv/typeset'
 import { describe, expect, it, vi } from 'vitest'
 import type { Timers } from '../src/bytes/source.ts'
@@ -77,9 +77,13 @@ function site(
     stalledBody?: string[]
     /** the answers each url's asks get first, in order (its own after them) */
     answers?: Record<string, Given[]>
+    /** the whole answers each url's asks get first, in order (its own after them) */
+    bodies?: Record<string, (() => Response)[]>
     timers?: Timers & { now?(): number }
     /** a slice's face loaded only once this resolves (by its unicode-range) */
     faceGate?: (range: string) => Promise<void>
+    /** the slices (by their unicode-range) whose bytes no face is made of, as a browser's FontFace refuses them */
+    notFont?: string[]
   } = {},
 ) {
   const asked: string[] = []
@@ -89,6 +93,8 @@ function site(
     asked.push(url)
     at.push([url, o.timers?.now?.() ?? 0])
     const signal = init?.signal
+    const body = o.bodies?.[url]?.shift()
+    if (body) return body()
     const given = o.answers?.[url]?.shift()
     if (given !== undefined)
       return typeof given === 'number'
@@ -130,6 +136,9 @@ function site(
     },
     async face(family, _bytes, d) {
       await o.faceGate?.(d.unicodeRange)
+      // (Chromium's FontFace from bytes its sanitiser refuses: load() rejected with a SyntaxError)
+      if (o.notFont?.includes(d.unicodeRange))
+        throw new DOMException('Invalid font data in ArrayBuffer.', 'SyntaxError')
       const f = { family, range: d.unicodeRange, added: false }
       faces.push(f)
       return {
@@ -645,7 +654,7 @@ describe('the reader closed, and the bounds of what is read', () => {
     await new Promise((go) => setTimeout(go, 0))
     expect(asked).toEqual(['/static-fonts/index.json'])
   })
-  it('a slice past its cap is let go at the chunk that passes it, and is lost as one too large is today', async () => {
+  it("a slice past its cap is let go at the chunk that passes it, and is lost at once, as one not there is (the file's, not the link's)", async () => {
     const bad = endless(1024 * 1024)
     const warned: string[] = []
     const tables: Record<string, unknown> = {
@@ -671,7 +680,7 @@ describe('the reader closed, and the bounds of what is read', () => {
     })
     await s.faces.ready([[FONT, 'a']])
     expect(bad.seen).toEqual({ pulled: 5, cancelled: true })
-    expect(s.metrics.ready(FONT, 'a')).toBe(false)
+    expect(s.metrics.ready(FONT, 'a')).toBe('never')
     expect(warned).toHaveLength(1)
     expect(warned[0]).toMatch(/slice/)
   })
@@ -800,5 +809,55 @@ describe('a slice lost for now (a failure that may pass, met twice): asked again
     closed.s.faces.dispose()
     await later.run(120_000)
     expect(slices(closed)).toHaveLength(4)
+  })
+  it.each(['a body past its cap', 'bytes no face is made of'] as const)(
+    "a slice whose file is wrong (%s) is the file's, not the link's: asked once, lost at once and told once, never asked again",
+    async (how) => {
+      const timers = handTimers()
+      const at = site(
+        how === 'a body past its cap'
+          ? { bodies: { [SLICE]: [() => endless(1024 * 1024).response] }, timers }
+          : { notFont: [unicodeRangeOf(HAN)], timers },
+      )
+      await at.s.faces.ready([[FONT, HAN_TEXT]])
+      expect([at.s.metrics.ready(FONT, HAN_TEXT), at.lost, slices(at)]).toEqual(['never', ['shs-sc-regular'], [0]])
+      // (the next wave, a lay that meets it, a page asking it healed, two minutes: nothing asked, nothing told again)
+      await at.s.faces.ready([[FONT, HAN_TEXT]])
+      const [, lost] = at.s.faces.lostIn(() => at.s.metrics.ready(FONT, HAN_TEXT))
+      at.s.faces.heal([...lost, 'shs-sc-regular:0'], () => true)
+      await timers.run(120_000)
+      expect([lost, slices(at), at.lost, at.s.metrics.ready(FONT, HAN_TEXT)]).toEqual([
+        [],
+        [0],
+        ['shs-sc-regular'],
+        'never',
+      ])
+      at.s.faces.dispose()
+    },
+  )
+  it("a body the link cuts short is the link's: a failure for now (no ask again within the ask), lost for now at the second, then asked again at the pace and ready", async () => {
+    const timers = handTimers()
+    // (its answer came, a part of its body, then the stream broke: a declared length not reached, a reset stream)
+    const cut = () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new Uint8Array([1]))
+            c.error(new TypeError('network error'))
+          },
+        }),
+        { status: 200 },
+      )
+    const at = site({ bodies: { [SLICE]: [cut, cut] }, timers })
+    await at.s.faces.ready([[FONT, HAN_TEXT]])
+    expect([at.s.metrics.ready(FONT, HAN_TEXT), at.lost]).toEqual([false, []])
+    await at.s.faces.ready([[FONT, HAN_TEXT]])
+    expect([at.s.metrics.ready(FONT, HAN_TEXT), at.lost, slices(at)]).toEqual(['never', ['shs-sc-regular'], [0, 0]])
+    const [, lost] = at.s.faces.lostIn(() => at.s.metrics.ready(FONT, HAN_TEXT))
+    expect(lost).toHaveLength(1)
+    at.s.faces.heal(lost, () => true)
+    await timers.run(BACKOFF_MS)
+    expect([at.s.metrics.ready(FONT, HAN_TEXT), slices(at)]).toEqual([true, [0, 0, BACKOFF_MS]])
+    at.s.faces.dispose()
   })
 })
