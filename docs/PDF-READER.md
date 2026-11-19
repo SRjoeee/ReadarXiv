@@ -8871,10 +8871,10 @@ our wire; the second statement differed from the released engine's shape, where 
 ### 18.102 Text inside a figure has one maker, the figure reading: what it refuses stays the original's ink, on every page (the coordinator's ruling of 2026-11-20)
 
 2610.20030v1's pages 9 to 11 (its supplement, a second top-level file our compile does not set, §18.27) on staging: each row
-of an axis's tick labels ("5.0 5.2 … 6.0", 22 pt apart) drawn as one short paragraph from the row's left end, the axis title's
-subscripted symbol joined to its end ("… 6.0 s0") and gone from under the title, a colour bar's exponents set on its baseline,
-its label `D_s` sent as a word; the title itself ("target area s₀") left the original's though its row held a translation.
-The released reader leaves all of it as the original draws it.
+of an axis's tick labels (six numbers 22 pt apart) drawn as one short paragraph from the row's left end, the axis title's
+subscripted symbol joined to its end and gone from under the title, a colour bar's exponents set on its baseline, its label (a
+letter with a subscript) sent as a word; the axis title itself left the original's though its row held a translation. The
+released reader leaves all of it as the original draws it.
 
 - **Why.** The figure reading (`figure-text.ts`) makes a unit only of a run that spells a word: "a number, a tick's label, a
   letter alone, a formula's, stays the original's ink". That refusal was stated nowhere the next phase reads: on a page our
@@ -8900,7 +8900,7 @@ The released reader leaves all of it as the original draws it.
   crop.
 - **Over the 245 papers** (the chain from the stored compiles, every object against the line's): 244 papers' objects byte for
   byte; one paper's move, 2610.20030v1's: its 176 units born of figure glyphs leave (p9 28, p10 73, p11 75: tick rows, panel
-  titles, single numbers, the colour bars' exponents, `D_s`; 29 distinct texts of its units chunk), with their 176 groups, and
+  titles, single numbers, the colour bars' exponents and labels; 29 distinct texts of its units chunk), with their 176 groups, and
   the 30 figure texts that list an element whose glyphs those units took (3 on p9, 9 on p10, 18 on p11) keep that element in an
   element group of their own (30 groups come); no other unit leaves, comes or changes. Two statements made of every member move
   with the units that left: page 9 is read as one column (`geometry.ts` columnsAndMeasures: the tick rows of three panels were
