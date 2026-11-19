@@ -1,8 +1,8 @@
 // What arXiv would compile, and the features a failure might hang on. The main file and compiler come from arXiv's own
 // 00README.json when the package carries one (arXiv writes it on submission); otherwise from the same heuristics as
 // arXiv's preflight, in simplified form.
-// Runs in Node and in the browser alike: `fsys` is a file system of latex-front.mjs (inMemory), or of node-files.mjs (folder:
-// a directory under Node, which the spikes' paper-meta.mjs hands in).
+// Runs in Node and in the browser alike: `fsys` is a file system (latex-front.ts Fsys, its `list` and `read`: inMemory over a
+// package's files, or a caller's own).
 import { isMemoryError } from '../memory.ts'
 import type { Fsys } from './latex-front.ts'
 import { jobName, normalizePath, texText } from './latex-front.ts'
@@ -71,10 +71,10 @@ export function analyze(fsys: Fsys): PaperMeta {
       const r: Readme = JSON.parse(utf8(fsys.read(readmeJson)!))
       meta.readme = 'json'
       const main = r.sources?.find((s) => s.usage === 'toplevel')?.filename
-      // the file the package holds (latex-front.mjs normalizePath), whatever spelling named it
+      // the file the package holds (latex-front.ts normalizePath), whatever spelling named it
       meta.main = main && normalizePath(main)
-      // how many toplevel sources arXiv compiles (its PDF is theirs in turn; the pipeline reads the first alone: the page
-      // pass's several-toplevels rule, pipeline/page-pass.mjs)
+      // how many toplevel sources arXiv compiles (its PDF is theirs in turn; the prepare compiles the first alone, whose pages
+      // are arXiv's first: compile/paper.ts markedOfPaper's page count)
       meta.toplevels = Array.isArray(r.sources) ? r.sources.filter((s) => s?.usage === 'toplevel').length : 0
       // (arXiv's long form of `latex`, the one DVI path it runs: "compiler: latex is actually shorthand for latex+dvips_ps2pdf")
       meta.compiler = r.process?.compiler === 'latex+dvips_ps2pdf' ? 'latex' : r.process?.compiler

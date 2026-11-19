@@ -1,15 +1,14 @@
-// src/pdf-reader/engine/source/paper-names.mjs
 // The structural names a paper's TeX prints that no package names in every target (PDF-READER §19.14): each becomes a unit of
 // its own (bundleUnitsOf, kind `name`), sent to the translator once with the paper's units and cached by its text as any unit,
 // and the layer draws a theorem's head or a generated reference's name in that translation where no package gives the target
-// a word (rules/tex-names.mjs, `names`). Read from the paper's own definitions, in the order its files write them:
+// a word (tex-names.ts, `names`). Read from the paper's own definitions, in the order its files write them:
 //   - a theorem-like environment's printed name: \newtheorem{env}[…]{Name}[…] and its starred form, llncs's \spnewtheorem,
 //     elsarticle's \newproof, mdframed's \newmdtheoremenv, thmtools' \declaretheorem (its `name=`, else the environment's name
 //     with a capital, as thmtools prints it);
 //   - a reference's names the paper gives: cleveref's \crefname and \Crefname (singular, plural), thmtools' `refname=` and
 //     `Refname=`, hyperref's \<type>autorefname redefined;
 //   - where the paper calls cleveref or \autoref: the counter types' English names and the conjunctions' words no package
-//     names in some target (rules/tex-names.mjs NAME_GAPS, CONJUNCTION_GAPS: zh's "Section", every CJK target's "and").
+//     names in some target (tex-names.ts NAME_GAPS, CONJUNCTION_GAPS: zh's "Section", every CJK target's "and").
 // A name is plain text alone: letters, spaces, a hyphen, an apostrophe, a stop; one holding a command or a brace is the
 // original's. At most NAMES_MAX a paper.
 //
@@ -64,7 +63,7 @@ const optionOf = (opts: string | null | undefined, key: string) => {
   return m ? m[1]!.replace(/^\{|\}$/g, '').trim() : null
 }
 
-/** a call of a command whose names a reader may draw (rules/tex-names.mjs GENERATED_COMMANDS: layer2.mjs GENERATED_REF's) */
+/** a call of a command whose names a reader may draw (tex-names.ts GENERATED_COMMANDS) */
 const CALLS = new RegExp(`\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
 
 /**
@@ -78,7 +77,7 @@ export function paperNames(texts: Iterable<string>) {
  * The printed names of the paper's theorem-like environments alone (`texts` as paperNames'): \newtheorem's and its kin's
  * `Name`, thmtools' `name=` or its environment's name with a capital — each once, in the order first written, the names
  * paperNames gives for them. A head TeX sets of one of them ("Recall 7 (", "Notation 9.") is a label's form, as "Theorem 7"
- * is (layout/own.mjs `names`: the wrap gives it its unit's label group, and the layer draws it in that name unit's word, the
+ * is (own/own.ts ownOf's `names`: the wrap gives it its unit's label group, and the layer draws it in that name unit's word, the
  * same word on every head of the name)
  */
 export function theoremNames(texts: Iterable<string>) {

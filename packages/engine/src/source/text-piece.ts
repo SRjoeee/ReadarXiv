@@ -1,9 +1,6 @@
-// src/pdf-reader/engine/rules/text-piece.mjs
 // A text piece: a placeholder whose plain text is its whole rendering, TeX setting its characters as they are written. One
-// rule for both of its readers: the layer draws one as page text, never as a formula's crops (layer-proto/layer2.mjs formulaOf),
-// and the layout maker finds one the matcher missed,
-// set over two lines in one PDF and on one in the other, by its characters on the unit's own lines (layout/make.mjs, the
-// tolerant match). Imports nothing.
+// rule for its readers: the instrument states one as page text, never a formula's crops (instrument/instrument.ts
+// `literal`), and reads a verbatim one's `_` and `^` as written (copyOf). Imports nothing.
 
 /** the commands whose one argument TeX sets in the typewriter face as its own characters: \texttt; and verbatim, \url
  *  and \path (url.sty's, a character at a time), \lstinline in braces */
