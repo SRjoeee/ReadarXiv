@@ -751,7 +751,7 @@ const HARNESS_PAPERS = ['1512.03385v1', '1706.03762v7', '2609.26457v1', '2307.16
  *  in that order, its page holding the mark that holds the most marks, the first at a tie; then, to twelve, each paper's page
  *  holding the most groups, in the papers' order. Both TeX trees: 1706.03762v7, 2609.26457v1 and 2307.16209v1 are the 2023
  *  tree's, the others the 2025 tree's. `node lab/release-check/group-pages.mjs <bundles> <papers.tsv> <prepare dumps> <rows>`
- *  makes the list again by that rule (here as it made it over a run's bundles at PIPELINE 106, 2026-11-19) */
+ *  makes the list again by that rule (here as it made it over a run's bundles at PIPELINE 108, 2026-11-20) */
 export const GROUP_PAGES = [
   '1512.03385v1:5',
   '1512.03385v1:8',
@@ -759,7 +759,7 @@ export const GROUP_PAGES = [
   '2609.26457v1:6',
   '2307.16209v1:33',
   '2610.20030v1:2',
-  '2610.20030v1:9',
+  '2610.20030v1:1',
   '2610.19159v1:4',
   '2610.19159v1:1',
   '1512.03385v1:9',

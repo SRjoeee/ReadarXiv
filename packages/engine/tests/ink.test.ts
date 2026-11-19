@@ -1054,6 +1054,89 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     ).toEqual(['cell motility', 'target area'])
   })
 
+  describe('on a page our compile sets none of, text inside a form has one maker: the figure reading', () => {
+    // (a supplement's page arXiv compiles and our compile never makes: its figure's form holds a row of axis numbers set wide
+    // apart and, under them, an axis title whose last word is a symbol with a subscript; outside the form, the figure's caption.
+    // The figure reading makes the title a figure text, its symbol an element, and refuses the numbers (a number is no word).
+    // Born of the glyphs it refused, the row and the title's symbol were one unit, cut by a unit's own line rule: the numbers'
+    // places lost, the symbol moved into the row, and the title left the original's though its row held a translation, its
+    // element's glyphs in the born unit's group and none in its own)
+    const lines = ['a paragraph whose word', 'continues on its last line']
+    const para = () => [unitOf('para', 'a paragraph whose word continues on its last line')]
+    /** the figure's lines: the numbers at 8 pt, 40 pt apart (a gap of 3.2 of their size), the title under them */
+    const figure = (y: number) => [
+      ...['1.0', '2.0', '3.0', '4.0'].map((t, i) => ({ text: t, x: 100 + 40 * i, y, size: 8, form: true })),
+      { text: 'grain size ', x: 130, y: y - 14, form: true },
+      { text: 's', x: 196, y: y - 14, font: 'ABCDEF+CMMI10', form: true },
+      { text: '0', x: 202, y: y - 15.5, size: 7, font: 'ABCDEF+CMR7', form: true },
+    ]
+    const caption = 'Figure 7. The grain sizes over the runs.'
+    const unset = () => {
+      const B = docOf([{ lines }])
+      const A = docOf([{ lines }, { lines: [...figure(640), { text: caption, y: 560 }] }])
+      const L = locate(instrumentOf(B, para(), [[0, 0]]), A, align(B, A), { pages: rawOf(A) })
+      const at = A.pages[0]!.glyphs.length
+      const g = (a: number) => A.pages[1]!.glyphs[a - at]!
+      const groupOf = (a: number) => L.groups[1]!.glyphs[a - at]
+      const numbers = A.pages[1]!.glyphs.flatMap((x, j) => (x.form && x.size === 8 && /\S/.test(x.u) ? [at + j] : []))
+      return { L, at, g, groupOf, numbers }
+    }
+
+    it('makes no unit of a glyph its form shows that the figure reading refused: the numbers stay the original’s ink', () => {
+      const { L, g, groupOf, numbers } = unset()
+      expect(numbers).toHaveLength(12)
+      // (in no member's lists and in no group: nothing sent, erased or drawn of them)
+      const listed = new Set(L.members.flatMap((m) => [...m.text, ...m.label, ...[...m.els.values()].flat()]))
+      for (const a of numbers) {
+        expect(listed.has(a)).toBe(false)
+        expect(groupOf(a)).toBeNull()
+      }
+      for (const mem of L.members.filter((m) => m.unit < 0)) expect(mem.text.some((a) => g(a).form)).toBe(false)
+      expect(L.born.size).toBe(0)
+    })
+
+    it('lays a figure text the figure reading makes there with its element: the symbol in the title’s own element group', () => {
+      const { L, g, groupOf } = unset()
+      const title = L.members.find((m) => m.figure && m.unit >= 0)
+      expect(title).toMatchObject({ located: true, figure: true, kind: 'inkfigures' })
+      const content = L.units[title!.unit]!.content
+      expect(content.map((p) => p.t)).toEqual(['text', 'el'])
+      expect(content[0]).toEqual(text('grain size '))
+      const els = [...title!.els.values()].flat()
+      expect(els.map((a) => g(a).u).join('')).toBe('s0')
+      // (its text in its text group, its element in its element group, both a figure's: what the reader turns off when it draws
+      // the title's translation and the element's crop; a group the add-on does not hold leaves the title the original's)
+      for (const a of title!.text) expect(groupOf(a)).toBe(`${title!.ord}.2.t`)
+      for (const a of els) expect(groupOf(a)).toBe(`${title!.ord}.2.e`)
+      expect(L.figureGroups.has(`${title!.ord}.2.e`)).toBe(true)
+    })
+
+    it('still makes the glyphs outside any form there a unit: the caption, an ink unit `inkorphan`', () => {
+      // (the ink makers' (ink.ts), before any unit is born: what they leave of the glyphs outside a form is born, `inkorphan`,
+      // locate.test.ts)
+      const { L, g, groupOf } = unset()
+      const cap = L.members.filter((m) => m.unit >= 0 && L.units[m.unit]!.kind.startsWith('ink') && !m.figure)
+      expect(cap.map((m) => [m.kind, L.units[m.unit]!.content])).toEqual([['inkorphan', [text(caption)]]])
+      expect(cap[0]).toMatchObject({ located: true, figure: false })
+      expect(cap[0]!.text.every((a) => !g(a).form && groupOf(a) === `${cap[0]!.ord}.2.t`)).toBe(true)
+    })
+
+    it('makes no unit of the same figure’s numbers on a page our compile sets: nothing is born there', () => {
+      // (the figure on a page our compile sets, its title printed by both and no source unit's, its numbers arXiv's page alone
+      // prints: the figure reading's title, nothing of the numbers (arXiv's ink, §18.27), none born)
+      const A = docOf([{ lines: [lines[0]!, ...figure(640), { text: lines[1]!, y: 560 }] }])
+      const B = docOf([{ lines: [lines[0]!, ...figure(640).slice(4), { text: lines[1]!, y: 560 }] }])
+      expect(B.pages[0]!.glyphs.some((g) => g.size === 8)).toBe(false)
+      const ins = instrumentOf(B, para(), [[0, -1, -1, -1, 0]])
+      const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
+      expect(L.born.size).toBe(0)
+      expect(L.members.filter((m) => m.figure).map((m) => L.units[m.unit]!.content[0])).toEqual([text('grain size ')])
+      A.pages[0]!.glyphs.forEach((x, j) => {
+        if (x.form && x.size === 8 && /\S/.test(x.u)) expect(L.groups[0]!.glyphs[j]).toBeNull()
+      })
+    })
+  })
+
   it('states a figure text’s style runs: a lead-in its glyphs set in its family’s bold a group, `must`, its style its glyphs’', () => {
     // (2608.25210v2 p2's "Data Extraction Task: Extract all …": the lead-in in HelveticaNeue-Bold, the rest in HelveticaNeue, one
     // run of today's figure reading (a family's faces); read as one style, the majority's, it was regular, the lead-in's weight
