@@ -4,7 +4,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ADDED, addedEnv, apartOf } from '../../lab/typeset/added.mjs'
+import { ADDED, addedEnv, apartOf, dropAdded } from '../../lab/typeset/added.mjs'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -74,12 +74,49 @@ describe('the added pairs', () => {
     }
     // (the real lab-data is not written)
     expect(readdirSync(join(lab, 'refactor-2026-11/baseline/tap/ledgers'))).toEqual(['a-zh.ledger.json.gz'])
-    // (asked again, the same root; one of the files it links moved, another)
-    expect(addedEnv(lab).AXT_LAB_DATA).toBe(root)
+  })
+
+  it("read them through a root of the run's own: two runs at once never share one, and one run's end removes none of the other's files", () => {
+    // (a root shared by every run that linked the same files lost a file between the run that made it and a run days later; one
+    // run may also end, and remove its root, while another still reads)
+    const lab = labOf()
+    const a = addedEnv(lab),
+      b = addedEnv(lab)
+    dirs.push(a.AXT_LAB_DATA, b.AXT_LAB_DATA)
+    expect(b.AXT_LAB_DATA).not.toBe(a.AXT_LAB_DATA)
+    const ledgers = (root: string) => readdirSync(join(root, 'refactor-2026-11/baseline/tap/ledgers')).sort()
+    expect(ledgers(a.AXT_LAB_DATA)).toEqual(['a-zh.ledger.json.gz', 'b-zh.ledger.json.gz'])
+    // (b's run ends: its root goes, its links alone, a's root and the real lab-data whole)
+    dropAdded(b)
+    expect(existsSync(b.AXT_LAB_DATA)).toBe(false)
+    expect(ledgers(a.AXT_LAB_DATA)).toEqual(['a-zh.ledger.json.gz', 'b-zh.ledger.json.gz'])
+    expect(readFileSync(join(a.AXT_LAB_DATA, 'refactor-2026-11/baseline/tap/metrics/b-zh.metrics.json.gz'), 'utf8')).toBe('M')
+    expect(readdirSync(join(lab, 'refactor-2026-11/baseline/added/tap/ledgers'))).toEqual(['b-zh.ledger.json.gz'])
+    expect(readdirSync(join(lab, 'refactor-2026-11/baseline/tap/ledgers'))).toEqual(['a-zh.ledger.json.gz'])
+    // (a later run makes its own again, whatever an earlier one left)
     utimesSync(join(lab, 'refactor-2026-11/baseline/added/reader/b-zh.reader.json'), new Date(), new Date(Date.now() + 5000))
-    const again = addedEnv(lab).AXT_LAB_DATA
-    dirs.push(again)
-    expect(again).not.toBe(root)
+    const c = addedEnv(lab)
+    dirs.push(c.AXT_LAB_DATA)
+    expect([a.AXT_LAB_DATA, b.AXT_LAB_DATA]).not.toContain(c.AXT_LAB_DATA)
+    // (a folder that is no root addedEnv made is never removed)
+    dropAdded({ AXT_LAB_DATA: lab })
+    expect(existsSync(join(lab, 'refactor-2026-11/STATE.md'))).toBe(true)
+  })
+
+  it("remove the run's own root once the added pairs' run is done", () => {
+    const lab = labOf()
+    const dir = mkdtempSync(join(tmpdir(), 'added-drop-'))
+    dirs.push(dir)
+    const added = join(import.meta.dirname, '../../lab/typeset/added.mjs')
+    // (the child writes where its root stands; the parent's runApart removes that root when the child exits)
+    writeFileSync(join(dir, 'child.mjs'), `import { writeFileSync } from 'node:fs'\nwriteFileSync(${JSON.stringify(join(dir, 'root.txt'))}, process.env.AXT_LAB_DATA)\n`)
+    writeFileSync(join(dir, 'parent.mjs'), `import { runApart } from ${JSON.stringify(added)}\nprocess.exit(await runApart(${JSON.stringify(join(dir, 'child.mjs'))}, ['b-zh'], { argv: [] }))\n`)
+    const r = spawnSync(process.execPath, [join(dir, 'parent.mjs')], { encoding: 'utf8', env: { ...process.env, AXT_LAB_DATA: lab } })
+    expect(r.status).toBe(0)
+    const root = readFileSync(join(dir, 'root.txt'), 'utf8')
+    expect(root).toContain('axt-added-')
+    expect(existsSync(root)).toBe(false)
+    expect(existsSync(join(lab, 'refactor-2026-11/baseline/added/tap/ledgers/b-zh.ledger.json.gz'))).toBe(true)
   })
 
   it('are refused where one of their files is the set\'s already, or where lab-data holds none', () => {

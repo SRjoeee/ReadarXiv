@@ -8510,6 +8510,62 @@ twin states it.
   head by its class (`headsOf`), so `\be` there has no mark and no ink of its own on B: kept as the original's by its place,
   as before (2608.09746v1, 2608.04473v1: 9 elements).
 
+### 18.96 The reader gate judges the lay the product makes, every invariant a count of its summary (2026-11-19)
+
+The reader gate (`lab/typeset/gate-l1.mjs --entry --reading=part`) read I3, I4 and I5 on its runner's own lay: the members it
+adapts itself, laid by `layPagePrepared`. The entry (`layPage`, the product's) fed I10, I11, I6 and the reads gate alone. The two
+lays disagreed on 63 of the runner's members with the door's rows and 741 with Google's (the 90 pairs), and the runner never laid
+the member-pages the entry lays with no unit of today's to join (32,315 member-pages laid with lines by the entry on the door's
+rows, 23,180 by the runner). And the release check read each run whole by its exit: a run that exits 1 for one verdict it states
+(a paragraph point run on) passed every other it did not parse (I11, F28, a pair that threw).
+
+- **The lay judged is the entry's.** `lab/typeset/entry-laid.mjs` routes the entry's own import of `lay/page.ts` to a shim whose
+  `layPagePrepared` hands the page it lays to the gate (no module edited; the runner's own import untouched); `gate-l1.ts`
+  (`entryLaid`) reads I4 and I5 on those members and I3 on the Page the entry returns. The runner still lays and dumps (its
+  comparison with today's), its invariants' line beside, not judged.
+- **I3 by ink, against everything that stays** (`packages/typeset/tests/replay/ink-gate.ts`): a laid unit's drawn ink against
+  every other laid unit's and all that the part states stays on the page as the Page leaves its groups: the lines of members
+  not laid, a group left on, an element stated `keep`, a label kept, a KEPT line, Room.stays. Ink is read glyph by glyph where a
+  run's box meets other ink, each glyph from its ink's left (the served faces' reading: a CJK opening mark's blank half is no
+  ink) to its ink's right; a turned run in its own frame; a crop as the reader draws it, its rectangle cut by its own ink (its
+  piece's, as the part states it). A line on A is its ink across and its fonts' box up and down (the part states no ink height of
+  a line). An overlap with ink the unit's own original met already, by the same measure, is the page's own setting (a figure's
+  label TeX set over its image), counted apart. Not seen: a figure's drawing that stands on no member's text line.
+- **I5 as said**: a line past its slot by its ink beyond the breaker's own tolerance (0.01 pt, `breaker/break.ts:638`), whatever
+  its class (the runner's restated form left out an overfull line and a closing mark's blank half by its advance); an end mark
+  (El.end) drawn where TeX set it held to TeX's own ink of it, which TeX may set past its measure (2610.20285v1: amsthm's box
+  0.30 pt past the measure on 15 lines, the gate's standing ord 258 among them; 2610.21106v1 ord 42, 0.01 pt); and a member under
+  its own size floor (its P.floorMin: the rule file's `floorMin`, 1 for a line of the page's head or foot).
+- **I6**: each page laid a second time by the entry, the two Pages compared whole; the units the head pass lays otherwise across
+  the lays held at the record (a rise fails), its remedy after the launch, with the part's statement of the head.
+- **A rows store laid natively** (`AXT_GATE_ROWS`): each member's unit's Result as the product's rows carry it, its sentences
+  too, which the lab's former hook handed the runner none of (2610.21377v1-zh ord 118, its paragraph point now cut as the entry
+  cuts it).
+- **Every count read from the summary, never the exit** (`lab/release-check/gates.mjs` `entryRunOf`): I10, I11, I6's other
+  cause and purity, the reads gate, F28, a pair that threw and a page whose lay was not read held to 0; I3, I4, I5, its floor and
+  the head pass's count held to the last round's record (`lab/release-check/reader-parts.json`, by store and part).
+
+- **Measured** (the release check's reader-parts and sentence-cover at this round's head over the round's bundles; the door's
+  rows, and Google's rows of the round as the round's own runs read them): on the door's rows the runner's dumps byte for byte
+  as before (92 of 92) and every summary line it printed before the same; the entry's own lay of every page read (2,568 of
+  2,568), 26,856 member-pages against the runner's 23,180. I3 by ink: 20 overlaps held, 17 places: four drawn worse than production would draw them (a run-in head set on its last row over a follower
+  left the original's for want of a row, 2608.06701v1 p6; a figure text over its own element kept on the page, 2610.19159v1 p51; a
+  formula drawn as a crop beside its own ink, which the part states `keep`, 2610.21765v1 p9; a member's last line laid 6 pt under
+  TeX's onto the next, 2610.21884v1 p25), the rest a translation's taller glyphs touching the line, the image or the display box
+  beside them by under a point, as production draws them, or the known paragraph beside a wrapped figure over its caption
+  (2610.40576v1 p7, production too), each listed by the gate, 339 more with ink the
+  unit's own original met already; 21 of a first count's 41 were the measure's own (an opening mark's blank half, a diagonal
+  figure text's page box, a run read as one box, a URL's crop standing for its whole ink) and were removed where they arose.
+  I5: 5 lines past their slots by ink (a closing mark hung by half its em whose ink reaches further; a line of one crop set by its
+  rectangle's edge, its ink the antialiased margin, 0.4 pt, right of TeX's); none under its floor. I6: 0 of 2,568 pages laid
+  otherwise the second time (66.7 s more a run); the head pass's 11. I10 0, I11 0. On Google's rows: 21 overlaps held (the
+  formula drawn twice and the last line laid onto the next as on the door's rows; the rest touching by under a point, as
+  production draws them or where it left the units the original's), I5 10, none under its floor, 0 of 2,568 pages laid otherwise
+  the second time (76.5 s), the head pass's 11; the runner's dumps as before but one member, 2610.21377v1-zh ord 118, now laid
+  as the entry lays it (its paragraph point cut by the Result's sentences). The added pairs: every count 0 on both stores. The
+  release check's own rows step at this head finds no reply in the lab's Google store to 239 units its chain asks, at the base
+  as here: its Google numbers are read over the round's rows.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

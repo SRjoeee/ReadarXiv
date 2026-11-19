@@ -42,16 +42,29 @@ export declare function harnessLabJudge(step: StepRun): Judged
 export declare function vitestOf(text: string): { tests?: number; failed?: number; skipped?: number; files?: number }
 export declare function diffOf(text: string): Partial<Record<'files' | 'of' | 'units' | 'shownBefore' | 'shown' | 'lost' | 'accepted' | 'gained' | 'changed', number>>
 /** a typesetter runner's numbers; `added`: the added pairs' (lab/typeset/added.mjs), read after its heading */
-export declare function typesetOf(text: string): Record<string, number> & { added?: Record<string, number> }
+export interface TypesetNumbers {
+  [k: string]: number | number[] | TypesetNumbers | Record<string, number> | undefined
+  added?: TypesetNumbers
+  /** I3, I4 and I5 on the entry's lay (gate-l1.mjs with --entry) */
+  entry?: Record<string, number>
+  /** F28's four lines' counts */
+  F28?: number[]
+}
+export declare function typesetOf(text: string): TypesetNumbers
 /** whether sentence-cover fails on a paragraph point run on: the engine half's lane turns it on (gates.mjs) */
 export declare const PARAS_HELD: boolean
 export declare function sentenceCoverJudge(steps: StepRun[], parasHeld?: boolean): Judged
-/** one run of the reader gate's runner with --entry: its numbers, the added pairs' apart, whether it ended whole and held */
-export declare function entryRunOf(step: StepRun | undefined, parasHeld?: boolean): { t: Record<string, number> & { added?: Record<string, number> }; a?: Record<string, number>; whole: boolean; held: boolean }
+/** the counts of one part of a reader gate's run each invariant is read by (null where its line is absent) */
+export declare function entryCountsOf(x: Record<string, unknown> | undefined): Record<'I3' | 'I4' | 'I5' | 'I5floor' | 'I6head' | 'I6other' | 'purity' | 'I10' | 'I11' | 'readsOutside' | 'parasOff' | 'F28' | 'threw' | 'unread', number | null>
+/** the counts reader-parts holds to the last round's record */
+export declare const RECORDED: readonly string[]
+/** one run of the reader gate's runner with --entry: its numbers, the added pairs' apart, whether every count is stated (`whole`,
+ *  `missing`), the counts held to 0 that are not (`faults`), and whether none is (`held`) */
+export declare function entryRunOf(step: StepRun | undefined, parasHeld?: boolean): { t: TypesetNumbers; a?: TypesetNumbers; whole: boolean; held: boolean; missing: string[]; faults: string[] }
 /** the Google rows tool's totals, each count by its words in camel case */
 export declare function rowsOf(text: string): Record<string, number>
 /** reader-parts' counts at the last integrated round (lab/release-check/reader-parts.json) */
-export interface ReaderPartsRecord { commit: string; counts: Record<string, Partial<Record<'I3' | 'I4' | 'I5', number>>> }
+export interface ReaderPartsRecord { commit: string; counts: Record<string, Partial<Record<'I3' | 'I4' | 'I5' | 'I5floor' | 'I6head', number>>> }
 /** reader-parts' verdict over its steps `door`, `rows`, `google`, its counts held to `record` */
 export declare function readerPartsJudge(steps: StepRun[], parasHeld?: boolean, record?: ReaderPartsRecord | null): Judged
 export declare function readerPartsRecord(root: string): ReaderPartsRecord
