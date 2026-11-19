@@ -280,7 +280,7 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   [data-zone="trail"] > [data-wide], [data-zoom] > .tbtn:not(.zoom-value) { display: none; }
 }
 /* narrower still, the bar's three zones close up, 8 px apart below 400 px and 6 px below 360 px, where the trail's last
-   divider goes too: the bar holds at 320 px (§5) with a control more in its lead */
+   divider goes too: the bar holds at 320 px with a control more in its lead (§5) */
 @media (width < 400px) { header.bar { gap: 8px; } }
 @media (width < 360px) { header.bar { gap: 6px; } [data-zone="trail"] > .divider { display: none; } }
 /* forced colours (Windows' contrast themes) drop the fills and the rings: a pressed button takes the system's

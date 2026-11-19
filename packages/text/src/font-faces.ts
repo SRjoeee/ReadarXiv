@@ -32,7 +32,7 @@ export interface Face {
  * its group (our CSS family is `axt-` and the group, but for the four FAMILY_NAME renames), its CSS weight and style, its size correction, its licence (an
  * SPDX expression, or a LicenseRef-) and its web status — `ofl` and `gfl` (GUST) served as their licences let, `notice`
  * served with its licence's notice, `gpl` served with the notice and the full file as the subsets' source, `review`
- * decided by the maintainer for the web (spec §8: served, as the gpl faces are).
+ * a face whose licence leaves its use on the web to a decision, served as the gpl faces are (docs/THIRD_PARTY.md).
  * scripts/font-roles.py reads this table too: it measures each file (font-coverage.ts), so keep one row a line, the
  * columns separated by spaces; the licence is every column between the size and the web status.
  *

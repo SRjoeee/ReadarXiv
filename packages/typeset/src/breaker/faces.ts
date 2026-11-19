@@ -1,5 +1,5 @@
 // B.faces (design-b §1.5, G2, A4): the face a run of the translation is set in, by the role table (faces are the role
-// table's only): a CJK run in its target's CJK family by weight (its slant a shear, CJK_SLANT_DEG, docs/PDF-READER.md
+// table's only, docs/PDF-READER.md §18.1): a CJK run in its target's CJK family by weight (its slant a shear, CJK_SLANT_DEG, docs/PDF-READER.md
 // §18.1); a Latin run in its design's group, math in the math face, small capitals
 // in Latin Modern's caps face where the design is Computer Modern's or none; the nearest style of the group that holds the
 // target's letters; with its fallbacks and its size correction. Ported from engine 065c1d973: rules/font-roles.mjs

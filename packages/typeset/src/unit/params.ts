@@ -24,7 +24,7 @@ export const CJK_CAPS_SIZE = 1
 /** a solid-set original's pitch, × its size (L2:3065 SOLID) */
 const SOLID = 1.25
 /** the units of the page's head and foot (the ink units of the heads and the notes): one of a single line, a running head,
- *  a page number, keeps the original's size: its fit's floor is its size */
+ *  a page number, keeps the original's size (docs/PDF-READER.md §18.11): its fit's floor is its size */
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
 /**

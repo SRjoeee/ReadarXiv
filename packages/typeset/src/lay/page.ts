@@ -84,10 +84,11 @@ export type CellTie = { rule: 'cells'; cells: readonly number[]; spanning?: read
 /**
  * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
  * size tie laid on the page at one scale of their own sizes, the smallest any of them is laid at: each laid larger is capped there
- * (its fit's states from that scale down, P.capScale) and the page laid again (the checkpoint's free-9: a paragraph's first
- * part at its size, its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even). By scale,
- * not by points: a run-in head TeX set smaller than its paragraph keeps the original's ratio to it, and neither shrinks the other
- * for being of another size (by points, 2610.30034v1 p2's head at 8.97 capped its paragraph at 8.97, 0.9 of its 9.96). The
+ * (its fit's states from that scale down, P.capScale) and the page laid again (the text of one paragraph is set even: else
+ * a paragraph's first part stays at its size and its part after the float is shrunk). By scale,
+ * not by points (docs/PDF-READER.md §18.64): a run-in head TeX set smaller than its paragraph keeps the original's ratio to
+ * it, and neither shrinks the other for being of another size (by points, 2610.30034v1 p2's head at 8.97 capped its
+ * paragraph at 8.97, 0.9 of its 9.96). The
  * least a member is capped at is its tie-mates' begun on its own first page or before (tieCaps, §18.64): a later page's
  * pass never reaches back over the page break
  */

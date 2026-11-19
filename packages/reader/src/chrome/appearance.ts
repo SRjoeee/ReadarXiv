@@ -4,7 +4,7 @@
 // any element above it (styles.ts DIMMED), as the tokens read data-theme, so no host copies the marks; a change
 // after the first paint is one crossfade of the whole page, not element by element, unless motion is reduced — every
 // element's own transition of a colour off for the flip, or a pressed button and a switch would fade on their own and
-// flash in the crossfade (better-ui: suppress transitions on a theme switch). A motion is
+// flash in the crossfade (the reader's design, §4.3). A motion is
 // kept: the appearance's thumb slides to the one chosen in the very change (holding it too had made it jump). The readings
 // of the preferences into the two marks are look.ts's, which a host's page takes before the reader's code has loaded
 import { withoutTransitions } from '@readarxiv/ui'

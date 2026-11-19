@@ -1,4 +1,4 @@
-// X.lastLines (design-b §1.5, T25; a heading on the original's last baseline): a heading set in
+// X.lastLines (design-b §1.5, T25; docs/PDF-READER.md §18.11: a heading on the original's last baseline): a heading set in
 // fewer lines than the original's stands on its last ones. Ported from engine 065c1d973 layer2.mjs toLastLines
 // L2:4268-4314 (moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript), held by the walk's replays.
 import { originalLines } from '../unit/decor.ts'
@@ -10,8 +10,8 @@ type Row = { block: number; baseline: number; x0: number; x1: number; pitch?: nu
 /**
  * A heading its translation sets in fewer lines than the original's (P.lastLines, run.mjs: a section heading): its lines
  * moved down onto the original's last ones, so that the room it frees falls above it, not between it and the text it heads
- * (1810.04805's "C.2 Ablation for Different Masking Procedures", two lines, its Chinese one, left a blank line before its
- * paragraph; so on the original's last baseline, past the page fill's floor,
+ * (docs/PDF-READER.md §18.11: 1810.04805's "C.2 Ablation for Different Masking Procedures", two lines, its Chinese one,
+ * left a blank line before its paragraph; so on the original's last baseline, past the page fill's floor,
  * footFloorAt, which would have left 7.4 pt of C.2's 13.5 under it). The last line goes onto the original's last baseline,
  * and every line above it as far down; each keeps its slot's measure (the first its start, where the heading's number is
  * drawn with it: run.mjs). Never nearer the next line of its column (the original's room under its last line, `below`:

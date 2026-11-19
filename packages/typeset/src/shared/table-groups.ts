@@ -1,7 +1,7 @@
-// S.table.groups (a table's cells drawn by group): the cells a reader compares with one another, held together where the
-// geometry needs it. The groups are read over TeX's grid as the part states it (Placed.cell), and are the entry's, before
-// anything is set. A cell that cannot be drawn is the original's by itself, as a paragraph is (the coordinator's
-// ruling (c)); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the lay,
+// S.table.groups (a table's cells drawn by group, docs/PDF-READER.md §18.72): the cells a reader compares with one another,
+// held together where the geometry needs it. The groups are read over TeX's grid as the part states it (Placed.cell), and
+// are the entry's, before anything is set. A cell that cannot be drawn is the original's by itself, as a paragraph is
+// (§18.72); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the lay,
 // lay/page.ts settleTies after it). A group on two pages is laid like any other, each cell by itself (PDF-READER §18.72).
 //
 // The groups follow the table's own structure, TeX's tabular: the header's cells are one group, and below it each column's

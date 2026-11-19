@@ -224,7 +224,7 @@ export function fillPage(
       tracked = 0
     const untracked = { st, l }
     // (never a table cell's: TeX stretches no entry of a tabular, and a table's text reads more naturally untracked,
-    // 2610.20967v1-zh p4; nor a float's member's, which nothing spreads, §18.90)
+    // 2610.20967v1-zh p4, docs/PDF-READER.md §18.11; nor a float's member's, which nothing spreads, §18.90)
     if (short && P.cjk && p.unit.kind !== 'cell' && !heldOf(p)) {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
       const K = Math.round(track / 0.01),
@@ -294,9 +294,9 @@ export function fillPage(
       return ls
     }
     // (a step at a time from the original's size, the first a unit no longer holds ending it: the sizes a halving search
-    // finds, by the simplest search and the fewest lays. A page that grows not at all, most pages that try, is tried once,
-    // where halving tries twice (measured 2026-11-08 over the 22 parity pairs: growth's lays 223 of 89,431 halving, 153 so;
-    // every page's size the same))
+    // finds, by the simplest search and the fewest lays, docs/PDF-READER.md §18.11. A page that grows not at all, most pages
+    // that try, is tried once, where halving tries twice (measured 2026-11-08 over the 22 parity pairs: growth's lays 223 of
+    // 89,431 halving, 153 so; every page's size the same))
     let ok = 0,
       best: (Layout | null)[] | null = null
     for (let k = 1, top = Math.round((size - 1) / P.step); k <= top; k++) {

@@ -62,10 +62,10 @@ export type LabelInput = {
 type Labelled = { relabel: string | null; head: HeadLabel | null; label: UnitLabel | undefined }
 
 /** a float's label in the target's name, its number and punctuation the original's; null where it keeps the original's
- *  (L2:1184 labelInTarget). Where its part states its float's type (`float`: one form a paper), by the type: a figure's or
- *  a table's in the rules' word, its glyphs after its name as TeX printed them, any number ("A1", "S3", "I"); any other
- *  type's (an algorithm's, a sub-figure's) the original's, and one whose parts do not hold its every glyph or state no
- *  number. Else by its spelling */
+ *  (L2:1184 labelInTarget). Where its part states its float's type (`float`: one form a paper, docs/PDF-READER.md §18.11),
+ *  by the type: a figure's or a table's in the rules' word, its glyphs after its name as TeX printed them, any number ("A1",
+ *  "S3", "I"); any other type's (an algorithm's, a sub-figure's) the original's, and one whose parts do not hold its every
+ *  glyph or state no number. Else by its spelling */
 export function labelInTarget(
   label: UnitLabel | undefined,
   names: LabelInput['words'],
