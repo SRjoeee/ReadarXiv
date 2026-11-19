@@ -175,14 +175,18 @@ interface Commit {
   shown: boolean
   /** every row its lay read, as it saw it: a landing that changes one lays the page again (moved) */
   read: Read
+  /** the served faces' slices lost for now a text of its lay needs (faces.ts `lostIn`): one that comes lays the page again */
+  lost: readonly string[]
 }
 interface PageRec {
   failed: boolean
   stalled: boolean
   /** laid with nothing of its own, or no part: the original's by the rule */
   nothing: boolean
-  /** laid with nothing of its own: every row its lay read, as a commit's `read` */
+  /** laid with nothing of its own: every row its lay read, as a commit's `read`, and the slices lost for now it met, as its
+   *  `lost` */
   read: Read
+  lost: readonly string[]
   /** the stall clock, from the commit to the drawing in place */
   clock: number
 }
@@ -222,7 +226,7 @@ export function createComposer(o: ComposerOptions): Composer {
   const rec = (n: number): PageRec => {
     let P = recs.get(n)
     if (!P) {
-      P = { failed: false, stalled: false, nothing: false, read: none(), clock: 0 }
+      P = { failed: false, stalled: false, nothing: false, read: none(), lost: [], clock: 0 }
       recs.set(n, P)
     }
     return P
@@ -273,8 +277,9 @@ export function createComposer(o: ComposerOptions): Composer {
   }
   /** the rows as if they had ended: what a page waiting for rows reads to ask the faces of the rows in (never committed) */
   const endedView: Rows = { get: (id) => rowsView.get(id), done: true, kept: rowsView.kept }
-  /** a page laid over the rows now, with every row its lay read as it saw it (Commit.read) */
-  const layRead = (part: Part): { page: Page; read: Read } => {
+  /** a page laid over the rows now, with every row its lay read as it saw it (Commit.read) and the slices lost for now it met
+   *  (Commit.lost) */
+  const layRead = (part: Part): { page: Page; read: Read; lost: readonly string[] } => {
     const read: Read = new Map()
     const view: Rows = {
       get(id) {
@@ -287,7 +292,19 @@ export function createComposer(o: ComposerOptions): Composer {
       },
       kept: rowsView.kept,
     }
-    return { page: held(o.lay(part, view), part), read }
+    const [page, lost] = lostIn(() => o.lay(part, view))
+    return { page: held(page, part), read, lost }
+  }
+  /** a lay called, with the served faces' slices lost for now its texts need (none where a host gives its own faces) */
+  const lostIn = <T>(f: () => T): [T, readonly string[]] => (faces.lostIn ? faces.lostIn(f) : [f(), []])
+  /** page n's demand: near, in this generation, while the composer lives */
+  const wantedOf = (n: number) => {
+    const mine = gen
+    return () => !disposed && mine === gen && stack.near(n)
+  }
+  /** the slices lost for now page n's text needs asked again by themselves while it is wanted (served.ts `heal`) */
+  const healFor = (n: number, lost: readonly string[]) => {
+    if (lost.length) faces.heal?.(lost, wantedOf(n))
   }
   /** whether a row a lay read stands otherwise now: come, failed, stated again otherwise (the same row read anew, as its run's
    *  whole states it again, is none: kept as the one read, so that it is compared once) */
@@ -299,6 +316,28 @@ export function createComposer(o: ComposerOptions): Composer {
       read.set(id, now)
     }
     return false
+  }
+  /** the pages laid this generation whose lay read what stands otherwise now (`changed`: a row it read, or a slice lost for now
+   *  it met that came) laid again, as follows */
+  function layAgain(changed: (read: Read, lost: readonly string[]) => boolean) {
+    // (a page laid this generation whose lay read a row that stands otherwise now: laid again, alone, its drawing kept and
+    // muted until the new one commits (a page far from the view let go, laid again as it comes near); one laid with
+    // nothing of its own, the original's by the rule no more, laid again here or once it comes near)
+    for (const [n, c] of [...commits])
+      if (c.gen === gen && changed(c.read, c.lost)) {
+        c.gen = -1
+        pages.delete(n)
+        if (stack.near(n)) askLay(n)
+        else uncommit(n)
+      }
+    for (const [n, P] of recs)
+      if (P.nothing && changed(P.read, P.lost)) {
+        P.nothing = false
+        P.read = none()
+        P.lost = []
+        stack.refresh(n)
+        if (stack.near(n)) askLay(n)
+      }
   }
 
   // ---------------------------------------------------------------- what a slot shows
@@ -507,14 +546,16 @@ export function createComposer(o: ComposerOptions): Composer {
     counts.lays++
     let page: Page
     let read: Read
+    let lost: readonly string[]
     try {
-      ;({ page, read } = layRead(part))
+      ;({ page, read, lost } = layRead(part))
     } catch (e) {
       warnOnce('a page laid', e)
       failed(n)
       return
     }
     pages.set(n, page)
+    healFor(n, lost)
     if (page.wait.faces.length) {
       wave.set(n, page.wait.faces)
       return
@@ -528,11 +569,12 @@ export function createComposer(o: ComposerOptions): Composer {
     if (!page.members.some((m) => m.state === 'laid' && m.off)) {
       P.nothing = true
       P.read = read
+      P.lost = lost
       if (commits.has(n)) uncommit(n)
       settledNow(n)
       return
     }
-    commit(n, page, read)
+    commit(n, page, read, lost)
   }
   /** the page with every member whose groups the composed document does not hold made the original's (its ink would stay
    *  under its translation), its links back at A's boxes as the typesetter places a member not laid (Page.links' owner: the
@@ -564,11 +606,15 @@ export function createComposer(o: ComposerOptions): Composer {
     if (!left || rows?.done || (earlyLeft.get(n) ?? Number.POSITIVE_INFINITY) <= left) return
     earlyLeft.set(n, left)
     let want: Page['wait']['faces']
+    let lost: readonly string[]
     try {
-      want = o.lay(part, endedView).wait.faces
+      const [p, met] = lostIn(() => o.lay(part, endedView))
+      want = p.wait.faces
+      lost = met
     } catch {
       return
     }
+    healFor(n, lost)
     if (want.length) wave.set(n, want)
   }
   /** the faces the round's pages wait for, asked in one wave in the view's order (the page in the middle first), each page laid
@@ -596,10 +642,10 @@ export function createComposer(o: ComposerOptions): Composer {
     if (commits.has(n)) uncommit(n)
     settledNow(n)
   }
-  function commit(n: number, page: Page, read: Read) {
+  function commit(n: number, page: Page, read: Read, lost: readonly string[]) {
     if (!groups) return
     groups.set(page)
-    const c: Commit = { page, tick: ++tick, gen, shown: false, read }
+    const c: Commit = { page, tick: ++tick, gen, shown: false, read, lost }
     commits.set(n, c)
     counts.commits++
     // (the pages kept: the oldest committed far from the view let go past the bound, its groups back on)
@@ -614,6 +660,7 @@ export function createComposer(o: ComposerOptions): Composer {
     // (a page committed holds something of its own: the original's by the rule no more)
     P.nothing = false
     P.read = none()
+    P.lost = []
     if (stack.near(n)) {
       // (the stall clock runs from the commit to the drawing in place: a page still waiting for its part or rows is never one)
       P.clock = clock.later(() => stalled(n, c), PAGE_MS)
@@ -689,6 +736,7 @@ export function createComposer(o: ComposerOptions): Composer {
       P.stalled = false
       P.nothing = false
       P.read = none()
+      P.lost = []
     }
     // (the drawings kept off the view are the generation before's; a laid page not in place yet is let go with its drawing:
     // nothing the run before lays or draws is put in place)
@@ -876,7 +924,7 @@ export function createComposer(o: ComposerOptions): Composer {
           pages.set(m, page)
           await backgroundTurn(ac.signal)
           if (!live() || viewBusy()) return
-          commit(m, page, got.read)
+          commit(m, page, got.read, got.lost)
           const kept = await stack.ahead(m, ac.signal)
           if (!live()) return
           if (kept) counts.aheadKept++
@@ -903,6 +951,9 @@ export function createComposer(o: ComposerOptions): Composer {
           stack.refresh(n)
         }
         askLay(n)
+        // (a page laid whose text needs a slice lost for now, near again: that slice asked again while it stays near)
+        const c = commits.get(n)
+        if (c?.gen === gen) healFor(n, c.lost)
       } else {
         queue.delete(n)
         marks.unmark(n)
@@ -943,6 +994,11 @@ export function createComposer(o: ComposerOptions): Composer {
           askLay(n)
         }
     }),
+    // (a slice lost for now come: the pages whose lay met it laid again, as a row that lands otherwise lays them)
+    faces.healed?.((key) => {
+      layAgain((_, lost) => lost.includes(key))
+      markSoon()
+    }) ?? (() => {}),
   ]
   const onScroll = () => {
     // (the pages given up at PAGE_MS, and the failed, asked again on the next scroll where they are near)
@@ -987,23 +1043,7 @@ export function createComposer(o: ComposerOptions): Composer {
       if (layer && rows) void renderingOnce()
       unrows =
         rows?.on(() => {
-          // (a page laid this generation whose lay read a row that stands otherwise now: laid again, alone, its drawing kept and
-          // muted until the new one commits (a page far from the view let go, laid again as it comes near); one laid with
-          // nothing of its own, the original's by the rule no more, laid again here or once it comes near)
-          for (const [n, c] of [...commits])
-            if (c.gen === gen && moved(c.read)) {
-              c.gen = -1
-              pages.delete(n)
-              if (stack.near(n)) askLay(n)
-              else uncommit(n)
-            }
-          for (const [n, P] of recs)
-            if (P.nothing && moved(P.read)) {
-              P.nothing = false
-              P.read = none()
-              stack.refresh(n)
-              if (stack.near(n)) askLay(n)
-            }
+          layAgain((read) => moved(read))
           // (a row in: the pages waiting laid again, and the pages another generation still shows where these rows have
           // ended; a committed page is final)
           for (const [n, p] of pages) {

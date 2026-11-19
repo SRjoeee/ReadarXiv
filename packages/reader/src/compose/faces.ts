@@ -39,6 +39,15 @@ export interface Faces {
    *  Latin face the reader draws from web font bytes it reads (a face the system holds is laid out with fractional advances
    *  under both renderings on every platform, and tells nothing); null where there is none, or it cannot be had */
   probeFace(text: string): Promise<FaceId | null>
+  /** the served faces' alone (compose/served.ts; a table's faces have none): `f` (a lay) called, with the keys of the slices
+   *  lost for now (a failure that may pass, met twice) that a text it measured needs */
+  lostIn?<T>(f: () => T): [T, string[]]
+  /** the served faces' alone: the slices of `keys` lost for now asked again by themselves, at the session's pace, while
+   *  `wanted` (the demand of a page whose lay met them) or another page's demand holds */
+  heal?(keys: readonly string[], wanted: () => boolean): void
+  /** the served faces' alone: `f` told the key of each slice lost for now that comes, its texts ready now; the listener's
+   *  removal */
+  healed?(f: (key: string) => void): () => void
   /** the faces asked of the network, and the most read at once (the probe's) */
   readonly asked: number
   readonly most: number
