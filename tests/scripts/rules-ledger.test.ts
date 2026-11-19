@@ -381,6 +381,46 @@ describe('a list part cited, part recorded: each entry its comment does not name
   })
 })
 
+describe('a plural in -s of an entry its comment names, read as named where the comment says so', () => {
+  let dir = ''
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'axt-rules-plural-'))
+    const write = (p: string, t: string) => {
+      mkdirSync(dirname(join(dir, p)), { recursive: true })
+      writeFileSync(join(dir, p), t)
+    }
+    write('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    write(
+      'packages/engine/src/index.ts',
+      [
+        '// (a module of two lists: the first comment of a file is its header, no declaration\'s)',
+        '',
+        "// Eqn and Tab: Wiktionary's eqn. and fancyref.sty's Tab.; a plural in -s of an abbreviation named here is its plural; the",
+        '// entries not named here are judged by recorded cases',
+        "export const PART = new Set(['Eqn', 'Eqns', 'Tab', 'Tabs', 'Rem'])",
+        "// Eqn and Tab: Wiktionary's eqn. and fancyref.sty's Tab.; the entries not named here are judged by recorded cases",
+        "export const BARE = new Set(['Eqn', 'Eqns', 'Tab', 'Rem'])",
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: (p: string) => p.startsWith('packages/engine/src/') })]
+  const row = (entries: string[], hits: number[]) => ({ kind: 'list', verdict: 'decides', size: entries.length, entriesDigest: digestOf(entries), hits })
+  it('reads Eqns and Tabs as named by Eqn and Tab where the comment says a plural is its singular, not where it does not', async () => {
+    const rulesLedger = {
+      recorded: { commit: 'c0ffee' },
+      rules: {
+        'packages/engine/src/index::(top)::PART#1': row(['Eqn', 'Eqns', 'Tab', 'Tabs', 'Rem'], [0, 0, 0, 0, 4]),
+        'packages/engine/src/index::(top)::BARE#1': row(['Eqn', 'Eqns', 'Tab', 'Rem'], [0, 0, 0, 4]),
+      },
+    }
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    const classes = Object.fromEntries(c.trees.NOW.debt.lists.list.map((l: { name: string | null; class: string }) => [l.name, l.class]))
+    expect(classes).toEqual({ PART: 'mixed', BARE: 'listed' })
+  })
+})
+
 describe("the ledger's areas: the census's debt areas, @readarxiv/text among them", () => {
   let root = ''
   beforeAll(() => {
