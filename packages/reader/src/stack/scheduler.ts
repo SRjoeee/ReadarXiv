@@ -1,11 +1,11 @@
-// The reader's one render scheduler (design §4.5; engine-view-host §15 root cause 2: today three renderers on the main thread
-// with no common scheduler, contention managed by gates and timers): every drawing either pane makes, a page view's or a
+// The reader's one render scheduler (three renderers on the main thread with no common scheduler would contend, held apart
+// only by gates and timers): every drawing either pane makes, a page view's or a
 // detail view's or a page's crop render, is a job here, and one runs at a time (PDF.js's own viewer draws one page at a time).
 // A job is picked by its rank when it is picked, not when it was asked for: what is in view first, then what is near, each in
 // the order its pane gives (the page in view first, then the pages after it). A job no longer wanted (rank null) is dropped
 // at its turn. A job asked while it runs runs again after it: its owner asks it because what it draws changed meanwhile (a
-// page view reset by a new scale while it drew, whose drawing PDF.js gives up; staging, 2026-11-14, a page in view left
-// undrawn). While the pages ahead are held, only what is in view is drawn.
+// page view reset by a new scale while it drew, whose drawing PDF.js gives up; on staging, a page in view left undrawn).
+// While the pages ahead are held, only what is in view is drawn.
 
 export interface Job {
   /** 0 in view, 1 near; null: no longer wanted */

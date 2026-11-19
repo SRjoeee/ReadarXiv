@@ -44,7 +44,7 @@ export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderCo
       if (stack) observer.observe(stack)
       return () => observer.disconnect()
     }, [])
-    // Hidden through a zoom (the owner's decision of 2026-11-01, §6.5): from the zoom's first Ctrl-wheel over the pages,
+    // Hidden through a zoom (§6.5): from the zoom's first Ctrl-wheel over the pages,
     // or its first change of scale, whatever asked it (a pinch, a key, the menu, a fit), at once and with no fade, until the
     // reader next scrolls. A scroll is the reader's when the reader's own input has come since the zoom's last change of scale:
     // a wheel without Ctrl (pinch.ts), a key other than the zoom's, a touch, a press anywhere (a link, the contents, the page pill).

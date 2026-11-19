@@ -1,12 +1,11 @@
-// How the overlay's SVG text is rendered (docs/PDF-READER.md §11.8, "The layer's text, at the page's weight"; today's
-// src/pdf-reader/engine/view/text-rendering.mjs at a79722e78, carried over the Page). The sheet (styles.ts) draws the overlay's
-// text with `text-rendering: geometricPrecision`, so that a word's glyphs advance as the Metrics measured them on a canvas: a
-// system that lays a web font out on whole-pixel advances (Chromium on Linux) would otherwise move a Latin word's letters, by up
-// to 4.5 CSS px over a page of German. But on macOS, Chromium draws geometricPrecision without the system's font smoothing: 80 %
-// of the ink PDF.js gives the same face at the same size, the translation lighter than the page around it (the maintainer's
-// ruling of 2026-10-29; seen again by him on 2026-11-08 in this reader, which drew it so until this module: 80 % of the ink its
-// own `auto` gives on 1706.03762v7's abstract). There `auto` keeps every glyph where geometricPrecision puts it and draws at
-// the canvas's weight.
+// How the overlay's SVG text is rendered (docs/PDF-READER.md §11.8, "The layer's text, at the page's weight"). The sheet
+// (styles.ts) draws the overlay's text with `text-rendering: geometricPrecision`, so that a word's glyphs advance as the
+// Metrics measured them on a canvas: a system that lays a web font out on whole-pixel advances (Chromium on Linux) would
+// otherwise move a Latin word's letters, by up to 4.5 CSS px over a page of German. But on macOS, Chromium draws
+// geometricPrecision without the system's font smoothing: 80 % of the ink PDF.js gives the same face at the same size, the
+// translation lighter than the page around it (measured 2026-11-08 in this reader drawing geometricPrecision: 80 % of the
+// ink its own `auto` gives on 1706.03762v7's abstract). There `auto` keeps every glyph where geometricPrecision puts it and
+// draws at the canvas's weight.
 //
 // So the overlay takes `auto` where the browser lays a served face's words out alike under both, and geometricPrecision
 // elsewhere: a feature test, not a platform's, in a face the overlay draws from web font bytes (a face the system holds is laid
@@ -15,7 +14,7 @@
 // off the view in the faces' probe face (Faces.probeFace: the served Computer Modern serif, loaded for it), under each
 // rendering; their glyphs' advances compared. Never by a page's own words: a page of few Latin words told nothing, so the first
 // page was drawn at 80 % of its ink on macOS until a later page told, and every page flipped then (2610.40645v1's page 1 in
-// Japanese, 10 runs of one place and 12 advances; the owner's question of 2026-11-08); and the weight a page was drawn at hung
+// Japanese, 10 runs of one place and 12 advances); and the weight a page was drawn at hung
 // on the order its pages were laid. The answer is an attribute of the reader's root (`data-axt-layer-text="auto"`) that the
 // sheet reads; where the probe says no, or tells nothing (no probe face to be had, a document that lays no SVG text out),
 // geometricPrecision.

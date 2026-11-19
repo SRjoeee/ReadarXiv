@@ -1,6 +1,6 @@
-// The page stack (design §4.5 "both panes are one kind of thing"): a slot for every page of a document, all under one scale,
+// The page stack (both panes are one kind of thing): a slot for every page of a document, all under one scale,
 // each slot PDF.js's own page view of what that page shows now, drawn by the reader's one scheduler (in view, then near).
-// Built for the right pane first; the left is put on it only if it matches today's left (stage 2, deliverable 7).
+// Built for the right pane first; the left is put on it only if it matches the left PDF.js's viewer draws.
 //
 // - **Slots.** A slot is the page's box, sized by PDF.js's own rule (setLayerDimensions: `round(down, var(--total-scale-factor)
 //   × the page's size, var(--scale-round-x))`) under the stack's `--scale-factor`, so that a slot of either pane and a page box of
@@ -14,8 +14,8 @@
 //   in one task, once it has drawn: the slot's size and the pane's scroll never change, and nothing blank shows. Drawn is
 //   finished at the scale it stands at: PDF.js's draw resolves as well where it gave its drawing up (a page view reset by a new
 //   scale while it drew), and such a page view is drawn again at its turn (the reset's ask, which the scheduler keeps for a
-//   job asked while it runs), the slot showing what it showed meanwhile (staging, 2026-11-14: the relayout's fit landing while
-//   a page drew left it in place undrawn, in view, until a zoom).
+//   job asked while it runs), the slot showing what it showed meanwhile (on staging, the relayout's fit landing while a page
+//   drew left it in place undrawn, in view, until a zoom).
 // - **Near and far.** A slot one pane's height above or below the view is near (an IntersectionObserver, which sees a slot where
 //   it shows, the follower's transform and all: nothing is lent). A far slot lets its drawing go, canvas and all, but a laid
 //   page's (one with an overlay), which is kept off the view within the device's budget, the farthest from the view let go
@@ -31,14 +31,14 @@
 //   RECOPY_MS after the last change (`again`). `scale` is told once the layout stands at the new scale, `drawn` each time a page
 //   is drawn at it.
 // - **Focus.** A slot's content going (swapped) gives the focus back to the link of the same rank in what it shows now, else to
-//   the slot (a stop of its own), so it never falls to <body> (places.mjs focusIn/keepFocus, kept).
+//   the slot (a stop of its own), so it never falls to <body>.
 // - **Detail.** At a high zoom PDF.js draws a page at a lower resolution and the part in view sharp (its detail view): the stack
 //   tells each page view in view its visible area after a scroll and a scale (`updateVisibleArea`, public), and draws its detail
 //   view through the scheduler.
 // - **Parsed pages.** PDF.js keeps a page's operator list and decoded images until its `cleanup()`; a page view's reset keeps
-//   them. A page of a laid page's document is kept parsed for the last WARM_PAGES pages let go (visibility.mjs WARM_PAGES), the
+//   them. A page of a laid page's document is kept parsed for the last WARM_PAGES pages let go (WARM_PAGES), the
 //   oldest cleaned up past it; a page of the original's document is cleaned up only where the left does not hold it (`shared`:
-//   never a page the other pane still shows, engine-view-host §16).
+//   never a page the other pane still shows).
 import type { PageViewport, PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
 import type { PDFPageView } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import { onOf } from '../listeners.ts'
@@ -56,23 +56,23 @@ const NEAR = '100% 0px 100% 0px'
  *  jump's scroll brings it near within a frame or two, and a slot that comes near later is the reader's own scroll.
  *  Unmeasured */
 const FOCUS_WAIT_MS = 2000
-/** how long after a zoom's or a pinch's steps are drawn again the laid pages' text layers stay out of style and layout (ms),
- *  places.mjs TEXT_BACK_MS: steps a little further apart than their drawing delay find them still out (PDF-READER
+/** how long after a zoom's or a pinch's steps are drawn again the laid pages' text layers stay out of style and layout (ms):
+ *  steps a little further apart than their drawing delay find them still out (PDF-READER
  *  §11.11); unmeasured */
 const TEXT_BACK_MS = 500
 /** how long after a zoom's last step a laid page's own drawings (its crops) are drawn again, ms: PDF.js draws its page
- *  STEP_DELAY (400 ms) after it (layer-side.mjs RECOPY_MS), and the 200 ms past that are unmeasured */
+ *  STEP_DELAY (400 ms) after it, and the 200 ms past that are unmeasured */
 const RECOPY_MS = 600
-/** the longest a laid page's drawing waits for the left's page being drawn before it is put in place, ms (layer-side.mjs
- *  LEFT_WAIT_MS): the two panes paint within one frame of each other, the left first, unless the left is slower than this.
+/** the longest a laid page's drawing waits for the left's page being drawn before it is put in place, ms:
+ *  the two panes paint within one frame of each other, the left first, unless the left is slower than this.
  *  It is past the 1.21 to 1.24 s the left's page took alone on 2602.23285v2's page 8 at k 2, measured in PDF-READER §11.8 */
 const LEFT_WAIT_MS = 1500
-/** the pages of a laid page's document kept parsed (operator lists, decoded images) after their drawings go (visibility.mjs) */
+/** the pages of a laid page's document kept parsed (operator lists, decoded images) after their drawings go */
 const WARM_PAGES = 4
 /** the mark of a slot whose drawing is kept off the view: the reader's sheet holds the drawing out of the layout tree */
 const KEPT = 'data-axt-kept'
-/** the most device pixels of laid pages' drawings kept off the view on any device (layer-side.mjs KEEP_PIXELS,
- *  docs/PDF-READER.md §11.8): 128 MiB at the 4 bytes a pixel a copy costs, some six and a half A4 pages at 120 % on a 2x
+/** the most device pixels of laid pages' drawings kept off the view on any device
+ *  (docs/PDF-READER.md §11.8): 128 MiB at the 4 bytes a pixel a copy costs, some six and a half A4 pages at 120 % on a 2x
  *  screen, each measured at 19.6 MiB of the GPU process's memory in Chromium 153 on Metal */
 export const KEEP_PIXELS = 2 ** 25
 /** the most device pixels of those drawings kept on iOS and iPadOS (IOS_KEEP_PIXELS, §11.8): 32 MiB, under a third of
@@ -91,7 +91,7 @@ const INITIAL = 0,
 /**
  * The device pixels of laid pages' drawings kept off the view on this device: KEEP_SHARE of its memory (`deviceMemory`, GB,
  * where the browser tells it, else KEEP_MEMORY_GB) at 4 bytes a pixel, never fewer than two of its screens' pixels, never more
- * than KEEP_PIXELS, nor than IOS_KEEP_PIXELS on iOS or iPadOS (layer-side.mjs keepBudget, carried)
+ * than KEEP_PIXELS, nor than IOS_KEEP_PIXELS on iOS or iPadOS
  */
 export function keepBudget(o: { deviceMemory?: number; screenPixels?: number; ios?: boolean } = {}): number {
   const gb =
@@ -104,7 +104,7 @@ export function keepBudget(o: { deviceMemory?: number; screenPixels?: number; io
   return Math.min(o.ios ? IOS_KEEP_PIXELS : KEEP_PIXELS, Math.max(byMemory, floor))
 }
 /** the kept drawings let go past `budget` (device pixels), in order: the farthest from page `at` (the page in the middle of the
- *  view) first, the one kept longest first between two as far (layer-side.mjs keepDrawing) */
+ *  view) first, the one kept longest first between two as far */
 export function pastBudget(kept: readonly { n: number; px: number }[], at: number, budget: number): number[] {
   let total = kept.reduce((a, x) => a + x.px, 0)
   const left = [...kept]
@@ -167,7 +167,7 @@ interface LeftContent {
   key: string
   fallback: ViewContent
 }
-/** a page of text in grey, while there is no original to draw (round 4's skeleton) */
+/** a page of text in grey, while there is no original to draw */
 interface SkeletonContent {
   kind: 'skeleton'
   key: string
@@ -334,7 +334,7 @@ export interface Stack {
   holdNear(on: boolean): void
   /** the pages ahead held (on) or let go: a slot near the view but not in it waits to draw its original's page view meanwhile
    *  (its page view made all the same; one that comes into view is drawn at once: only when a page is drawn changes, never
-   *  what; places.mjs letAheadGo) */
+   *  what) */
   hold(on: boolean): void
   readonly held: boolean
   on<K extends keyof StackEvents>(type: K, f: Listener<K>): () => void
@@ -548,7 +548,7 @@ export function createStack(o: StackOptions): Stack {
     view.div.removeAttribute('data-l10n-id')
     view.div.removeAttribute('data-l10n-args')
     // (its text layer holds the original's words: marked as the paper's language, the layer alone, so that the page's name
-    // and its links' names keep the interface's, reader-view.mjs sourceText)
+    // and its links' names keep the interface's)
     if (content.own && o.sourceLang) {
       const lang = o.sourceLang
       bus.on('textlayerrendered', (e: { source?: { textLayer?: { div?: HTMLElement } } }) =>
@@ -631,7 +631,7 @@ export function createStack(o: StackOptions): Stack {
     return d
   }
   /** the left's drawing of page n in a canvas of the slot's (one drawImage at its size: the same pixels, the slot's box the left
-   *  page box's), the one before let go; the left's loading mark until it is drawn (places.mjs copyLeft, mirrorLoading) */
+   *  page box's), the one before let go; the left's loading mark until it is drawn */
   function leftDrawing(s: Slot, content: LeftContent): Drawing {
     const d = drawingBase(content.key, content, holderOf())
     copyLeft(s, d)
@@ -887,8 +887,8 @@ export function createStack(o: StackOptions): Stack {
       s.div.setAttribute(KEPT, '')
     } else if (putBack(s)) s.div.removeAttribute(KEPT)
   }
-  /** drawing d's overlay let go to its copy as d is kept off the view (its crops' page-sized bitmap: design-performance-2026-11-13
-   *  Q7, a far page holds one bitmap): the device pixels the copy holds */
+  /** drawing d's overlay let go to its copy as d is kept off the view (its crops' page-sized bitmap: a kept page holds one
+   *  bitmap, docs/PDF-READER.md §11.8): the device pixels the copy holds */
   function awayOf(d: Drawing): number {
     const c = d.content
     return d.over && isView(c) && c.away ? c.away(d.over) : 0
@@ -955,7 +955,7 @@ export function createStack(o: StackOptions): Stack {
     return c ? c.width * c.height : 0
   }
   // The focus's move read a task later, never in a microtask: on a native Tab Chromium clears the focus, tells focusout and
-  // runs its microtasks before the focus arrives at the next element (layer-side.mjs focusMoved)
+  // runs its microtasks before the focus arrives at the next element
   let focusCheck = 0
   const focusMoved = () => {
     if (focusCheck || disposed || !keptForFocus.size) return
@@ -1404,7 +1404,7 @@ export function createStack(o: StackOptions): Stack {
   return stack
 }
 
-// ---------------------------------------------------------------- the skeleton (places.mjs skeleton, kept)
+// ---------------------------------------------------------------- the skeleton
 const part = (cls: string, style: Record<string, string> = {}) => {
   const e = document.createElement('i')
   if (cls) e.className = cls

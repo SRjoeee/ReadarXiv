@@ -1,24 +1,21 @@
-// U.rename (design-b §1.5, T15, D12, A6): the names TeX's cross-referencing packages generate in a reference (cleveref's
-// \cref, hyperref's \autoref: "Theorem A.17") and a citation's note ("[Ascolani et al., 2026, Lemma 1]") put in the target's
-// names, each replacement [start, end, word] over the text the page shows; its numbers and punctuation kept; a reference no
-// package names whole in the target left as the page shows it. Ported from engine 065c1d973: renameRefs L2:1289-1306
-// (GENERATED_REF L2:1277, CITE_NOTE L2:1279), nameOfRow L2:1266-1271, rules/tex-names.mjs refInTarget :103-140, refName
-// :74-84, conjunctionOf :86-91, ownName :36, unspaced :38, NUMBER :23, UNINFLECTED :17, BABEL_TYPES :20, WORDS :94,
-// GENERATED_COMMANDS :14. Today's renameRefs writes `rename` onto each resolution; the port returns the replacements by
-// element and the composition sets them.
+// U.rename: the names TeX's cross-referencing packages generate in a reference (cleveref's \cref, hyperref's \autoref:
+// "Theorem A.17") and a citation's note ("[Ascolani et al., 2026, Lemma 1]") put in the target's names, each replacement
+// [start, end, word] over the text the page shows; its numbers and punctuation kept; a reference no package names whole in
+// the target left as the page shows it. The rule returns the replacements by element, and the composition sets them.
 //
-// Its inputs, and where each comes from once the rule set and lane L1 state them:
+// Its inputs, and where each comes from:
 // - `elements`: the unit's resolutions in the row's order (U.elements' answer): each one drawn as its page's text
 //   (`orig-text`) with its source and text
-// - `names`: the packages' names (rules/tex-names.json, written from TeX Live's files: translator's, cleveref's, hyperref's,
-//   ctex's; a data file of Rules, LPPL), prepared for the target by `refNamesOf`
+// - `names`: the packages' names (data/rules/refs.ts and heads.ts, written from TeX Live's files: translator's,
+//   cleveref's, hyperref's, ctex's; a data file of Rules, LPPL), prepared for the target by `refNamesOf`
 // - `labels`: babel's names in the target (Rules.words); `own`: the paper's own name units' translations (other rows,
-//   `nameOfRow`: A6)
+//   `ownNamesOf`)
 
 import type { OutPiece, Row } from '@readarxiv/format'
 
-/** rules/tex-names.json as the rule reads it: each form's counter type, cleveref's English conjunctions and singulars, and
- *  per target the heads' (translator's), the references' (cleveref's, hyperref's) and the conjunctions' words */
+/** the reference names' data (data/rules/refs.ts, the engine's source/tex-names.json) as the rule reads it: each form's
+ *  counter type, cleveref's English conjunctions and singulars, and per target the heads' (translator's), the references'
+ *  (cleveref's, hyperref's) and the conjunctions' words */
 export type TexNamesData = {
   types: Readonly<Record<string, string>>
   conjunctions: readonly string[]
@@ -73,22 +70,22 @@ export const GENERATED_COMMANDS: readonly string[] = Object.freeze([
   'autoref',
   'Autoref',
 ])
-/** a placeholder whose text a package generates (L2:1277 GENERATED_REF) */
+/** a placeholder whose text a package generates */
 const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
-/** a citation's note, its last optional argument (L2:1279 CITE_NOTE) */
+/** a citation's note, its last optional argument */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
-/** the targets whose names do not inflect (tex-names.mjs:17) */
+/** the targets whose names do not inflect */
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
-/** the counter types babel names that neither cleveref nor ctex does (tex-names.mjs:20): article.cls's \figurename,
+/** the counter types babel names that neither cleveref nor ctex does: article.cls's \figurename,
  *  \tablename and \appendixname, as babel's captions */
 const BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
-/** a number a reference prints (tex-names.mjs:23 NUMBER) */
+/** a number a reference prints */
 const NUMBER =
   /^[([]?(?:(?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+|[.\-–][A-Za-z](?![A-Za-z]))*[a-z]?|[IVXLCDM]{1,7}|[ivxlcdm]{1,7}|[A-Z])[)\]]?$/
 const longestFirst = (a: string, b: string) => b.length - a.length
 
-/** the packages' names for one target, in today's order (tex-names.mjs:25 CONJUNCTIONS, :94 WORDS: the words of every
- *  target, as today's module reads them once) */
+/** the packages' names for one target: the conjunctions and the words of every target (the types, the heads' and the
+ *  references' names), each longest first, so that the name found at a place is the longest there */
 export function refNamesOf(data: TexNamesData, to: string): RefNames {
   return {
     to,
@@ -122,7 +119,7 @@ const unspaced = (s: string) =>
   )
 const has = (table: Readonly<Record<string, string>>, w: string) => Object.hasOwn(table, w) && !!table[w]
 
-/** a generated reference's name in the target, or null (tex-names.mjs:74 refName) */
+/** a generated reference's name in the target, or null */
 function refName(
   english: string,
   n: RefNames,
@@ -142,7 +139,7 @@ function refName(
   )
 }
 
-/** a conjunction in the target (tex-names.mjs:86 conjunctionOf) */
+/** a conjunction in the target */
 function conjunctionOf(t: NonNullable<RefNames['target']>, c: string, own: OwnNames | null) {
   if (Object.hasOwn(t.conj, c)) return t.conj[c]!
   if (!/\p{L}/u.test(c)) return c
@@ -152,7 +149,7 @@ function conjunctionOf(t: NonNullable<RefNames['target']>, c: string, own: OwnNa
 }
 
 /** a generated reference's text in the target's names: its replacements in order; null where a part of it is no number,
- *  name or conjunction the target has a word for; empty where it holds no name (tex-names.mjs:103 refInTarget) */
+ *  name or conjunction the target has a word for; empty where it holds no name */
 function refInTarget(
   text: string,
   n: RefNames,
@@ -202,7 +199,7 @@ function refInTarget(
 }
 
 /** U.rename: each resolution drawn as its page's text whose names a package generated, its replacements in the target's
- *  names, by element in the row's order; one with none is absent (L2:1289 renameRefs) */
+ *  names, by element in the row's order; one with none is absent */
 export function rename<K>(
   elements: Iterable<[K, Renamable | null | undefined]>,
   n: RefNames,
@@ -238,7 +235,7 @@ export function rename<K>(
 }
 
 /** a name's translation as the target's word: its text pieces joined, white space one space, an ideographic full stop the
- *  translator ends a word with gone (L2:1269) */
+ *  translator ends a word with gone */
 const wordOf = (texts: readonly string[]) =>
   texts
     .join('')
@@ -255,7 +252,7 @@ function textsOf(content: readonly OutPiece[], out: string[] = []): string[] {
   return out
 }
 /**
- * The paper's own names in the target, English → its word (today's ownNames, RUN:813-819, each row nameOfRow's): the name
+ * The paper's own names in the target, English → its word (each row's word as wordOf reads its text): the name
  * units the part states (Part.paper.names, [English, unit id]), each by its row where it is in and a translation; none where
  * it is not in, or no translation, and its heads and references keep the original's. Read when asked, each row once a call:
  * a name's row is read only by a member whose head or reference names it, and such a member's page waits for its paper's names

@@ -1,6 +1,4 @@
-// The typesetter's entry and its result, as decided (the page decision: the objects and the entry are design A's,
-// design-a §1.2; the inside and the ledger are design B's, design-b §1.5 to §1.7). Types only: the composition
-// (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
+// The typesetter's entry and its result. Types only: the composition (layPage, layFlow) is in lay/.
 import type { Box, Id, Ink, Link, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 import type { ScriptRules } from './data/rules/types.ts'
 import type { RefNames } from './unit/rename.ts'
@@ -12,13 +10,13 @@ export type Lang = string
 export type Script = 'Hans' | 'Hant' | 'Jpan' | 'Kore' | 'Latn' | 'Cyrl'
 
 /**
- * A served face, as the host loads and measures it: today's canvas font string at 100 px (fonts.mjs fontString(face, 100):
- * `400 100px "axt-nimbus-roman", "axt-lm-math", "axt-shs-sc"`). The tap's recorded widths are keyed by it
- * (`metrics/<pair>.metrics.json.gz`), so a face is named by it; a canvas adapter sets the font at the asked size from it
+ * A served face, as the host loads and measures it: its canvas font string at 100 px (breaker/measure.ts
+ * fontString(face, 100): `400 100px "axt-nimbus-roman", "axt-lm-math", "axt-shs-sc"`). The tap's recorded widths are keyed
+ * by it (`metrics/<pair>.metrics.json.gz`), so a face is named by it; a canvas adapter sets the font at the asked size from it
  */
 export type FaceId = string
 
-/** the rows of one target: a row by unit id, and whether no other row will come (design-a §1.2); `kept`, a unit the paper
+/** the rows of one target: a row by unit id, and whether no other row will come; `kept`, a unit the paper
  *  keeps as it is (format's Unit.kept: never sent to a translator), whose row never comes: none waited for, read as no row
  *  (`none`) as once the rows have ended */
 export interface Rows {
@@ -28,7 +26,7 @@ export interface Rows {
 }
 
 /**
- * The host's served faces, the typesetter's only platform input (design-a §1.2). Inside one call it answers from the faces
+ * The host's served faces, the typesetter's only platform input. Inside one call it answers from the faces
  * loaded at the call's start. `advance` is the text's advance at `size` (PDF units at size `size`, as a canvas measures it
  * with its font at that many px); `ink` its ink over and under the baseline and how far right of its start its ink ends.
  * `ready`: the face is loaded and holds every character of `text`; 'never' where no slice of it holds one
@@ -39,24 +37,23 @@ export interface Metrics {
   ink(face: FaceId, size: number, text: string): [ascent: number, descent: number, right: number]
 }
 
-/** the reader's choices that change what is laid (design-a §1.2) */
+/** the reader's choices that change what is laid */
 export type Choices = {
   captions?: { figure: 'target' | 'original'; table: 'target' | 'original' }
-  /** the unit kinds the reader shows untranslated (design-a's `Kind[]`: a toggle's kinds, e.g. the references' `reference`,
+  /** the unit kinds the reader shows untranslated (`Kind[]`: a toggle's kinds, e.g. the references' `reference`,
    *  `refnames`, `inkreferences`); layPage leaves a member the original's (`left`) whose toggleKind (format's: the block its
    *  source ties it to, Placed.of, else its kind) is one */
   leave?: string[]
   /** how far a unit's last line may stand under TeX's text block bottom, in points, where that keeps it from a step down its
-   *  fit's sizes (docs/PDF-READER.md §18.37): none, the rule's (fit/walk.ts PAST_FOOT); 0, never (the owner's switch) */
+   *  fit's sizes (docs/PDF-READER.md §18.37): none, the rule's (fit/walk.ts PAST_FOOT); 0, never (the switch) */
   pastFoot?: number
 }
 
 /**
- * Everything typographic the typesetter reads, for one target (design-b §1.4's shape): the rule set's fields resolved for it
- * (`set`: today's resolveRules params, by the names every ported rule reads them by; design-a's grouping of them by use is a
- * rename for after the port), its labels and babel's names, the hyphenation patterns the host handed in (never fetched by
- * the typesetter), the reader's choices. Built by `rulesFor` (rules-for.ts) from one data file a language
- * (src/data/rules/). Data, not a seam (design-a §4): tests pass edited values
+ * Everything typographic the typesetter reads, for one target: the rule set's fields resolved for it
+ * (`set`: resolveRules' params, by the names every rule reads them by), its labels and babel's names, the hyphenation
+ * patterns the host handed in (never fetched by the typesetter), the reader's choices. Built by `rulesFor` (rules-for.ts)
+ * from one data file a language (src/data/rules/). Data, not a seam: tests pass edited values
  */
 export type Rules = Readonly<{
   target: Lang
@@ -91,10 +88,10 @@ export type RuleParams = Readonly<
 >
 
 /**
- * Why a member stays the original's (design-a §1.2's typesetter `Why`, named `Unlaid` here: `packages/format`'s `Why` is a
- * row's failure, what the translate chain yields): the prepare's reasons (format's PrepWhy), the rows' reason kinds
- * (format's Why['kind']), no row by the rows' end (`none`), a unit the paper keeps as it is (`kept`: format's Unit.kept, never
- * sent, its row never coming), the reader's leave (`left`), and the typesetter's own
+ * Why a member stays the original's (`Unlaid`: `packages/format`'s `Why` is a row's failure, what the translate chain
+ * yields): the prepare's reasons (format's PrepWhy), the rows' reason kinds (format's Why['kind']), no row by the rows' end
+ * (`none`), a unit the paper keeps as it is (`kept`: format's Unit.kept, never sent, its row never coming), the reader's
+ * leave (`left`), and the typesetter's own
  */
 export type Unlaid =
   | PrepWhy
@@ -127,7 +124,7 @@ export type Item =
       skew?: 1
       dx?: number[]
       /** a superscript's raise over the line's baseline, PDF units (a footnote's mark, a symbol drawn raised: 0.36 of the line's
-       *  size, today's svgOfUnit); the page's drawing sets the run that much higher (the checkpoint's (10): drawn on the baseline) */
+       *  size); the page's drawing sets the run that much higher (unraised, it stood on the baseline) */
       rise?: number
       /** a run set along a direction (a figure text the original sets turned: Placed.dir, a unit vector, the page's y up): its
        *  line's baseline runs from (x0, y) along it, and `x` (and `dx`) is its place along it from x0 (x − x0 its distance from
@@ -148,7 +145,7 @@ export type Item =
  *  tracking, the room TeX left under its blocks, one step of its sizes; and at a column's foot the room past TeX's text block bottom
  *  (the borrow's own, §18.37). Here, where Laid states it, so that the page's fill imports it and no type cycle runs through it */
 export type EvenKnob = 'track' | 'room' | 'size' | 'foot'
-/** one member on one page, as laid (design-a §1.2) */
+/** one member on one page, as laid */
 export type Laid = {
   ord: number
   page: number
@@ -167,7 +164,7 @@ export type Laid = {
    *  members need (docs/PDF-READER.md §18.64): that scale of its own size, and the member whose own need set it (`by`, itself
    *  where it is that member, which then states the size step among its `evened` knobs where its page's fill took it) */
   tie?: { scale: number; by: number }
-  /** the paragraph points its part states by their first word (Placed.paras, design-display 2a), where it states one: how many
+  /** the paragraph points its part states by their first word (Placed.paras), where it states one: how many
    *  opened a block on the line TeX opened them on, how many flowed on for want of a sentence start of its row at the point's
    *  word, how many for want of its row's sentences (unit/breaks.ts paraPieces); where its part names the element a point
    *  stands after (Placed.parasAfter), also how many opened directly after their element and how many flowed on because the
@@ -190,7 +187,7 @@ export type Laid = {
   }
 }
 
-/** a page, laid or waiting (design-a §1.2); `ledger` where the call asked for a trace (design-b §1.7) */
+/** a page, laid or waiting; `ledger` where the call asked for a trace */
 export type Page = {
   page: number
   /** non-empty: not committed; every member is 'waiting', nothing off */
@@ -206,13 +203,13 @@ export type Page = {
   ledger?: PageLedger
 }
 
-// ---------------------------------------------------------------- the ledger (design-b §1.7, the tap's slots)
+// ---------------------------------------------------------------- the ledger (the tap's slots)
 
-/** a rule's home (design-b §1.1) */
+/** a rule's home */
 export type Home = 'fact' | 'unit' | 'shared' | 'breaker' | 'fit' | 'emit'
 /** a rule's id: a persisted vocabulary, the gate's ledgers kept in lab-data are read across versions */
 export type RuleId = `F.${string}` | `U.${string}` | `S.${string}` | `B.${string}` | `X.${string}` | `D.${string}`
-/** design-b's fixed order (§1.6): the step a rule is applied at */
+/** the steps' fixed order: the step a rule is applied at */
 export type Step =
   | 'L1'
   | 'L2'
@@ -230,9 +227,9 @@ export type Step =
 /** a JSON value: what a slot holds (numbers as JSON prints them, non-finite as strings: the tap's rule) */
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 /**
- * One rule applied to one member, in step order: the tap's slot (the tap's spec §3), so that the gate compares the
- * port's ledger with today's slot by slot and names the first rule whose value differs. `round`: the member's lay (today a
- * unit laid again is a round of its own; 0 for the slots before any lay)
+ * One rule applied to one member, in step order: the tap's slot, so that the gate compares the
+ * typesetter's ledger with the recorded one slot by slot and names the first rule whose value differs. `round`: the member's
+ * lay (a unit laid again is a round of its own; 0 for the slots before any lay)
  */
 export type LedgerSlot = { step: Step; by: RuleId; round: number; value: Json }
 /** a page's ledger: each member's slots, each pass page's fill target, the table groups read */

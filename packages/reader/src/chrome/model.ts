@@ -13,7 +13,7 @@ type EngineDisplay = 'original' | 'translation' | 'bilingual'
  *  the reader), or for this language (`target`) */
 export type Unavailable =
   | 'no-source'
-  /** no PDF of the paper to be had: the v1 layer API's word, which the extension's today session tells this chrome as it is
+  /** no PDF of the paper to be had: the v1 layer API's word, which the extension's v1 session tells this chrome as it is
    *  (src/pdf-reader/session/server.ts LAYER_WHYS, host/today.ts); our server's v2 says none such */
   | 'no-pdf'
   | 'cannot-prepare'
@@ -32,7 +32,7 @@ export type Unavailable =
   | 'unreachable'
   | 'target'
 /** the unavailable states that are the paper's or the language's, not a moment's: the session's lasting refusals as the chrome
- *  says them (one table, session/machine.ts LASTING), a language the typesetter does not set, and the today session's `no-pdf`
+ *  says them (one table, session/machine.ts LASTING), a language the typesetter does not set, and the v1 session's `no-pdf`
  *  (the v1 layer API's word, which no session of this package says) */
 export const LASTING: ReadonlySet<Unavailable> = new Set<Unavailable>(
   [...PAPERS].map((why) => LAYER_WHY[why]).concat('target', 'no-pdf'),
@@ -61,7 +61,7 @@ export interface Toast {
 /** how long a toast stands when its host names no time, ms (the website's TOAST_MS); unmeasured */
 export const TOAST_MS = 3000
 /** how long the chrome's notice of a face lost stays, ms (S-R-28): how long a notice stays, the value the website gives its two
- *  "lost" notices, which the owner has looked at on the site; a reading time chosen, which nothing was weighed to give */
+ *  "lost" notices, judged on the site; a reading time chosen, which nothing was weighed to give */
 export const FACES_LOST_MS = 8000
 export type SessionEvent =
   /** a write of the settings by this page that went through: a refusal before it is mended */
@@ -77,7 +77,7 @@ export type SessionEvent =
   /** the paper's id and its title for the toolbar, '' until known or when there is none */
   | { type: 'paper'; id: string; title: string }
   /** the panes scroll together, as the reader applies it; `available`: whether they can (both sides' pages laid out), none
-   *  where the session does not say (the extension's today session: as if they could) */
+   *  where the session does not say (the extension's v1 session: as if they could) */
   | { type: 'sync'; on: boolean; available?: boolean }
   /** the visitor's preferences, each time they land (the one model, prefs.ts) */
   | { type: 'prefs'; prefs: Prefs }
@@ -124,11 +124,11 @@ export type SessionEvent =
       self?: true
     }
   /** no bilingual version for now, or for this paper or language; `self`: the session asks again by itself (at its time, or
-   *  once the network is back): no retry offered (PDF-READER §8.1). None where a session does not say (the extension's today
+   *  once the network is back): no retry offered (PDF-READER §8.1). None where a session does not say (the extension's v1
    *  session): a retry offered */
   | { type: 'unavailable'; why: Unavailable; retryAt: number | null; self?: true }
   /** our server's document followed: its stream lost and asked again, nothing heard since (or heard again); `network`: the
-   *  network failed while the run is waited for (none where a session does not say: the extension's today session) */
+   *  network failed while the run is waited for (none where a session does not say: the extension's v1 session) */
   | { type: 'link'; reconnecting: boolean; network?: boolean }
   /** a face the translation is set in could not be had this visit (the reader's `faces`), its passages drawn in their fallback
    *  until the page is loaded again: the chrome's own toast says so (S-R-28), in the catalogue's one sentence, for every host */
@@ -197,7 +197,7 @@ export interface ReaderState {
   /** when a retry of the run's failure is due, where the service named a time (a rows' wait); null: none named */
   failureAt: number | null
   languageSupported: boolean
-  /** what can be downloaded: nothing yet, the original, or the translation (Task 20 fills it) */
+  /** what can be downloaded: nothing yet, the original, or the translation (no host makes its PDF yet: open.ts) */
   download: 'none' | 'original' | 'translation'
   scale: number
   sides: Record<Side, { page: number; pages: number }>
@@ -289,7 +289,7 @@ export interface Session {
   goToPage(side: Side, page: number): void
   /** a patch of the preferences, on top of what the store holds when its turn comes */
   setPrefs(patch: PrefsPatch): void
-  /** the translation's bytes, to save (Task 20 fills it); null while there are none */
+  /** the translation's bytes, to save; null while there are none (no host makes them yet: open.ts) */
   pdfBytes(which: 'translation'): Promise<Uint8Array | null>
   /** arXiv's own PDF of the paper opened by the browser, in a tab of its own: the browser streams it and saves it. Never read
    *  through the reader (the whole file, for every reader, in case one asks to save it) */
@@ -305,7 +305,7 @@ export interface Session {
   hold?(on: boolean): void
 }
 
-/** the engine's error kinds are the chain's (translate.mjs); anything else, a crash included, is the popup's unknown */
+/** the engine's error kinds are the translate chain's; anything else, a crash included, is the popup's unknown */
 const ERROR_KINDS: readonly ProviderErrorKind[] = [
   'no-key',
   'network',
@@ -557,7 +557,7 @@ function reduceRunFree(
       const lasting = LASTING.has(event.why)
       // (a wait the session goes on from by itself, as it says (`self`): the run it pauses stays the phase, its prepare's place
       // and its rows' coming with it, so that its line goes on and nothing reads as done between the session's own asks: one
-      // wait, the coordinator's R7 of 2026-11-12)
+      // wait, PDF-READER §8.1)
       const paused = GOES_ON.has(event.why) && !!event.self
       return {
         ...state,
@@ -599,7 +599,7 @@ export interface ReaderController {
   setPrefs(patch: PrefsPatch): void
   /** a pinch over a side: both sides zoom together about the pointer, one call a frame (ui/pinch.ts) */
   pinch(side: Side, factor: number, origin: [number, number]): void
-  /** translate again what is missing (Part 3: the page starts again; Part 4 in place) */
+  /** translate again what is missing, in place: the rows held stay, the missing alone are asked (reader.ts `rows`) */
   retry(): void
   /** the window too narrow for two sides, or wide enough again: told once per change */
   setNarrow(on: boolean): void
@@ -663,7 +663,7 @@ export function createController({
    */
   const later = (act: (s: Session) => void) => void session?.then(act, () => {})
   /** a change of the state that is the controller's own (the zoom chosen), not the session's; none, when nothing in it
-   *  differs (a pinch's every step sets no zoom: the final review) */
+   *  differs (a pinch's every step sets no zoom) */
   const set = (patch: Partial<ReaderState>) => {
     if ((Object.keys(patch) as (keyof ReaderState)[]).every((k) => Object.is(state[k], patch[k]))) return
     state = { ...state, ...patch }
@@ -713,7 +713,7 @@ export function createController({
       later((s) => s.setDisplay(display))
     },
     hold: (on) => later((s) => s.hold?.(on)),
-    // the interface's switch is the owner's design or nothing (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth addendum): top alignment, or off
+    // the interface's switch has one mode (PDF-READER §3, sync scrolling): top alignment, or off
     setSync: (on) => later((s) => s.setSyncMode(on ? 'same' : 'off')),
     zoomBy: (factor) => {
       set({ zoom: null })

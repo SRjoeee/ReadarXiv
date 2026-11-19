@@ -145,6 +145,8 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 
 - **Appearance**: 浅色 / 深色 / 跟随系统, default 跟随系统 (「深色模式跟随系统」). A change is one crossfade of the whole
   page (the View Transitions API, 260 ms), not element by element (the maintainer: 「要学alpharxiv的方式，过渡自然」).
+  For the flip every element's own colour transition is held off, or a pressed button and a switch would fade on their own
+  and flash in the crossfade (the maintainer, 2026-09-26; `packages/reader/src/chrome/appearance.ts`).
 - **深色时调暗页面**, a switch in the reading options, **default on** (「默认是开启这个功能的」): in the dark appearance the
   pages' canvases take `filter: invert(88.8%) hue-rotate(180deg)` and an undrawn page's background is `rgb(29 29 29)`,
   so nothing flashes white while scrolling. Only the page's own drawing is filtered: the canvas, and over a laid page the
@@ -190,7 +192,9 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
   900 px the language and service menus move into the reading options, as their first two rows; below 500 px the
   download, the settings and the way back move there too, before them, and the zoom keeps its value's menu (− and +
   give way; ⌘± and the pinch stay), so that the bar holds at 320 px (the interface review; the maintainer,
-  2026-09-26). When the
+  2026-09-26). Narrower still, the bar's three zones close up, 8 px apart below 400 px and 6 px below 360 px, where the
+  trail's last divider goes too, so that the bar holds at 320 px with a control more in its lead, as the website's home bar
+  has (the maintainer, 2026-10-04; `packages/reader/src/chrome/reader.css`). When the
   document area is narrower than 840 px, two pages side by side are too small to read: 对照 stays chosen, the translation
   is shown alone, and the capsule says so once, 窗口较窄，暂只显示译文 — the HTML page's rule and wording (S-P-74, 窗口较窄，
   暂按上下显示). The words stay 5 s of being read: the time stands while the pointer is over the capsule or it holds the
@@ -2905,7 +2909,7 @@ The edge cases, decided:
 - **`NAMES_SHARE` (a table's groups)** is a translation rule of today's reader (the rebuilt reader decides no group by what its cells say, §18.72). The workflow decides groups, and the rows a reader gets hold the decision (`state: 'kept'`), not the cells' translations. Making it a layout rule would mean rows that carry every kept cell's translation, for a threshold measured once.
 - **`authorsTranslated`** decides which units a target sends, so it is a translation rule and lives in `translate/kept.mjs`, apart from the TeX path's strategies (`scripts.mjs`, taken out of the engine with the compiled translation on 2026-11-04).
 - **Float labels and babel's names** (the names a language gives a figure, a table and each generated heading: Abstract, References, Contents, …, and whether to use them) are layout: one language's choice at draw time. Where each name stands is extraction: the layout marks wrap the name macros' text and the layout file locates each occurrence (D1a). The layer draws the target's word wherever TeX identified the heading: by its macro, by a style's literal through the definition it sits in, and after the paper's own `\selectlanguage`; the captions (which float labels are the target's: the reader's `CAPTIONS`, `layer-proto/reader.mjs`; a compile of the translation once read them, `captionsOf`, taken out with it on 2026-11-04) decide float labels alone (the ruling on D1a). A name TeX sets right before a unit on its first line (IEEEtran's run-in "Abstract—") is that unit's lead, flowed with its translation whatever its width, the original's joint and glue after it. A name's word is drawn in runs by script as a unit's words are: its CJK characters in the target's CJK face, every other (a Latin word, a digit, a space) in the Latin one (`layer2.mjs` `nameScriptRuns`): the CJK faces served hold no ASCII, so that one face for a word of two scripts was refused by the face check and the name left the original's (the figure labels' finding, #490). **The parked final's requirement:** if the TeX page program returns, it must name the same headings: rewrite a literal the marks wrap to its macro (`\abstractname`), and apply the target's captions again after the paper's own language switch. **Hyphenation** (which patterns a target uses, and their minimums) is layout; the pattern files are assets the host serves, and the algorithms are code.
-- **The font roles** (which CJK family and weights a script takes) are layout. The face catalog (files, licences, size corrections, coverage) and the Latin design table are facts about files and stay code. **A CJK script is drawn at Regular, and Bold for bold, beside every English family** (the maintainer's ruling of 2026-10-29, on crops of four papers, `research/babeldoc-typography-2026-10-29/weight/`): Light, and SemiBold for bold, beside Computer Modern and Garamond read lighter than the page they sit in and than BabelDOC's Source Han Serif Regular, by 9 % of the original's stroke on 2608.16117v1's six blocks (0.86 of it against Regular's 0.95, at the canvas's weight); the rule (`cjkFaces.light`) and the eight Light and SemiBold faces went (`RULES_SCHEMA` 6, §18.2; engines of schema 5 keep the last set published for it, §18.3). **A CJK italic run is the body's own face slanted** (the owner's ruling of 2026-10-19, Q17's row 3), in zh, zh-Hant, ja and ko alike: the same face, size correction and weight as the upright, sheared 13° about its baseline as it is drawn (an SVG skew, `layer-proto/fonts.mjs` `CJK_SLANT_DEG`, the one number; 10° was the other the owner saw). A bold italic run is the bold face sheared, no longer the bold upright. No file is fetched for it and no face is made: the run is measured in the upright's own font string, so its advance and every character's place are the upright's. **A CJK run's family list ends with the Latin face of its weight**, upright (`fonts.mjs` `roleFaceOf`, #47.14): the copy space the drawing appends to a run (`layer2.mjs` `lineRuns`, for copy and find) is Basic Latin, which every CJK slice leaves to the Latin faces (the web's font slices), so with the CJK face alone the device drew it and the canvas measured it in the device's own face (the web's `layer-fonts` e2e, rows 3 and 4, marked known); the CJK faces stay first, so every CJK character is theirs, and the CJK class holds no other character the Latin faces serve. The rule set's `cjkFaces.kai`, which no engine read after this ruling, went with the light designs at schema 6 (§18.2): the engines readers held before it, which draw emphasis in it, read schema 5 and keep their schema-5 set (§18.3), so no set of schema 6 names it.
+- **The font roles** (which CJK family and weights a script takes) are layout. The face catalog (files, licences, size corrections, coverage) and the Latin design table are facts about files and stay code. **Which face a run is set in is the role table's alone**, one rule in two tiers for every target to come (the maintainer's ruling of 2026-10-06; `packages/engine/src/fonts/font-roles.ts`, the typesetter's `breaker/faces.ts`): a script the paper's Western families are drawn for (Latin, Greek, Cyrillic, Vietnamese) takes the original's own family, from the cleanest source of its glyphs; a script no Western family covers well takes the Noto superfamily's design for it; no other module chooses a face. **A CJK script is drawn at Regular, and Bold for bold, beside every English family** (the maintainer's ruling of 2026-10-29, on crops of four papers, `research/babeldoc-typography-2026-10-29/weight/`): Light, and SemiBold for bold, beside Computer Modern and Garamond read lighter than the page they sit in and than BabelDOC's Source Han Serif Regular, by 9 % of the original's stroke on 2608.16117v1's six blocks (0.86 of it against Regular's 0.95, at the canvas's weight); the rule (`cjkFaces.light`) and the eight Light and SemiBold faces went (`RULES_SCHEMA` 6, §18.2; engines of schema 5 keep the last set published for it, §18.3). **A CJK italic run is the body's own face slanted** (the owner's ruling of 2026-10-19, Q17's row 3), in zh, zh-Hant, ja and ko alike: the same face, size correction and weight as the upright, sheared 13° about its baseline as it is drawn (an SVG skew, `layer-proto/fonts.mjs` `CJK_SLANT_DEG`, the one number; 10° was the other the owner saw). A bold italic run is the bold face sheared, no longer the bold upright. No file is fetched for it and no face is made: the run is measured in the upright's own font string, so its advance and every character's place are the upright's. **A CJK run's family list ends with the Latin face of its weight**, upright (`fonts.mjs` `roleFaceOf`, #47.14): the copy space the drawing appends to a run (`layer2.mjs` `lineRuns`, for copy and find) is Basic Latin, which every CJK slice leaves to the Latin faces (the web's font slices), so with the CJK face alone the device drew it and the canvas measured it in the device's own face (the web's `layer-fonts` e2e, rows 3 and 4, marked known); the CJK faces stay first, so every CJK character is theirs, and the CJK class holds no other character the Latin faces serve. The rule set's `cjkFaces.kai`, which no engine read after this ruling, went with the light designs at schema 6 (§18.2): the engines readers held before it, which draw emphasis in it, read schema 5 and keep their schema-5 set (§18.3), so no set of schema 6 names it.
   - **Measured** (Chromium, dpr 2, 44 px): the shear against the outlines sheared in the file, the Oblique 13 faces the owner judged, overlap 98.1 to 99.4 % of their ink (IoU), 0.1 to 0.8 % of the ink pixels more than a quarter apart, all at glyph edges (zh regular and bold, ja, ko).
   - **Row 2, kept for later versions** (no code): the Kai matched to the body by measurement. FandolKai (zh): its ideographs' mean ink box 0.828 × 0.848 em against the body's 0.890 × 0.910, a size factor of 1.074; ink per em² 0.135 against 0.183 (−26 %), made up by an SVG stroke at drawing time. AR PL KaitiM Big5 (bkai00mp, zh-Hant): 0.821 × 0.823 against Source Han Serif TC's 0.891 × 0.913, a factor of 1.098; ink 0.155 against 0.200 (−22 %). Its limits: Chinese only (ja and ko still get no italic); the factors are per font; the stroke only emulates weight; there is no bold Kai, so bold italic stays bold upright. The comparison page as the owner saw it, rows 1 to 4 in all four languages with their measures and licences, and its README, in the maintainer's archive of the study of 2026-10-19 (`index.html`, `README.md`), on his machine.
   - **Which face a target takes is one rule in two tiers** (the maintainer's rulings of 2026-10-06; `packages/engine/src/fonts/font-roles.ts`), and it governs every target to come. One rendering on every device: every face is a file we serve, TeX Live's or an upstream release's, under a family name of ours, the same files wherever the paper is drawn; none is a face the reader's device holds, and nothing names a generic family. A character no face of a run's role holds keeps its unit the original's (`canDraw`). Restoring the English original comes first, and a face gives way only to one that draws better or nearly the same and leaves the whole more unified (one family, which scales to more languages). Tier 1, the scripts the paper's Western families are drawn for (Latin, Greek, Cyrillic, Vietnamese): the original's own family, its same glyphs where a source has them, from the cleanest source of them, measured against what arXiv's PDFs embed: Times as Nimbus Roman (62 of 62 glyphs the same, GNU FreeSerif 3 to 24, its advances reworked), Helvetica as Nimbus Sans (53 to 62; FreeSans 13 to 26), Courier as GNU FreeMono, Computer Modern as CMU, Palatino as Domitian; where the family lacks a script a target needs, its unit stays the original's (Nimbus Roman, Nimbus Sans and Domitian hold 12 of Vietnamese's 104 letters and no polytonic Greek). Tier 2, the scripts no Western family covers well (CJK, Arabic, Hebrew, the Indic scripts, Thai and the rest): the Noto superfamily, one design per script, Source Han Serif being Noto Serif CJK; GNU FreeFont's own Arabic, Indic and Thai are not taken, their styles not one design.
@@ -3499,6 +3503,45 @@ the leadings (i) gave them (its count other than where the pair is laid without 
 replays of today's fill
 read a round that borrows, its fill leadings, and a run's tokens without the share's cut, as this ruling's (`borrowsAt`,
 round.ts `L9 (i)`, `F6 runs (share)`).
+
+**A page's body grows as the page fill grew it before, by the simplest search.** The owner's ruling, corrected the same
+day: body text grows with the same effect as the page fill before (the same pages, about the same size, up to about 1.1
+times), by a simpler method with the fewest lays, not held to the original's size. The page's one size grows a step at a
+time from the original's, the first step a unit no longer holds ending it: a page that grows not at all, most of those that
+try, is tried once, where a halving search tries twice (`packages/typeset/src/shared/fill-page.ts`). Measured over the 22
+parity pairs: the page fill before grew 9 of the 344 pages (1.1 on six, 1.075, 1.05, 1.025); the step search gives every
+page the size the halving search gives, and growth's lays fall from 223 to 153 of about 89,400.
+
+**A page's head and foot keep their size, a page number its end.** The owner's ruling: page numbers keep their size and
+are right-aligned. A unit of the page's head or foot (`inkheads`, `inknotes`) set on one line, a running head or a page
+number, is laid at the original's size, its fit's floor its size: where its row does not hold its translation at that size
+it stays the original's, never shrunk (`packages/typeset/src/unit/params.ts`). Such a line set flush right (the engine
+reads a head or foot line so where it ends at the measure's right edge and starts well in from its left) widens to its left,
+its end kept: TeX's `\hfil` before it gives a flush-right line its room before it (`unit/decor.ts` `widen`). Widened to the
+right alone, the folio of 2609.36054 ("page N of 14", its head on pages 2 to 14, its foot on page 1) shrank to 0.825 of its
+size in Chinese; over the 22 parity pairs 14 such lines shrank, all of them these folios.
+
+**A table's cells keep their sizes, each fitted in its own room, and none is tracked.** The owner's ruling: a table cell's
+size as before, each cell fitted in its own room; on 2610.20967v1's Chinese page 4, "in the tables the letter spacing as it
+was is more natural". The page fill tracks no table cell, as TeX stretches no entry of a tabular
+(`packages/typeset/src/shared/fill-page.ts`); a cell's room is its column's box (§18.13).
+
+**A float's label is named by its type, in one form a paper.** The owner's words: translating "Table" and "Fig." is not
+required, either is right and the cleaner rule decides, but a paper's labels must be uniform; his ruling: a figure's and a
+table's label in the target's word everywhere, the number as printed. Where the part states a caption's float type
+(`Label.float`, LaTeX's `\@captype`), a figure's or a table's label takes the rules' word and keeps every glyph after its
+name as TeX printed it, any number ("A1", "S3", "I"); any other type's (an algorithm's, a sub-figure's) stays the
+original's, as does one whose parts do not hold its every glyph or that states no number
+(`packages/typeset/src/unit/label.ts` `labelInTarget`).
+
+**A heading set in fewer lines than the original's stands on its last ones; a title and the front matter keep their
+top.** The owner's ruling of 2026-10-19, restored this day: the room a shorter translation of a heading frees falls above
+it, never between it and the text it heads (1810.04805's "C.2 Ablation for Different Masking Procedures", two lines, one in
+Chinese, had left a blank line before its paragraph). Its last line goes onto the original's last baseline, past the page
+fill's floor (`footFloorAt`, which would have left 7.4 pt of C.2's 13.5 under it), and every line above it as far down,
+each keeping its slot's measure; only a heading of one block, never a body paragraph (`packages/typeset/src/fit/last-lines.ts`).
+A title and the front matter are no such heading (`Placed.title`, `Placed.front`): they keep the original's top (the owner
+on staging, 2303.11366v4 page 1: a one-line title stood on the last line of the original's two).
 
 ### 18.12 A table cell's alignment is its column's, as LaTeX built it (2026-11-09)
 
@@ -6677,6 +6720,12 @@ its size; I6 outranks the tie's evenness, and one step is the grain the owner's 
 fill (it would break ties inside one page), nor freezing every tied member (it would take a page's fill knob for a
 neighbour's sake). One definition for every fill step, whatever knob set the scale.
 
+**By scale, not by points** (the coordinator's decision of 2026-11-08, under the maintainer's ruling that the text of one
+paragraph is set even). A tie caps its members at one scale of their own sizes, not at one size: a run-in head TeX set
+smaller than its paragraph keeps the original's ratio to it, and neither shrinks the other for being of another size.
+Capped by points, 2610.30034v1 page 2's head, set at 8.97 pt, capped its paragraph at 8.97 pt, 0.9 of its 9.96
+(`packages/typeset/src/lay/page.ts` `layPagePrepared`, P.capScale).
+
 **Two simpler cuts failed; do not go back to either.**
 
 - *Later tie-mates not read at all* (each member capped by those begun on its first page or before only). A later tie-mate's
@@ -7142,7 +7191,10 @@ a table's cells and a figure's texts); the typesetter lays a kept unit as kept a
   today draws them, none translated otherwise; (3) the 111 cells it draws that today keeps are the owner's choice itself (cells
   translated like body text; 90 kept by today's name rule, 12 by its column rule, 9 by its own group hold), not a new decision.
   No threshold, no list. It extends the coordinator's ruling of 2026-10-24 (a cell the wrap cannot hide is the original's alone,
-  "a table with one English cell beats an English table") to every reason a cell cannot be drawn.
+  "a table with one English cell beats an English table") to every reason a cell cannot be drawn, and refines the owner's
+  ruling of 2026-11-08, a table's cells translated or kept by group as the production reader decides them: the groups stand
+  (`packages/typeset/src/shared/table-groups.ts`, the cells a reader compares with one another, over TeX's grid), held
+  together only where the geometry needs it.
 - **Today's reader keeps its rule until the cut-over.** The rebuilt engine shares openPaper and the bundle's units with it; the name
   rule moved back to today's `translate/mt.mjs` (isName, isCode, proseOf, nameCells), and today's path states it on its own:
   `pipeline/live.mjs` openPaper (`withNames`), `layer-proto/units.mjs` bundleUnitsOf (its KEPT flag from the paper's `kept`),

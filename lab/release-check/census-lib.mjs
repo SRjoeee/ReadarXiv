@@ -166,14 +166,54 @@ const BUDGET_UNITS = [
 ]
 /** a platform's limit on record: a definition the census already reads (CITES_DEFINITION), or a platform's limit named */
 const PLATFORM_LIMIT = /\b(?:Chrome|Chromium|V8|Cloudflare|Workers?|Durable Objects?|R2|D1|KV|Node(?:\.js)?|IndexedDB|PDF\.js|WebGL|the browser|the platform)(?:'s)?\b[^.;]{0,60}\b(?:limits?|caps?|maximum|ceiling|quota|allows?)\b/i
-/** a comment line that tells history (census.mjs DEFINITIONS `history`) */
+/** a comment line that tells history (census.mjs DEFINITIONS `history`): it says today's, holds a date, names a reviewer, a
+ *  round or a plan (`named`), or holds one of the `forms`, each a kind of history a comment of the packages tells */
 export const HISTORY = {
   todays: /\btoday['’]s\b/i,
   dated: /\b20\d\d-\d\d-\d\d\b/,
   named: /\b(?:Codex|Devin|Copilot|CodeRabbit)\b|\bround (?:[A-Z]{1,2})?\d+\b|\b(?:Plan|Task) \d+[a-z]?\b/,
+  forms: {
+    /** a map to the engine the packages replace: a line map (`L2:3283`, `RUN:2022`, `TEX:120`, `MAKE:382`), a file of it and
+     *  its line (`tex.mjs:269`), its paths (`src/pdf-reader/engine/…`, `today/….mjs`), its commits (`engine 065c1d973`,
+     *  `at baf2083e0`, `(abe884b5e)`), and a port statement: ported, carried, copied or moved from it, the website, the
+     *  server, a path or a file (never a move the code makes: carried from page to page, moved from after it) */
+    ported:
+      /\b(?:RUN|L1|L2|TEX|MAKE)\s?:\s?\d|\.mjs:\d|\bsrc\/pdf-reader\/engine\b|(?<![\w/.-])today\/[\w./-]+\.mjs\b|\b(?:engine|at) (?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,12}\b|\((?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{9}\)|\b(?:[Pp]orted|[Cc]arried|COPIED|[Mm]oved)(?: whole| into the engine package)?(?: as it is)? from(?:\s*$| (?:today['’]s\b|the (?:engine|website|server|reader|extension|old)\b|engine\b|src\/|[\w./-]+\.(?:mjs|css|tsx?|js)\b))/,
+    /** "today" without the 's where it names that engine: its path (`today/…`), "as today", "where today decides", "(today",
+     *  "the extension's today session", today doing what the engine did; never the word's own use (TeX's \today, a name in
+     *  code, a file's name, what exists today, a third party's behaviour today, "Today, measured …") */
+    today:
+      /(?<![\w/.-])today\/|\b(?:as|where|what|that|which|so) today\b(?!['’]s)|\(today\b(?!['’]s)|\btoday (?:session|engine|reader|wire|code|then|any)\b|\btoday (?:does|did|decides|reads|keys|makes|made|leaves|pairs|draws|sets|holds|takes|translated|crowded|refuses|writes|puts|sends|asks)\b|\bToday (?:that|both|the)\b|\b(?:file['’]s|segments) today\b(?!['’]s)/,
+    /** a document, a note or a piece of work that is not in this repository: the lab's designs (design-a, design-b,
+     *  design-performance…, the page and host designs A and B, `design §`, the redesign's), its specs, notes, briefs,
+     *  checkpoints, spikes, decisions and moves; never this repository's documents (DESIGN §, docs/…, the reader's design §) */
+    private:
+      /(?<![\w-])design-[a-z]+\b|\b(?:page |host )?design [AB]\b|\bengine-view-host\b|(?<!reader['’]s )\bdesign §|\b(?:dump|tap['’]s) spec\b|(?<![\w-])spec §|\bthe redesign['’]s\b|\bthe checkpoint['’]s\b|\bspike S\d+\b|\bthe brief['’]s\b|\b(?:reduction|performance) design\b|\bthe note['’]s §|\bthe (?:page|host) decision\b|\bDECISION\b|\bthe compile move['’]s\b/,
+    /** a pull request's review: its number's review, a review of it or of a date, a review by its name (the interface,
+     *  the final, the branch review, a wave's), a reviewer on it; never the product's `review` or an issue of the tracker */
+    review:
+      /#\d+(?:['’]s)? (?:re-)?reviews?\b|\breviews? of (?:#\d|20\d\d|round)|\b(?:PR|pull request) #\d+|\bre-review\b|\b(?:interface|final|branch) review\b|\bwave-\d review\b|\b(?:Codex|Devin|Copilot|CodeRabbit) on #\d+/,
+    /** a piece of work by its name: a lane (L7, style-wire, one with its record or its date), a triage, a numbered round,
+     *  a part, a wave, a stage, a design's item (Q7, D6's), a lab option; never a word of the code (its lane, a pass's
+     *  first round, a stage of a document of this repository, cited on the line before as `docs/route/….md` and continued) */
+    work: /\blanes? (?:[A-Z]\d*\b|[a-z0-9]+(?:-[a-z0-9]+)+\b)|\blane [a-z0-9-]+(?=['’]s (?:record|probe|fill|spec)\b|, 20\d\d|\))|\btriage-\d|\b[A-Z]\d+ \w+ round\b|\bround-\d|\b(?:Part|wave) \d+\b|\bwave-\d\b|(?<!\.md,? |^[\s*]*)\bstage \d+[a-z]?(?:-\d+)?\b|\bQ\d+\b|\bD\d+['’]s\b|\b(?:lab )?option \((?:i{1,3}|iv|v)\)/,
+    /** a ruling or a decision by its number (ruling 5, decision 1, the coordinator's R7, R1 of a date); never an item of a
+     *  document's section (R1 of PDF-READER §18.72) */
+    ruling: /\b(?:ruling|decision)s? \d+\b|['’]s R\d+\b|\bR\d+(?:, R\d+)* of 20\d\d/,
+    /** who decided: the maintainer, the coordinator, the owner's ruling or word, the owner deciding, his answer; never an
+     *  owner that is a part of the code (told to the owner, a label's owner) */
+    person:
+      /\bthe (?:maintainer|coordinator)\b(?! of\b)|\bthe owner['’]s(?: own)? (?:ruling|rulings|rule|rules|decision|decisions|word|words|choice|answer|report|reports|question|guidance|exception|review|switch|reformulation|amendment|comment|order|code|design)\b|\bthe owner['’]s:|\bthe owner(?: on staging)?, 20\d\d|\bthe owner on staging\b|\bthe owner (?:decided|ruled|approved|chose|asked|has looked|looked|saw|kept|found|reported|plans)\b|\b(?:his|her) (?:answer|ruling|word|words|report|choice|question)\b|\bhe (?:ruled|chose|asked|saw|decided)\b/,
+  },
 }
 /** a date beside it that names a measurement: the one date a comment keeps */
 const MEASUREMENT = /\bmeasured\b|\bmeasurements?\b/i
+/** a date inside a git ref's name (`exp-freeze-2026-10-07:path`, what `git show <ref>:<path>` reads): the ref is a name */
+const REF_DATE = /\b[A-Za-z][\w.-]*-20\d\d-\d\d-\d\d(?=:[\w./-])/g
+/** a licence's statement of where third-party code came from (CLAUDE.md hard rule 6, docs/THIRD_PARTY.md): a sentence that
+ *  names a licence and says the code is ported, copied, adapted or derived from its upstream; counted apart, not as history */
+const LICENCE = /\b(?:A?GPL|LGPL)-\d(?:\.\d)?(?:-only|-or-later)?\b|\bApache-2\.0\b|\bMIT\b|\bBSD-[234]-Clause\b|\bMPL-2\.0\b|\bISC\b/
+const ORIGIN = /\b(?:ported|copied|adapted|derived|taken) from\b/i
 const UPPER = /^[A-Z][A-Z0-9_]*$/
 
 const pluginsOf = path => {
@@ -709,13 +749,59 @@ function historyIn(text, comments) {
     const first = lineOf(c.start)
     c.value.split('\n').forEach((part, i) => byLine.set(first + i, `${byLine.get(first + i) ?? ''} ${part}`))
   }
-  const h = { todays: [], dated: [], measuredDates: [], named: [] }
-  for (const [line, t] of [...byLine].sort((a, b) => a[0] - b[0])) {
+  const lines = [...byLine].sort((a, b) => a[0] - b[0])
+  const apart = attributionOf(lines)
+  const h = { todays: [], dated: [], measuredDates: [], named: [], forms: Object.fromEntries(Object.keys(HISTORY.forms).map(k => [k, []])), attribution: [] }
+  for (const [line, t] of lines) {
+    if (apart.has(line)) {
+      h.attribution.push(line)
+      continue
+    }
     if (HISTORY.todays.test(t)) h.todays.push(line)
-    if (HISTORY.dated.test(t)) (MEASUREMENT.test(t) ? h.measuredDates : h.dated).push(line)
+    const dates = t.replace(REF_DATE, '')
+    if (HISTORY.dated.test(dates)) (MEASUREMENT.test(dates) ? h.measuredDates : h.dated).push(line)
     if (HISTORY.named.test(t)) h.named.push(line)
+    for (const [k, re] of Object.entries(HISTORY.forms)) if (re.test(t)) h.forms[k].push(line)
   }
   return h
+}
+/** the lines of a licence's statement of third-party origin (LICENCE, ORIGIN): over each run of consecutive comment lines,
+ *  cut into sentences at a full stop and at an empty comment line (a statement of change runs on past a colon or a
+ *  semicolon to its full stop, GPL-3.0 §5(a)'s dated notice with it), every line of a sentence that names both */
+function attributionOf(lines) {
+  const out = new Set()
+  let run = []
+  const flush = () => {
+    let sentence = []
+    let text = ''
+    const end = () => {
+      if (sentence.length && LICENCE.test(text) && ORIGIN.test(text)) for (const l of sentence) out.add(l)
+      sentence = []
+      text = ''
+    }
+    for (const [line, t] of run) {
+      const words = t.replace(/^\s*\*+\s?/, '').trim()
+      if (!words) {
+        end()
+        continue
+      }
+      // (a line holding a sentence's end and the next one's start belongs to both)
+      const parts = words.split(/(?<=\.)\s+/)
+      parts.forEach((part, i) => {
+        sentence.push(line)
+        text += ` ${part}`
+        if (i < parts.length - 1 || /\.$/.test(part)) end()
+      })
+    }
+    end()
+    run = []
+  }
+  for (const entry of lines) {
+    if (run.length && entry[0] !== run.at(-1)[0] + 1) flush()
+    run.push(entry)
+  }
+  flush()
+  return out
 }
 /** a comment's sentences: its text with JSDoc's stars and line breaks out, cut after a full stop or a semicolon */
 const sentencesOf = value =>

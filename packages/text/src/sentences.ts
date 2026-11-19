@@ -1,11 +1,11 @@
 // Sentence cuts for engines that report none of their own (Google, Chrome's built-in translator): where each sentence after
 // the first begins, in a unit's plain projection (its text, each element one U+FFFC character). Restated from the
-// extension's splitter (src/core/sentences, the owner's code, measured against Microsoft's own boundaries over 60 blocks:
+// extension's splitter (src/core/sentences, our own code, measured against Microsoft's own boundaries over 60 blocks:
 // 98.4 % precision, 100 % outside bibliographies; under-splitting only), over typed elements instead of a wire's
 // placeholders: what an element reads as is the caller's word (`standIn`), not a guess from TeX. The splitter cut a wire whose
 // white space was collapsed; a projection carries its source's own, which is read here as that source reads it (`running`).
 
-/** A period after one of these ends no sentence (the extension's list, extended 2026-10-01 over the corpus) */
+/** A period after one of these ends no sentence (the extension's list, extended over the corpus) */
 export const ABBR =
   /\b(?:[A-Z]|Fig|Figs|Eq|Eqs|Sec|Secs|Ref|Refs|Thm|Def|Lem|Prop|Cor|Rev|Phys|Lett|Nucl|Astron|Astrophys|Mon|Not|Proc|Conf|Int|J|vs|etc|cf|al|approx|resp|viz|ca|c|Dr|Mr|Mrs|Ms|Prof|St|Mt|Jr|No|Vol|pp|Ed|Eds|Sci|Rep|Univ|Dept|Inst|Inc|Ltd|Corp|Co|e\.g|i\.e|w\.r\.t|a\.k\.a|i\.i\.d|a\.e)\.$/
 /** abbreviations that may end a sentence, where what follows decides */
@@ -51,9 +51,9 @@ export type StandIn = 'annotation' | 'citation' | string
 /**
  * The text's white space as TeX and HTML read a paragraph's: a run of it is one space, never a sentence's end. Intl.Segmenter
  * breaks at every line end (UAX #29 SB4), and the PDF's units carry their source's own lines, where TeX reads a line end as a
- * space (34,791 of the 88 corpus papers' 71,288 cuts stood at one with no stop before it, 2026-11-10); the HTML page's text
- * comes collapsed (src/core/sentences visibleTextOf). A run holding an empty line is TeX's `\par`, a paragraph's end: its
- * first line end kept. Each character in its place, so offsets do not move; an element's own stand-in is not touched
+ * space (34,791 of the 88 corpus papers' 71,288 cuts stood at one with no stop before it, measured 2026-11-10); the HTML
+ * page's text comes collapsed (src/core/sentences visibleTextOf). A run holding an empty line is TeX's `\par`, a paragraph's
+ * end: its first line end kept. Each character in its place, so offsets do not move; an element's own stand-in is not touched
  */
 function running(projection: string): string {
   return projection.replace(WHITE, (run) => {

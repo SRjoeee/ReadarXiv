@@ -1,5 +1,5 @@
 // The reader's own typesetter, openReader's engine where its host gives none (a host may still give its own: the e2e's fixture
-// lay): lane L3's `layPage` over the rule set's rules for the target the rows are of (`rulesFor`), the reader's "What to
+// lay): the typesetter's `layPage` over the rule set's rules for the target the rows are of (`rulesFor`), the reader's "What to
 // translate" as the rules' choices (`leave`: the unit kinds the toggles leave the original's), the hyphenation patterns those
 // rules read, and the reader's own Metrics over the served faces (served.ts). Bound once the head is read (the composed
 // document's open); the rules are made again as the target or the toggles change, so that a toggle lays the pages again (the
@@ -26,7 +26,7 @@ export function ruleTag(target: string): string | null {
 
 /** what the first page laid in `target` reads before its slices, asked as the code loads (before the head is read, the composed
  *  document opened or a page laid, so that neither waits for them): the target's hyphenation patterns, the faces' index and the
- *  tables of the target's CJK faces (its body's and its bold's: Source Han Serif SC's is 39 KB). Staging, 2026-11-08: the
+ *  tables of the target's CJK faces (its body's and its bold's: Source Han Serif SC's is 39 KB). On staging, asked later, the
  *  patterns were the composed document's open's last round trip, and the index and the CJK table two more before page 1's
  *  first slice */
 export function warmTypeset(s: Pick<Served, 'hyph' | 'warm'>, target: string): void {
@@ -55,7 +55,7 @@ export interface TypesetOptions {
 /** the most a page's address may set the borrow past TeX's bottom to, in points: the deepest `\maxdepth` of the classes
  *  measured (article at 12 pt and IEEEtran, 6 pt; docs/PDF-READER.md §18.11); a larger value sets nothing */
 export const PAST_FOOT_MAX = 6
-/** the borrow past TeX's text block bottom a page's address sets (§18.37, the owner's switch of 2026-11-12): its `axt-borrow`
+/** the borrow past TeX's text block bottom a page's address sets (§18.37, "The switch"): its `axt-borrow`
  *  parameter, in points, read on a website's page (http or https) alone, never on an extension's: 0 turns the borrow off, a
  *  number to PAST_FOOT_MAX is its bound; undefined where the address sets nothing so (the typesetter's rule then) */
 export function pastFootOf(at: { protocol: string; search: string } | null): number | undefined {
@@ -98,7 +98,7 @@ export async function typesetLay(o: TypesetOptions): Promise<Lay> {
     if (!r) return { page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] }
     if ('wait' in r)
       return { page: part.page, wait: { rows: [], faces: [[HYPH_WAIT, r.wait]] }, members: [], links: [] }
-    // (typeset's Page and the reader's are the one shape design-a decides: compose/page.ts states it word for word)
+    // (typeset's Page and the reader's are one shape: compose/page.ts states it word for word)
     return layPage(part, rows, r, o.served.metrics) as unknown as Page
   }
 }

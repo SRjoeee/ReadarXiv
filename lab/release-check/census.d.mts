@@ -32,7 +32,7 @@ export interface Tree {
     namespaceImports: { from: string; role: string; line: number; to: string; reads: string[]; whole: { line: number; why: string }[] | null }[]
   }
   functions: { count: number; longest: Fn | null; over500: number; over1000: number; over1000List: Fn[]; ten: Fn[]; tenLongest: number; byRepo: Record<string, { longest: Fn | null; over500: number; over1000: Fn[]; ten: Fn[]; tenLongest: number }> }
-  history: { files: number; todays: number; dated: number; measuredDates: number; named: number; lines: number; byFile: { repo: string; file: string; lines: number; at: number[] }[] }
+  history: { files: number; todays: number; dated: number; measuredDates: number; named: number; forms: Record<string, number>; attribution: number; lines: number; byFile: { repo: string; file: string; lines: number; at: number[] }[] }
 }
 type Fn = { repo: string; file: string; line: number; name: string; code: number; at: string }
 export interface Census {

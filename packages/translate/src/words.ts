@@ -1,4 +1,4 @@
-// A group that cuts a word is offered to no translator (the owner's ruling of 2026-11-12, docs/PDF-READER.md §18.47). A style
+// A group that cuts a word is offered to no translator (docs/PDF-READER.md §18.47). A style
 // group says something about a stretch of meaning, and crosses a translation only where it is made of whole words: one with
 // an edge inside a word describes that word's spelling (an acronym's initials, `\textbf{I}nduce, \textbf{E}dit,
 // \textbf{R}etrieve`; a drop cap; a stressed syllable, `{\em sub}gradient`), which has no counterpart in the target. Offered,
@@ -38,7 +38,7 @@
 // `\href{…}{M}\k{a}dry`): held, it would leave the group without them, a link of no text the original states with its text;
 // such letters go on the wire in their group, and the run stops at that group's edge.
 //
-// A number set flush against an inline formula is held with it (the rule's second arm, lane flush-hold of 2026-11-18): an
+// A number set flush against an inline formula is held with it (the rule's second arm, docs/PDF-READER.md §18.47): an
 // author types `32$\times$32`, `$-$0.016`, `6$n$+2`, `0$.$5`, the number outside the math and flush against it, and sent beside
 // the formula's tag the number came back broken (a counter or a noun put between the digits and the formula, digits lost:
 // 1512.03385v1 in Korean on staging, Google, both 32s of "32×32" gone). For an element of kind `math` (an inline formula;

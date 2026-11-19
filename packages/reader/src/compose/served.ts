@@ -1,5 +1,5 @@
 // The served faces and the typesetter's Metrics over them (the default engine's: compose/typeset.ts). The faces are the files
-// our site serves, as today's reader reads them (src/pdf-reader/session/faces.ts servedFaces, layer-proto/fonts.mjs sliceFace):
+// our site serves:
 //
 //   GET /static-fonts/index.json                  { schema: 1, fonts, faces: { <face id>: { group }, … } }
 //   GET /static-fonts/<group>.json?fonts=<fonts>  { schema: 1, group, slices: [[start, end, …], …], faces: { <id>: [{ path } | null, …] } }
@@ -20,8 +20,7 @@
 // A face is the typesetter's font string (typeset types.ts FaceId: `400 100px "axt-nimbus-roman", "axt-lm-math"`), each family
 // the catalogue's (typeset data/faces.ts FACES), never a system face nor a generic family.
 //
-// The Metrics measure as lane L7's spec for the reader says (lane L7's record, "The reader's own Metrics", held in a browser
-// by lab/typeset/metrics-browser.mjs's `rules` mode, equal to the measurer on 98,862 of 98,862): a text cut where its
+// The Metrics measure (held in a browser by lab/typeset/metrics-browser.mjs's `rules` mode, equal to the measurer on 98,862 of 98,862): a text cut where its
 // characters' slice changes (the first family of the string whose face, by CSS's matching, has a slice declaring the
 // character), each run measured alone in the font string without small capitals, a run of CJK characters unkerned and cut
 // between two adjacent CJK punctuation marks (no text-spacing-trim), the runs' widths summed; the ink their highest ascent,
@@ -83,7 +82,7 @@ const inRanges = (r: readonly number[], cp: number) => {
   return false
 }
 const hex = (n: number) => n.toString(16).toUpperCase()
-/** a slice's unicode-range descriptor from its [start, end] pairs (today's layer-proto/fonts.mjs unicodeRangeOf) */
+/** a slice's unicode-range descriptor from its [start, end] pairs */
 export const unicodeRangeOf = (ranges: readonly number[]): string => {
   const out: string[] = []
   for (let i = 0; i + 1 < ranges.length; i += 2) {

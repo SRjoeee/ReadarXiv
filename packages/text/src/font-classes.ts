@@ -2,8 +2,8 @@
 // PostScript name's design and class (a PDF's fonts: classifyFont, and the paper's body family they weigh for, familyOfFonts)
 // and an NFSS family name's text family (the TeX path's font probe: familyOfProbe). The engine's role table reads it
 // (packages/engine/src/fonts/font-roles.ts, which re-exports it at its old path) and so does the typesetter (typeset
-// breaker/font-names.ts, the paper's English family). Moved whole from the engine's font-roles.ts (C1's move of today's
-// rules/font-roles.mjs), its typed copy in the typesetter gone with it. Imports nothing.
+// breaker/font-names.ts, the paper's English family).
+// Imports nothing.
 
 /** the English families a paper's body is set in */
 export type EnglishFamily = 'cm' | 'times' | 'libertine' | 'palatino' | 'charter' | 'garamond' | 'utopia' | 'other'

@@ -17,7 +17,7 @@ export interface Facts {
   versions?: { name: string; value: string | number; line: number; schema: boolean }[]
   functions?: { line: number; endLine: number; name: string | null; code: number; tokens?: number; digest?: string | null }[]
   casts?: { cast: number[]; unsafe: number[]; nonNull: number }
-  history?: { todays: number[]; dated: number[]; measuredDates: number[]; named: number[] }
+  history?: { todays: number[]; dated: number[]; measuredDates: number[]; named: number[]; forms: Record<string, number[]>; attribution: number[] }
   [k: string]: unknown
 }
 export interface Profile {
