@@ -730,9 +730,9 @@ const refKey = r => (r[1] ? `${r[0]}.${r[1]}` : r[0])
 
 // ---------------------------------------------------------------- lists by use (DEFINITIONS.lists)
 
-const OPEN_TYPES = new Set(['TSStringKeyword', 'TSNumberKeyword', 'TSBooleanKeyword', 'TSBigIntKeyword', 'TSSymbolKeyword', 'TSObjectKeyword', 'TSAnyKeyword', 'TSUnknownKeyword', 'TSTemplateLiteralType'])
+const OPEN_TYPES = new Set(['TSStringKeyword', 'TSNumberKeyword', 'TSBooleanKeyword', 'TSBigIntKeyword', 'TSSymbolKeyword', 'TSObjectKeyword', 'TSAnyKeyword', 'TSUnknownKeyword'])
 /** a type written in the source, as listsByUse reads it: `lits` (string or number literals), `none` (null, undefined, never),
- *  `open` (a primitive: string, number, a template), `union`, `keyof`, `arr` (an array or a tuple, its element `e`), `ref`
+ *  `open` (a primitive: string, number), `tpl` (a template literal type, its parts' types `u`), `union`, `keyof`, `arr` (an array or a tuple, its element `e`), `ref`
  *  (a named type, `n`, through a namespace `ns`, its arguments `a`), `idx` (an indexed access: a property's name or
  *  '[number]'), `query` (`typeof` a value), `obj` (an object type, its properties `p`), `other` */
 const typeDescOf = t => {
@@ -747,7 +747,10 @@ const typeDescOf = t => {
     case 'TSVoidKeyword':
       return { k: 'none' }
     case 'TSLiteralType':
-      return t.literal?.type === 'TemplateLiteral' ? { k: 'open' } : { k: 'lits' }
+      // (a template literal type: the types of its parts, `${Role}-${Slant}`; with none, one literal)
+      return t.literal?.type !== 'TemplateLiteral' || !t.literal.expressions?.length ? { k: 'lits' } : { k: 'tpl', u: t.literal.expressions.map(typeDescOf) }
+    case 'TSTemplateLiteralType':
+      return t.types?.length ? { k: 'tpl', u: t.types.map(typeDescOf) } : { k: 'lits' }
     case 'TSUnionType':
       return { k: 'union', u: t.types.map(typeDescOf) }
     case 'TSIntersectionType':
@@ -903,6 +906,9 @@ export function listsByUse(files, resolve, only = null) {
         return true
       case 'union':
         return d.u.some(x => x?.k !== 'none') && d.u.every(x => closed(x, path, depth + 1))
+      // (a template holds as few members as its parts do: closed where every part is)
+      case 'tpl':
+        return d.u.every(x => closed(x, path, depth + 1))
       // (an intersection holds no member its closed part does not)
       case 'inter':
         return d.u.some(x => closed(x, path, depth + 1))

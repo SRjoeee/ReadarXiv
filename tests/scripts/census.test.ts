@@ -709,3 +709,37 @@ describe("the repository's debt areas", () => {
     expect(headline('OTHER')).toBe(false)
   })
 })
+
+// A template literal type over closed unions holds as few members as they do: a list declared of a union that holds one is a
+// vocabulary (a face's change, `${Role}-${Slant}`); a template with an open part (`${string}`) holds any string and is open.
+describe('a template of closed types is closed', () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'axt-census-template-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    put(
+      'packages/engine/src/index.ts',
+      [
+        "export type Role = 'serif' | 'sans'",
+        "export type Slant = 'italic' | 'upright'",
+        'export type Change = Role | Slant | `${Role}-${Slant}`',
+        'export type Loose = Role | `${string}-x`',
+        "export const FACED = new Set<string>(['serif', 'sans-italic', 'upright'] satisfies readonly Change[])",
+        "export const LOOSE = new Set<string>(['serif', 'a-x', 'b-x'] satisfies readonly Loose[])",
+        'export const faced = (c: Change, l: Loose): boolean => FACED.has(c) || LOOSE.has(l)',
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  it('reads a list declared of a union of templates over closed unions as a vocabulary, and one with an open part as a list', async () => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const c = await census({ today: null, now: [scanTree('engine', root, ENGINE_PROFILE)] })
+    expect(c.trees.NOW.debt.vocabularies.list.map((x) => [x.name, x.by])).toEqual([['FACED', 'declared of Change']])
+    expect(c.trees.NOW.debt.lists.list.map((x) => x.name)).toEqual(['LOOSE'])
+  })
+})
