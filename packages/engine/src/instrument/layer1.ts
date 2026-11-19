@@ -1,14 +1,7 @@
-// src/pdf-reader/engine/layer-proto/layer1.mjs
-// Ported from the website's private prototype of the instant layer (its iteration 1, as the prototype stood when it was
-// approved), 2026-10-06, as the instant layer's v0: iteration 1's helpers. Our own code,
-// so no licence applies; the provenance is kept so that every number the prototype was approved on traces back to it.
-// Unchanged in behaviour: the changes are the module paths, CJK characters written as \u escapes (the English gate),
-// imports nothing uses left out, and what is named below. The prototype's own description follows.
-//
-// Iteration 1's helpers the layer v0 still calls: the median, the units' blocks, the placeholders' classes and plain text,
-// the words and their alignment, the CJK line-break marks. Iteration 1's own measuring, fit and paint (pageChars,
-// resolvePlaceholders, tokensOf, layoutUnit, paintPart) are left out: v0 is iteration 2 and 3 (layer2.mjs), which
-// replaced them.
+// The placeholders' classes and plain text read off a unit's source (phClass, texToText, and their tables CITE, NUM,
+// DISPLAY, MACROS, SUP), which the instrument adapter states (instrument.ts); beside them the median, a unit's line
+// rectangles as blocks (blocksOf), its words and their alignment (wordsOf, lcsPairs) and the CJK line-break marks
+// (kinsokuOf). Its CJK characters are written as \u escapes (the English gate).
 import { textArgsOf, textless } from '../source/arg-roles.ts'
 
 // ---- the units' blocks
@@ -123,20 +116,20 @@ export function blocksOf(
 
 // ---- placeholders
 
-// (step 3: a table's rules, \specialrule and \cmidrule, and a strut, \rule of no width, are no text either: v0 found no
-// rendering for them and drew their arguments as text, "1pt-1pt0pt 0pt2.2ex" in 1706.03762's table cells; an image's
+// (a table's rules, \specialrule and \cmidrule, and a strut, \rule of no width, are no text either: read with no rendering,
+// their arguments would draw as text, "1pt-1pt0pt 0pt2.2ex" in 1706.03762's table cells; an image's
 // file may be braced twice, \includegraphics[width=5cm]{{berimbau.jpg}} in 2307.16209)
 // (the control sequences TeX and the kernel define to set no ink — \relax, \noindent, \indent, \leavevmode, \nobreak, \newline, \@, \/ and
-// the like — are not listed here: rules/tex-kernel.mjs is their one table, read through the role table's textless below)
-/** \rule's call, which the role table's textless takes in but v0 reads itself (ZERO: a strut nothing, a bar looked
- *  for), as the layout maker leaves it to TeX (layout/marks.mjs RULE, the same) */
+// the like — are not listed here: source/tex-kernel.ts is their one table, read through the role table's textless below)
+/** \rule's call, which the role table's textless takes in but this reading reads itself (ZERO: a strut nothing, a bar looked
+ *  for), as the marking leaves it to TeX (marks/marks.ts RULE, the same) */
 const RULE = /^\s*\\rule\b/
 /** what draws as nothing: TeX's grouping (\\begingroup, \\endgroup, \\bgroup, \\egroup: a group opened or closed, never ink;
  *  read as a paper's macro of unknown ink, 2608.25210v2's VLDB block, its \\endgroup after the unit's end mark, was a piece
  *  whose ink was not found and its unit unproven), a size or a face switch, a rule of a table, space, a label… */
 const ZERO =
   /^(?:\\(?:begingroup|endgroup|bgroup|egroup|footnotesize|scriptsize|tiny|small|normalsize|large|Large|LARGE|huge|Huge|selectfont|hline|centering|raggedright|par|bf|it|rm|em|sf|tt|sc|bfseries|itshape|rmfamily|mdseries|upshape|protect|toprule|midrule|bottomrule|smallskip|medskip|bigskip|vfill|hfill|null|arraystretch|clearpage|newpage|thanks|xspace|noalign|cr|strut)\b\*?|\\(?:v|h)space\*?\{[^}]*\}|\\fontsize\{[^}]*\}\{[^}]*\}|\\label\{[^}]*\}|\\c?line\{[^}]*\}|\\(?:v|h)skip\s*[-\d.]+\s*[a-z]*|\\setlength\{[^}]*\}\{[^}]*\}|\\arraystretch\{[^}]*\}|\\renewcommand.*|\\addlinespace(?:\[[^\]]*\])?|\\specialrule\{[^}]*\}\{[^}]*\}\{[^}]*\}|\\cmidrule(?:\[[^\]]*\])?(?:\([^)]*\))?\{[^}]*\}|\\rule(?:\[[^\]]*\])?\{0(?:\.0*)?[a-z]*\}\{[^}]*\}|\\arrayrulecolor\{[^}]*\}|\\includegraphics\*?(?:\[[^\]]*\])?\{(?:[^{}]|\{[^{}]*\})*\})$/
-// (a control space is a backslash and any white space, a tab or a line's end as well as a space: rules/tex-kernel.mjs counts
+// (a control space is a backslash and any white space, a tab or a line's end as well as a space: source/tex-kernel.ts counts
 // all three, and \<newline> read as 'zero' drew nothing where the original has a space: "vs.\<newline>answer"). The spaces:
 // TeX's control space and latex.ltx's ~, \,, \;, \:, \\, \quad, \qquad, \enspace, \thinspace; article.cls's \and; the
 // conference styles' author separators \And and \AND (neurips_2026.sty's, iclr2026_conference.sty's, acl.sty's \def)
@@ -148,9 +141,9 @@ export const CITE =
 /** a number TeX sets for a reference: latex.ltx's \\ref, \\pageref and \\footnotemark, amsmath.sty's \\eqref, hyperref.sty's
  *  \\autoref, cleveref.sty's \\cref and \\Cref */
 export const NUM = /^\\(?:ref|eqref|autoref|cref|Cref|pageref|footnotemark)\*?(?:\[[^\]]*\])?\{?/
-// (step 3: the engine's displayed environments, layout/marks.mjs DISPLAY's: v0 knew six, and read a subequations, an
-// alignat or a flalign display as an inline formula, drawn as its source's or its page's text in the line, too long for
-// any of the unit's lines and clipped: 2307.16209's units 74 and 240). Their definitions: latex.ltx's equation, eqnarray,
+// (the engine's displayed environments, mt.ts DISPLAY's: a subequations, an alignat or a flalign display read as an inline
+// formula would be drawn as its source's or its page's text in the line, too long for any of the unit's lines and clipped:
+// 2307.16209's units 74 and 240). Their definitions: latex.ltx's equation, eqnarray,
 // displaymath and \[; amsmath.sty's align, alignat, gather, multline, flalign, subequations; breqn.sty's dmath; IEEEtran.cls's
 // IEEEeqnarray
 export const DISPLAY =
@@ -348,10 +341,10 @@ export function texToText(src: string): string {
   if (CITE.test(src)) return '[·]'
   if (/^\\footnotemark\[(\d+)\]/.test(src)) return script(src.match(/\[(\d+)\]/)![1]!, SUP, '^')
   if (NUM.test(src)) return '?'
-  // what is never text goes before the source is drawn (arg-roles.mjs): a command proven to set no letters draws nothing
+  // what is never text goes before the source is drawn (source/arg-roles.ts): a command proven to set no letters draws nothing
   // (textless: a table's rule, space, a length, a definition), any other keeps only its arguments that may be text
-  // (textArgsOf: a rule's sizes, keys, a file, a label go). A \rule is v0's own (ZERO): a strut nothing, a bar in a
-  // line looked for on the page and cropped, as the layout maker asks TeX about it (layout/marks.mjs RULE)
+  // (textArgsOf: a rule's sizes, keys, a file, a label go). A \rule is this reading's own (ZERO): a strut nothing, a bar in a
+  // line looked for on the page and cropped, as the marking asks TeX about it (marks/marks.ts RULE)
   if (textless(src) && !RULE.test(src)) return ''
   // a math shift at either end goes, not an escaped dollar ending the source (stripped, \$ would draw as "\")
   let s = textArgsOf(src)
@@ -496,7 +489,7 @@ const lastOf = (s: string) => {
 }
 /**
  * The line-break marks as a rule set gives them: `noStart` and `noEnd`, the characters no line starts or ends with (the
- * layout rules' own lists, rules/layout.mjs), as { starts(s), ends(s) }: whether a token begins with one, or ends with one.
+ * rule set's own lists, the typesetter's rulesFor), as { starts(s), ends(s) }: whether a token begins with one, or ends with one.
  * A set of code points, not a pattern, so that nothing a set holds is read as syntax; made once for a pair of lists
  */
 export function kinsokuOf(noStart: string, noEnd: string): Kinsoku {

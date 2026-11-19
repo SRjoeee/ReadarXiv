@@ -1,8 +1,8 @@
-// Whether a short text is language to translate (docs/PDF-READER.md §18.72, the owner's direction: decide which cells are
-// content and which are not, by what the source states and the table's structure; a translator's error is not ours to
+// Whether a short text is language to translate (docs/PDF-READER.md §18.72: which cells are content and which are not is
+// decided by what the source states and the table's structure; a translator's error is not ours to
 // correct). A text that holds no ordinary word is not language: it is kept as written (R1). A word the paper's own running
 // text writes as a name is a name of that paper (R2). Both are facts of a text, so they are decided where Unit.kept is decided
-// (instrument.mjs unitFactsOf for the source's cells and figure texts, locate/ink.ts for a figure's texts read off its ink); the
+// (instrument.ts unitFactsOf for the source's cells and figure texts, locate/ink.ts for a figure's texts read off its ink); the
 // table's own structure too (R4, namesOfBlocks below, over the front end's tableBlocks: a body column's cells between the same
 // two rules; a header cell in no block), read by unitFactsOf; the typesetter decides none. No word list; BLOCK_SHARE a majority.
 import type { Piece } from '@readarxiv/format'
@@ -174,9 +174,9 @@ export function keptAsWritten(content: readonly Piece[], names: ReadonlySet<stri
 }
 
 /** R4's one threshold: a block is the paper's names where MORE than this share of its text cells are names, exactly half not.
- *  A majority is the least that makes a block one kind of thing (names) rather than the other (words): in the owner's words,
- *  translated, "if the whole column is proper names, we should not translate it" (PDF-READER §18.72). Measured over the 92
- *  pairs' tables against one reading of their cells (lane table-judge): a body column's kept share stands at 0 or 1 in 72 % of
+ *  A majority is the least that makes a block one kind of thing (names) rather than the other (words): a column wholly of
+ *  proper names is not translated (PDF-READER §18.72). Measured over the 92
+ *  pairs' tables against one reading of their cells: a body column's kept share stands at 0 or 1 in 72 % of
  *  them, and keeping the 72 blocks at exactly one half too would keep 72 cells read as words for 1 read as a name */
 const BLOCK_SHARE = 0.5
 
