@@ -34,7 +34,7 @@ const MICROSOFT_ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
 /** the raw reply's shape, part of the identity: `{ text, src?, tr? }`, the item's text and its sentence lengths */
 const RAW = 'raw/1'
 
-/** the endpoint's own table of targets (fetched 2026-09-08 and 2026-09-17: the same 138 codes) */
+/** the endpoint's own table of targets (fetched twice, the same 138 codes: measured 2026-09-08 and 2026-09-17) */
 const SUPPORTED = new Set(
   `af am ar as az ba be bg bho bn bo brx bs ca cs cy da de doi dsb dv el en es es-MX et eu fa fi fil
   fj fo fr fr-CA ga gl gom gu ha he hi hne hr hsb ht hu hy id ig ikt is it iu iu-Latn ja ka kk km kmr
@@ -44,8 +44,8 @@ const SUPPORTED = new Set(
     .trim()
     .split(/\s+/),
 )
-/** a target as the endpoint must be asked it: a bare `sr` comes back Latin and `zh` must be `zh-Hans` (measured
- *  2026-09-09); `ny`, `lg` are three-letter codes there. A script the endpoint cannot write (`bs-Cyrl`, `uz-Cyrl`,
+/** a target as the endpoint must be asked it: a bare `sr` comes back Latin and `zh` must be `zh-Hans`
+ *  (measured 2026-09-09); `ny`, `lg` are three-letter codes there. A script the endpoint cannot write (`bs-Cyrl`, `uz-Cyrl`,
  *  `az-Cyrl`) is in no row of its table, so it is not served */
 const REWRITE: Record<string, string> = {
   zh: 'zh-Hans',

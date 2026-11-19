@@ -132,9 +132,9 @@ const BEGINS = /^\s*[\p{Lu}\p{Lt}]/u
  * `silent`, one that reads as white space: a space, a break); an element that sets something, or the unit's end, gives none.
  * Each wire writes it after the display as the display's own stop, which reading takes back (the original sets none there),
  * and the tags wire's cutter reads it: a translator is asked for the sentence TeX ended (Microsoft cuts at neither a marker nor
- * a colon: 0 of 444 without a display's stop, 1,357 of 1,357 with it). Over the corpus's 88 papers (2026-11-09): 3,937 displays
- * state their stop; of the rest, 328 go on in lower case, 52 end their unit, 95 on 22 papers are followed by an upper-case
- * word, the commonest all a sentence's first (The 17, In 9, We 7, For 5, Here 5, Then 4, This 4)
+ * a colon: 0 of 444 without a display's stop, 1,357 of 1,357 with it). Over the corpus's 88 papers (measured 2026-11-09):
+ * 3,937 displays state their stop; of the rest, 328 go on in lower case, 52 end their unit, 95 on 22 papers are followed by
+ * an upper-case word, the commonest all a sentence's first (The 17, In 9, We 7, For 5, Here 5, Then 4, This 4)
  */
 export function displayEnds(content: readonly Piece[]): readonly Piece[] {
   const ends = new Set<Piece>()

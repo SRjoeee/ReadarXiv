@@ -91,10 +91,10 @@ const B_CLOSE = /<\/b\s*>/y
  * words read in their sentences (顺序, "m 个"); 3 of 122 units refused by the token contract (Google moved an element and
  * left its token as text: the next translator's). The element's tag is the shortest Google keeps whole (design-performance
  * Q5): of `<b>xn</b>`, `<b translate=no>xn</b>`, `<span translate=no>xn</span>` and `<span translate="no">xn</span>`, asked
- * in that order over 280 units of five languages (lane reply-dots, 2026-11-13), the bare `<b>` lost 173 of 1,909 elements
+ * in that order over 280 units of five languages (measured 2026-11-13), the bare `<b>` lost 173 of 1,909 elements
  * (dropped, or merged into a word), `<b translate=no>` none, every class (a stop before an element, ellipses, lost stops, a
  * unit left as the source) as with `<span id="n" translate="no">`, the tag back as sent 1,909 of 1,909; asked again over
- * this wire, 48 merged cells and 20 units of the HTML page (lane wire-w, 2026-11-15), every class the same, 2,169 of 2,169
+ * this wire, 48 merged cells and 20 units of the HTML page (measured 2026-11-15), every class the same, 2,169 of 2,169
  * tags back. 12 to 16 % fewer characters are sent. A reply in the spelling before it (`<span id="n" translate="no">`) reads
  * as it did: a stored reply is read again
  */

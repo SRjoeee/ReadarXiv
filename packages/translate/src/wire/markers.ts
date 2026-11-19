@@ -5,7 +5,7 @@
 // - each marker is a hard sentence boundary to the endpoint, so a span that is not `must` goes on no wire: its words join
 //   the sentence and its style may be lost (the decision: such a span may come back unstyled), and its head (accept.ts
 //   headLength: the elements before its first word, a declaration's place, `{\em all}`) is one marker that comes back in a
-//   copy of the span, never loose: a declaration loose held to the unit's end (1810.04805v2 on staging, 2026-11-08: all
+//   copy of the span, never loose: a declaration loose held to the unit's end (1810.04805v2 on staging: all
 //   after "all"'s translation slanted, all after BERT bold); a style that cannot be mapped is dropped, never spread. A
 //   span holding the whole unit goes on no wire either and comes back around the translation; a `must` span is kept as
 //   two markers, or as one when it holds no text;
@@ -15,21 +15,20 @@
 // - an element that sets nothing where it stands (`silent`, the source reader's from TeX's tables: a declaration, a key
 //   written to a file, `\noindent`, `\-`) goes on no wire, and so does a span's head of such elements alone (`{\bfseries w}`):
 //   a marker for it cut the sentence where the source sets nothing (2610.19159's `\textcolor{…}{\bfseries w}` round every
-//   word: 13,000 markers and word salad, until today's wire sent them on none, TRANSLATE_VERSION 3 and 10; this wire, before
-//   the source reader stated them, sent 106 in one of its units where today's sends 10, and Microsoft's reply was word salad
-//   again, 2026-11-09). Beside an element that sets something it rides in that one's marker, in its
+//   word: 13,000 markers and word salad; one of its units sent with them held 106 markers where it holds 10 without them,
+//   and Microsoft's reply was word salad). Beside an element that sets something it rides in that one's marker, in its
 //   place; alone, it comes back at the front of its innermost kept group (the unit, a kept span) where nothing of the group
-//   went out before it, else at the group's end, as today's wire puts it back; one beside a span that holds all the rest
+//   went out before it, else at the group's end; one beside a span that holds all the rest
 //   leaves that span around the translation, itself outside it where it stands;
 // - a marker touching a word is read as part of it, and one right after a full stop leaves the last word untranslated: a
 //   space of ours around it, taken back on reading wherever the reply kept it on that side of the marker: the space is the
 //   wire's, not the page's (DESIGN §6.2, as the HTML page's rehydrate takes it), and the source set the element glued there,
-//   a mark, a script or an accent to its word, a tie to its neighbours (before 2026-11-09 only beside a stop or a digit:
-//   2610.20967v1's names read back a space TeX never set before each name's marks, 4.3 pt where TeX's is 1.35). Not around an element
+//   a mark, a script or an accent to its word, a tie to its neighbours, not only a stop or a digit (2610.20967v1's names
+//   read back a space TeX never set before each name's marks, 4.3 pt where TeX's is 1.35). Not around an element
 //   inside a word (a letter right before it and right after it, an element that reads as part of a word: `inWord`): there
 //   the word is one token of the source, and spaced it went out as two words (2608.25210v2's `str\_s`: `str @a# s` came
 //   back `STR @a#`, `LLM @a# bottom @b# up` with "bottom" and "up" translated; unspaced, the four identifiers asked came
-//   back as they went, 2026-11-09);
+//   back as they went);
 // - a display's own end punctuation goes after its marker or the sentence runs on (0/444 vs 1,357/1,357), and the reply's
 //   marks after that marker are taken off on reading; an element's stop that is a line end (a forced break a run-in label
 //   follows, no stop ending the sentence before it: the source reader's run-in rule) goes after its marker too, where
@@ -521,8 +520,8 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
   // where the wire holds a `#` of its own, a `#` right after a marker is either Microsoft's doubled closer or the text's own
   // moved beside it: which, nobody can tell, and either way a reader would see one `#` too many or too few (stage 4b). Not
   // after a marker the wire itself follows with its text's `#` (`hashAfter`): there it is that `#`, as it went out (TeX's `\#`,
-  // a character of the text since 2026-11-11: `$k$\#`, `## Root Goal` after a list's mark; Microsoft gave back every one of
-  // 114 text `#` of the 88 papers' 24 units holding one, in Chinese, Japanese and German)
+  // a character of the text, PDF-READER §18.30: `$k$\#`, `## Root Goal` after a list's mark; Microsoft gave back every
+  // one of 114 text `#` of the 88 papers' 24 units holding one, in Chinese, Japanese and German)
   if (!plan.hashFree)
     for (const m of text.replace(/@@/g, '').matchAll(/@([a-z]+)#[ \t]*#/g))
       if (!plan.hashAfter.has(fromAlpha(m[1] as string))) return null

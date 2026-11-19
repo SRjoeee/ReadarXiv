@@ -3,10 +3,10 @@
 //
 // A wire may carry a group or not: the tags wire carries every group, and a translator that keeps tags brings each back; the
 // markers wire carries only a `must` group, since a marker is a hard sentence boundary to Microsoft's endpoint and it moves a
-// marker pair inside a sentence to the reply's end, empty (today's stored replies of the 22 parity pairs: of the inline style
-// groups today's wire sent as markers, bold 140 kept around their words and 166 moved, italic 104 and 709, colour 0 and 36);
+// marker pair inside a sentence to the reply's end, empty (the stored replies of the 22 parity pairs: of the inline style
+// groups sent as markers, bold 140 kept around their words and 166 moved, italic 104 and 709, colour 0 and 36);
 // and any translator may drop a tag pair. A group so lost loses its style: its weight, its slant, its colour (2610.17024v1
-// p9's `\textbf{(B1)}`, 2608.25210v2's `\textcolor{blue}{value}`, round 8 part A on staging).
+// p9's `\textbf{(B1)}`, 2608.25210v2's `\textcolor{blue}{value}`, seen on staging).
 //
 // Its place is stated where the translation holds the group's own text as the source holds it: a whole word or words
 // (Unicode's word boundaries, UAX #29) and equal by Unicode's compatibility (NFKC: a full-width "（B1）" is "(B1)"), white space
@@ -31,9 +31,10 @@
 // normalisation of both reads (NFKC, no white space beside a CJK character, a run of white space one space; the reference's
 // ends trimmed of punctuation and white space), both ends on a word boundary of the reply in the target language (UAX #29 and
 // ICU's dictionaries: `Intl.Segmenter`, granularity `word`); the place then takes back the opening and closing marks (brackets,
-// quotes) the reference was trimmed of where the reply sets them right beside it (`withEnds`). Over the 88 papers' Chinese (lane style-wire, 2026-11-11): of 559
-// phrase groups sent today as no markers, the reply states 236 references once, ICU's boundaries hold both ends of 233, and a
-// read of 60 found 59 placed right; "Power Law+Gaussian", whose reference holds a word of its own, is the one wrong. Not asked
+// quotes) the reference was trimmed of where the reply sets them right beside it (`withEnds`). Over the 88 papers' Chinese
+// (measured 2026-11-11, docs/DESIGN.md §16): of 559 phrase groups sent as no markers, the reply states 236 references
+// once, ICU's boundaries hold both ends of 233, and a read of 60 found 59 placed right; "Power Law+Gaussian", whose
+// reference holds a word of its own, is the one wrong. Not asked
 // for a group that is `must` (it comes back on the wire), that holds the whole unit (it comes back around the translation),
 // that holds an element or another group (its pieces travel on their own), whose text is one word (a label, a name: its own
 // text is placed as above, or it is translated as a word), or of a bibliography's entry (`BIBLIOGRAPHY`).
@@ -367,7 +368,7 @@ function wholeOf(content: readonly Piece[]): Set<string> {
 /** a bibliography's entries' kinds (the references' class, packages/engine content-classes.mjs UNIT_CLASS: a \\bibitem's, an
  *  entry's names, a biblatex entry's ink): no reference is asked for their groups, a venue's italics and BibTeX's case-protecting
  *  braces, sent only under the References toggle and never measured (4,673 of the 6,242 groups over the 88 papers, 161,000 of
- *  their 200,000 characters: the coordinator's ruling of 2026-11-11) */
+ *  their 200,000 characters; docs/DESIGN.md §16) */
 const BIBLIOGRAPHY = new Set(['reference', 'refnames', 'inkreferences'])
 /** A group a reference is asked for, and the unit it is asked as: the group's text alone */
 interface ReferenceGroup {

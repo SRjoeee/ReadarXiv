@@ -281,7 +281,7 @@ const refusedWhole = (f: Fault): boolean =>
 /**
  * A call's stages, one a translator of its chain: how many of the call's `n` units have no outcome yet from each, and the units
  * that fall from it held until none is left, so that they leave for the next translator together and its lane cuts them by its
- * own limits (design-performance-2026-11-13 Q6: the lab's fill sent 290 of Microsoft's 318 requests with one unit each, as the
+ * own limits (DESIGN §8: the lab's fill sent 290 of Microsoft's 318 requests with one unit each, as the
  * Google reply that refused it was read). No timer: a unit is held for its call's own earlier replies alone. A unit leaves a
  * stage once (`passed`), or every stage still before it when it has its result (`done`); an aborted call lets every held
  * unit go
@@ -741,8 +741,8 @@ export function chainOf(ports: Ports = {}): Chain {
     // everything the call starts that is still to settle: each of its requests, and what an answer no unit waits for is
     // written by (a phrase group's reference, asked in the unit's batch before its reply is known, which the reply may make
     // needless). The call owns them: when it ends, its signal cancels every request still asked for it, and they are all
-    // settled before its last store write, so that no request outlives the call and every answer it got is stored (the review
-    // of round B11: a reference outlived its call, out of the host's abort, and its answer was never stored)
+    // settled before its last store write, so that no request outlives the call and every answer it got is stored (DESIGN
+    // §16: else a reference outlives its call, out of the host's abort, and its answer is never stored)
     const started = new Set<Promise<unknown>>()
     const owned = <T>(p: Promise<T>): Promise<T> => {
       started.add(p)
@@ -1164,7 +1164,7 @@ function spanIdsOf(ps: readonly OutPiece[], out: string[] = []): string[] {
  *  groups hold them: the unit without them, which is what every translator is asked for, and what goes after its translation,
  *  each with the white space it states before it. Null for a unit with none. A translator never sees them: on the markers
  *  wire such a list was a marker Microsoft's Chinese read as a page number, writing the character for "page" before it
- *  (2610.37668v1, 5 of 41 entries; today's wire, mt.mjs listOf, TRANSLATE_VERSION 7) */
+ *  (2610.37668v1, 5 of 41 entries) */
 function tailOf(u: UnitIn): { unit: UnitIn; after: OutPiece[] } | null {
   const after: OutPiece[] = []
   const keep = (ps: readonly Piece[]): Piece[] =>
