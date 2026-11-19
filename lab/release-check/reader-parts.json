@@ -1,16 +1,17 @@
 {
   "format": "readarxiv/reader-parts 1",
-  "says": "reader-parts' counts of I3, I4 and I5 at the last integrated round, by rows store and by the set or the added pairs (lab/release-check/gates.mjs readerPartsJudge): the gate fails where a count rises above its value here, and says where one fell; the round that moves a count writes its value and its cause here",
-  "commit": "cee3bd8f9",
-  "round": "RB1 with its fix round (pull request #640): the reader gate over the 90 pairs of the stored rows and the added pairs, on the door's rows and on Google's",
+  "says": "reader-parts' counts at the last integrated round, by rows store and by the set or the added pairs (lab/release-check/gates.mjs readerPartsJudge, RECORDED), each read on the lay the product makes (the entry's own, each page as layPage laid it): I3 by ink against all that stays, I4, I5 by ink (a line past its slot beyond the breaker's 0.01 pt) and I5floor (a member under its own size floor), and I6head, the units the head pass lays otherwise across the pages' lays. The gate fails where a count rises above its value here, or where a part's count is not here, and says where one fell; the round that moves a count writes its value and its cause here",
+  "commit": "97cbd56cb",
+  "round": "lane v2-lay (round 4's V2): the reader gate over the 90 pairs of the stored rows and the added pairs, on the door's rows and on Google's rows of the round (r4c-int-2's), at the final engine head's product",
   "counts": {
-    "door": { "I3": 3, "I4": 0, "I5": 2 },
-    "door, added": { "I3": 0, "I4": 0, "I5": 0 },
-    "google": { "I3": 3, "I4": 0, "I5": 2 },
-    "google, added": { "I3": 0, "I4": 0, "I5": 0 }
+    "door": { "I3": 20, "I4": 0, "I5": 5, "I5floor": 0, "I6head": 11 },
+    "door, added": { "I3": 0, "I4": 0, "I5": 0, "I5floor": 0, "I6head": 0 },
+    "google": { "I3": 21, "I4": 0, "I5": 10, "I5floor": 0, "I6head": 11 },
+    "google, added": { "I3": 0, "I4": 0, "I5": 0, "I5floor": 0, "I6head": 0 }
   },
   "why": {
-    "I3": "on both stores: 2610.21176v1-zh p13, ords 98 and 99 against 101 (a cell given an ink box hundreds of points wide for one glyph: design 3h's E1, before the cut-over); 2610.40576v1-zh p7, ords 69 and 71 (a paragraph beside a wrapped figure laid over its caption: TeX's line measures, after the cut-over, production's too)",
-    "I5": "2610.20285v1-zh ord 258, a line 0.30 pt past its slot with spaces to shrink, on both stores; 2610.21106v1-zh ord 42, 0.04 pt (the door's rows); 2610.21085v1-zh ord 64, 0.01 pt (Google's)"
+    "I3": "each a laid unit's ink over ink that stays or another's, as the gate lists it ('entry I3:'). Drawn worse than production would draw it: 2608.06701v1-zh p6 ords 129 over 143 (door: a run-in head set on its last row over its follower left the original's for want of a row), 2610.19159v1-ja p51 ord 3806 (door: a figure text over its own element kept on the page), 2610.21765v1-zh p9 ord 143 over its element 37 (both: a formula drawn as a crop beside its own ink, which the part states keep), 2610.21884v1-zh p25 ords 199 over 200 (both: a last line laid 6 pt under TeX's onto the next member). As production draws it: 2610.40576v1-zh p7 ords 69 over 71 (a paragraph beside a wrapped figure over its caption), and a translation's taller glyphs touching the line, display, image or neighbour beside them by under a point (2608.06701v1-zh p8, 2608.25210v2-zh p6, 2610.18513v1-zh p41, 2610.21037v1-zh p14, 2610.21084v1-zh p44, 2610.21312v1-zh p3, 2610.21504v1-zh p5, 2610.21880v1-zh p3, 2610.30034v1-zh p7, and 2610.21765v1-zh p9's display row); where production left the units the original's, figure texts and a reference touching so (2610.20030v1-zh p3, p5; Google's 2608.06701v1-zh p7, 2610.21098v1-zh p6, 2610.21827v1-zh p10, 2610.22197v1-zh p21, p22)",
+    "I5": "lines past their slots by ink beyond 0.01 pt: a closing mark hung by half its em whose ink reaches further (2307.16209v1-zh ord 31, 0.99 pt; 2610.21176v1-zh ord 61; on Google also 2602.23285v2-ja ord 195, 2610.19282v1-zh ords 83, 105, 2610.30875v1-zh ords 16, 241, 2610.37818v1-zh ord 1365); a line of one crop set by its rectangle's edge, its ink 0.4 pt right of TeX's (2610.21376v1-zh ords 29, 31; 2610.21026v1-zh ord 91)",
+    "I6head": "the head pass (headOf reads the paragraph over a unit as one lay filled it and the other did not): its remedy after the launch, once the part states the head (the coordinator's ruling)"
   }
 }

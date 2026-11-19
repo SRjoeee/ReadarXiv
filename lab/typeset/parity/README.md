@@ -189,7 +189,11 @@ script's text, the names toggle off), that ruling's then; a part neither is a tr
 state. A page's parts are the members that stand on it: those the part states a line of on that page (the group's `pages`, the
 bundle's, never what v2 drew; a part holds whole flows, so the parts that carry a member are more pages than it stands on), and
 one it states no line of anywhere, which no page excuses; where none stands on the page, every member, none of them there. A
-unit of today's set over a page break and cut there into a member on each page is so shown on each page by its own member.
+unit of today's set over a page break and cut there into a member on each page is so shown on each page by its own member. On a
+page no member of a group stands on, the original's lines of the group are those of every unit of today's in it there (today's
+prepare dump), and its source's words are read unit by unit of those today drew there (`echoed`: each one's drawn text its
+source's), never the group's first unit's alone; and a member laid with a fresh row marks its group fresh on the pages it stands
+on alone (the group's `pages`), the other members' pages judged as anywhere.
 
 ## The measures: each a distance from the original, and when v2 is nearer
 
@@ -599,4 +603,5 @@ release of engine 065c1d973: on a paper staging prepared, the catalog and every 
 rows by the release's own translation code over Microsoft's keyless endpoint, today's prepare dump and reader dump by the
 baseline's tools, the tap's ledgers and metrics by its pass 1. It is lab-data's `refactor-2026-11/baseline/added/`, read through a
 root of links (added.mjs `addedEnv`: the set's folders hold their own files and the added pairs' side by side) so that no folder
-another tool walks whole changes. A round's bundles must hold the added papers (the chain's list of 90 papers).
+another tool walks whole changes; each run makes a root of its own and removes it when it ends (`dropAdded`), so that two runs
+at once never read or remove each other's. A round's bundles must hold the added papers (the chain's list of 90 papers).
