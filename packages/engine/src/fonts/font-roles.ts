@@ -1,10 +1,10 @@
 // The font role table: for each target and English family, the face file each role is drawn in, the same files in both
 // renderers — the TeX path sets them, the instant layer draws in web fonts made from them (spec §4.4, under the
-// maintainer's rulings of 2026-10-06, §1.3). One rendering on every device: every face is a file we serve, TeX Live's or
+// maintainer's rulings, §1.3). One rendering on every device: every face is a file we serve, TeX Live's or
 // an upstream release's, under a family name of ours; none is a face the reader's device holds, and nothing here names
 // a generic family. A character no face of a run's role holds keeps its unit the original's (canDraw).
 //
-// Which face a target takes is one rule in two tiers (the maintainer, 2026-10-06), and it governs every target to come:
+// Which face a target takes is one rule in two tiers, and it governs every target to come:
 // - Tier 1, the scripts the paper's Western families are drawn for (Latin, Greek, Cyrillic, Vietnamese): the original's
 //   own family, its same glyphs where a source has them, from the cleanest source of them. Today, measured against what
 //   arXiv's PDFs embed: Times → Nimbus Roman and Helvetica → Nimbus Sans (URW's base 35 release: 62 and 53-62 of 62
@@ -17,18 +17,17 @@
 // - Tier 2, the scripts no Western family covers well (CJK, Arabic, Hebrew, the Indic scripts, Thai and the rest): the
 //   Noto superfamily, one design per script. Source Han Serif is Noto Serif CJK: zh, zh-Hant and ko in Source Han Serif
 //   SC, TC and K, ja in Harano Aji Mincho (Source Han Serif JP), at Regular beside every English family and its real bold,
-//   Bold, for bold and headings, as the original's serif bold (the maintainer's ruling of 2026-10-29: Light, and SemiBold
+//   Bold, for bold and headings, as the original's serif bold (not Light and SemiBold
 //   for its bold, beside Computer Modern and Garamond read lighter than the page, docs/PDF-READER.md §18.1); Korean's
 //   Hangul at the size of the family's ideographs (Face.size). Emphasis
-//   is that same face slanted (the owner's ruling of 2026-10-19: a shear the layer draws, layer-proto/fonts.mjs
+//   is that same face slanted (PDF-READER §18.1: a shear the layer draws, the typesetter's breaker/faces.ts
 //   CJK_SLANT_DEG), in every CJK target alike; no Kai. GNU FreeFont's own Arabic, Indic and Thai glyphs are not taken for
 //   Tier 2: their styles are not one design.
 //
 // Also the names behind both renderers' reading of a paper's fonts: each design's NFSS family names (the TeX path's
 // font probe, familyOfProbe) and its PostScript names (a PDF's fonts, classifyFont and familyOfFonts), in one table.
 //
-// Moved whole from today's engine (src/pdf-reader/engine/rules/font-roles.mjs), typed; the website builds the faces it serves
-// from it (FACES, with font-coverage.ts), and its old path re-exports it until the cut-over deletes that path.
+// The website builds the faces it serves from this table (FACES, with font-coverage.ts).
 //
 // The face catalogue, the names' reading and the roles' tables are @readarxiv/text's (font-faces.ts, font-classes.ts),
 // which the typesetter reads too: this module keeps the engine's readings over them that keep a cache of their own (the
@@ -93,7 +92,7 @@ export interface FaceRun {
  * What a target draws in, for a paper's English family. `cjkFaces`: the target's CJK family as the layout rule set gives
  * it (rules/layout.mjs: its group), null for an alphabet. Which family a script takes is a layout rule, not a fact about
  * the files: this table only builds the roles from it, Regular for the body and Bold for bold beside every English family
- * (the maintainer's ruling of 2026-10-29, docs/PDF-READER.md §18.1, the font roles). A script that is no alphabet's and is
+ * (docs/PDF-READER.md §18.1, the font roles). A script that is no alphabet's and is
  * given none has no roles to draw in
  */
 export function rolesFor(target: string, family: EnglishFamily, cjkFaces: CjkFaces | null): RoleSet {

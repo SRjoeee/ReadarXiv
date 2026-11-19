@@ -1,12 +1,10 @@
 // TeX's hyphenation patterns as a host serves them: the pattern file of each language under TeX Live's texmf-dist, how each
 // is decoded, and the reading of one into { patterns, exceptions } (patternsOfTex), the JSON a reader's hyphenation is made
 // from (the typesetter's breaker/hyph.ts hyphenationOf). The website builds the patterns it serves with these
-// (/hyph/<lang>.json). Moved from today's engine (src/pdf-reader/engine/layer-proto/hyph.mjs: the part its host's patterns
-// are read with, the private prototype's host reading of a TeX pattern file, serve.mjs hyphenation(), at 9e56fca, our own
-// code), typed; the rest of that module, today's layer's own hyphenation, stays there until the cut-over deletes it.
+// (/hyph/<lang>.json).
 
 /** hyph-utf8's languages the engine hyphenates with: French, Spanish and Portuguese (#121-4: those three were hyphenated with
- *  English's patterns), and the languages of the owner's ruling of 2026-10-29 */
+ *  English's patterns), and the further languages PDF-READER §11.10 lists */
 const HYPH_UTF8: readonly Exclude<PatternLanguage, 'en' | 'de'>[] = [
   'fr',
   'es',
