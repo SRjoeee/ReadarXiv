@@ -36,42 +36,40 @@ export const bareFontName = (name: string): string => String(name ?? '').replace
 // stixmath (STIXMath-Regular), stix2.map's stixtwomath (STIXTwoMath), xits's xitsmath (XITSMath-Bold.otf); mathdesign's
 // MathDesign-CH-Regular-MathItalic-10 (mathdesign) and its mdbch tfm; fourier's futs (futs8r) and futm (futmiib); MnSymbol.map
 // (mnsymbol), ESSTIX.map (esstix), Euler-Math.otf (euler); and the PostScript Symbol face (symbol: PDF.js's standard_fonts.js
-// getStdFontMap). The entries not named here are judged by recorded cases (the rule ledger's)
+// getStdFontMap)
 const MATH_NAME =
-  /^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex|mib|syb)|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i
+  /^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex)|rsfs|cmbsy|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix)/i
 const MATH_WORD = /math|symbol/i
 // (a monospaced face by its names: the Fontname scheme's typeface.map (courier, typewriter: Typewriter, inconsolata, consol:
 // Consolas), TeX's font names of TeX Live's maps (cm, lm, ec and tc before tt: cm.map's cmtt8, cfr-lm's lmtt8ttl8, cm-super's
 // ectt0800 and tctt0800; sftt, cm-super's SFTT0800; txtt, txfonts.map's; pcr, the Fontname scheme's Adobe Courier; cmvtt,
 // cm.map's cmvtt10), PostScript names (mono: lm's LMMono10-Regular; sourcecode: SourceCodePro.map's; firamono: fira.map's;
-// nimbusmon: ucr.map's NimbusMonL-Bold); the entries not named here are judged by recorded cases (the rule ledger's))
+// nimbusmon: ucr.map's NimbusMonL-Bold), and menlo, Apple's Menlo (Apple Support's page "Fonts included with macOS
+// Monterey" names it among the faces macOS installs))
 const MONO_NAME =
-  /mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|beramono|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i
+  /mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i
 // (a sans face by its names: the Fontname scheme's typeface.map (arial, verdana, calibri, avant, futura, frutiger, myriad,
 // tahoma, gillsans, optima), TeX's font names of TeX Live's maps (cm and lm before ss: cm.map's cmss8, cfr-lm's lmss8ttl8;
 // phv, the Fontname scheme's Adobe Helvetica: phvb8z; uhvr, uhv.map's uhvr8r; qhv, qx-base.map's qhvb), PostScript names of its
 // maps (sans: lm's LMSans8-Regular; helvetica: Helvetica; nimbussan: NimbusSanL-Bold; biolinum: LinBiolinumTBO; grotesk:
 // URWGroteskT-Bold; roboto, lato, opensans, sourcesans, firasans, cabin, raleway, montserrat, inter and arimo: their packages'
 // maps; heros: TeXGyreHeros-Regular; dejavusans: DejaVuSansCondensed), and segoe in PDF.js's standard_fonts.js
-// getNonStdFontMap (SegoeUISymbol, read as Helvetica); the entries not named here are judged by recorded cases (the rule
-// ledger's))
+// getNonStdFontMap (SegoeUISymbol, read as Helvetica))
 const SANS_NAME =
-  /sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|^cmssbx|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i
+  /sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i
 // (bold by its names: weights of the Fontname scheme's weight.map (bold, black, heavy, semibold, extrabold) and of PDF.js's
 // font_substitutions.js getFamilyName's style words (demibold, ultrabold), PostScript names (demi: uag.map's URWGothicL-Demi;
 // libertinetb: libertine.map's LinLibertineTB), TeX's font names of TeX Live's maps (cm, lm and ec before bx: cm.map's cmbx5,
 // cfr-lm's lmbx8ttl5, cm-super's ecbx0500; sfbx and sfsx, cm-super's; cmssbx, cmmib and cmbsy, cm.map's; ptmb and phvb, the
-// Fontname scheme's Adobe Times and Helvetica bold: ptmb8z, phvb8z); the entries not named here are judged by recorded cases
-// (the rule ledger's))
+// Fontname scheme's Adobe Times and Helvetica bold: ptmb8z, phvb8z))
 const BOLD_NAME =
-  /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmbxti|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i
+  /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i
 // (italic by its names: variants of the Fontname scheme's variant.map (italic, kursiv, oblique, and URW's ital: Ital),
 // PostScript names (slant: AlgolRevived-Slanted; linlibertineti, linlibertinetbi and linbiolinumti: libertine.map's
-// LinLibertineTI, LinLibertineTBI, LinBiolinumTI), TeX's font names of TeX Live's maps (cm before ti: cm.map's cmti7; cmsl,
-// cmbxti, cmbxsl, cmssi, cmitt and cmmi, cm.map's; sfti, sfsl, sfsi and sfbi, cm-super's); the entries not named here are
-// judged by recorded cases (the rule ledger's))
+// LinLibertineTI, LinLibertineTBI, LinBiolinumTI), TeX's font names of TeX Live's maps (cmti, cmsl, cmbxti, cmbxsl, cmssi,
+// cmitt and cmmi, cm.map's: cmti7, cmsl8, cmbxti10, cmbxsl10, cmssi8, cmitt10, cmmi5; sfti, sfsl, sfsi and sfbi, cm-super's))
 const ITALIC_NAME =
-  /italic|ital\b|ital$|oblique|slant|kursiv|inclined|^(cm|lm)ti|^cmsl|^sfti|^sfsl|^sfsi|^sfbi|^cmbxti|^cmbxsl|^cmssi|^cmitt|^cmsltt|^cmmi|-it$|-bi$|linlibertineti|linlibertinetbi|linbiolinumti|-ita?$|italicmt|obliquemt/i
+  /italic|ital\b|ital$|oblique|slant|kursiv|^cmti|^cmsl|^sfti|^sfsl|^sfsi|^sfbi|^cmbxti|^cmbxsl|^cmssi|^cmitt|^cmmi|-it$|-bi$|linlibertineti|linlibertinetbi|linbiolinumti|-ita?$/i
 // (small capitals by their names: smallcap (the Fontname scheme's variant.map SmallCaps; kerkis.map's Kerkis-SmallCaps), caps
 // and lmromancaps (lm's LMRomanCaps10-Regular), TeX's font names of TeX Live's maps (cmcsc and cmtcsc: cm.map's cmcsc10,
 // cmtcsc10; sfcc and sfxc: cm-super's))
@@ -102,8 +100,8 @@ export function readFontStyle(name: string): FontNameStyle {
     design = /^(cm|lm|ec|tc)tt|^sftt|lmmono|cmvtt|cmitt|cmsltt/i.test(n) ? 'cmtt' : 'courier'
   else if (fam === 'sans')
     // the cmss design's names, TeX's font names of TeX Live's maps: cm and lm before ss (cm.map's cmss8, cfr-lm's
-    // lmss8ttl8), lmsans (lm's LMSans8-Regular); the entries not named here are judged by recorded cases (the rule ledger's)
-    design = /^(cm|lm)ss|^sfs[sxi]|^cmssbx|lmsans/i.test(n) ? 'cmss' : 'helvetica'
+    // lmss8ttl8), lmsans (lm's LMSans8-Regular)
+    design = /^(cm|lm)ss|^sfs[sxi]|lmsans/i.test(n) ? 'cmss' : 'helvetica'
   else if (
     /* the cm design's names, TeX's font names of TeX Live's maps: cm, lm, ec and tc before a shape and a size (cm.map's cmb10, cmbx10,
        cmti10, cmsl10, cmcsc10, cmdunh10, cmfib8, cmff10: bx, ti, sl, csc, dunh, fib, ff; cfr-lm's lmr8ttl5; cm-super's ecsl0500,
@@ -117,8 +115,7 @@ export function readFontStyle(name: string): FontNameStyle {
   else if (
     /* the palatino design's names: palatino and palladio (the Fontname scheme's typeface.map Palatino and URWPalladioL; PDF.js's
        standard_fonts.js getSerifFonts Palatino), pagella (newpx's TeXGyrePagellaX), ppl (the Fontname scheme's Adobe
-       Palatino: pplbi8z) and zpl (newpx.map's zplx-regular); the entries not named here are judged by recorded cases (the
-       rule ledger's) */ /palladio|palatino|pagella|^ppl|^pplx|^zpl/i.test(n)
+       Palatino: pplbi8z) and zpl (newpx.map's zplx-regular) */ /palladio|palatino|pagella|^ppl|^zpl/i.test(n)
   )
     design = 'palatino'
   else if (/charter|^bch/i.test(n)) design = 'charter'
@@ -127,8 +124,7 @@ export function readFontStyle(name: string): FontNameStyle {
     /* the times design's names: times and nimbusrom (the Fontname scheme's typeface.map Times and NimbusRomNo9L; PDF.js's
        standard_fonts.js getStdFontMap Times-Roman), termes (newtx.map's TeXGyreTermesX-Regular), ptm (the Fontname scheme's
        Adobe Times: ptmr8z), txr (pxtxalfa's txr-of), ntx (newtx.map's ntxexmods), stixtwotext (stix2.map's STIXTwoText),
-       stixgeneral (stix.map's STIXGeneral-Regular); the entries not named here are judged by recorded cases (the rule
-       ledger's) */ /times|nimbusrom|nimbusroman|termes|^ptm|^txr|^ntx|^tx(?!tt)|stixtwotext|stix-?regular|stixgeneral/i.test(
+       stixgeneral (stix.map's STIXGeneral-Regular) */ /times|nimbusrom|termes|^ptm|^txr|^ntx|^tx(?!tt)|stixtwotext|stix-?regular|stixgeneral/i.test(
       n,
     )
   )

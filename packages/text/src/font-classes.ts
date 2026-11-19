@@ -122,9 +122,8 @@ const SERIF_DESIGN = new Set<string>(ENGLISH_FAMILIES)
 // ExtraBold), and SemiBold as PostScript names spell it (archivo's ArchivZero.map: Archiv0-SemiBold)
 const BOLD = /(?:Bold|Bol(?![a-z])|Black|Heavy|Demi|Semibold|SemiBold|ExtraBold|Medi(?![a-z]))/
 // the slant words: Italic, Kursiv and Oblique variants of TeX Live's Fontname scheme (fonts/map/fontname/variant.map), Slant
-// and It in PostScript names (algolrevived's AlgolRevived-Slanted, sourcesanspro's SourceSansPro-It); the entries not named
-// here are judged by recorded cases (the rule ledger's)
-const ITALIC = /(?:Italic|Ital(?![a-z])|Ita(?![a-z])|Oblique|Obli(?![a-z])|Slant|Inclined|Kursiv|It$)/
+// and It in PostScript names (algolrevived's AlgolRevived-Slanted, sourcesanspro's SourceSansPro-It)
+const ITALIC = /(?:Italic|Ital(?![a-z])|Ita(?![a-z])|Oblique|Obli(?![a-z])|Slant|Kursiv|It$)/
 // small capitals, by a name's words: a face named for them (SmallCaps, Caps, Capitals) or with an SC suffix: SmallCaps a variant
 // of TeX Live's Fontname scheme (fonts/map/fontname/variant.map), Caps and Capitals in PostScript names (lm's
 // LMRomanCaps10-Regular, bookhands' Bookhands-Square-Capitals)
@@ -132,8 +131,8 @@ const CAPS = /(?:SmallCaps|Caps|Capitals|[a-z]SC$|-SC$|-Sc$)/
 // a name no table holds: its class guessed from its words, mono's first (a typewriter's or a code face's), then sans's, then
 // math's; a name with none of them is a serif's. Mono's words, monospaced faces' names: Courier, Typewriter, Consol (Consolas)
 // and Monaco faces of TeX Live's Fontname scheme (fonts/map/fontname/typeface.map), Mono and Code in PostScript names (lm's
-// LMMono10-Regular, cascadia-code's CascadiaCode-Bold), Fixed in a font file's (almfixed.otf, ALM Fixed); the entries not named
-// here are recorded cases (the rule ledger's)
+// LMMono10-Regular, cascadia-code's CascadiaCode-Bold), Fixed in a font file's (almfixed.otf, ALM Fixed), and Menlo, Apple's
+// (Apple Support's page "Fonts included with macOS Monterey" names it among the faces macOS installs)
 const MONO_WORD = /(?:Mono|Courier|Typewriter|Consol|Code|Menlo|Monaco|Fixed)/i
 // (sans's words: Sans, Gothic, a grotesque's, and sans families' own names: Arial, Verdana, Calibri, Tahoma, Futura, Avenir,
 // Univers and Frutiger faces of TeX Live's Fontname scheme (fonts/map/fontname/typeface.map), Grotesk (its AkzidenzGrotesk),
