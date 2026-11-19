@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, harnessLabJudge, INVARIANTS, PARAS_HELD, productionRowsOf, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, GROUP_PAGES, harnessLabJudge, INVARIANTS, PARAS_HELD, productionRowsOf, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, textOrderOf, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { papersOf } from '../../lab/release-check/papers.mjs'
 import { ADDED, ADDED_HEADING } from '../../lab/typeset/added.mjs'
 import { isProduction, type Row, rowsAgainst } from '../../lab/typeset/parity/production-rows.mjs'
@@ -189,6 +189,17 @@ describe("a gate's output, read as the gate states it", () => {
     expect(g.judge!(ctx2, [step(0, `${gpu}\n${line}\n`)])).toMatchObject({ pass: false, note: expect.stringMatching(/^not the software canvas/) })
     expect(g.judge!(ctx2, [step(0, `${line}\n`)])).toMatchObject({ pass: false })
     rmSync(ctx2.refactor, { recursive: true, force: true })
+  })
+
+  it("reads text-order's totals and fails a member missing or out of order, by its first", () => {
+    const t = "1512.03385v1-zh: 12 of 12 pages laid, 349 members read; missing 0; out of order 0\nI8 over the run's bundles: 92 pairs, 2101 laid pages of 2354, 22000 members (150000 runs) read; missing 0, out of order 1; 600000 ms\n  out of order 2610.1v1-zh p3 ord 7\n"
+    expect(textOrderOf(t)).toEqual({ pairs: 92, laidPages: 2101, pages: 2354, members: 22000, runs: 150000, missing: 0, outOfOrder: 1, ms: 600000, first: 'out of order 2610.1v1-zh p3 ord 7' })
+    const run = (exit: number, text: string) => ({ exit, text, cmd: [], ms: 0, waited: 0, log: '' })
+    const g = GATES.find(x => x.id === 'text-order')!
+    const ctx: Ctx = { root: '/repo', labData: '/lab', refactor: '/lab/refactor-2026-11', work: '/work', online: false, minFree: 12 }
+    expect(g.holds).toEqual(['I8'])
+    expect(g.judge!(ctx, [run(0, ''), run(1, t)])).toMatchObject({ pass: false, note: 'out of order 2610.1v1-zh p3 ord 7' })
+    expect(g.judge!(ctx, [run(0, ''), run(0, t.replace('out of order 1', 'out of order 0').split('\n  ')[0] ?? '')])).toMatchObject({ pass: true })
   })
 })
 
@@ -606,6 +617,19 @@ describe("today's rows, the way back and the head's own builds", () => {
     expect(harnessLabJudge(run(1, `${ours}${missing}`))).toMatchObject({ pass: false, note: 'no rows of this run for 2609.26457v1: expected /r/2609.26457v1-zh.json' })
     const refused = 'FAIL fixtures: 2609.26457v1: rows do not belong to these bundles: 25 of 321 units without a row (rows /r, bundles /b)\n'
     expect(harnessLabJudge(run(1, refused))).toMatchObject({ pass: false, note: expect.stringMatching(/^2609\.26457v1: rows do not belong to these bundles: 25 of 321 units without a row/) })
+    // (I7 and the typesetter's pages' I8 hold nothing where the served faces are not there: a line that says so fails the gate)
+    const skipped = 'ok   I7: a laid unit\'s boxes … every page laid (1512.03385v1, the reader\'s own typesetter) {"skipped":"no served faces: AXT_FACE_TABLES and AXT_FACE_SLICES unset"}\n'
+    expect(harnessLabJudge(run(0, `${ours}${skipped}121 of 121 checks passed\n`))).toMatchObject({ pass: false, note: expect.stringMatching(/^held nothing: I7 \(1512\.03385v1, the reader's own typesetter\): no served faces/) })
+  })
+
+  it("turns each group off on twelve corpus pages of both trees, by its rule's list, and lays I7 on the served faces", () => {
+    const h = gate('harness-lab')
+    expect(h.holds).toEqual(['I2', 'I7', 'I8'])
+    expect(GROUP_PAGES).toHaveLength(12)
+    expect(GROUP_PAGES.every(p => /^\d{4}\.\d{4,5}v\d+:\d+$/.test(p))).toBe(true)
+    expect(new Set(GROUP_PAGES).size).toBe(12)
+    expect(h.steps!(ctx)[0]?.env?.AXT_GROUP_PAGES).toBe(GROUP_PAGES.join(','))
+    expect(h.needs!(ctx).some(n => /AXT_FACE_TABLES/.test(n.what))).toBe(true)
   })
 })
 

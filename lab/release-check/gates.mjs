@@ -278,8 +278,19 @@ export function harnessLabJudge(step) {
     l1: of.filter(m => m[2] === "lane L1's").map(m => m[1]),
   }
   const refused = /^FAIL fixtures: (.*)$/m.exec(text)?.[1] ?? null
-  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : null)
-  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+  // (I7 and the typesetter's pages' I8 hold nothing where the served faces are not there: a line of theirs that says so fails
+  // the gate, never passes it)
+  const unheld = [...text.matchAll(/^ok {3}(I7|I8): .*\(([^()]+)\) \{"skipped":"([^"]*)"\}$/gm)].map(m => `${m[1]} (${m[2]}): ${m[3]}`)
+  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : unheld.length ? `held nothing: ${unheld.join('; ')}` : null)
+  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !unheld.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+}
+
+/** text-order.mjs's totals: "I8 over the run's bundles: P pairs, L laid pages of N, M members (R runs) read; missing X, out of
+ *  order Y; T ms", and its first listed member */
+export function textOrderOf(text) {
+  const m = /^I8 over the run's bundles: (\d+) pairs, (\d+) laid pages of (\d+), (\d+) members \((\d+) runs\) read; missing (\d+), out of order (\d+); (\d+) ms/m.exec(text)
+  const first = /^ {2}((?:missing|out of order) .*)$/m.exec(text)?.[1]
+  return m ? { pairs: num(m[1]), laidPages: num(m[2]), pages: num(m[3]), members: num(m[4]), runs: num(m[5]), missing: num(m[6]), outOfOrder: num(m[7]), ms: num(m[8]), ...(first ? { first } : {}) } : {}
 }
 
 /** a terminal's colours (vitest colours its summary where it is asked to) */
@@ -557,6 +568,28 @@ const todayE2e = (script, title) => ({
 const lab = (ctx, ...p) => join(ctx.refactor, ...p)
 /** the five corpus papers the reader package's harness opens (its I8 on the corpus) */
 const HARNESS_PAPERS = ['1512.03385v1', '1706.03762v7', '2609.26457v1', '2307.16209v1', '2610.20030v1']
+/** the twelve corpus pages the harness turns each group off on in the reader's canvas (I2), by a rule: four marks of a page (a
+ *  group of ours paints a path; one paints an image; two members' groups whose stated inks meet within half a point; a member
+ *  of a float), read by PDF.js over the composed document and by the part; for each of the five papers above and the first
+ *  paper by id whose group paints an image of those the run's rows hold in Chinese (none of the five holds one), for each mark
+ *  in that order, its page holding the mark that holds the most marks, the first at a tie; then, to twelve, each paper's page
+ *  holding the most groups, in the papers' order. Both TeX trees: 1706.03762v7, 2609.26457v1 and 2307.16209v1 are the 2023
+ *  tree's, the others the 2025 tree's. `node lab/release-check/group-pages.mjs <bundles> <papers.tsv> <prepare dumps> <rows>`
+ *  makes the list again by that rule (here as it made it over a run's bundles at PIPELINE 106, 2026-11-19) */
+export const GROUP_PAGES = [
+  '1512.03385v1:5',
+  '1512.03385v1:8',
+  '1706.03762v7:4',
+  '2609.26457v1:6',
+  '2307.16209v1:33',
+  '2610.20030v1:2',
+  '2610.20030v1:9',
+  '2610.19159v1:4',
+  '2610.19159v1:1',
+  '1512.03385v1:9',
+  '1706.03762v7:14',
+  '2609.26457v1:27',
+]
 const exists = (what, path) => ({ what, path })
 
 // The corpus the prepare's gates run, as the integration round's stage 1a runs it (lanes/converge-8/rf-chain.sh): the set's 88
@@ -722,7 +755,7 @@ export const GATES = [
     title: "the reader package's browser checks on its own fixtures (packages/reader/e2e/run.mjs)",
     tier: 'fast',
     stage: 'reader',
-    holds: ['I1', 'I3', 'I4', 'I8'],
+    holds: ['I1', 'I2', 'I3', 'I4', 'I8'],
     steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_TIMINGS_OUT: join(ctx.work, 'harness-timings.json') } }],
     judge: (ctx, steps) => {
       const text = steps[0].text
@@ -932,10 +965,10 @@ export const GATES = [
   },
   {
     id: 'harness-lab',
-    title: "the reader package's browser checks with five corpus papers, laid from this run's bundles and this run's rows of them (the prepare's bundles; reader-parts' rows step, Google's rows over them read from the lab's store, no translator asked); the text layer's order asserted; their I1 residue and I3 reported, not asserted",
+    title: "the reader package's browser checks with five corpus papers, laid from this run's bundles and this run's rows of them (the prepare's bundles; reader-parts' rows step, Google's rows over them read from the lab's store, no translator asked); the text layer's order asserted, and the reading made without a browser held equal to the browser's; I7 at the reader's seam on every page the reader's own typesetter lays; I2 in the reader's canvas on twelve corpus pages (GROUP_PAGES); their I1 residue and I3 reported, not asserted",
     tier: 'full',
     stage: 'reader',
-    holds: ['I8'],
+    holds: ['I2', 'I7', 'I8'],
     // (bundles and rows of the same run, never one without the other: the prepare's bundles (AXT_L1_BUNDLES) and the rows
     // reader-parts' rows step made over them (AXT_LAB_ROWS). The harness refuses bundles without rows, and stops before any
     // check where a paper's rows leave a unit its bundle asks without a row, or name units it does not hold ("rows do not belong
@@ -949,9 +982,33 @@ export const GATES = [
       exists("the corpus papers' list", lab(ctx, 'baseline/corpora/papers.json')),
       exists("today's reader dumps", lab(ctx, 'baseline/reader')),
       exists("this run's rows of its bundles (reader-parts' rows step)", runRowsDir(ctx)),
+      // (I7 and the typesetter's pages' I8 lay with the reader's own typesetter over the served faces: without them those checks
+      // would say "no served faces" and hold nothing, so the gate is skipped, named)
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
     ],
-    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_LAB_ROWS: runRowsDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
+    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_GROUP_PAGES: GROUP_PAGES.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_LAB_ROWS: runRowsDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
     judge: (ctx, steps) => harnessLabJudge(steps[0]),
+  },
+  {
+    id: 'text-order',
+    title: "the text layer of every laid page reads the translation in reading order, over every pair this run lays (reader-parts' Google rows over the prepare's bundles): each page laid by the reader's own typesetter in Node, its text layer's reading made by the composer's text module without a browser (lab/release-check/text-order.mjs over packages/reader/e2e/text-order.mjs, whose reading harness-lab holds equal to the browser's), judged by the harness's I8 judge",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['I8'],
+    after: ['prepare', 'reader-parts'],
+    needs: ctx => [
+      ...corpusNeeds(ctx),
+      exists("this run's rows of its bundles (reader-parts' rows step)", runRowsDir(ctx)),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+      exists('the hyphenation patterns (AXT_HYPH)', process.env.AXT_HYPH ?? ''),
+    ],
+    steps: ctx => [listStep(ctx), { cmd: ['node', 'lab/release-check/text-order.mjs', `--bundles=${bundlesDir(ctx)}`, `--rows=${runRowsDir(ctx)}`, `--papers=${corpusList(ctx)}`], slot: 'run' }],
+    judge: (ctx, steps) => {
+      const t = textOrderOf(steps.at(-1).text)
+      return { pass: steps.every(s => s.exit === 0) && t.pairs > 0 && t.missing === 0 && t.outOfOrder === 0, numbers: t, ...(t.first ? { note: t.first } : {}) }
+    },
   },
   // today's reader, the way back until the cut-over deletes it: a build of its own (a default build carries the rebuilt reader,
   // on which reader.mjs and registration.mjs run the rebuilt reader's checks), today's checks run on it; a build that carries the

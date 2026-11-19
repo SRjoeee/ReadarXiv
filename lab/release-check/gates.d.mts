@@ -62,4 +62,11 @@ export declare function displayJudge(steps: StepRun[], planned: number, modes: [
 export declare function corpusLogOf(file: string): { papers: number; made: number; failed: string[]; refused: string[]; missingCompile: string[]; proofs: { a: number; c: number; on: number; offOutside: number } }
 export declare function drawnOf(dir: string, within?: string | null): { source: number; ink: number; figures: number; refusedWhole: number; papers: number }
 export declare function cachesOf(text: string): string
-export declare function canvasOf(text: string, ids?: string[]): { papers: number; pages: number; over: string[] }
+export declare function canvasOf(
+  text: string,
+  ids?: string[],
+): { papers: number; pages: number; renderer: { renderer: string; canvas2d: string | null; gl: string | null; browser: string } | null; over: string[] }
+/** text-order.mjs's totals (pairs, laid pages, members, runs, missing, out of order, ms) and its first listed member */
+export declare function textOrderOf(text: string): Record<string, number | string>
+/** the corpus pages harness-lab turns each group off on (I2), `<id>:<page>`, by the rule its comment states */
+export declare const GROUP_PAGES: string[]
