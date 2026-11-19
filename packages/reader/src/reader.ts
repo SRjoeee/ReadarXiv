@@ -176,8 +176,9 @@ export interface ReaderState {
    *  (machine.ts linkSaid, PDF-READER §8.1). A view that waits for nothing is told nothing */
   network: boolean
   /** `lost`: a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice), its
-   *  passages drawn in their fallback until the page is loaded again (the chrome says so once, for every host: UI.md S-R-28,
-   *  chrome/events.ts); null while none is */
+   *  passages the original's with the served faces (one that failed for now until it comes: compose/served.ts `heal`), drawn
+   *  in their fallback with a host's own (compose/faces.ts), until the page is loaded again; kept for the visit (the chrome
+   *  says so once, for every host: UI.md S-R-28, chrome/events.ts); null while none is */
   faces: 'lost' | null
   crashed: boolean
 }
@@ -287,7 +288,7 @@ export function openReader(
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
   const kitReady = loadKit(o.pdfjs ?? {})
   let syncAvailable = false
-  /** a face lost this visit (faces.ts `lost`): kept, as its passages stay in their fallback */
+  /** a face lost this visit (faces.ts, served.ts `lost`): kept, told once whatever comes since */
   let facesLost = false
   let kit: Kit | null = null,
     panes: Panes | null = null,

@@ -676,7 +676,7 @@ No state that tells the reader nothing is shown (no "done").
 | No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
-| A font lost | a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice: the reader's `faces`), its passages drawn in their fallback until the page is loaded again | the chrome's own toast, once a visit, for 8 s, with the information sign and no action: 部分字体加载失败，请刷新页面重试 (UI.md S-R-28, the owner's words, 2026-11-19), on both hosts in the catalogue's one sentence; the website no longer words it |
+| A font lost | a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice: the reader's `faces`). With the served faces, both hosts' readers' (§11.5), its passages stay the original's: a file not there or a table not to be had, until the page is loaded again; a file that failed for now, until it comes, asked again by the reader itself while a page that needs it is near, its passages then laid in place, translated. With a host's own faces (an engine's table), its passages drawn in their fallback until the page is loaded again | the chrome's own toast, once a visit, for 8 s, with the information sign and no action: 部分字体加载失败，请刷新页面重试 (UI.md S-R-28, the owner's words, 2026-11-19), on both hosts in the catalogue's one sentence; the website no longer words it |
 
 - **The website's words** (its reader's own table, given to the chrome as `StateWords` by its
   v2 page; zh-TW, ja and ko in the same table). The extension gives none and keeps the catalogue's above. A run's
@@ -1231,7 +1231,25 @@ reader's own Metrics over our site's served faces (`served.ts`: `/static-fonts/i
 fetch and made a FontFace with its code points as its unicode-range), measured as lane L7's spec says (runs cut where the
 slice changes, a CJK run unkerned and cut between two punctuation marks, never in small capitals; held in a browser by
 `lab/typeset/metrics-browser.mjs`). The website serves those files from its origin; the extension reads them from our
-server's, as today's reader does.
+server's, as today's reader does. Both hosts' readers take this path: neither gives an engine (the website's page, and the
+extension's `src/pdf-reader/host/v2.ts`, open the reader with none); a host that gives its own engine and faces
+(`createFaces`, a table; the harness's fixture lay) keeps its faces' own rules, a face lost drawn in its fallback.
+
+A served file that cannot be had leaves its passages the original's, never drawn in a face the layout was not made for (the
+typesetter measures nothing before its faces are there, `cover`, and leaves such a unit `served`). One not there (a 404, a
+410), or every face of a table that cannot be had, is lost for the visit, until the page is loaded again. One that fails for
+now (the network, a 5xx, nothing in time: each ask already asked once more by the request layer, §8.1) is asked again by the
+next wave that wants it, and failed again is lost for now (the coordinator's ruling of 2026-11-19, lane faces-heal: a lost
+slice of the main CJK face had left most paragraphs the original's until a reload, worse than production's reader, which draws
+them in the browser's fallback): the pages are laid with the rest, the notice told once (§8), and the reader asks the file
+again by itself at the session's pace (`backoff`, as the rows' objects, §8.1: a second after its last failure, doubled to
+thirty), one ask of it at a time, while a page whose lay met a text that needs it is near (`served.ts` `heal`, the demand
+the composer gives with the lay, `lostIn`); a page away from the view, or of a generation before, asks nothing, and one that
+comes near again asks it again. When it comes it is added to the document alone (one change of its fonts), and every page
+whose lay met it is laid again in place as a page is when a row it read lands otherwise (`composer.ts` `layAgain`: its
+drawing kept and muted until the new one commits), translated, with no reload and nothing told again; a page that did not
+need it is not laid again. With no failure none of this runs: the asks of the faces, their order, the changes of the
+document's fonts and the drawings are those of before (the reader's harness, `reader: no failure`, base and head alike).
 
 ### 11.6 Words
 
