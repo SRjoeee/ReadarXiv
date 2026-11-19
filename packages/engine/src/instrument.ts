@@ -1,4 +1,4 @@
-// The seam between the prepare's front half and its back half (design §4.3, stage 1a): what a marked compile yields, the
+// The seam between the prepare's front half and its back half (ARCHITECTURE.md §2): what a marked compile yields, the
 // INSTRUMENT. B (our marked compile) is never shown: it is read for who owns each glyph and box, and its ownership is carried
 // onto arXiv's page by align and locate. The front half makes it through its adapter (instrument/instrument.ts, DESIGN §16);
 // the back half reads nothing else of the source, the marks or the compile.
@@ -48,21 +48,21 @@ export interface InstrumentUnit {
   /** a figure text or a table cell held whole as the original for a decorated word (PDF-READER §18.61):
    *  `token`, one that holds the word, a figure text a word of which a decoration holds (figure-lines.ts, its element
    *  `cite`) or a cell holding a piece TeX set beside a decoration of its own with a letter in its text (the probe's `decorated`,
-   *  pipeline/instrument.mjs decoratedCellsOf); `label`, a figure text of the same label or printed line as such a text, by the
+   *  instrument/instrument.ts decoratedCellsOf); `label`, a figure text of the same label or printed line as such a text, by the
    *  paragraph reading's pairing (figure-lines.ts figureLinesOf). `fixed`, never `kept`: its text could be translated and is
    *  held for its drawing alone. The lab's dump and parity tell it by it; the bundle does not carry it */
   decorated?: 'token' | 'label'
-  /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
+  /** a kept block of e-mail addresses and their separators alone (locate/ink-units.ts addressesAlone): the lab's dump and parity
    *  tell such a block by it (PDF-READER §19.13, §18.62); the bundle does not carry it */
   address?: true
-  /** a kept block of any other text no unit owns (today/ink-units.mjs keptUnitsOf, rule 10: a code listing, a URL alone, a page
+  /** a kept block of any other text no unit owns (locate/ink-units.ts keptUnitsOf, rule 10: a code listing, a URL alone, a page
    *  number, a bibliography not cut into entries): the lab's dump tells it by it; the bundle does not carry it */
   block?: true
-  /** a kept block of a display TeX set (today/ink-units.mjs keptUnitsOf: its lines a display's region holds, its number with them,
+  /** a kept block of a display TeX set (locate/ink-units.ts keptUnitsOf: its lines a display's region holds, its number with them,
    *  PDF-READER §18.58): its lines on A are its rows by the display rule (locate/rows.ts), as a unit's display's are, never the
    *  text line rule's, which cut display (4) of 2111.09276v1 p5 after its number's "(" (§17.9); the bundle does not carry it */
   display?: true
-  /** a line of an algorithm float's body, kept as the original as code is (the front end's `pseudocode`, pipeline/instrument.mjs
+  /** a line of an algorithm float's body, kept as the original as code is (the front end's `pseudocode`, instrument/instrument.ts
    *  unitFactsOf; PDF-READER §18.62): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
   pseudocode?: true
   /** a table's cell or a figure's text that holds no ordinary word, kept as written (R1, PDF-READER §18.72: language.ts): the lab's
@@ -75,10 +75,10 @@ export interface InstrumentUnit {
    *  wherever the paper's tables print it: the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
   namesBlock?: true
   /** a figure text the figure reading keeps whole as crowded (a formula it would tear, a translation with no room beside other
-   *  ink: figure-lines.ts, today/figure-text.mjs) and for no reason of its own besides (`double`, `script`): the lab's dump tells
+   *  ink: figure-lines.ts, figure-text.ts) and for no reason of its own besides (`double`, `script`): the lab's dump tells
    *  it by it; the bundle does not carry it (`unwrapped`, as a wrap failure is) */
   crowded?: true
-  /** where each group the instrument wrote as its content opened (pipeline/instrument.mjs passThroughOf: a group that carries
+  /** where each group the instrument wrote as its content opened (instrument/instrument.ts passThroughOf: a group that carries
    *  nothing), as offsets in the unit's projection (text pieces' characters, each element or nested unit one): the facts pass
    *  counts a paragraph TeX opened at one (`opensLost`), which must be none; the bundle does not carry it */
   passed?: number[]
@@ -107,12 +107,12 @@ export interface InstrumentUnit {
   front?: true
   /** a bibliography's entry, the source reader's `\bibitem` (instrument.ts entryOf): format's Unit.entry, its parts its blocks */
   entry?: true
-  /** the author block a note is tied to by its source (latex-front.mjs tieNotes: written inside an author command's argument,
+  /** the author block a note is tied to by its source (source/latex-front.ts tieNotes: written inside an author command's argument,
    *  or on its own where the paper's bindings attach it to an author): its toggle the block's (format's Unit.of) */
   of?: 'author'
   /** an author command's argument a macro of the paper's or its class's stores to set elsewhere (the front end's `held`: ICML's
    *  \icmlaffiliation, set in the footnote \printAffiliationsAndNotice sets): no mark of its own, its ink an ink unit's
-   *  (today/ink-units.mjs's stored rule); the bundle does not carry it */
+   *  (locate/ink-units.ts inkUnitsOf's rule 8, `stored`); the bundle does not carry it */
   stored?: true
   /** TeX's alignment of it where TeX stated it (its end mark's \leftskip, \rightskip, \parfillskip); a cell's, its own
    *  paragraph's, else the class LaTeX built its column's template from (marks/channels.ts readAlign) */
@@ -172,8 +172,8 @@ export interface PieceClass {
    *  unit, which the piece sets (ACM's `\urldef\tempurl\url{…}` then `\showDOI{\tempurl}`); its copy text and break points
    *  are its glyphs', as a \url's are */
   url?: true
-  // what the other rules read of its source (the reading's own reads of `src`: tokensOf2's glue, style commands and links,
-  // U.breaks' forced breaks, U.rename's notes, U.elements' macros):
+  // what the typesetter's rules read of its source (lay/read.ts srcOfEl: breaker/tokens.ts's glue, style commands and links,
+  // unit/breaks.ts's forced breaks, unit/rename.ts's notes, unit/elements.ts's macros):
   /** its glue as TeX sets it (glueOf): a length in the font's em or in PDF units, and whether a line may break at it */
   glue?: [length: number, unit: 'em' | 'bp', brk?: 1]
   /** the command its source begins with (its name and star); `bare`: its source is that command alone (a declaration) */
@@ -189,14 +189,14 @@ export interface PieceClass {
   colour?: number
   /** a nested unit's mark (a footnote set inside the unit), not a placeholder */
   nested?: true
-  /** a tie (the source's `~`, pipeline/instrument.mjs isTie): TeX's interword glue no line breaks at */
+  /** a tie (the source's `~`, instrument/instrument.ts isTie): TeX's interword glue no line breaks at */
   tie?: true
   /** a text macro's text as TeX sets it (the marking's probe), where its glyphs are the unit's text, no ink of its own */
   text?: string
   /** the text TeX set for it where the document uses it, every glyph stated as itself (the loop's first pass's ask, marks.ts
    *  readAskTexts): what the reading states of its element where nothing on the page bounds its ink (locate/geometry.ts) */
   told?: string
-  /** TeX sets it as its unit's end mark (the compile move's F14): the unit's last ink, whose own box TeX ends with ink a glue of
+  /** TeX sets it as its unit's end mark (F14, PDF-READER §18.78): the unit's last ink, whose own box TeX ends with ink a glue of
    *  infinite stretch pushed (the probe's listing: an author's \qed written in the text), or which the source pushes with a fill
    *  right before it (`\hfill $\square$`): marks.ts endPiecesOf; its element's El.end */
   end?: true
@@ -276,7 +276,7 @@ export interface Instrument {
   /** what PDF.js recovered from inside its worker while B was read (read.ts readPdf), where it did */
   recovered?: Recovered
   /** what made it: the compiler, the TeX tree, the engine of the front half (part of the prepare's identity); `reduced` where
-   *  its marked compile left the optional classes of points out (design-performance Q2: front.ts prepareFront, the head's) */
+   *  its marked compile left the optional classes of points out (DESIGN §16's Q2: front.ts prepareFront, the head's) */
   made: { compiler: string; tree: string; front: string; reduced?: true }
 }
 

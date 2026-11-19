@@ -5,7 +5,7 @@
 // handed its PDF libraries everywhere.
 //
 // pageInk copies a glyph's Unicode alone, so each glyph of the operator list carries its code and font character through it,
-// joined to its Unicode by a separator no Unicode holds (U+FFFF U+FFFE U+FFFF: spike S1c found that S1's U+0000 is the
+// joined to its Unicode by a separator no Unicode holds (U+FFFF U+FFFE U+FFFF; U+0000 is the
 // Unicode of txexs's big parentheses), and the two are split again after it. pageInk reads a glyph's Unicode for one thing
 // alone, whether it is blank, which is read again from the Unicode split off (the same test).
 //
@@ -16,7 +16,7 @@
 //
 // Each page's operator list is read in the pieces PDF.js's worker sends it (opstream.ts readOps), each piece by every reader in
 // turn (`extra`'s, the glyphs' tags, pageInk's: each reads the list front to back once, its state running on from piece to piece)
-// and let go: no page's whole list is held (2610.40394v1 page 23, 510,506 operations, was 93 MiB held as one list, lane op-stream).
+// and let go: no page's whole list is held (2610.40394v1 page 23, 510,506 operations, would be 93 MiB held as one list).
 import type { Doc, DocGlyph, DocMarks, DocPage, DocTurned } from './doc.ts'
 import { PageGlyph } from './glyph.ts'
 import { BOXES_PAGE, GLYPHS_PAGE, inkReader, type PageInk } from './ink.ts'
@@ -68,7 +68,7 @@ interface ReadOptions<X> {
   shapes?: boolean
   /** false: each page's raw glyphs (pageInk's) let go once its Doc page is made, its raw page kept without them (`glyphs` empty):
    *  a reader that reads the Doc's glyphs alone holds one copy of a document's glyphs, never two (the front half's adapter
-   *  reading B, lane mem-front) */
+   *  reading B) */
   rawGlyphs?: boolean
 }
 
@@ -116,7 +116,7 @@ export async function readPdf<X = never>(
   // (each font's map, read once a document: by its id in the page's common objects)
   const maps = new Map<string, Set<string> | null>()
   // (each font's name, and its name with its subset's tag taken off, one string a document: every glyph of a font holds the one,
-  // pageInk's `names` and docPageOf's `bases`; read once a glyph, each held its own, 72 MiB of 2610.19159v1's two Docs, lane L9)
+  // pageInk's `names` and docPageOf's `bases`; read once a glyph, each would hold its own, 72 MiB of 2610.19159v1's two Docs)
   const names = new Map<unknown, string>()
   const bases = new Map<string, string>()
   const pages: ReadPage<X>[] = []

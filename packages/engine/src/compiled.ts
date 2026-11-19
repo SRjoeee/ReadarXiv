@@ -63,7 +63,7 @@ export type CompiledResult =
       options: Record<string, unknown>
       made: StoredInstrument | null
       probeLog: string | null
-      /** the marked compile left the optional classes of points out (design-performance Q2), or a stored plan says it did */
+      /** the marked compile left the optional classes of points out (Q2, DESIGN §16), or a stored plan says it did */
       reduced: boolean
     }
 

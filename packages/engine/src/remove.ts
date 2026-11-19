@@ -7,10 +7,10 @@
 // An original module (no port statement). It imports none of PDF.js: a page is aligned by its facts (alignOf) or a list given,
 // and the PDF object layer (@cantoo/pdf-lib, MIT) and a tolerant inflate are given.
 //
-// Isolation, the caller's contract: arXiv's PDF, and ours made from its source, are
+// Isolation, the caller's contract (PDF-READER §19.9): arXiv's PDF, and ours made from its source, are
 // untrusted, and the hard bound on what reading them may cost is the process it runs in, not this module. Its budgets (WALK_MAX,
 // HELD_MAX, BYTES_MAX, FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js and the object layer may
-// still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
+// still exceed any of them: run it in a child process, under a hard memory limit and a wall clock, one paper at a time. A failed
 // allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.ts).
 import { at, latin1 } from './bounded-reads.ts'
 import { isMemoryError } from './memory.ts'
@@ -672,7 +672,7 @@ export class DecodeLimit extends Error {
 /** a decoding stream's bytes, read a chunk at a time and no further than `limit` past (DecodeLimit), as bytes of their own: the
  *  stream's buffer grows by CHUNK and doubles past it, and its view would hold it all (a form of 2 KB held 128 KB), which the
  *  decoded streams' cache, bounded by the bytes it holds, kept for every stream it held: 2610.21924's page 9, 3,128 forms of a
- *  plot's markers, held 960 MB in a wrap of our final pass, and the maker died of its memory */
+ *  plot's markers, held 960 MB in a wrap of our final pass, and its process died of its memory */
 const CHUNK = 1 << 16
 export function readAtMost(stream: PdfDecodeStream, limit: number): Uint8Array {
   let total = 0
@@ -867,7 +867,7 @@ export async function openRemover(
     ParseSpeeds,
   } = PL
   // (parsed in one go: the object layer's default, ParseSpeeds.Slow, waits for a timer every 100 objects, a yield that keeps a
-  // page's events going; the maker child that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one core)
+  // page's events going; a child process that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one core)
   const doc = await PDFDocument.load(bytes, {
     ignoreEncryption: true,
     updateMetadata: false,
@@ -902,7 +902,7 @@ export async function openRemover(
     }
     let out: Uint8Array
     // (a stream of no bytes is no bytes, whatever its filters, as PDF.js reads it: arXiv's rewrite (pikepdf) writes an empty
-    // form's stream with /FlateDecode, which the object layer's inflater and zlib refuse; spike S1c, 2610.21924v1 p10)
+    // form's stream with /FlateDecode, which the object layer's inflater and zlib refuse; 2610.21924v1 p10)
     if (st instanceof PDFRawStream && st.contents.length === 0) out = new Uint8Array(0)
     else if (st instanceof PDFRawStream) {
       try {
@@ -981,8 +981,8 @@ export async function openRemover(
         // ranges span; 20,000 ranges of every code took 22 s as a Map, code by code, against PDF.js's 1.5 s. Read as
         // PDF.js reads it (evaluator's /W): a first code not an integer, or a range's last, ends it; a width not a
         // number is passed over, the code keeping what it had. The array as wide as the codes /W names, as PDF.js's,
-        // and none for a font without /W: a fixed array of every code was 512 KB a font, outside the heap, kept for
-        // the document, the re-review's 3,000 fonts 1.5 GB)
+        // and none for a font without /W: a fixed array of every code would be 512 KB a font, outside the heap, kept for
+        // the document, 1.5 GB over 3,000 fonts)
         const entries: (
           | [first: number, widths: (number | undefined)[]]
           | [first: number, last: number, width: number]
@@ -1060,7 +1060,7 @@ export async function openRemover(
     return info
   }
   /**
-   * Whether a font's codes have a Unicode a reader can trust (layout/figure-text.mjs: a figure's text in a font with none is
+   * Whether a font's codes have a Unicode a reader can trust (locate/figure-text.ts: a figure's text in a font with none is
    * left the original's, counted): a /ToUnicode; else a simple font whose encoding names its glyphs (a standard encoding, a
    * /Differences whose every name is a glyph's name, not a code's — `g12`, `cid12`, `glyph12`, `index12`, `c12` —, or a Type 1
    * font's own encoding, which names its glyphs); else a composite font of a CMap that is no identity. A symbolic TrueType or a
@@ -1401,7 +1401,7 @@ export async function openRemover(
  * text-showing operation (showText, showSpacedText) outside an annotation's appearance, in order, its glyph objects'
  * character codes (`originalCharCode`; null for a glyph with none, which is not compared; -1 for one that is not a code,
  * which no code equals); `paths`, the number of constructPath operations outside an annotation and a soft mask's group; `images`,
- * the number of images painted there, each image of a repeat or a group PDF.js merged one (layout/ink.mjs pageInk's boxes of
+ * the number of images painted there, each image of a repeat or a group PDF.js merged one (ink.ts pageInk's boxes of
  * kind -3, one an image, as many). The facts are what a
  * remover with no PDF.js aligns a page by: the page is aligned by them exactly as by the list. Pure
  */
@@ -1412,7 +1412,7 @@ export function alignOf(OPS: Record<string, number>, opList: OpList): AlignFacts
 }
 
 /** alignOf as a reader of the list in pieces (`read(fnArray, argsArray)`, each after the one before, then `end()`: alignOf's facts),
- *  so that no reader holds a page's whole list (ink.mjs inkReader, opstream.ts readOps): its count and its state (an annotation's
+ *  so that no reader holds a page's whole list (ink.ts inkReader, opstream.ts readOps): its count and its state (an annotation's
  *  appearance, a soft mask's group) run on from one piece to the next */
 export function alignReader(OPS: Record<string, number>): OpsReader<AlignFacts> {
   const codes: (number | null)[][] = []

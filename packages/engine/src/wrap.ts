@@ -1,11 +1,11 @@
-// Our final pass's pages wrapped by optional content, once, in the maker child (per-unit optional-content erasure, design
-// `docs/route/ocg-erasure.md` §2–§3): each run a unit owns (layout/own.mjs) put in `/OC /axt<group> BDC … EMC`, the page's
+// A PDF's pages (arXiv's: wrap/wrap.ts) wrapped by optional content, once (per-unit optional-content erasure, design
+// `docs/route/ocg-erasure.md` §2–§3): each run a group of the plan owns put in `/OC /axt<group> BDC … EMC`, the page's
 // resources naming each group (`/Properties`), one optional-content group per name in the catalog's `/OCProperties`, all ON —
-// so that with every group ON the page is our page, and the reader hides a drawn unit's ink, and nothing else, by setting its
-// groups OFF. The result is our bytes followed by ONE incremental section (section.ts, the final's cross-reference kind):
+// so that with every group ON the page is the PDF's own, and the reader hides a drawn unit's ink, and nothing else, by setting
+// its groups OFF. The result is the PDF's bytes followed by ONE incremental section (section.ts, the final's cross-reference kind):
 // each wrapped page's dict written again under its own number with a new content stream, the groups, and the catalog again with
-// `/OCProperties`. Both forms of the base are made of it: the full base is these bytes, the delta (layout/delta.mjs) copies their
-// streams.
+// `/OCProperties`. Both forms of the base are made of it: the full base is these bytes, the delta (docs/route/delta.md) copies
+// their streams.
 //
 // Where a wrapper may go (§2.2): between whole operators only (never in a TJ array, a path object, an inline image, or between
 // an operator and its operands); a BDC and its EMC in one stream, at one q depth, one text-object state and one depth of the
@@ -98,7 +98,7 @@ type WrapMade = {
   forms?: number
   unwrapped?: true
 }
-/** the document composed: finalBytes and the section, and its digest (wrapFinal's) */
+/** the document composed: finalBytes and the section, and its digest */
 export type Wrap = WrapMade & { bytes: Uint8Array; sha256: string }
 /** the section alone (`compose: false`, the back half's: wrap.ts keeps the add-on alone), empty where no page is wrapped */
 export type WrapSection = WrapMade & { section: Uint8Array }
@@ -273,16 +273,16 @@ const PATH = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'W', 'W*'])
 /** the text-showing operators (ISO 32000-1 §9.4.3): Tj, TJ, ' and " */
 const SHOWS = new Set(['Tj', 'TJ', "'", '"'])
 
-/** pageInk's kind of an image's box (layout/ink.mjs: -3) */
+/** pageInk's kind of an image's box (ink.ts: -3) */
 const IMAGE_BOX = -3
 /**
- * A page's plan as wrapOf takes it: from own.mjs's groups of its glyphs and rules and pageInk's (n, k) and path places.
- * `glyphs` pageInk's glyphs of the page (with `indices`), `groupOfGlyph` own.mjs's `glyphs[p - 1]`, `paths` pageInk's, and
- * `groupOfBox` own.mjs's `boxes[p - 1]`. Returns { shows: Map n -> (group | null | undefined)[] by k, paths: Map m -> group,
+ * A page's plan as wrapOf takes it: from own/own.ts's groups of its glyphs and rules and pageInk's (n, k) and path places.
+ * `glyphs` pageInk's glyphs of the page (with `indices`), `groupOfGlyph` own/own.ts's `glyphs[p - 1]`, `paths` pageInk's, and
+ * `groupOfBox` own/own.ts's `boxes[p - 1]`. Returns { shows: Map n -> (group | null | undefined)[] by k, paths: Map m -> group,
  * images: Map j -> group, lost }: an image's box (IMAGE_BOX) a placeholder owns is the page's j-th image painted, its boxes
  * of that kind in their order, where they are as many as the reading's (`facts.images`, alignOf's: an image clipped away gives
  * no box, one in an annotation's appearance or a soft mask's group is not the page's); where they are not, none is wrapped and
- * the groups that owned one are `lost` (their units the original's: wrapFinal)
+ * the groups that owned one are `lost` (their units the original's)
  */
 export function planOf(
   glyphs: { n?: number; k?: number }[],
@@ -342,10 +342,10 @@ function codeGroups(row: (string | null | undefined)[] | undefined, count: numbe
  * page), shows, paths } (planOf's), a page with none left unwrapped; `PL` @cantoo/pdf-lib's exports; `deflate` (bytes -> bytes, deterministic) and
  * `inflate` (bytes, limit -> bytes) as the remover takes them. Returns { bytes (finalBytes and the section), xref, sha256,
  * pages: Map p -> { ok, why?, groups, sequences, split, merged } (a page not ok or merged makes each unit on it `page` or, with a
- * placeholder, `bounds`: wrapFinal's), groups (in the document), stats } or { refused (a WRAP_WHYS code), why }. With
+ * placeholder, `bounds`: the caller's), groups (in the document), stats } or { refused (a WRAP_WHYS code), why }. With
  * `compose` false (the prepare's back half, wrap.ts, which keeps the add-on alone), the section is given as it is, `section` in
  * place of `bytes` and no `sha256`: finalBytes and the section are never composed, nor the whole hashed, which held two more
- * copies of finalBytes at the wrap's end (lane mem-back: 33.5 MiB on 2609.19644v1, the digest's job holding the composed one).
+ * copies of finalBytes at the wrap's end (33.5 MiB on 2609.19644v1, the digest's job holding the composed one).
  * Never throws but a failed allocation
  */
 export async function wrapOf(
@@ -450,7 +450,7 @@ export async function wrapOf(
           made = { ok: false, why: `past ${groupsDoc} groups in the document`, docFull: true }
         }
         // the page's own /Properties kept whole, ours beside them under names of our own; a page that already names one of ours
-        // is not wrapped (B3: never an entry of the page's dropped)
+        // is not wrapped (never an entry of the page's dropped)
         const node = made.ok ? made.walk.node : null,
           res = node ? node.Resources() : null
         const own = res instanceof PDFDict ? R.look(res.get(PDFName.of('Properties'))) : undefined
@@ -731,7 +731,7 @@ function lexWithin(bytes: Uint8Array, budget: Budget): LexOps | null {
   }
 }
 
-/** a figure's group (layout/figure-text.mjs figureGroup): `f<k>`; and the text's group a placeholder's or a label's folds into
+/** a figure's group (locate/figure-text.ts figureGroup): `f<k>`; and the text's group a placeholder's or a label's folds into
  *  on a page past its bounds (`u<id>.p`, `u<id>.l` -> `u<id>`). The default naming: a plan that names its groups otherwise
  *  states both (`isFigure`, `textOf`: the back half's `<ord>.<page>.<t|e|l>`, packages/engine/src/wrap/wrap.ts) */
 const isFigure = (g: string | null | undefined) => typeof g === 'string' && g.startsWith('f')
@@ -1128,7 +1128,7 @@ function flatOf(
     }
     // (an inline image, BI … EI, is one whole operator that changes no state: it may lie inside a group of ours, as wrapPage
     // wraps it, an image event, as it wraps a Do. The dvips + Ghostscript chain paints every TeX rule as one, an image mask:
-    // spike S1d, 2 papers of the corpus, every proof held with it)
+    // 2 papers of the corpus, every proof held with it)
     if (open && (o.op === 'q' || o.op === 'Q' || o.op === 'BT' || o.op === 'ET'))
       return { why: `a group of ours over ${o.op}` }
     flat.push(o)
