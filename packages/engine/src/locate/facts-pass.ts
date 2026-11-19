@@ -1035,10 +1035,14 @@ function readLineFlags(fx: FactsIndex, r: MemberReading): void {
   // (PINNED: any glyph of the page on its baseline's band within its
   // block's span and off its own extent, its own label's aside (whether a label kept stands before it is U.params' to say);
   // its block, its run of lines on one page and column, each under the one before; the band by the line's size)
-  const label = new Set(mem.label)
+  const aside = new Set(mem.label)
   // (and the glyphs of the name that leads it: its lead's, drawn with it (Placed.bound), its line starting at the name)
   const leader = mem.leader !== undefined ? members[mem.leader] : undefined
-  for (const a of leader?.text ?? []) label.add(a)
+  for (const a of leader?.text ?? []) aside.add(a)
+  // (and its own end mark's (El.end): drawn at its translation's end, it moves with it, no ink that stays on its last line's
+  // band. Taken for one, it takes off the floor that keeps that line a leading over the next paragraph, and the walk lays the
+  // line lower, onto that paragraph (2610.21884v1 p25 ord 199, its proof's square). PDF-READER §18.99)
+  for (const [id, el] of mem.elements) if (el.end) for (const a of mem.els.get(id) ?? []) aside.add(a)
   // (its block: the run of its lines on one page and column, each under the one before, which the line before and the line
   // after share with it pairwise: the runs cut once, each run's span read once, one pass over the lines)
   const spans: [number, number][] = []
@@ -1060,7 +1064,7 @@ function readLineFlags(fx: FactsIndex, r: MemberReading): void {
   const spanOf = (q: number): [number, number] => spans[q]!
   own.forEach(([l, j], q) => {
     const size = l[10] ?? sizeOf(j)
-    const ink = bandOn(l[0], l[4] - 0.4 * size, l[4] + 0.4 * size).filter((g) => !label.has(g.a))
+    const ink = bandOn(l[0], l[4] - 0.4 * size, l[4] + 0.4 * size).filter((g) => !aside.has(g.a))
     if (pinnedOf(l, size, ink, spanOf(q))) l[9] |= 2
   })
   const displays = mem.elements.filter(([, el]) => el.kind === 'display').flatMap(([, el]) => el.ink)

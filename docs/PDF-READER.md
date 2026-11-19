@@ -8713,6 +8713,21 @@ TeX set the element.
   them), on three text lines under a display row whose box reaches 54 pt below its baseline. None stands on a KEPT line's
   baseline.
 
+### 18.99 A line is pinned by ink that stays, never by its own end mark (2026-11-19)
+
+A line is PINNED (`Line` flag 2) where it shares its baseline with ink that stays: a glyph of the page on its band, across its
+block's span and off its own extent (`locate/facts.ts` pinnedOf), its own label's and its lead's aside. Its unit's own end mark
+(`El.end`, §18.52) is aside too (`locate/facts-pass.ts` readLineFlags): the typesetter erases it with the unit's elements and
+lays it at the end of the translation's last line, wherever that falls, so it stays nowhere on the band. Taken for ink that stays,
+a glyph mark (`$\square$`, a font's `∎`) pinned the last line it stands on (a mark of rules, amsthm's `\openbox`, never did: the
+band reads glyphs alone). A pinned last line has no floor under it (U.params' `halfLead.foot`, `unit/slots.ts` footFloorAt: the
+floor that keeps a paragraph's last line a leading of its own over the next paragraph, §18.11), and the walk borrowed the room
+under the run: 2610.21884v1 p25 ord 199, a proof whose last line ends in its square, laid 5.98 pt under TeX's baseline, its
+formula's ink onto the next paragraph's first glyph. Production keeps that line on TeX's baseline.
+
+- **Pinned as before:** a line beside which other ink stays on its band, its own end mark aside (another unit's ink, a stay of no
+  unit's).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
