@@ -213,10 +213,14 @@ typesetter and the painter, is the package's, the same on both hosts.
 
 ## 4. The invariants, and the gates that hold them
 
-Hosted CI (`.github/workflows/ci.yml`) runs `pnpm typecheck`, `pnpm lint`, `pnpm build` and `pnpm test`. Every other gate runs
-by `pnpm release-check --tier fast|full|release` (`lab/release-check/run.mjs`; each gate, the invariants it holds and the gaps
-it states, in `lab/release-check/gates.mjs`; where each tier runs, `lab/release-check/CI.md`), the full and release tiers on
-the lab's data, which the repository does not hold.
+Hosted CI (`.github/workflows/ci.yml`) runs the release check's fast tier on every pull request and every push to `main` and
+`rebuild/v2`: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and the census of this tree (`check`), the reader
+package's harness (`reader`), the extension's offline browser suites (`extension`); today's layer's small capitals run on the
+maintainer's machine alone (`lab/release-check/CI.md`). Every
+gate runs by `pnpm release-check --tier fast|full|release` too (`lab/release-check/run.mjs`; each gate, the invariants it holds
+and the gaps it states, in `lab/release-check/gates.mjs`; where each tier runs, `lab/release-check/CI.md`), the full and release
+tiers on the lab's data, which the repository does not hold, by hand on the maintainer's machine: no runner of his serves this
+public repository.
 
 I1 to I10 and D are the approved design's invariants as `lab/release-check/gates.mjs` states them, with the gaps it states;
 a gate is named by its id there. The rows after them are this repository's own.
