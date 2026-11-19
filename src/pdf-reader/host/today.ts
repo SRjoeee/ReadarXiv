@@ -37,6 +37,9 @@ export function configStore(first: Config | null): ConfigStore & { told(config: 
       session = s
       for (const change of held.splice(0)) s.patchSettings(change)
     },
+    // this reader's calls carry no mark of the PDF reader's (session/translate.mjs): the page's chain answers them, and asks the
+    // stored translator first (providers/translators.ts translatorsOf)
+    askedFirst: config => config.provider,
   }
 }
 

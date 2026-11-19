@@ -5,6 +5,7 @@
 // `eventsOf`), and the chrome's commands are the reader's.
 import type { Host, Prefs, PrefStore, PrefsPatch, ReaderState, Session as ChromeSession, SessionEvent, SessionHost as ChromeHost } from '@readarxiv/reader'
 import type { PaperStore } from '@/cache/paper-store'
+import { readerProviderOf } from '@/config/services'
 import type { SurfaceConfig } from '@/shared/surface-config'
 import type { TranslationTransport } from '@/providers/transport'
 import { prefsOf, withPrefs } from './prefs'
@@ -146,6 +147,8 @@ export function surfaceStore(surface: Pick<SurfaceConfig, 'state' | 'subscribe' 
     },
     subscribe: (l: () => void) => surface.subscribe(l),
     patch: (change: Parameters<SurfaceConfig['patch']>[0]) => void surface.patch(change),
+    // this reader's calls are the PDF reader's (translate.ts readerTransport), whose chain asks the PDF reader's translator first
+    askedFirst: readerProviderOf,
   }
 }
 

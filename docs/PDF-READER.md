@@ -582,7 +582,9 @@ The states are §8's.
   and not `any-hover`/`any-pointer`, which answer for every input a device has: a phone with a stylus that hovers would
   read as able to hover and get the keyboard, and a laptop with a touch screen would lose the focus its keyboard types
   into. The extension's popup and settings page draw the same menu (UI.md S-P-22, S-O-23), at five rows and a half.
-- 翻译服务: the same list and labels as the popup's service menu.
+- 翻译服务: the same list and labels as the popup's service menu. Its check and the button's value are the translator the
+  reader asks first (UI.md S-P-46): Google's until the reader picks one (DESIGN §8.5), then the pick; the popup checks the
+  stored one, Microsoft until a pick.
 - They are built on the shared `Menu` once it has the fixes in §9.4.
 
 ### 6.8 Pinch zoom
@@ -882,7 +884,8 @@ The reader keeps no settings of its own apart from the extension's: the popup, t
 the same values, and each follows the others through the shared configuration's subscription at once
 (`useSurfaceConfig`). There is no new message for it.
 
-**Read, as they are**: `targetLanguage` (the reader's languages, §6.7; §8 for the others), `provider` and `services`,
+**Read, as they are**: `targetLanguage` (the reader's languages, §6.7; §8 for the others), `provider`, `providerChosen` and
+`services` (the service menu names the translator the reader asks first, §6.7),
 `reading.sentenceHighlight` (对照高亮), `appearance.activeHighlight` among `appearance.highlights` (高亮颜色: the swatches are
 the configured highlight profiles, the three built-in and any added), `uiLanguage` (the reader's words), `mode` (the
 display, §3). The image switch (`image.enabled`, S-P-85) is the HTML page's alone since v21: the reader's figure text is
