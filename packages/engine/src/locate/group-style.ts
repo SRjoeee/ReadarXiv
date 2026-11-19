@@ -5,13 +5,12 @@
 // the fill of a colour piece alone (`\textcolor`'s, `\color`'s: SpanAt.colour, El.colour). And a member's style read over all
 // of its glyphs is its groups' where they hold most of its letters: p10's Hendrycks entry, its title link holding most, drawn
 // blue whole; 2609.20976v1 p13's references, their \emph titles and journals holding most, drawn italic whole, where the
-// translators' replies move an \emph's markers to the end, empty. Today's reader read both off the glyphs (layer2.mjs
-// measuredStyle: each piece that may set an attribute, the value its own glyphs hold; the unit's, the value of its glyphs
-// outside them).
+// translators' replies move an \emph's markers to the end, empty. Both are read off the glyphs: each piece that may set an
+// attribute, the value its own glyphs hold; the unit's, the value of its glyphs outside them.
 //
 // The source's letters and the glyphs' letters are matched in order (the longest common subsequence, Myers', as words.ts
 // places a unit's words on A and marks/faces.ts reads a group's face on B), compared folded (compatibility decomposition,
-// marks off, lower case, its letters and digits alone, as today's measuredStyle read them); a text macro's text (the marking
+// marks off, lower case, its letters and digits alone); a text macro's text (the marking
 // probe's, its glyphs the unit's text) is the source's there, an element whose ink is its own has no glyph among them. Its
 // punctuation is no reading of its own: TeX sets the commas between an author line's `\textbf` names regular, and a unit
 // read off them was drawn regular where a translation drops the names' groups (2602.23285v2's author line).
@@ -34,9 +33,9 @@
 // off its own text alone: a group whose text is all another scope's (a declaration's run, a named group) is drawn in that
 // scope's face, and one stated on it too would be applied twice (`{\em …}`: the stated italic, then the switch's toggle).
 // Votes of glyphs and inequalities, no threshold.
-import type { Piece, Style } from '@readarxiv/format'
+import type { KnownSpanKind, Piece, Style } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
-import { classifyFont, type StyleGlyph, styleOf, unitSize } from './facts.ts'
+import { classifyFont, fold, mostOf, type StyleGlyph, styleOf, unitSize } from './facts.ts'
 
 type El = Extract<Piece, { t: 'el' }>
 type Span = Extract<Piece, { t: 'span' }>
@@ -54,38 +53,15 @@ interface GroupStyle {
   face: { own: Face | undefined; groups: [id: string, style: Style][]; apart: boolean }
 }
 
-const LETTER = /[\p{L}\p{N}]/u
-/** a character's letters as both sides are compared: decomposed, marks off, lower case, its letters and digits alone (a
- *  ligature its letters) */
-const fold = (ch: string): number[] =>
-  [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
-    .filter((c) => LETTER.test(c))
-    .map((c) => c.codePointAt(0) as number)
 /** the steps an alignment may take, per letter of the two sides: a resource bound (myers.ts `work`), never a decision about
  *  content; past it the letters not reached are not read */
 const WORK_PER_LETTER = 256
 /** the group styles whose command names no face (the group table's, ink.ts groupStyleOf: a link, a colour piece, an
  *  underline, any other command or a bare group); every other names one (bold, italic, mono, small capitals, or what a paper's
  *  macro was read to change, marks/faces.ts) */
-const NO_FACE = new Set(['other', 'link', 'colour', 'underline'])
+const NO_FACE = new Set<string>(['other', 'link', 'colour', 'underline'] satisfies readonly KnownSpanKind[])
 /** whether a group style (the group table's, or a paper's macro's read face) names a face */
 export const namesFace = (style: string): boolean => !NO_FACE.has(style)
-
-/** the value most of `xs` hold, a tie to the one met first; undefined for none */
-const mostOf = <T>(xs: readonly T[]): T | undefined => {
-  const n = new Map<T, number>()
-  let best: T | undefined
-  let k = 0
-  for (const x of xs) {
-    const c = (n.get(x) ?? 0) + 1
-    n.set(x, c)
-    if (c > k) {
-      k = c
-      best = x
-    }
-  }
-  return best
-}
 
 /** whether a unit's content has a scope a fill or a face may be set in apart from its own: a group, or a switch */
 export function hasScopes(content: readonly Piece[], switches: (el: El) => boolean): boolean {

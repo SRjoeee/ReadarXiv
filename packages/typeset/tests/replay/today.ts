@@ -1,15 +1,15 @@
 // What today's reader read off a paper's bundle that the tap does not record: the bundle the baseline's reader opened
-// (baseline/tools/reader.mjs: the sweep cache's catalog and objects, release bundle 16, pipeline 76, layout 39), read here
+// (the baseline's reader tool: the sweep cache's catalog and objects, release bundle 16, pipeline 76, layout 39), read here
 // for two facts only. A page's rules (each part's `rules`, reader.mjs `hiding.rules`: the add-on manifest's x0, y0, x1, y1
 // stride 4), which a CJK cell's bands between the rules over and under its lines read (U.params' cellBands; lane L1 states
 // them as Room.band). A unit's first line in the file (the layout file's `lines`, tex.index.unit(id).lines: page, x0, x1,
 // baseline, top, bottom, size, frame a line), which S.overFollower reads of the follower's (lane L1 states it as the
-// follower's first Line). Skipped where the cache is absent, as the tap is.
+// follower's first Line). Skipped where the cache is absent, as the tap is: AXT_SWEEP_CACHE names it (the website's sweep
+// cache), none by default (unset, a path no machine holds, as tap.ts's LAB).
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const CACHE =
-  process.env.AXT_SWEEP_CACHE ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache'
+export const CACHE = process.env.AXT_SWEEP_CACHE ?? '/dev/null/AXT_SWEEP_CACHE-unset'
 export const hasCache = existsSync(join(CACHE, 'papers'))
 
 export type TodayBundle = {

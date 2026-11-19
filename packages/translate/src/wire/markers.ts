@@ -1,11 +1,10 @@
-// The markers wire, over typed pieces (Microsoft's free endpoint keeps no tag: tags 0 %, markers 98 %, translation dossier
-// §16). A unit goes out as plain text with its elements as markers `@a#`; what Microsoft does to markers is repaired here
-// and nowhere else. Restated from the measured facts the PDF engine's wire (mt.mjs) carries, now that the source reader
-// types each piece:
+// The markers wire, over typed pieces (Microsoft's free endpoint keeps no tag: tags 0 %, markers 98 %,
+// DESIGN §8.3). A unit goes out as plain text with its elements as markers `@a#`; what Microsoft does to markers is repaired here
+// and nowhere else. The measured facts it rests on, each piece typed by the source reader:
 // - each marker is a hard sentence boundary to the endpoint, so a span that is not `must` goes on no wire: its words join
 //   the sentence and its style may be lost (the decision: such a span may come back unstyled), and its head (accept.ts
 //   headLength: the elements before its first word, a declaration's place, `{\em all}`) is one marker that comes back in a
-//   copy of the span, never loose: a declaration loose held to the unit's end (1810.04805v2 on staging, 2026-11-08: all
+//   copy of the span, never loose: a declaration loose held to the unit's end (1810.04805v2 on staging: all
 //   after "all"'s translation slanted, all after BERT bold); a style that cannot be mapped is dropped, never spread. A
 //   span holding the whole unit goes on no wire either and comes back around the translation; a `must` span is kept as
 //   two markers, or as one when it holds no text;
@@ -15,27 +14,27 @@
 // - an element that sets nothing where it stands (`silent`, the source reader's from TeX's tables: a declaration, a key
 //   written to a file, `\noindent`, `\-`) goes on no wire, and so does a span's head of such elements alone (`{\bfseries w}`):
 //   a marker for it cut the sentence where the source sets nothing (2610.19159's `\textcolor{…}{\bfseries w}` round every
-//   word: 13,000 markers and word salad, until today's wire sent them on none, TRANSLATE_VERSION 3 and 10; this wire, before
-//   the source reader stated them, sent 106 in one of its units where today's sends 10, and Microsoft's reply was word salad
-//   again, 2026-11-09). Beside an element that sets something it rides in that one's marker, in its
+//   word: 13,000 markers and word salad; one of its units sent with them held 106 markers where it holds 10 without them,
+//   and Microsoft's reply was word salad). Beside an element that sets something it rides in that one's marker, in its
 //   place; alone, it comes back at the front of its innermost kept group (the unit, a kept span) where nothing of the group
-//   went out before it, else at the group's end, as today's wire puts it back; one beside a span that holds all the rest
+//   went out before it, else at the group's end; one beside a span that holds all the rest
 //   leaves that span around the translation, itself outside it where it stands;
 // - a marker touching a word is read as part of it, and one right after a full stop leaves the last word untranslated: a
 //   space of ours around it, taken back on reading wherever the reply kept it on that side of the marker: the space is the
 //   wire's, not the page's (DESIGN §6.2, as the HTML page's rehydrate takes it), and the source set the element glued there,
-//   a mark, a script or an accent to its word, a tie to its neighbours (before 2026-11-09 only beside a stop or a digit:
-//   2610.20967v1's names read back a space TeX never set before each name's marks, 4.3 pt where TeX's is 1.35). Not around an element
+//   a mark, a script or an accent to its word, a tie to its neighbours, not only a stop or a digit (2610.20967v1's names
+//   read back a space TeX never set before each name's marks, 4.3 pt where TeX's is 1.35). Not around an element
 //   inside a word (a letter right before it and right after it, an element that reads as part of a word: `inWord`): there
 //   the word is one token of the source, and spaced it went out as two words (2608.25210v2's `str\_s`: `str @a# s` came
 //   back `STR @a#`, `LLM @a# bottom @b# up` with "bottom" and "up" translated; unspaced, the four identifiers asked came
-//   back as they went, 2026-11-09);
+//   back as they went);
 // - a display's own end punctuation goes after its marker or the sentence runs on (0/444 vs 1,357/1,357), and the reply's
 //   marks after that marker are taken off on reading; an element's stop that is a line end (a forced break a run-in label
-//   follows, no stop ending the sentence before it: the source reader's run-in rule) goes after its marker too, where
-//   Microsoft cuts its sentence (it reads neither a marker nor a colon as a sentence's end), and is taken back on reading
-//   (1810.04805v2 p8: the label "No NSP" inside the sentence before it came back with its term lost; begun on its own line,
-//   whole);
+//   follows, no stop ending the sentence before it: the source reader's run-in rule) goes BEFORE its stretch's marker, where
+//   Microsoft cuts its sentence (it reads neither a marker nor a colon as a sentence's end), and is taken back on reading: the
+//   stretch leads the next sentence, as one after a full stop does (text.ts leadsNext). 1810.04805v2 p8: the label "No NSP"
+//   inside the sentence before it came back with its term lost; begun on its own line, whole; with the line end after the
+//   break's marker, the marker ended the sentence before and came back inside it in Japanese, Korean and Chinese;
 // - ids are letters, never digits (engines reorder, merge and thousand-separate digits);
 // - Microsoft writes `@e##`, `@d# #`, drops `#` before a CJK character, displaces a `#` (`@f#(#)`): read tolerantly where
 //   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
@@ -58,8 +57,10 @@ import {
   LEAD_PUNCT,
   LETTER,
   LINE_END,
+  leadsNext,
   OWN_LEAD,
   SAYS,
+  setsNoWord,
 } from './text.ts'
 
 type Item =
@@ -109,7 +110,7 @@ export interface MarkersPlan {
   gluedAfter: ReadonlySet<number>
   /** markers after which the wire wrote their element's own stop */
   own: ReadonlySet<number>
-  /** markers after which the wire wrote a line end, their element's stop: taken back on reading */
+  /** markers BEFORE which the wire wrote a line end, their stretch's stop (text.ts leadsNext): taken back on reading */
   lines: ReadonlySet<number>
   /** spans that hold the whole unit, outermost first: back around the translation */
   around: readonly string[]
@@ -291,7 +292,27 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
     return at
   }
   walk(content, at0, 0)
-  // side-by-side elements, white space alone between them, one marker; a display ends the stretch
+  /** an element that sets no word of the text (text.ts setsNoWord), or nothing at all */
+  const noWord = (x: Item | undefined): boolean =>
+    x?.t === 'void' && (x.silent || (!!x.ends && setsNoWord(x.ends.first.kind) && setsNoWord(x.ends.last.kind)))
+  /** whether the elements that set no word from item `x` on, white space alone between them, state a line end: they lead the
+   *  next sentence (text.ts leadsNext) */
+  const leadsFrom = (x: number): boolean => {
+    const stops: (string | undefined)[] = []
+    for (let k = x; k < items.length; k++) {
+      const y = items[k] as Item
+      if (y.t === 'text') {
+        if (SOLID.test(y.s)) break
+        continue
+      }
+      if (!noWord(y)) break
+      stops.push(y.t === 'void' ? y.stop : undefined)
+    }
+    return leadsNext(false, stops)
+  }
+  // side-by-side elements, white space alone between them, one marker; a display ends the stretch, and so does an element that
+  // sets a word before elements that set none and lead the next sentence (a formula or an address before a forced break that
+  // states its line end: the sentence's, before the break)
   const out: Item[] = []
   for (let i = 0; i < items.length; i++) {
     const it = items[i] as Item
@@ -300,6 +321,7 @@ function itemsOf(content: readonly Piece[], at0: number): Item[] {
       for (let x = i + 1; x < items.length; x++) {
         const y = items[x] as Item
         if (y.t === 'void') {
+          if (noWord(y) && !noWord(items[last]) && leadsFrom(x)) break
           last = x
           if (y.display) break
           continue
@@ -421,13 +443,22 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     if (it.t === 'open' && it.letters) kept.push({ id: it.id, depth: it.depth })
     const n = slots.length
     const nextText = textBeside(i, 1)
+    const stop = it.t === 'void' && it.stop && !LEAD_PUNCT.test(nextText) ? it.stop : ''
+    // (a stretch whose stop is a line end, its last setting element's or one a forced break in it states, itemsOf, leads the next
+    // sentence, text.ts leadsNext: the line end, the sentence's end, written before its marker in place of the white space the
+    // text before ends with; Microsoft cuts its sentence there. Any other stop the element's own, written after it)
+    const line = leadsNext(false, [stop])
+    if (line) {
+      while (/[ \t]$/.test(wire)) {
+        wire = wire.slice(0, -1)
+        plainAt.pop()
+      }
+      put(stop, it.at)
+      lines.add(n)
+    } else if (stop) own.add(n)
     if (wire.endsWith('.')) stops.add(n)
     if (/\p{N}$/u.test(wire)) numbers.add(n)
     if (/^\p{N}/u.test(nextText)) numbersAfter.add(n)
-    const stop = it.t === 'void' && it.stop && !LEAD_PUNCT.test(nextText) ? it.stop : ''
-    const line = LINE_END.test(stop)
-    if (line) lines.add(n)
-    else if (stop) own.add(n)
     // (glued to the piece beside it in the source, a text or another element; a space of ours where it touches the wire's text,
     // none inside a word: text.ts glueOf)
     const glued = glueOf(
@@ -445,7 +476,7 @@ export function planMarkers(unit: UnitIn): MarkersPlan {
     if (glued.after) gluedAfter.add(n)
     put(before, it.at)
     put(`@${toAlpha(n)}#`, it.at)
-    put(stop, end)
+    if (!line) put(stop, end)
     put(after, end)
     seen()
     if (it.t === 'open') groups.push({ id: it.id, seen: false, lead: [], end: [] })
@@ -495,7 +526,7 @@ const CLOSER = '#(?:[ \\t]*#)*'
  *  width, followed by no letter of an id and no `#`: `@b形`). A marker without its `#` is read only where the wire holds no
  *  `#` of its own: there every other `#` of the reply is taken out as the marker's, elsewhere the one it lost may stand in
  *  the text, which a reader would see (`F# @a(#)` → `F# … (#)`; the HTML page's 20 fixture blocks with a `#` of their own,
- *  DESIGN §6.3's reason; stage 4b's slip check) */
+ *  DESIGN §6.3's reason) */
 function readerOf(hashFree: boolean, bare: number | null): RegExp {
   const closer = hashFree ? CLOSER : '#'
   if (bare === null || !hashFree) return new RegExp(`@@|@([a-z]+)${closer}`, 'g')
@@ -507,9 +538,9 @@ const STRAY = /(?<!&)#+/g
 const STRAY_PAIR = /[ \t]*[([（【]\s*(?<!&)#+\s*[)\]）】]/g
 /** our space after a stop before a marker, while the text still ends in a stop of any script */
 const STOP_SPACE = /(?<=[.。．।॥۔։።။།])[ \t\n\f\r]+$/
-/** our line end after a marker, where the reply kept it: its white space up to the first word, the sentinels a reading set
- *  among it kept */
-const LINE_LEAD = /^[ \t\f\r\ue000]*\n[ \t\n\f\r\ue000]*/
+/** our line end before a marker, where the reply kept it there: its white space back to the last word, the sentinels a reading
+ *  set among it kept */
+const LINE_TRAIL = /[ \t\n\f\r\ue000]*\n[ \t\f\r\ue000]*$/
 /** our space after a digit before a marker, and before a digit after one */
 const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u
 const NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
@@ -519,10 +550,10 @@ export const MARKER_ATOM = new RegExp(`@@|@[a-z]+(?:${CLOSER})?|${ENTITY}`, 'g')
 /** A reply → tokens, or null where it cannot be read: a marker unknown, doubled or lost, every word lost */
 export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean): Tok[] | null {
   // where the wire holds a `#` of its own, a `#` right after a marker is either Microsoft's doubled closer or the text's own
-  // moved beside it: which, nobody can tell, and either way a reader would see one `#` too many or too few (stage 4b). Not
+  // moved beside it: which, nobody can tell, and either way a reader would see one `#` too many or too few. Not
   // after a marker the wire itself follows with its text's `#` (`hashAfter`): there it is that `#`, as it went out (TeX's `\#`,
-  // a character of the text since 2026-11-11: `$k$\#`, `## Root Goal` after a list's mark; Microsoft gave back every one of
-  // 114 text `#` of the 88 papers' 24 units holding one, in Chinese, Japanese and German)
+  // a character of the text, PDF-READER §18.30: `$k$\#`, `## Root Goal` after a list's mark; Microsoft gave back every
+  // one of 114 text `#` of the 88 papers' 24 units holding one, in Chinese, Japanese and German)
   if (!plan.hashFree)
     for (const m of text.replace(/@@/g, '').matchAll(/@([a-z]+)#[ \t]*#/g))
       if (!plan.hashAfter.has(fromAlpha(m[1] as string))) return null
@@ -531,13 +562,12 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
   let afterNumber = false
   let afterGlued = false
   let afterOwn = false
-  let afterLine = false
-  const push = (raw: string, takeBack: RegExp | null) => {
+  const push = (raw: string, takeBack: RegExp | null, line = false) => {
     let s = raw
     if (plan.hashFree) s = s.replace(STRAY_PAIR, '').replace(STRAY, '')
+    if (line) s = s.replace(LINE_TRAIL, (m) => m.replace(/[^\ue000]/g, ''))
     if (takeBack) s = s.replace(takeBack, '')
     if (afterOwn) s = s.replace(OWN_LEAD, '$1')
-    if (afterLine) s = s.replace(LINE_LEAD, (m) => m.replace(/[^\ue000]/g, ''))
     s = decode(s)
     if (afterNumber) s = s.replace(NUMBER_LEAD, '')
     if (afterGlued) s = s.replace(GLUED_LEAD, '')
@@ -566,6 +596,7 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
           : plan.numbers.has(id)
             ? NUMBER_SPACE
             : null,
+      plan.lines.has(id),
     )
     buf = ''
     seen.add(id)
@@ -573,7 +604,6 @@ export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean):
     afterNumber = plan.numbersAfter.has(id)
     afterGlued = plan.gluedAfter.has(id)
     afterOwn = plan.own.has(id)
-    afterLine = plan.lines.has(id)
   }
   push(buf + text.slice(last), null)
   if (seen.size !== plan.slots.length) return null

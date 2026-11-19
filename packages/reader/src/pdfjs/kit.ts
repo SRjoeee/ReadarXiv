@@ -1,15 +1,15 @@
-// PDF.js inside the reader (design §4.5 "PDF.js's set-up lives in the reader, so both hosts run the same"; interfaces/host
-// design-a §1.2, §1.5; design-b §1.7): the library and its viewer components loaded once a page, the options the website
-// measured for every document, the one fix of PDF.js's page views the reader still needs, and a worker per document role per
-// reader, made over its own port (never GlobalWorkerOptions), so that two readers on one page share none.
+// PDF.js inside the reader (its set-up lives in the reader, so both hosts run the same): the library and its viewer
+// components loaded once a page, the options the website measured for every document, the one fix of PDF.js's page views
+// the reader still needs, and a worker per document role per reader, made over its own port (never GlobalWorkerOptions), so
+// that two readers on one page share none.
 //
-// The options (W pdfjs.ts:209-225, each measured): `enableHWA` (GPU-backed canvases: without it a pinch in WebKit took 40 to
+// The options (the website's, each measured): `enableHWA` (GPU-backed canvases: without it a pinch in WebKit took 40 to
 // 75 ms a frame); `disableStream` and `disableAutoFetch` (a paper read by ranges, a document reading what its pages need and
 // never the rest behind them), 64 KiB chunks (ranged.ts). The data files (cMaps, standard fonts, wasm) and the worker are
 // served from `<base>` = `/pdfjs/<version>/` by default, which the reader's build plugin (`@readarxiv/reader/vite`) fills.
 //
-// What of today's fixes stays: `forgetCancelledText` (a TextLayerBuilder cancelled keeps no hold on its spans: 6,729 detached
-// spans on the thesis, W pdfjs.ts:78-104), a per-document class patch, idempotent. `quietRoot`, `eagerPages` and `aheadHeld`
+// The fix the page views need: `forgetCancelledText` (a TextLayerBuilder cancelled keeps no hold on its spans: 6,729 detached
+// spans on the thesis, measured on the website), a per-document class patch, idempotent. `quietRoot`, `eagerPages` and `aheadHeld`
 // were PDFViewer's and go with it: the page stack sizes its own slots and has one scheduler. `globalThis.pdfjsLib` is set, since
 // PDF.js's viewer module reads it as it is evaluated.
 import type * as Lib from 'pdfjs-dist'
@@ -49,7 +49,7 @@ export interface Kit {
   /** getDocument's options for a document of `role`: the measured ones and this reader's worker for it */
   options(role: Role): Record<string, unknown>
   /** the worker of `role` let go, once the documents on it are destroyed (a worker destroyed before its handshake reports
-   *  "Worker was destroyed", W run.mjs:428-438): the next ask of that role makes a new one */
+   *  "Worker was destroyed", as the website found): the next ask of that role makes a new one */
   release(role: Role): void
   /** every worker let go */
   destroy(): void
@@ -84,7 +84,7 @@ const forgetting = new WeakSet<object>()
 /**
  * A text layer let go keeps no hold on its spans. PDF.js's TextLayerBuilder.render maps the page's highlighter and its
  * accessibility manager to the layer's spans as it begins; its cancel empties the layer and disables both, and neither drops
- * the mapping, so every page view let go held its last text layer's DOM (W pdfjs.ts:78-104). Here the cancel drops both
+ * the mapping, so every page view let go held its last text layer's DOM (measured on the website). Here the cancel drops both
  * mappings; the next render maps them again before it enables them. Once a class
  */
 export function forgetCancelledText(builder: TextLayerBuilderClass): void {

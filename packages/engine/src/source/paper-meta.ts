@@ -1,8 +1,8 @@
 // What arXiv would compile, and the features a failure might hang on. The main file and compiler come from arXiv's own
 // 00README.json when the package carries one (arXiv writes it on submission); otherwise from the same heuristics as
 // arXiv's preflight, in simplified form.
-// Runs in Node and in the browser alike: `fsys` is a file system of latex-front.ts (inMemory), or of the lab's node-files.mjs
-// (folder: a directory under Node, which the spikes' paper-meta.mjs hands in).
+// Runs in Node and in the browser alike: `fsys` is a file system (latex-front.ts Fsys, its `list` and `read`: inMemory over a
+// package's files, or a caller's own).
 import { isMemoryError } from '../memory.ts'
 import type { Fsys } from './latex-front.ts'
 import { jobName, normalizePath, texText } from './latex-front.ts'
@@ -71,10 +71,10 @@ export function analyze(fsys: Fsys): PaperMeta {
       const r: Readme = JSON.parse(utf8(fsys.read(readmeJson)!))
       meta.readme = 'json'
       const main = r.sources?.find((s) => s.usage === 'toplevel')?.filename
-      // the file the package holds (latex-front.mjs normalizePath), whatever spelling named it
+      // the file the package holds (latex-front.ts normalizePath), whatever spelling named it
       meta.main = main && normalizePath(main)
-      // how many toplevel sources arXiv compiles (its PDF is theirs in turn; the pipeline reads the first alone: the page
-      // pass's several-toplevels rule, pipeline/page-pass.mjs)
+      // how many toplevel sources arXiv compiles (its PDF is theirs in turn; the prepare compiles the first alone, whose pages
+      // are arXiv's first: compile/paper.ts markedOfPaper's page count)
       meta.toplevels = Array.isArray(r.sources) ? r.sources.filter((s) => s?.usage === 'toplevel').length : 0
       // (arXiv's long form of `latex`, the one DVI path it runs: "compiler: latex is actually shorthand for latex+dvips_ps2pdf")
       meta.compiler = r.process?.compiler === 'latex+dvips_ps2pdf' ? 'latex' : r.process?.compiler
@@ -99,8 +99,11 @@ export function analyze(fsys: Fsys): PaperMeta {
     // package holds it under (\subfile{./chapters/ch1}: chapters/ch1.tex, a subfile's own \documentclass and all)
     for (const f of tex)
       for (const m of bodies[f]!.matchAll(
-        /\\(input|include|subfile|(?:sub)?(?:import|inputfrom|includefrom))\s*\*?\s*\{([^}]+)\}(?:\s*\{([^}]+)\})?/g,
+        // (latex.ltx's \input and \include, subfiles.sty's \subfile; import.sty's \import, \subimport, \inputfrom, \includefrom,
+        // \subinputfrom and \subincludefrom)
+        /\\(input|include|subfile|(?:sub)?(?:import|inputfrom|includefrom))\s*\*?\s*\{([^}]+)\}(?:\s*\{([^}]+)\})?/g, // latex.ltx, subfiles.sty, import.sty
       )) {
+        // (the three that name the file alone, latex.ltx's and subfiles.sty's; import.sty's name its directory first)
         const n = normalizePath(
           /^(input|include|subfile)$/.test(m[1]!) || m[3] === undefined
             ? m[2]!.trim()
@@ -156,9 +159,14 @@ export function analyze(fsys: Fsys): PaperMeta {
   meta.biblatex = /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\bbiblatex\b/.test(all)
   const exts = files.map((f) => extname(f).toLowerCase())
   meta.eps = exts.filter((e) => e === '.eps' || e === '.ps').length
+  // (the graphics pdfTeX reads and DVI's drivers do not: pdftex.def's \Gin@extensions .pdf, .png, .jpg, .jpeg)
   meta.rasterOrPdf = exts.filter((e) => ['.pdf', '.png', '.jpg', '.jpeg'].includes(e)).length
+  // (the packages that stop TeX but under XeTeX or LuaTeX: fontspec.sty, unicode-math.sty and polyglossia.sty raise an error
+  // on another engine, xeCJK.sty requires XeTeX, luatexja.sty calls LuaTeX's \directlua)
   meta.unicodeEngineOnly =
     /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\b(fontspec|xeCJK|unicode-math|polyglossia|luatexja)\b/.test(all)
+  // (the packages whose output a program run beside TeX makes: minted.sty's and svg.sty's \ShellEscape, shellesc.sty's
+  // \ShellEscape itself, pythontex.sty's \jobname.pytxcode its own script reads between passes)
   meta.shellEscape =
     /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\b(minted|svg|pythontex|shellesc)\b/.test(all) || /\\write18/.test(all)
   meta.tikz = /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\b(tikz|pgfplots)\b/.test(all)

@@ -3,7 +3,7 @@
 // its row's start), and each page laid by the package's composition (src/lay/page.ts layPagePrepared: L8-L11, E1) from that
 // page's own part, design-a §1.3: the flows with a line on the page, the flows of every page one of its members begins on,
 // and every member of a tie holding one of them.
-// Answers the pair's laid units in the baseline's reader-dump format (FORMAT.md §4: size, leading, lines with their text,
+// Answers the pair's laid units in the baseline's reader-dump format (the dump spec §4: size, leading, lines with their text,
 // crops), and risk 1 of the page decision: whether a member on two pages is laid alike from each page's part.
 import { fitMeasure } from '../../src/breaker/measure.ts'
 import { layPagePrepared } from '../../src/lay/page.ts'

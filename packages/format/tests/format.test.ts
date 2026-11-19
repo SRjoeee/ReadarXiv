@@ -25,7 +25,7 @@ import {
   write,
 } from '../src/index.ts'
 
-// Unit ids: the baseline's vectors (readarxiv-lab-data/refactor-2026-11/baseline, FORMAT.md §2). The first eight are units
+// Unit ids: the baseline's vectors (the lab's baseline, its dump spec §2). The first eight are units
 // of the baseline's dumps whose whole content is a common word (no paper's text), each the same id in every paper of the
 // corpus that holds it; the rest synthetic, their ids computed by the baseline's own tools/unit-id.mjs idOf (an independent
 // implementation of the rule). The lab runner checks the rule on every unit of the 87 dumps.
@@ -119,7 +119,7 @@ describe('unitId', () => {
     )
   })
   // (lane L2's tests of the walk, rebuild/source c26d4bf7a packages/engine/tests/source/id.test.ts: the flat list the id hashes,
-  // hashed by FORMAT.md's rule through Node's own SHA-256)
+  // hashed by the dump spec's rule through Node's own SHA-256)
   const reference = (kind: string, flat: unknown[]) =>
     createHash('sha256')
       .update(JSON.stringify([kind, flat]), 'utf8')

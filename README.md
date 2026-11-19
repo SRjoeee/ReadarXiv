@@ -101,7 +101,7 @@ background beside the new pages. Your settings are kept and carried over to the 
 
 | Service | API key | Notes |
 | --- | --- | --- |
-| Microsoft Translator | not needed | The default. |
+| Microsoft Translator | not needed | The default on arXiv's HTML pages. Until you pick a service, the PDF reader asks Google first and Microsoft after it, as the Read arXiv website does. |
 | Google Translate | not needed | |
 | Chrome's built-in translation | not needed | Runs on your machine, offline, once Chrome has downloaded the language pack. |
 | Any OpenAI-compatible API | yours | OpenRouter, DeepSeek, Ollama, LM Studio and the like. Prompts and the glossary apply here. |

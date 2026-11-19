@@ -38,7 +38,7 @@ export const MEASURES = [
   { id: 'historyComments', says: 'comment lines in the packages telling history' },
   { id: 'unsafeCasts', says: '`as never`, `as any` and casts of a cast in product TypeScript' },
   { id: 'suppressions', says: '@ts-ignore and @ts-expect-error in product code' },
-  { id: 'rulesUnexplained', says: "tuned thresholds and name lists with neither a definition cited nor a reason in the rule ledger (lab/rules/ledger.json); magnitudes and lists not judged by entry reported apart" },
+  { id: 'rulesUnexplained', says: "tuned thresholds and name lists with neither a definition cited nor a reason in the rule ledger (lab/rules/ledger.json); magnitudes, lists not judged by entry and budgets reported apart" },
 ]
 const IDS = MEASURES.map(m => m.id)
 

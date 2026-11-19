@@ -4,6 +4,7 @@
 // map and a recording written here, one rule a case: a site that decides, one that folds beside it, a test of our own
 // taking the other side, a test that reads the lab's data (the corpus), never run, a magnitude, a value with a source, a
 // citation of each kind, the list rules. Then the census on a tree written here, with and without a ledger.
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -11,11 +12,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { scanTree } from '../../lab/release-check/census-lib.mjs'
 import { ENGINE_PROFILE } from '../../lab/release-check/census-profile.mjs'
 import { census } from '../../lab/release-check/census.mjs'
-import { citationsOf, exercisedBy, type Ledger, ledgerOf, recordedOf, trackedOf, trackedText } from '../../lab/rules/ledger.mjs'
+import { citationsOf, digestOf, exercisedBy, type Ledger, ledgerOf, recordedOf, trackedOf, trackedText } from '../../lab/rules/ledger.mjs'
 import type { Recording, SiteSums } from '../../lab/rules/merge.mjs'
 import { remapOf } from '../../lab/rules/record.mjs'
 import { reportOf } from '../../lab/rules/report.mjs'
-import type { Rule, Site, SiteMap } from '../../lab/rules/sites.mjs'
+import { type Rule, type Site, type SiteMap, sitesOfTree } from '../../lab/rules/sites.mjs'
 
 // ---- a site map and a recording by hand: rule name -> its sites, each site's sums per input
 type Spec = { kind?: 'threshold' | 'list'; comment?: string; cls?: string; entries?: string[]; sites: { kind: Site['kind']; per: Record<string, Partial<SiteSums>> }[]; wholeReads?: number }
@@ -193,8 +194,9 @@ describe('the tracked form', () => {
     expect(t.rules[`packages/engine/src/locate/rules::(top)::DECIDES`]?.runs).toEqual({ corpus: [9, 7, 2] })
     expect(t.rules[`packages/engine/src/locate/rules::(top)::FOLDED_READ`]).toMatchObject({ runs: { corpus: [2, 2, 0] }, reads: { corpus: 1 }, folds: 1 })
     expect(t.rules[`packages/engine/src/locate/rules::(top)::LIST`]).toMatchObject({ kind: 'list', size: 3, hits: [3, 0, 0] })
-    // (a list whose entries are exempt or not judged: its hits decide nothing, and are left in the full record)
-    expect(t.rules[`packages/engine/src/locate/rules::(top)::DEFINED`]?.hits).toBeUndefined()
+    // (a list whose entries are exempt: its hits remove none of them, and are kept, the census's reading of its recorded cases)
+    expect(t.rules[`packages/engine/src/locate/rules::(top)::DEFINED`]).toMatchObject({ hits: [1, 0, 0] })
+    expect(l.rules[`packages/engine/src/locate/rules::(top)::DEFINED`]?.removeEntries).toBeUndefined()
     expect(t.rules[`packages/engine/src/locate/rules::(top)::BY_TEST`]?.tests).toEqual({ false: { 'a.test.ts': [0] } })
     expect(t.rules[`packages/engine/src/locate/rules::(top)::PAPER`]?.cites).toEqual({ flag: 'paper', papers: ['2401.00001v1'] })
     const text = trackedText(t)
@@ -256,5 +258,185 @@ describe("the census's reading of the ledger", () => {
     const rulesLedger = { recorded: { commit: 'c0ffee' }, rules: { 'packages/engine/src/index::(top)::GAP': { verdict: 'magnitude' }, 'packages/engine/src/index::(top)::KINDS#1': { verdict: 'decides' }, 'packages/engine/src/index::far::>4#1': { verdict: 'remove' } } }
     const read = await census({ today: null, now: scan(), rulesLedger })
     expect(read.trees.NOW.debt.rules).toMatchObject({ ledger: true, recorded: 'c0ffee', unexplained: 1, magnitudes: 1, notJudged: 0 })
+  })
+  it('reports a bound the ledger reads a budget apart, beside the magnitudes, never as a rule with no reason (VERDICTS.budget)', async () => {
+    const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: p => p.startsWith('packages/engine/src/') })]
+    const rulesLedger = { recorded: { commit: 'c0ffee' }, rules: { 'packages/engine/src/index::(top)::GAP': { verdict: 'magnitude' }, 'packages/engine/src/index::(top)::KINDS#1': { verdict: 'decides' }, 'packages/engine/src/index::far::>4#1': { verdict: 'budget' } } }
+    const read = await census({ today: null, now: scan(), rulesLedger })
+    expect(read.trees.NOW.debt.rules).toMatchObject({ ledger: true, unexplained: 0, magnitudes: 1, notJudged: 0, budgets: 1 })
+    expect(read.trees.NOW.debt.rules.list).toEqual([])
+  })
+})
+
+// (the owner's definition of the debt, 2026-11-12: a list with neither a citation nor recorded cases; the census reads both: a
+// list whose every entry the ledger's recording hit is defined by its recorded cases, counted apart from the cited ones)
+describe("a list defined by its recorded cases: every entry hit in the rule ledger's recording", () => {
+  let dir = ''
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'axt-rules-recorded-'))
+    const write = (p: string, t: string) => {
+      mkdirSync(dirname(join(dir, p)), { recursive: true })
+      writeFileSync(join(dir, p), t)
+    }
+    write('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    write(
+      'packages/engine/src/index.ts',
+      [
+        "export const KINDS = new Set(['para', 'head', 'cell'])",
+        "export const MORE = new Set(['one', 'two', 'six'])",
+        "export const CITED = new Set(['tabular', 'longtable', 'tabu']) // tabularx.sty's",
+        "export const main = (f: string) => /^(main|paper|manuscript|arxiv)\\.tex$/i.test(f)",
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: (p: string) => p.startsWith('packages/engine/src/') })]
+  const row = (entries: string[], hits: number[], extra = {}) => ({ kind: 'list', verdict: 'decides', size: entries.length, entriesDigest: digestOf(entries), hits, ...extra })
+  const classes = (c: Awaited<ReturnType<typeof census>>) =>
+    Object.fromEntries(c.trees.NOW.debt.lists.list.map((l: { name: string | null; class: string }) => [l.name, l.class]))
+  it('reads a list every entry of which the recording hit as defined by its recorded cases, apart from the cited ones', async () => {
+    const rulesLedger = {
+      recorded: { commit: 'c0ffee' },
+      rules: {
+        'packages/engine/src/index::(top)::KINDS#1': row(['para', 'head', 'cell'], [5, 1, 2]),
+        'packages/engine/src/index::(top)::MORE#1': row(['one', 'two', 'six'], [4, 0, 1]),
+        // (a pattern judged by its alternatives' words, one more than the census's entries: `arxiv` stands before `\.tex`)
+        'packages/engine/src/index::main::main#1': row(['main', 'paper', 'manuscript'], [9, 2, 1, 3], { judged: 4 }),
+      },
+    }
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    expect(classes(c)).toMatchObject({ KINDS: 'recorded', MORE: 'listed', CITED: 'defined' })
+    expect(c.trees.NOW.debt.lists.list.find((l: { form: string }) => l.form === 'regex')?.class).toBe('recorded')
+    expect(c.trees.NOW.debt.lists.headline).toEqual({ recorded: 2, listed: 1, defined: 1 })
+    expect(c.trees.NOW.debt.rules).toMatchObject({ unexplained: 0 })
+  })
+  it('reads no recorded cases where the row is not the list as it stands, or no hit of an entry is recorded', async () => {
+    const rulesLedger = {
+      recorded: { commit: 'c0ffee' },
+      rules: {
+        // (the list changed since the recording: another entry)
+        'packages/engine/src/index::(top)::KINDS#1': row(['para', 'head', 'list'], [5, 1, 2]),
+        // (no hits kept: a list not judged by entry)
+        'packages/engine/src/index::(top)::MORE#1': { kind: 'list', verdict: 'not judged', size: 3, entriesDigest: digestOf(['one', 'two', 'six']) },
+        // (a pattern whose words the hits do not number)
+        'packages/engine/src/index::main::main#1': row(['main', 'paper', 'manuscript'], [9, 2, 1], { judged: 4 }),
+      },
+    }
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    expect(classes(c)).toMatchObject({ KINDS: 'listed', MORE: 'listed' })
+    expect(c.trees.NOW.debt.lists.headline).toEqual({ listed: 3, defined: 1 })
+    expect((await census({ today: null, now: scan() })).trees.NOW.debt.lists.headline).toEqual({ listed: 3, defined: 1 })
+  })
+})
+
+describe('a list part cited, part recorded: each entry its comment does not name hit in the recording', () => {
+  let dir = ''
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'axt-rules-mixed-'))
+    const write = (p: string, t: string) => {
+      mkdirSync(dirname(join(dir, p)), { recursive: true })
+      writeFileSync(join(dir, p), t)
+    }
+    write('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    write(
+      'packages/engine/src/index.ts',
+      [
+        '// (a module of four lists: the first comment of a file is its header, no declaration\'s)',
+        '',
+        "// Black and Heavy: weights of TeX Live's Fontname weight.map; the other entries recorded cases",
+        'export const BOLD = /(?:Bold|Black|Heavy|Semi)/',
+        "// cmmi and cmsy: TeX's font names; the other entries recorded cases",
+        "export const MATH = new Set(['cmmi', 'cmsy', 'msam', 'eufm'])",
+        "// Bold, Black and Heavy: weights of TeX Live's Fontname weight.map; the other entries recorded cases",
+        'export const ALL = /(?:Bold|Black|Heavy)/',
+        "// tabularx.sty's",
+        "export const CITED = new Set(['tabular', 'longtable', 'tabu'])",
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: (p: string) => p.startsWith('packages/engine/src/') })]
+  const row = (entries: string[], hits: number[]) => ({ kind: 'list', verdict: 'decides', size: entries.length, entriesDigest: digestOf(entries), hits })
+  const classes = (c: Awaited<ReturnType<typeof census>>) =>
+    Object.fromEntries(c.trees.NOW.debt.lists.list.map((l: { name: string | null; class: string }) => [l.name, l.class]))
+  const rulesLedger = {
+    recorded: { commit: 'c0ffee' },
+    rules: {
+      'packages/engine/src/index::(top)::BOLD#1': row(['Bold', 'Black', 'Heavy', 'Semi'], [5, 0, 0, 2]),
+      // (eufm: neither named nor hit)
+      'packages/engine/src/index::(top)::MATH#1': row(['cmmi', 'cmsy', 'msam', 'eufm'], [0, 3, 1, 0]),
+      'packages/engine/src/index::(top)::ALL#1': row(['Bold', 'Black', 'Heavy'], [5, 0, 0]),
+      'packages/engine/src/index::(top)::CITED#1': row(['tabular', 'longtable', 'tabu'], [0, 0, 0]),
+    },
+  }
+  it('reads a list whose comment cites a definition for the entries it names, and the recording hit every other, apart', async () => {
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    expect(classes(c)).toEqual({ BOLD: 'mixed', MATH: 'listed', ALL: 'defined', CITED: 'defined' })
+    expect(c.trees.NOW.debt.lists.headline).toEqual({ mixed: 1, listed: 1, defined: 2 })
+  })
+  it('reads no recorded cases with no ledger: a list that says its other entries are recorded cases is listed', async () => {
+    expect((await census({ today: null, now: scan() })).trees.NOW.debt.lists.headline).toEqual({ listed: 2, defined: 2 })
+  })
+})
+
+describe('a plural in -s of an entry its comment names, read as named where the comment says so', () => {
+  let dir = ''
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'axt-rules-plural-'))
+    const write = (p: string, t: string) => {
+      mkdirSync(dirname(join(dir, p)), { recursive: true })
+      writeFileSync(join(dir, p), t)
+    }
+    write('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    write(
+      'packages/engine/src/index.ts',
+      [
+        '// (a module of two lists: the first comment of a file is its header, no declaration\'s)',
+        '',
+        "// Eqn and Tab: Wiktionary's eqn. and fancyref.sty's Tab.; a plural in -s of an abbreviation named here is its plural; the",
+        '// entries not named here are judged by recorded cases',
+        "export const PART = new Set(['Eqn', 'Eqns', 'Tab', 'Tabs', 'Rem'])",
+        "// Eqn and Tab: Wiktionary's eqn. and fancyref.sty's Tab.; the entries not named here are judged by recorded cases",
+        "export const BARE = new Set(['Eqn', 'Eqns', 'Tab', 'Rem'])",
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: (p: string) => p.startsWith('packages/engine/src/') })]
+  const row = (entries: string[], hits: number[]) => ({ kind: 'list', verdict: 'decides', size: entries.length, entriesDigest: digestOf(entries), hits })
+  it('reads Eqns and Tabs as named by Eqn and Tab where the comment says a plural is its singular, not where it does not', async () => {
+    const rulesLedger = {
+      recorded: { commit: 'c0ffee' },
+      rules: {
+        'packages/engine/src/index::(top)::PART#1': row(['Eqn', 'Eqns', 'Tab', 'Tabs', 'Rem'], [0, 0, 0, 0, 4]),
+        'packages/engine/src/index::(top)::BARE#1': row(['Eqn', 'Eqns', 'Tab', 'Rem'], [0, 0, 0, 4]),
+      },
+    }
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    const classes = Object.fromEntries(c.trees.NOW.debt.lists.list.map((l: { name: string | null; class: string }) => [l.name, l.class]))
+    expect(classes).toEqual({ PART: 'mixed', BARE: 'listed' })
+  })
+})
+
+describe("the ledger's areas: the census's debt areas, @readarxiv/text among them", () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'axt-rules-areas-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('package.json', JSON.stringify({ name: 'e3' }))
+    for (const pkg of ['engine', 'typeset', 'text']) put(`packages/${pkg}/src/far.ts`, 'export const far = (d: number) => d > 4\n')
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    execFileSync('git', ['add', '-A'], { cwd: root })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  it('holds a rule of a module of @readarxiv/text, as one of the engine or the typesetter (pkg:text, where the font tables are held)', () => {
+    const keys = Object.keys(sitesOfTree(root, ENGINE_PROFILE).rules)
+    expect(['engine', 'typeset', 'text'].map(pkg => keys.includes(`packages/${pkg}/src/far::far::>4#1`))).toEqual([true, true, true])
   })
 })

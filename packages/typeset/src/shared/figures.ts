@@ -1,14 +1,14 @@
-// S.figures (design-b §1.6 L4, T10, G16, A26): a page's figure texts (the content class `figures`, docs/route/orphan-text.md
-// stage 5), each drawn in its translation where it says something its source does not, in the faces of its font's family and
-// weight (its CJK characters in the target's CJK face, the rest in the Latin one), each fitted by its own width (figure-fit.ts),
+// S.figures: a page's figure texts (the content class `figures`, docs/route/orphan-text.md stage 5), each drawn in its
+// translation where it says something its source does not, in the faces of its font's family and weight (its CJK
+// characters in the target's CJK face, the rest in the Latin one), each fitted by its own width (figure-fit.ts),
 // each translation's line by its ink as the breaker sets every line (the blank halves of the marks at its edges, blanksOf);
 // else left the original's, why told: `no row`, `kept`, `untranslated`, `same` as its source, `unhidden` where the document
 // holds no group of it, a face's refusal (`served`), `unfit` (its width needs more than the floor). Width is the fit's only test
-// (figure-fit.ts, the owner's rule of 2026-11-13): a translation's height is not measured, nor what another text of its figure
-// needs (each at its own size, docs/PDF-READER.md §19.12). Ported from engine 065c1d973 run.mjs
-// paintFigures RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs
-// figureRuns, figureRunsWidth L2:4824-4836 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face not
-// loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
+// (figure-fit.ts): a translation's height is not measured, nor what another text of its figure needs (each at its own size,
+// docs/PDF-READER.md §19.12). It paints nothing (the hidden box, the SVG, the text layer are the reader's and D.*'s); a
+// figure's family, weight and slant are its font's name's (fontClassOf). A face not loaded yet is waited for (B.cover:
+// `waiting`, its faces in `wait`): no width is taken before its face is there.
+import { readFontName } from '@readarxiv/text'
 import { hangOf, leadOf } from '../breaker/break.ts'
 import { cover } from '../breaker/cover.ts'
 import { type FitMeasure, fitMeasure } from '../breaker/measure.ts'
@@ -19,7 +19,7 @@ import { firstCompress } from '../fit/walk.ts'
 import type { FaceId, Metrics } from '../types.ts'
 import { type FitFigure, fitFigure, sameAsSource } from './figure-fit.ts'
 
-/** a figure unit on its page (figure-rows.mjs checkFigures): its run's first glyph's origin, its direction, its box's length
+/** a figure unit on its page: its run's first glyph's origin, its direction, its box's length
  *  along it, its size and band, its anchor, its fill (-1 none), its font's name, its room */
 export type FigureRow = FitFigure & {
   id: number
@@ -35,7 +35,7 @@ export type FigureRow = FitFigure & {
   font: string
   /** its family, weight and slant where they are stated (a part's Style), else read off its font's name (`font`); its small
    *  capitals and its design where its style reads them (lay/read.ts tstyleOf: a face of small capitals, the design of its
-   *  family), so that its runs are drawn in its face as a body unit's are (Codex on #634, ec222ba69) */
+   *  family), so that its runs are drawn in its face as a body unit's are */
   cls?: {
     fam: 'serif' | 'sans' | 'mono' | 'math'
     bold: boolean
@@ -49,7 +49,7 @@ export type FigureRow = FitFigure & {
 }
 /** a figure text's family, weight and slant (FigureRow.cls) */
 export type FigureClass = NonNullable<FigureRow['cls']>
-/** a figure unit's row as the door gives it (rows.mjs unitOf): its state and its pieces, each in the style of its group's run on
+/** a figure unit's row as the door gives it: its state and its pieces, each in the style of its group's run on
  *  A where it stands in one (`cls`: a figure text's run of glyphs in another face, the part's SpanAt.style), else the unit's */
 export type FigureUnit = {
   state: string
@@ -80,7 +80,7 @@ type FiguresInput = {
   figures: readonly FigureRow[]
   /** a figure unit's row, undefined where the door has none */
   unit: (id: number) => FigureUnit | undefined
-  /** a figure unit's plain source (mt.mjs plainSource) */
+  /** a figure unit's plain source */
   src: (id: number) => string
   /** whether the document holds a group of a figure unit (the add-on's: VIS) */
   grouped: (group: string) => boolean
@@ -93,26 +93,16 @@ type FiguresInput = {
   metrics: Metrics
 }
 
-// ---- fonts.mjs classifyFont: the family, weight and slant a font's name tells (what figures read of it)
-const bare = (name: string) => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
-const MATH =
-  /^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex|mib|syb)|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i
-const MONO =
-  /mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|beramono|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i
-const SANS =
-  /sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|^cmssbx|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i
-const BOLD =
-  /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmbxti|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i
-const ITALIC =
-  /italic|ital\b|ital$|oblique|slant|kursiv|inclined|^(cm|lm)ti|^cmsl|^sfti|^sfsl|^sfsi|^sfbi|^cmbxti|^cmbxsl|^cmssi|^cmitt|^cmsltt|^cmmi|-it$|-bi$|linlibertineti|linlibertinetbi|linbiolinumti|-ita?$|italicmt|obliquemt/i
-/** a font's family (serif, sans, mono, math), weight and slant by its name (fonts.mjs:42 classifyFont, no PDF.js guess) */
+// ---- the family, weight and slant a font's name tells (what figures read of it)
+/** a font's family (serif, sans, mono, math), weight and slant by its name (no PDF.js guess: held
+ *  once in @readarxiv/text, readFontName), its small capitals and design left out: a figure's style takes them from its
+ *  class's own or the paper's (styleOf below) */
 export function fontClassOf(name: string): { fam: 'serif' | 'sans' | 'mono' | 'math'; bold: boolean; italic: boolean } {
-  const n = bare(name)
-  const fam = MATH.test(n) || /math|symbol/i.test(n) ? 'math' : MONO.test(n) ? 'mono' : SANS.test(n) ? 'sans' : 'serif'
-  return { fam, bold: BOLD.test(n), italic: ITALIC.test(n) }
+  const { fam, bold, italic } = readFontName(name)
+  return { fam, bold, italic }
 }
 
-/** a figure's translation in its runs by script, each in its face (L2:4825 figureRuns); and by style, where its characters
+/** a figure's translation in its runs by script, each in its face; and by style, where its characters
  *  (`at`, by code point) hold their own (a group's run on A), each run in its style's face */
 function figureRuns(
   text: string,
@@ -157,14 +147,14 @@ function textOfPieces(pieces: NonNullable<FigureUnit['pieces']>): { text: string
   while (out.at(-1)?.c === ' ') out.pop()
   return { text: out.map((x) => x.c).join(''), at: out.map((x) => x.cls) }
 }
-/** figureRuns' width at size 1, each run's in its face (L2:4836 figureRunsWidth, widthOf L2:1322) */
+/** figureRuns' width at size 1, each run's in its face */
 const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
   runs.reduce((a, r) => a + m.w100(r.s, r.face) / 100, 0)
 
 /** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the
  *  breaker sets every line (B.break leadOf, hangOf) at its target's first state (firstCompress), its first and last characters
  *  marks as the tokens class them (script.ts markOf: a mark's blank half as its run's face draws it; none where its ink crosses
- *  its em's middle, nor for a curly quote in an alphabet's Latin face, Codex on #634) */
+ *  its em's middle, nor for a curly quote in an alphabet's Latin face) */
 function blanksOf(runs: readonly FigureRun[], rules: FiguresInput['rules']): [number, number] {
   const compress = firstCompress(rules)
   const edge = (r: FigureRun | undefined, ch: string | undefined) => ({
@@ -175,11 +165,11 @@ function blanksOf(runs: readonly FigureRun[], rules: FiguresInput['rules']): [nu
   return [leadOf(edge(a, a && [...a.s][0]), compress), hangOf(edge(z, z && [...z.s].at(-1)), compress)]
 }
 
-/** a row a translation (rows.mjs: whole or partial, with its pieces) */
+/** a row a translation (whole or partial, with its pieces) */
 const translated = (u: FigureUnit | undefined): u is FigureUnit & { pieces: NonNullable<FigureUnit['pieces']> } =>
   !!u?.pieces && (u.state === 'whole' || u.state === 'partial')
 
-/** S.figures on one page (RUN:1441 paintFigures): each figure unit's outcome, in its rows' order; the faces to wait for */
+/** S.figures on one page: each figure unit's outcome, in its rows' order; the faces to wait for */
 export function figures(i: FiguresInput): { figures: Figure[]; wait: [FaceId, string][] } {
   const m = fitMeasure(i.metrics)
   const out: Figure[] = [],

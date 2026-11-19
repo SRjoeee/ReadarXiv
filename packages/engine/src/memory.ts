@@ -1,7 +1,7 @@
-// Memory-class errors (the prepare pipeline's bundle 4 contract, C8.4 and amendment M7): the failures that mean a paper does
+// Memory-class errors (PDF-READER §19.3): the failures that mean a paper does
 // not fit in this process, as V8 and Node name them. Every catch of the engine's that would turn an error into a verdict (a
 // refused page, a dropped part) lets one of these through unchanged, so that the service sees a memory failure as one and not
-// as a defect of the paper. The predicate is the web's own (container/src/run/memory.ts isMemoryError), reproduced word for
+// as a defect of the paper. The predicate is the host's own, reproduced word for
 // word, so that the child and the service agree on what a memory failure is. Imports nothing: the readers and the writers of
 // the layer's format take it. isMemoryText is the same definition for a reason that reaches text only (PDF.js's warnings: a
 // failure its worker recovers from, read by readPdf's watch, warnings.ts), V8's words in one place for both.

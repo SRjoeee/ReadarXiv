@@ -42,6 +42,62 @@ rebuild line, where staging serves another round behind a tester gate a fresh pr
 5. `pnpm build && pnpm zip` from the tag with a clean tree; the console line must read `[build] ref: v0.5.0`. Build `pnpm zip:staging` too if a test build is wanted.
 6. Put the new sha256 of the archive in the pull request and in the owner's upload kit, then submit to the store.
 
+## Going back from the rebuilt reader's release
+
+The first release whose PDF reader is the rebuilt one (`AXT_READER` `v2`, the build's default: `wxt.config.ts:69-82`) changes
+what a reader's machine holds against 0.5.2, the version the Chrome Web Store holds. Contract by contract: what is migrated
+forward, what 0.5.2 refuses, what a reader on 0.5.2 sees, and what this release meets when it comes back. Read from the code at
+the release's head and at the tag `v0.5.2`; the two IndexedDB stores are measured (the next section).
+
+- **The settings** (`local:config`). This release reads and writes `CONFIG_VERSION` 21 at the time of writing
+  (`src/config/schema.ts:9`; a step added before the release raises it, and what follows holds for any number above 20); 0.5.2
+  knows 20. *Forward*: the step 20 → 21 (`src/config/storage.ts:142-157`) adds the PDF reader's "What to translate", each
+  toggle as it was in effect; nothing else changes. *Back*: 0.5.2 reads a stored 21 as `tooNew`
+  (`v0.5.2:src/config/storage.ts:200-204`), runs on its defaults, and refuses every write while the stored value cannot be
+  read (`:260-266`), so nothing the reader set is written over. *What the reader sees on 0.5.2*: the settings page's card
+  S-O-02 with its reset, and in the PDF reader the capsule S-R-21 (`docs/UI.md` at 0.5.2); the default service translates;
+  the reader's own services, keys, prompts and glossary stay in storage, out of effect. *Coming forward again*: the stored 21
+  is read as it was and nothing is lost, unless the reset was pressed on 0.5.2: it writes 0.5.2's defaults at version 20
+  (`:276-281`), which this release then migrates, and the reader's own settings are gone. A reader who goes back alone
+  should not press it.
+- **The service health and the floating button's place** (`local:serviceHealth`, `local:floatingEntry`): the same items, of
+  the same shapes, as 0.5.2's (`src/shared/service-health.ts` and `src/entrypoints/background/floating-entry.ts` are
+  unchanged since the tag). Nothing either way.
+- **The papers kept for reading offline** (`axt-layer`, version 5) and **the translations** (`axt-translation-cache`,
+  version 3, its `answers`, `rows` and `ocr` tables): the next section. In short, 0.5.2 works on both, its own tables made
+  again empty (what it had kept, the HTML page's translations and the figures' readings included, was let go once by this
+  release's steps); this release, back again, works on its own rows, each read for 30 days from its write
+  (`src/cache/translate-store.ts:28`, `:79`).
+- **The website's API.** The rebuilt reader opens, follows and reads papers through the website's second API
+  (`/api/v2/open`, `/api/v2/papers/…`, `/api/v2/o/…`: `packages/reader/src/session/client.ts`); 0.5.2's reader reads the
+  first (`/api/v1/…`). Each works only while the website answers the API it reads, which this repository does not decide:
+  this release is uploaded only after the website serves the second API in production. Where the website answers the
+  rebuilt reader's open with 404, the reader takes it as a lasting refusal: the original stays, the translated displays are
+  greyed, no retry is offered (`client.ts:446`, `packages/reader/src/session/machine.ts:779`,
+  `packages/reader/src/chrome/events.ts:11-17`); a paper this machine keeps is answered from the store only where the
+  website is out of reach or answers 5xx (`src/pdf-reader/host/stored-fetch.ts:9-12`). What 0.5.2's reader shows once the
+  website no longer answers the first API depends on the website's answer: not established here.
+
+**A build that takes every reader back.** The store takes only a version above the one it holds, so going back for every
+reader is a new upload of older code under a higher number, the maintainer's act like any upload. From the contracts above,
+such a build:
+
+1. carries a `package.json` version above the release's;
+2. reads the release's `CONFIG_VERSION`. A tree at a lower number puts every reader who updated on the defaults (above): an
+   upload of 0.5.2's tree is no way back, and `next` at `065c1d973` (21, today's reader) is one only while the release is
+   at 21;
+3. runs a PDF reader whose API the website still serves. Today's reader (`AXT_READER=today pnpm build`, `wxt.config.ts:69-82`;
+   `lab/release-check/today-build.sh` builds it for the release check's full tier) reads the first API, and it goes with the
+   cut-over's deletion of today's reader. After that deletion, and once the website stops answering the first API, the
+   reader has no way back, only forward;
+4. needs no store step to work (measured, the next section); the release that comes forward after it carries the null steps
+   of the recipe there.
+
+Which build is made ready before the upload, and kept for how long, is the maintainer's to choose: a commit of this release's
+line that still holds today's reader and the release's configuration steps, built with `AXT_READER=today` under a higher
+number, or `next`'s tree while the release is at 21. Neither has been uploaded or installed over this release's stores; the
+stores' half of it is measured, the rest is read from the code.
+
 ## Going back a version: the reader's stores
 
 The first release whose PDF reader is the rebuilt one (the build's one reader since the cut-over; its default since 2026-11-13) steps two
@@ -83,7 +139,7 @@ Category: Productivity. Language: English, with the Chinese description below; t
 >
 > Rest on a sentence and its counterpart lights up on the other side; in translation-only mode the original sentence floats beside the line. The words inside figures are translated and overlaid in place — vector figures read exactly, bitmaps recognised in your browser by a model that comes with the extension: nothing to install, and an image never leaves your machine.
 >
-> Microsoft's translator works out of the box with no account. Add Google's, Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 180 target languages; interface in Simplified and Traditional Chinese, Japanese, Korean and English.
+> Google's and Microsoft's translators work out of the box with no account. Add Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 180 target languages; interface in Simplified and Traditional Chinese, Japanese, Korean and English.
 >
 > Paragraphs are sent to the service you choose; Chrome's built-in translation and a local endpoint keep them on your machine. Your API keys stay in the browser's extension storage. Translations are cached locally so a paper reopens at once.
 >
@@ -95,7 +151,7 @@ Category: Productivity. Language: English, with the Chinese description below; t
 >
 > 鼠标停在一句话上，另一侧对应的句子同时高亮；只译文模式下，原文句子会浮在这一行旁边。图里的文字也会翻译并覆盖在原位——矢量图直接读取，位图由扩展自带的识别模型在浏览器里识别：无需安装任何东西，图片不会离开你的电脑。
 >
-> 默认使用微软翻译，无需账号。也可以用 Google 翻译、Chrome 内置的离线翻译，或者任何兼容 OpenAI 接口的服务（OpenRouter、DeepSeek、本机的 Ollama 等），填自己的密钥。翻译到一半服务失效时，剩下的页面会退到免费服务继续，弹窗会说明。提示词和术语表让 LLM 服务的术语前后一致。180 种目标语言；界面有简体中文、繁體中文、日本語、한국어和英文。
+> Google 翻译和微软翻译开箱即用，无需账号。也可以添加 Chrome 内置的离线翻译，或者任何兼容 OpenAI 接口的服务（OpenRouter、DeepSeek、本机的 Ollama 等），填自己的密钥。翻译到一半服务失效时，剩下的页面会退到免费服务继续，弹窗会说明。提示词和术语表让 LLM 服务的术语前后一致。180 种目标语言；界面有简体中文、繁體中文、日本語、한국어和英文。
 >
 > 段落会发给你选定的服务；Chrome 内置翻译和本机端点让文字不出本机。API 密钥只保存在浏览器的扩展存储里。译文在本地缓存，再次打开同一篇论文即时显示。
 >

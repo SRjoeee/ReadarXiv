@@ -1,16 +1,16 @@
-// Laid.lit (design-a §1.2; docs/PDF-READER.md §17): what each pane lights of a member on a page, per sentence, from the same
+// Laid.lit (docs/PDF-READER.md §17): what each pane lights of a member on a page, per sentence, from the same
 // boxes on both panes' terms. A member lights by sentence where its row carries its sentences (Row.sentences: where each
 // sentence after the first begins in the unit's source projection and in its translation's, the translator's own cuts) and
 // its part places its words on A (Placed.words, which the prepare states for a unit lit by sentence, Unit.sentences): each
 // start found on both panes, one entry a sentence, numbered alike on every page the member is on (an entry empty on a page
 // that holds none of that sentence). Else it lights whole, one entry a pane, both panes together (a unit never lights by
-// sentence on one pane and whole on the other). Today's rule (anchors.mjs sentenceStarts, words.mjs, highlight.mjs):
+// sentence on one pane and whole on the other). The rule:
 // - on the left, A: a start at its sentence's first word the part places, its second or third where the first is not
 //   (LATE), past that none; its lines' boxes (each line's ink across, its fonts' boxes up and down) cut at the starts' glyphs;
-//   its label where it is drawn anew and the babel name it is led by widening its first sentence's row (today's unitRuns: a
-//   label or a lead with no row of its own widens its unit's row);
+//   its label where it is drawn anew and the babel name it is led by widening its first sentence's row (a label or a lead
+//   with no row of its own widens its unit's row);
 // - on the right, as drawn: its laid lines' tokens (D.sentences' tokenBox), each in the sentence its start falls in (a text
-//   token's place in the translation, one of no place of its own its neighbour's: words.mjs addUnitWords), the sentence's
+//   token's place in the translation, one of no place of its own its neighbour's, as addUnitWords places it), the sentence's
 //   start its first word's, from the opening brackets and quotes set against it; and the lines it keeps where they stand (a
 //   held line: its ink stays), in the sentence they stand in on A;
 // - an element, one piece on both panes, in one sentence on both (sentenceMap, the one place that decides it): the one its ink
@@ -18,15 +18,15 @@
 //   stands on widened over its ink (one TeX set past its line's text, an equation's number at the margin, stands in no line's
 //   box). A translator counts a mark at a cut with either sentence: Microsoft set its cut past "P²-MOPD", which begins the
 //   next sentence in the translation as in the source, and the left lit it from "P²-MOPD" on, the right with the sentence
-//   before (2611.03953v2 p2, the owner's report of 2026-11-10); 425 elements of the corpus's laid pages over today's rows lit
+//   before (2611.03953v2 p2); 425 elements of the corpus's laid pages over the stored rows lit
 //   with one sentence on one pane and another on the other (the sentence cover, packages/typeset/tests/replay/cover.ts);
 // - `own`: its displays (D.groups' shown), each a block of its own by its piece, the same boxes on both panes: lit alone where the
-//   pointer is over it, never with its member, whole or by sentence, and no row of its text (today's units.mjs displayBlockId:
-//   one hover id a display; the owner's reports of 2026-11-09, a sentence lit over its display on 2602.23285v2 p15, a paragraph
-//   lit over both of its on 2609.33403v1). The rest of the ink it keeps (a piece or a label kept where it stands, a character)
-//   lights with its member, on both panes the row it stands on widened over it (today's unitRuns), else a row of its own: lit
-//   by sentence, a kept piece with its sentence (an element no sentence of the translation places, the sentence it stands in on
-//   A, as a held line), a label with the first, a kept character with the token beside it (words.mjs: the owner, 2026-10-30).
+//   pointer is over it, never with its member, whole or by sentence, and no row of its text (one hover target a display: a
+//   sentence lit over its display on 2602.23285v2 p15, a paragraph lit over both of its on 2609.33403v1). The rest of the
+//   ink it keeps (a piece or a label kept where it stands, a character) lights with its member, on both panes the row it
+//   stands on widened over it, else a row of its own: lit by sentence, a kept piece with its sentence (an element no
+//   sentence of the translation places, the sentence it stands in on A, as a held line), a label with the first, a kept
+//   character with the token beside it (docs/PDF-READER.md §17.1).
 // A member not laid, and every member of a page that waits, lights from A on both panes: the right mirrors the left (by
 // sentence where its row's starts are found on A), its displays apart as above. A figure text the original sets turned
 // (Placed.dir, its run Placed.run) is lit whole, turned with its text: its boxes in its run's frame (Laid.lit's `dir`), on A its
@@ -166,7 +166,7 @@ export function runBoxOfA(m: Placed, page: number): Box | null {
 export type Sentences = { src: readonly number[]; tr: readonly number[] }
 /** a place on A: the index of a line in Placed.lines, an x on it */
 type At = [line: number, x: number]
-/** how many words after a sentence's first its start may be found at (today's anchors.mjs LATE) */
+/** how many words after a sentence's first its start may be found at (its second or third, docs/PDF-READER.md §17.9) */
 const LATE = 2
 const after = (a: At, b: At) => a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])
 
@@ -185,7 +185,7 @@ export function firstWordAt(words: readonly (readonly [number, number, number])[
 }
 
 /**
- * Where each sentence after the first begins on A (today's anchors.mjs sentenceStarts): row start `o` at the first of the
+ * Where each sentence after the first begins on A: row start `o` at the first of the
  * part's words (Placed.words) at or after it that the part places, among its sentence's first three (LATE) and before the
  * next start's; each after the one before and after the unit's own first word. Null where one is not found
  */
@@ -227,7 +227,7 @@ function displayRowOf(m: Placed): (l: Line) => boolean {
 }
 
 /**
- * Which sentence each piece of a member is in, decided once for both panes (the owner's rules of 2026-10-30: both panes light
+ * Which sentence each piece of a member is in, decided once for both panes (docs/PDF-READER.md §17.9: both panes light
  * the same thing; a sentence lights all its pieces, text, elements, labels): the unit cut at its row's starts, half-open, each
  * piece in the sentence its start falls in. On A a piece's start is where it begins on the page (`startsA`: a line of A from a
  * start to the next); in the translation a token's first character's place (`startsT`); an element, one piece in both texts,
@@ -288,7 +288,7 @@ function cutOnA(m: Placed, page: number, keep: (l: Line) => boolean, starts: rea
 }
 
 /**
- * Each place a row's pieces take in the translation's plain text (words.mjs pieceOffsets: every piece that is no text a
+ * Each place a row's pieces take in the translation's plain text (every piece that is no text a
  * space, white space one, trimmed: the text the tokens' `at` count in, breaker/tokens.ts), and each offset of the
  * translation's projection there (Row.sentences.tr counts in it: text pieces as the row writes them, each element one
  * character, a group's edges none). Null where a text's shown form cannot be read back character by character
@@ -373,7 +373,7 @@ function shownIndex(p: TextPiece, sh: string): number[] | null {
  *  id: a crop of its ink or its text) and whether it is a label's crop */
 type Placed_ = { line: number; box: Box; place: number; el?: string; label?: true }
 /** the member's laid tokens on `page`, in its text's order, each with a place: its own (a text token's `at`), its piece's (an
- *  element drawn as a crop or as text), else the token's before it, else after it (words.mjs addUnitWords) */
+ *  element drawn as a crop or as text), else the token's before it, else after it, as addUnitWords places them */
 function tokensOn(
   L: Layout,
   page: number,
@@ -416,8 +416,8 @@ function tokensOn(
  * first word or element (a letter, a digit or an element at or after it, before the next start) and the opening marks set
  * against it, as the source's is found on A at its first word or element (Placed.words). An element its translation begins a
  * sentence with is that sentence's (2611.03953v2 p5: "Three details of Equation (6) matter." came back with the reference first, "(6)" then "three details
- * matter", the row's start at the reference; moved on to the first letter, it lit with the sentence before, the owner's report
- * of 2026-11-10). Null where one has none
+ * matter", the row's start at the reference; moved on to the first letter, it lit with the sentence before). Null where one
+ * has none
  */
 function startsInPlain(places: NonNullable<ReturnType<typeof placesOf>>, tr: readonly number[]): number[] | null {
   const starts = startsInProjection(places.text, tr)
@@ -453,7 +453,7 @@ export function startsInProjection(text: string, tr: readonly number[]): number[
 /**
  * The boxes of the laid tokens, one a run of a sentence's tokens on a line: across them, the line's band up and down (its
  * tokens' boxes together), each running on to the next run's start on the line (the space after a full stop is the sentence's
- * before it, as today's shapes tile a row: a pointer over it lights that sentence), the line's last one to its last token's
+ * before it, so that the runs tile the row: a pointer over it lights that sentence), the line's last one to its last token's
  * end. A sentence's tokens on a line are one run but where an element of another stands among them (one its translation set
  * inside it): a run each side of it. The band whatever the run holds: a run of an element's crop alone took the crop's ink
  * height, short of the line's (2602.23285v2-ja p13 t219, every toggle on: 554.7-562.1 in a band of 552.8-563.8)
@@ -488,7 +488,7 @@ function rowsBySentence(tokens: readonly (Placed_ & { s: number })[], n: number)
   return out
 }
 
-/** the sentence of the token beside a box on its band (words.mjs placeBeside: a kept character at its neighbour's place) */
+/** the sentence of the token beside a box on its band (placeBeside: a kept character at its neighbour's place) */
 function besideOf(tokens: readonly (Placed_ & { s: number })[], [x0, y0, x1, y1]: Box): number {
   const x = (x0 + x1) / 2,
     y = (y0 + y1) / 2
@@ -506,7 +506,7 @@ function besideOf(tokens: readonly (Placed_ & { s: number })[], [x0, y0, x1, y1]
 }
 
 /** a member lit from A on both panes (not laid, or waiting): its lines on the page, its label with the line it stands on, by
- *  sentence where its row's starts (`src`, Row.sentences) are found on A (today's mirror: a unit shown as the original's lights
+ *  sentence where its row's starts (`src`, Row.sentences) are found on A (a mirror: a unit shown as the original's lights
  *  by the left's starts on both panes); a turned figure text its run's box, turned with it */
 export function litOfA(m: Placed, page: number, src?: readonly number[]): Lit {
   const run = runBoxOfA(m, page)
@@ -537,7 +537,7 @@ export function litOfA(m: Placed, page: number, src?: readonly number[]): Lit {
  * reading (U.elements' kept, in place); `lead` the name it is led by, drawn anew with it; `by` its row's sentences and the
  * pieces its reading laid (rowPieces), where its row has sentences; `carried` its label as drawn at the end of the name before
  * (a label no line opens with, lay/flow.ts), on another member's line: lit with its first sentence on the right as on A, the
- * label's owner one on both panes (the coordinator's ruling of 2026-11-11)
+ * label's owner one on both panes (docs/PDF-READER.md §18.16)
  */
 export function litLaid(
   m: Placed,
@@ -564,8 +564,7 @@ export function litLaid(
     els,
     label: m.label ? { ink: [m.label.ink], drawn: relabelled } : null,
     fixed: m.fixed ?? 0,
-    // (the elements' group as the entry decides it: one the translation omits is drawn nowhere else, its ink stays and lights,
-    // #626's review)
+    // (the elements' group as the entry decides it: one the translation omits is drawn nowhere else, its ink stays and lights)
     elementsOff: !!(o.off & 2),
   })
   const displays = shown.filter((s) => s.kind === 'display')
@@ -647,10 +646,10 @@ function withBreaks(
  * The translator's sentence cuts with each sentence that holds no word of the source joined to its neighbour on both panes:
  * the one before it, the next where it is the first. Such a sentence holds no word at an offset in it (Placed.words): what a
  * translator cuts off after a unit's last stop, a citation, a reference's DOI, URL or back-reference list, a display. Its start
- * has no word placed on A, and the whole unit lit whole for it (startsOnA): the lab's 8 units by default and 78 with every switch
- * on that today pairs by sentence were all such, or a translation's sentence with no token drawn (bySentence's `unlaid`: an
- * element moved past the translation's last stop), joined the same way (the feature list's F1). Joined, the other sentences stay
- * the translator's pairs, and the one joined lights with its neighbour on both panes (lanes/hl-display: a cut stands on both
+ * has no word placed on A, and the whole unit lit whole for it (startsOnA): of the lab's units so lit whole that are lit by
+ * sentence otherwise, 8 by default and 78 with every switch on, every one was such, or a translation's sentence with no token
+ * drawn (bySentence's `unlaid`: an element moved past the translation's last stop), joined the same way. Joined, the other
+ * sentences stay the translator's pairs, and the one joined lights with its neighbour on both panes (a cut stands on both
  * panes or on neither). A paragraph point pairs with these cuts (unit/breaks.ts paraPieces)
  */
 export function worded(

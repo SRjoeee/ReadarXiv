@@ -1,8 +1,6 @@
 // Synchronised scrolling: the identity follower (createFollower), the reading view's, where both panes hold the original's pages
 // at its sizes and zoom (docs/PDF-READER.md §11.7), so that the other pane moves by the reader's own steps and is levelled at rest
-// by the same point of the same page. No map is needed. (The synced-scroll experiment's map between two layouts, which the parked
-// compiled-copy session read, went with the rules audit of 2026-11-04: exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md,
-// sixteenth addendum, holds it.)
+// by the same point of the same page. No map is needed.
 
 /** a pane as the follower moves it: its scroller, its page stack (what a transform moves), its pages drawn where they now
  *  show, and its renderer told it shows `shift()` px below its scrollTop (null to stop) */
@@ -67,7 +65,7 @@ type Moving<P> = Exclude<Glass<P>, { anim: null }>
 // The reader drives one pane — the one last touched by a wheel, a touch, a key or a press — and the other follows it as one
 // sheet: while the reader scrolls, by the reader's own steps; once the scroll has ended (a trackpad's glide included) and
 // 150 ms have passed, it glides so that the point at the top of the driver's view stands at the same height on both
-// (top alignment at rest: exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth and seventeenth addenda).
+// (top alignment at rest: docs/PDF-READER.md §3, "Sync scrolling", and §11.7).
 // The other pane's scroll events never drive back.
 //
 // A follower set by script each frame moves on the main thread a frame late, and misses frames whenever PDF.js draws the

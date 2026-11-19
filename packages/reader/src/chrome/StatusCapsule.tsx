@@ -4,12 +4,13 @@
 // A load or a translation under way has no capsule: the progress line under the toolbar shows it (ProgressLine), and its
 // words are said here; a host that words a run's stages (the website's) has the capsule say them too, with the spinner, once
 // the wait has lasted WAIT_SHOWN_MS (a wait the reader cannot perceive is not announced).
-// A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone, for their time.
+// A host's passing words (a toast: the website's "copied") come first, in its words and sign, alone, for their time, and so
+// do the chrome's own for a face lost (S-R-28).
 // A notice has a close of its own, remembered for the visit, and its retry chip where the run stopped
 // for a reason a retry mends
 // (status.ts capsuleOf); the sentence for a write storage refused (S-R-22) is one of them, an error that stays until it
 // is closed or a later write lands. The narrow window's words leave by themselves after 5 s of being read, waiting while
-// the pointer is over them or they hold the focus (the maintainer, 2026-10-01). Settings that cannot be read are said
+// the pointer is over them or they hold the focus (S-R-14). Settings that cannot be read are said
 // for as long as it is so, with the way to the settings page and no close (S-R-21). A paper that cannot be had as a bilingual PDF has no close: its HTML version is a link, opened where
 // the settings say — a new tab, or this one, the reader's own or the PDF page it lies over (`_top`; a click lets a frame
 // navigate its page). A failure never takes the focus; the card's reason is said in this region
@@ -211,7 +212,7 @@ export function StatusCapsule({
   )
 }
 
-/** how long the narrow window's words are read before they leave, ms: the maintainer's ruling (UI.md S-R-14), unmeasured */
+/** how long the narrow window's words are read before they leave, ms: a ruling (UI.md S-R-14), unmeasured */
 const NARROW_MS = 5000
 /** how long a run's wait lasts before its capsule enters, ms (PDF-READER §6.6): a wait the reader cannot perceive is not
  *  announced. Of the family of the page's mark, which PDF.js shows after 400 ms (`--loading-icon-delay`), and of the
@@ -223,8 +224,8 @@ export const WAIT_SHOWN_MS = 400
  * that ended sooner; once in, it stays through every change of its stage and words (a count that pauses and moves again, our
  * server heard again) until no run's capsule is wanted, when it leaves at once. The gate is for a wait that begins with nothing
  * on screen: where a capsule is (`showing`: the network's words, the failed passages' notice, a run's capsule still leaving) and
- * the state turns into a run, the capsule changes its words in place at once, never a hole of WAIT_SHOWN_MS (the flow-demo,
- * 2026-11-12; the coordinator's R4: the grace never makes a gap after a capsule that was showing). Every other capsule (a refusal,
+ * the state turns into a run, the capsule changes its words in place at once, never a hole of WAIT_SHOWN_MS (PDF-READER
+ * §6.6, §8.1: the grace never makes a gap after a capsule that was showing). Every other capsule (a refusal,
  * a notice, a toast, an error) at once
  */
 function useWaitShown(wanted: Capsule | null, showing = false): Capsule | null {
@@ -251,8 +252,8 @@ function useWaitShown(wanted: Capsule | null, showing = false): Capsule | null {
   return pending ? null : wanted
 }
 
-/** what the narrow window's words are owed by, where the switch shows the translation alone (the website's rule, its owner's of
- *  2026-11-03): a window that showed the paper side by side (`readWide`: some pages drawn, side by side on screen, the window wide)
+/** what the narrow window's words are owed by, where the switch shows the translation alone (the website's rule, PDF-READER
+ *  §5): a window that showed the paper side by side (`readWide`: some pages drawn, side by side on screen, the window wide)
  *  and was then narrowed while reading (`narrowed`) says that it shows the translation alone; a page opened in a narrow window
  *  says nothing (its switch shows the translation chosen), and widened again it says nothing either. What it has seen only grows */
 interface NarrowWatch {
@@ -270,7 +271,7 @@ function narrowWatch(was: NarrowWatch, now: { narrow: boolean; display: string; 
 
 /**
  * A capsule that leaves by itself after `ms` of being read: the time stands while the pointer is over it or it holds the
- * focus, and the rest of it runs once neither does (the maintainer, 2026-10-01). `on` starts it afresh, the pointer and
+ * focus, and the rest of it runs once neither does (S-R-14). `on` starts it afresh, the pointer and
  * the focus as if elsewhere — a capsule just drawn has had neither — and `leave` is called once the time is out. The
  * handlers go on the capsule; the website's capsule leaves the same way
  */

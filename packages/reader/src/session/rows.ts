@@ -1,8 +1,7 @@
-// The rows made here, as today's run makes them (R session/run.ts §6, `rank`, `contextOf`; docs/PDF-READER.md §11.10): the paper's
-// own names first (§19.14), then the units nearest the page in view (the units that page and the next wait on), then ahead before
-// behind, a unit behind the reading place counted twice as far; the paper's title and abstract as an LLM's context; a retry
-// asking for the units with no row alone (those translated are held). Pure: the reader gives it the units, the rows held and the
-// reading place.
+// The rows made here (docs/PDF-READER.md §11.10): the paper's own names first (§19.14), then the units nearest the page in
+// view (the units that page and the next wait on), then ahead before behind, a unit behind the reading place counted twice as
+// far; the paper's title and abstract as an LLM's context; a retry asking for the units with no row alone (those translated
+// are held). Pure: the reader gives it the units, the rows held and the reading place.
 import { type Row, toggleKind, type Unit } from '@readarxiv/format'
 import { kindShown } from '../compose/classes.ts'
 import { committed, type Page } from '../compose/page.ts'
@@ -32,8 +31,8 @@ export function contextOf(units: readonly Unit[], title: string): PaperContext {
 }
 
 /**
- * The units in the order they are asked for (R run.ts `rank`): the paper's own names (units of kind `name`, which no page waits
- * on and every theorem head of their name reads: today's namesFirst, rows.mjs, PDF-READER §19.14) first, so that the first
+ * The units in the order they are asked for: the paper's own names (units of kind `name`, which no page waits on and every
+ * theorem head of their name reads: PDF-READER §19.14) first, so that the first
  * batch carries them; then those `near` names (the units the page in view and the next wait on), in their own order; then by
  * their distance from the reading place (`anchor`, an index into `units`: the first near unit's, else the page's share of the
  * paper), ahead before behind, a unit behind counted twice as far
@@ -122,9 +121,9 @@ export function runOf(s: State): {
   return { run: (own || ahead) && live, own, ahead, live, failed: r.s === 'failed' && !asking, asking }
 }
 /**
- * Our server's work for the view without the reader's acting, as the document read for the target states it (PDF-READER §8, the
- * coordinator's R3 of 2026-11-12; never a time): its prepare running (`prepare.state`: a layer lands at its end, and the target's
- * run over its units follows, started by our server on units it has not run, worker v2 machine.ts startRecent, or asked by this
+ * Our server's work for the view without the reader's acting, as the document read for the target states it (PDF-READER §6.6,
+ * §8; never a time): its prepare running (`prepare.state`: a layer lands at its end, and the target's
+ * run over its units follows, started by our server on units it has not run (its recent run), or asked by this
  * session's open, needsOf); or a need of the visit (needsOf: the prepare of a stale `layer`, the target `done` on other `units`
  * than the layer's) that the session asks: its open under way, or not yet asked with no wait named for it. The target's attempt
  * covers the layer where its `units` are the layer's own (needsOf's comparison by digest). Whether that work goes on is the
@@ -218,11 +217,11 @@ export function rowsTold(s: State, view: ViewRows, run: ReturnType<typeof runOf>
 /**
  * The view's wait as the reader tells it (reader.ts stateOf; the whole-visit tests read the same): what the view shown lacks of
  * what our server's work would bring (viewOf over the run's work), waited for while the system still works for this reader by
- * itself (runOf `live`: R6), the rows as told (rowsTold), our server's link as the count's word for it (linkSaid), and, over a
- * layer shown, our server's look stopped or paused while the view lacks what that work would bring (`stopped`: its cause, its
- * time, whether the session asks again by itself), so that its cause is said there as where no layer is shown: over the count
- * while the session goes on by itself (the queue, the rate; the network is `network`'s, linkSaid), the wait over where it will not
- * (the limit, our server out of reach: the coordinator's R7, R8 of 2026-11-12)
+ * itself (runOf `live`: PDF-READER §8.1), the rows as told (rowsTold), our server's link as the count's word for it
+ * (linkSaid), and, over a layer shown, our server's look stopped or paused while the view lacks what that work would bring
+ * (`stopped`: its cause, its time, whether the session asks again by itself), so that its cause is said there as where no
+ * layer is shown: over the count while the session goes on by itself (the queue, the rate; the network is `network`'s,
+ * linkSaid), the wait over where it will not (the limit, our server out of reach: §8.1)
  */
 export function toldWait(
   s: State,

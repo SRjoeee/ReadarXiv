@@ -26,34 +26,38 @@ export const INVARIANTS = [
   {
     id: 'I1',
     says: "all groups on, the composed page paints what arXiv's page paints, glyph for glyph, box for box and pixel for pixel (in the reader's canvas, up to the split show's residue)",
-    gap: "the composed page in the reader is held on the harness's own fixtures only; on corpus papers the harness measures its residue and holds nothing, and the canvas gate (the release tier's) passed in lane L1 only with a stand-in (`--normalize`) for a reader change not built",
+    gap: "in the reader's software canvas a split show's glyphs paint other pixels than arXiv's on 9 pages of 7 of the canvas gate's 12 papers (at most 102 pixels and a channel delta of 81 a page, none outside those glyphs: the split moves the pen into the show's matrix, which the canvas holds in single precision), each paper held to its record (canvas.json); its fix after the launch / before the launch: the coordinator's ruling of 2026-11-19",
   },
   {
     id: 'I2',
     says: 'a group off hides exactly its ink, rules and images included; no pixel outside that ink changes',
-    gap: 'no check of a group turned off in the reader; the prepare proves it in PDF.js and Cairo only',
+    gap: null,
   },
-  { id: 'I3', says: "a laid unit's ink stays inside its regions and room and overlaps no other ink", gap: null },
+  {
+    id: 'I3',
+    says: "a laid unit's ink stays inside its regions and room and overlaps no other ink",
+    gap: "a figure's drawing (its paths and images) that stands on no member's text line: no part states it (Room.stays states the ink beside a member's text lines alone), so a laid unit's ink over it is not seen (reader-parts reads I3 by ink against all the part states that stays, on the lay the product makes)",
+  },
   { id: 'I4', says: 'every element of a laid unit appears exactly once', gap: null },
   {
     id: 'I5',
     says: 'no line wider than its frame beyond the stated tolerance; no unit set under the size floor',
-    gap: 'the runners count the restated form (a closing mark\'s blank half and an overfull line with nothing to shrink set apart); no gate counts the size floor',
+    gap: "the figure texts and the babel names, fitted by rules of their own (shared/figures.ts, shared/names.ts, each never under the rule file's floorMin): the Page states no scale or slot of theirs, so neither their width nor their floor is counted (reader-parts counts every other laid member on the lay the product makes: a line past its slot by its ink beyond the breaker's 0.01 pt, an end mark held to its ink where TeX set it; a member under its own floor)",
   },
   {
     id: 'I6',
     says: 'the same inputs give the same bytes (prepare) and the same display list (typesetting on table metrics)',
-    gap: 'a page laid twice gives the same display list on one pair alone (`purity.test.ts`, with lab data); over the corpus only a unit as every page\'s lay that runs its first page\'s fill lays it (`sentence-cover`)',
+    gap: "a unit the head pass lays otherwise across the pages' lays that run its first page's fill (headOf reads the paragraph over it as one lay filled it and the other did not: 11 units on each store's 90 pairs): held where it is, a rise failing reader-parts (its record), and remedied after the launch, once the part states the head (the coordinator's ruling); a page laid twice gives the same display list on every page of both stores (reader-parts, sentence-cover)",
   },
   {
     id: 'I7',
     says: "a unit's boxes on the left and on the right are the same boxes",
-    gap: "no gate: the harness holds the slots' page boxes at five scales and the highlight lighting one unit on both panes, not a unit's boxes",
+    gap: null,
   },
   {
     id: 'I8',
     says: 'the text layer of a laid page reads the translation in reading order',
-    gap: 'held on the fixtures and five corpus papers (the harness; the website\'s e2e on fixtures); not on the corpus',
+    gap: null,
   },
   {
     id: 'I9',
@@ -244,7 +248,7 @@ export const TARGETS = [
     value: n => n.gplReachedNow != null && `reached now ${n.gplReachedNow}, after the cut-over ${n.gplReachedAfter}; ported files left after it ${n.gplFilesAfter}`,
     met: n => (n.partial ? null : n.gplReachedAfter === 0 && n.gplFilesAfter === 0),
   },
-  { id: 'tiers', measure: 'Tiers that run on a pull request', baseline: "unit tests, the gate's model tier", target: 'every pull-request tier of §4.9', from: null, why: 'planned in lab/release-check/CI.md; the workflows are not written yet' },
+  { id: 'tiers', measure: 'Tiers that run on a pull request', baseline: "unit tests, the gate's model tier", target: 'every pull-request tier of §4.9', from: null, why: "the fast tier on GitHub's runners (.github/workflows/ci.yml: check, reader, extension; lab/release-check/CI.md), shown by a pull request's run; the full and release tiers read the lab's data and run on the maintainer's machine by hand, recorded with the commit, never from this public repository's workflows" },
 ]
 
 // ---------------------------------------------------------------- reading a gate's output
@@ -278,8 +282,54 @@ export function harnessLabJudge(step) {
     l1: of.filter(m => m[2] === "lane L1's").map(m => m[1]),
   }
   const refused = /^FAIL fixtures: (.*)$/m.exec(text)?.[1] ?? null
-  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : null)
-  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+  // (I7 and the typesetter's pages' I8 hold nothing where the served faces are not there: a line of theirs that says so fails
+  // the gate, never passes it)
+  const unheld = [...text.matchAll(/^ok {3}(I7|I8): .*\(([^()]+)\) \{"skipped":"([^"]*)"\}$/gm)].map(m => `${m[1]} (${m[2]}): ${m[3]}`)
+  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : unheld.length ? `held nothing: ${unheld.join('; ')}` : null)
+  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !unheld.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+}
+
+/** text-order.mjs's totals: "I8 over the run's bundles: P pairs, L laid pages of N, M members (R runs) read; missing X, out of
+ *  order Y; T ms", its first listed member, and every member it lists, one a line ("  out of order <pair> p<n> ord <ord>"):
+ *  `missingListed`, `outOfOrderListed` as `<pair> p<n> ord <ord>` */
+export function textOrderOf(text) {
+  const m = /^I8 over the run's bundles: (\d+) pairs, (\d+) laid pages of (\d+), (\d+) members \((\d+) runs\) read; missing (\d+), out of order (\d+); (\d+) ms/m.exec(text)
+  const first = /^ {2}((?:missing|out of order) .*)$/m.exec(text)?.[1]
+  const listed = kind => [...text.matchAll(new RegExp(`^ {2}${kind} (\\S+ p\\d+ ord \\d+)$`, 'gm'))].map(x => x[1])
+  return m
+    ? { pairs: num(m[1]), laidPages: num(m[2]), pages: num(m[3]), members: num(m[4]), runs: num(m[5]), missing: num(m[6]), outOfOrder: num(m[7]), ms: num(m[8]), ...(first ? { first } : {}), missingListed: listed('missing'), outOfOrderListed: listed('out of order') }
+    : {}
+}
+
+/** text-order's record (lab/release-check/text-order.json): the out-of-order members at the last integrated round, by pair */
+export const textOrderRecord = root => JSON.parse(readFileSync(join(root, 'lab/release-check/text-order.json'), 'utf8'))
+
+/**
+ * text-order's verdict, read from its totals and its list (textOrderOf), never its exit: pairs read, no member missing, every
+ * member the totals count listed, and every out-of-order member one its record names (`record.outOfOrder`, by pair: `p<n> ord
+ * <ord>`): a member out of order the record does not name fails the gate; a recorded one read in order now is said (the record
+ * to lower)
+ */
+export function textOrderJudge(text, record) {
+  const t = textOrderOf(text)
+  const held = new Set(Object.entries(record?.outOfOrder ?? {}).flatMap(([pair, ms]) => ms.map(x => `${pair} ${x}`)))
+  const now = t.outOfOrderListed ?? []
+  const fresh = now.filter(x => !held.has(x))
+  const fell = t.pairs > 0 ? [...held].filter(x => !now.includes(x)) : []
+  const whole = (t.missingListed?.length ?? -1) === t.missing && now.length === t.outOfOrder
+  const notes = [
+    !(t.pairs > 0) && 'no pair read',
+    t.missing > 0 && `missing: ${t.missingListed.slice(0, 4).join(', ')}`,
+    !whole && t.pairs > 0 && `the totals count ${t.missing} missing and ${t.outOfOrder} out of order, the list names ${t.missingListed?.length} and ${now.length}`,
+    fresh.length && `out of order and not in the record: ${fresh.slice(0, 6).join(', ')}${fresh.length > 6 ? ` and ${fresh.length - 6} more` : ''}`,
+    fell.length && `in order now, the record to lower (${record?.commit}): ${fell.join(', ')}`,
+  ].filter(Boolean)
+  const { missingListed, outOfOrderListed, ...numbers } = t
+  return {
+    pass: t.pairs > 0 && t.missing === 0 && whole && !fresh.length,
+    numbers: { ...numbers, recorded: held.size, fresh: fresh.length, fell: fell.length },
+    ...(notes.length ? { note: notes.join('; ') } : {}),
+  }
 }
 
 /** a terminal's colours (vitest colours its summary where it is asked to) */
@@ -337,8 +387,28 @@ export function typesetOf(text) {
   const first = /^\{"pairs":.*\}$/m.exec(text)
   if (first) {
     const c = JSON.parse(first[0])
-    Object.assign(out, { pairs: c.pairs, pages: c.pages, msPerPage: c.msPerPage })
+    Object.assign(out, { pairs: c.pairs, pages: c.pages, msPerPage: c.msPerPage, ...(c.threw != null ? { threw: c.threw } : {}) })
   }
+  // (I11, the runner with --entry: every lit box painted whole on both panes, painted.mjs; those not painted whole)
+  const painted = /^I11, every lit box painted whole on both panes \(painted\.mjs\): (\d+) pages, \d+ shapes, (\d+) boxes; (\d+) not painted whole/m.exec(text)
+  if (painted) Object.assign(out, { I11pages: num(painted[1]), I11boxes: num(painted[2]), I11: num(painted[3]) })
+  // (the spacing rule's four lines, F28 (spacing-gate.ts, docs/PDF-READER.md §18.90): each line's count of members)
+  const f28 = /^F28 the spacing rule over the members read .*$/m.exec(text)?.[0]
+  if (f28) {
+    const at = re => num(re.exec(f28)?.[1] ?? Number.NaN)
+    out.F28 = [at(/\(i\) a float's member above its rule-1 pitch (\d+)/), at(/\(ii\) a body member \(a note too\) the fill lays above its page's target and band (\d+)/), at(/\(iii\) under its script's floor (\d+)/), at(/\(iv\) a step smaller though it sets whole at its size, no stated cause (\d+)/)]
+  }
+  // (I3, I4 and I5 on the lay the product makes, the runner with --entry (gate-l1.mjs, the entry's own lay, entry-laid.mjs): its
+  // pages, those read, each count; I3 by ink's overlaps on the page's own setting (not held), the runs not read; I6's purity)
+  const theirs = /^the invariants on the entry's lay \([^)]*\): (\{[^}]*\})/m.exec(text)
+  if (theirs) {
+    const j = JSON.parse(theirs[1])
+    out.entry = { pages: j.pages, read: j.read, I3: j.I3, I4: j.I4, I5: j.I5, I5floor: j.I5floor, unread: j.unread }
+    const ink = /^I3 by ink on the entry's lay \(ink-gate\.ts\): \d+ overlaps .*?; beside, (\d+) with ink its own .*?; (\d+) runs set along a direction read by their corners' box; (\d+) runs no measure holds/m.exec(text)
+    if (ink) Object.assign(out.entry, { I3own: num(ink[1]), turned: num(ink[2]), unmeasured: num(ink[3]) })
+  }
+  const purity = /^I6, each page laid twice by the entry over the same inputs \(purity\): (\d+) pages, (\d+) whose two Pages differ/m.exec(text)
+  if (purity) Object.assign(out, { purityPages: num(purity[1]), purity: num(purity[2]) })
   return out
 }
 
@@ -348,40 +418,80 @@ export function typesetOf(text) {
  *  its first word. Before it, such a point had no first word to fall back to, and its count was reported, not held */
 export const PARAS_HELD = true
 
+/** the counts of one part of a reader gate's run (the set, or the added pairs) that each invariant is read by, every one a
+ *  number the run's summary states (typesetOf), `null` where its line is absent: I3, I4 and I5 (its width and its size floor) on
+ *  the entry's lay; I6 across the lays (the head pass's known cause, and any other) and its purity (a page laid twice); I10; I11;
+ *  the reads gate's ids read outside a page's wait set; the paragraph points run on; F28's four lines; the pairs that threw; the
+ *  lines no measure holds the ink of */
+export function entryCountsOf(x) {
+  const e = x?.entry
+  return {
+    I3: e?.I3 ?? null,
+    I4: e?.I4 ?? null,
+    I5: e?.I5 ?? null,
+    I5floor: e?.I5floor ?? null,
+    I6head: x?.I6head ?? null,
+    I6other: x?.I6other ?? null,
+    purity: x?.purity ?? null,
+    I10: x?.I10 ?? null,
+    I11: x?.I11 ?? null,
+    readsOutside: x?.readsOutside ?? null,
+    parasOff: x?.parasOff ?? null,
+    F28: x?.F28 ? x.F28.reduce((n, v) => n + v, 0) : null,
+    threw: x?.threw ?? null,
+    unread: e ? e.unread + (e.pages - e.read) : null,
+  }
+}
+/** the counts held to the last integrated round's record (reader-parts.json: a rise fails, a fall is said), by rows store and
+ *  part: I3, I4 and I5 on the lay the product makes (I5's width and its floor apart), and I6's units the head pass lays otherwise
+ *  (known, kept where it is till the part states the head: the coordinator's ruling) */
+export const RECORDED = ['I3', 'I4', 'I5', 'I5floor', 'I6head']
+/** the counts held to 0, the only passing value: I6's other cause and its purity, I10, I11, the reads gate, F28, a pair that
+ *  threw, a line or a page the entry's lay was not read on; the paragraph points where `parasHeld` */
+const ZERO = ['I6other', 'purity', 'I10', 'I11', 'readsOutside', 'F28', 'threw', 'unread']
+
 /**
- * One run of the reader gate's runner with --entry (lab/typeset/gate-l1.mjs): its numbers, the added pairs' apart (`a`), and
- * whether it ended whole. The runner exits 1 for its own verdicts, each of which it states and counts: a paragraph point run on,
- * a unit laid otherwise by two pages' lays by another cause than the head pass's, a row id read outside a page's wait set. A run
- * that exits 1 with one of them stated, over pieces the entry drew (and, where the added pairs were walked, over theirs too),
- * ended whole and is read by its counts; any other exit is no count. `held`: the runner's own verdicts on the set and the added
- * pairs alike, the paragraph points held only where `parasHeld`
+ * One run of the reader gate's runner with --entry (lab/typeset/gate-l1.mjs): its numbers, the added pairs' apart (`a`), whether
+ * it ended whole, and the counts it is held by. Read from the run's summary alone, never from its exit (the runner exits 1 for
+ * any of its own verdicts, so a verdict standing on one store hid every other on it: an I11 fault beside the door's paragraph
+ * points): whole where every count is stated, over pieces the entry drew, the set's and, where the added pairs were walked,
+ * theirs; `faults` each count held to 0 that is not, by part; `held` none
  */
 export function entryRunOf(step, parasHeld = PARAS_HELD) {
   const t = typesetOf(step?.text ?? '')
   const a = t.added
-  const both = [t, a].filter(Boolean)
-  const stated = both.some(x => x.parasOff > 0 || x.I6other > 0 || x.readsOutside > 0)
-  const whole = (step?.exit === 0 || (step?.exit === 1 && stated)) && t.I10pieces > 0 && (!a || a.I10pieces > 0)
-  // (a count the run does not print, its gate's line absent, is none, the paragraph points' as the reads': `> 0` fails)
-  const held = whole && both.every(x => x.I6other === 0 && !(x.readsOutside > 0) && !(parasHeld && x.parasOff > 0))
-  return { t, a, whole, held }
+  const parts = [['', t], ...(a ? [['added', a]] : [])]
+  const zero = parasHeld ? [...ZERO, 'parasOff'] : ZERO
+  const missing = [],
+    faults = []
+  for (const [p, x] of parts) {
+    const c = entryCountsOf(x)
+    for (const [k, v] of Object.entries(c)) if (v === null || Number.isNaN(v)) missing.push(`${k}${p ? ` (${p})` : ''}`)
+    if (!(x.I10pieces > 0)) missing.push(`I10's pieces${p ? ` (${p})` : ''}`)
+    for (const k of zero) if (c[k] > 0) faults.push(`${k} ${c[k]}${p ? ` (${p})` : ''}`)
+  }
+  const whole = !missing.length
+  return { t, a, whole, held: whole && !faults.length, missing, faults }
 }
 
 const parasOf = (x) => (x.parasOff != null ? { parasAnchored: x.parasAnchored, parasOpened: x.parasOpened, parasOnTexLine: x.parasOnTexLine, parasOff: x.parasOff } : {})
 
-/** sentence-cover's verdict over its run (`steps`, the reader gate's): I10 and I6 counted where the run ended whole (entryRunOf),
- *  the runner's own verdicts held (a unit laid otherwise by another cause, a read outside a page's wait set; the paragraph
- *  points where `parasHeld`). The added pairs walked apart (`added`, lab/typeset/added.mjs) are held as the set's in each of
- *  these: their I10, their I6, their reads and their paragraph points */
+/** sentence-cover's verdict over its run (`steps`, the reader gate's), read from its summary's counts (entryRunOf): every count
+ *  held to 0 held (I10, I11, I6's other cause and its purity, the reads gate, F28, a pair that threw, the entry's lay not read;
+ *  the paragraph points where `parasHeld`), I10 and I6 as findings; its I3, I4, I5 and the head pass's count reported, held by
+ *  reader-parts' record over its own pairs. The added pairs walked apart (`added`, lab/typeset/added.mjs) are held as the set's */
 export function sentenceCoverJudge(steps, parasHeld = PARAS_HELD) {
-  const { t, a, whole, held } = entryRunOf(steps[0], parasHeld)
-  const counted = whole && t.I10 != null
-  const across = whole && t.I6other != null
-  const findings = { ...(counted ? { I10: { held: t.I10 === 0, count: t.I10 } } : {}), ...(across ? { I6: { held: t.I6other === 0, count: t.I6other } } : {}) }
+  const { t, a, whole, held, missing, faults } = entryRunOf(steps[0], parasHeld)
+  const parts = [t, a].filter(Boolean)
+  const sum = k => parts.reduce((n, x) => n + (entryCountsOf(x)[k] ?? 0), 0)
+  const findings = whole ? { I10: { held: sum('I10') === 0, count: sum('I10') }, I6: { held: sum('I6other') + sum('purity') === 0, count: sum('I6other') + sum('purity') } } : {}
+  const counts = x => ({ ...entryCountsOf(x), pairs: x.pairs, pieces: x.I10pieces ?? 0, ...(x.I6twice != null ? { I6twice: x.I6twice } : {}), ...parasOf(x) })
+  const notes = [missing.length && `not stated: ${missing.join(', ')}`, faults.length && `counted against it: ${faults.join(', ')}`].filter(Boolean)
   return {
-    pass: held && counted && t.I10 === 0 && across && (!a || a.I10 === 0),
-    numbers: { ...(t.I10 != null ? { I10: t.I10 } : {}), pieces: t.I10pieces ?? 0, pairs: t.pairs, ...(t.I6other != null ? { I6twice: t.I6twice, I6head: t.I6head, I6other: t.I6other } : {}), ...(t.readsOutside != null ? { readsOutside: t.readsOutside } : {}), ...parasOf(t), ...(a ? { added: { pairs: a.pairs, I10: a.I10, pieces: a.I10pieces ?? 0, I6other: a.I6other, ...(a.readsOutside != null ? { readsOutside: a.readsOutside } : {}), ...parasOf(a) } } : {}) },
-    ...(Object.keys(findings).length ? { findings } : {}),
+    pass: held,
+    numbers: { ...counts(t), ...(a ? { added: counts(a) } : {}) },
+    ...(whole ? { findings } : {}),
+    ...(notes.length ? { note: notes.join('; ') } : {}),
   }
 }
 
@@ -398,41 +508,61 @@ export function rowsOf(text) {
 
 /**
  * reader-parts' verdict over its three steps (`as`: 'door', the runner over the door's rows; 'rows', Google's rows made through
- * this tree's chain; 'google', the runner over them): each store's run whole and its runner's own verdicts held (entryRunOf), the
- * rows made with no unit unavailable (a unit whose wire the lab's store holds no reply to: the rows would not be the round's); I3,
- * I4 and I5 counted over both stores, the set and the added pairs, as findings, and held to the last integrated round's counts
- * (`record`, lab/release-check/reader-parts.json: the round judges the reader gate so, against the round before): a count above
- * its record fails the gate, one below it is said. The door's entry times give the page's layout (design §7)
+ * this tree's chain; 'google', the runner over them), every count read from the runs' summaries (entryRunOf), never their exits:
+ * each store's run whole and its counts held to 0 held, the rows made with no unit unavailable (a unit whose wire the lab's store
+ * holds no reply to: the rows would not be the round's); the counts RECORDED held to the last integrated round's record
+ * (`record`, lab/release-check/reader-parts.json, by store and part): a count above its record fails the gate, one below it is
+ * said, a part's count the record lacks fails it; I3, I4, I5, I6 and I10 counted over both stores, the set and the added pairs,
+ * as findings. The door's entry times give the page's layout (design §7)
  */
 export function readerPartsJudge(steps, parasHeld = PARAS_HELD, record = null) {
   const at = as => steps.find(s => s.as === as)
   const rows = at('rows')
   const made = rowsOf(rows?.text ?? '')
   const runs = Object.fromEntries(['door', 'google'].map(k => [k, entryRunOf(at(k), parasHeld)]))
-  const storeOf = ({ t, a }) => ({ alike: t.entryAlike, not: t.entryNot, I3: t.I3, I4: t.I4, I5: t.I5, I10: t.I10, pieces: t.I10pieces, I6other: t.I6other, readsOutside: t.readsOutside, ...parasOf(t), ...(a ? { added: { pairs: a.pairs, alike: a.entryAlike, not: a.entryNot, I3: a.I3, I4: a.I4, I5: a.I5, I10: a.I10, I6other: a.I6other, readsOutside: a.readsOutside, ...parasOf(a) } } : {}) })
-  const findings = {}
+  // (each store's numbers: the counts it is held by, the entry's agreement with the runner's own lay (reported), the runner's own
+  // invariants (reported: its lay is not the product's))
+  const countsOf = x => ({ ...entryCountsOf(x), pairs: x.pairs, alike: x.entryAlike, not: x.entryNot, runner: { I3: x.I3, I4: x.I4, I5: x.I5 }, pieces: x.I10pieces, ...(x.entry ? { I3own: x.entry.I3own, turned: x.entry.turned, unmeasured: x.entry.unmeasured } : {}), ...parasOf(x) })
+  const storeOf = ({ t, a }) => ({ ...countsOf(t), ...(a ? { added: countsOf(a) } : {}) })
+  // (each part of a store's run, as the record names it: `door`, `door, added`, …)
+  const parts = Object.entries(runs).flatMap(([s, r]) => [[s, r.t, r], ...(r.a ? [[`${s}, added`, r.a, r]] : [])])
   const rose = [],
-    fell = []
-  for (const k of ['I3', 'I4', 'I5']) {
-    const parts = Object.entries(runs).filter(([, r]) => r.whole && r.t[k] != null).flatMap(([s, r]) => [[s, r.t[k]], ...(r.a?.[k] != null ? [[`${s}, added`, r.a[k]]] : [])])
-    if (parts.length) findings[k] = { held: parts.every(([, n]) => n === 0), count: parts.every(([, n]) => n === 0) ? 0 : parts.filter(([, n]) => n > 0).map(([s, n]) => `${n} (${s})`).join(', ') }
-    // (against the last integrated round's counts: a part the record names, its count above the record's or below it)
-    for (const [s, n] of parts) {
+    fell = [],
+    unrecorded = []
+  for (const [s, x, r] of parts) {
+    if (!r.whole || !record) continue
+    const c = entryCountsOf(x)
+    for (const k of RECORDED) {
       const was = record?.counts?.[s]?.[k]
-      if (was == null) continue
-      if (n > was) rose.push(`${k} ${was} -> ${n} (${s})`)
-      else if (n < was) fell.push(`${k} ${was} -> ${n} (${s})`)
+      if (was == null) {
+        unrecorded.push(`${k} (${s})`)
+        continue
+      }
+      if (c[k] > was) rose.push(`${k} ${was} -> ${c[k]} (${s})`)
+      else if (c[k] < was) fell.push(`${k} ${was} -> ${c[k]} (${s})`)
     }
+  }
+  // (each invariant as the gate counts it over both stores, the set and the added pairs: held only where every part counts 0;
+  // I5 its width and its floor together, I6 its other cause and its purity, the head pass's count beside in the record)
+  const findings = {}
+  const whole = parts.filter(([, , r]) => r.whole)
+  for (const [id, keys] of [['I3', ['I3']], ['I4', ['I4']], ['I5', ['I5', 'I5floor']], ['I6', ['I6other', 'purity']], ['I10', ['I10']]]) {
+    if (!whole.length) break
+    const by = whole.map(([s, x]) => [s, keys.reduce((n, k) => n + (entryCountsOf(x)[k] ?? 0), 0)])
+    findings[id] = { held: by.every(([, n]) => n === 0), count: by.every(([, n]) => n === 0) ? 0 : by.filter(([, n]) => n > 0).map(([s, n]) => `${n} (${s})`).join(', ') }
   }
   const door = runs.door.t
   const notes = [
+    ...Object.entries(runs).flatMap(([s, r]) => [r.missing.length && `${s}: not stated: ${r.missing.join(', ')}`, r.faults.length && `${s}: counted against it: ${r.faults.join(', ')}`]),
+    !(made.units > 0) && "the rows step stated no total: Google's rows not made",
     made.refusedUnavailable > 0 && `the lab's Google store holds no reply to ${made.refusedUnavailable} units the chain asks: the rows are not the round's`,
     made.noBundle > 0 && `${made.noBundle} pairs have no bundle in this run`,
+    unrecorded.length && `no count of the last round's record for ${unrecorded.join(', ')}`,
     rose.length && `above the last round's (${record.commit}): ${rose.join(', ')}`,
     fell.length && `below the last round's (${record.commit}), the record to lower: ${fell.join(', ')}`,
   ].filter(Boolean)
   return {
-    pass: runs.door.held && runs.google.held && rows?.exit === 0 && made.units > 0 && !(made.refusedUnavailable > 0) && !(made.noBundle > 0) && !rose.length,
+    pass: runs.door.held && runs.google.held && made.units > 0 && !(made.refusedUnavailable > 0) && !(made.noBundle > 0) && !rose.length && !unrecorded.length,
     numbers: { door: storeOf(runs.door), google: storeOf(runs.google), rows: made, ...(door.entryP50 != null ? { layP50: door.entryP50, layP90: door.entryP90, layP99: door.entryP99, layPages: door.entryPages } : {}) },
     ...(Object.keys(findings).length ? { findings } : {}),
     ...(notes.length ? { note: notes.join('; ') } : {}),
@@ -479,7 +609,7 @@ export function corpusLogOf(file) {
   return out
 }
 
-/** the candidate's prepare dumps (baseline FORMAT.md §3): units drawn by group, and the papers refused whole (no source
+/** the candidate's prepare dumps (the baseline's dump spec §3): units drawn by group, and the papers refused whole (no source
  *  unit drawn), as baseline/tools/acceptance.mjs counts them; `within` a directory of dumps (the baseline's): only the papers
  *  it holds a dump of, so that a count stands beside the baseline's own (a paper the corpus gained after it is left out) */
 export function drawnOf(dir, within = null) {
@@ -502,15 +632,75 @@ export function drawnOf(dir, within = null) {
 
 /** canvas.mjs's line a paper, held to the bound its header names (the erasure's E4: at most 0.1 % of the split glyphs'
  *  pixels, max channel Δ 16; no pixel outside them); a paper it refused (`{ id, refused }`: no add-on) or did not report at
- *  all, of the `ids` asked, is over, by name */
+ *  all, of the `ids` asked, is over, by name. `renderer`: its first line, the browser's own word on the canvas it drew on
+ *  (`{ renderer, canvas2d, gl, browser }`), null where it printed none */
 export function canvasOf(text, ids = []) {
   const rows = text.split('\n').filter(l => l.startsWith('{"id"') && (l.includes('"splitShows"') || l.includes('"refused"'))).map(l => JSON.parse(l))
   const over = rows.filter(r => r.refused || r.outsidePages?.length || r.shareMax > 0.001 || r.maxDelta > 16)
   const seen = new Set(rows.map(r => r.id))
+  const head = text.split('\n').find(l => l.startsWith('{"renderer"'))
   return {
     papers: rows.length,
     pages: rows.reduce((n, r) => n + (r.pages ?? 0), 0),
+    renderer: head ? JSON.parse(head) : null,
     over: [...over.map(r => `${r.id}: ${r.refused ? r.refused : `outside ${JSON.stringify(r.outsidePages)}, share ${r.shareMax}, Δ ${r.maxDelta}`}`), ...ids.filter(id => !seen.has(id)).map(id => `${id}: no line (the canvas did not report it)`)],
+    unseen: ids.filter(id => !seen.has(id)),
+    rows,
+  }
+}
+
+/** the canvas gate's record (lab/release-check/canvas.json): each paper's residue at the last integrated round */
+export const canvasRecord = root => JSON.parse(readFileSync(join(root, 'lab/release-check/canvas.json'), 'utf8'))
+
+/**
+ * canvas' verdict, read from its papers' lines (canvasOf), never its exit: the software canvas; every paper asked has its line,
+ * none refused and none with a pixel outside the split glyphs' boxes (I1 itself: never recorded); each paper's residue inside
+ * the split glyphs held to its record (`record.papers[id]`: `pages`, the differing pixels by page; `share`, `delta`, its largest
+ * share and channel delta): a page that differs and is not among its recorded pages, more pixels on a recorded page, a larger
+ * share or delta fail the gate, as does a paper the record lacks; a reading below the record is said (the record to lower)
+ */
+export function canvasJudge(text, ids, record) {
+  const c = canvasOf(text, ids)
+  const soft = c.renderer?.renderer === 'software' && c.renderer?.canvas2d === 'unavailable_software'
+  const broken = [],
+    worse = [],
+    fell = [],
+    unrecorded = []
+  for (const r of c.rows) {
+    if (r.refused || r.outsidePages?.length) {
+      broken.push(`${r.id}: ${r.refused ?? `outside the split glyphs ${JSON.stringify(r.outsidePages)}`}`)
+      continue
+    }
+    const was = record?.papers?.[r.id]
+    if (!was) {
+      unrecorded.push(r.id)
+      continue
+    }
+    const now = Object.fromEntries((r.differingPages ?? []).map(([p, n]) => [String(p), n]))
+    for (const [p, n] of Object.entries(now)) {
+      const w = was.pages?.[p]
+      if (w == null) worse.push(`${r.id} p${p}: ${n} px on a page outside its record`)
+      else if (n > w) worse.push(`${r.id} p${p}: ${w} -> ${n} px`)
+      else if (n < w) fell.push(`${r.id} p${p}: ${w} -> ${n} px`)
+    }
+    for (const [p, w] of Object.entries(was.pages ?? {})) if (!(p in now)) fell.push(`${r.id} p${p}: ${w} -> 0 px`)
+    for (const [k, v, at] of [['share', r.shareMax, was.share], ['Δ', r.maxDelta, was.delta]]) {
+      if (v > at) worse.push(`${r.id}: ${k} ${at} -> ${v}`)
+      else if (v < at) fell.push(`${r.id}: ${k} ${at} -> ${v}`)
+    }
+  }
+  const notes = [
+    !soft && `not the software canvas: ${JSON.stringify(c.renderer)}`,
+    c.unseen.length && `no line (the canvas did not report it): ${c.unseen.join(', ')}`,
+    broken.length && broken.slice(0, 4).join('; '),
+    unrecorded.length && `no record for ${unrecorded.join(', ')}`,
+    worse.length && `above the record (${record?.commit}): ${worse.slice(0, 6).join(', ')}`,
+    fell.length && `below the record (${record?.commit}), the record to lower: ${fell.join(', ')}`,
+  ].filter(Boolean)
+  return {
+    pass: soft && c.papers > 0 && !c.unseen.length && !broken.length && !unrecorded.length && !worse.length,
+    numbers: { papers: c.papers, pages: c.pages, residuePages: c.rows.reduce((n, r) => n + (r.differingPages?.length ?? 0), 0), worse: worse.length, fell: fell.length },
+    ...(notes.length ? { note: notes.join('; ') } : {}),
   }
 }
 
@@ -540,6 +730,28 @@ const e2e = (script, title, holds = [], extra = {}) => ({
 const lab = (ctx, ...p) => join(ctx.refactor, ...p)
 /** the five corpus papers the reader package's harness opens (its I8 on the corpus) */
 const HARNESS_PAPERS = ['1512.03385v1', '1706.03762v7', '2609.26457v1', '2307.16209v1', '2610.20030v1']
+/** the twelve corpus pages the harness turns each group off on in the reader's canvas (I2), by a rule: four marks of a page (a
+ *  group of ours paints a path; one paints an image; two members' groups whose stated inks meet within half a point; a member
+ *  of a float), read by PDF.js over the composed document and by the part; for each of the five papers above and the first
+ *  paper by id whose group paints an image of those the run's rows hold in Chinese (none of the five holds one), for each mark
+ *  in that order, its page holding the mark that holds the most marks, the first at a tie; then, to twelve, each paper's page
+ *  holding the most groups, in the papers' order. Both TeX trees: 1706.03762v7, 2609.26457v1 and 2307.16209v1 are the 2023
+ *  tree's, the others the 2025 tree's. `node lab/release-check/group-pages.mjs <bundles> <papers.tsv> <prepare dumps> <rows>`
+ *  makes the list again by that rule (here as it made it over a run's bundles at PIPELINE 106, 2026-11-19) */
+export const GROUP_PAGES = [
+  '1512.03385v1:5',
+  '1512.03385v1:8',
+  '1706.03762v7:4',
+  '2609.26457v1:6',
+  '2307.16209v1:33',
+  '2610.20030v1:2',
+  '2610.20030v1:9',
+  '2610.19159v1:4',
+  '2610.19159v1:1',
+  '1512.03385v1:9',
+  '1706.03762v7:14',
+  '2609.26457v1:27',
+]
 const exists = (what, path) => ({ what, path })
 
 // The corpus the prepare's gates run, as the integration round's stage 1a runs it (lanes/converge-8/rf-chain.sh): the set's 88
@@ -580,12 +792,11 @@ const stage1a = ctx => ['--prove', `--baseline=${lab(ctx, 'baseline/prepare')}`]
 // pairs (lab/typeset/added.mjs), which the runner walks apart
 const STORED = 'lanes/cjk-punct/blast/pairs.txt'
 const storedOf = ctx => readFileSync(lab(ctx, STORED), 'utf8').split(/\s+/).filter(Boolean)
-// Google's rows as the rounds make them (the integration's tools, lab-data only): the lab's Google store read through this tree's
-// chain, no translator asked (google-rows.mts), and the reader gate laid over them in place of the door's (rows-register.mjs, a
-// module hook on gate-l1.ts that fails to load where one of its anchors no longer stands once in the file)
+// Google's rows as the rounds make them (the integration's tool, lab-data only): the lab's Google store read through this tree's
+// chain, no translator asked (google-rows.mts), and the reader gate laid over them in place of the door's (gate-l1.mjs
+// AXT_GATE_ROWS: each member's unit's Result as the product's rows carry it, its sentences too)
 const GOOGLE_STORE = 'google-rows/ef6989debed1'
 const ROWS_TOOL = 'lanes/converge-7/tools-b15/google-rows.mts'
-const ROWS_REGISTER = 'lanes/converge-7/tools-b15/rows-register.mjs'
 /** the inputs the typesetter's runners read besides the bundles */
 const runnerNeeds = ctx => [
   exists('the tap', lab(ctx, 'baseline/tap/ledgers')),
@@ -601,9 +812,9 @@ const runRowsDir = ctx => join(ctx.work, 'reader-parts', 'google-rows')
 // Today's side of the display gates, FROZEN before the cut-over deleted today's engine (design amendment 8.3, lane c1-freeze):
 // each pair's readings and shots of today's drawing under each toggles (lab/typeset/parity/frozen.mjs) and production's row
 // path's answers (production-rows.json), read in place of drawing today's side and running today's engine. AXT_TODAY_FROZEN,
-// else SanDisk's today-frozen/frozen; the steps hand it on in their environment (render.mjs and production-rows.mjs read it
+// none by default (unset, the gates that read it are skipped, naming it); the steps hand it on in their environment (render.mjs and production-rows.mjs read it
 // where no flag is given)
-const TODAY_FROZEN = process.env.AXT_TODAY_FROZEN ?? '/Volumes/SanDisk_Dev/readarxiv-lab-archive/today-frozen/frozen'
+const TODAY_FROZEN = process.env.AXT_TODAY_FROZEN ?? ''
 const frozenEnv = { AXT_TODAY_FROZEN: TODAY_FROZEN }
 
 // The parity's steps over some pairs (lab/typeset/parity/: v2's lay, the drawing, the measures and the verdict), into `dir`;
@@ -669,7 +880,7 @@ export function displayJudge(steps, planned, modes, rows) {
 export const GATES = [
   // ---------------------------------------------------------------- unit (hosted CI, every pull request)
   { id: 'typecheck', title: 'the type check (the extension, the packages, the website\'s calls in tests/contract/website-use.tsx)', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('typecheck')] },
-  { id: 'lint', title: 'Biome, the packages\' format, the English, boundary and review-citation gates', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('lint')] },
+  { id: 'lint', title: 'Biome, the packages\' format, the English, boundary, review-citation and machine-path gates', tier: 'fast', stage: 'unit', holds: [], steps: () => [pnpm('lint')] },
   {
     id: 'test',
     title: "the unit tests: the extension's and every package's (the typeset replays read the tap where the machine has it)",
@@ -705,7 +916,7 @@ export const GATES = [
     title: "the reader package's browser checks on its own fixtures (packages/reader/e2e/run.mjs)",
     tier: 'fast',
     stage: 'reader',
-    holds: ['I1', 'I3', 'I4', 'I8'],
+    holds: ['I1', 'I2', 'I3', 'I4', 'I8'],
     steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_TIMINGS_OUT: join(ctx.work, 'harness-timings.json') } }],
     judge: (ctx, steps) => {
       const text = steps[0].text
@@ -830,17 +1041,16 @@ export const GATES = [
   },
   {
     id: 'reader-parts',
-    title: "the reader gate over this run's prepared parts, once with each rows store, as the integration round runs it (lab/typeset/gate-l1.mjs --entry --reading=part, the runner set up as the entry is): each page of the 90 pairs of the stored rows and the added pairs (apart) laid over the door's rows, the release's stored replies, and over Google's, the lab's Google store read through this tree's chain (no translator asked); I3 read by ink, I4 and I5 counted on both",
+    title: "the reader gate over this run's prepared parts, once with each rows store, as the integration round runs it (lab/typeset/gate-l1.mjs --entry --reading=part): each page of the 90 pairs of the stored rows and the added pairs (apart) laid over the door's rows, the release's stored replies, and over Google's, the lab's Google store read through this tree's chain (no translator asked); on the lay the product makes (the entry's own, each page as layPage laid it): I3 by ink against all that stays, I4, I5 by ink and its size floor, I6 across the lays and laid twice, I10 and I11, each a count of the run's summary held to 0 or to the last round's record",
     tier: 'full',
     stage: 'reader',
-    holds: ['I3', 'I4', 'I5'],
+    holds: ['I3', 'I4', 'I5', 'I6', 'I10'],
     after: ['prepare'],
     needs: ctx => [
       ...runnerNeeds(ctx),
       exists('the 90 pairs of the stored rows', lab(ctx, STORED)),
       exists("the lab's Google store", lab(ctx, GOOGLE_STORE)),
       exists("the rounds' tool making Google's rows from the store", lab(ctx, ROWS_TOOL)),
-      exists('its hook laying them in place of the door\'s', lab(ctx, ROWS_REGISTER)),
     ],
     // (one long process each, no pool of workers: the heavy slot's `run`; the door's run whatever it finds, so that Google's runs
     // too; AXT_GATE_ENTRY=1, as the round sets it, lists each member the entry lays otherwise in the log)
@@ -848,15 +1058,15 @@ export const GATES = [
       const dir = join(ctx.work, 'reader-parts')
       const pairs = [...storedOf(ctx), ...ADDED]
       const env = { AXT_L1_BUNDLES: bundlesDir(ctx), AXT_GATE_ENTRY: '1' }
-      const gate = (store, ...pre) => ['node', ...pre, 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(dir, store)}`, ...pairs]
+      const gate = store => ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', `--out=${join(dir, store)}`, ...pairs]
       return [
         { cmd: gate('door'), slot: 'run', env, fresh: dir, all: true, as: 'door' },
         { cmd: ['node', '--experimental-strip-types', lab(ctx, ROWS_TOOL), ctx.root, runRowsDir(ctx), lab(ctx, GOOGLE_STORE), ...pairs], slot: 'run', env, as: 'rows' },
-        { cmd: gate('google', '--import', lab(ctx, ROWS_REGISTER)), slot: 'run', env: { ...env, AXT_B14_ROWS: runRowsDir(ctx) }, as: 'google' },
+        { cmd: gate('google'), slot: 'run', env: { ...env, AXT_GATE_ROWS: runRowsDir(ctx) }, as: 'google' },
       ]
     },
-    // (each store's run read whole as the runner states it, its own verdicts held; I3, I4, I5 counted as findings and held to the
-    // last integrated round's counts, reader-parts.json: readerPartsJudge)
+    // (each store's run read by its summary's counts, never its exit: those held to 0 and those held to the last integrated
+    // round's record, reader-parts.json: readerPartsJudge)
     judge: (ctx, steps) => readerPartsJudge(steps, PARAS_HELD, readerPartsRecord(ctx.root)),
   },
   {
@@ -913,10 +1123,10 @@ export const GATES = [
   },
   {
     id: 'harness-lab',
-    title: "the reader package's browser checks with five corpus papers, laid from this run's bundles and this run's rows of them (the prepare's bundles; reader-parts' rows step, Google's rows over them read from the lab's store, no translator asked); the text layer's order asserted; their I1 residue and I3 reported, not asserted",
+    title: "the reader package's browser checks with five corpus papers, laid from this run's bundles and this run's rows of them (the prepare's bundles; reader-parts' rows step, Google's rows over them read from the lab's store, no translator asked); the text layer's order asserted, and the reading made without a browser held equal to the browser's; I7 at the reader's seam on every page the reader's own typesetter lays; I2 in the reader's canvas on twelve corpus pages (GROUP_PAGES); their I1 residue and I3 reported, not asserted",
     tier: 'full',
     stage: 'reader',
-    holds: ['I8'],
+    holds: ['I2', 'I7', 'I8'],
     // (bundles and rows of the same run, never one without the other: the prepare's bundles (AXT_L1_BUNDLES) and the rows
     // reader-parts' rows step made over them (AXT_LAB_ROWS). The harness refuses bundles without rows, and stops before any
     // check where a paper's rows leave a unit its bundle asks without a row, or name units it does not hold ("rows do not belong
@@ -930,9 +1140,31 @@ export const GATES = [
       exists("the corpus papers' list", lab(ctx, 'baseline/corpora/papers.json')),
       exists("today's reader dumps", lab(ctx, 'baseline/reader')),
       exists("this run's rows of its bundles (reader-parts' rows step)", runRowsDir(ctx)),
+      // (I7 and the typesetter's pages' I8 lay with the reader's own typesetter over the served faces: without them those checks
+      // would say "no served faces" and hold nothing, so the gate is skipped, named)
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
     ],
-    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_LAB_ROWS: runRowsDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
+    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_GROUP_PAGES: GROUP_PAGES.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_LAB_ROWS: runRowsDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
     judge: (ctx, steps) => harnessLabJudge(steps[0]),
+  },
+  {
+    id: 'text-order',
+    title: "the text layer of every laid page reads the translation in reading order, over every pair this run lays (reader-parts' Google rows over the prepare's bundles): each page laid by the reader's own typesetter in Node, its text layer's reading made by the composer's text module without a browser (lab/release-check/text-order.mjs over packages/reader/e2e/text-order.mjs, whose reading harness-lab holds equal to the browser's), judged by the harness's I8 judge",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['I8'],
+    after: ['prepare', 'reader-parts'],
+    needs: ctx => [
+      ...corpusNeeds(ctx),
+      exists("this run's rows of its bundles (reader-parts' rows step)", runRowsDir(ctx)),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+      exists('the hyphenation patterns (AXT_HYPH)', process.env.AXT_HYPH ?? ''),
+    ],
+    steps: ctx => [listStep(ctx), { cmd: ['node', 'lab/release-check/text-order.mjs', `--bundles=${bundlesDir(ctx)}`, `--rows=${runRowsDir(ctx)}`, `--papers=${corpusList(ctx)}`], slot: 'run' }],
+    // (a member read out of order is held to its record, text-order.json, textOrderJudge: none stands there now)
+    judge: (ctx, steps) => textOrderJudge(steps.at(-1).text, textOrderRecord(ctx.root)),
   },
   // ---------------------------------------------------------------- the definitions the engine's lists mirror, in the TeX trees
   // (a list of a package's names whose header names the file it copies, held to that file as each pinned compile image holds it:
@@ -1032,17 +1264,19 @@ export const GATES = [
   },
   {
     id: 'canvas',
-    title: "all groups on in the reader's canvas: arXiv's page against the composed document in Chromium, on spike S1c's papers (lab/pdf/prepare-back/canvas.mjs, the bound its header names)",
+    title: "all groups on in the reader's canvas: arXiv's page against the composed document in Chromium's software 2D canvas (the renderer a runner with no GPU has; no stand-in for an unbuilt reader change), every draw call rasterised as it is made in both, on spike S1c's papers (lab/pdf/prepare-back/canvas.mjs, the bound its header names)",
     tier: 'release',
     stage: 'corpus',
     holds: ['I1'],
     after: ['prepare'],
     needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 88 papers', lab(ctx, PAPERS))],
-    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), ...canvasIds(ctx)], slot: 'e2e' }],
-    judge: (ctx, steps) => {
-      const c = canvasOf(steps[0].text, canvasIds(ctx))
-      return { pass: steps[0].exit === 0 && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: c.over.slice(0, 4).join('; ') }
-    },
+    // (--flush: Chromium rasterises a 2D canvas's recorded calls in batches whose ends fall where the page's task yields, and the
+    // same calls give other pixels for other batch ends (arXiv's page against itself so too): unflushed, two runs of the gate on
+    // one machine gave other pixels outside the split glyphs on three papers (2026-11-19). Flushed after every call in A's render
+    // and W's alike, the same calls give the same pixels, and what is left is what W's calls change)
+    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), '--renderer=software', '--flush', ...canvasIds(ctx)], slot: 'e2e' }],
+    // (the split shows' residue stands (INVARIANTS I1's gap): each paper's is held to its record, canvas.json, canvasJudge)
+    judge: (ctx, steps) => canvasJudge(steps[0].text, canvasIds(ctx), canvasRecord(ctx.root)),
   },
   // ---------------------------------------------------------------- performance (the owner's base threshold: better than
   // production, measured; lab/release-check/perf.mjs judges, the lab's perf/tools measure: each reader built as its website
@@ -1120,14 +1354,22 @@ export const RETIRED = [
     by: ['display-wide'],
     why: "the six replays (lab/typeset/replay-*.mjs) compare the typesetter's internal passes with today's recorded ones: every ruling since 2026-11-08 would have to be taught to four replay readers that the cut-over deletes, and a pass that differs is not a difference a reader sees (at 13216ac44 fit and display failed on one pair, a crop box the tap does not record; at round B14's head emit read 13 differing and 9 thrown). Their point, a comparison with today's lay wider than 22 pairs, is the display gate over every pair of the stored rows (display-wide), which asks the owner's own question with his rulings encoded and survives the cut-over",
   },
+  {
+    // (never a gate of this file: the lab's corpus check of today's layout marks, lab/pdf/spikes/layout-marks-gate.mjs, retired in
+    // lab/pdf/README.md on 2026-11-13 and named here since 2026-11-19 so that the report and --only say why)
+    id: 'layout-marks-gate',
+    retired: '2026-11-13',
+    by: ['prepare', 'prepare-diff'],
+    why: "it asked whether the layout marks move a line of the marked compile against the same compile without them, by TeX's own boxes, over 113 papers one Docker compile at a time. The rebuilt reader draws over arXiv's own bytes: a line the marks move in the marked compile moves no glyph a reader sees, and what it could cost (a unit not located on arXiv's page, or drawn otherwise) is counted against arXiv's PDF at the head's marks by the prepare's corpus gates: the proofs on every page (prepare: I1 (a), I2 (c′)) and the units lost against the frozen baseline (prepare-diff). Its record (lab/pdf/records/layout-marks.json, 2026-10-08) and its accepted causes predate every marks change of rounds B8 to B15: at round RB1 every page of the five papers it ran failed, at the base as at the head, rows and TeX traces identical between them, so re-recording (about 4 hours of the only Docker slot) would write a failing verdict for every paper and fail every run after it, unless its judge were taught today's marks. What it alone held, a moved line named by its cause before it costs a located unit, is held for a change to the marks by the small documents of lab/pdf/spikes/layout-marks-cases.mjs, run natively. The script and its judgements stay readable until the cut-over deletes today's engine, whose back half it reads",
+  },
 ]
 
 /** the website's tree NEW's reader is built in: PERF_WEB, a website worktree whose HEAD is the website's side (its pin of
  *  vendor/readarxiv replaced by this commit); none by default, so that no build stands in for the head's */
 const perfWeb = () => process.env.PERF_WEB ?? ''
-/** TODAY's reader's build and tree (production's: the website at 0bf496b5 with the engine 065c1d973), which perf-release
- *  measures against: PERF_TODAY_BUILD, else where the lab's performance lane built it */
-const todayPerfBuild = () => process.env.PERF_TODAY_BUILD ?? '/Volumes/SanDisk_Dev/readarxiv-lab-archive/perf-check/build'
+/** TODAY's reader's build and tree (production's: the website's release with the engine 065c1d973), which perf-release
+ *  measures against: PERF_TODAY_BUILD, where the lab's performance lane built it; none by default, as PERF_WEB */
+const todayPerfBuild = () => process.env.PERF_TODAY_BUILD ?? ''
 /** NEW's reader built from this commit into `build` (the lab's perf/tools/build-new.sh: the website's HEAD exported with this
  *  commit as vendor/readarxiv, installed from the store, built as staging builds it, into new-web and new-dist-web) */
 const buildNew = (ctx, build) => ({ cmd: ['bash', lab(ctx, 'perf/tools/build-new.sh'), 'HEAD', 'HEAD'], slot: 'test', env: { PERF_BUILD: build, PERF_WEB_REPO: perfWeb(), PERF_ENGINE_REPO: ctx.root }, fresh: build, as: 'build' })

@@ -44,6 +44,9 @@ describe('@readarxiv/ui', () => {
     expect(ui.resolve('brand', 'light')).toMatch(/^oklch\(/)
     expect(manifest.exports).toEqual({
       '.': './src/index.ts',
+      // (what a host's pages take with no pack and no control: tests/host-entries.test.ts)
+      './languages': './src/languages.ts',
+      './bands': './src/bands.ts',
       './tokens.css': './src/tokens.css',
       './controls.css': './src/controls.css',
     })

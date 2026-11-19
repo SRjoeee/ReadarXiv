@@ -1,11 +1,10 @@
-// U.blocks (design-b §1.5; lab/typeset/registry.ts): a unit's lines grouped into blocks, each with the original's
-// baselines, its grid, its pitch and its measures; the blocks of one flow of TeX's lines told apart (T21, E10, E11).
-// Ported from layer2.mjs at 065c1d973: blocks2 L2:2966-3032, blocksOf2 L2:626-695, measuresOf L2:549-576, evenGridOf
-// L2:3172-3176, tightOf L2:3037-3040. Pure: no input is mutated, every block is a new object.
+// U.blocks (lab/typeset/registry.ts): a unit's lines grouped into blocks, each with the original's baselines, its grid,
+// its pitch and its measures; the blocks of one flow of TeX's lines told apart. Pure: no input is mutated, every block is a
+// new object.
 //
-// Its inputs, and the part's field each comes from once lane L1 states it (until then the tap's recorded values):
-// - `rects`: the unit's lines as rectangles, its baseline less 0.215 and plus 0.683 of its size (tex.mjs texRects) ← Placed.lines
-//   (page, x0, x1, base, size; the band is today's reading of a line's extent)
+// Its inputs, and the part's field each comes from:
+// - `rects`: the unit's lines as rectangles, its baseline less 0.215 and plus 0.683 of its size ← Placed.lines
+//   (page, x0, x1, base, size; the band is a share of the size, not the line's own ink)
 // - `lineInfo`: each line's exact baseline, size, top, bottom, its row `j` in the unit's lines and its frame ← Placed.lines
 //   (base, top, bottom, col; `j` its index)
 // - `keep`: the lines the unit keeps as the original's (held lines, a display's rows) ← Line flag KEPT
@@ -19,7 +18,7 @@ import { median, type Rect, rectKey, rectKeyNoX0 } from '../util.ts'
 /** how far apart two baselines are told (PDF units): a line's is stated to a hundredth, as the slots' feet read it */
 const ON_BASE = 0.05
 
-/** a line as the unit's reading knows it (tex.mjs:506 texParts' lineInfo) */
+/** a line as the unit's reading knows it (`lineInfo`) */
 export type LineInfo = {
   baseline: number
   size: number
@@ -29,6 +28,8 @@ export type LineInfo = {
   file?: boolean
   j?: number
   frame?: number
+  /** TeX's measure's left edge for the line, as the part states it (Line[7]): where its ink stands at it, TeX set it under it */
+  m0?: number
 }
 
 export type BlocksInput = {
@@ -44,9 +45,13 @@ export type BlocksInput = {
   paraAt?: ReadonlySet<string> | null
   /** TeX's \baselineskip for the unit's lines (Placed.lead where the part states it): every block's pitch, null where unstated */
   pitch?: number | null
+  /** TeX may have set the unit's first line apart from the edge its later lines share, left of it (a hang after the first line,
+   *  a list item's first line or label in the margin: docs/PDF-READER.md §18.94): its lines set justified or flush left
+   *  (Placed.align j, l); absent, a block's edge is its leftmost line's */
+  apart?: boolean
 }
 
-/** a block of a unit's lines (layer2.d.mts Block2): its lines, bounds, pitch, measures, the original's baselines `B` and
+/** a block of a unit's lines: its lines, bounds, pitch, measures, the original's baselines `B` and
  *  grid `G` (its forced breaks' gaps closed), its one-pitch grid `E`, the kept regions before it (`after`), its flow */
 export type Block = {
   page: number
@@ -74,12 +79,20 @@ export type Block = {
   through?: boolean
 }
 
-/** a change of a paragraph's measure: a line's edge this many em off the line's before it (L2:534) */
+/**
+ * What two lines' ink starts may differ by under one measure, in em of the line's size: a glyph's side bearing and microtype's
+ * protrusion (docs/PDF-READER.md §18.94). Measured over the 245 papers' parts (2026-11-18): of 190,155 text lines past
+ * a member's first, 175,833 stand within 0.125 em of the measure TeX states for them, 159 within 0.125 to 0.2 em, then 7 to 26 a
+ * 0.025 em bin to 0.4 em (lines TeX did not start at it: indents, content); within 0.25 em, |ink - m0| q0.9999 0.211 em, and
+ * the step between two lines of one stated measure q0.9999 0.240 em. A hang or a label in the margin stands 1 em and more apart
+ */
+export const ONE_EDGE = 0.25
+/** a change of a paragraph's measure: a line's edge this many em off the line's before it */
 const STEP_EM = 2
-/** lines set to one measure: their edges within this many em of it (L2:537) */
+/** lines set to one measure: their edges within this many em of it */
 const MEASURE_TOL = 0.5
 
-/** a block's lines by the measure TeX set each to, where it changed within the paragraph (L2:549 measuresOf) */
+/** a block's lines by the measure TeX set each to, where it changed within the paragraph */
 export function measuresOf(
   rects: readonly Rect[],
   keep: ReadonlySet<string> | null = null,
@@ -114,18 +127,17 @@ export function measuresOf(
 }
 
 /** a block's measure at slot `k` of its lines or at baseline `y`: its line's (measuresOf); between two lines of two
- *  measures the narrower of both (L2:579 measureAt) */
+ *  measures the narrower of both */
 function measureAt(b: Measured, y: number | null, k: number | null): [number, number] {
   const at = (i: number) => b.measures!.get(rectKey(b.rects[i]!)) ?? [b.x0, b.x1]
   return k !== null && k >= 0 && k < b.rects.length ? at(k) : measureOn(b.G ?? b.B!, at, y!)
 }
 /** what a measure is read from: a block, or blocksOf2's block before its baselines (read by its lines alone) */
 type Measured = Pick<Block, 'measures' | 'centred' | 'rects' | 'x0' | 'x1' | 'G'> & { B?: number[] }
-/** a block's measure as its own lines are laid: measureAt where TeX changed it within the paragraph, else its edges
- *  (L2:585 measureOf) */
+/** a block's measure as its own lines are laid: measureAt where TeX changed it within the paragraph, else its edges */
 export const measureOf = (b: Measured, y: number | null, k: number | null): [number, number] =>
   b.measures && !b.centred ? measureAt(b, y, k) : [b.x0, b.x1]
-/** the measure at baseline `y` of lines at baselines `Y` (top down), line i's `at(i)` (L2:588 measureOn) */
+/** the measure at baseline `y` of lines at baselines `Y` (top down), line i's `at(i)` */
 export function measureOn(Y: readonly number[], at: (i: number) => [number, number], y: number): [number, number] {
   if (y >= Y[0]! - 0.05) return at(0)
   for (let i = 0; i + 1 < Y.length; i++) {
@@ -141,7 +153,31 @@ export function measureOn(Y: readonly number[], at: (i: number) => [number, numb
 
 type Raw = Omit<Block, 'after' | 'B' | 'exact' | 'sizes' | 'pitch0' | 'free' | 'flow'> & { after?: number }
 
-/** the unit's lines as blocks, its kept lines never moved, each block with the kept regions before it (L2:626 blocksOf2) */
+/**
+ * The edge a block's later text lines share where its first line stands left of it by more than a line's ink differs by under
+ * one measure (ONE_EDGE), each later line within that of the leftmost: TeX's \hangindent after the first line (\@hangfrom's label
+ * box, an author's hang), a list item TeX sets its first line left of the list's measure (natbib's \bibhang, a negative
+ * \itemindent) or whose label stands in the margin. Shared by two later lines or more, or by one that stands at the measure TeX
+ * states for it (`stated`): one line alone shares no edge (a paragraph's second line that is a display's row, a line set far
+ * right). Undefined where the first line is held or none follows, where the later lines share no edge (content set at its own
+ * starts, a shape that changes again), and where the first line is not left of it (a \parindent, a line its protruded first
+ * glyph alone sets left)
+ */
+function apartEdge(
+  rs: readonly Rect[],
+  kept: (r: Rect) => boolean,
+  size: (r: Rect) => number,
+  stated: (r: Rect) => boolean,
+): number | undefined {
+  const first = rs[0]
+  const later = rs.slice(1).filter((r) => !kept(r))
+  if (!first || kept(first) || !later.length || (later.length === 1 && !stated(later[0]!))) return undefined
+  const edge = Math.min(...later.map((r) => r[1]))
+  if (!later.every((r) => r[1] - edge <= ONE_EDGE * size(r))) return undefined
+  return first[1] < edge - ONE_EDGE * size(first) ? edge : undefined
+}
+
+/** the unit's lines as blocks, its kept lines never moved, each block with the kept regions before it */
 function blocksOf2(i: BlocksInput): Raw[] {
   const { rects, keep, regionOf, referenced, breakAt, joinAt, centred, paraAt } = i
   const kept = (r: Rect) => !!keep?.has(rectKey(r))
@@ -174,17 +210,30 @@ function blocksOf2(i: BlocksInput): Raw[] {
     }
     cur!.rects.push([page, x0, y0, x1, y1])
   }
-  const whole: Raw[] = blocks.map((b) => {
+  const infoOf = (r: Rect) => i.lineInfo.get(rectKey(r)) ?? i.lineInfo.get(rectKeyNoX0(r))
+  const sizeOf = (r: Rect) => infoOf(r)?.size ?? (r[4] - r[2]) / 0.894
+  // (a line that stands at the measure TeX states for it, within what a line's ink differs by under one measure)
+  const stated = (r: Rect) => {
+    const m0 = infoOf(r)?.m0
+    return m0 !== undefined && Math.abs(r[1] - m0) <= ONE_EDGE * sizeOf(r)
+  }
+  const whole: Raw[] = blocks.map((b, bi) => {
     const rs = b.rects
-    const x0 = Math.min(...rs.map((r) => r[1]))
+    const c = centred === true
+    const measures = c ? null : measuresOf(rs, keep)
+    // (the unit's first block, where TeX set its first line apart from the edge its later lines share, left of it (apartEdge;
+    // §18.94, H1 and H2): its edge theirs, its first line's indent signed, that line starting where it starts. Not where its
+    // measure changes again after the first line (measuresOf's runs: a wrapped figure's shape, by height, as before); its right
+    // edge its rightmost line's whatever its first line)
+    const edge = bi === 0 && i.apart && !c && !measures ? apartEdge(rs, kept, sizeOf, stated) : undefined
+    const x0 = edge ?? Math.min(...rs.map((r) => r[1]))
     const x1 = Math.max(...rs.map((r) => r[3]))
     const top = Math.max(...rs.map((r) => r[4]))
     const bottom = Math.min(...rs.map((r) => r[2]))
     const h = median(rs.map((r) => r[4] - r[2]))
     const pitch = rs.length > 1 ? median(rs.slice(1).map((r, k) => rs[k]![4] - r[4])) : h * 1.38
-    const indent = Math.max(0, rs[0]![1] - x0)
-    const c = centred === true
-    return { ...b, x0, x1, top, bottom, h, pitch, indent, centred: c, measures: c ? null : measuresOf(rs, keep) }
+    const indent = edge !== undefined ? rs[0]![1] - edge : Math.max(0, rs[0]![1] - x0)
+    return { ...b, x0, x1, top, bottom, h, pitch, indent, centred: c, measures }
   })
   if (!keep?.size && !breakAt?.size) return whole.map((b) => ({ ...b, after: 0 }))
   let after = 0
@@ -218,7 +267,7 @@ function blocksOf2(i: BlocksInput): Raw[] {
   })
 }
 
-/** whether TeX's \lineskip rule set two consecutive lines `gap` apart (L2:3037 tightOf) */
+/** whether TeX's \lineskip rule set two consecutive lines `gap` apart */
 function tightOf(
   upper: LineInfo | undefined,
   lower: LineInfo | undefined,
@@ -231,8 +280,8 @@ function tightOf(
   )
 }
 
-/** a block's grid with one pitch inside it: each gap TeX's \lineskip rule opened closed to `p0` (L2:3172 evenGridOf; the
- *  maintainer's ruling of 2026-10-29) */
+/** a block's grid with one pitch inside it: each gap TeX's \lineskip rule opened closed to `p0` (docs/PDF-READER.md
+ *  §18.8) */
 export function evenGridOf(G: readonly number[], opened: readonly boolean[], p0: number): number[] {
   const out = [G[0]!]
   for (let k = 1; k < G.length; k++) {
@@ -242,7 +291,7 @@ export function evenGridOf(G: readonly number[], opened: readonly boolean[], p0:
   return out
 }
 
-/** U.blocks: blocksOf2's blocks, each with its baselines, sizes, grids and pitch, and the flows they make (L2:2966 blocks2) */
+/** U.blocks: blocksOf2's blocks, each with its baselines, sizes, grids and pitch, and the flows they make */
 export function blocks(i: BlocksInput): Block[] {
   const { rects, lineInfo } = i
   const lineskip = i.lineskip ?? null
@@ -267,7 +316,7 @@ export function blocks(i: BlocksInput): Block[] {
       .map((y, k) => g[k]! - y)
       .filter((v) => v > 0)
     // (its pitch: TeX's \baselineskip where the part states it, the pitch TeX set the paragraph's lines at, which its \lineskip
-    // rule only widens under a line too tall for it; else, as today, read off its gaps, their upper median, the mean where they
+    // rule only widens under a line too tall for it; else read off its gaps, their upper median, the mean where they
     // agree to a fiftieth. A gap the \lineskip rule opened is no pitch: read as one (2602.23285v2 p4 t29, its gaps 10.96 and
     // 12.24 read 12.24), the grid kept that gap where the translation set the tall line elsewhere and a push of its own was
     // added to it, the paragraph's last line past TeX's text block bottom. A block whose lines stand nearer than the pitch

@@ -1,11 +1,9 @@
-// D.groups (design-b §1.6 E1; design-a §1.2 Laid.off, §1.4 "Hiding and text by the same groups"): a laid member's groups turned
-// off on a page, and what of its own ink the page keeps, which the right pane lights with it (the owner's ruling of 2026-10-30:
-// a block lights whole, its kept pieces and its label with it; a display a block of its own). Ported from engine 065c1d973
-// hide.mjs unitHiding L46-109, its groups alone: its text (bit 1) goes off on every page it is drawn on; its elements (bit 2)
-// where one of them with ink on the page is not kept where it stands (drawn as a crop, or as text in the translation); its
-// label (bit 4) where it is drawn in the target's form. Planes B and C, the pastes and the erase rectangles have no
-// counterpart: kept ink is in no group (design-a). A group the add-on could not part (Placed.fixed) is never turned off; a
-// piece in such a group stays shown however it is drawn (today's `has`). A babel name that leads the member is a member of its
+// D.groups (Laid.off): a laid member's groups turned off on a page, and what of its own ink the page keeps, which the right
+// pane lights with it (docs/PDF-READER.md §17.1: a block lights whole, its kept pieces and its label with it; a display a block
+// of its own). Its text (bit 1) goes off on every page it is drawn on; its elements (bit 2) where one of them with ink on the
+// page is not kept where it stands (drawn as a crop, or as text in the translation); its label (bit 4) where it is drawn in
+// the target's form. Kept ink is in no group. A group the add-on could not part (Placed.fixed) is never turned off; a
+// piece in such a group stays shown however it is drawn. A babel name that leads the member is a member of its
 // own (its group is its own Laid's). Its facts: each element's ink (El.ink, one box a TeX line: [page, x0, y0, x1, y1, base]),
 // whether it is a display, whether the reading keeps it where it stands (U.elements' `kept`), the label's ink (Label.ink) and
 // whether it is drawn anew (U.label), the characters the reading keeps where they stand.
@@ -20,7 +18,7 @@ export type GroupEl = {
 }
 export type GroupsInput = {
   page: number
-  /** the member's ord: its displays' hover ids are made from it (units.mjs displayIdsOf) */
+  /** the member's ord: its displays' hover ids are made from it (displayIdsOf) */
   ord: number
   els: readonly GroupEl[]
   /** its label's ink ([page, x0, y0, x1, y1, base] a box) and whether it is drawn in the target's form; null where none */
@@ -40,16 +38,17 @@ export type Shown =
   | { kind: 'piece'; k: number; box: [number, number, number, number]; base: number }
   | { kind: 'label' | 'char'; box: [number, number, number, number]; base: number }
 
-/** the first hover id of the displays and how many a unit may have (units.mjs DISPLAY_ID_FROM, DISPLAYS_UNIT, NAME_ID_FROM) */
+/** the first hover id of the displays and how many a unit may have, and the first of the names': a unit's ord under
+ *  NAME_ID_FROM, so that no unit, name or display shares a hover id */
 const DISPLAY_ID_FROM = 2 ** 29,
   DISPLAYS_UNIT = 2 ** 7,
   NAME_ID_FROM = 2 ** 22
-/** a display's hover id: the unit's j-th display (units.mjs displayBlockId) */
+/** a display's hover id: the unit's j-th display */
 const displayBlockId = (unit: number, j: number) =>
   Number.isInteger(unit) && unit >= 0 && unit < NAME_ID_FROM && Number.isInteger(j) && j >= 0 && j < DISPLAYS_UNIT
     ? DISPLAY_ID_FROM + unit * DISPLAYS_UNIT + j
     : null
-/** each display's hover id, by piece, in the piece order (units.mjs displayIdsOf) */
+/** each display's hover id, by piece, in the piece order */
 function displayIdsOf(unit: number, ks: readonly number[]): Map<number, number> {
   const out = new Map<number, number>()
   ;[...new Set(ks)]

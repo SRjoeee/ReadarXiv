@@ -28,12 +28,26 @@ export const CHROME_OFF = Object.freeze(['PMProcessPriorityPolicy'])
 /**
  * A launch's options with those features off, its own switches after them. `partitioned`: storage partitioning left on, as a
  * reader's Chrome has it (Playwright turns it off): the reader's checks and the TeX page's probe, where the cache a frame
- * shares is what is checked (tests/e2e/lib/extension.mjs)
+ * shares is what is checked (tests/e2e/lib/extension.mjs).
+ *
+ * `language`: the interface language the extension is read in, whatever the machine's, for a suite that finds its controls and
+ * sentences by their words in one language (the extension's pages take theirs from `chrome.i18n.getUILanguage()` where the reader
+ * chose none, src/ui/apply-locale.ts). Stated twice, since no one way holds on every system:
+ * - Playwright's `locale`, which the context tells every page and frame it drives (DevTools' Emulation.setLocaleOverride):
+ *   `chrome.i18n.getUILanguage()` in the extension's pages reads it, whatever the system. Measured on macOS 2026-11-19 (Chrome
+ *   for Testing 153, Playwright 1.63's), on a browser whose own language is English: the settings page reads zh-CN with it
+ *   stated, en-US without. The extension's service worker is no page: it keeps the browser's own.
+ * - Chromium's `--lang`: the browser's own interface language, its service worker's included, where Chromium takes it from the
+ *   command line (Linux and Windows, by its own switch; not run here: the hosted runner's run shows it). macOS takes the
+ *   browser's from the system's preferences alone: there `--lang`, LANGUAGE and LANG, and a profile's intl.app_locale change
+ *   nothing (measured the same day), and the preferences' own argument (`-AppleLanguages (xx)`) is a page to open to Playwright
+ *   and to Chromium both.
  */
-export function chromiumOptions(options = {}, { partitioned = false } = {}) {
+export function chromiumOptions(options = {}, { partitioned = false, language = null } = {}) {
   const off = [...PLAYWRIGHT_OFF.filter(f => !(partitioned && f === 'ThirdPartyStoragePartitioning')), ...CHROME_OFF]
   const own = options.args ?? []
   const clash = own.find(a => a.startsWith('--disable-features='))
   if (clash) throw new Error(`${clash}: the features a check turns off are tests/e2e/lib/chromium.mjs's list, one list (a second --disable-features replaces it)`)
-  return { ...options, args: [`--disable-features=${off.join(',')}`, ...own] }
+  if (language && (options.locale || own.some(a => a.startsWith('--lang')))) throw new Error(`${language}: the interface language a check states is tests/e2e/lib/chromium.mjs's to state (a locale or a --lang of the launch's own would contradict it)`)
+  return { ...options, ...(language ? { locale: language } : {}), args: [`--disable-features=${off.join(',')}`, ...(language ? [`--lang=${language}`] : []), ...own] }
 }

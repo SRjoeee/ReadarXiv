@@ -34,8 +34,9 @@ function codeLines(text: string): string[] {
 const violations = (file: string, text: string) => codeLines(text).flatMap((line, i) => (COMPARES.test(line) || BY_NAME.test(line) ? [`${file}:${i + 1}: ${line.trim().slice(0, 120)}`] : []))
 
 /** the role table and the TeX patterns' reading as they moved into the engine package from today's rules/font-roles.mjs and
- *  layer-proto/hyph.mjs (deleted at the cut-over with the rest of layer-proto/): held by the same rule where they are */
-const MOVED = ['packages/engine/src/fonts/font-roles.ts', 'packages/engine/src/fonts/hyph.ts']
+ *  layer-proto/hyph.mjs (deleted at the cut-over with the rest of layer-proto/), the role table's tables and names' reading
+ *  held once in @readarxiv/text since: held by the same rule where they are */
+const MOVED = ['packages/engine/src/fonts/font-roles.ts', 'packages/engine/src/fonts/hyph.ts', 'packages/text/src/font-faces.ts', 'packages/text/src/font-classes.ts', 'packages/text/src/font-names.ts']
 
 describe('no drawing module names a target', () => {
   it('layer-proto/ and rules/font-roles.mjs compare no target with a string literal and tell no script or CJK-ness by a language\'s name', () => {

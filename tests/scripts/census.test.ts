@@ -390,6 +390,7 @@ describe("the reduction round's measures", () => {
         "/** a gap's width at most, em */",
         'export const GAP_MAX = 3',
         "export const KINDS = ['para', 'heading', 'caption'] as const",
+        'export type Kind = (typeof KINDS)[number]',
         "export const STATE = z.enum(['open', 'shut', 'gone'])",
         "const NAMES = ['Figure', 'Table', 'Algorithm']",
         '',
@@ -475,8 +476,9 @@ describe("the reduction round's measures", () => {
 
   it('counts vocabularies apart from name lists', () => {
     const d = r.trees.NOW.debt
-    expect(d.vocabularies.list.map(x => x.name)).toEqual(['KEYS', 'KINDS', 'STATE'])
-    expect(d.lists.list.map(x => x.name)).toEqual(['NAMES'])
+    // (KINDS: a type read off it; STATE: a schema's enum; KEYS is `as const` and nothing types over it: a name list)
+    expect(d.vocabularies.list.map(x => x.name)).toEqual(['KINDS', 'STATE'])
+    expect(d.lists.list.map(x => x.name)).toEqual(['KEYS', 'NAMES'])
   })
 
   it('counts translate chains by implementation: hosts of a package take its chain', () => {
@@ -504,5 +506,428 @@ describe("the reduction round's measures", () => {
     expect(engine.trees.NOW?.values).toMatchObject({ longestFunction: 1004, functionsOver1000: 1, tenLongest: 1004 + 7 + 8, contentVersions: 2, budgetsUnmeasured: 1, historyComments: 3, unsafeCasts: 3, suppressions: 1, chains: 2 })
     const web = record(null, j.web!.current, j.web!.lines, { commit: null, at: 't0', about: 'a fixture' })
     expect(web.trees.NOW?.values).toMatchObject({ chains: 0, longestFunction: 1, tenLongest: 1 })
+  })
+})
+
+// A list is classed by what the code does with its members, never by how it is spelled (DEFINITIONS.lists), and an export
+// is live by what is read of it (DEFINITIONS.dead), on a third tree: a package whose lists are each used one way (a type read
+// off them in their module or an importer's, a schema's enum, a union of the code's they are declared an array or a set of,
+// a JavaScript module's list typed by its declaration; names matched against a value, a table's rows, an annotation nothing
+// else names, a type read off a list whose members are not kept), and whose entry reads two members of one namespace, passes
+// another namespace on whole and re-exports a third; a test reads one member of a fourth.
+describe('lists by use, exports by what is read', () => {
+  const P3 = {
+    name: 'engine',
+    areas: [
+      { prefix: 'packages/p/src/', area: 'pkg:p', role: 'product' },
+      { prefix: 'packages/', area: 'packages', role: 'config' },
+      { prefix: 'tests/', area: 'tests', role: 'test' },
+      { prefix: '', area: 'root', role: 'config' },
+    ],
+    workspaces: ['packages'],
+    publicEntries: { packageExports: 'packages' },
+    engineAreas: ['pkg:p'],
+    debtAreas: ['pkg:p'],
+    builds: [{ name: 'packages', entries: { packageExports: 'packages' } }],
+  }
+  let root = ''
+  let r: Census
+  const put = (path: string, text: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), text)
+  }
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), 'census-use-'))
+    put('engine/package.json', JSON.stringify({ name: 'e3' }))
+    put('engine/packages/p/package.json', JSON.stringify({ name: '@x/p', exports: { '.': './src/index.ts' } }))
+    put(
+      'engine/packages/p/src/kinds.ts',
+      [
+        "import { z } from 'zod'",
+        '// our kinds: a type is read off them',
+        "export const KINDS = Object.freeze(['para', 'heading', 'caption'] as const)",
+        'export type Kind = (typeof KINDS)[number]',
+        "// a paper's font names, declared `as const`: matched against a name read off a page, no type read off them",
+        "export const FONTS = ['cmr10', 'cmbx10', 'cmti10'] as const",
+        'export const isTexFont = (name: string): boolean => (FONTS as readonly string[]).includes(name)',
+        '// a family of ours: a union the code names, the list declared an array of it, no `as const`',
+        "export type Family = 'cm' | 'times' | 'other'",
+        "export const FAMILIES: readonly Family[] = Object.freeze(['cm', 'times', 'other'])",
+        "export const familyOf = (name: string): Family => (name.startsWith('cm') ? 'cm' : 'other')",
+        '// the stops that go on: a set of a union the code names elsewhere',
+        "export type Stop = 'busy' | 'rate' | 'network' | 'auth'",
+        "export const GOES: ReadonlySet<Stop> = new Set<Stop>(['busy', 'rate', 'network'])",
+        "export const stopOf = (s: string): Stop => (GOES.has(s as Stop) ? (s as Stop) : 'auth')",
+        '// an annotation whose union nothing else names: spelling alone',
+        "export const ONLY: readonly ('a' | 'b' | 'c')[] = ['a', 'b', 'c']",
+        "// a type read off a list whose members are not kept: `string`",
+        "export const LOOSE = ['x', 'y', 'z']",
+        'export type Loose = (typeof LOOSE)[number]',
+        "// a schema's enum, written in place and by a list's name",
+        "export const STATE = z.enum(['open', 'shut', 'gone'])",
+        "const UNDER = ['none', 'solid', 'dotted'] as const",
+        'export const Look = z.object({ underline: z.enum(UNDER) })',
+        "// a table of each face's alphabets, read off its file: rows of measured values",
+        "export const HOLDS: Readonly<Record<string, readonly string[]>> = { a: ['Latn', 'Cyrl', 'de'], b: ['Latn', 'de', 'fr'] }",
+        '',
+      ].join('\n'),
+    )
+    put('engine/packages/p/src/modes.ts', "export const MODES = ['stack', 'side', 'only'] as const\n")
+    put(
+      'engine/packages/p/src/use.ts',
+      "import * as K from './kinds.ts'\nimport { MODES } from './modes.ts'\nexport type Mode = (typeof MODES)[number]\nexport const kindAt = (k: K.Kind): number => K.KINDS.indexOf(k)\n",
+    )
+    put('engine/packages/p/src/old.mjs', "export const CLASSES = Object.freeze(['math', 'cite', 'ref'])\nexport const NAMES = Object.freeze(['Figure', 'Table', 'Algorithm'])\nexport const classOf = x => (CLASSES.includes(x) ? x : 'math')\n")
+    put(
+      'engine/packages/p/src/old.d.mts',
+      "export type MarkClass = 'math' | 'cite' | 'ref'\nexport declare const CLASSES: readonly MarkClass[]\nexport declare const NAMES: readonly string[]\nexport declare function classOf(x: string): MarkClass\n",
+    )
+    put('engine/packages/p/src/ns.ts', 'export const a = 1\nexport const b = 2\nexport const c = 3\n')
+    put('engine/packages/p/src/whole.ts', 'export const d = 4\nexport const e = 5\n')
+    put('engine/packages/p/src/re.ts', 'export const f = 6\n')
+    put('engine/packages/p/src/two.ts', 'export const g = 7\nexport const h = 8\n')
+    put(
+      'engine/packages/p/src/index.ts',
+      [
+        "import * as N from './ns.ts'",
+        "import * as W from './whole.ts'",
+        "export { kindAt } from './use.ts'",
+        "export { classOf } from './old.mjs'",
+        "export { familyOf, isTexFont, stopOf } from './kinds.ts'",
+        "export * as R from './re.ts'",
+        'const keep = (m: object): number => Object.keys(m).length',
+        'export const total = (x: typeof N.b): number => N.a + x + keep(W)',
+        "export type { Family } from './kinds.ts'",
+        '',
+      ].join('\n'),
+    )
+    put('engine/tests/two.test.ts', "import * as T from '../packages/p/src/two.ts'\nexport const seen = T.g\n")
+    // (a dynamic import's module object: destructured, bound to a name, one member read off it, and one handed on unread)
+    for (const [m, a, b] of [['three', 'i', 'j'], ['four', 'k', 'l'], ['five', 'n', 'o'], ['six', 'q', 's']]) put(`engine/packages/p/src/${m}.ts`, `export const ${a} = 1\nexport const ${b} = 2\n`)
+    put(
+      'engine/tests/dyn.test.ts',
+      [
+        'export const run = async (): Promise<number> => {',
+        "  const { i } = await import('../packages/p/src/three.ts')",
+        "  const m = await import('../packages/p/src/four.ts')",
+        "  return i + m.k + (await import('../packages/p/src/five.ts')).n",
+        '}',
+        "export const later = () => import('../packages/p/src/six.ts')",
+        '',
+      ].join('\n'),
+    )
+    // (the website declares a list of the package's union, through the package's entry in its pin)
+    put('web/package.json', JSON.stringify({ name: 'w3' }))
+    put('web/app/main.ts', "import { pickOf } from './pick.ts'\nexport const run = () => pickOf('cm')\n")
+    put('web/app/pick.ts', "import type { Family } from '@x/p'\nexport const PICKS: readonly Family[] = ['cm', 'times', 'other']\nexport const pickOf = (f: Family): number => PICKS.indexOf(f)\n")
+    const SITE3 = { ...WEB, workspaces: ['vendor/e/packages'] }
+    r = await census({ today: null, now: [scanTree('engine', join(root, 'engine'), P3), scanTree('web', join(root, 'web'), SITE3)] })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('classes a list as a vocabulary where the code types over its members, whatever it is declared with', () => {
+    const d = r.trees.NOW.debt
+    // KINDS and MODES: a type read off them (in their module, in an importer); FAMILIES and GOES: declared of a union the
+    // code names elsewhere; CLASSES: a JavaScript module's list its declaration types so; STATE and UNDER: a schema's enum
+    expect(d.vocabularies.list.filter(x => x.repo === 'engine').map(x => x.name).sort()).toEqual(['CLASSES', 'FAMILIES', 'GOES', 'KINDS', 'MODES', 'STATE', 'UNDER'])
+    expect(Object.fromEntries(d.vocabularies.list.filter(x => ['KINDS', 'GOES', 'CLASSES', 'UNDER'].includes(x.name ?? '')).map(x => [x.name, x.by]))).toEqual({
+      KINDS: 'a type read off it',
+      GOES: 'declared of Stop',
+      CLASSES: 'declared of MarkClass',
+      UNDER: "a schema's enum",
+    })
+  })
+
+  it("classes a website's list declared of a package's union a vocabulary, the union read through the pin", () => {
+    expect(r.trees.NOW.debt.vocabularies.list.filter(x => x.repo === 'web').map(x => [x.name, x.by])).toEqual([['PICKS', 'declared of Family']])
+  })
+
+  it("keeps a name list a name list whatever its spelling: `as const`, an annotation nothing else names, a table's rows", () => {
+    const d = r.trees.NOW.debt
+    // FONTS is `as const` and matched against a value; ONLY's union is named nowhere else; LOOSE's members are not kept, so
+    // the type read off it is `string`; HOLDS's two rows; NAMES is declared `readonly string[]`
+    expect(d.lists.list.filter(x => x.repo === 'engine').map(x => x.name).sort()).toEqual(['FONTS', 'HOLDS', 'HOLDS', 'LOOSE', 'NAMES', 'ONLY'])
+  })
+
+  it('counts an export live through a namespace import only where the importer reads it', () => {
+    const dead = r.trees.NOW.dead
+    // ns.ts: N.a and `typeof N.b` read, c not; two.ts: the test reads T.g alone, so h is dead and g is the tests' only
+    expect(dead.deadExportList).toEqual(expect.arrayContaining(['packages/p/src/ns.ts:3 c', 'packages/p/src/two.ts:2 h']))
+    expect(dead.deadExportList).not.toEqual(expect.arrayContaining(['packages/p/src/ns.ts:1 a']))
+    expect(dead.deadExportList).not.toEqual(expect.arrayContaining(['packages/p/src/ns.ts:2 b']))
+    expect(dead.deadExportList).not.toEqual(expect.arrayContaining(['packages/p/src/two.ts:1 g']))
+  })
+
+  it("reads a dynamic import's module object as a namespace: destructured, bound to a name, a member read off it", () => {
+    const dead = r.trees.NOW.dead.deadExportList
+    expect(dead).toEqual(expect.arrayContaining(['packages/p/src/three.ts:2 j', 'packages/p/src/four.ts:2 l', 'packages/p/src/five.ts:2 o']))
+    for (const x of ['packages/p/src/three.ts:1 i', 'packages/p/src/four.ts:1 k', 'packages/p/src/five.ts:1 n', 'packages/p/src/six.ts:1 q', 'packages/p/src/six.ts:2 s']) expect(dead).not.toContain(x)
+  })
+
+  it('counts every export live where a namespace escapes whole, and lists each such import with why', () => {
+    const dead = r.trees.NOW.dead
+    // W is passed on whole, R re-exported whole: their exports live, each import listed
+    for (const x of ['packages/p/src/whole.ts:1 d', 'packages/p/src/whole.ts:2 e', 'packages/p/src/re.ts:1 f']) expect(dead.deadExportList).not.toContain(x)
+    expect(dead.wholeImports).toEqual([
+      { from: 'packages/p/src/index.ts', line: 2, to: 'packages/p/src/whole.ts', why: 'a namespace passed on whole' },
+      { from: 'packages/p/src/index.ts', line: 6, to: 'packages/p/src/re.ts', why: 'a namespace re-exported' },
+      { from: 'tests/dyn.test.ts', line: 6, to: 'packages/p/src/six.ts', why: 'a dynamic import' },
+    ])
+  })
+})
+
+// The repository's own profile (census-profile.mjs): the debt areas the owner's measure reads are the prepare's and the
+// typesetter's code, today's and the packages', and the package the two share, @readarxiv/text, where a table both read is held
+// once: a list moved there from the engine or the typesetter is still theirs, and still counted.
+describe("the repository's debt areas", () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'census-areas-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('package.json', JSON.stringify({ name: 'e3' }))
+    put('packages/engine/src/a.ts', "export const DESIGNS = ['Figure', 'Table', 'Algorithm']\n")
+    put('packages/typeset/src/b.ts', "export const WORDS = ['Mono', 'Courier', 'Typewriter']\n")
+    put('packages/text/src/c.ts', "export const MOVED = ['Sans', 'Gothic', 'Grotesk']\n")
+    put('packages/translate/src/d.ts', "export const OTHER = ['Times', 'Helvetica', 'Courier']\n")
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    execFileSync('git', ['add', '-A'], { cwd: root })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('counts a list held in @readarxiv/text in the headline, as one held in the engine or the typesetter', async () => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const { debtOf } = await import('../../lab/release-check/census.mjs')
+    const scan = scanTree('engine', root, ENGINE_PROFILE)
+    const files = [...scan.files].map(([path, f]) => ({ id: `engine:${path}`, repo: 'engine', path, f, scan }))
+    const d = debtOf({ label: 'AFTER', scans: [scan], files })
+    const headline = (name: string) => d.lists.list.find((l) => l.name === name)?.headline
+    expect([headline('DESIGNS'), headline('WORDS'), headline('MOVED')]).toEqual([true, true, true])
+    // (a package the two do not share is no debt area of theirs)
+    expect(headline('OTHER')).toBe(false)
+  })
+})
+
+// A template literal type over closed unions holds as few members as they do: a list declared of a union that holds one is a
+// vocabulary (a face's change, `${Role}-${Slant}`); a template with an open part (`${string}`) holds any string and is open.
+describe('a template of closed types is closed', () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'axt-census-template-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    put(
+      'packages/engine/src/index.ts',
+      [
+        "export type Role = 'serif' | 'sans'",
+        "export type Slant = 'italic' | 'upright'",
+        `export type Change = Role | Slant | \`\${Role}-\${Slant}\``,
+        `export type Loose = Role | \`\${string}-x\``,
+        "export const FACED = new Set<string>(['serif', 'sans-italic', 'upright'] satisfies readonly Change[])",
+        "export const LOOSE = new Set<string>(['serif', 'a-x', 'b-x'] satisfies readonly Loose[])",
+        'export const faced = (c: Change, l: Loose): boolean => FACED.has(c) || LOOSE.has(l)',
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  it('reads a list declared of a union of templates over closed unions as a vocabulary, and one with an open part as a list', async () => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const c = await census({ today: null, now: [scanTree('engine', root, ENGINE_PROFILE)] })
+    expect(c.trees.NOW.debt.vocabularies.list.map((x) => [x.name, x.by])).toEqual([['FACED', 'declared of Change']])
+    expect(c.trees.NOW.debt.lists.list.map((x) => x.name)).toEqual(['LOOSE'])
+  })
+})
+
+describe('the history reading (DEFINITIONS.history)', () => {
+  // each case one comment line of a package's source; `told` the lines read as history, `attribution` those read apart
+  const read = (lines: string[]) => {
+    const h = factsOf('packages/p/src/x.ts', `${lines.join('\n')}\nexport const x = 1\n`).history!
+    const told = new Set([...h.todays, ...h.dated, ...h.named, ...Object.values(h.forms).flat()])
+    return { told: [...told].sort((a, b) => a - b), attribution: h.attribution }
+  }
+  it('reads a map to the old engine: a line map, a file and its line, its paths, its commits, a port statement', () => {
+    const { told } = read([
+      '// layer2.mjs L2:3283-3893 and RUN:2022, TEX:120',
+      '// a line rectangle (tex.mjs:269 texRects)',
+      '// Ported from engine 065c1d973 run.mjs fillPage',
+      '// Carried from the website own store, as it was at baf2083e0',
+      '// (today/ink-units.mjs keptUnitsOf)',
+      '// (src/pdf-reader/engine/view/links.mjs)',
+      '// COPIED as it is from the engine sheet (abe884b5e)',
+      '// carried from page to page in order: one map for the glyphs',
+      "// a punctuation mark moved from after it (cite.sty's own)",
+      '// the bytes taken from the store where they are in it',
+      '// graphics-def 8d691483be, the version its driver states',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+  it("reads 'today' without the 's where it names the old engine, never the word's ordinary use", () => {
+    const { told } = read([
+      '// laid as today draws it',
+      '// where today decides them',
+      "// the extension's today session says it",
+      '// \\today in our compiles is the day arXiv printed',
+      '// `today`: the ownership records the lab checks',
+      '// `state`, what exists today: built or planned',
+      '// held equal by tests/pdf-reader/locate-ink-today.test.ts',
+      "// the last step's log, whatever the earlier passes' hold (BusyTeX's pipeline empties them today)",
+      "// the original's own family. Today, measured against what arXiv's PDFs embed: Times → Nimbus Roman",
+    ])
+    expect(told).toEqual([1, 2, 3])
+  })
+  it('reads a document, a note or a piece of work that is not in this repository', () => {
+    const { told } = read([
+      '// (design-b §1.5, T25)',
+      '// the host design A §1.1',
+      '// (design §4.5 "Painting")',
+      '// a unit kind, of the dump spec §2',
+      '// engine-view-host §16',
+      '// the redesign\'s design, §2.1',
+      "// the compile move's B3",
+      "// the reader's design §15",
+      '// DESIGN §7.2, docs/route/design.md §3.4',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+  it("reads a pull request's review, never the product's own `review` or an issue of the tracker", () => {
+    const { told } = read([
+      "// the original's anchor stays with it, #626's review",
+      "// PR #620's re-review",
+      '// the review of #490',
+      '// whatever the width (the interface review)',
+      "// drew it for two frames (the pin's wave-1 review)",
+      '// the `review` faces are served for the web',
+      '// (#636: 100 units were 199 requests)',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5])
+  })
+  it('reads a lane, a triage, a part, a stage, a numbered ruling and an option by name, never a word of the code', () => {
+    const { told } = read([
+      "// (triage-1 B: 2608.16117v1-de p4's t11)",
+      '// (L11 third round, gap 5)',
+      "// lane L7's record",
+      '// (lane style-wire, on the corpus)',
+      "// (Part 3's interfaces)",
+      '// (stage 1b states them)',
+      "// lab option (i)'s frame share",
+      '// a sentence lit with the one before (ruling 5)',
+      "// the coordinator's R7: the network down",
+      '// a design-performance item (Q7)',
+      '// its lane cuts them by its own limits alone',
+      '// evened by a size step in the first round',
+      '// R1 of PDF-READER §18.72: no ordinary word',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  })
+  it('reads who decided, never an owner that is a part of the code', () => {
+    const { told } = read([
+      "// (the owner's ruling, docs/PDF-READER.md §18.13)",
+      '// (the maintainer plans more interface languages)',
+      '// a page that is arXiv\'s, as the owner decided',
+      '// (his answer: the size never gives way to whole words)',
+      '// is told to the owner (`refused`), who fails the page',
+      '// asked of the owner (`contentOf(n)`)',
+      "// the label stays the owner's, its group off",
+    ])
+    expect(told).toEqual([1, 2, 3, 4])
+  })
+  it("counts a licence's statement of third-party origin apart, never one of our own code's", () => {
+    const { told, attribution } = read([
+      '// Ported from reference/read-frog/src/x.ts@abc1234 (GPL-3.0), 2026-01-01, modified',
+      '//',
+      '// The conversion (cmykToRgb) is ported from pdfjs-dist 6.3.289 (Mozilla, Apache-2.0), src/core/colorspace.js, its',
+      '// #toRgb, 2026-10-19, modified: one colour at a time into a clamped array, no buffer.',
+      "// Ported from the website's prototype, 2026-10-06, as it stood",
+    ])
+    expect(attribution).toEqual([1, 3, 4])
+    expect(told).toEqual([5])
+  })
+  it("reads no date inside a git ref's name, and a date beside it as a date", () => {
+    const { told } = read([
+      '// top alignment (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md §4)',
+      '// decided 2026-10-07 beside it',
+    ])
+    expect(told).toEqual([2])
+  })
+})
+
+describe("the history reading: this repository's own names, a third party's files (DEFINITIONS.history)", () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'census-names-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('package.json', JSON.stringify({ name: 'e4', dependencies: { libx: '1.0.0' } }))
+    put('.gitignore', 'node_modules\n')
+    // a dependency's distribution: its build files, one of whose names this repository also holds (tools/lib.mjs)
+    put('node_modules/libx/package.json', JSON.stringify({ name: 'libx' }))
+    put('node_modules/libx/build/lib.worker.mjs', 'export {}\n')
+    put('node_modules/libx/build/lib.mjs', 'export {}\n')
+    put('tools/lib.mjs', 'export {}\n')
+    // this repository's documents: a label given right after a bold rule, a part of it named, a table of stages
+    put(
+      'docs/DESIGN.md',
+      [
+        '# Design',
+        '## 16. The prepare',
+        '**The marked compile is the pass loop** (Q1, the lab design): the files carried in (`carried`, Q1\'s option (i)).',
+        '**A marked request that dies is asked once more, reduced** (Q2; `reduce`).',
+        '**Over the 88** (stage 1a, a lane of the lab): every object the same.',
+        '',
+      ].join('\n'),
+    )
+    put(
+      'docs/route/notes.md',
+      ['## 7. Versions, stages', '', '| Stage | Scope |', '|---|---|', '| 1 (built) | the ledger |', '| 2 (built) | ink units |', '| 5 (built) | figure text |', ''].join('\n'),
+    )
+    // a file that cites both documents, and one that cites none
+    put(
+      'packages/p/src/a.ts',
+      [
+        "// the pass loop (DESIGN §16's Q1)",
+        '// asked once more without the optional classes (Q2)',
+        '// carried into pass 1 (option (i) of Q1)',
+        '// a folio: stage 2 brackets them (notes.md §7)',
+        "// a folio: the lab plan's stage 3 (notes.md §7)",
+        "// the worker's Glyph (lib.worker.mjs:32428-32439): the library's contract",
+        '// a line rectangle (tex.mjs:269 texRects)',
+        "// the run (Q7, the lab's performance design)",
+        "// the old reader's parse (lib.mjs:12)",
+        '// (docs/route/notes.md stage 5)',
+        "// a page's figure texts (the content class `figures`, docs/route/notes.md",
+        '// stage 5), each drawn in its translation',
+        '// a gate, which must count none (stage 1a fails a paper with one; DESIGN §16)',
+        'export const a = 1',
+        '',
+      ].join('\n'),
+    )
+    put('packages/p/src/b.ts', ['// the pass loop (Q1, convergeThenMark)', '// built for the right pane first (stage 2, deliverable 7)', 'export const b = 1', ''].join('\n'))
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    execFileSync('git', ['add', '-A'], { cwd: root })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const told = async (path: string) => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const h = scanTree('engine', root, ENGINE_PROFILE).files.get(path)!.history!
+    return [...new Set([...h.todays, ...h.dated, ...h.named, ...Object.values(h.forms).flat()])].sort((a, b) => a - b)
+  }
+  it('reads no name a document of this repository defines in a file that cites it, and every other as before', async () => {
+    // Q1, Q2 and Q1's option (i) are DESIGN's labels, stages 2 and 5 rows of notes.md's table of stages (a stage named on the
+    // line after the document's path too): this file cites both. Stage 3 and Q7 are no document's; a file that cites neither
+    // document reads Q1 and stage 2 as the lab's. A stage named after a bold heading (DESIGN's stage 1a) is the lab's, cited
+    expect((await told('packages/p/src/a.ts')).filter(l => l <= 5 || l >= 8)).toEqual([5, 8, 9, 13])
+    expect(await told('packages/p/src/b.ts')).toEqual([1, 2])
+  })
+  it("reads no file a dependency distributes, cited by its line, as the old engine's; one this repository holds too stays", async () => {
+    // lib.worker.mjs is libx's alone; tex.mjs is no dependency's; lib.mjs is libx's and this repository's (tools/lib.mjs)
+    expect((await told('packages/p/src/a.ts')).filter(l => l >= 6 && l <= 9)).toEqual([7, 8, 9])
   })
 })

@@ -1,5 +1,5 @@
-// The reader's rows made here (its Host's `translate`, interfaces/host design-a §1.1) through the background: the one function of
-// the extension's reader host that knows the messages (shared/transport.ts; their shapes, lanes/L4-reader.md 5a.5b).
+// The reader's rows made here (its Host's `translate`, the host design A §1.1) through the background: the one function of
+// the extension's reader host that knows the messages (shared/transport.ts; their shapes, lane L4-reader's record, 5a.5b).
 // `axt:provider-status` binds a scope to the chain built from the settings as stored; `axt:translate` takes a call's units and
 // answers one result a unit, the chain's (packages/translate: the translators, their fall-through and acceptance, the rows and
 // the store are the background's); `axt:cancel-scope` withdraws the scope, on the reader's abort and when the page goes (an
@@ -9,6 +9,23 @@ import type { Row as Result, Unit, Why } from '@readarxiv/format'
 import { type UnitIn, unitInOf } from '@readarxiv/translate'
 import type { TranslationTransport } from '@/providers/transport'
 import type { ProviderErrorKind } from '@/providers/types'
+import { sendMessage } from '@/shared/messages'
+import { createMessageTransport } from '@/shared/transport'
+
+/**
+ * The PDF reader's transport: the extension's message transport, each call and each ask of the status marked the PDF reader's
+ * (`surface`), which the background answers from the PDF reader's chain (providers/translators.ts readerTranslatorsOf: the
+ * website's, Google's then Microsoft's, for a reader who never chose a translator; the owner's ruling of 2026-11-19). The
+ * page's transport is not this one and sends no mark, so that the page translator is as it was
+ */
+export function readerTransport(send: typeof sendMessage = sendMessage): TranslationTransport {
+  const base = createMessageTransport(send)
+  return {
+    ...base,
+    translate: call => base.translate({ ...call, surface: 'pdf' }),
+    status: (scope, options) => send({ type: 'axt:provider-status', ...(scope ? { scope } : {}), ...(options?.fresh ? { fresh: true } : {}), surface: 'pdf' }),
+  }
+}
 
 /**
  * A failure the transport names by its kind (the status's demotion of the service chosen, a whole call's stop) as the `Why` a

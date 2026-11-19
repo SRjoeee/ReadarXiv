@@ -41,7 +41,7 @@ import { layerOf, paperDoc, prepareOf, runOf as targetRun } from '../helpers/doc
 
 const ZH = 'zh-Hans'
 const PREFS: Prefs = { ...DEFAULTS, display: 'bilingual', target: ZH }
-/** the website's words for the states these cases reach (its v2 words.ts), the time as given */
+/** the website's words for the states these cases reach (its own reader's), the time as given */
 const WORDS: StateWords = {
   translating: (got, total) => (total > 0 ? `translating ${got}/${total}` : 'translating'),
   notNow: (at) => (at === null ? 'unavailable' : `unavailable until ${at}`),
@@ -329,7 +329,7 @@ function run(o: {
 }
 
 describe('a run of our server that ends failed (PDF-READER §8)', () => {
-  // (our server's compact: the windows done, in one rows object, as worker v2 translate.ts writes it)
+  // (our server's compact: the windows done, in one rows object, as our server writes it)
   const windowsDone = (store: Store) => [rowsObject(store, ids(0, 5))]
   it("(a) some units not answered past their retries (the chain's unavailable; the attempt translation-down): told, its retry at our server's time", () => {
     const v = run({ laidAt: 4000, end: windowsDone })

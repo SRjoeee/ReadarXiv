@@ -14,7 +14,7 @@ import type { WireFormat } from '@/core/protector/tokens'
 import type { KeyValues } from '@/cache/translate-store'
 import { batchLine, redact } from '@/shared/diagnostics'
 import type { CancelledScopeRegistry } from './request/cancellation'
-import { type Answerer, langOf, translatorOf, translatorsOf, type TranslatorDeps } from './translators'
+import { type Answerer, langOf, readerTranslatorsOf, translatorOf, translatorsOf, type Translators, type TranslatorDeps } from './translators'
 import type { ProviderErrorKind, ProviderKind, TranslateContext } from './types'
 
 /** The engine actually in use right now and the latest hand-over reason (§8.5); the popup explains by it why the translation changed engine */
@@ -65,7 +65,13 @@ export interface TranslateCall {
   /** A service as the settings page would save it, asked as the call carries it (its id is `providerId`). Carries a key
    *  across runtime messaging, as the stored configuration does across storage: never logged (hard rule 5) */
   candidate?: Service
+  /** `pdf`: the PDF reader's call, answered by the PDF reader's chain (translators.ts readerTranslatorsOf: the website's for a
+   *  reader who never chose a translator, v22); none: the page's, as before */
+  surface?: Surface
 }
+
+/** who asks: the PDF reader (`pdf`), or none, the HTML page and every other caller */
+export type Surface = 'pdf'
 
 /** A failure as it crosses the message boundary; `status` is the HTTP status where one is known (only a 401 is a key refused) */
 export interface ErrorInfo { kind: ProviderErrorKind; message: string; status?: number }
@@ -84,8 +90,9 @@ export interface TranslationTransport {
   translate(call: TranslateCall): Promise<TranslateResponse>
   /** Withdraw the scope's calls; returns how many. Whether the scope is dead afterwards is the session router's decision (DESIGN §8.5) */
   cancel(scope: string): Promise<number>
-  /** `scope`: the session's own chain. `fresh`: a chain built from the configuration as stored now (provider-status.ts) */
-  status(scope?: string, options?: { fresh?: boolean }): Promise<ProviderStatus>
+  /** `scope`: the session's own chain. `fresh`: a chain built from the configuration as stored now (provider-status.ts).
+   *  `surface`: the PDF reader's chain's status (TranslateCall `surface`) */
+  status(scope?: string, options?: { fresh?: boolean; surface?: Surface }): Promise<ProviderStatus>
   /** Local only: every call withdrawn and every later one refused; the chain holder retires the chains a deletion replaces */
   retire?(): number
   isRetired?(): boolean
@@ -205,55 +212,73 @@ function isRow(r: Result, order: readonly Translator[], passed: ReadonlyMap<stri
   return k >= 0 && order.slice(0, k).every(t => refusedAll(r.id, t.identity))
 }
 
+/**
+ * One chain of translators a transport answers by, with what is told of it: the page's (`translatorsOf`), and the PDF reader's
+ * (`readerTranslatorsOf`), which is the page's own lane where the reader picked a translator. Each has its rows (keyed by its
+ * identity) and its hand-overs (the status of who answers it), so that the PDF reader's chain says nothing of the page's
+ */
+interface Lane {
+  built: Translators
+  translators: Translator[]
+  chainId: string
+  usesContext: boolean
+  /** the hand-overs in force, by service id, and the service that answered last (the popup's `engine`) */
+  demoted: Map<string, { kind: ProviderErrorKind; message: string; status?: number; until: number }>
+  lastAnswer: string
+  lastDemoted?: { id: string; kind: ProviderErrorKind; message: string }
+}
+
 export async function createLocalTransport(config: Config, deps: LocalTransportDeps): Promise<TranslationTransport> {
   const revision = await chainRevision(config)
   /** a refused key's status, from the reader's service, as its request failed */
   let lastStatus: number | undefined
   const tdeps: TranslatorDeps = { ...deps, onStatus: s => { lastStatus = s; deps.onStatus?.(s) } }
-  const built = translatorsOf(config, tdeps)
   const chosen = chosenService(config)
   const rejected = (id: string) => deps.rejected?.has(id) === true
-  // a service whose key the endpoint refused before is asked nothing: off at its first request, before any is sent
-  const translators: Translator[] = built.translators.map(t => {
-    const a = built.answerers.get(t.identity)
-    if (!a || !rejected(a.id)) return t
-    const refuse = (): never => {
-      throw new Fault('off', 'key-refused', 'the endpoint refused this key before')
+  const laneOf = async (built: Translators): Promise<Lane> => {
+    // a service whose key the endpoint refused before is asked nothing: off at its first request, before any is sent
+    const translators: Translator[] = built.translators.map(t => {
+      const a = built.answerers.get(t.identity)
+      if (!a || !rejected(a.id)) return t
+      const refuse = (): never => {
+        throw new Fault('off', 'key-refused', 'the endpoint refused this key before')
+      }
+      return { ...t, send: () => ({ [Symbol.asyncIterator]: () => ({ next: async () => refuse() }) }) }
+    })
+    const lane: Lane = { built, translators, chainId: await identityOf(translators), usesContext: translators.some(t => t.context), demoted: new Map(), lastAnswer: built.primary.id }
+    for (const t of translators) {
+      const a = built.answerers.get(t.identity)
+      if (!a || !rejected(a.id)) continue
+      lane.demoted.set(a.id, { kind: 'auth', message: 'the endpoint refused this key before', status: 401, until: Number.POSITIVE_INFINITY })
+      // the seeded hand-over names the refused service from the first status, not only once a call has met it: a chain
+      // made after the record changed is the one a page's popup asks (the popup's note under the card, UI.md S-P-30)
+      lane.lastDemoted = { id: a.id, kind: 'auth', message: 'the endpoint refused this key before' }
     }
-    return { ...t, send: () => ({ [Symbol.asyncIterator]: () => ({ next: async () => refuse() }) }) }
-  })
-  const chainId = await identityOf(translators)
+    return lane
+  }
+  const page = await laneOf(translatorsOf(config, tdeps))
+  // the PDF reader's: the page's own where the reader picked a translator, else the website's chain apart (v22)
+  const reader = config.providerChosen ? page : await laneOf(readerTranslatorsOf(config, tdeps))
+  const laneFor = (surface: Surface | undefined) => (surface === 'pdf' ? reader : page)
+  const { built, translators } = page
   const target = langOf(config.targetLanguage)
-  const usesContext = translators.some(t => t.context)
 
   let retired = false
   /** calls in flight, by scope (`''` for none), each withdrawn by its controller */
   const live = new Map<string, Set<AbortController>>()
   let inFlight = 0
-  /** the hand-overs in force, by service id, and the service that answered last (the popup's `engine`) */
-  const demoted = new Map<string, { kind: ProviderErrorKind; message: string; status?: number; until: number }>()
-  let lastAnswer: string = built.primary.id
-  let lastDemoted: { id: string; kind: ProviderErrorKind; message: string } | undefined
-  for (const t of translators) {
-    const a = built.answerers.get(t.identity)
-    if (!a || !rejected(a.id)) continue
-    demoted.set(a.id, { kind: 'auth', message: 'the endpoint refused this key before', status: 401, until: Number.POSITIVE_INFINITY })
-    // the seeded hand-over names the refused service from the first status, not only once a call has met it: a chain
-    // made after the record changed is the one a page's popup asks (the popup's note under the card, UI.md S-P-30)
-    lastDemoted = { id: a.id, kind: 'auth', message: 'the endpoint refused this key before' }
-  }
 
   // (the unit as its row is keyed: the digest of its statement, the package's `askedOf`, every field of the contract's UnitIn
   // but its id, a label, so that two units a wire writes apart never share a row (a bibliography entry's `entry` cuts it at
   // its blocks, hard rule 4); the same digest our server's rows name their statement by. The context as the unit's answers
   // depend on it: its glossary the entries the unit's wires use, #637; without a glossary the context itself, the key as
-  // before)
-  const rowKey = (u: UnitIn, lang: string, context: PaperContext | undefined) =>
-    `${ROWS}|${chainId}|${lang}|${askedOf(u)}|${usesContext && context ? sha256Hex(JSON.stringify(rowContextOf(translators, u, lang, context))) : '-'}`
+  // before. The chain's identity is its lane's: the PDF reader's rows are its chain's)
+  const rowKey = (lane: Lane, u: UnitIn, lang: string, context: PaperContext | undefined) =>
+    `${ROWS}|${lane.chainId}|${lang}|${askedOf(u)}|${lane.usesContext && context ? sha256Hex(JSON.stringify(rowContextOf(lane.translators, u, lang, context))) : '-'}`
 
   /** one call of `chain` with `order`: results by unit, the rows read first and written after. `own`: only a translator's
-   *  own answer is one (the connection test's) */
-  async function run(chain: Chain, order: Translator[], answerers: ReadonlyMap<string, Answerer>, call: TranslateCall, rows: KeyValues | undefined, scope: string, own = false): Promise<TranslateResponse> {
+   *  own answer is one (the connection test's). `lane`: the chain the call is told as (its rows, its hand-overs) */
+  async function run(chain: Chain, order: Translator[], answerers: ReadonlyMap<string, Answerer>, call: TranslateCall, rows: KeyValues | undefined, scope: string, own = false, lane: Lane = page): Promise<TranslateResponse> {
     const context = paperContextOf(call.context)
     // the session's own target, as its status gave it (a session holds to the transport it started on, whose target it is)
     const lang = call.target ? langOf(call.target) : target
@@ -267,13 +292,13 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     try {
       const out = new Map<string, UnitResult>()
       // the rows first: a unit with one is answered by it, nothing asked
-      const keys = rows ? call.units.map(u => rowKey(u, lang, context)) : []
+      const keys = rows ? call.units.map(u => rowKey(lane, u, lang, context)) : []
       const keyById = new Map(keys.map((k, i) => [(call.units[i] as UnitIn).id, k]))
       const held = rows ? await within(rows.read(keys), 2_000, keys.map(() => null)) : []
       const todo: UnitIn[] = []
       call.units.forEach((u, i) => {
         const row = rowOf(held[i])
-        if (row) out.set(u.id, { ...row, id: u.id, ...engineOf(row.by, answerers) })
+        if (row) out.set(u.id, { ...row, id: u.id, ...engineOf(row.by, answerers, lane) })
         else todo.push(u)
       })
       const cached = call.units.length - todo.length
@@ -287,7 +312,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         const byT = passed.get(n.id) ?? new Map<string, Why['kind'][]>()
         passed.set(n.id, byT)
         byT.set(n.by, [...(byT.get(n.by) ?? []), n.why.kind])
-        handover(answerers.get(n.by), n.why, told)
+        handover(answerers.get(n.by), n.why, told, lane)
       }
       const writes: [string, string][] = []
       if (todo.length) {
@@ -297,8 +322,8 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
           // runs floor rebuilt from its stretches is the chain's, and fails the test as the endpoint's reply alone would
           if (r.ok && own && !order.some(t => t.identity === r.by)) out.set(r.id, { id: r.id, ok: false, why: { kind: 'refused' }, error: errorOf({ kind: 'refused' }) })
           else if (r.ok) {
-            const e = engineOf(r.by, answerers)
-            if (e.engine) answered(e.engine)
+            const e = engineOf(r.by, answerers, lane)
+            if (e.engine) answered(e.engine, lane)
             out.set(r.id, { ...r, ...e })
             if (rows && isRow(r, order, passed)) {
               const { id: _, ...row } = r
@@ -342,14 +367,15 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     }
   }
 
-  const engineOf = (by: string, answerers: ReadonlyMap<string, Answerer>): { engine?: string; kind?: ProviderKind } => {
+  const engineOf = (by: string, answerers: ReadonlyMap<string, Answerer>, lane: Lane): { engine?: string; kind?: ProviderKind } => {
     const identity = by.startsWith('runs:') ? by.slice(5) : by
-    const a = answerers.get(identity) ?? (by === 'runs:mixed' ? built.primary : undefined)
+    const a = answerers.get(identity) ?? (by === 'runs:mixed' ? lane.built.primary : undefined)
     return a ? { engine: a.id, kind: a.kind } : {}
   }
   /** a translator passed over for a unit: a hand-over the popup may word, for what makes it more than the unit's; told once a
    *  call (`told`), the units after the first counted (two calls of 60 units passing a cooling translator logged 120 lines) */
-  const handover = (a: Answerer | undefined, why: Why, told: Map<string, Told>) => {
+  const handover = (a: Answerer | undefined, why: Why, told: Map<string, Told>, lane: Lane) => {
+    const { demoted } = lane
     if (!a || why.kind === 'refused' || why.kind === 'aborted') return
     if (why.kind === 'unconfigured' && why.code === 'no-language') return
     const info = errorOf(why, why.kind === 'unconfigured' && why.code === 'key-refused' ? lastStatus : undefined)
@@ -362,14 +388,14 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     // a lasting hand-over already known (the health record's refused key, with its 401) keeps what it says
     if (lasting && demoted.get(a.id)?.until === Number.POSITIVE_INFINITY) return
     demoted.set(a.id, { kind: info.kind, message: info.message, ...(info.status !== undefined ? { status: info.status } : {}), until: lasting ? Number.POSITIVE_INFINITY : Date.now() + HANDOVER_MS })
-    lastDemoted = { id: a.id, kind: info.kind, message: info.message }
+    lane.lastDemoted = { id: a.id, kind: info.kind, message: info.message }
     // a refused key of a stored service of the reader's (a 401): the health record's (background/health-guard.ts)
     if (info.kind === 'auth' && info.status === 401 && serviceOf(config, a.id)) deps.onFailure?.({ id: a.id, kind: 'auth', message: info.message, status: 401 })
     told.set(`${a.id}|${info.kind}`, { id: a.id, kind: info.kind, message: info.message, count: 1 })
   }
-  const answered = (id: string) => {
-    lastAnswer = id
-    demoted.delete(id)
+  const answered = (id: string, lane: Lane) => {
+    lane.lastAnswer = id
+    lane.demoted.delete(id)
   }
 
   const refusal = (scope: string | undefined): TranslateResponse => ({ ok: false, error: { kind: 'aborted', message: scope === undefined ? 'cancelled (chain retired)' : `cancelled (scope: ${scope})` } })
@@ -387,13 +413,15 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
         const one = translatorOf(id, config, tdeps, call.candidate ?? serviceOf(config, id))
         return await run(deps.probe, [one.translator], new Map([[one.translator.identity, one.answerer]]), call, undefined, call.scope ?? '', true)
       }
-      return await run(deps.chain, translators, built.answerers, call, deps.rows, call.scope ?? '')
+      const lane = laneFor(call.surface)
+      return await run(deps.chain, lane.translators, lane.built.answerers, call, deps.rows, call.scope ?? '', false, lane)
     } catch (e) {
       return { ok: false, error: { kind: 'unknown', message: redact(e instanceof Error ? e.message : String(e)) } }
     }
   }
 
-  const status = async (): Promise<ProviderStatus> => {
+  const status = async (_scope?: string, options?: { surface?: Surface }): Promise<ProviderStatus> => {
+    const { built, translators, demoted, chainId, lastAnswer, lastDemoted } = laneFor(options?.surface)
     const now = Date.now()
     for (const [id, d] of demoted) if (d.until <= now) demoted.delete(id)
     // every probe bounded: a probe that hangs answers "unavailable" in time

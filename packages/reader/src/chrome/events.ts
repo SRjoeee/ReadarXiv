@@ -1,6 +1,6 @@
 // The reader's state as the chrome's events (model.ts SessionEvent): what changed between two states of openReader, in the
-// words the chrome's model folds, as it folds the extension's today session's. One fold for every host that mounts the chrome
-// over openReader (the extension's v2 page and the website's had a copy each, L11's gap 1): a host's `open` tells the chrome
+// words the chrome's model folds, as it folds the extension's v1 session's (src/pdf-reader/session). One fold for every host
+// that mounts the chrome over openReader, so that no host holds a copy of it: a host's `open` tells the chrome
 // `eventsOf(told, reader.state())` at each of the reader's changes.
 import { kindOfWhy } from '@readarxiv/format'
 import type { ProviderErrorKind } from '@readarxiv/ui'
@@ -29,10 +29,11 @@ export const LAYER_WHY: Readonly<Record<LayerWhy, Unavailable>> = {
 
 /**
  * Each stage of a prepare (our server's record's `prepare.stage`, its PREPARE_STAGES in order) at a fixed place on the prepare's
- * stretch, as a share of it: where the stage starts in the time a prepare takes, the mean of the two staging timelines of
- * 2026-11-11 (a new paper's, 2610.20266v1: 87.9 s; a paper prepared again after a deploy, 2610.21924v1: 95.6 s). Fetching is
- * short (10 % of the time), compiling the long one (59 % and 22 %), the units and their layout the rest, the bundle the last
- * few seconds. No time-based creeping: the line moves as the record's stage does, never back (ProgressLine; status.ts lineOf)
+ * stretch, as a share of it: where the stage starts in the time a prepare takes, the mean of the two staging timelines
+ * measured 2026-11-11 (a new paper's, 2610.20266v1: 87.9 s; a paper prepared again after a deploy, 2610.21924v1: 95.6 s).
+ * Fetching is short (10 % of the time), compiling the long one (59 % and 22 %), the units and their layout the rest, the
+ * bundle the last few seconds. No time-based creeping: the line moves as the record's stage does, never back (ProgressLine;
+ * status.ts lineOf)
  */
 const PREPARE_PLACES: Readonly<Record<string, number>> = {
   fetching: 0.02,
@@ -145,6 +146,8 @@ export function eventsOf(prev: ReaderState | null, next: ReaderState): SessionEv
     })
   if (!!p?.reconnecting !== !!next.reconnecting || !!p?.network !== !!next.network)
     out.push({ type: 'link', reconnecting: !!next.reconnecting, network: !!next.network })
+  // a face lost, told once: the reader keeps it lost for the visit (reader.ts `faces`), and the chrome says so (S-R-28)
+  if (next.faces === 'lost' && p?.faces !== 'lost') out.push({ type: 'faces' })
   // the translation under way is what the view shown waits for (reader.ts `waits`, session/rows.ts viewOf), counted over the layer
   // it shows: rows read of a run done, a run that restates rows held, one on units of a layer not shown, are told by their end
   // alone. The view's wait over while the rows still come (every unit shown holds its translation) is its end

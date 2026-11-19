@@ -3,10 +3,10 @@
 import { sha256, sha256Hex, toBase64Url, utf8 } from './bytes.ts'
 import { ORIGINAL_CHUNK, type Piece } from './schema.ts'
 
-/** a piece as the id's hash reads it (the baseline's FORMAT.md §2): ["t", s] a text, ["p", src] an element, ["o", open] and
+/** a piece as the id's hash reads it: ["t", s] a text, ["p", src] an element, ["o", open] and
  *  ["c", close] around a span's content (either absent where the unit's edge cuts the group), ["n", pre, unit, post] a nested unit */
 function tagged(content: readonly Piece[], out: unknown[]): unknown[] {
-  // (an explicit stack, not recursion: spans nest as deep as a source's groups do; lane L2's walk, rebuild/source c26d4bf7a)
+  // (an explicit stack, not recursion: spans nest as deep as a source's groups do)
   const stack: { list: readonly Piece[]; k: number; close?: string }[] = [{ list: content, k: 0 }]
   while (stack.length) {
     const top = stack[stack.length - 1] as { list: readonly Piece[]; k: number; close?: string }
@@ -37,7 +37,7 @@ function tagged(content: readonly Piece[], out: unknown[]): unknown[] {
 
 /**
  * A unit's id: the lowercase hexadecimal SHA-256 of the UTF-8 bytes of `JSON.stringify([kind, P])`, P its pieces tagged in
- * the source's order (the baseline's FORMAT.md §2). Nothing else enters: no ordinal, occurrence, position or flag, so two
+ * the source's order. Nothing else enters: no ordinal, occurrence, position or flag, so two
  * units of one kind and content share an id, and a row
  */
 export const unitId = (kind: string, content: readonly Piece[]): string =>

@@ -1,11 +1,11 @@
-// The faces a reader paints translations in (no state outside a reader, design §4.5): each a FontFace of its own family name,
+// The faces a reader paints translations in (no state outside a reader): each a FontFace of its own family name,
 // made from bytes read through the reader's fetch (a font is fetched as data, never imported: Chromium keeps a failed import()
-// failed for the page's life, W faces.ts:10-13), added to the document while the reader lives and taken out with it, and a class
+// failed for the page's life, as the website found), added to the document while the reader lives and taken out with it, and a class
 // a run is drawn with. A face the table names a local family for (a test's, a system's) is that family.
 //
-// Loaded in waves (layer-side.mjs warmPages, docs/PDF-READER.md §11.8): the faces asked together are read in the order asked
+// Loaded in waves (docs/PDF-READER.md §11.8): the faces asked together are read in the order asked
 // (the page in the middle of the view first), WAVE_SLOTS at a time, so that a wave does not hold the original's reads behind
-// it; each asked once. A face whose answer is a 4xx other than 408 and 429 is never asked again (W faces.ts:69-72); any other
+// it; each asked once. A face whose answer is a 4xx other than 408 and 429 is never asked again (the website's rule); any other
 // failure (the network, a 5xx, a 408 or 429) is forgotten, and asked again by the next wave that wants it.
 import type { Fetch } from '../bytes/source.ts'
 import type { FaceId } from './page.ts'
@@ -21,7 +21,7 @@ export interface FaceEntry {
   fallback?: string
 }
 export type FaceTable = Readonly<Record<FaceId, FaceEntry>>
-/** how many faces a wave reads at a time (layer-side.mjs WAVE_SLOTS) */
+/** how many faces a wave reads at a time */
 export const WAVE_SLOTS = 4
 
 export interface Faces {
@@ -39,6 +39,15 @@ export interface Faces {
    *  Latin face the reader draws from web font bytes it reads (a face the system holds is laid out with fractional advances
    *  under both renderings on every platform, and tells nothing); null where there is none, or it cannot be had */
   probeFace(text: string): Promise<FaceId | null>
+  /** the served faces' alone (compose/served.ts; a table's faces have none): `f` (a lay) called, with the keys of the slices
+   *  lost for now (a failure that may pass, met twice) that a text it measured needs */
+  lostIn?<T>(f: () => T): [T, string[]]
+  /** the served faces' alone: the slices of `keys` lost for now asked again by themselves, at the session's pace, while
+   *  `wanted` (the demand of a page whose lay met them) or another page's demand holds */
+  heal?(keys: readonly string[], wanted: () => boolean): void
+  /** the served faces' alone: `f` told the key of each slice lost for now that comes, its texts ready now; the listener's
+   *  removal */
+  healed?(f: (key: string) => void): () => void
   /** the faces asked of the network, and the most read at once (the probe's) */
   readonly asked: number
   readonly most: number

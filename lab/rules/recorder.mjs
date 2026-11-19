@@ -1,4 +1,4 @@
-// lab/rules/recorder.mjs: the rule ledger's instrument, its run-time half (design-reduction-2026-11-13.md §3c, R4). The
+// lab/rules/recorder.mjs: the rule ledger's instrument, its run-time half (the reduction design §3c, R4). The
 // instrumented code (transform.mjs, the site map of sites.mjs) calls `globalThis.__axtRules` at each site; this records,
 // per site: how often it ran and each outcome's count; for a comparison and a Math.min / max, the nearest case on each
 // side of the bound (the rule's value): the effective operand (the value of the rule's literal or constant at which that
@@ -407,6 +407,23 @@ export function recorderOf(map, { out = null, paper = null, input = 'corpus' } =
       const ids = [...new Set(sources.flatMap(s => marksOf(s) ?? []))].filter(id => S[id].kind !== 're').sort((a, b) => a - b)
       return ids.length ? Object.setPrototypeOf(set, protoFor(`s${ids.join(',')}`, () => setProto(ids))) : set
     },
+    /** a value the platform copies (structuredClone, as install() hands it on): every list in it read whole, by no method of
+     *  its own, wherever the value came from (`structuredClone`: its entries not judged, ledger.mjs). The value walked as the
+     *  copy walks it: arrays, plain objects' own values, a Map's keys and values, a Set's members, each object once */
+    cloned: value => {
+      const seen = new Set()
+      const stack = [value]
+      while (stack.length) {
+        const x = stack.pop()
+        if (!x || typeof x !== 'object' || seen.has(x)) continue
+        seen.add(x)
+        for (const id of marksOf(x) ?? []) read(id, 'structuredClone')
+        if (Array.isArray(x)) for (let i = 0; i < x.length; i++) stack.push(x[i])
+        else if (x instanceof Map) for (const [k, v] of Map.prototype.entries.call(x)) stack.push(k, v)
+        else if (x instanceof Set) for (const v of Set.prototype.values.call(x)) stack.push(v)
+        else if (Object.getPrototypeOf(x) === Object.prototype || Object.getPrototypeOf(x) === null) for (const v of Object.values(x)) stack.push(v)
+      }
+    },
     /** a module of the site map loaded (transform.mjs puts the call first in each): the modules an input exercised */
     loaded: path => {
       loaded.add(path)
@@ -466,5 +483,18 @@ export function install({ input = null } = {}) {
   const paper = process.env.AXT_RULES_PAPER ?? process.argv.find(a => a.startsWith('--id='))?.slice(5) ?? null
   // (the input a record is of: `tests`, `corpus` (the default), `holdout`, as the run says)
   globalThis.__axtRules = recorderOf(map, { out: process.env.AXT_RULES_OUT ?? null, paper, input: input ?? process.env.AXT_RULES_INPUT ?? 'corpus' })
+  // (the platform's copy, structuredClone, reads a list's entries by no method of the list's: the copy of a list a table holds,
+  // read through a key known at run time (the typesetter's rule set: rules-for.ts copy), is a read no site map can name
+  // (sites.mjs `unseen` names a copy of a list's own binding). The global handed on, each list it copies read first)
+  const clone = globalThis.structuredClone
+  if (typeof clone === 'function' && !clone[MARK]) {
+    const rec = globalThis.__axtRules
+    const copying = (value, options) => {
+      rec.cloned(value)
+      return clone(value, options)
+    }
+    Object.defineProperty(copying, MARK, { value: true })
+    globalThis.structuredClone = copying
+  }
   return globalThis.__axtRules
 }

@@ -132,6 +132,27 @@ describe('adapt: a member set from its part’s facts', () => {
     if (!('member' in led)) throw new Error(led.stop)
     expect(led.member.rowStart?.row).toMatchObject({ id: 3, page: 1, baseline: 676, x1: 68 })
   })
+  it('ends its room on a row it shares with a member not laid where TeX ended its text there, as where ink stays between', () => {
+    // (2608.06701v1-zh p6: a run-in heading's last line the row of a paragraph that had no row; its slot there ran to the measure
+    // and its translation over the paragraph's text, which stays. The stop (U.decor's keptAfter) was made from the follower's
+    // join alone, Placed.join's kept flag)
+    const head = member({ kind: 'heading', lines: [line(712, 300), line(700, 100, 2)] })
+    const after = member({ ord: 4, join: [5], lines: [[1, 0, 105, 300, 700, 707, 698, 72, 300, 2], line(688, 300)] })
+    const of = (o: Partial<AdaptInput>) => {
+      const got = adapt(input(head, { after, ...o }))
+      if (!('member' in got)) throw new Error(got.stop)
+      return { kept: got.member.kept, stop: (got.member.blocks[0] as { stop?: unknown }).stop ?? null }
+    }
+    // (the follower not laid: its text stays on the row; no unit is laid from the head's end there)
+    expect(of({ afterOpen: false })).toEqual({
+      kept: { page: 1, baseline: 700, x1: 100, size: 10, byLabel: false },
+      stop: { y: 700, band: 10, x1: 100 },
+    })
+    // (its near miss: the follower laid from the head's end, the row the head's to run on)
+    expect(of({ afterOpen: true })).toEqual({ kept: null, stop: null })
+    // (ink kept between the two, the follower laid or not: the stop as before)
+    expect(of({ after: { ...after, join: [5, 1] }, afterOpen: true }).stop).toEqual({ y: 700, band: 10, x1: 100 })
+  })
   it('says what stops it: the prepare’s reason, a forced break where the reading hands no U.breaks maps (today’s tokens)', () => {
     expect(adapt(input(member({ why: 'unlocated' })))).toEqual({ stop: 'unlocated' })
     expect(adapt(input(member({ els: [['1', { kind: 'other', ink: [], ends: [0, 0] }]] })))).toEqual({

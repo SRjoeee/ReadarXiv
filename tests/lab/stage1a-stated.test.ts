@@ -9,6 +9,7 @@
 // of that unit's (a kept block holding it stated apart, not accepted); (k), 2026-11-10, a unit the prepare keeps for its text set
 // wholly in a face of one pitch, the candidate's own unit's cause. Synthetic units in the dumps' form.
 import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
 import { CAUSE, HOLDER_JOIN, holdersDeclared, keptWhyOf, statedOf } from '../../lab/pdf/prepare-back/stated.mjs'
@@ -829,7 +830,8 @@ describe('every kept unit states the rule that keeps it (lane gate-finds, the co
   })
 })
 
-const ACCEPTANCE ='/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/acceptance.json'
+// (AXT_LAB_DATA the lab-data directory, none by default: unset, a path no machine holds, and the tests skip)
+const ACCEPTANCE = join(process.env.AXT_LAB_DATA ?? '/dev/null/AXT_LAB_DATA-unset', 'refactor-2026-11/baseline/acceptance.json')
 describe.skipIf(!existsSync(ACCEPTANCE))("the differential's acceptance list (lab-data's baseline/acceptance.json)", () => {
   const accepted = (cause: string) =>
     (JSON.parse(readFileSync(ACCEPTANCE, 'utf8')) as { accepted: { match: string }[] }).accepted.some((e) =>

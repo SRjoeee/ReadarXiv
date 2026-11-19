@@ -1,8 +1,8 @@
-// What a host gives the chrome besides its session (interfaces/host design-a §1.1 Slots): its own controls in their approved
-// places, and the words that are its own. The extension's service menu goes before the reading options, its download, settings
+// What a host gives the chrome besides its session (its slots): its own controls in their approved places, and the words
+// that are its own. The extension's service menu goes before the reading options, its download, settings
 // and way back after them (in the bar, and as the reading options' first rows in a narrow window); its "open the settings"
-// stands under a failure's card. The target languages are named by the host's own tables (the extension's are ported from
-// another project and stay in it), and a failure's reason is worded by the host, which knows whether its translator has a key.
+// stands under a failure's card. The target languages are named by the host's own tables (the extension's are its own and
+// stay in it), and a failure's reason is worded by the host, which knows whether its translator has a key.
 import { createContext, type ReactNode, useContext } from 'react'
 import { LOCALES, localeInUse, type ProviderErrorKind } from '@readarxiv/ui'
 import { DEFAULTS, type Prefs } from '../prefs.ts'
@@ -37,7 +37,7 @@ export interface Slots {
 }
 /**
  * A host's words for the states the status capsule and the failure cards show, each in place of the catalogue's (the
- * website's own sentences: its words today): one override typed by state, never a second catalogue; a state the host does
+ * website's own sentences): one override typed by state, never a second catalogue; a state the host does
  * not word keeps the catalogue's. A run under way (queued, translating, reconnecting) has no sentence of the
  * catalogue's (the progress line under the bar shows it, the extension's approved look): where a host words it, the capsule
  * says it too, with the spinner. A function is given what the state holds (a place in the queue, a count, the time a retry
@@ -52,8 +52,7 @@ export interface StateWords {
    *  where it stands in the sentence. `chip`: `showTranslation` stands beside it (the website's says the bare stage there in a
    *  window too narrow for both). `first`: the paper's first making (its layer being made, the first time anyone opens it, or
    *  made this visit and its count not known yet: status.ts `firstOf`), whose words hold no count (the website's say the time
-   *  a first one takes). The making itself is never said: the reader waits for the translation (the coordinator's decision 1,
-   *  2026-11-11) */
+   *  a first one takes). The making itself is never said: the reader waits for the translation (PDF-READER §6.6) */
   translating?: (got: number, total: number, chip?: boolean, first?: boolean) => string
   /** our server's document followed, its stream lost and asked again */
   reconnecting?: string
@@ -109,16 +108,16 @@ export interface Parts {
   languages: Languages
   /** the host's words for the capsule's and the cards' states; none: the catalogue's */
   words?: StateWords
-  /** the narrow window's rule, where side by side shows the translation alone (interfaces/host design-a §6, one of the
-   *  host-divergent behaviours): `told` (the extension's, the default) keeps side by side chosen on the display switch and
-   *  says so in the capsule (S-R-14); `shown` (the website's: its owner's rule of 2026-11-03) shows the translation chosen
+  /** the narrow window's rule, where side by side shows the translation alone (PDF-READER §5; one of the behaviours the
+   *  hosts differ in): `told` (the extension's, the default) keeps side by side chosen on the display switch and
+   *  says so in the capsule (S-R-14); `shown` (the website's, PDF-READER §5) shows the translation chosen
    *  with side by side greyed (the stored side by side kept for a wider window), and says so only where a window that showed
    *  the paper side by side was narrowed while reading; and while the paper is made (prepared, translated after its prepare,
    *  or refused for now with nothing laid) it holds the original on screen until the reader chooses a display */
   narrow?: 'told' | 'shown'
   /** the signs the capsule and the cards are drawn with: `plain` (the extension's, the default) the information sign for every
-   *  state but a run's spinner and a toast's own, the alert for every card; `by-state` (the website's: the interface review of
-   *  2026-11-03) a clock while a retry's time is to come and the information sign once it has come, the alert in the danger's
+   *  state but a run's spinner and a toast's own, the alert for every card; `by-state` (the website's, PDF-READER §6.6) a
+   *  clock while a retry's time is to come and the information sign once it has come, the alert in the danger's
    *  red for a failure, in the capsule as on its card, and a card that waits (our server or the service out of reach for
    *  now, a limit) a clock in quiet ink */
   signs?: 'plain' | 'by-state'
@@ -135,7 +134,7 @@ export interface Parts {
   sync?: 'side-by-side' | 'located'
   /** the bar where neither side has anything to show (status.ts `nothingShown`: the original could not be read, and no
    *  translation is to be had now, its layer refused for now or for the paper): `whole` (the extension's, the default) every
-   *  control, over the failure's card; `bare` (the website's: the interface review of 2026-11-03, v-modes-disabled) the lead's
+   *  control, over the failure's card; `bare` (the website's, PDF-READER §6.6) the lead's
    *  slot and the reading options alone, as its page for a paper arXiv does not have draws its bar: no contents, title,
    *  switch, side-by-side pair, zoom, language, host's own trail or progress line, and the reading options without a paper's
    *  rows (the appearance, the dimming and the host's own last rows) */

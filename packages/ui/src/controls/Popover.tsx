@@ -1,10 +1,10 @@
-// Popovers (the reader's design, §6.7; every surface's since the redesign's §2.3): anchored under their button, 6 px
+// Popovers (the reader's design, §6.7; every surface's): anchored under their button, 6 px
 // below it, kept within the window (position-try); they grow from the button. The browser's own light-dismiss popover:
 // its button opens and closes it (popovertarget), Escape and a press outside close it; the focus comes back to the
 // button when it closes with the focus inside, and closes when the focus leaves it for another control, as a Tab out of
-// a menu does (APG; the interface review: a menu stayed open behind the focus, and no tooltip showed while it did) —
+// a menu does (APG; else a menu stays open behind the focus, and no tooltip shows while it does) —
 // but not for a press on its own button, which takes the focus on mousedown, before the click that closes it: closed
-// then, the click would open it again (the branch review). Its contents are drawn from the start, so that it never
+// then, the click would open it again. Its contents are drawn from the start, so that it never
 // shows empty for a frame and a key pressed as it opens is not lost; opening puts the focus on its [data-autofocus]
 // element, or a dialog's first control that shows, and a menu's contents start afresh after each close (their key,
 // `generation`)
@@ -110,7 +110,7 @@ export function Popover({
     }
   }, [id, role, onOpenChange, onClosed])
   // a dialog is the popover itself; a menu or a list is the element inside it, which carries the role and the name, so
-  // that there is one menu and not a menu in a menu (the final review)
+  // that there is one menu and not a menu in a menu
   const dialog = role === 'dialog'
   return (
     // biome-ignore lint/a11y/useAriaPropsSupportedByRole: a dialog, named by its label; nothing for a menu or a list

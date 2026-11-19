@@ -1,6 +1,6 @@
-// A compile's TeX errors and the units they stand in: live.mjs's safety net, which sets a unit TeX cannot set in the
-// source so that the rest of the paper is set translated (exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md,
-// Task 2). The same for native nonstop latexmk, which logs every error, and for the TeX page's BusyTeX, which halts on
+// A compile's TeX errors and the units they stand in, which the layout guard reads (guard.ts: the units a marked compile's
+// TeX errors stand in are left unmarked, PDF-READER §19.6). The same for native nonstop latexmk, which logs every error,
+// and for the TeX page's BusyTeX, which halts on
 // the first: TeX writes each as `! <message>`, the levels of input it was reading, and at the base level `l.<n>`, the
 // line of the file it was reading and the text of that line before and after its place
 import { latin1 as latin1Of } from '../bounded-reads.ts'
@@ -9,7 +9,7 @@ import { lastTexLog } from '../source/latex-front.ts'
 /** a TeX error as its log writes it: its message, the line of input TeX was reading and the text around its place, and the code
  *  point of a letter lost */
 export type TexError = { message: string; line: number; before: string; after: string; char?: number }
-/** a unit's lines in a file a compile was given, and its bytes there where the compile's spans give them (live.mjs originalFiles'
+/** a unit's lines in a file a compile was given, and its bytes there where the compile's spans give them (live.ts originalFiles'
  *  `spans`: both ends, and for a unit nested in another what closes it there, `post`), else none */
 export type UnitLines<U> = { file: string; unit: U; first: number; last: number } & (
   | { from: number; to: number; post?: number }
@@ -110,7 +110,7 @@ const innermost = <U>(xs: UnitLines<U>[]) => {
 /**
  * The units whose lines hold the errors: `files`, path → the bytes a compile was given; `lines`, each unit's
  * { file, unit, first, last, from?, to?, post? } in them, its lines and its bytes, and for a unit nested in another the
- * bytes after it that close it there (live.mjs originalFiles' `spans`). An
+ * bytes after it that close it there (live.ts originalFiles' `spans`). An
  * error is a unit's when one file the compile was given has a unit on the error's line whose text there holds the
  * error's context — so that a package's own line `n` is not the paper's — and that unit is one: where units share the
  * line, the one whose own bytes on it hold the context. A lost letter is a unit's only when the unit holds the letter.

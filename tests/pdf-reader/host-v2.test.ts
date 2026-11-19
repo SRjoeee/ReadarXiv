@@ -1,4 +1,4 @@
-// The extension as the reader package's host: host conformance as interfaces/host design-a §5 names it,
+// The extension as the reader package's host: host conformance as the host design A §5 names it,
 // for the members whose adapters are the extension's (fetch, prefs; translate in host-translate.test.ts), and the reader's
 // state told to the chrome as its events
 import { describe, expect, it, vi } from 'vitest'
@@ -50,7 +50,8 @@ describe('the extension host prefs over the configuration surface', () => {
     const s = surface(null)
     const p = hostPrefs(s as never).read()
     expect(s.start).toHaveBeenCalled()
-    s.land({ ...DEFAULT_CONFIG, theme: 'dark' })
+    s.land({ ...DEFAULT_CONFIG, theme: 'dark', providerChosen: true })
+    // (the translator: the chain's revision, a service picked; host-prefs.test.ts names the website's chain apart, v22)
     await expect(p).resolves.toMatchObject({ theme: 'dark', translator: 'r1' })
   })
   it('stored and unreadable (the surface fell back to the defaults): told as null, the read too; a readable landing after it told as values', async () => {

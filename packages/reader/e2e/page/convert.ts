@@ -1,5 +1,5 @@
-// The Page fixtures (stage 2, deliverable 6): a reader dump in the baseline's format (readarxiv-lab-data/refactor-2026-11/
-// baseline/FORMAT.md §4: each laid unit's size, leading, lines and the text on each, its crops) made into the `Page`s the reader
+// The Page fixtures (stage 2, deliverable 6): a reader dump in the baseline's format (the baseline's dump
+// spec §4: each laid unit's size, leading, lines and the text on each, its crops) made into the `Page`s the reader
 // paints, over the parts of lane L1's bundle of the same paper, so that the reader runs before lane L3's typesetter exists, and
 // its `layPage` then takes the converter's place behind the same call (`Lay`). The same converter reads the baseline's dumps of
 // corpus papers (licensed: read in place, never committed) and the dumps of the repository's own papers.

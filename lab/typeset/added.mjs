@@ -13,10 +13,9 @@
 // `tokens`, which hold links to the real files and to the added pairs'; AXT_SWEEP_CACHE the added pairs' own cache, today's layer
 // and door rows), so that what the set's walk reads is unchanged byte for byte.
 import { spawnSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 
 /** the added pairs, in the order they were added: 2111.09276v1-zh the 91st, 2611.03953v2-zh the 92nd (the owner's staging
  *  papers of 2026-11-13: a paragraph begun on the last line of the one before, a footnote mark alone at a line's start; a
@@ -26,7 +25,9 @@ export const ADDED = Object.freeze(['2111.09276v1-zh', '2611.03953v2-zh'])
 export const ADDED_HEADING = 'THE ADDED PAIRS, REPORTED APART FROM THE SET:'
 export const isAdded = (pair) => ADDED.includes(pair)
 
-const LAB = process.env.AXT_LAB_DATA ?? '/Users/cheongzhiyan/Developer/readarxiv-lab-data'
+// (AXT_LAB_DATA the lab-data directory, none by default: unset, a path no machine holds, under /dev/null, a file, so that
+// addedEnv's refusal names the variable)
+const LAB = process.env.AXT_LAB_DATA ?? '/dev/null/AXT_LAB_DATA-unset'
 /** lab-data's folder of the added pairs' today's side (`prepare/`, `reader/`, `tap/{ledgers,metrics,tokens}/`, `cache`, `pairs.txt`,
  *  `papers.tsv`) */
 export const ADDED_DIR = join(LAB, 'refactor-2026-11', 'baseline', 'added')
@@ -44,64 +45,52 @@ const WAY = new Set(['', 'refactor-2026-11', 'refactor-2026-11/baseline', 'refac
 const PAPERS = 'refactor-2026-11/lanes/L1-papers87.tsv'
 
 /**
- * The environment of an added pairs' run (`{ AXT_LAB_DATA, AXT_SWEEP_CACHE }`): the root of links over `lab` (made once in the
- * system's temporary folder, named by the digest of what it links, made again when that moves), the added pairs' cache. Throws,
- * naming it, where lab-data holds no added pairs' folder, or one of their files stands in a real folder already (the root would
- * hide which is read)
+ * The environment of an added pairs' run (`{ AXT_LAB_DATA, AXT_SWEEP_CACHE }`): a root of links over `lab` of the run's own (a
+ * folder made for this call in the system's temporary folder, never another run's), the added pairs' cache. The caller removes the
+ * root when its run is done (dropAdded). A root shared by every run that linked the same files (named by their digest) was read
+ * by a run days after the run that made it, and had lost a file meanwhile (the system clears its temporary folder's old entries);
+ * one run could also rebuild or remove what another was reading. Throws, naming it, where lab-data holds no added pairs' folder,
+ * or one of their files stands in a real folder already (the root would hide which is read)
  */
 export function addedEnv(lab = LAB) {
   const added = join(lab, 'refactor-2026-11', 'baseline', 'added')
   if (!existsSync(join(added, 'pairs.txt'))) throw new Error(`added.mjs: no added pairs' today's side in lab-data (${added})`)
-  const h = createHash('sha256').update(lab)
-  const papers = `${readFileSync(join(lab, PAPERS), 'utf8')}${readFileSync(join(added, 'papers.tsv'), 'utf8')}`
-  h.update(papers)
-  for (const [real, mine] of OVER) {
-    for (const d of [join(lab, real), join(added, mine)]) {
-      const names = existsSync(d) ? readdirSync(d).sort() : []
-      h.update(`${d}\n`)
-      for (const n of names) h.update(`${n}:${statSync(join(d, n)).mtimeMs}\n`)
-    }
-  }
-  const root = join(tmpdir(), `axt-added-${h.digest('hex').slice(0, 16)}`)
-  if (!existsSync(join(root, '.made'))) {
-    const tmp = `${root}.${process.pid}`
-    rmSync(tmp, { recursive: true, force: true })
-    const build = (rel) => {
-      const dst = join(tmp, rel)
-      mkdirSync(dst, { recursive: true })
-      for (const name of readdirSync(join(lab, rel)).sort()) {
-        const r = rel ? `${rel}/${name}` : name
-        if (WAY.has(r)) build(r)
-        else if (r === PAPERS) writeFileSync(join(tmp, r), papers)
-        else if (OVER.has(r)) {
-          mkdirSync(join(tmp, r))
-          for (const n of readdirSync(join(lab, r))) symlinkSync(join(lab, r, n), join(tmp, r, n))
-          const a = join(added, OVER.get(r))
-          for (const n of existsSync(a) ? readdirSync(a) : []) {
-            if (existsSync(join(lab, r, n))) throw new Error(`added.mjs: ${r}/${n} is the set's file already: the added pairs' would hide it`)
-            symlinkSync(join(a, n), join(tmp, r, n))
-          }
-        } else symlinkSync(join(lab, r), join(dst, name))
-      }
-    }
-    try {
-      build('')
-    } catch (e) {
-      rmSync(tmp, { recursive: true, force: true })
-      throw e
-    }
-    mkdirSync(join(tmp, '.made'))
-    try {
-      renameSync(tmp, root)
-    } catch (e) {
-      // (another run made it meanwhile: its root is the same links)
-      rmSync(tmp, { recursive: true, force: true })
-      if (!existsSync(join(root, '.made'))) throw e
-    }
-  }
   const cache = join(added, 'cache')
   if (!existsSync(join(cache, 'papers'))) throw new Error(`added.mjs: the added pairs' cache is not there (${cache})`)
+  const papers = `${readFileSync(join(lab, PAPERS), 'utf8')}${readFileSync(join(added, 'papers.tsv'), 'utf8')}`
+  const root = mkdtempSync(join(tmpdir(), 'axt-added-'))
+  const build = (rel) => {
+    const dst = join(root, rel)
+    mkdirSync(dst, { recursive: true })
+    for (const name of readdirSync(join(lab, rel)).sort()) {
+      const r = rel ? `${rel}/${name}` : name
+      if (WAY.has(r)) build(r)
+      else if (r === PAPERS) writeFileSync(join(root, r), papers)
+      else if (OVER.has(r)) {
+        mkdirSync(join(root, r))
+        for (const n of readdirSync(join(lab, r))) symlinkSync(join(lab, r, n), join(root, r, n))
+        const a = join(added, OVER.get(r))
+        for (const n of existsSync(a) ? readdirSync(a) : []) {
+          if (existsSync(join(lab, r, n))) throw new Error(`added.mjs: ${r}/${n} is the set's file already: the added pairs' would hide it`)
+          symlinkSync(join(a, n), join(root, r, n))
+        }
+      } else symlinkSync(join(lab, r), join(dst, name))
+    }
+  }
+  try {
+    build('')
+  } catch (e) {
+    rmSync(root, { recursive: true, force: true })
+    throw e
+  }
   return { AXT_LAB_DATA: root, AXT_SWEEP_CACHE: cache }
+}
+
+/** the root of links addedEnv made for a run, removed once that run is done: its links alone (a link is removed, never what it
+ *  names), and only a root addedEnv names so */
+export function dropAdded(env) {
+  const root = env?.AXT_LAB_DATA
+  if (typeof root === 'string' && basename(root).startsWith('axt-added-') && dirname(root) === tmpdir()) rmSync(root, { recursive: true, force: true })
 }
 
 /**
@@ -141,11 +130,16 @@ export async function runApart(script, later, { argv = process.argv.slice(2), di
     return 1
   }
   await flushed()
-  const r = spawnSync(process.execPath, [...process.execArgv, script, ...flags, ...Object.entries(dirs).map(([k, v]) => `--${k}=${join(v, 'added')}`), '--apart', ...later], {
-    stdio: 'inherit',
-    env: { ...process.env, ...env },
-  })
-  return r.status ?? 1
+  // (the run's own root, removed once its run is done, whatever it ends with)
+  try {
+    const r = spawnSync(process.execPath, [...process.execArgv, script, ...flags, ...Object.entries(dirs).map(([k, v]) => `--${k}=${join(v, 'added')}`), '--apart', ...later], {
+      stdio: 'inherit',
+      env: { ...process.env, ...env },
+    })
+    return r.status ?? 1
+  } finally {
+    dropAdded(env)
+  }
 }
 
 // `node lab/typeset/added.mjs -- <command…>`: the command run with addedEnv's environment (the release check's steps of the added
@@ -165,5 +159,6 @@ if (process.argv[1] === import.meta.filename) {
     process.exit(1)
   }
   const r = spawnSync(cmd[0], cmd.slice(1), { stdio: 'inherit', env: { ...process.env, ...env } })
+  dropAdded(env)
   process.exit(r.status ?? 1)
 }

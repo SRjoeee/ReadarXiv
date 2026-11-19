@@ -1,13 +1,13 @@
-// The adapter (design-b §1.6 L6, stage one): a part's member (lane L1's Placed) made the composition's prepared member, its
-// setting through the ported unit rules from the facts the part states: U.blocks (blocks2 over the member's lines: each Line
-// a rectangle and its line facts, KEPT lines kept, TeX's \lineskip, where TeX's forced breaks and the paragraphs it opened
-// end its lines: U.breaks' maps, the reading's), U.decor (decorBefore and decorAfter: the alignment
-// stated, the label's ink, the room beside its lines Room.side, the row kept after it, the displays set with the short
-// skip), U.params (the size the style states, the edges its lines' PINNED flags and Room.next state, a CJK cell's bands over
-// the page's rules), and, within its flow, the shared row it starts on and the row it leaves (Placed.join, the members before
-// and after it). The reading and the tokens (L5, L7: U.elements to U.marks, B.tokens to B.measure) are not adapted here yet:
-// the caller hands them in (`Reading`), and what it hands is today's (the gate's runner: the tap's), so that a difference the
-// runner finds is a fact of the setting's. A member the stage does not set says why (`stop`), never silently.
+// The adapter: a part's member (Placed) made the composition's prepared member, its setting through the unit rules from the
+// facts the part states: U.blocks (blocks2 over the member's lines: each Line a rectangle and its line facts, KEPT lines
+// kept, TeX's \lineskip, where TeX's forced breaks and the paragraphs it opened end its lines: U.breaks' maps, the
+// reading's), U.decor (decorBefore and decorAfter: the alignment stated, the label's ink, the room beside its lines
+// Room.side, the row kept after it, the displays set with the short skip), U.params (the size the style states, the edges
+// its lines' PINNED flags and Room.next state, a CJK cell's bands over the page's rules), and, within its flow, the shared
+// row it starts on and the row it leaves (Placed.join, the members before and after it). The reading and the tokens
+// (U.elements to U.marks, B.tokens to B.measure) are not adapted here: the caller hands them in (`Reading`), the gate's
+// runner the recorded ones (the tap's), so that a difference the runner finds is a fact of the setting's. A member the
+// stage does not set says why (`stop`), never silently.
 import type { Placed } from '@readarxiv/format'
 import { classifyFont } from '../breaker/font-names.ts'
 import { wordSegmenter, wordsOf } from '../breaker/words.ts'
@@ -15,7 +15,7 @@ import { type NumberCrop, numberCrop } from '../fit/numbered.ts'
 import type { FitBlock, FitParams, Stay, Tokens } from '../fit/types.ts'
 import type { Row, RowLine, RunRow } from '../shared/row-start.ts'
 import type { RuleParams } from '../types.ts'
-import { blocks as blocksOf, type LineInfo, measureOf } from '../unit/blocks.ts'
+import { blocks as blocksOf, type LineInfo, measureOf, ONE_EDGE } from '../unit/blocks.ts'
 import type { Breaks } from '../unit/breaks.ts'
 import {
   carriedCrop,
@@ -55,11 +55,11 @@ export type Reading = {
   /** the kept regions (runs of KEPT lines, in order) the translation passes (U.breaks' referenced): what its tokens block to */
   referenced: ReadonlySet<number>
   /** U.breaks' maps (lay/read.ts: TeX's forced breaks and paragraphs paired with the row), which number the regions
-   *  `referenced` names; absent where the reading is not the part's (the gate's runner hands today's tokens), and a member
+   *  `referenced` names; absent where the reading is not the part's (the gate's runner hands recorded tokens), and a member
    *  whose part states a break or a paragraph point is then not set */
   breaks?: Pick<Breaks, 'regionOf' | 'breakAt' | 'joinAt' | 'paraAt'>
-  /** the tokens are the unit's own (lay/read.ts): the adapter sets a carried label's crop before them (RUN:2225-2238), which
-   *  today's tokens handed in already hold */
+  /** the tokens are the unit's own (lay/read.ts): the adapter sets a carried label's crop before them, which recorded tokens
+   *  handed in already hold */
   own?: boolean
 }
 export type AdaptInput = {
@@ -88,7 +88,7 @@ export type AdaptInput = {
 }
 type Adapted = { member: FlowMember } | { stop: string }
 
-/** today's rectangle of a line (tex.mjs texRects, TEX:269-286): across its ink, and up and down a band of its size from its
+/** a line's rectangle, the key the reading holds it by: across its ink, and up and down a band of its size from its
  *  baseline, BELOW under it and ABOVE over it, to a hundredth (the line's top and bottom, its fonts' boxes, are its `exact`
  *  facts, which the \lineskip rule reads) */
 const BELOW = 0.215,
@@ -102,11 +102,11 @@ export const rectOf = (l: Line, m: Placed): Rect => {
 }
 /**
  * A table cell's own room on a line, where its column's box is not its room (columnRoomOf: the part states none, or it is laid
- * otherwise; today's reader's room for every cell): what TeX set on it, its glyphs' advances (the line's x0 and x1) and its
+ * otherwise): what TeX set on it, its glyphs' advances (the line's x0 and x1) and its
  * elements' ink on its baseline, which an italic letter's overhang takes past its advance (2610.17024v1 p14's cells "p=5 n=20
  * …": the p's ink at 149.79, its line's advances from 150.42).
- * Today's rectangle held it (texRects: the layout file's glyph boxes); a room of the advances alone was that much narrower, and
- * a translation opening with that p was set a step under the original's size where today's kept it. A centred cell's stays
+ * A room of the advances alone is that much narrower than the ink, and a translation opening with that p would be set a step
+ * under the original's size. A centred cell's stays
  * centred where TeX centred its line, its advances' middle (TeX's column class, Placed.align), as wide as its own ink needs
  * (2602.23285v2 p19's "Top-τ", the τ's ink 0.74 pt past its line's end). A held line's is its own
  */
@@ -128,7 +128,7 @@ function cellExtent(l: Line, m: Placed): [number, number] {
 }
 /**
  * A table cell's room in its column (Room.column: its column's box widened by the column's share of the blank beside it, never
- * past its own side; the owner's decisions, docs/PDF-READER.md §18.13, and for a cell of several lines §18.75): the room each of
+ * past its own side; docs/PDF-READER.md §18.13, and for a cell of several lines §18.75): the room each of
  * its lines is laid in, in its column's alignment (its class: Placed.align; a cell of several lines its box so, its lines in the
  * box by Placed.inner: FitBlock.box), at the largest size not over the original's that fits every line, the same room at every
  * size (no step down in its own ink's width first, no room opening only where it is clipped at its floor: X.further's 'widen').
@@ -148,8 +148,8 @@ function columnRoomOf(m: Placed): readonly [number, number] | undefined {
   if (side && (side[0] > c[0] + 0.01 || side[1] < c[1] - 0.01)) return undefined
   return c
 }
-/** the label as U.decor reads it: its parts' ink as its characters, the first and the last reaching its ink's own ends (today's
- *  decor read every glyph of the label: a bracket before its name, "(a)", no part names, is its ink's all the same) */
+/** the label as U.decor reads it: its parts' ink as its characters, the first and the last reaching its ink's own ends (decor
+ *  reads every glyph of the label: a bracket before its name, "(a)", that no part names, is its ink's all the same) */
 function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNullable<DecorLabel['chars']> }) | null {
   const lb = m.label
   if (!lb) return null
@@ -182,10 +182,9 @@ function labelOf(m: Placed, drawn: string | null): (DecorLabel & { chars: NonNul
  * The free paper two members share on one baseline (two authors set side by side; a table cell's own widening reads its side
  * alone, half way to the glyph beside it, the adapter's cellSideOf): where a line's Room.side stops at another
  * member's ink on its baseline (within 0.4 of the smaller size) and that one's stops at its own, both may widen into the paper
- * between, and each takes its half: today's paperTo widened a cell half way to another unit's text (RUN:1717), as today's
- * figure reading shares the line between two figure texts (figure-text.mjs: half the line to another unit's band, the other
- * half that unit's). Not between a member and the one it shares a row with (Placed.join, a name's bound member: set as one
- * row). By ord, [left, right] the middle of the paper on each side, NaN where it shares none
+ * between, and each takes its half, neither widening over the other's text, as two figure texts on one line share it (half
+ * the line to each one's band). Not between a member and the one it shares a row with (Placed.join, a name's bound member:
+ * set as one row). By ord, [left, right] the middle of the paper on each side, NaN where it shares none
  */
 export function sharedPaper(flows: readonly (readonly Placed[])[], page: number): Map<number, [number, number]> {
   const rowOf = new Set<string>()
@@ -371,6 +370,7 @@ export function adapt(i: AdaptInput): Adapted {
       file: true,
       j,
       frame: frames[j]!,
+      m0: l[7],
     }
     lineInfo.set(rectKey(rects[j]!), info)
     lineInfo.set(rectKeyNoX0(rects[j]!), info)
@@ -392,12 +392,12 @@ export function adapt(i: AdaptInput): Adapted {
   // (a label on a line of its own is laid as a row of its own (entry.ts labelRowOf): no line of the member's starts at it)
   const ownRow = !!m.label && m.label.line === undefined && m.label.align !== undefined
   const label = ownRow ? null : labelOf(m, i.reading.labelDrawn)
-  // (a label drawn anew is the first line's: its rectangle starts at the label, RUN:2039-2041. But a label TeX hung beside its
+  // (a label drawn anew is the first line's: its rectangle starts at the label. But a label TeX hung beside its
   // text, every text line of the member starting at one x past the label's end and the label at the measure's start (the
   // caption package's `hang`, \hangindent its label box's width, the label and its separator: 2609.36054v2 p3's "Figure 1." at
   // 47, its text's lines at 95.61, 3.94 pt after it), hangs its text by TeX's own rule at the drawn label's width: the label at
-  // its place, the space TeX set after it (`hangGap`), every text line from there to its right edge (the coordinator's ruling
-  // of 2026-11-11). Widened to the label, the block's edge was the label's and every line after the first ran under it)
+  // its place, the space TeX set after it (`hangGap`), every text line from there to its right edge (docs/PDF-READER.md
+  // §18.29). Widened to the label, the block's edge would be the label's and every line after the first would run under it)
   let hang: number | undefined
   let hangGap = 0
   if (label?.drawn) {
@@ -411,9 +411,34 @@ export function adapt(i: AdaptInput): Adapted {
         text.every((l) => Math.abs(l[2] - text[0]![2]) <= 0.01) &&
         text[0]![2] > m.label.ink[3] &&
         Math.abs(m.label.ink[1] - lines[0]![7]) <= 0.01
+      // (and where TeX states the hang, read from its statement (docs/PDF-READER.md §18.94, H1 (a)): the later text lines of the
+      // first line's frame stand at the left measure the first of them states (Line[7]), that measure right of the first
+      // line's; the first line's text begins at it and the label at the first line's measure start; each within what a line's
+      // ink differs by under one measure (ONE_EDGE: a protruded first glyph, 2610.20266v1 p1's abstract 0.31 left of what TeX
+      // states, which the ink test reads to 0.01 and misses). A later line standing at a measure of its own more than ONE_EDGE
+      // away fails it: a shape that changes again; one nearer is the same edge by that tolerance. \@hangfrom: the label box
+      // hung from the measure's start, \hangindent its width, \hangafter 1. The space TeX set after the label, from its ink's end
+      // to the stated hang)
+      const f0 = lines[0]!
+      const later = text.filter((l) => l !== f0 && l[0] === f0[0] && l[1] === f0[1])
+      const M = later[0]?.[7]
+      const tol = ONE_EDGE * sizeOf(f0, m)
+      const stated =
+        !hung &&
+        !!m.label &&
+        text[0] === f0 &&
+        M !== undefined &&
+        later.every((l) => Math.abs(l[2] - M) <= ONE_EDGE * sizeOf(l, m)) &&
+        M > f0[7] + tol &&
+        Math.abs(f0[2] - M) <= tol &&
+        f0[2] > m.label.ink[3] &&
+        Math.abs(m.label.ink[1] - f0[7]) <= tol
       if (hung && m.label) {
         hang = lx0
         hangGap = text[0]![2] - m.label.ink[3]
+      } else if (stated && m.label) {
+        hang = lx0
+        hangGap = (M as number) - m.label.ink[3]
       } else rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]]
     }
   }
@@ -442,6 +467,9 @@ export function adapt(i: AdaptInput): Adapted {
     centred: before.centredFlag,
     // (TeX's \baselineskip where the part states it: Placed.lead, read off the lines where 'lead' is read)
     pitch: (m.read ?? []).includes('lead') ? null : m.lead,
+    // (a first line TeX may have set apart from its later lines' edge: a member set justified or flush left, docs/PDF-READER.md
+    // §18.94; a centred and a flush-right member's edge its leftmost line's, as before)
+    apart: m.align === 'j' || m.align === 'l',
   }) as FitBlock[]
   // (the label's hang: on the block of the member's first line, whose first slot starts at the label, its text at the hang's end)
   if (hang !== undefined && blocks[0] && blocks[0].page === rects[0]![0] && !blocks[0].centred) {
@@ -454,11 +482,11 @@ export function adapt(i: AdaptInput): Adapted {
     const cls = m.align === 'r' ? 'r' : m.align === 'c' ? 'c' : 'l'
     for (const b of blocks) b.box = { cls, inner: m.inner ?? cls }
   }
-  // (the room each block may borrow under it (today's freeFor RUN:1677, which RUN:2193 gives every block but a cell's), from TeX's
-  // facts alone (the owner's ruling of 2026-11-08): a block that ends a run of its text lines the part states the room under
-  // (Room.runs) takes the lines down to TeX's text block bottom, the next ink staying TeX's paragraph separation (Room.sep,
-  // \baselineskip and \parskip) under the lowest one's baseline. A part that states no run or no separation, nothing: no tuned
-  // clearance and no reading of the page's pixels stand in for TeX's)
+  // (the room each block but a cell's may borrow under it, from TeX's facts alone (docs/PDF-READER.md §18.11): a block that
+  // ends a run of its text lines the part states the room under (Room.runs) takes the lines down to TeX's text block bottom,
+  // the next ink staying TeX's paragraph separation (Room.sep, \baselineskip and \parskip) under the lowest one's baseline.
+  // A part that states no run or no separation, nothing: no tuned clearance and no reading of the page's pixels stand in for
+  // TeX's)
   const runs = m.room.runs
   const sep = m.room.sep
   // (a float's member: the free part of its room, the shrink TeX's glue states in the gap under it (Room.gap[2]), which
@@ -501,9 +529,9 @@ export function adapt(i: AdaptInput): Adapted {
       })
       if (own.length) b.stays = own
     }
-  // (its size: the style's, where the prepare read it off its text (today's originalStyle); else, as today, the median of its
-  // lines' bands over 0.894 (RUN:2088). In a CJK target smaller where its base is set in small capitals: the tokens' base
-  // (baseOf over the row's groups), else its style's (its face's, or today's vote, Style.caps), as unitSizeOf reads it)
+  // (its size: the style's, where the prepare read it off its text; else the median of its lines' bands over 0.894. In a CJK
+  // target smaller where its base is set in small capitals: the tokens' base (baseOf over the row's groups), else its style's
+  // (its face's, or faked ones where most of its letters that can tell are, Style.caps), as unitSizeOf reads it)
   const fromText = !(m.read ?? []).includes('size:lines')
   const heights = rects.map((r) => r[4] - r[2]).sort((a, b) => a - b)
   const base = (i.reading.tokens as { base?: { caps?: boolean } }).base
@@ -511,14 +539,20 @@ export function adapt(i: AdaptInput): Adapted {
   const s =
     (fromText ? unitSizeOf({ orig: { size: m.style.size, st: { caps } } }, R) : undefined) ??
     (heights[heights.length >> 1] as number) / 0.894
-  // (the row kept after it: the next member's join says ink stays between the two on their shared line)
+  // (the row kept after it, its room there ending where TeX ended its text on it: ink stays between the two on their shared
+  // line (the next member's join says so), or the next member is not laid (`afterOpen` false: no row, a row refused, unproven,
+  // left by the reader's option, kept by the paper) and its own text stays on the row where TeX set it, TeX's separation
+  // before it. A room run on to the row's end would draw this member's translation over that text (docs/PDF-READER.md §18.97))
   const last = lines.at(-1)!
   const after = i.after
-  // (a shared row's size, here and below: its line's, today's rowLeadOf row (need.mjs:37, the file line's size field), which
-  // keptAfter and S.share read as the row's band)
+  // (a shared row's size, here and below: its line's (the Line's size field), which keptAfter and S.share read as the row's
+  // band. Where the next member is not laid, no label of it goes with a member laid from this one's end: what stays is the
+  // page's, `byLabel` false)
   const kept: KeptRow | null = after?.join?.[1]
     ? { page: last[0], baseline: last[4], x1: last[3], size: sizeOf(last, m), byLabel: !!after.label }
-    : null
+    : after?.join && !i.afterOpen
+      ? { page: last[0], baseline: last[4], x1: last[3], size: sizeOf(last, m), byLabel: false }
+      : null
   // (the displays set with the short skip: under each SHORTSKIP line, the member's display element there)
   const displays = (m.els ?? []).filter(([, e]) => e.kind === 'display').flatMap(([, e]) => e.ink)
   const shortSkips: ShortSkip[] = []
@@ -528,7 +562,7 @@ export function adapt(i: AdaptInput): Adapted {
     if (d) shortSkips.push({ page: d[0]!, x0: d[1]!, x1: d[3]!, top: d[4]!, bottom: d[2]!, line: j })
   })
   // (a single line's room to widen into: its column, TeX's measure m0..m1; the ink beside it where Room.side stops short of
-  // the column, half its size off, today's margin: widen RUN:1576-1584)
+  // the column, half its size off)
   const sideOf = (b: FitBlock): Side | undefined => {
     // (its line by its rectangle, or, where a label drawn anew moved the rectangle's start, by the rest of it: as U.blocks reads it)
     const r0 = b.rects[0] as Rect
@@ -539,8 +573,7 @@ export function adapt(i: AdaptInput): Adapted {
     // (no side stated: a member across columns, whose lines' sides the one interval cannot hold; its line runs to its column)
     if (!side) return { column: [l[7], l[8]], left: [], right: [] }
     const half = 0.5 * (b.sizes?.[0] ?? m.style.size)
-    // (the paper it shares with a member beside it: its half, as today's paperTo widened a cell half way to another unit's text
-    // (RUN:1717))
+    // (the paper it shares with a member beside it: its half, the other half the other member's, sharedPaper)
     const [sl, sr] = i.shared ?? [Number.NaN, Number.NaN]
     // (and the ink that stays beside it, a rule or an image too (Room.stays), which Room.side, the glyphs', does not stop at)
     const st = stayOf(j!)
@@ -579,11 +612,10 @@ export function adapt(i: AdaptInput): Adapted {
     lineInfo,
   })
   // (a cell's single lines widened over the paper beside them, its fit's further step where it is clipped in its own ink's
-  // width at its floor (X.further's 'widen': today's widenOverPaper, a cell never widened before, RUN:2116), its room today's
-  // paperTo's (RUN:1699): half way to the glyph beside it, another cell's text or a number's (two cells sharing paper take
-  // half each), a quarter of its size off a wall (Room.wall: its column's rule, a neighbour's fill), to its column's edge
-  // where nothing stands before it; null where none grows. None for a cell laid in its column's box (columnRoomOf): its room
-  // is that box at every size, and X.further shrinks it there)
+  // width at its floor (X.further's 'widen'), its room half way to the glyph beside it, another cell's text or a number's
+  // (two cells sharing paper take half each), a quarter of its size off a wall (Room.wall: its column's rule, a neighbour's
+  // fill), to its column's edge where nothing stands before it; null where none grows. None for a cell laid in its column's
+  // box (columnRoomOf): its room is that box at every size, and X.further shrinks it there)
   const cellSideOf = (b: FitBlock): Side | undefined => {
     const r0 = b.rects[0] as Rect
     const j = (lineInfo.get(rectKey(r0)) ?? lineInfo.get(rectKeyNoX0(r0)))?.j
@@ -626,14 +658,14 @@ export function adapt(i: AdaptInput): Adapted {
     heading: decor.heading,
     numbered: decor.numbered,
   })
-  // (a merged cell the lay fills (docs/PDF-READER.md §18.75, the owner's decision of 2026-11-15): a cell of several lines TeX
+  // (a merged cell the lay fills (docs/PDF-READER.md §18.75): a cell of several lines TeX
   // ended every one of but its last at a forced break of its text (El.ends of a break, El.brk: its lines its text's rows, none
   // wrapped by TeX, as a paragraph cell's are), whose reading takes none of its forced breaks (U.breaks statedBreaks: a reply
   // that sets its break at its start or its end, or drops it, opens no line: breakAt and joinAt empty), so that the breaker
   // fills its lines itself, in its column's room or in their own. They end between words of the target's text, by the
   // platform's own segmentation (breaker/words.ts: Intl.Segmenter of the target, where the platform has one), where a size
   // sets them so: the same rooms, the one size, the same search for it, each size's states between words first and then as
-  // before (fit/walk.ts triesOf; the owner's answer of 2026-11-16: the size never gives way to whole words). A reply that keeps
+  // before (fit/walk.ts triesOf; §18.75: the size never gives way to whole words). A reply that keeps
   // a break between its lines is laid as before, the break where it states it)
   const ended = new Set((m.els ?? []).flatMap(([, e]) => (e.brk && e.ends ? [e.ends[0]] : [])))
   const rows = m.kind === 'cell' && lines.length > 1 && lines.slice(0, -1).every((_, j) => ended.has(j))
@@ -675,8 +707,7 @@ export function adapt(i: AdaptInput): Adapted {
               : null,
           keptBetween: () => !!m.join![1],
           x: lines[0]![2],
-          // (its label's crop, where the tokens are its own: RUN:2215-2224, the crop as a carried label's, set by the row's
-          // baseline)
+          // (its label's crop, where the tokens are its own: the crop as a carried label's, set by the row's baseline)
           ...(i.reading.own && label
             ? {
                 label: {
@@ -692,7 +723,7 @@ export function adapt(i: AdaptInput): Adapted {
       : undefined
   const fl = after?.lines[0]
   // (a label carried to its first line's start: its own ink's crop before the unit's own tokens, the line's own glyphs'
-  // baselines its own: RUN:2225-2238)
+  // baselines its own)
   let tokens = seg ? wordsOf(i.reading.tokens, seg) : i.reading.tokens
   if (i.reading.own && decor.carried && label && blocks[0]) {
     const own = lines
@@ -744,7 +775,7 @@ export function adapt(i: AdaptInput): Adapted {
       },
     ) as typeof tokens
   }
-  // (its end mark (El.end, docs/PDF-READER.md §18.52; the coordinator's ruling of 2026-11-12): ink TeX pushed to the end of the
+  // (its end mark (El.end, docs/PDF-READER.md §18.52): ink TeX pushed to the end of the
   // unit's last line after its text, amsthm's QED box. It belongs to the end of the translation, wherever that ends: its crop the
   // last token, set at the end of the line the text ends on, as far from that line's right edge as TeX set it from its own
   // (`pad`, its rectangle's right edge to the slot's on the line TeX set it on), on that line where the text ends the keep-off

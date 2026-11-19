@@ -1,7 +1,7 @@
-// D.display against the baseline's reader dumps (baseline/FORMAT.md §4: each laid unit's size, leading, lines and the crops
+// D.display against the baseline's reader dumps (the baseline's dump spec §4: each laid unit's size, leading, lines and the crops
 // painted): every laid unit of a pair laid by the chain from F2 and filled by its page's pass (pass.ts), its lines drawn by
-// D.display (src/emit/display.ts), projected as the baseline's harness reads today's drawing (baseline/tools/reader.mjs
-// dumpOf, reader-entry.mjs unitsOfSvg and run()): a line's page, baseline, x0 and x1 today's record's (RUN:1829 recLinesOf,
+// D.display (src/emit/display.ts), projected as the baseline's harness reads today's drawing (the baseline's reader
+// tool: its dump, its reading of the SVG and its run): a line's page, baseline, x0 and x1 today's record's (RUN:1829 recLinesOf,
 // to 1/100), its text the SVG's line on the same page within 0.05 of that baseline (each <text>'s tspans, a crop's copy text
 // read as U+FFFC, two <text>s on one y within 0.01 one line), each crop's box its device pixels (hideOps' dst, the page's
 // viewport at the harness's scale 2.5) read back over the page's view. The page views are today's bundle's (each part's
@@ -43,7 +43,7 @@ export function viewport(view: readonly number[], scale = SCALE): (x: number, y:
   return (x, y) => [x * m[0]! + y * m[2]! + m[4]!, x * m[1]! + y * m[3]! + m[5]!]
 }
 
-/** the baseline's reader-dump unit (FORMAT.md §4), as far as the typesetter decides it; and `sizes`, the size each of its lines
+/** the baseline's reader-dump unit (the dump spec §4), as far as the typesetter decides it; and `sizes`, the size each of its lines
  *  is drawn at, where one is drawn at another than `size` (a unit laid a run at a time, fit/runs.ts: `size` is its layout's
  *  own, its first run's, and each line is drawn at its run's, D.display's segOf). Not the baseline's: its harness states one
  *  size a unit, so a comparison with it reads the four fields alone (`baselineOf`); a unit's two lays (I6) read it whole */
@@ -54,7 +54,7 @@ export type DumpUnit = {
   elements?: { k: number | null; page: number; x0: number; x1: number; top: number; bottom: number }[]
   sizes?: number[]
 }
-/** a dumped unit as the baseline's reader dump states one (FORMAT.md §4): its size, leading, lines and elements */
+/** a dumped unit as the baseline's reader dump states one (the dump spec §4): its size, leading, lines and elements */
 export const baselineOf = (d: DumpUnit): DumpUnit => ({
   size: d.size,
   leading: d.leading,

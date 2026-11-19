@@ -1,5 +1,5 @@
-// Microsoft Edge's free translation endpoint, written from its measured behaviour (translation dossier §16,
-// ext-providers-config §16) as the owner's own code. No key. It keeps markers, not tags; it answers each text with its own
+// Microsoft Edge's free translation endpoint, written from its measured behaviour (DESIGN §8.3)
+// as our own code. No key. It keeps markers, not tags; it answers each text with its own
 // sentence lengths (`sentLen`, unrequested, usable on white-space-collapsed text: 60/60 counts matched); it refuses over
 // 50,000 characters a request with a plain-text 400; throughput comes from concurrency (2,000-character requests, 8 in
 // flight: 23 k characters/s, no 429 in 30); from Cloudflare it refuses a request with no browser User-Agent, which the
@@ -34,7 +34,7 @@ const MICROSOFT_ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
 /** the raw reply's shape, part of the identity: `{ text, src?, tr? }`, the item's text and its sentence lengths */
 const RAW = 'raw/1'
 
-/** the endpoint's own table of targets (fetched 2026-09-08 and 2026-09-17: the same 138 codes) */
+/** the endpoint's own table of targets (fetched twice, the same 138 codes: measured 2026-09-08 and 2026-09-17) */
 const SUPPORTED = new Set(
   `af am ar as az ba be bg bho bn bo brx bs ca cs cy da de doi dsb dv el en es es-MX et eu fa fi fil
   fj fo fr fr-CA ga gl gom gu ha he hi hne hr hsb ht hu hy id ig ikt is it iu iu-Latn ja ka kk km kmr
@@ -44,8 +44,8 @@ const SUPPORTED = new Set(
     .trim()
     .split(/\s+/),
 )
-/** a target as the endpoint must be asked it: a bare `sr` comes back Latin and `zh` must be `zh-Hans` (measured
- *  2026-09-09); `ny`, `lg` are three-letter codes there. A script the endpoint cannot write (`bs-Cyrl`, `uz-Cyrl`,
+/** a target as the endpoint must be asked it: a bare `sr` comes back Latin and `zh` must be `zh-Hans`
+ *  (measured 2026-09-09); `ny`, `lg` are three-letter codes there. A script the endpoint cannot write (`bs-Cyrl`, `uz-Cyrl`,
  *  `az-Cyrl`) is in no row of its table, so it is not served */
 const REWRITE: Record<string, string> = {
   zh: 'zh-Hans',
@@ -66,7 +66,7 @@ const MICROSOFT_LIMITS: Limits = { chars: 2_000, units: 100, inFlight: 8, callMs
 const OVER_CAP = /exceeds the maximum allowed translation size/i
 
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts (the suite prints a new one when they move) */
-export const MICROSOFT_DIGEST = '6fec7ab7dd7c0407c0972f3b1220033e30a3379a85746afd4a2461a85b931990'
+export const MICROSOFT_DIGEST = '1cf319170bc54c4826285429b4b3465b44a0deb61cdee4c2735e7a2b7f187189'
 
 export interface MicrosoftOptions {
   fetch: Fetch

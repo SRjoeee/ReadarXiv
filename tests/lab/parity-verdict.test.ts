@@ -1595,3 +1595,52 @@ describe("shown: a unit of today cut into members of v2 across a page break is j
     expect(shown(page(v2, 1, 100, [20], group))).toEqual([[true, 'part 21: no member on the page']])
   })
 })
+
+describe("a group whose members stand on no line of a page today draws one of its units on: that page reads the units today drew there (lane gate-pages' first defect)", () => {
+  // (today's t30 and t31, one member of v2's, 21, whose lines the part states on page 2 alone; today draws t31, not t30, on page
+  // N. The original's facts and the echo read there are t31's, the unit today drew, never the group's first unit's)
+  type D = { flag: string; worse: boolean; unit: string }
+  const prep = (text31: string) => [
+    { ord: 30, kind: 'inknotes', text: 'alpha beta', lines: [{ page: 2, x0: 92, x1: 192, baseline: 646.6, top: 653.5, bottom: 644.2, size: 9.96 }] },
+    { ord: 31, kind: 'inknotes', text: text31, lines: [{ page: N, x0: 92.47, x1: 192.23, baseline: 646.6, top: 653.55, bottom: 644.23, size: 9.96 }] },
+  ]
+  const group = { today: [30, 31], members: [21], pages: { 21: [2] } }
+  const ctx = (p: { ord: number }[]) => ({ prepByOrd: new Map(p.map((u) => [u.ord, u])), todayOf: new Map(), turned: new Set(), led: new Map(), top: new Set(), pieceGroups: [group] })
+  const shown = (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === 'shown').map((d) => [d.unit, d.worse])
+  it("today's t31 drawn in its own source's words on the page: an echo, no translation missing", () => {
+    const v2 = v2Of()
+    const p = measurePage('p-zh', v2, rec({ today: { units: [{ id: 31, lines: [drawnLine(92.47, 192.21, 646.6, 'yiminglin@berkeley.edu ', 9.96)] }] } }), ctx(prep('yiminglin@berkeley.edu')))
+    expect(shown(p)).toEqual([])
+    expect(p.measures.echoed).toEqual(['t30 inknotes'])
+  })
+  it("today's t31 translated there: a translation missing, as before", () => {
+    const v2 = v2Of()
+    const p = measurePage('p-zh', v2, rec({ today: { units: [{ id: 31, lines: [drawnLine(92.47, 192.21, 646.6, 'xbo wang@sutd.edu.sg ', 9.96)] }] } }), ctx(prep('bo wang@sutd.edu.sg')))
+    expect(shown(p)).toEqual([['t30 inknotes', true]])
+  })
+  it("the original's lines there are t31's: on a line v2 draws translated as a member of its own, no translation missing", () => {
+    // (v2's member 50, joined to today's t60, stands on t31's original line on page N and is drawn there)
+    const v2 = v2Of({ members: [{ ord: 50, state: 'laid', lines: [] }], facts: [{ ord: 50, kind: 'para', align: 'j', style: { size: 9.96 }, lines: [factLine(92.47, 192.23, 646.6, 9.96)] }], today: { 50: { today: 60 } } })
+    const r = rec({ today: { units: [{ id: 31, lines: [drawnLine(92.47, 192.21, 646.6, 'une ligne traduite', 9.96)] }] }, v2: { units: [{ id: 50, lines: [drawnLine(92.47, 192.21, 646.6, 'une ligne traduite', 9.96)] }] } })
+    const p = measurePage('p-zh', v2, r, ctx(prep('a translated line')))
+    expect(shown(p)).toEqual([])
+    expect(p.measures.within).toEqual(['t30 inknotes'])
+  })
+})
+
+describe("a group's member laid with a fresh row marks the group fresh only on a page it stands on (lane gate-pages' second defect)", () => {
+  // (today's t7 cut into v2's members 11, on page N, and 12, on page N + 1, whose row is fresh: on page N the group's lines are
+  // 11's alone, laid with a stored row, and judged as anywhere)
+  type D = { flag: string; worse: boolean; nearer: string; unit: string }
+  const lead = { ord: 11, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(72, 300, 500)] }
+  const v2 = { ...v2Of({ members: [{ ord: 11, state: 'laid', lines: [] }], facts: [lead] }), fresh: [12] }
+  const r = rec({ today: { units: [{ id: 7, lines: [drawnLine(72, 300, 500, 'abcdefghij')] }] }, v2: { units: [{ id: 11, lines: [drawnLine(72, 300, 500, 'abcdefghij', 8)] }] } })
+  const ctx = (pages: Record<number, number[]>) => ({ prepByOrd: new Map(), todayOf: new Map(), turned: new Set(), led: new Map(), top: new Set(), pieceGroups: [{ today: [7], members: [11, 12], pages }] })
+  const size = (p: { diffs: D[] }) => p.diffs.filter((d) => d.flag === 'size').map((d) => [d.unit, d.worse, d.nearer])
+  it('on the page of the member laid with a stored row: its size judged, worse', () => {
+    expect(size(measurePage('p-zh', v2, r, ctx({ 11: [N], 12: [N + 1] })))).toEqual([['t7 para', true, 'today']])
+  })
+  it('with the fresh member on the page too: fresh, never worse', () => {
+    expect(size(measurePage('p-zh', v2, r, ctx({ 11: [N], 12: [N] })))).toEqual([['t7 para', false, 'fresh']])
+  })
+})

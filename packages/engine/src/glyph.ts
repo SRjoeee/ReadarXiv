@@ -1,7 +1,7 @@
 // A page's glyphs as readPdf makes them (read.ts docPageOf): each glyph's eight coordinates in its page's one Float64Array, in the
 // order x0, x1, y, top, bottom, size, ix0, ix1, read by getters, and every other field its own. A coordinate held as a field of
 // its own is a heap number of 16 bytes, eight a glyph and every copy of a glyph boxing its own: 180 MiB of a 163-page paper's two
-// Docs (lane L9 §2), which the array holds in 64 bytes a glyph. The readers' `g.x0` is unchanged; no reader writes, spreads or
+// Docs, which the array holds in 64 bytes a glyph. The readers' `g.x0` is unchanged; no reader writes, spreads or
 // enumerates a glyph's coordinates, and one that makes a glyph with a field changed makes it by glyphWith, never a spread (which
 // copies a page glyph's own fields alone, and so none of its coordinates). A Doc a test builds by hand holds plain glyphs, which
 // every reader takes alike.

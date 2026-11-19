@@ -1,5 +1,5 @@
-// Which of PDF.js's builds a browser runs (interfaces/host design-a §3: "PDF.js's build choice" carried into the reader; the
-// website's pdfjs.ts `buildFor`, the extension's support.ts `readerRuns`): the modern build where every built-in it calls
+// Which of PDF.js's builds a browser runs (one rule for both hosts: the website's own choice, the extension's support.ts
+// `readerRuns`): the modern build where every built-in it calls
 // unguarded is there, else the legacy build down to its own floor, else none. The reader loads the modern build by default;
 // a host that serves older browsers hands it the legacy one (openReader's `pdfjs`, `@readarxiv/reader/pdfjs-legacy`), by
 // these checks or by a rule of its own: the choice is the host's.

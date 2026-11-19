@@ -1,5 +1,5 @@
 // What both wires do to text: the escaping the free endpoints need, the entities read back, the code points no reader
-// sees. Restated from the measured facts (translation dossier §16): Microsoft's and Google's free endpoints run an HTML
+// sees. Restated from the measured facts (DESIGN §8.3): Microsoft's and Google's free endpoints run an HTML
 // aligner on every request, so a bare `<` or `&` fuses (`a < b and c > d` came back `<B和C> d`), and replies stay
 // HTML-encoded; Google sets zero width spaces inside words; a numeric entity past U+10FFFF must not throw.
 import type { Piece } from '../contract.ts'
@@ -30,7 +30,7 @@ export const ENTITY = '&(?:#[xX][0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos|nbsp);'
 export const SAYS = /[\p{L}\p{N}]/u
 export const LETTER = /\p{L}/u
 
-/** what an element reads as to the sentence splitter, by its kind (mt.mjs splitContextOf, now typed): a note's mark belongs
+/** what an element reads as to the sentence splitter, by its kind: a note's mark belongs
  *  to the sentence before it; a citation too where it is set against it, else it opens the next (`… expensive. \citet{x}
  *  proposes …`: the splitter reads where it stands, @readarxiv/text `citation`); a reference is a number, a formula a word, a
  *  break a space */
@@ -43,9 +43,30 @@ export function standInOf(kind: string): 'annotation' | 'citation' | string | un
   return undefined
 }
 
-/** an element's stop that is white space alone: a line end it states (a forced break a run-in label follows), which the
- *  markers wire writes where Microsoft cuts its sentence; never punctuation of the element's own */
+/** whether an element of this kind sets no word of the text: one its reader states nothing of (`other`: the PDF's source
+ *  reader's kind for a skip, a switch) or one the cutter reads as white space (a space, a forced break) */
+export const setsNoWord = (kind: string): boolean => kind === 'other' || (standInOf(kind) ?? 'x').trim() === ''
+
+/** an element's stop that is white space alone: a line end it states (a forced break a run-in label follows, no stop ending
+ *  the text before it: the source reader's run-in rule), the end of the sentence before the stretch it stands in (leadsNext);
+ *  never punctuation of the element's own */
 export const LINE_END = /^\s+$/
+
+/**
+ * Whether a stretch of elements, white space alone between them, LEADS the next sentence: the sentence before ended right
+ * before the stretch, by a stop of its text set right before the stretch's first element (`stopped`), or by the line end one of
+ * its elements states (LINE_END, among its `stops`: the source's own statement that the text before the forced break ended its
+ * sentence; the stretch then the elements that set no word around the break, setsNoWord, its skip before it, its `\noindent`
+ * after it, past any that sets a word, a formula or an address, which is the sentence's before it). TeX ends the line there and
+ * sets the stretch first on the next, so every wire sends it as the next sentence's first thing, never as the last of the
+ * sentence it ends: there a translator's word order carries it into that sentence (Microsoft set a break so written
+ * mid-sentence in Japanese, Korean and Chinese, in every reply asked, where a break after a full stop, the next sentence's
+ * first thing, stood before its label in every one). The markers wire writes the line end before the stretch's marker (a stop
+ * of the text stands there already); the tags wire's cutter ends the sentence at the line end and sets its boundary marker
+ * before the stretch's first element, the stretch read back as that sentence's lead (tags.ts `leads`)
+ */
+export const leadsNext = (stopped: boolean, stops: readonly (string | undefined)[]): boolean =>
+  stopped || stops.some((s) => LINE_END.test(s ?? ''))
 
 /** a display's kind (the source reader's) */
 export const DISPLAY = 'display'
@@ -121,7 +142,7 @@ const OWN_MARKS = '.,;:。．，、；：।۔،؛'
 export const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 
 /** the stop a display that states none of its own ends its sentence with, where TeX set it at that sentence's end */
-export const DISPLAY_END = '.'
+const DISPLAY_END = '.'
 /** a text that begins a sentence: its first letter upper case (Unicode Lu, Lt) */
 const BEGINS = /^\s*[\p{Lu}\p{Lt}]/u
 /**
@@ -132,9 +153,9 @@ const BEGINS = /^\s*[\p{Lu}\p{Lt}]/u
  * `silent`, one that reads as white space: a space, a break); an element that sets something, or the unit's end, gives none.
  * Each wire writes it after the display as the display's own stop, which reading takes back (the original sets none there),
  * and the tags wire's cutter reads it: a translator is asked for the sentence TeX ended (Microsoft cuts at neither a marker nor
- * a colon: 0 of 444 without a display's stop, 1,357 of 1,357 with it). Over the corpus's 88 papers (2026-11-09): 3,937 displays
- * state their stop; of the rest, 328 go on in lower case, 52 end their unit, 95 on 22 papers are followed by an upper-case
- * word, the commonest all a sentence's first (The 17, In 9, We 7, For 5, Here 5, Then 4, This 4)
+ * a colon: 0 of 444 without a display's stop, 1,357 of 1,357 with it). Over the corpus's 88 papers (measured 2026-11-09):
+ * 3,937 displays state their stop; of the rest, 328 go on in lower case, 52 end their unit, 95 on 22 papers are followed by
+ * an upper-case word, the commonest all a sentence's first (The 17, In 9, We 7, For 5, Here 5, Then 4, This 4)
  */
 export function displayEnds(content: readonly Piece[]): readonly Piece[] {
   const ends = new Set<Piece>()

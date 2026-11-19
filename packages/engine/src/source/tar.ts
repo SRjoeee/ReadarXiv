@@ -49,6 +49,9 @@ export function untar(b: Uint8Array): Map<string, Uint8Array> {
   return files
 }
 
+/** whether a body is a tar: its first header block's magic field, six bytes at offset 257 (POSIX.1's ustar format, IEEE Std
+ *  1003.1: "ustar" and a NUL; GNU tar's "ustar "), read where the body holds the whole field, through byte 262; a shorter body
+ *  holds no header block and is one TeX file, whatever its bytes at 257 read (packages/engine/tests/tar.test.ts) */
 const isTar = (b: Uint8Array): boolean => b.length > 262 && text(b, 257, 262) === 'ustar'
 const isPdf = (b: Uint8Array): boolean => text(b, 0, 5) === '%PDF-'
 

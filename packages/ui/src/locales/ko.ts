@@ -1,6 +1,6 @@
 // Korean. The platforms' own words for an interface (Chrome's first, then Apple's and Microsoft's: 설정, 기본, 확장 프로그램,
 // 실행 취소, 다시 시도, 뷰어…), and the product's register: a sentence in 합니다체 (~습니다), a request ~하세요, a state, a
-// label or a button ending in a noun (번역 중, 링크 복사됨, 다시 시도) (the glossary of 2026-11-04, §J).
+// label or a button ending in a noun (번역 중, 링크 복사됨, 다시 시도) (UI.md §1).
 // Half-width punctuation with a space after it, no space before a parenthesis, “ ” for quotes; a sentence ending in
 // ~습니다 or ~하세요 takes a full stop even alone, a noun ending none (UI.md §1, the Korean line). **No particle follows
 // a name set into a sentence**: 을/를, 이/가, 은/는, (으)로 depend on the name's last sound, which a template cannot know,
@@ -178,7 +178,7 @@ const O: Locale['O'] = {
   saveFailed: '저장하지 못했습니다. 다시 시도하세요.',
   appearance: {
     theme: '모양',
-    // the theme switch's three equal segments hold 274 px at a 320 px window (ui-shots.mjs): the platform's longer
+    // the theme switch's three equal segments hold 274 px at a 320 px window (tests/e2e/probes/ui-shots.mjs): the platform's longer
     // "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese and English are
     themes: { system: '시스템', light: '라이트', dark: '다크' },
     dim: '다크 모드에서 PDF 페이지 어둡게',
@@ -369,6 +369,7 @@ const R: Locale['R'] = {
     goToArxiv: 'arXiv로 이동',
     unreadable: '설정을 읽을 수 없어 기본 설정 사용 중',
     unreadableHint: '설정을 읽을 수 없음',
+    facesLost: '일부 글꼴을 불러오지 못했습니다. 페이지를 새로고침한 후 다시 시도하세요.',
   },
 }
 

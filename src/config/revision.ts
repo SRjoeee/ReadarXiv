@@ -11,11 +11,22 @@ import { sha256Hex } from '@/shared/digest'
  * translating, and a rebuild would clear the token buckets and the hand-over records with it. `tests/providers/transport.test.ts` guards this table: a new configuration field must be classified explicitly.
  */
 export const CHAIN_CONFIG_FIELDS = ['provider', 'services', 'prompts', 'targetLanguage', 'fallback'] as const
-/** The complement of CHAIN_CONFIG_FIELDS; the two together must cover every field of Config */
+/**
+ * The fields that shape the PDF reader's chain alone (v22; providers/translators.ts readerTranslatorsOf): a change rebuilds the
+ * chain in force (`readerChainChanged`, background/chain.ts), and is no change of a page's settings: neither `chainConfigChanged`
+ * nor `chainRevision` reads them, so that the page translator is as it was
+ */
+export const READER_CHAIN_FIELDS = ['providerChosen'] as const
+/** The complement of CHAIN_CONFIG_FIELDS and READER_CHAIN_FIELDS; the three together must cover every field of Config */
 export const VOLATILE_CONFIG_FIELDS = ['version', 'mode', 'glossary', 'appearance', 'preload', 'image', 'reading', 'uiLanguage', 'pdfReader', 'theme'] as const
 
 export function chainConfigChanged(a: Config, b: Config): boolean {
   return CHAIN_CONFIG_FIELDS.some(field => !deepEqual(a[field], b[field]))
+}
+
+/** A field the PDF reader's chain alone is built from changed (READER_CHAIN_FIELDS) */
+export function readerChainChanged(a: Config, b: Config): boolean {
+  return READER_CHAIN_FIELDS.some(field => !deepEqual(a[field], b[field]))
 }
 
 /**

@@ -1,214 +1,252 @@
-# The CI tiers: the plan
+# The CI tiers: what runs where
 
-What each tier of `pnpm release-check` (`lab/release-check/run.mjs`, the gates in `lab/release-check/gates.mjs`) must run,
-where, on what inputs, in how many minutes and with which secret, written so that each job becomes one workflow file.
-The workflows themselves are not written here. Times were measured on 2026-11-07 at `13216ac44` on the maintainer's
-machine (Apple silicon, 14 cores, 48 GiB) unless a row says otherwise; a hosted runner (4 vCPU for a public repository)
-is taken as about twice as slow on the CPU-bound steps.
+What each tier of `pnpm release-check` (`lab/release-check/run.mjs`, the gates in `lab/release-check/gates.mjs`) runs, where,
+on what inputs, in how many minutes and with which secret. The fast tier is `.github/workflows/ci.yml`; the full and release
+tiers read the lab's data and run on the maintainer's machine by hand, never from this repository's workflows (below,
+"Security"). Restated on 2026-11-19 at `2ed857426` from the plan of 2026-11-07; times "here" are the maintainer's machine (Apple
+silicon, 14 cores, 48 GiB, shared with other jobs) as the release check's own logs of 2026-11-13 to 2026-11-19 record them, and a
+hosted runner (4 vCPU for a public repository) is taken as about twice as slow on the CPU-bound steps, until a pull request's run
+measures it.
 
-| Tier | When | Runner | Command | Minutes a run | Secret |
-|---|---|---|---|---|---|
-| fast | every pull request and every push to `next`, `main`, `rebuild/v2` | GitHub-hosted `ubuntu-latest` | three jobs (below) | 14 wall clock, about 28 of runner time | the fixtures' read token (exists) |
-| full | every merge into `rebuild/v2` (later `next`), newest first | self-hosted, the maintainer's machine, with the lab data | `pnpm release-check --tier full --work=<external disk>` | 26 (measured), 16 for `display` and about 9 for `perf-batch`, one runner; 110 at `6b91f86ff` (2026-11-13, a shared machine, `perf-batch` skipped), `display` 51 of them in both modes | none |
-| release | before a release, by hand (`workflow_dispatch`) | self-hosted, the same machine | `pnpm release-check --tier release --online --work=<external disk>` | about 80, and 100 to 130 for `perf-release` | none here; the private repository's own |
+| Tier | Job | Runner | When | Commands | Needs | Minutes | What it catches that `check` alone did not |
+|---|---|---|---|---|---|---|---|
+| fast | `check` | GitHub's `ubuntu-latest` | every pull request; every push to `main` and `rebuild/v2` | `pnpm typecheck`, `pnpm lint`, `pnpm build`, the fixtures' fetch, `pnpm test` (the contract tests among its files), `node lab/release-check/census.mjs --no-today` | the fixtures' read token (a repository secret, one step's environment; a fork's run has none and fetches from arXiv) | 5 to 8 (five runs of 2026-11-07), the census 8 s here | the census's ratchet: a complexity or debt measure above the ledger's recorded value (new) |
+| fast | `reader` | GitHub's `ubuntu-24.04` | as `check` | Playwright's Chromium (`pnpm exec playwright install --with-deps chromium`), `node packages/reader/e2e/run.mjs` (`harness`) | nothing: no secret, no lab data | here: harness 239 to 310 s; hosted: harness 4 min 38 s, the job 6 min (run 44432025091) | the reader package in a real browser on its own fixtures (93 checks, 12 of them holding nothing without the website's served faces: the stack, the composer, the panes, links, the text layer, the highlight; I1, I3, I4, I8 there); vitest's happy-dom draws nothing |
+| fast | `extension` | GitHub's `ubuntu-24.04` | as `check` | Playwright's Chromium, `pnpm build`, then `pnpm e2e:reader`, `e2e:framing`, `e2e:a11y`, `e2e:viewer`, `e2e:registration` | nothing | here: 77, 64, 33, 6, 32 s; hosted about 12 with the build | the shipped build loaded in Chromium: the PDF page's entries (its button, the panel, the popup), the reader behind the extension's host on the stand-in of `/api/v2`, the framing defences, an accessibility finding the extension adds, the figure viewer under a pinned header, a laid page's drawing, overlay and links registered at every zoom; each suite behind a route table that fails the run on any request it does not answer |
+| full | none | the maintainer's machine, by hand | before an integration round's merge into `rebuild/v2`, and at a release candidate | `pnpm release-check --tier full --work=<a directory on the external disk>` | the lab's data (`AXT_LAB_DATA`), the external disk, Docker for `perf-batch` | 26 at `13216ac44`; 110 at `6b91f86ff` on a shared machine | the corpus: below |
+| release | none | the maintainer's machine, by hand | before a release | `pnpm release-check --tier release --online --work=<…>` | as full, and the network for the online scripts | about 80, and 100 to 130 for `perf-release` | below |
 
-## fast: every pull request (hosted)
+The private repository's tiers run on its own runners (below); the report names them and runs none.
 
-Nothing of the lab's data, no network but the install's and the fixtures' fetch, no Docker. On this machine at
-`13216ac44` every gate of the tier passed but `e2e:small-caps`, today's layer's script, which went with it at the cut-over.
+## Security
 
-**Job `check`** (exists: `.github/workflows/ci.yml`, unchanged): `pnpm install --frozen-lockfile`, `pnpm typecheck`,
-`pnpm lint`, `pnpm build`, the fixtures (`node scripts/fetch-fixtures.mjs`, with `READARXIV_CI_TOKEN` and the cache keyed by
-the manifest), `pnpm test`. The contract tests (`tests/contract/`) run inside `pnpm test`; release-check runs them again as
-their own line of the report (1 s). 5 to 8 min a run on the hosted runner (five runs of 2026-11-07).
+This repository is public. Anyone can open a pull request, and a pull request's run takes its workflow files from the pull
+request itself, so a rule about which workflow is meant to run is no boundary: what a run can reach is. The rules every workflow
+obeys are readers of its text (`tests/scripts/workflow-rules.ts`), held by `tests/scripts/ci-workflows.test.ts` over every file
+of `.github/workflows`, with what is particular to the rules gate's workflows and to the fixtures' token in
+`tests/scripts/rules-workflows.test.ts`. No YAML parser: the files are held to the one plain form they are written in, and every
+reader fails closed on form. A spelling of YAML or of an expression it does not read is itself a violation, never a pass: a quoted
+key, a flow mapping, a key at another indentation, a script in double quotes (YAML reads its escapes before GitHub reads its
+expressions), an anchor, an alias, a merge, a tag, an escape, a step at another indentation (rule 0, `forms`). A line led by `#`
+inside a scalar's text (a script's shell comment, a line of a value written as a block) is that text, not a YAML comment: GitHub
+reads its expressions, and every rule reads it. Each rule is shown to
+refuse what it is for in every spelling that could carry it (`tests/scripts/workflow-controls.ts`: 54 controls).
 
-**Jobs `reader` and `extension`** (new, beside `check`, no secret), each: `pnpm install --frozen-lockfile`; Playwright's
-browsers (`pnpm exec playwright install --with-deps chromium`; the browsers cached by the lockfile's Playwright version); `pnpm build`; then
+1. **GitHub's runners alone.** Every job has exactly one `runs-on:` naming a hosted image (`ubuntu-latest`, `ubuntu-24.04`) as a
+   plain value at the job's level; a flow sequence, an expression, a block sequence, a quoted key or an alias is refused, and no
+   workflow names `self-hosted` in any case. A runner registered to a public repository takes a job from any workflow that names
+   its labels, a fork's pull request's own workflow file included; on a personal account there are no runner groups to restrict it
+   to chosen workflows, and what would stand between a stranger's code and the maintainer's machine (the lab's data, licensed
+   papers, his credentials) is one person's approval of each outside run. GitHub's own guidance is to use self-hosted runners with
+   private repositories alone. So the full and release tiers stay on that machine, run by hand (below); no self-hosted job is
+   written here, however its triggers are set.
+2. **Events an outsider cannot turn into the repository's context.** A workflow's events are one block under `on:`, each a plain
+   key, among `push`, `pull_request`, `workflow_dispatch` and `schedule`. A pull request's run, a fork's included, has no secret
+   and a token that reads. No workflow names `pull_request_target`, `workflow_run`, `issue_comment` or `workflow_call`, in a line or
+   a comment, in any case.
+3. **A secret reaches one step.** The secrets context, in any spelling (its dot or its brackets, any case: expressions are
+   case-insensitive), stands only in a step's own environment's entry of the one form `NAME: ${{ secrets.NAME }}`, never in a
+   workflow's or a job's environment or an action's input, never passed on whole; the step that holds it names none of the job's
+   files a step writes for the steps after it (`GITHUB_ENV`, `GITHUB_OUTPUT`, `GITHUB_PATH`, `GITHUB_STATE`). No expression is
+   spliced into a script, whatever the script's style (no `${{` in a `run:` body: an expression's value is passed through the
+   environment). `check`'s fixtures fetch and the rules gate's two pack restores are the steps that hold the bucket's read token;
+   the publish and rollback steps hold the publish secret.
+4. **GitHub's own actions, listed and pinned.** Every `uses:` is a plain step key naming one of the actions the rules list
+   (`actions/checkout`, `actions/setup-node`, `actions/cache/restore`, `actions/cache/save`, `actions/upload-artifact`: none runs
+   an input as a script) at a full commit with its version beside it, one commit an action across the workflows; pnpm comes from
+   corepack at `package.json`'s version, not from a third party's action.
+5. **The least token.** Every workflow's permissions begin with `contents: read`. A `permissions:` key stands only at the
+   workflow's level or a job's, as a block of `<scope>: read|write|none` entries and nothing else; any other spelling or place is
+   refused. And, whatever that reading sees, every `write` anywhere in a workflow is a scope its file may write: a write is held
+   only where the rules' list says why (the rules gate's comment on its own pull request; the rollback's cancel of unfinished
+   publishes).
+6. **No credential kept.** Every checkout is a plain step with `persist-credentials: false` in its block of inputs;
+   `persist-credentials` in any other spelling is refused; nothing pushes with git.
+7. **The browser jobs hold nothing.** `reader` and `extension` name no secret, variable or token in any spelling or case, and hold
+   no environment, cache, permission, service or container of their own: a fork's pull request runs them as they are, and nothing
+   they run reaches a credential.
+8. **No lab tier here.** No workflow runs the release check itself, a `--tier` in any spelling, or names the lab's data.
 
-```
-reader:     pnpm release-check --tier fast --only=harness
-extension:  pnpm release-check --tier fast --only=e2e:reader,e2e:framing,e2e:a11y,e2e:viewer,e2e:registration
-```
+The alternative to the full tier by hand, if the maintainer wants it in Actions: a private mirror of this repository (pushed by
+him, with no other collaborator; a private repository's forks run no workflows unless he allows it) with its own self-hosted
+runner and its own copy of the full tier's workflow. It costs a second repository to keep in step and a runner to keep up, and
+its result is not shown on this repository's pull requests; it is not built.
 
-and the report (`lab/release-check/out/fast/`) kept as the run's artifact. With `--only` the verdict is those gates'. The
-scripts run headless (Playwright's `chromium` channel, which loads an extension), so no display is needed. The heavy slot
-is the maintainer's machine's alone; where it is absent the gates run directly. Times here:
+## fast: every pull request, and every push to `main` and `rebuild/v2` (GitHub's runners)
+
+Nothing of the lab's data, no network but the install's, the browsers' download and the fixtures' fetch, no Docker. A pull
+request's newer push stops its older run (`concurrency`); a push to a branch runs to its end.
+
+**`check`**: the fixtures (`node scripts/fetch-fixtures.mjs`, with the read token and the cache keyed by the manifest, a pull
+request's own) and `pnpm test`; the contract tests (`tests/contract/`) run inside `pnpm test`, and release-check runs them again
+as their own line of its report. The census of this tree alone (`--no-today`): its ratchet judges the measures this tree holds
+(21 at `2ed857426`) and skips, with their reason, the 27 that read the website's tree or today's engine.
+
+**`reader` and `extension`**: Playwright's Chromium at the lockfile's Playwright version, with the system libraries it needs
+(`--with-deps`, apt on the runner). The runner's browser speaks English and the maintainer's machine's Chinese: a suite that finds
+the extension's controls and sentences by their Chinese words (`e2e:reader`, `e2e:a11y`) states Chinese where it launches
+(`tests/e2e/lib/chromium.mjs`, `language`: Playwright's locale for every page and frame, and Chromium's `--lang`), so that its
+verdict is not the machine's language's (run 44432025091 failed two of `e2e:reader`'s checks and `e2e:a11y`'s first look there); headless, Playwright's `chromium` channel, which loads an extension. `ubuntu-24.04` is
+pinned: the browsers draw with its libraries and fonts. Each check step runs whatever the one before it gave, so that one
+failure hides no other. The harness's checks that lay with the website's served faces (licensed files the repository may not
+hold: `AXT_FACE_TABLES`, `AXT_FACE_SLICES`, `AXT_HYPH`) hold nothing there: 12 of its 93 at `2ed857426`, run as a hosted runner
+meets them (no lab data, none of the three set: 93 of 93 "ok" in 3 min 52 s here), each printing its line with
+`skipped: no served faces`; they hold on the maintainer's machine, in the fast tier run there and in the full tier's
+`harness-lab`. `tests/scripts/ci-workflows.test.ts` holds each job's steps to `gates.mjs`: every
+gate of the fast tier is run with the command `gates.mjs` gives it, the browser gates as steps named by their ids, the e2e
+scripts on the job's own build.
 
 | Gate | Here | Hosted, estimated |
 |---|---|---|
-| `typecheck`, `lint`, `build` | 3 s, 2 s, 3 s | in `check` |
-| `test` (vitest, 566 files, 9,075 tests) | 146 s | in `check` |
-| `contract` (tests/contract: 2 files, 98 tests) | 1 s | in `check` (inside `pnpm test`) |
-| `census` (lab/release-check/census.mjs: the complexity and debt census, design §7's census rows; measured 2026-11-12 at `75602aecb`) | 6 s this tree alone; 20 s with today's engine and the website's two trees (its profile in the lab's notes) | in `check`, this tree alone: `node lab/release-check/census.mjs --no-today`; judged by its ratchet (census-ledger.json): a measure above the last integrated round's value fails, naming the entries that added to it; the measures that need the website's tree (AFTER, dead modules and exports, ported files reached) are skipped there with their reason |
-| `harness` (packages/reader/e2e/run.mjs: 49 checks at `13216ac44`, 82 at `cee3bd8f9`) | 109 s | about 4 min |
-| `e2e:reader` (the rebuilt reader's, 81 checks: `tests/e2e/reader-v2.mjs` and `reader-v2-layer.mjs`; today's reader's 158 at `13216ac44` went with it at the cut-over) | 177 s | about 6 min |
-| `e2e:framing` (22) | 65 s | about 2 min |
-| `e2e:a11y` (15) | 44 s | about 1.5 min |
-| `e2e:viewer` (20) | 6 s | under 1 min |
-| `e2e:registration` (the rebuilt reader's, `tests/e2e/registration-v2.mjs`: 74 at `6b91f86ff`, 78 at the cut-over's branch) | 55 s | about 2 min |
-| the three jobs | 11 min in all, serial | `check` 5–8 min (measured), `reader` about 7 min, `extension` about 14 min with install and browsers: 14 min a pull request's wall clock, about 28 min of runner time |
+| `typecheck`, `lint`, `build` | 1 to 3 s each | in `check` |
+| `test` (vitest, 811 files, 12,494 tests at `2ed857426` with this tier's own test) | 113 to 165 s | in `check` |
+| `contract` | 1 s | in `check` (inside `pnpm test`) |
+| `census` (this tree alone) | 8 s | in `check` |
+| `harness` (93 checks) | 239 to 310 s | about 8 min |
+| `e2e:small-caps` (three browsers) | 4 to 15 s | not run there (below) |
+| `e2e:reader` (81 checks on the default build: `tests/e2e/reader-v2.mjs`, `reader-v2-layer.mjs`) | 77 s | about 3 min |
+| `e2e:framing` (22) | 64 to 66 s | about 2 min |
+| `e2e:a11y` (15) | 33 to 34 s | about 1 min |
+| `e2e:viewer` (20) | 5 to 10 s | under 1 min |
+| `e2e:registration` (74 on the default build) | 31 to 34 s | about 1 min |
+| the three jobs, in parallel | | `check` 5 to 8 min, `reader` 6 (run 44432025091), `extension` about 12 (Chromium's system libraries alone took 8 min of it there): about 12 min of a pull request's wall clock |
 
-**Rules gate**: today's layout rules' workflows (`rules-gate.yml`, `rules-publish.yml`, `rules-point.yml`) went with today's
+**Kept off GitHub's runners: `e2e:small-caps`.** It holds today's layer (`src/pdf-reader/engine`), which the cut-over deletes.
+Its two measures of a run are today's layer's own: the width it lays a run at, measured on a canvas at 100 px and scaled, and the
+width the run's `<tspan>` is drawn at, read by `getSubStringLength` at the drawn size (20 px). On the hosted runner's Chromium
+(Linux, a device scale of 1) glyph advances come whole pixels at each of those sizes (its own synthesis of the same words reads
+247.00, 319.00, 239.00 px in SVG and canvas alike), so the two disagree by up to 4.48 px over a heading, and the layout, laid on
+those whole-pixel measures, stands 0.18 to 0.70 PDF units off Firefox's and WebKit's (run 44432025091: 13 of 28; Firefox and WebKit
+pass every case there). On macOS Chromium measures and draws with fractional advances (250.00 against 249.99 px, WebKit's own
+249.99), and all 28 pass. A platform difference of today's reader, production's, not of a change here: the check stays the
+maintainer's machine's, in the fast tier run there, until its code goes. The rebuilt reader's checks that hold a drawn run against
+its layout (the harness's full-width punctuation, laid by the reader's own typesetter over the served faces) skip on the runner
+for want of those faces: the rebuilt reader's drawing against its layout on Linux is not shown by the hosted tier.
+
+**The rules gate**: today's layout rules' workflows (`rules-gate.yml`, `rules-publish.yml`, `rules-point.yml`) went with today's
 engine at the cut-over.
 
-## full: every merge into the rebuild branch (self-hosted, with the lab data)
+## full: by hand on the maintainer's machine, recorded
 
-The corpus replays need what the repository may not hold: arXiv's papers under their licence, the cached compiles, the
-frozen baseline and the tap (the lab-data directory, `AXT_LAB_DATA`), some on the external disk. So a runner on the
-maintainer's machine, registered to this repository alone, with labels `self-hosted`, `macOS`, `ARM64`, `lab-data`.
+The corpus replays need what the repository may not hold: arXiv's papers under their licence, the cached compiles, the frozen
+baseline and the tap (the lab-data directory, `AXT_LAB_DATA`), some on the external disk. They run on the maintainer's machine,
+started by hand, not by a runner (Security, rule 1).
 
-- **Trigger**: `push` to `rebuild/v2` only (a merge), never `pull_request`: a self-hosted runner on a public repository
-  must not run a fork's code. `concurrency: { group: full, cancel-in-progress: true }`: a burst of merges is judged once,
-  at its newest.
-- **Command**: `pnpm install --frozen-lockfile && pnpm release-check --tier full --work=<a directory on the external disk>`
-  (a corpus run writes about 400 MB; the corpus runners refuse a paper under 12 GiB free, and release-check reports such a
-  gate as skipped, never passed). The report is the run's artifact; the run fails on NO-GO.
+- **When**: by the integration before it asks for a round's merge into `rebuild/v2` (the round's head, every gate of the tier),
+  and at a release candidate. A round whose lanes touched none of a gate's inputs may run that gate with `--only`, and says so.
+- **Command**: `pnpm install --frozen-lockfile && pnpm release-check --tier full --work=<a directory on the external disk>` (a
+  corpus run writes about 400 MB; the corpus runners refuse a paper under 12 GiB free, and release-check reports such a gate as
+  skipped, never passed). Heavy steps take the lab's heavy slot themselves.
+- **Recorded**: the report (`release-check.md`, `release-check.json`: the commit, every gate's verdict and numbers) is kept in the
+  lab's notes beside the round, and its verdict line and commit go into the pull request's description. A result recorded at
+  another commit is not the head's.
 - **Inputs**: `$AXT_LAB_DATA/refactor-2026-11/` (`baseline/`: the frozen dumps, `acceptance.json`, the tap;
   `lanes/L1-papers88.tsv` and the added pairs' papers (`baseline/added/papers.tsv`, `lab/typeset/added.mjs`), written as
   one list into the work directory (`papers.mjs`), and the compile caches, partly on the external disk: the corpus the
   integration round's stage 1a runs, with its flags (`--prove`, `--baseline` = the baseline's prepare dumps), a run and its
   twin alike. The caches are `RELEASE_CHECK_CACHES` (a list of directories, or a corpus run's `flags.txt`, whose `--caches=`
   line is the chain that run read: at a round's head, the round's own run, whose chain names the added papers' compiles
-  too, e.g. `lanes/converge-8/r23d-two/flags.txt` at `cee3bd8f9`), else `lanes/L1-caches88.txt`: a round whose marks move
-  fills new compiles into a directory of its own, and the list must name it, or every paper is "missing a compile" (exit 3;
-  at `75602aecb` all 87, the list predating the rounds' chain; at `cee3bd8f9` the list is round B14's, so the full tier is
-  run with the round's `flags.txt`); `lanes/L3/replay/`: the typesetter's derived inputs; `lanes/L6/capture.jsonl`: today's
-  readers' replies, and `lanes/L6/capture-today.json`: today's typing of them, frozen (`lab/translate/today-typed.ts`); `lanes/cjk-punct/blast/pairs.txt`: the 90 pairs of the stored rows the rounds' reader gate walks;
-  `google-rows/ef6989debed1` and `lanes/converge-7/tools-b15/{google-rows.mts,rows-register.mjs}`: the lab's Google store
-  and the rounds' tools that read it through the tree's chain and lay the reader gate over it; `baseline/corpora/papers.json`:
+  too), else `lanes/L1-caches88.txt`: a round whose marks move fills new compiles into a directory of its own, and the list must
+  name it, or every paper is "missing a compile" (exit 3); `lanes/L3/replay/`: the typesetter's derived inputs;
+  `lanes/L6/capture.jsonl`: today's readers' replies, and `lanes/L6/capture-today.json`: today's typing of them, frozen
+  (`lab/translate/today-typed.ts`); `lanes/cjk-punct/blast/pairs.txt`: the 90 pairs of the stored rows the rounds' reader gate
+  walks; `google-rows/ef6989debed1` and `lanes/converge-7/tools-b15/google-rows.mts`: the lab's Google store and the rounds' tool
+  that reads it through the tree's chain (the reader gate lays the rows it writes itself, `AXT_GATE_ROWS`; a unit the store holds
+  no reply to is `unavailable`, which fails the gate: a round whose units move refills the store, keyless, before it runs); `baseline/corpora/papers.json`:
   the harness's corpus papers, opened from this run's bundles with this run's rows of them, `reader-parts`' Google rows);
-  today's engine at `065c1d973` checked out beside the
-  worktree (`AXT_TODAY`: no longer the display gates', which read today's side frozen, `AXT_TODAY_FROZEN`, SanDisk's
-  `readarxiv-lab-archive/today-frozen/frozen`); the release sweep's cache and the reader's served faces, which the typeset runners read
-  (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`); Playwright's Chromium; for `perf-batch`, the website's tree its
-  reader is built in (`PERF_WEB`, a website worktree: its HEAD with this commit as `vendor/readarxiv`) and the round's box
-  image (`PERF_NEW_IMAGE`). Docker for `perf-batch` alone (a compile no cache holds is a failed paper: exit 3).
-- **Minutes**: 26 of the gates' own on this machine at `13216ac44` (below; the heavy slot's waits for other lanes' jobs left
-  out), and 16 for `display` (measured at `a7a6e4097`); no hosted minute. At `6b91f86ff` (2026-11-13, the machine shared with a
-  round's gates, loads 4 to 146): 110 in all, of them `display` 51 (both modes, the added pairs apart), `reader-parts` 11,
-  `prepare-same` 10, `harness-lab` 9, `prepare` 8, `sentence-cover` 6, `pnpm test` 2.5, `e2e:reader-today` 3 (gone at the cut-over).
-- **Secret**: none. The job reads no network.
+  today's side of the display gates frozen (`AXT_TODAY_FROZEN`, in the lab's archive); the release sweep's cache and the
+  reader's served faces, which the typeset runners read (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`); Playwright's
+  Chromium; for `perf-batch`, the website's tree its reader is built in (`PERF_WEB`, a website worktree: its HEAD with this
+  commit as `vendor/readarxiv`) and the round's box image (`PERF_NEW_IMAGE`). Docker for `perf-batch` alone (a compile no cache
+  holds is a failed paper: exit 3).
+- **Minutes**: 26 of the gates' own at `13216ac44` (the heavy slot's waits for other lanes' jobs left out), and 16 for
+  `display` (at `a7a6e4097`). At `6b91f86ff` (2026-11-13, the machine shared with a round's gates, loads 4 to 146): 110 in all,
+  of them `display` 51 (both modes, the added pairs apart), `reader-parts` 11, `prepare-same` 10, `harness-lab` 9, `prepare` 8,
+  `sentence-cover` 6, `pnpm test` 2.5, `e2e:reader-today` 3 (gone at the cut-over).
+- **Secret**: none. The tier reads no network.
 
 | Gate | Here |
 |---|---|
-| the fast tier's gates | as in fast (about 11 min) |
+| the fast tier's gates | as in fast (about 11 min, serial) |
 | `prepare` (87 papers from cached compiles, PDF.js proofs) | 184 s: pass, proofs (a) and (c′) 0 on every page |
 | `prepare-diff` (the differential against the frozen baseline) | 1 s: pass, shown 37,793 → 38,146, lost 0 (+3 accepted), gained 356 |
 | `prepare-same` (the prepare again, object by object) | 188 s: pass, 2,692 of 2,692 objects, 87 of 87 dumps |
-| `translate-equivalence` (recorded replies) | 1 s: fail at `13216ac44`, 3 disagreements of 6,228 |
-
-The translation equivalence counts a difference of a class the package's owners accepted as compared (its rows
-`accepted`), and passes on the tool's own exit with no other disagreement: with those rows merged, its failure above is the
-class they name (the `#` of its own, 3 replies) and the gate passes.
+| `translate-equivalence` (recorded replies) | 1 s; a difference of a class the package's owners accepted counts as compared (its rows `accepted`) |
 | `typeset-today` (today's members, the reader's differential) | 39 s: pass, 32,035 laid as the baseline, changed 12; I3 160, I4 0, I5 0 |
-| `sentence-cover` (this run's parts laid by the entry over the stored rows, the reading from the part: invariant I10; and I6 across the pages' lays, each unit begun on a pass page laid alike by every page's lay that holds it, the head pass's known cause counted apart) | 229 s: pass at `2d33bf467` over round 8 B5's parts, I10 0 in 4,767,634 pieces of 63,614 member-pages (123 pairs); `gate-l1.mjs --entry` under today's reading lays no entry and is refused |
-| `typeset-data` (today's readings derived again, the lab's tests; the run here also checked the package's data against the generators the package's data files have since replaced) | 7 s: pass |
-| `reader-parts` (this run's parts laid by the entry over each rows store, the door's and Google's, the 90 pairs of the stored rows and the added pairs apart, as the round's reader gate: I3 read by ink, I4, I5; the page's layout, design §7) | 641 s: pass at `6b91f86ff`, the 90 pairs' lines identical to round RB1's on both stores (door: 24,056 laid alike, 244 not; I3 3, I4 0, I5 2; I10 0 in 3,145,597 pieces; Google: I3 3, I4 0, I5 2), at its record (`reader-parts.json`); the rows 32,833 units, Google 32,247, Microsoft 569, none unavailable |
-| `harness-lab` (the harness with five corpus papers, laid from this run's bundles with this run's rows of them, `reader-parts`' Google rows; after `prepare` and `reader-parts`) | 340 s: fail at `13216ac44`, 75 of 79 (on lane L1's bundles then); 118 of 118 at `cb10a1f7d`; 523 s: fail at `6b91f86ff`, 121 of 122, the overlay's weight check on 2609.26457v1 (its page-1 overlay measured one text, the title in its own colour, at no ink), the same on lane L1's bundles: not the bundles'; 559 s: pass over `46dd8fcdf` on round RB2b's bundles and Google rows, 130 of 130; given another run's rows (RB2a's), it stops in 3 s, "rows do not belong to these bundles: 54 of 358 units without a row" and the others'; given rows that lack a paper's file, it stops in 1 s, "no rows of this run for 2609.26457v1: expected …" (no paper laid from lane L1's data in their place, 2026-11-14) |
-| `display` (display ≥ today: no page worse than today's, a difference only where nearer the original; under the default options and with every switch on, as the round judges it; today's rows checked production's first, `lab/typeset/parity/production-rows.mjs`; **a cut-over blocker**) | 16 min (v2's lay 15 s, the drawing 954 s for 344 pages with the machine shared, the verdict 10 s): fail at `a7a6e4097`, 326 of 344 pages worse than today's: the links (246 pages) and the highlight's sentence boxes (324) the entry does not state yet, and on 115 pages another measure (turned figure texts drawn upright 18 pages, lines across a rule or over a neighbour 16, sizes 36, anchoring 15, run-in gaps 11, translations missing 7 and figure texts 20) |
+| `sentence-cover` (I10 and I6 across the pages' lays) | 229 s: pass at `2d33bf467`, I10 0 in 4,767,634 pieces of 63,614 member-pages (123 pairs) |
+| `typeset-data` (today's readings derived again, the lab's tests) | 7 s: pass |
+| `reader-parts` (this run's parts laid by the entry over each rows store; I3 by ink, I4, I5) | 641 s: pass at `6b91f86ff`, at its record (`reader-parts.json`) |
+| `harness-lab` (the harness with five corpus papers, this run's bundles and rows) | 559 s: pass over `46dd8fcdf`, 130 of 130 |
+| `text-order` (I8: every page this run lays read by the composer's text module in Node, in reading order; out-of-order members held to `text-order.json`, which names none) | after `reader-parts` (its Google rows); a `run` slot |
+| `display` (display ≥ today, under the default options and with every switch on; **a cut-over blocker**) | 16 min at `a7a6e4097` |
+| `perf-batch` (NEW's prepare in the round's box and its reader built from this commit, against the last round recorded) | about 9 min and the waits for its slots |
 
-**Retired (2026-11-13, design 3i).** `typeset-parts`: its runner, under today's reading, lays only units whose id is
-today's, and the owner's rulings cut units otherwise on purpose: its losses counted the runner; `reader-parts` holds I3, I4
-and I5 as the reader draws, and "nothing lost" is held by `prepare-diff`, `display` and `sentence-cover`. `typeset-replays`:
-the replays compare internal passes with today's recorded ones, so every ruling would have to be taught to four readers the
-cut-over deletes, and a pass that differs is not a difference a reader sees; `display-wide` (release tier) asks the owner's
-question over every pair. Their reasons stand in `gates.mjs` (`RETIRED`), the report lists them, and naming one to `--only`
-says why. The replays' tools went at the cut-over; the records that cite them keep their sentences.
+**Retired.** `typeset-parts` and `typeset-replays` (2026-11-13, design 3i), and `layout-marks-gate` (the lab's corpus check of
+today's layout marks, retired in `lab/pdf/README.md` on 2026-11-13, named among them since 2026-11-19): their reasons stand in
+`gates.mjs` (`RETIRED`), the report lists them, and naming one to `--only` says why. The replays' tools went at the cut-over;
+the records that cite them keep their sentences.
 
-**Today's rows are production's.** Today's side of the display gates lays the release's stored rows. Rows made by a lab
-replica of production's path stood in for production's on the two added pairs until 2026-11-13 (each unit's row, no
-`layerRows`: 11 rows production keeps were translated). So each display gate first checks, pair by pair, that production's
-own row path (today's engine's `layerRows` over the release's units and the stored rows) gives every stored row back, a
-kept row by its state (`production-rows.mjs`, about a second for 92 pairs); a pair whose rows it does not give back fails
-the gate, named, and the parity is still measured beside it. Its answers are recorded once in the frozen folder
-(`production-rows.json`, by the digest of the stored rows and the release's units they were read over) and read there.
+**Today's rows are production's.** Today's side of the display gates lays the release's stored rows, and each display gate first
+checks, pair by pair, that production's own row path gives every stored row back (`production-rows.mjs`, its answers recorded in
+the frozen folder); a pair whose rows it does not give back fails the gate, named, and the parity is still measured beside it.
 
-**Cut-over blockers.** The maintainer's base threshold for the refactor: v2's display equal to or better than the
-production site's, and performance, complexity and debt improved. `display` (`lab/typeset/parity/`, its README) is the
-display part: every page of 22 corpus papers drawn by today's reader and by v2's with the same rows, each measure a distance
-from arXiv's page, and a page fails where v2 is farther from the original than today on any measure past its noise floor (a
-translation today shows and v2 does not, always). A gate marked `cutover` in `gates.mjs` keeps the report's cut-over
-verdict (`release-check.md`, "Cut-over") NO-GO until it passes, whatever the tier's verdict; a tier that does not run it
-says so.
+**Cut-over blockers.** The maintainer's base threshold for the refactor: v2's display equal to or better than the production
+site's, and performance, complexity and debt improved. `display` (`lab/typeset/parity/`, its README) is the display part. A gate
+marked `cutover` in `gates.mjs` keeps the report's cut-over verdict NO-GO until it passes, whatever the tier's verdict; a tier
+that does not run it says so.
 
-The private repository's platform tier (its whole local gate: the Worker, the paper's object and the Workflows under
-workerd, the routes' contract suite) runs on every pull request there, on its own runners; release-check names it in this
-tier's report and does not run it.
+**Performance, every batch: `perf-batch`** (`lab/release-check/perf.mjs` judges; the lab's `perf/tools/run.mjs --mode=batch`
+measures): NEW's reader built from the commit judged (no build made before stands in), NEW's prepare in the round's compile image
+(`PERF_NEW_IMAGE`, one CPU, 3 GiB, no network, the amd64 image under this machine's emulation), every measure against the last
+round recorded, worse only past the two rounds' run-to-run spreads added; a repetition that measured the machine, not the
+reader, is void and run again; void twice in a row, the gate is skipped, never passed. A regression understood is recorded with
+`--accept`.
 
-**Performance, every batch: `perf-batch`** (lab/release-check/perf.mjs judges; the lab's `perf/tools/run.mjs --mode=batch`
-measures). NEW's reader is built from the commit judged, first (`perf/tools/build-new.sh`: the website's tree `PERF_WEB` at its
-HEAD, this commit as its `vendor/readarxiv`, built as staging builds it, into the work directory): no build made before stands
-in for the head's, and without `PERF_WEB` the gate is skipped and says so. NEW's prepare in the round's compile image
-(`PERF_NEW_IMAGE`; one paper, three times, each in a container of its own sized as the box:
-one CPU, 3 GiB, no network, the amd64 image under this Mac's emulation, a warm box) and its reader on that build
-(three papers, three visits each after a warm-up, in Chromium, offline, every request served from stored data); every measure
-against the last round recorded (`perf/rounds/`, the newest that passed or was accepted), worse only past the two rounds'
-run-to-run spreads added (the speed check's rule; an exact measure such as bytes or TeX's passes past its 0.5 % tolerance); a
-measure the round could not take fails it. It holds only the slots of its own kinds, each while its part runs (the docker slot
-for each prepare, the only one of its kind; one e2e slot for the reader; one test slot to remake the rows), under the machine's
-ordinary load: no integration round can give it the whole machine, so its spreads are that load's and its judged measures lean
-on what load moves least (TeX's passes and compiles, bytes, CPU seconds, the main thread's task time) beside the wall times,
-which the same rule judges only by large moves. About 9 minutes and the waits for its slots; it uses Docker (the round's box
-image, PERF_NEW_IMAGE) where the rest of this tier does not. A regression understood is recorded with `--accept` so that the next
-round is compared with it. A repetition that holds a visit whose longest task outlasted the rest of its own scroll (the scroll's
-measured duration less that task: perf.mjs `stallOf`) measured the machine, not the reader: it is void and run again before the
-round is recorded; void twice in a row, the round ends as "the machine could not measure" (the run's exit 3), which the gate
-reads as skipped, never as a pass, and records nothing. A round recorded before the rule with such a repetition is marked
-`void` in its record and is never a base.
+**Cut-over blocker: `perf-release`** (the release tier): TODAY (production's release) against NEW on every measure, the same
+stored translation on both sides; about 100 to 130 minutes holding every heavy slot of the machine (`perf/tools/quiet.sh`), in a
+window the coordinator gives.
 
-**Cut-over blocker: `perf-release`** (the release tier): TODAY (production's release) against NEW on every measure, on papers
-chosen by a stated rule from the 90 pairs, the same stored translation on both sides, each side measured by one instrument
-(lab data `perf/README.md`): the reader (six papers, three visits a side, interleaved), the language switch (three papers), the
-prepare (the same six papers, three times a side, interleaved paper by paper), a re-prepare with the stored instrument; it fails
-where NEW is worse than TODAY on any judged measure past the spreads, or a measure is missing. About 100 to 130 minutes holding
-every heavy slot of the machine (`perf/tools/quiet.sh`): run only in a window the coordinator gives.
-
-## release: before a release (by hand, the same machine)
+## release: before a release, by hand on the same machine
 
 - **Command**: `pnpm release-check --tier release --online --work=<external disk>` (today's engine at `065c1d973`, which
   `typeset-data` reads, as `AXT_TODAY`, else `.worktrees/refactor-read` beside this one). The performance gates measure the
   website's readers; today's engine's speed check went with that engine at the cut-over.
-- **Adds to full**: `display-wide`, the display gate over every pair of the stored rows (the 90, about 2,300 pages, the
-  default options; today's rows checked production's first; about 2.5 hours of browser slots, an estimate from 954 s for 344
-  pages, so overnight, once per candidate; **a cut-over blocker**: a page it leaves uncovered is fixed, shown to be a
-  measure's artefact, or brought to the owner); the prepare's pixel proofs on every page of the 88 papers and the added pairs' (poppler's `pdftoppm` and `pdftocairo`); the
-  reader's canvas on spike S1c's papers (Chromium); the babel names
-  the layout marks wrap against babel's own files in each pinned compile image's TeX Live (`babel-names`: the docker slot, the
-  images already local, never pulled; seconds), and the source reader's table of csquotes' English style against
-  csquotes.def there the same way (`csquotes-styles`); the typesetter's face coverage, HOLDS and SMCP, against the 83 face
-  files' own OpenType tables, read with fontTools (`face-files`: the lab's fonts folder, `AXT_FACE_FILES`, and a Python with
-  fontTools, `AXT_PYTHON`, each a skip when absent; about a second); the online scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`,
-  `e2e:local-endpoint`, `e2e:image`) and the live placeholder run (`e2e:placeholders`), each under the project's
-  User-Agent and never against our production server (`tests/e2e/lib/online.mjs`); performance ≥ today (`perf-release`,
-  above: a cut-over blocker).
-- **The private repository's gates**, named in the report with their commands there and never run here: its platform
-  tier; the security suite of its compile jail on native amd64 (invariant I9); the corpus through its prepare, byte for
-  byte the lab's (I6); its website's reader e2e (I8); the staging soak's measurements (design §7's prepare times and the
-  rows' reuse) and the release sweep. A result of theirs for the release candidate is written into the private gates' file
-  (`--private`, `result: { status, commit, date, evidence }`, `commit` being this repository's commit that run was made
-  against); without it each stays NO-GO, and a result recorded at another commit than the candidate's is stale, a NO-GO
-  naming both, so the release verdict can be GO only with that repository's evidence for this very commit.
-- **I7 keeps the release NO-GO until it has a gate.** An invariant no gate holds is NO-GO by design (no gate is weakened
-  and none is invented here), so with every gate passing the release tier still says NO-GO and its report says why: that
-  is the runner telling the truth, not a fault in it. Today I7 (a unit's boxes the same on both panes) has no gate.
-- **Minutes**: about 80 in all. Measured here: the full tier's 26; the pixel proofs 25 (pass: every page of the 87 papers,
-  2,328, all groups on is arXiv's page under Splash and each kind off changes only its ink under Cairo); the canvas 2 (fail
-  at `13216ac44`, as lane L1's own GPU run: 9 of 12 papers over the bound in the GPU canvas, 27 pages with pixels outside the
-  split glyphs). Estimated from the lanes' records: the online scripts about 15. No hosted minute.
-- **Secret**: none for this repository's gates (the free engines need no key; an LLM service in the placeholder run would
-  take its key from the browser's settings, never from CI). The private repository's own: the registry's read-only
-  credentials to pull its frozen base image (the security job), and a read token for the staging soak's analytics.
+- **Adds to full**: `display-wide` (the display gate over every pair of the stored rows, about 2.5 hours of browser slots,
+  overnight, once per candidate; **a cut-over blocker**); the prepare's pixel proofs on every page (poppler); the reader's canvas
+  on spike S1c's papers (Chromium's software 2D canvas, every draw call rasterised as it is made, no stand-in for a reader
+  change; each paper's split residue held to its record, `canvas.json`); `babel-names` and `csquotes-styles` (each pinned compile image's TeX
+  Live, the docker slot, the images already local, never pulled); `face-files` (the lab's 83 face files, fontTools); the online
+  scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`, `e2e:local-endpoint`,
+  `e2e:image`) and the live placeholder run, each under the project's User-Agent and never against our production server
+  (`tests/e2e/lib/online.mjs`); `perf-release`.
+- **The private repository's gates**, named in the report and never run here: its platform tier; the security suite of its
+  compile jail on native amd64 (I9); the corpus through its prepare (I6); its website's reader e2e (I8); the staging soak and the
+  release sweep. A result of theirs for the release candidate is written into the private gates' file (`--private`, `result:
+  { status, commit, date, evidence }`, `commit` this repository's commit that run was made against); without it each stays
+  NO-GO, and a result recorded at another commit is stale.
+- **An invariant no gate holds, or one whose gap says what stands, keeps the release NO-GO** by design. I7 has had a gate
+  since 2026-11-19 (`harness-lab`'s check at the reader's seam); I1's gap says what stands, held to its record
+  (`canvas.json`) until the coordinator's ruling; I8 has none (`text-order` reads no member out of order, and `text-order.json`
+  names none).
+- **Minutes**: about 80 in all (the full tier's, the pixel proofs 25, the canvas 2 on the software canvas, its two runs' lines
+  equal, the online scripts about 15), and `perf-release`'s 100 to 130.
+- **Secret**: none for this repository's gates (the free engines need no key; an LLM service in the placeholder run would take
+  its key from the browser's settings, never from CI).
+
+## The private repository's tiers
+
+Run on its own runners and named here only: its **platform tier** (its whole local gate: the Worker, the paper's object and the
+Workflows under workerd, the routes' contract suite, its build; its site's reader e2e beside it) on every pull request, on
+GitHub's runners; its **box tier** on native amd64 (GitHub's x86_64 runner), on a change to the box and nightly: the compile
+jail's security suite, where the three cases emulation cannot hold hold as written, and the box's image held equal whether it
+is built on its frozen base or in one go. The box tier can build its base from its pinned public inputs; a read-only registry
+credential (the maintainer's to add) lets it test the deployed base by its digest instead and saves that build.
 
 ## Costs
 
-GitHub Actions minutes on standard hosted runners are free for a public repository, so this repository's tiers cost no
-money: `fast` takes about 15,000 runner minutes a month, counted and not billed (about 180 pull requests a month into
-`next` over the last 30 days, about three runs each for a pull request's pushes and fix rounds: about 540 runs at about
-28 minutes, the three jobs together); `full` and `release` run on the maintainer's machine. The private repository pays for its hosted minutes beyond
-its plan's included ones (2,000 a month on Free, 3,000 on Pro and Team, at the time of writing; Linux x64 billed per
-minute beyond that, about $0.006 to $0.008, to be read from the billing page before deciding): its platform tier on every
-pull request (its tests took 63 s on this machine, its typecheck, lint and build besides: on a hosted runner about 8 to 10
-min a run, an estimate), and the native amd64 security job, nightly and on a change to the compile jail (about 30 to 40
-runs a month at its 60 min bound; an estimate of 15 to 25 min a run, the image from the cached base then the suite, 105 s
-of tests under emulation): about 600 to 1,000 minutes a month.
-That is design §9's decision 5: these minutes on hosted runners, or a second self-hosted runner on amd64.
+GitHub Actions minutes on standard hosted runners are free for a public repository, so this repository's tiers cost no money.
+The fast tier is about 35 runner minutes a run (three jobs in parallel), counted and not billed; the full and release tiers run
+on the maintainer's machine. The private repository pays for its hosted minutes beyond its plan's included ones (2,000 a month
+on Free, 3,000 on Pro and Team, at the time of writing): its platform tier (about 2,000 minutes in 30 days when it last ran on
+GitHub's runners) and its box tier (each tree's base build, about 25 minutes, on every run without the registry credential).
+That is design §9's decision 5: these minutes on hosted runners, or a self-hosted runner of the private repository's.

@@ -1,4 +1,4 @@
-// arXiv's ink, for the layout maker (Plan 8b, Task 5; the layout research of 2026-10-06): every glyph of a page of
+// arXiv's ink, for the prepare's readings: every glyph of a page of
 // arXiv's PDF placed as PDF.js's canvas places it, and the page's graphics as boxes, read from the page's operator list
 // (page.getOperatorList(): fnArray, argsArray). The text layer gives a run's box only, its characters an even share of
 // its width; the canvas places each glyph by its own width, which is where the layer erases and what a placeholder's
@@ -14,9 +14,9 @@
 // page), a reader that asks keeps no more than GLYPHS_PAGE glyphs and BOXES_PAGE boxes
 // one by one (the boxes past it merged, below), a matrix or a number that is not one places
 // nothing, and nothing here throws on a malformed list. Each bound is an abuse guard, twenty times or more above the
-// corpus's heaviest page (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus, read by the pinned
+// corpus's heaviest page (measured 2026-10-16: the 2,793 pages of the 124 papers of data/corpus, read by the pinned
 // PDF.js on the lite worker), and every one of those pages is read under them exactly as under none: no real page meets one.
-// Imports only its readers of PDF.js's values (ink-args.ts) and the engine's shared reads (bounded-reads.ts, a leaf): the maker
+// Imports only its readers of PDF.js's values (ink-args.ts) and the engine's shared reads (bounded-reads.ts, a leaf): a host
 // runs it in a Worker or in Node alike.
 import { at } from './bounded-reads.ts'
 import {
@@ -70,7 +70,8 @@ export interface Glyph {
   blank?: boolean
   form?: boolean
   /** with `turned` (the figures' reading): not wholly inside the clip in force (`clipped`); nothing of it shown (`unseen`: wholly
-   *  outside the clip, or painted at an alpha of 0); its form's number and its innermost picture's (`fid`, `pid`) */
+   *  outside the clip, painted at an alpha of 0, or covered whole by an opaque fill painted after it); its form's number and its
+   *  innermost picture's (`fid`, `pid`) */
   clipped?: true
   unseen?: true
   fid?: number
@@ -145,7 +146,7 @@ export interface PageInkOptions {
  *  font's band in em, its own ink up and down from its baseline in em (`up`, `down`: its outline's, else its font's band), its
  *  box's index (-1 for none), the level glyphs and the pictures' points before it; `clipped` where its own ink (its outline,
  *  else its font's band, across its advance) is not wholly inside the clip in force; `unseen` where nothing of it is shown (that
- *  ink wholly outside the clip, or painted at an alpha of 0) */
+ *  ink wholly outside the clip, painted at an alpha of 0, or covered whole by an opaque fill painted after it) */
 export interface TurnedGlyph {
   u: string
   n: number
@@ -257,12 +258,12 @@ declare const performance: { now(): number } | undefined
 /** the operations read on a page at most; past it the page is capped (its reader gives it no ink). The corpus's busiest
  *  page holds 146,115 (2608.12606 page 5: 17,903 paths, each with its save, transform, colour, width and restore; the next
  *  102,052, and 6 pages of 2,793 more than 50,000); this is 20.5 times that. It bounds the walk, not the page: PDF.js
- *  parses a page to its end whatever the walk. A list read whole (pageInk: the layout maker's readers) is the dearer: a
+ *  parses a page to its end whatever the walk. A list read whole (pageInk) is the dearer: a
  *  painted path is some 580 bytes of it (`re f`; a plot's mix 150 an operation), so a page of paths fills the server's 768
  *  MiB at some 1,300,000 of them, long before this (still 58 times the corpus's most, 22,381 paths a page); one read in
  *  PDF.js's pieces (inkReader: readPdf, the prepare's) is held a piece at a time. 25,000 saves left open cost PDF.js's parse 19 s (it grows
  *  with their square: 100,000, 299 s). The prepare's readers wait for a page's list however long it
- *  takes (oplist.mjs listOf): no clock decides what is read, and a parse that never ends is the run's deadline's */
+ *  takes (opstream.ts readOps): no clock decides what is read, and a parse that never ends is the run's deadline's */
 export const OPS_CAP: number = 3_000_000
 /** the glyphs a page's ink holds at most, where its reader asks (`glyphsMax`): one text-showing operation may show any
  *  number of glyphs, so OPS_CAP alone does not bound a page's ink. A page past it is capped as one past OPS_CAP is: no ink,
@@ -278,8 +279,8 @@ export const GLYPHS_PAGE: number = 100_000
 export const STEPS_MAX: number = 5_000_000
 /** the boxes a page's ink keeps one by one at most where its reader asks (`boxesMax`), every box it holds counted: past it
  *  each further box, of whatever kind (a path's, an image's or one of its placements, a shading's, a glyph set turned), is
- *  merged into the cells of a grid it meets (TILE), and the page is `degraded`. What the maker holds of a page's boxes is
- *  so bounded whatever the page: some 140 bytes a box in all (the walk's 4 numbers and kind, the maker's own array of
+ *  merged into the cells of a grid it meets (TILE), and the page is `degraded`. What a reader holds of a page's boxes is
+ *  so bounded whatever the page: some 140 bytes a box in all (the walk's 4 numbers and kind, the reader's own array of
  *  them), 65 MB at the budget and its 4,096 cells. The corpus's most: 22,101 boxes (2608.27728 page 15); this is 22.6
  *  times that */
 export const BOXES_PAGE: number = 500_000
@@ -292,7 +293,7 @@ export const BOXES_CAP: number = 1_000_000
 /** the graphics state's levels that hold a copy of it at most (a save, a form, a group, an annotation each push one; a copy
  *  some 177 bytes: 3,000,000 saves unrestored held 530 MB). Past it a level holds none: its save changes nothing, and the
  *  walk goes on exactly; its restore cannot give back the state of its save, and ink placed before a restore reaches a level
- *  that holds a copy caps the page (pageInk's `lost`), so a page is read exactly or not at all. The census of 2026-10-17 (the
+ *  that holds a copy caps the page (pageInk's `lost`), so a page is read exactly or not at all. Measured 2026-10-17 (the
  *  127 papers of data/corpus and the gate's pack, 2,836 pages, by the pinned PDF.js): the deepest 27 (2608.04183 page 15),
  *  then 26 and 19, the median paper's deepest 6; and no page leaves a save open at its list's end. This is 37 times that */
 export const STACK_MAX: number = 1_000
@@ -309,25 +310,25 @@ export const MERGED: number = -5
 const CLOCK_EVERY = 1024
 const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 
-/** where a font gives no ascent or descent (an old Type 3 font gives none worth reading), as anchors.mjs reads them */
+/** where a font gives no ascent or descent (an old Type 3 font gives none worth reading) */
 const ASCENT = 0.75,
   DESCENT = -0.22
 /** a glyph's run counts as level when its rise across is under this share of its advance */
 const LEVEL = 1e-3
 /** a turned glyph's axes meet square within this share (a cosine): a shear past it is no turn (pageInk's `turned`) */
 const TURN_SKEW = 0.02
-/** a TikZ picture's points (layout/marks.mjs POINTS_TEX, around pgf's picture): a figure's text and lines lie between them */
+/** a TikZ picture's points (marks/marks.ts POINTS_TEX, around pgf's picture): a figure's text and lines lie between them */
 export const PICTURE_START = 'zs',
   PICTURE_END = 'ze'
-/** a region's points (layout/marks.mjs regionsTex, POINTS_TEX): `<kind>s<n>` before a line TeX set in a region of that kind,
+/** a region's points (marks/marks.ts regionsTex, POINTS_TEX): `<kind>s<n>` before a line TeX set in a region of that kind,
  *  `<kind>e<n>` after it, the kind's name one of REGION_POINT_KINDS. A code region's: each line of the body of an environment
- *  the source sets as code (latex-front.mjs codeEnvsOf, the listing packages' own), whatever box or picture holds it. A
+ *  the source sets as code (source/latex-front.ts codeEnvsOf, the listing packages' own), whatever box or picture holds it. A
  *  display's: each display TeX sets, its start before its formula's first ink and its end the last thing in its formula,
  *  before its number, or after each of its rows where TeX set it as an alignment; a display the source ends with $$ has no
  *  end, and its start alone states no region */
 export const REGION_POINT = /^(cd|dp|dt|dm)([se])(\d+)$/
-/** the region kinds by their points' names (the layout file's REGION_KINDS, layout/file.mjs, holds 'code'; 'display' and a
- *  display's text are read by the engine's ledger and figures alone, the file's maker passing them by): a display's text,
+/** the region kinds by their points' names (read by locate's ledger, figures and ink units: ledger.ts, figure-text.ts,
+ *  ink-units.ts): a display's text,
  *  `dtext`, what an \\hbox opened in its math set in text mode (`dts<n>` first in the box, `dte<n>` after it); `dmath`, the math
  *  opened again in such a text (`dms<n>`, `dme<n>`) */
 export const REGION_POINT_KINDS = Object.freeze<Record<string, string>>({
@@ -336,12 +337,12 @@ export const REGION_POINT_KINDS = Object.freeze<Record<string, string>>({
   dt: 'dtext',
   dm: 'dmath',
 })
-/** the kinds whose region runs to its last end: an alignment's rows each end with one (marks.mjs POINTS_TEX \\axt@dpcr) */
+/** the kinds whose region runs to its last end: an alignment's rows each end with one (marks/marks.ts POINTS_TEX \\axt@dpcr) */
 const TO_LAST_END = new Set(['display'])
 /** the kinds whose start and end are paired alone, never from or to a column body's bracket: a box TeX set once and placed
  *  elsewhere (\\setbox), or set again (\\copy, \\unhcopy), states nothing */
 const PAIRED = new Set(['dtext', 'dmath'])
-/** a column body's bracket (marks.mjs POINTS_TEX: `bs<n>` before it, `be<n>` after it) */
+/** a column body's bracket (marks/marks.ts POINTS_TEX: `bs<n>` before it, `be<n>` after it) */
 const BODY_BRACKET = /^b[se]\d+$/
 /** a figure's curve as this many chords (`turned`'s shapes), and the numbers a page's shapes hold at most */
 const CURVE_STEPS = 8,
@@ -438,6 +439,206 @@ function rectPathOf(m: Matrix, path: unknown): boolean {
     upright = (i: number) => Math.abs(pts[i]![0] - pts[(i + 1) % 4]![0]) <= 0.01
   return (level(0) && upright(1) && level(2) && upright(3)) || (upright(0) && level(1) && upright(2) && level(3))
 }
+/** whether a segment on the page from (ax, ay) to (bx, by) passes inside a box (x0, y0, x1, y1), its edges not: the part of the
+ *  segment inside the box with its edges (Liang and Barsky's clip), whose middle is inside the box proper where any of it is, the
+ *  box being convex; a segment along an edge, or touching a corner, is not inside */
+function entersBox(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): boolean {
+  const dx = bx - ax,
+    dy = by - ay
+  // (the segment's parameter from 0 to 1 cut to the inner side of the box's left, right, bottom and top sides in turn)
+  const t: [number, number] = [0, 1]
+  if (!inside(t, -dx, ax - x0) || !inside(t, dx, x1 - ax) || !inside(t, -dy, ay - y0) || !inside(t, dy, y1 - ay))
+    return false
+  const mid = (t[0] + t[1]) / 2,
+    mx = ax + mid * dx,
+    my = ay + mid * dy
+  return mx > x0 && mx < x1 && my > y0 && my < y1
+}
+/** Liang and Barsky's step: a segment's parameter range `t` cut to one side's inner half plane, `p` the segment's motion across
+ *  the side and `q` its start's distance inside it; false where nothing of the range is left */
+function inside(t: [number, number], p: number, q: number): boolean {
+  if (p === 0) return q >= 0
+  const r = q / p
+  if (p < 0) {
+    if (r > t[1]) return false
+    if (r > t[0]) t[0] = r
+  } else {
+    if (r < t[0]) return false
+    if (r < t[1]) t[1] = r
+  }
+  return true
+}
+/** whether a fill's region holds a box on the page whole (x0, y0, x1, y1, of some area): the region a path PDF.js gives encloses
+ *  under matrix `m` (constructPath's data: 0 moveTo, 1 lineTo, 2 and 3 curves, 4 closePath; each subpath closed, as a fill
+ *  closes it), by the nonzero rule or the even-odd one. Held where no edge of the region passes inside the box and the box's middle
+ *  is inside the region: the region's edges then leave the box whole on one side of them. A straight edge is read exactly; a curve
+ *  by the box of its points and control points, which holds the curve (a Bézier curve lies in its control points' hull): a box a
+ *  curve's control box meets is not held, whether the curve passes clear of it or not, and one clear of every such box is
+ *  inside or outside alike by the curve or by its chord, which the middle's count reads. A path of no reading holds nothing */
+function holdsWhole(
+  m: Matrix,
+  path: unknown,
+  evenOdd: boolean,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): boolean {
+  const data = pathOf(path)
+  if (!data || !(x1 > x0 && y1 > y0)) return false
+  const cx = (x0 + x1) / 2,
+    cy = (y0 + y1) / 2
+  // (the region's winding about the box's middle: each edge crossing the level line through it to its right, up +1, down -1)
+  let wind = 0
+  const cross = (ax: number, ay: number, bx: number, by: number): void => {
+    if ((ay <= cy && by > cy) || (by <= cy && ay > cy)) {
+      if (ax + ((cy - ay) / (by - ay)) * (bx - ax) > cx) wind += by > ay ? 1 : -1
+    }
+  }
+  const X = (px: number, py: number): number => m[0] * px + m[2] * py + m[4],
+    Y = (px: number, py: number): number => m[1] * px + m[3] * py + m[5]
+  let px = Number.NaN,
+    py = Number.NaN,
+    sx = Number.NaN,
+    sy = Number.NaN,
+    open = false
+  /** a straight edge: false where it passes inside the box */
+  const edge = (ax: number, ay: number, bx: number, by: number): boolean => {
+    if (entersBox(ax, ay, bx, by, x0, y0, x1, y1)) return false
+    cross(ax, ay, bx, by)
+    return true
+  }
+  const close = (): boolean => !open || (px === sx && py === sy) || edge(px, py, sx, sy)
+  for (let i = 0; i < data.length; ) {
+    const o = data.at(i++)
+    if (o === 0) {
+      if (!close()) return false
+      px = sx = X(data.at(i), data.at(i + 1))
+      py = sy = Y(data.at(i), data.at(i + 1))
+      if (!finite(px, py)) return false
+      open = true
+      i += 2
+    } else if (o === 1) {
+      const qx = X(data.at(i), data.at(i + 1)),
+        qy = Y(data.at(i), data.at(i + 1))
+      if (!open || !finite(qx, qy) || !edge(px, py, qx, qy)) return false
+      px = qx
+      py = qy
+      i += 2
+    } else if (o === 2 || o === 3) {
+      // (a cubic's two control points and end, a quadratic's one control point and end; the box of them and its start)
+      const n = o === 2 ? 6 : 4
+      let bx0 = px,
+        by0 = py,
+        bx1 = px,
+        by1 = py,
+        ex = px,
+        ey = py
+      for (let q = 0; q < n; q += 2) {
+        ex = X(data.at(i + q), data.at(i + q + 1))
+        ey = Y(data.at(i + q), data.at(i + q + 1))
+        if (!finite(ex, ey)) return false
+        bx0 = Math.min(bx0, ex)
+        by0 = Math.min(by0, ey)
+        bx1 = Math.max(bx1, ex)
+        by1 = Math.max(by1, ey)
+      }
+      if (!open || (bx0 < x1 && bx1 > x0 && by0 < y1 && by1 > y0)) return false
+      cross(px, py, ex, ey)
+      px = ex
+      py = ey
+      i += n
+    } else if (o === 4) {
+      if (!close()) return false
+      px = sx
+      py = sy
+    } else return false
+  }
+  if (!close()) return false
+  return evenOdd ? wind % 2 !== 0 : wind !== 0
+}
+/** a coordinate's cell of the grid (TILE points, TILES across and up; the outermost cells reaching on past it) */
+const cellOf = (v: number): number => Math.min(TILES - 1, Math.max(0, Math.floor(v / TILE)))
+/** a box of a glyph's text space ([a0, a1] across, [b0, b1] up) on the page under matrix `M`: its four corners' box */
+function textBoxOnPage(M: Matrix, a0: number, a1: number, b0: number, b1: number): Box4 {
+  let X0 = Infinity,
+    Y0 = Infinity,
+    X1 = -Infinity,
+    Y1 = -Infinity
+  for (const [x, y] of [
+    [a0, b0],
+    [a1, b0],
+    [a0, b1],
+    [a1, b1],
+  ] as const) {
+    const X = M[0] * x + M[2] * y + M[4],
+      Y = M[1] * x + M[3] * y + M[5]
+    if (X < X0) X0 = X
+    if (X > X1) X1 = X
+    if (Y < Y0) Y0 = Y
+    if (Y > Y1) Y1 = Y
+  }
+  return [X0, Y0, X1, Y1]
+}
+/**
+ * The figures' reading of what an opaque fill painted after a glyph covers whole (pageInk's `turned`). `add`: a glyph painted,
+ * level or turned, with its own ink's box on the page, kept by the cell of the grid its box's middle lies in. `cover`: an opaque
+ * fill painted now (under matrix `m`, its path's data, its rule, and `fb` its box on the page cut to the clip in force and the
+ * groups' bounds, where it shows): each glyph painted before it whose box lies inside `fb` and whose ink its region holds whole
+ * (holdsWhole) is `unseen`, a turned glyph's box with it (`boxes`, the walk's unseen boxes). A step of the walk's (`step`, which
+ * may stop it: `stopped`) each cell it meets, each glyph it tests and each of the path's numbers it reads for one
+ */
+function coverReading(boxes: Set<number>, step: (k: number) => void, stopped: () => boolean) {
+  const glyphs: (Glyph | TurnedGlyph)[] = [],
+    inks: Box4[] = []
+  let cells: (number[] | undefined)[] | null = null
+  return {
+    add(x: Glyph | TurnedGlyph, x0: number, y0: number, x1: number, y1: number): void {
+      if (!(x1 > x0 && y1 > y0) || !finite(x0, y0, x1, y1)) return
+      cells ??= new Array(TILES * TILES)
+      const c = cellOf((y0 + y1) / 2) * TILES + cellOf((x0 + x1) / 2)
+      let cell = cells[c]
+      if (!cell) {
+        cell = []
+        cells[c] = cell
+      }
+      cell.push(glyphs.length)
+      glyphs.push(x)
+      inks.push([x0, y0, x1, y1])
+    },
+    cover(m: Matrix, path: unknown, evenOdd: boolean, fb: Box4): void {
+      if (!cells) return
+      const cost = pathOf(path)?.length ?? 0
+      for (let cy = cellOf(fb[1]); cy <= cellOf(fb[3]); cy++)
+        for (let cx = cellOf(fb[0]); cx <= cellOf(fb[2]); cx++) {
+          step(1)
+          if (stopped()) return
+          for (const i of cells[cy * TILES + cx] ?? []) {
+            const x = glyphs[i],
+              b = inks[i]
+            if (!x || !b || x.unseen) continue
+            step(1)
+            if (stopped()) return
+            if (b[0] < fb[0] || b[1] < fb[1] || b[2] > fb[2] || b[3] > fb[3]) continue
+            step(cost)
+            if (stopped()) return
+            if (!holdsWhole(m, path, evenOdd, b[0], b[1], b[2], b[3])) continue
+            x.unseen = true
+            if ('box' in x && x.box >= 0) boxes.add(x.box)
+          }
+        }
+    },
+  }
+}
 /** an alpha constant as an ExtGState gives it, 0 to 1 (a value of no number: 1, PDF's default) */
 const alphaOf = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1)
 /** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
@@ -451,7 +652,7 @@ const fillOf = (a: readonly unknown[]): number =>
  * A glyph's own ink in em, [x0, y0, x1, y1] from its origin, y up: the extremes of its outline, as PDF.js gives it where
  * it draws glyphs as paths (`<font's loadedName>_path_<fontChar>` in the common objects, a FontPathInfo: in Node, where
  * the font face is disabled by default, or wherever the document is opened with `disableFontFace`; Float32 whatever the runtime
- * where the host made it so, layout/pdf-lite.mjs float32Outlines). The outline's points
+ * where the host made it so, compile/pdf-lite.ts float32Outlines). The outline's points
  * and its curves' control points bound it, and a font's outline has a point at each extreme (TrueType's and CFF's own
  * rule), so the box is its ink. [] for a glyph of no outline (a space drawn); null where no outline is given (a Type 3
  * font, the browser's default): the font's declared ascent and descent then
@@ -485,14 +686,14 @@ const TYPE3_OPS = 512
 /** each Type 3 font's glyph boxes by procedure (type3Box), read once a font */
 const type3Boxes = new WeakMap<PdfFont, Map<unknown, Box4 | [] | null>>()
 /**
- * A Type 3 glyph's own ink in em, [x0, y0, x1, y1] from its origin, y up, as outlineBox gives an outline's (#122-1: every glyph
- * of a font was boxed alike, its declared ascent and descent, a "." as an "M"): the extent of what its char procedure paints
+ * A Type 3 glyph's own ink in em, [x0, y0, x1, y1] from its origin, y up, as outlineBox gives an outline's (PDF-READER §19.12:
+ * its font's ascent and descent would box its glyphs alike, a "." as an "M"): the extent of what its char procedure paints
  * (PDF.js's `charProcOperatorList` for the glyph's `operatorListId`, as the canvas runs it: each painted path's box, a
  * stroke's widened by half its line width, each image's unit square, through the procedure's own transforms), carried
  * through the font's matrix. [] for a procedure that paints nothing (a space); null where it cannot be read whole (no
  * procedure, one past TYPE3_OPS steps, or one holding any operation but a path, an image and those that paint nothing
  * (QUIET_NAMES): text shown, a shading, a form, a group, whose extent is not read here):
- * the font's ascent and descent then, as before. Never the FontBBox, which bounds every glyph of the font. Read once a font
+ * the font's ascent and descent then. Never the FontBBox, which bounds every glyph of the font. Read once a font
  * and glyph; nothing is rendered
  */
 export function type3Box(OPS: Record<string, number>, font: PdfFont | null, id: unknown): Box4 | [] | null {
@@ -732,21 +933,21 @@ export function readOutlines(table: Record<string, (string | number)[]> | null |
   return out
 }
 
-/** a point of the marked compile (layout/marks.mjs LAYOUT_TEX's \\axt@point): a rendering intent, `/axt-<name> ri`,
+/** a point of the marked compile (marks/marks.ts LAYOUT_TEX's \\axt@point): a rendering intent, `/axt-<name> ri`,
  *  which PDF.js keeps in the operator list with its name (it drops marked-content points, DP and MP) and which its text
  *  layer passes over. The name: a mark's, or a bracket's (bs, be, fs, fe and a number) */
 const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
-/** a paragraph's point (marks.mjs POINTS_TEX: `q<n>` at LaTeX's para/begin): kept apart (`paras`), so that no reader of the marks
- *  meets it among their points; the ledger reads it (layout/ledger.mjs) */
+/** a paragraph's point (marks.ts POINTS_TEX: `q<n>` at LaTeX's para/begin): kept apart (`paras`), so that no reader of the marks
+ *  meets it among their points; the ledger reads it (locate/ledger.ts) */
 export const PARA_POINT = /^q\d+$/
-/** a paragraph's end (marks.mjs POINTS_TEX: `qe<n><code>` at LaTeX's para/end, the code TeX's alignment of the paragraph, c, l, r
+/** a paragraph's end (marks.ts POINTS_TEX: `qe<n><code>` at LaTeX's para/end, the code TeX's alignment of the paragraph, c, l, r
  *  or j as readAlign's): kept apart (`paraEnds`, each with `point` and `para`, the counts of the page's points and paragraph
  *  starts before it, its place among them where they stand at one glyph), read by the ink units' alignment alone
- *  (layout/ink-units.mjs alignOf) */
+ *  (locate/ink-units.ts alignOf) */
 export const PARA_END = /^qe\d+[cjlr]$/
-/** where TeX begins a front matter environment no author's (marks.mjs POINTS_TEX: `fm<n>`, set at the start of the paragraph
+/** where TeX begins a front matter environment no author's (marks/marks.ts POINTS_TEX: `fm<n>`, set at the start of the paragraph
  *  that begins it): kept apart (`fronts`), no mark of any unit's, so that no reader of the marks meets it among their points (an
- *  opening alone read to the next point, own.mjs MR 3); the author block's end (locate/author-block.ts) */
+ *  opening alone read to the next point, own/own.ts MR 4); the author block's end (locate/author-block.ts) */
 export const FRONT_POINT = /^fm\d+$/
 /** where TeX ends a line at a forced break (marks.ts STATEMENTS_TEX's BREAKS_TEX: `kb<n>` after \@gnewline's \unskip): kept
  *  apart (`breaks`), no mark of any unit's, so that no reader of the marks meets it among their points; the line TeX ended at a
@@ -776,31 +977,31 @@ export const FORCED_BREAK = /^kb\d+$/
  * but merged by the grid's cells (TILE), after the others and in the cells' order (from `mergedAt`, the first merged box's
  * index; null on a page not degraded), each of kind MERGED in `paths` (no path's index), and the page is `degraded`. The
  * glyphs are read in full whatever the boxes, the boxes before the budget and every path's index stay what they are, and
- * a merged box covers all the ink it stands for: so a degraded page's text is placed and removed as ever, and the ink past
+ * a merged box covers all the ink it stands for: so a degraded page's text is placed and removed as any, and the ink past
  * the budget is kept (never owned, never removed: kept ink where a unit's rectangle meets it) and met where it lies, to a
- * cell. A merged box is no box of any one rule, and its reader must take it as none (the layout maker marks them taken,
- * make.mjs glyphsOf): so a placeholder whose rule lies past the budget is LOST, a line's rule there is not the line's, a
- * cell's rule there is not among its rules
+ * cell. A merged box is no box of any one rule, and its reader must take it as none: so a placeholder whose rule lies past
+ * the budget is LOST, a line's rule there is not the line's, a cell's rule there is not among its rules
  * `indices` (the text remover's, remove.ts): each glyph also carries where the content stream shows it: `n`, its
  * text-showing operation's place among the page's own (an annotation's appearance not counted: -1 there), and `k`, its
  * place among that operation's glyphs, `blank: true` where its Unicode is blank, and `form: true` where it is shown inside a
- * form XObject (an included PDF's, the ledger's figures: layout/ledger.mjs); and `paths` gives, for each box,
+ * form XObject (an included PDF's, the ledger's figures: locate/ledger.ts); and `paths` gives, for each box,
  * its path's place among the page's own painted paths (constructPath), or its kind: -1 a path of an annotation's
  * appearance, -2 a shading, -3 an image, -4 a glyph set rotated or mirrored; and `shows` counts the page's own
- * text-showing operations. Off, the answer is the maker's, unchanged.
+ * text-showing operations. Off, the answer holds none of these.
  * `outlines` (the text removal's, the reader's side): the outline boxes of the paper's glyphs by font and character
  * (outlineTable's, made where PDF.js gives the outlines: in Node), for a glyph whose outline this reading has not (the
  * browser draws a font as a font face, and gives no outline): its box is then the server's, exactly. `collect`: a Map
  * this reading's outline boxes are added to, by outlineKey
- * `turned` (the figures' reading, layout/figure-text.mjs; the wrap's alone): the glyphs set turned (`turned`), the figures' paths
+ * `turned` (the figures' reading, locate/figure-text.ts; the wrap's alone): the glyphs set turned (`turned`), the figures' paths
  * as their lines (`shapes`), the pictures' points, each figure's extent (`figures`), and what the page does not show, which is no
- * ink a figure's label may be crowded by or stand on: a glyph's `clipped` where it is not wholly inside the clip in force and
- * `unseen` where nothing of it is shown (wholly outside the clip, or painted at an alpha of 0), and `unseen`, the boxes painted at
- * an alpha of 0 (a fill's, an image's or a shading's by the fill's alpha constant, a stroke's by the stroke's, a glyph's by its
- * rendering mode's, each times the alpha every transparency group open is painted with: PDF 11.6.6). Every box is kept, at its
- * index, as every other reading has it
- * `glyphsOnly` (the reader's live fills, layer-proto/run.mjs liveFillsOf): the glyphs alone, as a whole walk places them (their
- * text, place, size and fill: layout/fills.mjs reads no more), with no box, path, image or outline read: `boxes` empty, a
+ * ink a figure's label may be crowded by or stand on, nor a label's own: a glyph's `clipped` where it is not wholly inside the
+ * clip in force and `unseen` where nothing of it is shown (wholly outside the clip, painted at an alpha of 0, or covered whole by
+ * an opaque fill painted after it: coverReading, holdsWhole), and `unseen`, the boxes painted at an alpha of 0 (a fill's, an image's or
+ * a shading's by the fill's alpha constant, a stroke's by the stroke's, a glyph's by its rendering mode's, each times the alpha
+ * every transparency group open is painted with: PDF 11.6.6), and a turned glyph's box where its glyph is covered so. Every box is
+ * kept, at its index, as every other reading has it
+ * `glyphsOnly` (a reader's live fills): the glyphs alone, as a whole walk places them (their
+ * text, place, size and fill: a fill's reader reads no more), with no box, path, image or outline read: `boxes` empty, a
  * glyph's outline its line's
  * `names`: a Map the reader keeps across its pages, each font's name by its object, read once (PDF.js's FontInfo.name decodes a
  * new string at every read): every glyph of a font holds one string. None given, one a page
@@ -881,8 +1082,8 @@ export function inkReader(
     pictures: InkPoint[] = [],
     regionPoints: { name: string; glyph: number }[] = []
   // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
-  // kept, `many` past stepsMax, the three caps; `late` past msMax, a wait a reader asks of its own (the reader's live fills,
-  // layer-proto/run.mjs), none by default: no clock decides what the prepare reads. Where one is asked, the clock is read once
+  // kept, `many` past stepsMax, the three caps; `late` past msMax, a wait a reader asks of its own (a reader's live fills),
+  // none by default: no clock decides what the prepare reads. Where one is asked, the clock is read once
   // every CLOCK_EVERY steps)
   let stop = false,
     over = false,
@@ -909,7 +1110,6 @@ export function inkReader(
   // (the boxes past `boxesMax`: each cell's union, x0 y0 x1 y1, NaN until a part lands there; made at the first)
   const keep = typeof boxesMax === 'number' && boxesMax >= 0 ? Math.floor(boxesMax) : Infinity
   let tiles: Float64Array | null = null
-  const cellOf = (v: number): number => Math.min(TILES - 1, Math.max(0, Math.floor(v / TILE)))
   /** a box past the budget, its part in each cell it meets merged into that cell's union */
   const merge = (x0: number, y0: number, x1: number, y1: number): void => {
     tiles ??= new Float64Array(4 * TILES * TILES).fill(Number.NaN)
@@ -1125,6 +1325,10 @@ export function inkReader(
   /** the alpha a fill (or an image, a shading, a group) is painted with now, and a stroke: the alpha constant times the groups' */
   const fillAlpha = () => s.ga * s.ca,
     strokeAlpha = () => s.ga * s.CA
+  /** whether a fill painted now covers what was painted under it (`opaque`): a colour (no pattern, nor PDF.js's transparent) at
+   *  an alpha of 1, under no blend mode but Normal and no soft mask, its groups' alike, and every clip in force a rectangle on the
+   *  page's axes, so that `clip`, and the groups' bounds, are where it shows */
+  const opaqueNow = (): boolean => s.fill !== NO_FILL && fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend && s.rclip
   /** what a Type 3 glyph's procedure paints, once a font and glyph: `d0` where it begins with d0, and where it paints, by the
    *  alpha the text gives it (`fill`, `stroke`: a fill's paint, or a stroke's, under no alpha of its own) or at an alpha its own
    *  ExtGState set above 0 (`lit`), as PDF.js keeps a procedure's alpha entries; a fill's paint is a path filled, a bitmap's mask
@@ -1220,7 +1424,7 @@ export function inkReader(
   }
   // (a font's name read once: PDF.js's FontInfo.name decodes a new string from the font's buffer at every read, so that each glyph
   // held a string of its own, read three times. One string a font, across the reader's pages where it gives its own table
-  // (`names`, read.ts's: one a document); a font of no name its id, as before)
+  // (`names`, read.ts's: one a document); a font of no name its id)
   const fontNames: Map<unknown, string> = names ?? new Map()
   const fontName = (): string => {
     const f = s.font
@@ -1363,12 +1567,12 @@ export function inkReader(
     // (`turned`, the figures' reading: a glyph whose own ink (its outline, else its advance and its font's band) is not wholly
     // inside the clip in force is not shown whole, an included figure's text its viewport cuts off. Its own ink alone, never its
     // advance: a plotting program bounds its figure's box by the ink, so that the side bearing of a label at its edge stands past
-    // it, and the label is shown whole (2610.19274v1 p9 "frames" and p56's title, the sweep of 1e01ce14: no unit since #555
-    // bounded the clip by the groups' boxes))
+    // it, and the label is shown whole (2610.19274v1 p9 "frames" and p56's title, read as cut by their advances, would be no
+    // unit: PDF-READER §19.12))
     if (turned && outsideClip(glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)) glyph.clipped = true
     // (and one nothing of which is shown, `unseen`: its own ink (its outline, else its advance and its font's band) wholly outside
     // the clip, a cropped plot's title its form's box hides, or painted at an alpha of 0: no ink a figure's label may be crowded
-    // by, nor a label's own)
+    // by, nor a label's own. An opaque fill painted after it may yet cover it whole: coverReading)
     if (
       turned &&
       (!(textAlpha(g) > 0) || (glyph.clipped && hiddenByClip(glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)))
@@ -1386,6 +1590,7 @@ export function inkReader(
       }
       glyphs.push(glyph)
       boxAt.push(boxes.length / 4)
+      if (turned && !glyph.unseen) covers.add(glyph, glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)
     }
   }
 
@@ -1401,13 +1606,13 @@ export function inkReader(
     const c = figureClip()
     return !!c && (x0 < c[0] - 0.05 || y0 < c[1] - 0.05 || x1 > c[2] + 0.05 || y1 > c[3] + 0.05)
   }
-  /** a glyph set turned (`turned`, layout/figure-text.mjs: a figure's y-axis title), as a TurnedGlyph: its baseline from its
+  /** a glyph set turned (`turned`, locate/figure-text.ts: a figure's y-axis title), as a TurnedGlyph: its baseline from its
    *  origin (ox, oy) to its advance's end (ex, ey), its direction (ux, uy), its size and its font's ascent and descent in em, a
    *  rotation of the page's axes alone (no mirror, no shear past TURN_SKEW); its own ink up and down from its baseline in em
    *  (`up`, `down`: its outline's top and bottom, none for an outline of nothing drawn, else its font's ascent and descent, as a
    *  level glyph's `top` and `bottom` are); its box's index among the page's boxes (-1 where its clip left none), the level glyphs
    *  and the points before it in the stream (`at`, `pt`); `clipped` where its own ink is not wholly inside the clip in force. A
-   *  glyph mirrored or sheared is a box alone, as before */
+   *  glyph mirrored or sheared is a box alone */
   const turnedGlyph = (
     g: PdfGlyph,
     M: Matrix,
@@ -1465,43 +1670,28 @@ export function inkReader(
     // (not shown whole where its own ink is not wholly inside the clip in force, as a level glyph (emit): its outline across it,
     // else its advance, its outline's bottom to its top, else its font's descent to its ascent (an outline of nothing drawn:
     // its baseline alone); the four corners of that box turned with it. Never a box of its whole size on both sides of its
-    // baseline: a y-axis title or a colour bar's title set at its figure's edge, inside the form's box, read as cut and was no
-    // unit (2610.35877v1 p8, 2610.22065v1 p3: the sweep of 6e0a8d1c, once the final pass drew its figures with no group, whose
+    // baseline: a y-axis title or a colour bar's title set at its figure's edge, inside the form's box, would read as cut, no
+    // unit (2610.35877v1 p8, 2610.22065v1 p3, PDF-READER §19.12: the final pass draws its figures with no group, whose
     // box PDF.js gives no form))
+    const ia = has ? xa + o[0] * s.size * hs : xa,
+      ib = has ? xa + o[2] * s.size * hs : xa
+    const b0 = ty + down * s.size,
+      b1 = ty + up * s.size
+    // (its own ink, its outline across (else its advance), the four corners of that box turned with it: not shown whole where it
+    // is not wholly inside the clip, as a level glyph's; nothing of it shown where it is wholly outside, or where an opaque fill
+    // painted after it covers it whole: coverReading)
+    const own = has
+      ? textBoxOnPage(M, Math.min(ia, ib), Math.max(ia, ib), b0, b1)
+      : textBoxOnPage(M, Math.min(xa, xb), Math.max(xa, xb), b0, b1)
     if (figureClip()) {
-      const ia = has ? xa + o[0] * s.size * hs : xa,
-        ib = has ? xa + o[2] * s.size * hs : xa
-      const b0 = ty + down * s.size,
-        b1 = ty + up * s.size
-      /** a box of text space [a0, a1] across, [b0, b1] up, on the page: its four corners turned with the glyph */
-      const onPage = (a0: number, a1: number): Box4 => {
-        let X0 = Infinity,
-          Y0 = Infinity,
-          X1 = -Infinity,
-          Y1 = -Infinity
-        for (const [x, y] of [
-          [a0, b0],
-          [a1, b0],
-          [a0, b1],
-          [a1, b1],
-        ] as const) {
-          const X = M[0] * x + M[2] * y + M[4],
-            Y = M[1] * x + M[3] * y + M[5]
-          if (X < X0) X0 = X
-          if (X > X1) X1 = X
-          if (Y < Y0) Y0 = Y
-          if (Y > Y1) Y1 = Y
-        }
-        return [X0, Y0, X1, Y1]
-      }
-      // (its own ink, its outline across (else its advance): not shown whole where it is not wholly inside the clip, as a level
-      // glyph's; nothing of it shown where it is wholly outside)
-      const own = has ? onPage(Math.min(ia, ib), Math.max(ia, ib)) : onPage(Math.min(xa, xb), Math.max(xa, xb))
       if (outsideClip(...own)) t.clipped = true
       if (t.clipped && hiddenByClip(...own)) t.unseen = true
     }
     if (!(textAlpha(g) > 0)) t.unseen = true
-    if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
+    if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) {
+      turnedOut.push(t)
+      if (!t.unseen) covers.add(t, ...own)
+    }
   }
   /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its
    *  segments on the page (a curve's CURVE_STEPS chords, a fill's subpaths closed), whether it strokes and fills, whether its fill
@@ -1510,10 +1700,12 @@ export function inkReader(
    *  is where it shows), and its half line width on the page, by its box's index; at most
    *  SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
   const shapes = new Map<number, Shape>()
-  /** the boxes painted at an alpha of 0 or past the bounds of their groups (`turned`), by index: nothing of them shows; and the
-   *  boxes those bounds cut, by index, as far as they show */
+  /** the boxes painted at an alpha of 0 or past the bounds of their groups (`turned`), and a turned glyph's whose glyph an opaque
+   *  fill painted after it covers whole (coverReading), by index: nothing of them shows; and the boxes those bounds cut, by index, as far
+   *  as they show */
   const unseen = new Set<number>(),
     cut = new Map<number, Box4>()
+  const covers = coverReading(unseen, step, () => stop)
   let picture = 0,
     shapeNumbers = 0
   /** each form painted and each TikZ picture its own number (`turned`: a figure's glyphs are of one figure, `fid` and `pid`, so
@@ -1523,7 +1715,7 @@ export function inkReader(
   const pictureIds: number[] = []
   /** each figure's extent on the page (`turned`): the box of every box painted inside it, by `<fid>:<pid>` (its form's number and
    *  its innermost picture's, 0 for none), before any budget merges it, cut to the clip in force as every box is; a figure's
-   *  glyphs carry the same numbers, so that its reader adds their boxes (layout/figure-text.mjs: a label's room never leaves its
+   *  glyphs carry the same numbers, so that its reader adds their boxes (locate/figure-text.ts: a label's room never leaves its
    *  figure) */
   const figureBoxes = new Map<string, Box4>()
   const extend = (key: string, x0: number, y0: number, x1: number, y1: number): void => {
@@ -1607,7 +1799,7 @@ export function inkReader(
     if (!segs.every(Number.isFinite)) return
     shapeNumbers += segs.length
     // (`pattern`: a fill of a tiling pattern, whose cells (a hatching) paint what is not read)
-    const opaque = fill && s.fill !== NO_FILL && fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend && s.rclip
+    const opaque = fill && opaqueNow()
     shapes.set(box, {
       segs: Float32Array.from(segs),
       stroke,
@@ -1895,6 +2087,19 @@ export function inkReader(
               !inMask
             )
               shapeOf(had / 4, op, at(a[1], 0))
+            // (what an opaque fill covers whole of the glyphs painted before it is not shown: an annotation's appearance, which a
+            // viewer draws or not by its flags, and a soft mask's content, which paints no colour, cover nothing)
+            const fb =
+              turned && FILLS.has(op) && !inAnnotation && !inMask && known() && opaqueNow()
+                ? boxOf(s.ctm, ...mm, figureClip())
+                : null
+            if (fb)
+              covers.cover(
+                s.ctm,
+                at(a[1], 0),
+                op === OPS.eoFill || op === OPS.eoFillStroke || op === OPS.closeEOFillStroke,
+                fb,
+              )
           }
           // a clip takes effect after the path is painted (the canvas's pendingClip)
           if (s.pendingClip) {
@@ -2112,6 +2317,10 @@ export function regionMask(regions: readonly InkRegion[] | null | undefined, n: 
   for (const r of regions ?? []) if (r.kind === kind) out.fill(1, Math.max(0, r.from), Math.min(n, r.to))
   return out
 }
+/** whether ink lies in a display TeX stated, by its glyphs: `inside` of its `all` glyphs inside a display region and not in its
+ *  text mode (a page's regionMask 'display' and displayTextMask), one at least and at least half. The one test of it: the ledger's
+ *  reading of a line as a display's formula (locate/ink.ts), and the instrument's of a piece's ink (texDisplaysOf) */
+export const inDisplay = (inside: number, all: number): boolean => inside > 0 && inside >= 0.5 * all
 /** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or
  *  'timedOut' (past the walk's backstop). What such a reading holds is a prefix of the page, or nothing: every reader keeps
  *  the page the original's (no unit located, owned or removed there) and never reads the prefix as the page */
@@ -2140,8 +2349,7 @@ export const GLYPH_COLUMNS = Object.freeze([
  * Glyph holds it, but `ix0` and `ix1`, its ink across with its advance (the lesser and the greater of the two: an
  * italic's overhang past its advance); `font` the id `fontIds` gives its font's name, -1 where none is asked; `most` the
  * largest size. A Glyph is an object of ten fields, some 290 bytes in Node; its ten columns 76, the four the marks read
- * keeps 32 (the prepare memory note of 2026-10-15). The layout maker keeps arXiv's ink so, every column (make.mjs
- * glyphsOf); the marks read the marked compile's, the columns ownedOf reads (marks.mjs layoutMarksOf, stream.mjs)
+ * keeps 32 (measured 2026-10-15; the columns ownedOf reads, own/stream.ts STREAM_COLUMNS)
  */
 export function packGlyphs(glyphs: readonly Glyph[], o?: PackOptions & { columns?: undefined }): PackedGlyphs
 export function packGlyphs<K extends GlyphColumn>(

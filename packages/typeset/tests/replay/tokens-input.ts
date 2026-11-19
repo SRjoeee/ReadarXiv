@@ -1,8 +1,8 @@
 // tokensOf2's inputs made from a sampled round (B.tokens' replay and U.marks'): tokensOf2's arguments as today's run made them
 // (B.tokens:in), the elements' fills and colours by the layout unit (U.elements:in's lu and kOf, as texParts makes them), the
 // faces by B.faces' port over the pair's roles (the ledger's info.paper; B.faces' own replay holds them to today's faceOf), each
-// rendering's runs of one fill and faked small capitals (lanes/L3/replay/B.tokens.json.gz), the pieces' classes
-// (lanes/L3/replay/U.breaks.json.gz).
+// rendering's runs of one fill and faked small capitals (lane L3's derived B.tokens), the pieces' classes
+// (lane L3's derived U.breaks).
 import { faceOf, ownSmallCaps, type Roles, rolesFor } from '../../src/breaker/faces.ts'
 import type { Face, TokensInput, TStyle } from '../../src/breaker/tokens.ts'
 import type { LayoutUnit } from '../../src/unit/breaks.ts'

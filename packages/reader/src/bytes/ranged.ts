@@ -1,19 +1,19 @@
-// A PDF.js document over a ByteSource (from the website's `openRanged`, W ranges.ts:826): the first chunk read here and given
+// A PDF.js document over a ByteSource: the first chunk read here and given
 // as the transport's initial data, the document's last chunks asked as soon as its length is known (PDF.js reads a file's
 // startxref and cross-reference right after its first chunk), and every range PDF.js asks for read chunk by chunk through the
 // source (the store shares and joins them) and given whole once its chunks are in. The source is not the document's:
 // the original's is the reader's, shared by both documents; letting the document go stops its reads, not the source.
 //
 // PDF.js waits for a range it asked for ever: a range the source refuses (its answers not the object, a chunk not the head's,
-// the network) is told to the owner (`refused`), who fails the page with it by letting the document go (W session/prefetch.ts
-// prefetchDocument; reader-hosts-data §16). A source let go (`gone`) is never told.
+// the network) is told to the owner (`refused`), who fails the page with it by letting the document go (as the website's
+// prefetch did; reader-hosts-data §16). A source let go (`gone`) is never told.
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
 import { RangeRefusal, type ByteSource } from './source.ts'
 import { CHUNK } from './store.ts'
 
 /** the chunks at a document's end asked beside its first: its trailer and cross-reference (2602.23285v2: its last 2 chunks
- *  were 3.11 to 3.65 s of a cold visit, one after the other, once its worker had started; W ranges.ts:35-37) */
-export const TAIL_CHUNKS = 2
+ *  were 3.11 to 3.65 s of a cold visit, one after the other, once its worker had started; the website's measurement) */
+const TAIL_CHUNKS = 2
 
 /** what of PDF.js a ranged open needs */
 export interface RangedLib {
@@ -127,7 +127,7 @@ export function openRanged(lib: RangedLib, source: ByteSource, o: RangedOptions)
       cancelled = true
     }
     // disableStream: ranges alone, never a stream of the file from its first byte; disableAutoFetch: a document reads what its
-    // pages need and never the rest of the file behind them (W pdfjs.ts:213-224, the measured options)
+    // pages need and never the rest of the file behind them (the options the website measured)
     task = lib.getDocument({
       ...o.options,
       range: transport,

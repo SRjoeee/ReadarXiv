@@ -1,5 +1,5 @@
 // The L1 bundles folder the lab reads (a folder a paper: `<paper>/head.json`, its parts and units): AXT_L1_BUNDLES where set, else
-// the converge lane's default (lanes/L7). A value that is set and is no bundles folder is an error naming it, never the default:
+// the converge lane's default (lane L7's). A value that is set and is no bundles folder is an error naming it, never the default:
 // twice a clobbered shell variable (a number) sent a gate over the wrong bundles or over none (integration's round 8m reader
 // gate laid 0 pages, "no L1 bundle" 123 times; marks-2's reader gate). Every tool names the folder it serves in one line
 // (`bundlesLine`), so a gate's log always says which; a pair a tool is asked of a named folder that holds no head of it is an

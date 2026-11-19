@@ -1,28 +1,27 @@
-// COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
+// COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at the package's modules and, where
 // marked COPY, nothing else but two changes, marked CHANGED (a formula's interior: an orphan line between two of a formula's lines
 // the formula's; a float of a type with no counter no float: its text the page's own outside the bodies): run by locate over
-// arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file
-// stays the production prepare's until the cut-over.
+// arXiv's page (../ink.ts).
 // ADDED (no class moves): the float lines, each line the depth rule reads as its float's text (RULES' last `figures`), stated
 // with its float and why no unit owns it, and counted (`floatLines`, `floatCount`): PDF-READER §18.45.
 // The ledger of our final pass (docs/route/orphan-text.md, stage 1): every text glyph of every page given exactly one content
-// class (rules/content-classes.mjs), so that what no class explains — an orphan — is counted, listed and gated (the sweep's
-// invariant (o): orphan letters, none). Read from what the maker child already has: the pages pageInk read (`indices`, with
-// each glyph's font and whether it is inside a form XObject) and own.mjs's ownership. No layout file, nothing of arXiv's PDF,
-// no position estimated: what decides a class is TeX's — a glyph's owner (a unit's marks), its region (stream.mjs regionsOf: a
+// class (content-classes.ts), so that what no class explains — an orphan — is counted, listed and gated (orphan-text.md §3's
+// invariant (o): orphan letters, none). Read from what the prepare already has: the pages pageInk read (`indices`, with
+// each glyph's font and whether it is inside a form XObject) and own/own.ts's ownership. No layout file, nothing of arXiv's PDF,
+// no position estimated: what decides a class is TeX's — a glyph's owner (a unit's marks), its region (own/stream.ts regionsOf: a
 // column's body or not, a float's depth), the babel names' points (a list's or the bibliography's own name), stream order on
 // the page (the output routine ships the head before the page's first mark and the foot after its last) — or the glyph's own
 // font (a math or a typewriter face) and whether it is a letter.
 //
 // Rules, in order (RULES; each tested):
-//   1. an owned glyph is its owner's class: a unit's (u<id>, u<id>.p, u<id>.l) by its kind (content-classes.mjs unitClass), a figure's ink unit's (f<k>, layout/figure-text.mjs) `figures`, a
+//   1. an owned glyph is its owner's class: a unit's (u<id>, u<id>.p, u<id>.l) by its kind (content-classes.ts unitClass), a figure's ink unit's (f<k>, figure-text.ts) `figures`, a
 //      babel name's (n<occ>) `generated`;
 //   2. the other glyphs, in stream order, make lines: a glyph joins the line before it where both are no unit's, in one region
 //      and one zone, on one baseline (within LINE_DY of their size: scripts and sub-scripts too) and no further right than
 //      LINE_GAP of its size; each line is given one class by the first rule of RULES it meets, and so is every glyph of it.
 // A page our compile left unbracketed (no column body anywhere on it: a page not read, an included page) has no "outside the
 // bodies": its lines are read as a body's. The heads and the foot are read by stream order and one baseline, as folioOf reads a
-// folio; stage 2 brackets them by points of their own (the note's §7).
+// folio; stage 2 brackets them by points of their own (orphan-text.md §7).
 // Pure arithmetic over the pages; an original module (no port statement).
 import { CLASS_CODE, CLASS_IDS, type ClassId, unitClass } from './content-classes.ts'
 import { displayTextMask, type InkPoint, type InkRegion, regionMask } from '../ink.ts'
@@ -43,7 +42,7 @@ export interface LedgerGlyph {
   form?: boolean
   blank?: boolean
 }
-/** a page as the ledger reads one (own.mjs ownOf's): its glyphs in stream order, the marks' points, its boxes (stride 4), the
+/** a page as the ledger reads one (own/own.ts ownOf's): its glyphs in stream order, the marks' points, its boxes (stride 4), the
  *  regions TeX set (pageInk's `regions`), its paragraphs' points (`paras`) and its view (columnsAt) */
 export interface LedgerPage {
   glyphs?: readonly LedgerGlyph[]
@@ -55,11 +54,11 @@ export interface LedgerPage {
 }
 /** a point of the marked compile as the makers read one (pageInk's): its name, and the glyphs and boxes the page showed before it */
 export type TodayPoint = InkPoint
-/** a page as today's makers read one (layout/wrap-final.mjs's pages: pageInk's result, its view, and the marks' points), as its
+/** a page as the ink makers read one (pageInk's result, its view, and the marks' points), as its
  *  callers hold it; each maker reads it by its own page type (LedgerPage, FigurePage, the ink units'), all of whose fields are
  *  optional */
 export type TodayPage = Record<string, unknown>
-/** a piece as today's front end holds one: its strings UTF-8 bytes read latin1; an element's `kind` where the instrument states it */
+/** a flat piece (ink.ts flatOf): its strings UTF-8 bytes read latin1; an element's `kind` where the instrument states it */
 export interface TodayPiece {
   t: string
   s?: string
@@ -67,12 +66,12 @@ export interface TodayPiece {
   id?: number
   kind?: string
 }
-/** a unit as the makers read today's front end's ({ kind, pieces }), null for none (a babel name's or a structural name's) */
+/** a unit as the makers read a source unit ({ kind, pieces }), null for none (a babel name's or a structural name's) */
 export type TodayUnit = { kind: string; pieces: TodayPiece[] } | null
-/** an owner of a glyph or a box as today's ownership names it, its group's name: a unit's text `u<id>`, its placeholders'
- *  `u<id>.p`, its label's `u<id>.l` (own.mjs), a babel name's `n<occ>`, a figure text's `f<k>` (figureGroup); locate's own
+/** an owner of a glyph or a box as ownership names it, its group's name: a unit's text `u<id>`, its placeholders'
+ *  `u<id>.p`, its label's `u<id>.l` (own/own.ts), a babel name's `n<occ>`, a figure text's `f<k>` (figureGroup); locate's own
  *  marks beside them ('u', 'b', 'f' and arXiv's ink: ink.ts), which these makers read as owned. A string, as it is: ownership
- *  on A has one writer after R3b, its module the reader of these names */
+ *  on A has one writer, its module the reader of these names */
 export type OwnerName = string
 /** each glyph's and each box's owner a page, null for none (ownOf's; claimInk writes the ink units' into it) */
 export type TodayOwn = { glyphs: (OwnerName | null)[][]; boxes: (OwnerName | null)[][] }
@@ -186,7 +185,7 @@ type Family = ReturnType<typeof classifyFont>['fam']
 const LINE_DY = 0.6
 /** two glyphs on one line: the second no more than this many of its sizes right of the line's end (a word space, a tab stop) */
 const LINE_GAP = 4
-/** the foot stands this many of its sizes below every other glyph of its page, at least (stream.mjs FOLIO_GAP's: \\footskip) */
+/** the foot stands this many of its sizes below every other glyph of its page, at least (own/stream.ts FOLIO_GAP's: \\footskip) */
 const FOOT_GAP = 1.5
 /** a formula's line: a math face's glyph, fewer than MATH_WORDS words of three letters in the text faces, and math faces this
  *  share of the line or a relation */
@@ -200,13 +199,13 @@ const RELATION = /[=<>≤≥≈≠∈∉⊂⊆→←↦∼≃≡∝]/u
 const MONO_SHARE = 0.6
 /** an included graphic's line: glyphs inside a form XObject this share of it, at least */
 const FORM_SHARE = 0.5
-/** a float's bracket (layout/marks.mjs POINTS_TEX `fs<n>`, `fe<n>`) and the point that says its type has no counter (`fn<n>`) */
+/** a float's bracket (marks/marks.ts POINTS_TEX `fs<n>`, `fe<n>`) and the point that says its type has no counter (`fn<n>`) */
 const FLOAT_BRACKET = /^f([se])(\d+)$/
 const FLOAT_UNCOUNTED = /^fn\d+$/
 /** the orphan lines a ledger lists, at most (all are counted): a count of lines, the ledger's bound (PDF-READER §18.45);
  *  unmeasured */
 const ORPHAN_LINES_MAX = 200
-/** ADDED: a float's caption type that is an algorithm's (latex-front.mjs FLOAT_ENVS `algorithm`, every float the walk reads an
+/** ADDED: a float's caption type that is an algorithm's (latex-front.ts FLOAT_ENVS `algorithm`, every float the walk reads an
  *  algorithm's by, algorithm.sty's and algorithm2e's alike: its body's lines are the original's, PSEUDOCODE), and a table's
  *  (FLOAT_ENVS' table, table*, wraptable and sidewaystable: floatTypeOf) */
 const ALGORITHM_FLOAT = 'algorithm',
@@ -238,13 +237,13 @@ const UNIT_END = /^[th]?(\d+)e$/
 /** a bibliography's last entry's line after the line before it: within this many of its size below it (an entry's leading;
  *  the skip before a heading, a list or an author's address after the bibliography is more) */
 const ENTRY_DY = 1.6
-/** a biblatex entry's start (marks.mjs POINTS_TEX: `bi<n>`, biblatex's per-entry hook): it opens the references' zone, its entry
+/** a biblatex entry's start (marks.ts POINTS_TEX: `bi<n>`, biblatex's per-entry hook): it opens the references' zone, its entry
  *  the glyphs from it to the next one's, to its bibliography's end (`bz<n>`) or to the next unit's start, which end the zone */
 const BIB_ITEM = /^bi(\d+)$/
-/** a biblatex bibliography's end (marks.mjs POINTS_TEX: `bz<n>`, after its last entry): it ends the zone, so that what follows —
+/** a biblatex bibliography's end (marks.ts POINTS_TEX: `bz<n>`, after its last entry): it ends the zone, so that what follows —
  *  the next bibliography's heading of a title of its own (`\printbibliography[type=book,title={Books}]`) — is no entry's */
 const BIB_END = /^bz\d+$/
-/** the units a bibliography's entry is (latex-front.mjs bibliography): an entry's start opens the references' zone, whatever
+/** the units a bibliography's entry is (source/latex-front.ts bibliography): an entry's start opens the references' zone, whatever
  *  name opened it or none did (REVTeX's, whose \\refname no heading sets), and the start of any other unit ends it */
 const ENTRY_KINDS = new Set(['reference', 'refnames'])
 /** a page's column mark (MARK_DEF's c<n>-<k>, set by shipout/background before anything of the page): no mark of its text */
@@ -259,7 +258,7 @@ const WORD = /\p{L}{3,}/gu,
 const CODE_SHARE = 0.5
 
 /**
- * The end marks of each bibliography's last entry (a source unit of ENTRY_KINDS: latex-front.mjs bibliography), by `<page index>:<point
+ * The end marks of each bibliography's last entry (a source unit of ENTRY_KINDS: latex-front.ts bibliography), by `<page index>:<point
  * index>`: an entry's end mark after which, in stream order, the next unit to start is no entry (another unit's start, a babel
  * name that opens a zone, a biblatex entry or its bibliography's end) or none does. The references' zone an entry opens ends with
  * that entry's last line, where TeX ended the bibliography, not at the next unit's start: what TeX sets between the two — an
@@ -305,15 +304,15 @@ function lastEntriesOf(pages: readonly LedgerPage[], units: readonly TodayUnit[]
 const RULES: readonly LineRule[] = Object.freeze(
   (
     [
-      // (a line TeX set in the body of an environment the source sets as code, by its points (pageInk's `regions`, marks.mjs
+      // (a line TeX set in the body of an environment the source sets as code, by its points (pageInk's `regions`, marks/marks.ts
       // regionsTex), wherever it stands — in a picture, a box, a float —: code, kept as the paper has it, never by its face alone)
       ['code', (l) => l.code > 0 && l.code >= CODE_SHARE * l.n],
-      // (CHANGED: a line TeX set in a display, by its points (pageInk's `regions`, marks.mjs POINTS_TEX), wherever it stands — under
+      // (CHANGED: a line TeX set in a display, by its points (pageInk's `regions`, marks.ts POINTS_TEX), wherever it stands — under
       // a footnote rule, in a box, a float, beside a column — and whatever its face: the formula's, kept as the paper has it.
-      // 2608.08481v1 p7's displays (7) and (8), REVTeX's widetext at the page's foot and set in a text face by \mathrm, were the
-      // foot's notes by their place and translated; today's reads them so. A glyph TeX set in text mode there (an \hbox in its math,
+      // 2608.08481v1 p7's displays (7) and (8), REVTeX's widetext at the page's foot and set in a text face by \mathrm, read by
+      // their place alone, would be the foot's notes and translated. A glyph TeX set in text mode there (an \hbox in its math,
       // `dtext`: \text, \mbox, a brace's label) is no formula's: a line mostly such text goes through the rules of place and is read
-      // as text, as today's (the coordinator's ruling of 2026-11-09: 2610.22299v1's display (1), a sentence), a formula line with a
+      // as text (PDF-READER §18.19: 2610.22299v1's display (1), a sentence), a formula line with a
       // short \text{if} stays the formula's)
       ['math', (l) => l.display > 0 && l.display >= CODE_SHARE * l.n],
       // (a biblatex entry's line in a column's body, whatever it holds: TeX set it in that entry — its URL alone, its numbers alone)
@@ -345,28 +344,28 @@ const RULES: readonly LineRule[] = Object.freeze(
 /** ADDED: the line rule that reads a line no unit owns inside a float as that float's text by its depth alone */
 const DEPTH_RULE = RULES.findLast((r) => r.cls === 'figures')
 
-/** a glyph's owner as own.mjs names its group: a unit's id, or a babel name's (`name`) */
+/** a glyph's owner as own/own.ts names its group: a unit's id, or a babel name's (`name`) */
 const UNIT_GROUP = /^u(\d+)(?:\.[pl])?$/
 const ownerClass = (group: OwnerName, units: readonly TodayUnit[] | null): ClassId => {
   if (group.startsWith('n')) return 'generated'
-  // (a figure's ink unit, layout/figure-text.mjs: f<k>)
+  // (a figure's ink unit, figure-text.ts: f<k>)
   if (group.startsWith('f')) return 'figures'
   const m = UNIT_GROUP.exec(group)
   return (m && units ? unitClass(units[Number(m[1])]) : null) ?? 'body'
 }
 
 /**
- * The ledger of a document. `pages` (page p at index p - 1) as own.mjs ownOf reads them — `glyphs` ({ u, x0, x1, y, size, font,
+ * The ledger of a document. `pages` (page p at index p - 1) as own/own.ts ownOf reads them — `glyphs` ({ u, x0, x1, y, size, font,
  * form }, stream order), `boxes`, `points` ({ name, glyph, box }) —; `own`, ownOf's result for them (its `glyphs[p - 1][g]`, a
  * group or null); `units`, the paper's units (their ids their indices), or null (every unit's class then `body`).
  * Returns { classes: per page a Uint8Array, each glyph's class code (CLASS_IDS); counts: { [class]: { glyphs, letters } } over
  * the glyphs that are no blank, a glyph's letters those it spells (a ligature's each); lines, every line of glyphs no unit owns in
- * stream order, { page, cls, gs (its glyphs' indices on its page), region, zone, para (its paragraph's number, ink.mjs `paras`, or
+ * stream order, { page, cls, gs (its glyphs' indices on its page), region, zone, para (its paragraph's number, ink.ts `paras`, or
  * null), opens (whether its paragraph's point lies on it: the paragraph's first line, never a line it runs on to), entry (its
- * biblatex entry's number, marks.mjs POINTS_TEX `bi<n>`, or null), entryFrom (on an entry's first line, the glyph its point
+ * biblatex entry's number, marks/marks.ts POINTS_TEX `bi<n>`, or null), entryFrom (on an entry's first line, the glyph its point
  * stands before: what precedes it, the entry's label; else null), y, size, x0, x1,
  * letters } (the ink units'
- * input: layout/ink-units.mjs); letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
+ * input: ink-units.ts); letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
  * ORPHAN_LINES_MAX, each { page, text, letters, x0, x1, y } }
  */
 export function ledgerOf(
@@ -426,7 +425,7 @@ export function ledgerOf(
       code = regionMask(pg.regions, n, 'code'),
       display = regionMask(pg.regions, n, 'display'),
       dtext = displayTextMask(pg.regions, n)
-    // (CHANGED: each glyph's floats of a type with no counter, `fn<n>` beside the float's `fs<n>` (layout/marks.mjs): no \\caption
+    // (CHANGED: each glyph's floats of a type with no counter, `fn<n>` beside the float's `fs<n>` (marks.ts POINTS): no \\caption
     // can number such a float, so TeX says it is no figure, table or algorithm but the page's own text the float mechanism
     // placed: NeurIPS's notice, \\@float{noticebox}[b]. Its lines are read at the depth of the counted floats around them, so
     // that the rules read one at no float's depth as text outside the bodies, a note (PDF-READER §18.34), not `figures` by
@@ -540,7 +539,7 @@ export function ledgerOf(
       }
       ending = null
     }
-    // each glyph's paragraph: the number of the last paragraph point at or before it (ink.mjs `paras`, marks.mjs POINTS_TEX q<n>),
+    // each glyph's paragraph: the number of the last paragraph point at or before it (ink.ts `paras`, marks.ts POINTS_TEX q<n>),
     // a paragraph going on across a page from the page before; null where the compile set none (a base of before)
     const paraAt: (number | null)[] = new Array(n),
       opensAt = new Uint8Array(n)
@@ -865,7 +864,7 @@ const isCellOf = (units: readonly TodayUnit[] | null, id: number) => kindOf(unit
 
 /** where a page's foot begins among its glyphs (its glyph count where it has none): the run of glyphs that ends its stream,
  *  after its last mark, on one baseline, no unit's and outside the bodies, below every other glyph of the page by FOOT_GAP of
- *  its size (stream.mjs folioOf's run, whatever it spells) */
+ *  its size (own/stream.ts folioOf's run, whatever it spells) */
 function footOf(G: readonly LedgerGlyph[], R: { readonly glyph: Int32Array }, O: OwnersOf, last: number): number {
   const n = G.length
   let k = n - 1
@@ -897,7 +896,7 @@ function wordsOf(
   return { words: (s.match(WORD) ?? []).length, pairs: (s.match(PAIR) ?? []).length }
 }
 
-/** a page as listedOf reads it: its glyphs, their owners (`O`, a unit's group or none), its columns (stream.mjs columnsAt) and,
+/** a page as listedOf reads it: its glyphs, their owners (`O`, a unit's group or none), its columns (own/stream.ts columnsAt) and,
  *  once asked, the numbers it sets past the units' lines (marginNumbers) */
 function listPage(G: readonly LedgerGlyph[], O: OwnersOf, colOf: (x0: number, x1: number) => number) {
   let margins: [number, number, number][] | null = null
@@ -1027,7 +1026,7 @@ function textOf(gs: readonly LedgerGlyph[]): string {
   return s.replace(/\s+/g, ' ').trim()
 }
 
-/** the ledger once the ink units own what they own (layout/ink-units.mjs claimInk): its orphans the orphan glyphs no unit owns
+/** the ledger once the ink units own what they own (ink-units.ts claimInk): its orphans the orphan glyphs no unit owns
  *  still, counted and listed again; its classes as they were (an ink unit's glyph keeps its line's class). `own` ownOf's,
  *  claimed; `pages` the ledger's */
 export function inkLeft(

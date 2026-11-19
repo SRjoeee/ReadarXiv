@@ -1,6 +1,6 @@
-// Composing the right pane (design §4.5 "composing a page"; interfaces/page design-a §2.2, §2.3): what each slot of the right
-// stack shows, from the documents open and the pages laid. Today's layer side (src/pdf-reader/engine/view/layer-side.mjs at
-// baf2083e0, docs/PDF-READER.md §11.8) carried over the stack: each behaviour with the reason it was found.
+// Composing the right pane: what each slot of the right
+// stack shows, from the documents open and the pages laid. The layer side (docs/PDF-READER.md §11.8) over the stack: each
+// behaviour with the reason it was found.
 //
 // - A page not laid is arXiv's: the panes' original content (the left's own drawing while the page waits for its layer, its own
 //   page view once it stays the original's, the skeleton with no original), or, by the reader's choice (`unlaid: 'composed'`),
@@ -11,7 +11,7 @@
 //   one task (the stack's swap), with its size and the pane's scroll unchanged; its crops drawn again after a zoom.
 // - **Laying, one page at a time.** The near pages are laid the page in the middle of the view first (then the pages after it
 //   at an equal distance); from a page's commit until it is in place no other page is laid, HOLD_MS at most, so that the page
-//   the reader waits on is shown first (layer-side.mjs `hold`). A page commits when nothing it waits for is missing: its rows,
+//   the reader waits on is shown first. A page commits when nothing it waits for is missing: its rows,
 //   or its faces (asked in one wave for the near pages, the middle page first, each page laid again once its own are in; a page
 //   still waiting for rows asks meanwhile those of the rows it has). A page laid remembers every row its lay read and what it
 //   saw of it (a translation, a refusal, none in yet), and is laid again, alone, when a row lands that stands otherwise than
@@ -27,9 +27,9 @@
 //   it lit or hit); one the new generation lays with nothing, or fails, the original's; the drawings kept off the view, the
 //   generation before's, let go. The left pane is not touched. A row stated again otherwise (our server's run on the source's
 //   units, begun before the bundle states which units are cut into sentences, replaced mid-way by one on the layer's, which
-//   states the same ids again with their sentences: readarxiv-web worker v2 machine.ts wanted, startRecent; format.ts fits)
+//   states the same ids again with their sentences: our server's units wanted and its recent run; format.ts fits)
 //   lays again the pages that read it, as any landing that changes what a page read: laid once for good, a page lit its units
-//   whole in the tab that watched its rows arrive, and by sentence after a reload (staging, 2026-11-11: 1706.03762v7 p2,
+//   whole in the tab that watched its rows arrive, and by sentence after a reload (on staging: 1706.03762v7 p2,
 //   2610.21312v1 p1).
 // - **Translating marks** on near pages not laid (marks.ts).
 // - **The pages ahead**: once the rows have ended, the AHEAD_PAGES pages past the near ones the way the reader moves, laid and
@@ -40,6 +40,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { ClassName } from '../prefs.ts'
 import type { Kit } from '../pdfjs/kit.ts'
 import type { Clock } from '../stack/clock.ts'
+import { onOf } from '../listeners.ts'
 import type { PageContent, SlotAt, Stack } from '../stack/stack.ts'
 import { kindShown, sameClasses } from './classes.ts'
 import type { Faces } from './faces.ts'
@@ -77,15 +78,15 @@ const cropGridOf = (at: SlotAt) => cropGrid(at.viewport, outputScaleOf(at), roun
 /** the laid pages a reader keeps, at most (a page's Page is some kilobytes; past it the least recently shown is let go) */
 export const PAGES_KEPT = 600
 /** how long a page's drawing, once committed, may take to be put in place before its slot shows the original's page, ms
- *  (layer-side.mjs PAGE_MS; PDF-READER §11.8); a ruling, unmeasured */
+ *  (PDF-READER §11.8); a ruling, unmeasured */
 export const PAGE_MS = 30_000
-/** the longest a page's commit holds the laying of the next, ms (reader.mjs HOLD_MS; PDF-READER §11.8): the commit's wait for
+/** the longest a page's commit holds the laying of the next, ms (PDF-READER §11.8): the commit's wait for
  *  the left's page, LEFT_WAIT_MS, and its copy's drawing in tenths of a second; past it the hold is a promise gone astray.
  *  Unmeasured */
 export const HOLD_MS = 2000
-/** how many pages past the near ones are laid ahead, the way the reader moves (layer-side.mjs AHEAD_PAGES) */
+/** how many pages past the near ones are laid ahead, the way the reader moves */
 export const AHEAD_PAGES = 2
-/** how long the near pages stay where they are before a window ahead is begun, ms (layer-side.mjs AHEAD_SETTLE_MS): a page
+/** how long the near pages stay where they are before a window ahead is begun, ms: a page
  *  of a steady scroll comes near every half second or so, a fling's every tenth, as the scroll probe of PDF-READER §11.8
  *  measured them (1,500 px/s, a fling of 2,600 px, on 1706.03762v7) */
 export const AHEAD_SETTLE_MS = 150
@@ -174,14 +175,18 @@ interface Commit {
   shown: boolean
   /** every row its lay read, as it saw it: a landing that changes one lays the page again (moved) */
   read: Read
+  /** the served faces' slices lost for now a text of its lay needs (faces.ts `lostIn`): one that comes lays the page again */
+  lost: readonly string[]
 }
 interface PageRec {
   failed: boolean
   stalled: boolean
   /** laid with nothing of its own, or no part: the original's by the rule */
   nothing: boolean
-  /** laid with nothing of its own: every row its lay read, as a commit's `read` */
+  /** laid with nothing of its own: every row its lay read, as a commit's `read`, and the slices lost for now it met, as its
+   *  `lost` */
   read: Read
+  lost: readonly string[]
   /** the stall clock, from the commit to the drawing in place */
   clock: number
 }
@@ -221,7 +226,7 @@ export function createComposer(o: ComposerOptions): Composer {
   const rec = (n: number): PageRec => {
     let P = recs.get(n)
     if (!P) {
-      P = { failed: false, stalled: false, nothing: false, read: none(), clock: 0 }
+      P = { failed: false, stalled: false, nothing: false, read: none(), lost: [], clock: 0 }
       recs.set(n, P)
     }
     return P
@@ -272,8 +277,9 @@ export function createComposer(o: ComposerOptions): Composer {
   }
   /** the rows as if they had ended: what a page waiting for rows reads to ask the faces of the rows in (never committed) */
   const endedView: Rows = { get: (id) => rowsView.get(id), done: true, kept: rowsView.kept }
-  /** a page laid over the rows now, with every row its lay read as it saw it (Commit.read) */
-  const layRead = (part: Part): { page: Page; read: Read } => {
+  /** a page laid over the rows now, with every row its lay read as it saw it (Commit.read) and the slices lost for now it met
+   *  (Commit.lost) */
+  const layRead = (part: Part): { page: Page; read: Read; lost: readonly string[] } => {
     const read: Read = new Map()
     const view: Rows = {
       get(id) {
@@ -286,7 +292,19 @@ export function createComposer(o: ComposerOptions): Composer {
       },
       kept: rowsView.kept,
     }
-    return { page: held(o.lay(part, view), part), read }
+    const [page, lost] = lostIn(() => o.lay(part, view))
+    return { page: held(page, part), read, lost }
+  }
+  /** a lay called, with the served faces' slices lost for now its texts need (none where a host gives its own faces) */
+  const lostIn = <T>(f: () => T): [T, readonly string[]] => (faces.lostIn ? faces.lostIn(f) : [f(), []])
+  /** page n's demand: near, in this generation, while the composer lives */
+  const wantedOf = (n: number) => {
+    const mine = gen
+    return () => !disposed && mine === gen && stack.near(n)
+  }
+  /** the slices lost for now page n's text needs asked again by themselves while it is wanted (served.ts `heal`) */
+  const healFor = (n: number, lost: readonly string[]) => {
+    if (lost.length) faces.heal?.(lost, wantedOf(n))
   }
   /** whether a row a lay read stands otherwise now: come, failed, stated again otherwise (the same row read anew, as its run's
    *  whole states it again, is none: kept as the one read, so that it is compared once) */
@@ -298,6 +316,28 @@ export function createComposer(o: ComposerOptions): Composer {
       read.set(id, now)
     }
     return false
+  }
+  /** the pages laid this generation whose lay read what stands otherwise now (`changed`: a row it read, or a slice lost for now
+   *  it met that came) laid again, as follows */
+  function layAgain(changed: (read: Read, lost: readonly string[]) => boolean) {
+    // (a page laid this generation whose lay read a row that stands otherwise now: laid again, alone, its drawing kept and
+    // muted until the new one commits (a page far from the view let go, laid again as it comes near); one laid with
+    // nothing of its own, the original's by the rule no more, laid again here or once it comes near)
+    for (const [n, c] of [...commits])
+      if (c.gen === gen && changed(c.read, c.lost)) {
+        c.gen = -1
+        pages.delete(n)
+        if (stack.near(n)) askLay(n)
+        else uncommit(n)
+      }
+    for (const [n, P] of recs)
+      if (P.nothing && changed(P.read, P.lost)) {
+        P.nothing = false
+        P.read = none()
+        P.lost = []
+        stack.refresh(n)
+        if (stack.near(n)) askLay(n)
+      }
   }
 
   // ---------------------------------------------------------------- what a slot shows
@@ -323,7 +363,7 @@ export function createComposer(o: ComposerOptions): Composer {
         own: false,
         over: (at) => overlay(n, page, doc, g, at),
         again: (el, at) => cropsAgain(page, doc, g, el, at),
-        // (a far page's crops kept as a copy of their box, back in the task it returns: design-performance-2026-11-13 Q7)
+        // (a far page's crops kept as a copy of their box, back in the task it returns: docs/PDF-READER.md §11.8)
         away: cropsAway,
         back: (el, at) => cropsBack(el, cropGridOf(at).px),
         free: (el) => {
@@ -497,7 +537,7 @@ export function createComposer(o: ComposerOptions): Composer {
     }
     if (mine !== gen || disposed) return
     if (!part) {
-      // (no part: the page is arXiv's, as the owner decided; a page the generation before laid goes back to it)
+      // (no part: the page is arXiv's; a page the generation before laid goes back to it)
       P.nothing = true
       if (commits.has(n)) uncommit(n)
       settledNow(n)
@@ -506,14 +546,16 @@ export function createComposer(o: ComposerOptions): Composer {
     counts.lays++
     let page: Page
     let read: Read
+    let lost: readonly string[]
     try {
-      ;({ page, read } = layRead(part))
+      ;({ page, read, lost } = layRead(part))
     } catch (e) {
       warnOnce('a page laid', e)
       failed(n)
       return
     }
     pages.set(n, page)
+    healFor(n, lost)
     if (page.wait.faces.length) {
       wave.set(n, page.wait.faces)
       return
@@ -527,15 +569,16 @@ export function createComposer(o: ComposerOptions): Composer {
     if (!page.members.some((m) => m.state === 'laid' && m.off)) {
       P.nothing = true
       P.read = read
+      P.lost = lost
       if (commits.has(n)) uncommit(n)
       settledNow(n)
       return
     }
-    commit(n, page, read)
+    commit(n, page, read, lost)
   }
   /** the page with every member whose groups the composed document does not hold made the original's (its ink would stay
    *  under its translation), its links back at A's boxes as the typesetter places a member not laid (Page.links' owner: the
-   *  part's links it owns on this page; one moved with its translation would open over the original's text, Codex on #626) */
+   *  part's links it owns on this page; one moved with its translation would open over the original's text) */
   function held(page: Page, part: Part): Page {
     const g = groups
     if (!g?.size) return page
@@ -555,24 +598,28 @@ export function createComposer(o: ComposerOptions): Composer {
   /** the rows page n still waited for when the faces of its rows in were last asked (`early`) */
   const earlyLeft = new Map<number, number>()
   /** a near page waiting for rows: the faces of the rows it has asked meanwhile, as it would wait for them were the rows ended
-   *  (that lay is never committed), so that its slices come while the rest of its rows do, not after its last one (staging,
-   *  2026-11-08: 2611.07042v1's page 1 had 32 of its 39 rows at 27 s and its last at 44.5 s, and only then asked its 49 slices,
-   *  2.5 MB, in 16 s). Asked again only once more of its rows are in */
+   *  (that lay is never committed), so that its slices come while the rest of its rows do, not after its last one (on staging,
+   *  measured 2026-11-08: 2611.07042v1's page 1 had 32 of its 39 rows at 27 s and its last at 44.5 s, and only then asked its
+   *  49 slices, 2.5 MB, in 16 s). Asked again only once more of its rows are in */
   function early(n: number, part: Part) {
     const left = pages.get(n)?.wait.rows.length ?? 0
     if (!left || rows?.done || (earlyLeft.get(n) ?? Number.POSITIVE_INFINITY) <= left) return
     earlyLeft.set(n, left)
     let want: Page['wait']['faces']
+    let lost: readonly string[]
     try {
-      want = o.lay(part, endedView).wait.faces
+      const [p, met] = lostIn(() => o.lay(part, endedView))
+      want = p.wait.faces
+      lost = met
     } catch {
       return
     }
+    healFor(n, lost)
     if (want.length) wave.set(n, want)
   }
   /** the faces the round's pages wait for, asked in one wave in the view's order (the page in the middle first), each page laid
-   *  again once its own faces are in: never held by another page's (staging, 2026-11-08: 2611.07042v1's page 1, whose own
-   *  faces were 49 slices, 2.5 MB, waited for the 64 of its wave, 3.9 MB) */
+   *  again once its own faces are in: never held by another page's (measured on staging 2026-11-08: 2611.07042v1's page 1,
+   *  whose own faces were 49 slices, 2.5 MB, waited for the 64 of its wave, 3.9 MB) */
   function flushWave() {
     if (!wave.size) return
     const c = stack.centre() || 1
@@ -595,10 +642,10 @@ export function createComposer(o: ComposerOptions): Composer {
     if (commits.has(n)) uncommit(n)
     settledNow(n)
   }
-  function commit(n: number, page: Page, read: Read) {
+  function commit(n: number, page: Page, read: Read, lost: readonly string[]) {
     if (!groups) return
     groups.set(page)
-    const c: Commit = { page, tick: ++tick, gen, shown: false, read }
+    const c: Commit = { page, tick: ++tick, gen, shown: false, read, lost }
     commits.set(n, c)
     counts.commits++
     // (the pages kept: the oldest committed far from the view let go past the bound, its groups back on)
@@ -613,6 +660,7 @@ export function createComposer(o: ComposerOptions): Composer {
     // (a page committed holds something of its own: the original's by the rule no more)
     P.nothing = false
     P.read = none()
+    P.lost = []
     if (stack.near(n)) {
       // (the stall clock runs from the commit to the drawing in place: a page still waiting for its part or rows is never one)
       P.clock = clock.later(() => stalled(n, c), PAGE_MS)
@@ -688,6 +736,7 @@ export function createComposer(o: ComposerOptions): Composer {
       P.stalled = false
       P.nothing = false
       P.read = none()
+      P.lost = []
     }
     // (the drawings kept off the view are the generation before's; a laid page not in place yet is let go with its drawing:
     // nothing the run before lays or draws is put in place)
@@ -737,7 +786,7 @@ export function createComposer(o: ComposerOptions): Composer {
     marks.mark(n, slot, (vp?.viewBox as number[] | undefined) ?? null, vp?.rotation ?? 0, boxes)
   }
 
-  // ---------------------------------------------------------------- the pages ahead (layer-side.mjs layAhead)
+  // ---------------------------------------------------------------- the pages ahead
   let aheadAc: AbortController | null = null,
     aheadDir = 1,
     nearLo = 0,
@@ -875,7 +924,7 @@ export function createComposer(o: ComposerOptions): Composer {
           pages.set(m, page)
           await backgroundTurn(ac.signal)
           if (!live() || viewBusy()) return
-          commit(m, page, got.read)
+          commit(m, page, got.read, got.lost)
           const kept = await stack.ahead(m, ac.signal)
           if (!live()) return
           if (kept) counts.aheadKept++
@@ -902,6 +951,9 @@ export function createComposer(o: ComposerOptions): Composer {
           stack.refresh(n)
         }
         askLay(n)
+        // (a page laid whose text needs a slice lost for now, near again: that slice asked again while it stays near)
+        const c = commits.get(n)
+        if (c?.gen === gen) healFor(n, c.lost)
       } else {
         queue.delete(n)
         marks.unmark(n)
@@ -942,6 +994,11 @@ export function createComposer(o: ComposerOptions): Composer {
           askLay(n)
         }
     }),
+    // (a slice lost for now come: the pages whose lay met it laid again, as a row that lands otherwise lays them)
+    faces.healed?.((key) => {
+      layAgain((_, lost) => lost.includes(key))
+      markSoon()
+    }) ?? (() => {}),
   ]
   const onScroll = () => {
     // (the pages given up at PAGE_MS, and the failed, asked again on the next scroll where they are near)
@@ -986,23 +1043,7 @@ export function createComposer(o: ComposerOptions): Composer {
       if (layer && rows) void renderingOnce()
       unrows =
         rows?.on(() => {
-          // (a page laid this generation whose lay read a row that stands otherwise now: laid again, alone, its drawing kept and
-          // muted until the new one commits (a page far from the view let go, laid again as it comes near); one laid with
-          // nothing of its own, the original's by the rule no more, laid again here or once it comes near)
-          for (const [n, c] of [...commits])
-            if (c.gen === gen && moved(c.read)) {
-              c.gen = -1
-              pages.delete(n)
-              if (stack.near(n)) askLay(n)
-              else uncommit(n)
-            }
-          for (const [n, P] of recs)
-            if (P.nothing && moved(P.read)) {
-              P.nothing = false
-              P.read = none()
-              stack.refresh(n)
-              if (stack.near(n)) askLay(n)
-            }
+          layAgain((read) => moved(read))
           // (a row in: the pages waiting laid again, and the pages another generation still shows where these rows have
           // ended; a committed page is final)
           for (const [n, p] of pages) {
@@ -1036,12 +1077,7 @@ export function createComposer(o: ComposerOptions): Composer {
     },
     settled: (n) => settledOriginal(n),
     member: (ord) => members.get(ord) ?? null,
-    on(type, f) {
-      const set = listeners.get(type) ?? new Set()
-      listeners.set(type, set)
-      set.add(f as (e: unknown) => void)
-      return () => set.delete(f as (e: unknown) => void)
-    },
+    on: onOf<ComposerEvents>(listeners),
     timings: () => timings,
     probe() {
       return {

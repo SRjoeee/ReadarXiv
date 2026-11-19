@@ -1,4 +1,4 @@
-// The capsule's motion (the reader's design, §6.6; the web's round 4, approved 2026-10-04): the engine that owns the
+// The capsule's motion (the reader's design, §6.6): the engine that owns the
 // words' cell and the box's width, so that the words move with the box as one motion. A change of words moves the
 // width once, one way, from where it stands:
 // - growing, the box leads: it opens at once (300 ms, the soft curve) while the old words stay; old and new cross-fade

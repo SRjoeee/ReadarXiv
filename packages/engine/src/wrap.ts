@@ -1,11 +1,11 @@
-// Our final pass's pages wrapped by optional content, once, in the maker child (per-unit optional-content erasure, design
-// `docs/route/ocg-erasure.md` §2–§3): each run a unit owns (layout/own.mjs) put in `/OC /axt<group> BDC … EMC`, the page's
+// A PDF's pages (arXiv's: wrap/wrap.ts) wrapped by optional content, once (per-unit optional-content erasure, design
+// `docs/route/ocg-erasure.md` §2–§3): each run a group of the plan owns put in `/OC /axt<group> BDC … EMC`, the page's
 // resources naming each group (`/Properties`), one optional-content group per name in the catalog's `/OCProperties`, all ON —
-// so that with every group ON the page is our page, and the reader hides a drawn unit's ink, and nothing else, by setting its
-// groups OFF. The result is our bytes followed by ONE incremental section (section.ts, the final's cross-reference kind):
+// so that with every group ON the page is the PDF's own, and the reader hides a drawn unit's ink, and nothing else, by setting
+// its groups OFF. The result is the PDF's bytes followed by ONE incremental section (section.ts, the final's cross-reference kind):
 // each wrapped page's dict written again under its own number with a new content stream, the groups, and the catalog again with
-// `/OCProperties`. Both forms of the base are made of it: the full base is these bytes, the delta (layout/delta.mjs) copies their
-// streams.
+// `/OCProperties`. Both forms of the base are made of it: the full base is these bytes, the delta (docs/route/delta.md) copies
+// their streams.
 //
 // Where a wrapper may go (§2.2): between whole operators only (never in a TJ array, a path object, an inline image, or between
 // an operator and its operands); a BDC and its EMC in one stream, at one q depth, one text-object state and one depth of the
@@ -31,14 +31,12 @@
 // own /Properties kept and ours beside them, every group listed and ON.
 //
 // An original module (no port statement). It imports the remover's lexer and page walk (remove.ts), the section writer
-// and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given. Moved into the engine package with wrapOf and planOf
-// alone (the rebuild's stage 1a): wrapFinal, which owns our final pass's ink before it wraps it, stays today's
-// (src/pdf-reader/engine/layout/wrap-final.mjs) and calls these through the package's entry.
+// and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given.
 import { at } from './bounded-reads.ts'
 import { isMemoryError } from './memory.ts'
 import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.ts'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover, vOf } from './remove.ts'
-import { appendSection } from './section.ts'
+import { appendSection, concat } from './section.ts'
 import { startxrefOf } from './tail.ts'
 import { openObjects } from './xref.ts'
 import type { WrapStats } from './delta-wire.ts'
@@ -68,9 +66,9 @@ export interface WrapPlan {
   shows: Map<number, (string | null | undefined)[]>
   paths: Map<number, string>
   images?: Map<number, string>
-  /** the plan's naming where it is not today's: which groups are figure texts' (their runs in a form are wrapped in the form;
-   *  true of a group's name alone, never of a glyph of no group), and the text group an element's or a label's folds into on a
-   *  page past its bounds */
+  /** the plan's naming where it is not the default (isFigure, textOf): which groups are figure texts' (their runs in a form
+   *  are wrapped in the form; true of a group's name alone, never of a glyph of no group), and the text group an element's or
+   *  a label's folds into on a page past its bounds */
   isFigure?(group: string | null | undefined): boolean
   textOf?(group: string): string
   /** the figure groups its shows hold, read once (figureGroupsOf) */
@@ -100,7 +98,7 @@ type WrapMade = {
   forms?: number
   unwrapped?: true
 }
-/** the document composed: finalBytes and the section, and its digest (wrapFinal's) */
+/** the document composed: finalBytes and the section, and its digest */
 export type Wrap = WrapMade & { bytes: Uint8Array; sha256: string }
 /** the section alone (`compose: false`, the back half's: wrap.ts keeps the add-on alone), empty where no page is wrapped */
 export type WrapSection = WrapMade & { section: Uint8Array }
@@ -196,17 +194,6 @@ const equalBytes = (a: Uint8Array, b: Uint8Array) => {
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
   return true
 }
-const concat = (parts: Uint8Array[]): Uint8Array => {
-  let n = 0
-  for (const p of parts) n += p.length
-  const out = new Uint8Array(n)
-  let o = 0
-  for (const p of parts) {
-    out.set(p, o)
-    o += p.length
-  }
-  return out
-}
 const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'))
 const hex = (b: Uint8Array) => {
   let s = '<'
@@ -244,7 +231,8 @@ const fmt = (x: number) => {
 }
 const td = new TextDecoder('latin1')
 
-/** the operators that set state alone: a run of one group goes on over them */
+/** the operators that set state alone: a run of one group goes on over them. ISO 32000-1's text state operators (§9.3) and
+ *  text-positioning operators (§9.4.2), its graphics state operators (§8.4.4) and colour operators (§8.6.8) */
 const NEUTRAL = new Set([
   'Tf',
   'Td',
@@ -279,20 +267,22 @@ const NEUTRAL = new Set([
   'ri',
   'i',
 ])
-/** a path's construction, and its clip, before its painting operator */
+/** a path's construction, and its clip, before its painting operator: ISO 32000-1's path construction operators (§8.5.2) and
+ *  clipping path operators (§8.5.4) */
 const PATH = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'W', 'W*'])
+/** the text-showing operators (ISO 32000-1 §9.4.3): Tj, TJ, ' and " */
 const SHOWS = new Set(['Tj', 'TJ', "'", '"'])
 
-/** pageInk's kind of an image's box (layout/ink.mjs: -3) */
+/** pageInk's kind of an image's box (ink.ts: -3) */
 const IMAGE_BOX = -3
 /**
- * A page's plan as wrapOf takes it: from own.mjs's groups of its glyphs and rules and pageInk's (n, k) and path places.
- * `glyphs` pageInk's glyphs of the page (with `indices`), `groupOfGlyph` own.mjs's `glyphs[p - 1]`, `paths` pageInk's, and
- * `groupOfBox` own.mjs's `boxes[p - 1]`. Returns { shows: Map n -> (group | null | undefined)[] by k, paths: Map m -> group,
+ * A page's plan as wrapOf takes it: from own/own.ts's groups of its glyphs and rules and pageInk's (n, k) and path places.
+ * `glyphs` pageInk's glyphs of the page (with `indices`), `groupOfGlyph` own/own.ts's `glyphs[p - 1]`, `paths` pageInk's, and
+ * `groupOfBox` own/own.ts's `boxes[p - 1]`. Returns { shows: Map n -> (group | null | undefined)[] by k, paths: Map m -> group,
  * images: Map j -> group, lost }: an image's box (IMAGE_BOX) a placeholder owns is the page's j-th image painted, its boxes
  * of that kind in their order, where they are as many as the reading's (`facts.images`, alignOf's: an image clipped away gives
  * no box, one in an annotation's appearance or a soft mask's group is not the page's); where they are not, none is wrapped and
- * the groups that owned one are `lost` (their units the original's: wrapFinal)
+ * the groups that owned one are `lost` (their units the original's)
  */
 export function planOf(
   glyphs: { n?: number; k?: number }[],
@@ -352,10 +342,10 @@ function codeGroups(row: (string | null | undefined)[] | undefined, count: numbe
  * page), shows, paths } (planOf's), a page with none left unwrapped; `PL` @cantoo/pdf-lib's exports; `deflate` (bytes -> bytes, deterministic) and
  * `inflate` (bytes, limit -> bytes) as the remover takes them. Returns { bytes (finalBytes and the section), xref, sha256,
  * pages: Map p -> { ok, why?, groups, sequences, split, merged } (a page not ok or merged makes each unit on it `page` or, with a
- * placeholder, `bounds`: wrapFinal's), groups (in the document), stats } or { refused (a WRAP_WHYS code), why }. With
+ * placeholder, `bounds`: the caller's), groups (in the document), stats } or { refused (a WRAP_WHYS code), why }. With
  * `compose` false (the prepare's back half, wrap.ts, which keeps the add-on alone), the section is given as it is, `section` in
  * place of `bytes` and no `sha256`: finalBytes and the section are never composed, nor the whole hashed, which held two more
- * copies of finalBytes at the wrap's end (lane mem-back: 33.5 MiB on 2609.19644v1, the digest's job holding the composed one).
+ * copies of finalBytes at the wrap's end (33.5 MiB on 2609.19644v1, the digest's job holding the composed one).
  * Never throws but a failed allocation
  */
 export async function wrapOf(
@@ -460,7 +450,7 @@ export async function wrapOf(
           made = { ok: false, why: `past ${groupsDoc} groups in the document`, docFull: true }
         }
         // the page's own /Properties kept whole, ours beside them under names of our own; a page that already names one of ours
-        // is not wrapped (B3: never an entry of the page's dropped)
+        // is not wrapped (never an entry of the page's dropped)
         const node = made.ok ? made.walk.node : null,
           res = node ? node.Resources() : null
         const own = res instanceof PDFDict ? R.look(res.get(PDFName.of('Properties'))) : undefined
@@ -529,6 +519,7 @@ export async function wrapOf(
         const fEntries = fres instanceof PDFDict ? fres.entries().filter(([k]) => k.toString() !== '/Properties') : []
         const fprops = fown instanceof PDFDict ? fown.entries().map(([k, v]) => ` ${k.toString()} ${lit(v)}`) : []
         for (const g of [...f.groups].sort()) fprops.push(` /${propName(g)} ${docGroups.get(g)} 0 R`)
+        // (but the stream's own entries, ISO 32000-1 §7.3.8.2, and the form's /Resources, §8.10.2)
         const dEnts = dict
           .entries()
           .filter(([k]) => !['/Length', '/Filter', '/DecodeParms', '/Resources'].includes(k.toString()))
@@ -740,9 +731,9 @@ function lexWithin(bytes: Uint8Array, budget: Budget): LexOps | null {
   }
 }
 
-/** a figure's group (layout/figure-text.mjs figureGroup): `f<k>`; and the text's group a placeholder's or a label's folds into
- *  on a page past its bounds (`u<id>.p`, `u<id>.l` -> `u<id>`). Today's naming: a plan that names its groups otherwise states
- *  both (`isFigure`, `textOf`: the back half's `<ord>.<page>.<t|e|l>`, packages/engine/src/wrap/wrap.ts) */
+/** a figure's group (locate/figure-text.ts figureGroup): `f<k>`; and the text's group a placeholder's or a label's folds into
+ *  on a page past its bounds (`u<id>.p`, `u<id>.l` -> `u<id>`). The default naming: a plan that names its groups otherwise
+ *  states both (`isFigure`, `textOf`: the back half's `<ord>.<page>.<t|e|l>`, packages/engine/src/wrap/wrap.ts) */
 const isFigure = (g: string | null | undefined) => typeof g === 'string' && g.startsWith('f')
 const isFigureToday = isFigure
 const textOf = (g: string) => g.replace(/\.[pl]$/, '')
@@ -1137,7 +1128,7 @@ function flatOf(
     }
     // (an inline image, BI … EI, is one whole operator that changes no state: it may lie inside a group of ours, as wrapPage
     // wraps it, an image event, as it wraps a Do. The dvips + Ghostscript chain paints every TeX rule as one, an image mask:
-    // spike S1d, 2 papers of the corpus, every proof held with it)
+    // 2 papers of the corpus, every proof held with it)
     if (open && (o.op === 'q' || o.op === 'Q' || o.op === 'BT' || o.op === 'ET'))
       return { why: `a group of ours over ${o.op}` }
     flat.push(o)
@@ -1238,6 +1229,7 @@ function graphWhy(
     const a = F.lookup(ref),
       b = X.lookup(ref)
     if (!(a instanceof PDFRawStream) || !(b instanceof PDFRawStream)) return `the form ${text(ref)} is not a stream`
+    // (the stream's own entries, ISO 32000-1 §7.3.8.2: /Length, /Filter, /DecodeParms; and the form's /Resources, §8.10.2)
     if (!sameBut(b.dict, a.dict, ['/Length', '/Filter', '/DecodeParms', '/Resources']))
       return `the form ${text(ref)}'s dict is not ours but for its stream and resources`
     const ra = look(F, a.dict.get(PDFName.of('Resources'))),
@@ -1326,7 +1318,10 @@ function sameOps(a: LexOp[], b: LexOp[]): string | null {
         for (const [w, v] of want) {
           if (b[j]?.op !== w) return `operator ${i}: a split show's ${w} missing`
           const a0 = b[j]!.args[0]
-          if (v !== null && !(typeof v === 'number' && typeof a0 === 'number' && Math.abs(a0 - v) < 5e-7))
+          // (the page's own number, the very one: the split writes it in full (fmtOf, exact: String's shortest decimal, which
+          // ECMAScript's Number::toString makes read back as the number it was written of) and the lexer reads a decimal to its
+          // nearest number, as it read the page's (remove.ts numberAt)
+          if (v !== null && !(typeof v === 'number' && typeof a0 === 'number' && a0 === v))
             return `operator ${i}: a split show's ${w} not its own`
           j++
         }

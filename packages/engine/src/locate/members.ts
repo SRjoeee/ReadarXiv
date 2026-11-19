@@ -11,7 +11,7 @@ import { AUTHOR_KINDS, type Work } from './work.ts'
 /** the cause of an author block's unit left unplaced because TeX set it in a paragraph that sets a unit again: it has no place
  *  of its own on A (ink.ts reads the block's own text where its units stand nowhere else) */
 export const SET_AGAIN = 'set in a paragraph that sets a unit again'
-/** a babel name's end point on B (marks.mjs NAMES_TEX: `n<occurrence>.<key>.e`) */
+/** a babel name's end point on B (marks/marks.ts NAMES_TEX: `n<occurrence>.<key>.e`) */
 const NAME_END = /^n\d+\.[a-z]{1,16}\.e$/
 /** the same, its unit's key and whether it starts or ends a setting */
 const MARK_KEY = /^([ht]?\d+)([se])$/
@@ -24,7 +24,7 @@ export function placeUnits(w: Work, claims: Claims): void {
   // read and translated as one unit (ink.ts), never cut by the unit. 2610.22065v1 p1: its block under the title written out by
   // the paper, its \author units set in the reference format alone, each name a member: the paragraph laid on the original's
   // rows, never reflowing (its first line ended at x 190, TeX's at 294). A paragraph sets a unit again where a start point of
-  // the unit's stands in it after an end point of the unit's in B's stream (its setting begun again: the copy, own.mjs MR 3's
+  // the unit's stands in it after an end point of the unit's in B's stream (its setting begun again: the copy, own/own.ts MR 3's
   // first occurrence the unit's own); the paragraph from the last end TeX states before the unit's first glyph to the first
   // after its last (Instrument.tex.paragraphEnds). Where TeX states no paragraph ends, nothing is read. Not a name's own setting:
   // a block whose units TeX set twice has them its first setting's, the block's (2402.10294v1's ACM names)

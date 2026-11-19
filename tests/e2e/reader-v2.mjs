@@ -12,7 +12,8 @@
 // What it holds is what the extension's host gives the reader (the reader's own behaviour is the reader package's e2e,
 // packages/reader/e2e/run.mjs, which this suite does not repeat; the lane note's table says which of the old reader's checks
 // went where): the guard; the stand-in on the build's hosts; the entries (the PDF page, its button's panel, the popup); the
-// original's faults; an address with no paper; the reader's settings as the extension's (the display, the sync, unreadable
+// original's faults; an address with no paper; the translator the reader names and checks, for a reader who never chose one
+// and after a pick; the reader's settings as the extension's (the display, the sync, unreadable
 // settings, asked to translate); the reader on the layer (prepared, laid as the extension translates, the contents, a link out
 // of the paper through the host, the original's download); another target and another service; what to translate from the
 // reading options and the settings page; the states on our server's answers; arXiv's bytes not the layer's original; the
@@ -106,8 +107,9 @@ const manifestText = (await import('node:fs')).readFileSync(`${BUILD}/manifest.j
 const API_HOSTS = ['https://readarxiv.com', ...['https://app-staging.readarxiv.org'].filter(host => manifestText.includes(host))]
 // (a copy of the build with the loopback and our server's hosts granted, which Chrome would ask the reader for in a prompt)
 copyWithGrants(BUILD, EXT, { hostPermissions: ['http://127.0.0.1/*', ...API_HOSTS.map(host => `${host}/*`)] })
-// (the back-forward cache on, as a reader's Chrome has it: the page's end is checked on it)
-const { context, worker, id, readerUrl } = await launchWithReader({ profile: 'reader-v2-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 }, args: [RESOLVER_WALL], backForwardCache: true })
+// (the back-forward cache on, as a reader's Chrome has it: the page's end is checked on it; the interface in Chinese, whatever the
+// machine's: the checks find the settings page's sections, the reader's cards and the settings' count by their Chinese words)
+const { context, worker, id, readerUrl } = await launchWithReader({ profile: 'reader-v2-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 }, args: [RESOLVER_WALL], backForwardCache: true, language: 'zh-CN' })
 const api = v2Api({ fixtures: [fixture], base: API_HOSTS[0], extension: `chrome-extension://${id}` })
 const guard = await routeTable(context, [
   ['https://arxiv.org', arxiv],
@@ -117,6 +119,8 @@ const guard = await routeTable(context, [
 ])
 console.log(`route table: ${guard.hosts.join(', ')}`)
 for (let tries = 0; tries < 50 && !(await worker.evaluate(() => chrome.storage.local.get('config').then(r => !!r.config)).catch(() => false)); tries++) await sleep(200)
+// (the translator the install stored, before any seed: a reader who never chose one)
+const installed = await worker.evaluate(() => chrome.storage.local.get('config').then(r => ({ provider: r.config?.provider, providerChosen: r.config?.providerChosen })))
 await seedService(worker, { id: 'svc-e2eecho0', name: 'echo', baseURL: echo.baseURL, model: 'local-echo' })
 // the target: German, whose text the stand-in's one Latin face holds
 await worker.evaluate(async () => { const { config } = await chrome.storage.local.get('config'); await chrome.storage.local.set({ config: { ...config, targetLanguage: 'deu' } }) })
@@ -237,7 +241,13 @@ try {
     }
     const sources = { html: ENTRY.html.source, pdf: ENTRY.pdf.source }
     const panelEntries = frame => frame.evaluate(({ html, pdf }) => [...document.querySelectorAll('button')].filter(b => new RegExp(`${html}|${pdf}`).test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.getAttribute('aria-disabled') === 'true' })), sources)
+    /** an entry pressed: the press makes its panel or its popup go (the reader laid over the page, the panel's frame removed by
+     *  the page that framed it, the popup closed). Playwright races every evaluation against its frame's end and rejects it with
+     *  "Frame was detached" when the end is told first, the click already done; the panel's frame is the extension's process and
+     *  its removal the PDF page's, so either may reach Playwright first. A frame detached, a page closed, is the press done:
+     *  the checks after it read whether the reader came (tests/e2e/reader.mjs's entries, the same) */
     const pressEntry = (frame, which) => frame.evaluate(({ which, sources }) => [...document.querySelectorAll('button')].find(b => new RegExp(sources[which]).test(b.textContent ?? ''))?.click(), { which, sources })
+      .catch(e => { if (!/detached|closed/i.test(e.message)) throw e })
 
     const page = track(await context.newPage())
     await page.goto(`https://arxiv.org/pdf/${PAPER}`)
@@ -421,6 +431,54 @@ try {
       state?.noPaper === true && card > 0 && pageErrors.length === errorsBefore && guard.violations.length === violationsBefore,
       `${JSON.stringify(state)}, ${card} card(s); ${pageErrors.length - errorsBefore} error(s), ${guard.violations.length - violationsBefore} refused`)
     await bad.close()
+  }
+
+  // ------------------------------------------------------------------------------------------------- the reader's translator
+  section('the translator the reader names and checks: the one it asks first, Google\'s until the reader picks one (UI.md S-P-46)')
+  {
+    // a reader who never chose, as the install stored it (the seeded echo service stays in the list, unpicked), in the original
+    // display, which asks no translator: nothing goes to Google's or Microsoft's hosts, which the route table names no answer for
+    await setConfig({ provider: installed.provider, providerChosen: installed.providerChosen })
+    const page = await openReader({ mode: 'original' })
+    await paperOpened(page)
+    const violationsBefore = guard.violations.length
+    // (the interface's words, the Chinese pack's, by their code points: the row's label S-P-10, "translation service", and the
+    // two names S-P-46, each the engine's name and "translation")
+    const TRANSLATION = String.fromCodePoint(0x7ffb, 0x8bd1)
+    const SERVICE = `${TRANSLATION}${String.fromCodePoint(0x670d, 0x52a1)}`
+    const NAME = { google: `Google ${TRANSLATION}`, microsoft: `Microsoft ${TRANSLATION}` }
+    const button = () => page.getByRole('button', { name: new RegExp(`${SERVICE}$`) })
+    const nameOf = () => button().evaluate(b => b.getAttribute('aria-labelledby').split(' ').map(id => document.getElementById(id)?.textContent).join(' '))
+    /** the service button's accessible name (its value, then the row's label) and the rows its menu checks, opened and closed */
+    const shown = async () => {
+      const name = await nameOf()
+      await button().click()
+      await sleep(300)
+      const checked = await page.evaluate(() => [...document.querySelectorAll('[role="option"][aria-selected="true"]')].filter(o => o.checkVisibility()).map(o => o.firstElementChild?.textContent))
+      await page.keyboard.press('Escape')
+      await sleep(200)
+      return { name, checked }
+    }
+    const pick = async service => {
+      await button().click()
+      await page.getByRole('option', { name: new RegExp(`^${service}`) }).click()
+      for (let i = 0; i < 25 && !(await nameOf()).startsWith(service); i++) await sleep(200)
+      const stored = await worker.evaluate(() => chrome.storage.local.get('config').then(r => [r.config.provider, r.config.providerChosen]))
+      return { ...(await shown()), stored }
+    }
+    const as = service => s => s.name === `${service} ${SERVICE}` && JSON.stringify(s.checked) === JSON.stringify([service])
+    const fresh = await shown()
+    check('a reader who never chose a translator (the install\'s Microsoft stored, nobody\'s pick): the button names Google\'s and the menu checks it, the translator the reader asks first',
+      installed.provider === 'microsoft' && installed.providerChosen === false && as(NAME.google)(fresh), `installed ${JSON.stringify(installed)}; ${JSON.stringify(fresh)}`)
+    control('the stored provider is not what is named: the same reading for Microsoft\'s', { ok: as(NAME.microsoft)(fresh), detail: JSON.stringify(fresh) })
+    const microsoft = await pick(NAME.microsoft)
+    check('Microsoft\'s picked in the reader\'s menu: recorded as the reader\'s pick, named and checked', as(NAME.microsoft)(microsoft) && JSON.stringify(microsoft.stored) === '["microsoft",true]', JSON.stringify(microsoft))
+    const google = await pick(NAME.google)
+    check('Google\'s picked: recorded as a pick too, named and checked', as(NAME.google)(google) && JSON.stringify(google.stored) === '["google-web",true]', JSON.stringify(google))
+    check('nothing asked of a translator while the original was shown and the menu used', guard.violations.length === violationsBefore, `${guard.violations.length - violationsBefore} refused`)
+    await page.close()
+    // (the echo service picked again, as the seed left it, for the checks that translate)
+    await setConfig({ provider: 'svc-e2eecho0', providerChosen: true })
   }
 
   // ----------------------------------------------------------------------------------------------------- reader settings

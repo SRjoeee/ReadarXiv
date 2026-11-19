@@ -1,10 +1,9 @@
-// S.fill.page (design-b §1.5, T33): a page's fill over the units begun on it, each spread over its frame at the page's target
-// leading, tracked where it stays short, and the page's one size where every body unit is short. Today's code (run.mjs
-// RUN:319-492: fillUnitsOf, fillPage), first moved as it was by lab/typeset/move-fit.mjs, then ported to TypeScript under
-// its replay (replay-fill: 3,013 of 3,014 cases equal, the one short of its F2 chain). Its target is
-// S.fill.target's port, its settling S.settle's, the layout S.fill.leads found the unit's field `fillLaid` (today's module
-// WeakMap), the shared row's ink ends measured by the unit's own measure (`p.P.measure`); an optional `trace` is told what the
-// tap read inside it, at its probes' places (baseline/tap/engine.diff): each unit's decision, the page's size, each unit filled.
+// S.fill.page: a page's fill over the units begun on it, each spread over its frame at the page's target
+// leading, tracked where it stays short, and the page's one size where every body unit is short. Its target is
+// S.fill.target's, its settling S.settle's, the layout S.fill.leads found the unit's field `fillLaid`, the shared row's ink
+// ends measured by the unit's own measure (`p.P.measure`); an optional `trace` is told what the
+// tap read inside it, at its probes' places (the tap's own patch of the engine it recorded): each unit's decision, the
+// page's size, each unit filled.
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
 import { closerLead, fillLeadsOf, framesOf } from './fill-leads.ts'
@@ -85,14 +84,14 @@ export function fillUnitsOf(begun: FillLaid[], continuing: FillLaid[]): FillUnit
 }
 
 /**
- * adaptiveFill (P.adaptiveFill: { band, track, size }; D since 2026-10-07, generalised by D6's F6b on 2026-10-08, page-local
- * since 1b-C; null for B): the units that begin on a page (`units`, each laid already: tokens, blocks, s, P, layout), each
- * spread over its original's frame, the page's lines kept to one rhythm. A unit is filled at the state its fit set it at, its
- * leading apart: its fill leading is the loosest, from its fitted leading up to P.fillLead em of the size it is drawn
- * at (null: the original's own pitch), at which that state still sets it whole, so that its text reaches its frame's
- * foot. The page's target is pageTarget's: the median of its body units' fill leadings held within `band` of the median of
- * every body unit drawn on it (`continuing`: the units begun on a page before and running on to it), however the paper is
- * opened. Each unit takes its fill leading, but never more than `band` over the
+ * adaptiveFill (P.adaptiveFill: { band, track, size }, its band read page by page, docs/PDF-READER.md §18.5; null where a
+ * script keeps its leading on the original's pitch alone): the units that begin on a page (`units`, each laid already:
+ * tokens, blocks, s, P, layout), each spread over its original's frame, the page's lines kept to one rhythm. A unit is
+ * filled at the state its fit set it at, its leading apart: its fill leading is the loosest, from its fitted leading up to
+ * P.fillLead em of the size it is drawn at (null: the original's own pitch), at which that state still sets it whole, so
+ * that its text reaches its frame's foot. The page's target is pageTarget's: the median of its body units' fill leadings
+ * held within `band` of the median of every body unit drawn on it (`continuing`: the units begun on a page before and
+ * running on to it), however the paper is opened. Each unit takes its fill leading, but never more than `band` over the
  * target, so that neighbouring paragraphs keep one line spacing. A CJK unit the band or its fill leading's top stops
  * short of its fill then takes tracking, up to `track` em; and where every body unit of the page is still short with
  * all of it, the page's body units take one size, the largest up to `size` x the original's at which every one of them
@@ -121,13 +120,12 @@ export function fillPage(
 ): FillTarget | null {
   const { band, track, size } = P.adaptiveFill
   const r3 = (x: number) => Math.round(x * 1000) / 1000
-  // (a unit whose last row the next unit's first continues on a shared line, laid from where its fit ended there (`share`,
-  // layer2.mjs shareOf), is filled only where that stays so: no leading, tracking or size that sets its text there further
-  // right, sets text there where its fit left the row free, or moves its line there off the baseline the next unit's first
-  // line was set on (the fit's, `at`). Its fill leading is still its fit's, which the page's target
-  // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own. Each try is
-  // settled (settleLayout: a cell's lines in their bands) before anything is read of it, as the fit's share was: the row is
-  // kept as it is drawn)
+  // (a unit whose last row the next unit's first continues on a shared line, laid from where its fit ended there (`share`),
+  // is filled only where that stays so: no leading, tracking or size that sets its text there further right, sets text
+  // there where its fit left the row free, or moves its line there off the baseline the next unit's first line was set on
+  // (the fit's, `at`). Its fill leading is still its fit's, which the page's target reads (fillLeadsOf); the page's one size
+  // is chosen as for any page, and a unit it would move there keeps its own. Each try is settled (settleLayout: a cell's lines
+  // in their bands) before anything is read of it, as the fit's share was: the row is kept as it is drawn)
   const free = (p: FillLaid, st: FitState) => {
     const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st)
     if (l.clipped || (p.parent && !keepsPages(p.layout.lines, l.lines, p.tokens, !!st.share))) return null
@@ -159,10 +157,9 @@ export function fillPage(
     if (q) even.set(p, q)
   }
   // (each unit's leading as the pass lays it, its fill leading under the band over the target. The gap under a paragraph is
-  // held to its own leading alone and the original's skip there (footFloorAt), never the next paragraph's: the owner's ruling
-  // of 2026-11-08, chosen on a preview of the rules, where today's 2026-10-17 rule held it to the larger of both and pulled a
-  // paragraph whose translation nearly fills its block under the leading its own block allows, 1810.04805v2 p8 t156 at 1.08
-  // among neighbours at 1.38-1.5, its own 1.14)
+  // held to its own leading alone and the original's skip there (footFloorAt), never the next paragraph's (docs/PDF-READER.md
+  // §18.11): held to the larger of both, it pulled a paragraph whose translation nearly fills its block under the leading its
+  // own block allows, 1810.04805v2 p8 t156 at 1.08 among neighbours at 1.38-1.5, its own 1.14)
   const leadOf = (p: FillLaid) => Math.min(p.fillLead === undefined ? Number.NaN : (p.fillLead ?? 0), r3(target + band))
   const filled: {
     p: FillLaid
@@ -184,9 +181,9 @@ export function fillPage(
     // (a unit over a page or column break: each frame at its own fill leading, held to the band as the unit's is (S.fill.leads
     // frameLeadsOf); its last frame's the state's `lead`, which the gap under it reads)
     // (the frames' share (S.fill.leads frameShareOf) where every frame before the last holds its share at or above the page's
-    // band floor, target - band, today's rhythm rule: there each frame holds its share of the lines; else the fit's split, the
-    // share's cuts read by no lay. Lab option (i)'s frame share, bounded by the band (2026-11-09: a share that set two lines
-    // solid at a column's foot, 2610.37668v1-zh p17, read worse than the one line its fit left there))
+    // band floor, target - band, the page's rhythm rule: there each frame holds its share of the lines; else the fit's split,
+    // the share's cuts read by no lay. Bounded by the band (docs/PDF-READER.md §18.11): unbounded, a share set two lines solid
+    // at a column's foot, 2610.37668v1-zh p17, which read worse than the one line its fit left there)
     const floor = r3(target - band),
       sh = q.fillShare?.needs.every((v) => v !== null && v >= floor - 1e-9) ? q.fillShare : null
     // (a float's member, `held` (lay/page.ts, docs/PDF-READER.md §18.90): never spread, its leading no looser than its fit set
@@ -225,8 +222,8 @@ export function fillPage(
     let full = !short,
       tracked = 0
     const untracked = { st, l }
-    // (never a table cell's: TeX stretches no entry of a tabular, the owner's ruling of 2026-11-08, "in the tables today's letter
-    // spacing is more natural", 2610.20967v1-zh p4; nor a float's member's, which nothing spreads, §18.90)
+    // (never a table cell's: TeX stretches no entry of a tabular, and a table's text reads more naturally untracked,
+    // 2610.20967v1-zh p4, docs/PDF-READER.md §18.11; nor a float's member's, which nothing spreads, §18.90)
     if (short && P.cjk && p.unit.kind !== 'cell' && !heldOf(p)) {
       // (the most tracking that still sets it: halving, as a wider tracking holds no more on a line)
       const K = Math.round(track / 0.01),
@@ -252,9 +249,8 @@ export function fillPage(
     filled.push({ p, st, l, full, tracked, untracked })
     trace?.unit(p, { lead, same: !!same, short, full, tracked })
   }
-  // (the runs of a unit split by its displays (`parent`, run.mjs layoutRuns) keep one tracking, as their fit does
-  // (layer2.mjs layoutRuns): each the least any of its unit's runs on the page takes, a run the pass does not track taking
-  // none; its leading still its own)
+  // (the runs of a unit split by its displays (`parent`) keep one tracking, as their fit does (layoutRuns): each the least
+  // any of its unit's runs on the page takes, a run the pass does not track taking none; its leading still its own)
   const least = new Map<FillLaid, number>()
   for (const q of units)
     if (q.parent)
@@ -268,9 +264,9 @@ export function fillPage(
   }
   // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
   // set whole, a step up at a time (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
-  // keeps its own largest fitting size: setting the page's other body units at it (PR #335's reviews) left the alphabets'
-  // and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap 1.255
-  // -> 1.708, as before D6; full size 0.25 -> 0; Japanese 1.011 -> 1.289), the coordinator's ruling of 2026-10-09
+  // keeps its own largest fitting size (docs/PDF-READER.md §18.49): setting the page's other body units at it left the
+  // alphabets' and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap
+  // 1.255 -> 1.708; full size 0.25 -> 0; Japanese 1.011 -> 1.289)
   const grown = filled.filter((f) => BODY_KINDS.includes(f.p.unit.kind))
   if (size > 1 && grown.length && grown.every((f) => !f.full)) {
     const scaleOf = (k: number) => r3(1 + k * P.step)
@@ -295,10 +291,10 @@ export function fillPage(
       }
       return ls
     }
-    // (a step at a time from the original's size, the first a unit no longer holds ending it: a page that grows not at all,
-    // most pages that try, is tried once, where today's halving tried twice (the 22 parity pairs, 2026-11-08: growth's lays
-    // 223 of 89,431 halving, 153 so; every page's size the same). Changed from today's, the owner's word of 2026-11-08:
-    // today's effect, by the simplest search and the fewest lays)
+    // (a step at a time from the original's size, the first a unit no longer holds ending it: the sizes a halving search
+    // finds, by the simplest search and the fewest lays, docs/PDF-READER.md §18.11. A page that grows not at all, most pages
+    // that try, is tried once, where halving tries twice (measured 2026-11-08 over the 22 parity pairs: growth's lays 223 of
+    // 89,431 halving, 153 so; every page's size the same))
     let ok = 0,
       best: (Layout | null)[] | null = null
     for (let k = 1, top = Math.round((size - 1) / P.step); k <= top; k++) {
@@ -364,8 +360,8 @@ export function fillPage(
     if (q?.evened && by.length) p.evened = { by, lines: q.evened.lines }
     p.layout = l
     p.layout.extents = keep
-    // (laid anew, and settled as it was tried (`free`): its clearance at its new size, before it is recorded or painted; the
-    // pass put a cleared CJK cell's first line back on the original's baseline, over its rule, 2026-10-07)
+    // (laid anew, and settled as it was tried (`free`): its clearance at its new size, before it is recorded or painted;
+    // unsettled, a cleared CJK cell's first line went back on the original's baseline, over its rule)
     trace?.filled(p, st, l, target)
     onFilled(p, target)
   }
@@ -373,10 +369,10 @@ export function fillPage(
 }
 
 /**
- * The room the gap over a unit's first line lacks where the paragraph over it cannot end higher (the owner on staging,
+ * The room the gap over a unit's first line lacks where the paragraph over it cannot end higher (docs/PDF-READER.md §18.11,
  * 2610.20967v1-zh p4): a paragraph over a column or page break whose last line stands alone on the first and only line TeX
  * set in its last frame (TeX's widow), the unit's first line the next line TeX set in that column. The gap under a paragraph
- * follows its own leading (the owner's ruling of 2026-11-08, (a)), and its own is the whole paragraph's: a frame of one line
+ * follows its own leading, and its own is the whole paragraph's (docs/PDF-READER.md §18.11): a frame of one line
  * has none and takes its frame before's, where it holds two lines or more, as filled (`leads`). Its last line cannot rise
  * (footFloorAt: no room to give in a frame of one line), so the unit under it starts lower by the deficit: that leading's
  * pitch and the original's own skip there past its pitch (capped at a pitch, as footFloorAt reads it) less TeX's gap. 0
@@ -476,17 +472,17 @@ function knobOf(p: FillLaid, P: PageRules, st: FitState, knob: EvenKnob): FitSta
 }
 
 /**
- * A paragraph tighter than its page (§18.57; the owner's guidance of 2026-11-12: "one size a page" and a fixed leading are means,
- * the aim is a page that looks naturally even, and a difference the eye does not see is allowed): a body unit a frame of which
+ * A paragraph tighter than its page (§18.57: "one size a page" and a fixed leading are means, the aim is a page that looks
+ * naturally even, and a difference the eye does not see is allowed): a body unit a frame of which
  * stands under its page's band floor (underBand) laid again at its fitted state with the fit's own knobs, in the fit's own order,
  * each kept for the next as the walk keeps them (EVEN_KNOBS, knobOf): its tracking to the fit's bound, the room TeX left under
- * it, then one size step, which the reader's eye was shown between neighbouring paragraphs and did not tell apart (today's
- * reader set them 2.5-5 % apart by its misread size on the pages he read; a theorem a step smaller, accepted), where two steps
- * (5 %) he saw. Each try laid at the band floor's leading, no closer, on the pages its fit set it on, no frame gaining a line
- * (the share TeX's breaks gave each column and page kept); its fill leadings found again there (S.fill.leads) and taken at the
- * first that leaves no frame of two lines or more under the floor. Returns the unit as the fill then reads it (its layout and
- * fill leadings, `evened` the knobs taken and its lines before them), or null: it stays as it was. Its vote is the unit's own (fillLead, fitLines), never
- * the stand-in's: the page's target is read before and every lay reads the page alike
+ * it, then one size step, which the eye did not tell apart between neighbouring paragraphs (2.5-5 % apart on the pages read
+ * for it; a theorem a step smaller, accepted), where two steps (5 %) it saw. Each try laid at the band floor's leading, no
+ * closer, on the pages its fit set it on, no frame gaining a line (the share TeX's breaks gave each column and page kept);
+ * its fill leadings found again there (S.fill.leads) and taken at the first that leaves no frame of two lines or more under
+ * the floor. Returns the unit as the fill then reads it (its layout and fill leadings, `evened` the knobs taken and its
+ * lines before them), or null: it stays as it was. Its vote is the unit's own (fillLead, fitLines), never the stand-in's:
+ * the page's target is read before and every lay reads the page alike
  */
 function evenOf(p: FillLaid, P: PageRules, floor: number): FillLaid | null {
   if (!underBand(p, floor)) return null
@@ -566,8 +562,8 @@ function carried(knob: EvenKnob, st: FitState, even: FitState): boolean {
   return st.scale === even.scale
 }
 
-/** a unit's decision in the fill (the tap's passes[].units, less today's `next` and `closer`: the gap ruling of 2026-11-08):
- *  skipped, or its leading and what it took */
+/** a unit's decision in the fill (the tap's passes[].units, less `next` and `closer`: the gap reads the paragraph's own
+ *  leading alone and searches no closer one, docs/PDF-READER.md §18.11): skipped, or its leading and what it took */
 export type FillDecision =
   | { skip: 'no fill leading' }
   | { skip: 'not set'; lead: number }

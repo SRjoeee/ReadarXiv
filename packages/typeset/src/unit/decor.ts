@@ -1,30 +1,28 @@
-// U.decor (design-b §1.5): what the unit's blocks are set with besides their lines. Before the blocks (U.blocks) are read:
-// the unit centred as its cell or the file has it, and a label kept as the original's ink that the unit's text group hides
-// (`labelHides`), whose first rectangle then starts at the label where the unit is centred by the file's flag (E8, E9).
-// After: TeX's flush alignment kept (E12), a hidden label on a centred or flush-right first line carried with it (E9, its
-// crop token T30), a single line widened to its column's edge or the next glyph on its baseline (E13; a cell's never, today's
-// RUN:2116: its widening is X.further's), a line that stops
-// where a page's character stays on the shared row after it (E14), the short skips over a display (E15), the first line
-// indented after a label kept as the original's (E16), a heading and a numbered heading (E17). Ported from engine
-// 065c1d973: RUN:2101-2137, widen RUN:1576-1587 (its room: `Side`), keptAfter's use RUN:2118-2121, shortSkipsTo L2:3048-3056,
-// originalLines L2:4316, the carried label's crop token RUN:2225-2238, INK_UNIT_KINDS RUN:239.
+// U.decor: what the unit's blocks are set with besides their lines. Before the blocks (U.blocks) are read: the unit centred
+// as its cell or the file has it, and a label kept as the original's ink that the unit's text group hides (`labelHides`),
+// whose first rectangle then starts at the label where the unit is centred by the file's flag. After: TeX's flush alignment
+// kept, a hidden label on a centred or flush-right first line carried with it (as a crop token), a single line widened to
+// its column's edge or the next glyph on its baseline (a cell's never: its widening is X.further's), a line that stops where
+// a page's character stays on the shared row after it, the short skips over a display, the first line indented after a
+// label kept as the original's, a heading and a numbered heading.
 //
-// Its inputs, and the field each comes from once lane L1 states it:
-// - `byCell`: a cell centred by its own lines (cellCentred RUN:1508: F.align.cell); `luCentred`, `luFlush`: the file's
+// Its inputs, and the field each comes from:
+// - `byCell`: a cell centred by its own lines (cellCentred: F.align.cell); `luCentred`, `luFlush`: the file's
 //   UNIT_FLAG.CENTRED and FLUSH_* ← Placed.align
-// - `label`, `firstX0`: the label the class set before the unit's first line and where its text starts (U.label, U.lead,
-//   prepareUnit) ← Placed.label, Line.x0
+// - `label`, `firstX0`: the label the class set before the unit's first line and where its text starts (U.label, U.lead)
+//   ← Placed.label, Line.x0
 // - `relabels`, `labelKept`, `labelShown` (the label's own group shown), `lead`: the toggles, the wrap and U.lead
-// - `side`: each widened block's room: its column's edges (columnOf RUN:1557, the page's paragraph lines) and the next
-//   glyphs on its baseline (RUN:1580-1582, the page's characters) ← Room.side (F.room)
-// - `kept`: the shared row after the unit where a page's character stays between it and the next unit (keptAfter RUN:1596,
-//   the page's characters) ← Placed.join kept
-// - `shortSkips`: the displays TeX set with its short skip (shortSkipsOf TEX:328) ← F.shortSkips
+// - `side`: each widened block's room: its column's edges (the page's paragraph lines) and the next glyphs on its baseline
+//   (the page's characters) ← Room.side (F.room)
+// - `kept`: the shared row after the unit where a page's character stays between it and the next unit (keptAfter, the
+//   page's characters) ← Placed.join kept
+// - `shortSkips`: the displays TeX set with its short skip ← F.shortSkips
 // - `lineInfo`: the reading's per-line facts (each rectangle's line index in the file)
+import type { KnownKind } from '@readarxiv/format'
 import { median, type Rect, rectKey } from '../util.ts'
 import type { Block } from './blocks.ts'
 
-/** the units of text our compile set that no source unit owns (RUN:239 INK_UNIT_KINDS) */
+/** the units of text our compile set that no source unit owns */
 export const INK_UNIT_KINDS: readonly string[] = Object.freeze([
   'inkheads',
   'inkcontents',
@@ -32,15 +30,15 @@ export const INK_UNIT_KINDS: readonly string[] = Object.freeze([
   'inkorphan',
   'inknames',
   'inkreferences',
-])
+] satisfies readonly KnownKind[])
 const INK_UNITS = new Set(INK_UNIT_KINDS)
 
 /** a label's character as the rule reads it */
 export type DecorChar = { ch: string; x0: number; x1: number; page: number; yb: number; size: number }
 export type DecorLabel = { x1: number; text: string; chars?: readonly DecorChar[]; drawn?: string }
-/** a display TeX set with its short skip under line `line` of the file (shortSkipsOf TEX:328) */
+/** a display TeX set with its short skip under line `line` of the file */
 export type ShortSkip = { page: number; x0: number; x1: number; top: number; bottom: number; line: number }
-/** the shared row after the unit where something of the page stays (keptAfter RUN:1596) */
+/** the shared row after the unit where something of the page stays (keptAfter) */
 export type KeptRow = { page: number; baseline: number; x1: number; size: number; byLabel?: boolean }
 /** a widened line's room: its column's edges, and the glyphs on its baseline left and right of its rectangle, each as the
  *  edge it leaves (half its size off them) */
@@ -65,7 +63,7 @@ type DecorBeforeInput = {
 /** before the blocks are read: how the unit is centred, whether its label goes with its text, and its rectangles then */
 type DecorBefore = { centredFlag: boolean | undefined; labelHides: boolean; rects: Rect[] }
 
-/** U.decor before U.blocks (RUN:2101-2109) */
+/** U.decor before U.blocks */
 export function decorBefore(i: DecorBeforeInput): DecorBefore {
   const centredFlag = i.byCell !== null ? i.byCell : i.luCentred
   const r00 = i.rects[0]
@@ -89,8 +87,8 @@ export function decorBefore(i: DecorBeforeInput): DecorBefore {
 }
 
 /** a single line run on to its column's edge or the next glyph on its baseline; a centred one as far to either side
- *  (RUN:1576 widen, its room stated: `side`); one set flush right back to its left, its end kept (TeX's \hfil before it: the
- *  room a flush-right line has is before it; the owner's ruling of 2026-11-08, a page number keeps its size and its end) */
+ *  (its room stated: `side`); one set flush right back to its left, its end kept (TeX's \hfil before it: the
+ *  room a flush-right line has is before it; a page number keeps its size and its end, docs/PDF-READER.md §18.11) */
 export function widen(b: DecorBlock, side: Side | undefined): void {
   if (b.rects.length !== 1 || !side) return
   const r = b.rects[0]!
@@ -108,7 +106,7 @@ export function widen(b: DecorBlock, side: Side | undefined): void {
   } else if (right > b.x1) b.x1 = right
 }
 
-/** each block's displays TeX set with its short skip under one of its own lines (L2:3048 shortSkipsTo) */
+/** each block's displays TeX set with its short skip under one of its own lines */
 function shortSkipsTo(
   blocks: DecorBlock[],
   skips: readonly ShortSkip[],
@@ -123,7 +121,7 @@ function shortSkipsTo(
   }
 }
 
-/** how many of the original's baselines a block stands on (L2:4316 originalLines) */
+/** how many of the original's baselines a block stands on */
 export const originalLines = (b: Pick<Block, 'B'>): number => new Set(b.B.map((v) => Math.round(v * 100))).size
 
 type DecorAfterInput = {
@@ -148,19 +146,20 @@ type DecorAfterInput = {
 }
 type DecorAfter = { carried: boolean; heading: boolean; numbered: boolean; indented: boolean }
 
-/** U.decor after U.blocks: each block's decorations set on it, in today's order (RUN:2112-2137) */
+/** U.decor after U.blocks: each block's decorations set on it, in an order where each reads what the steps before it set (the
+ *  flush before the carried label and the widening, which read it) */
 export function decorAfter(blocks: DecorBlock[], i: DecorAfterInput): DecorAfter {
-  // (a cell's too, which today's never kept (RUN:2112: no fact told a cell's then): its flush is the class LaTeX built its
-  // column's template from, TeX's own (docs/PDF-READER.md §18.12), so an r column's translation ends where its original ends)
+  // (a cell's too: its flush is the class LaTeX built its column's template from, TeX's own (docs/PDF-READER.md §18.12), so an
+  // r column's translation ends where its original ends)
   if (i.luFlush) for (const b of blocks) if (!b.centred) b.flush = i.luFlush
   const b0 = blocks[0]
   const carried = i.labelHides && !!b0 && b0.page === i.firstPage && (b0.centred || b0.flush === 'right')
   const sideOf = (b: DecorBlock, k: number) => (typeof i.side === 'function' ? i.side(b, k) : i.side.get(b))
-  // (but a cell's, as today's widened none (RUN:2116): a single-line cell whose column's box the part states is set in that box
-  // (the adapter's columnRoomOf; the owner's decision, PDF-READER §18.13); any other in its own ink's width at its own size, shrunk
-  // there to its fit's floor, and run on over the paper beside it only where it is clipped there, X.further's 'widen' (the
-  // adapter's `wide`), as today. Widened at once to its rules, a column's every cell was set at the original's size, the column
-  // crowded (2608.25210v2-zh p14), and a cell left room for the page's fill to spread (2610.20967v1-zh p4))
+  // (every block widened but a cell's: a single-line cell whose column's box the part states is set in that box (the adapter's
+  // columnRoomOf; PDF-READER §18.13); any other in its own ink's width at its own size, shrunk there to its fit's floor, and
+  // run on over the paper beside it only where it is clipped there, X.further's 'widen' (the adapter's `wide`). Widened at
+  // once to its rules, a column's every cell was set at the original's size, the column crowded (2608.25210v2-zh p14), and a
+  // cell left room for the page's fill to spread (2610.20967v1-zh p4))
   blocks.forEach((b, k) => {
     if (i.kind !== 'cell') widen(b, sideOf(b, k))
   })
@@ -201,7 +200,7 @@ type LabelCrop = {
 }
 /** a carried label as its first line's start: its ink's crop, the original's space after it to its text kept, set by its
  *  line's baseline (`ownBaselines`: the unit's own characters on its first line, the page's; else the block's first
- *  baseline) (RUN:2225-2238) */
+ *  baseline) */
 export function carriedCrop(
   label: DecorLabel & { chars: readonly DecorChar[] },
   b0: Pick<Block, 'page' | 'B'>,

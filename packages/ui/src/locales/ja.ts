@@ -1,6 +1,6 @@
 // Japanese. The platforms' own words for an interface (Chrome's first, then Apple's and Microsoft's: 設定, 既定, 拡張機能,
 // 元に戻す, 再試行, ビューア…), and the product's register: a button is a noun or 〜を + a verb (再試行, リンクをコピー), a
-// state 〜中 (翻訳中), a sentence です・ます, no apology and no exclamation mark (the glossary of 2026-11-04, §J).
+// state 〜中 (翻訳中), a sentence です・ます, no apology and no exclamation mark (UI.md §1).
 // Full-width 、。「」; a half-width space between Japanese and a Latin word (arXiv で, PDF を), none between Japanese and
 // digits (3件, 12段落); a text ends in 。 where the Chinese one does (UI.md §1, the Japanese line). A name set into a
 // sentence is spaced by ./spacing, which knows whether it begins or ends in Latin.
@@ -176,7 +176,7 @@ const O: Locale['O'] = {
   saveFailed: '保存できませんでした。もう一度お試しください',
   appearance: {
     theme: '外観',
-    // the theme switch's three equal segments hold 274 px at a 320 px window (ui-shots.mjs): the platform's longer
+    // the theme switch's three equal segments hold 274 px at a 320 px window (tests/e2e/probes/ui-shots.mjs): the platform's longer
     // "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese and English are
     themes: { system: 'システム', light: 'ライト', dark: 'ダーク' },
     dim: 'ダークモードで PDF ページを暗くする',
@@ -368,6 +368,7 @@ const R: Locale['R'] = {
     goToArxiv: 'arXiv へ移動',
     unreadable: '設定を読み込めなかったため、既定の設定を使用しています',
     unreadableHint: '設定を読み込めませんでした',
+    facesLost: '一部のフォントを読み込めませんでした。ページを再読み込みして再試行してください',
   },
 }
 

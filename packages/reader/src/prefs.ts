@@ -1,4 +1,4 @@
-// The visitor's preferences, one shape in both hosts (interfaces/host design-a §1.1): what the reader reads, writes as a
+// The visitor's preferences, one shape in both hosts: what the reader reads, writes as a
 // patch and watches through `host.prefs`. Each host maps its own store to it; neither store changes (the extension's saved
 // configuration keeps its schema: its adapter maps `mode` + `pdfReader.*`, the website keeps its `axt.*` keys).
 
@@ -62,16 +62,16 @@ export const DEFAULTS: Prefs = {
   translator: null,
 }
 
-/** a band's strength, at least and at most (the extension's settings schema clamps a profile's opacity so, as today's look
- *  sheet did: src/core/renderer/style-preset.ts appearanceRule) */
+/** a band's strength, at least and at most (the extension's settings schema clamps a profile's opacity so: its
+ *  HL_OPACITY_MIN, HL_OPACITY_MAX) */
 const BAND_MIN = 0.05,
   BAND_MAX = 0.6
 /**
- * The highlight's paint, the band chosen (`highlight.band` among `bands`; the first where it names none of them, as today's
- * `activeHighlight`): its colour and its strength as the wash's two variables, which the reader's sheet reads for every band it
- * lights, a sentence's or a whole unit's, on a page light, dark or dimmed (styles.ts `.axt-hl`); the strength a whole percentage,
- * clamped. A band of no colour (the extension's `''`) is the sheet's green at its strength. Null where the host gives no band:
- * the sheet's own green at 22 %
+ * The highlight's paint, the band chosen (`highlight.band` among `bands`; the first where it names none of them, as the
+ * extension's `activeHighlight`): its colour and its strength as the wash's two variables, which the reader's sheet reads
+ * for every band it lights, a sentence's or a whole unit's, on a page light, dark or dimmed (styles.ts `.axt-hl`); the
+ * strength a whole percentage, clamped. A band of no colour (the extension's `''`) is the sheet's green at its strength.
+ * Null where the host gives no band: the sheet's own green at 22 %
  */
 export function bandPaint(
   p: Pick<Prefs, 'bands' | 'highlight'>,

@@ -1,4 +1,4 @@
-// The composed document's bytes (design §4.5, interfaces/page DECISION from C, 2): arXiv's bytes followed by the add-on's,
+// The composed document's bytes (docs/PDF-READER.md §19.8): arXiv's bytes followed by the add-on's,
 // both by ranges. The add-on is an incremental update over the original (its xref's /Prev the original's startxref), so the
 // composed file is the two objects one after the other: a range that spans the seam is split there, its first part read of
 // the original's source (the same source, and so the same chunks, the left's document reads), its rest of the add-on's.

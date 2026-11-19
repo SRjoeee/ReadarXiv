@@ -20,20 +20,27 @@
 // With --entry, I11 (painted.mjs, the coordinator's ruling of 2026-11-13): every box of every shape the reader paints of each laid
 // page, on both panes, held inside what the reader's own rows and outlines paint; one not painted whole fails the run (exit 1),
 // 0 the only passing value (I10 judges Laid.lit, never the paint: a display's second row on neither pane passed it).
-import { appendFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+// With --entry, I3, I4 and I5 are read on the lay the product makes (the entry's own, entry-laid.mjs, registered here before the
+// typesetter loads): each page's members as layPage laid them held to I4 and I5 by ink (a line past its slot by its ink beyond the
+// breaker's stated tolerance; a member under its own size floor), the Page it drew to I3 by ink against all that stays on the page
+// (ink-gate.ts); and each page laid twice by the entry, the two Pages compared (I6's purity). The runner's own lay is still dumped
+// and compared with today's (its invariants' line beside, not judged).
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { register } from 'node:module'
 import { join } from 'node:path'
-import { readerDump } from '../../packages/typeset/tests/replay/display.ts'
-import { gateL1Pair } from '../../packages/typeset/tests/replay/gate-l1.ts'
-import { LAB, readGz, TAP } from '../../packages/typeset/tests/replay/tap.ts'
-import { bundlesLine, headsFor } from '../../packages/typeset/tests/replay/bundles.ts'
-import { L1_BUNDLES_DIR } from '../../packages/typeset/tests/replay/l1.ts'
-import { tableMetrics } from '../../packages/typeset/src/metrics/table.ts'
-import { layered, servedMetrics } from './served-metrics.mjs'
-import { accept as acceptReading } from '../../packages/translate/src/accept.ts'
-import { CLASS_DEFAULTS, leftKinds } from '../../packages/reader/src/compose/classes.ts'
-import { unitInOf } from '../../packages/translate/src/bundle.ts'
-import { ADDED_HEADING, apartOf, runApart } from './added.mjs'
-import { paintedOf } from './painted.mjs'
+
+register('./entry-laid.mjs', import.meta.url)
+const { readerDump } = await import('../../packages/typeset/tests/replay/display.ts')
+const { gateL1Pair, LINE_TOLERANCE } = await import('../../packages/typeset/tests/replay/gate-l1.ts')
+const { LAB, readGz, TAP } = await import('../../packages/typeset/tests/replay/tap.ts')
+const { bundlesLine, headsFor } = await import('../../packages/typeset/tests/replay/bundles.ts')
+const { L1_BUNDLES_DIR } = await import('../../packages/typeset/tests/replay/l1.ts')
+const { tableMetrics } = await import('../../packages/typeset/src/metrics/table.ts')
+const { layered, servedMetrics } = await import('./served-metrics.mjs')
+const { rowJudge } = await import('./gate-rows.mjs')
+const { CLASS_DEFAULTS, leftKinds } = await import('../../packages/reader/src/compose/classes.ts')
+const { ADDED_HEADING, apartOf, runApart } = await import('./added.mjs')
+const { paintedOf } = await import('./painted.mjs')
 
 const args = process.argv.slice(2)
 const OUT = args.find(a => a.startsWith('--out='))?.slice(6) ?? join(LAB, 'refactor-2026-11', 'lanes', 'L3', 'gate', 'l1')
@@ -78,24 +85,11 @@ const LEAVE = new Map([
 ])
 const reads = new Map([...LEAVE.keys()].map((k) => [k, { pages: 0, reads: 0, outside: 0, outsidePages: 0, ex: [] }]))
 const entry = { paras: { stated: new Map(), anchor: new Map(), opened: 0, onTexLine: 0, off: [], offBy: new Map(), notLaid: new Map(), openedEx: [], noneEx: [] }, crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
-/** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
- *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
- *  reading, and the chain makes no row of it whatever its translator: the entry is given none and leaves the unit the
- *  original's (given it, the entry hid the unit's text and drew nothing: three table cells of two pack pairs, I10's "right
- *  missing sentence"). A row the rule's other clauses refuse (a span lost, emptied or set otherwise than the unit nests it; an
- *  id, a span named by today's numbering; its length) the chain would ask again of the next translator; the door holds no
- *  other reply of its unit and the row still says its translation: given as it is, as the parity lays it on both sides,
- *  and counted by why (over the 123 pairs with round 8 B5's parts: 229 by a span, 6 by an id, 1 by its length) */
-const judged = new Map(), unsaid = []
+/** Whether a stored row is given, the runner's and the entry's alike, a door row or a store's Result: the product's acceptance rule
+ *  judges it, a row it refuses for any reason no row (gate-rows.mjs, rowJudge) */
+const judge = rowJudge()
 let judging = ''
-const accept = (unit, content) => {
-  const r = acceptReading(unitInOf(unit), content)
-  if (r.ok) return true
-  judged.set(r.why, (judged.get(r.why) ?? 0) + 1)
-  if (r.why !== 'empty') return true
-  unsaid.push(`${judging} ${unit.kind} ${unit.id.slice(0, 8)}`)
-  return false
-}
+const accept = (unit, content) => judge.takes(judging, unit, content)
 /** I10's counts (cover.ts) over the pairs: each fault's count by key, its examples, each pair's faults */
 const addCover = (pair, c) => {
   const C = entry.cover
@@ -128,6 +122,32 @@ const addCrossLay = (pair, x) => {
   for (const d of x.differ) X[d.cause === 'head' ? 'head' : 'other'].push(`${pair} p${d.page} ord ${d.ord} by p${d.by.join('/p')}: ${d.what}`)
 }
 const metricsOf = pair => (METRICS === 'served' ? served : layered(tableMetrics(readGz(join(TAP, 'metrics', `${pair}.metrics.json.gz`))), served))
+// (AXT_GATE_ROWS=<dir>: a rows store laid in place of today's door rows, its Results of each pair by unit id (`<pair>.json`, the
+// rounds' google-rows.mts over the lab's Google store, `{ results }`), the runner's and the entry's alike; a pair the folder holds
+// no file of is laid with no row at all, never the door's)
+const ROWS = process.env.AXT_GATE_ROWS
+if (ROWS) console.log(`the rows of ${ROWS} in place of the door's`)
+const resultsOf = (pair) => {
+  if (!ROWS) return undefined
+  const f = join(ROWS, `${pair}.json`)
+  if (!existsSync(f)) {
+    console.log(`no rows of ${pair} in ${ROWS}: laid with none`)
+    return new Map()
+  }
+  return new Map(JSON.parse(readFileSync(f, 'utf8')).results.map((r) => [r.id, r]))
+}
+// (the entry's own lay of a page, as entry-laid.mjs hands it over: the last layPagePrepared the entry ran, taken once)
+let lastLaid = null
+globalThis.__axtEntryLaid = (p) => {
+  lastLaid = p
+}
+const takeLaid = () => {
+  const p = lastLaid
+  lastLaid = null
+  return p
+}
+/** I3, I4 and I5 on the entry's lay over the pairs (gate-l1.ts entry.laid, entry.ink), and I6's purity (entry.purity) */
+const theirs = { pages: 0, read: 0, inv: { laid: 0, lines: 0, I3: 0, I4: [], I5: [], I5floor: [], unread: 0 }, I5by: new Map(), ink: [], turned: 0, unmeasured: 0, purity: { pages: 0, differ: [], ms: 0 } }
 const count = { pairs: 0, laid: 0, adapted: 0, pages: 0, twoPages: 0, twoPagesDiffer: 0, threw: 0 }
 const stops = new Map(), setting = new Map(), threw = [], selfDiffer = []
 // (each unit the baseline laid: laid alike, changed or not laid, by its setting's first differing field)
@@ -179,7 +199,27 @@ for (const pair of pairs) {
   if (process.env.AXT_GATE_OVER || process.env.AXT_GATE_PAIRS) console.log(`PAIR ${pair}`)
   let g
   judging = pair
-  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept, ...(ENTRY ? { leave: LEAVE, laid: paintOf(pair) } : {}), ...(SPACING ? { spacing: (line) => appendFileSync(SPACING, `${pair}\t${line}\n`) } : {}) }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  try { g = gateL1Pair(pair, { ...(METRICS === 'table' ? {} : { metricsOf, served }), reading: READING, substitute: SUBST, entry: ENTRY, accept, results: resultsOf(pair), ...(ENTRY ? { leave: LEAVE, laid: paintOf(pair), entryLaid: takeLaid, twice: true } : {}), ...(SPACING ? { spacing: (line) => appendFileSync(SPACING, `${pair}\t${line}\n`) } : {}) }) } catch (e) { threw.push(`${pair}: ${String(e?.stack ?? e).slice(0, 300)}`); count.threw++; continue }
+  if (g.entry?.laid) {
+    const x = g.entry.laid
+    theirs.pages += x.pages
+    theirs.read += x.read
+    theirs.inv.laid += x.inv.laid
+    theirs.inv.lines += x.inv.lines
+    theirs.inv.unread += x.inv.unread ?? 0
+    for (const k of ['I4', 'I5', 'I5floor']) for (const e of x.inv[k] ?? []) theirs.inv[k].push(`${pair} ${e}`)
+    for (const [k, b] of x.inv.I5by) { const t = theirs.I5by.get(k) ?? theirs.I5by.set(k, { n: 0, max: 0 }).get(k); t.n += b.n; t.max = Math.max(t.max, b.max) }
+  }
+  if (g.entry?.ink) {
+    for (const o of g.entry.ink.overlaps) theirs.ink.push({ pair, ...o })
+    theirs.turned += g.entry.ink.turned
+    theirs.unmeasured += g.entry.ink.unmeasured
+  }
+  if (g.entry?.purity) {
+    theirs.purity.pages += g.entry.purity.pages
+    theirs.purity.ms += g.entry.purity.ms
+    for (const d of g.entry.purity.differ) theirs.purity.differ.push(`${pair} ${d}`)
+  }
   for (const [k, n] of g.spacing.read) add(spacing.read, k, n)
   for (const [k, n] of g.spacing.runs) add(spacing.runs, k, n)
   spacing.runsRead += g.spacing.runsRead
@@ -330,7 +370,10 @@ if (ENTRY) {
   console.log(`the entry's figure texts (S.figures over the part), by turn and state: ${[...entry.figures].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}`)
   console.log(`the entry's boxes (Laid.lit): ${entry.lit.laid} members laid with lines, ${entry.lit.lines} lines, ${entry.lit.boxes} boxes on the right; panes' entries apart ${entry.lit.apart}; nothing on the right ${entry.lit.empty}`)
   const C = entry.cover, faults = [...C.faults.values()].reduce((a, b) => a + b, 0)
-  console.log(`the entry's rows that say nothing (the chain's 'empty', accept.ts), given as no row: ${unsaid.length}${unsaid.length ? `: ${unsaid.join(' | ')}` : ''}; held to its other clauses, given as they are: ${[...judged].filter(([k]) => k !== 'empty').map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}`)
+  const withheld = judge.withheld()
+  const byWhy = new Map()
+  for (const x of withheld) byWhy.set(x.why, (byWhy.get(x.why) ?? 0) + 1)
+  console.log(`the rows the acceptance rule refuses (accept.ts), each withheld as the product's chain withholds it, its unit left the original's: ${withheld.length}${withheld.length ? ` (${[...byWhy].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}): ${withheld.map((x) => `${x.pair} ${x.kind} ${x.id.slice(0, 8)} ${x.why}`).join(' | ')}` : ''}`)
   console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
@@ -349,8 +392,33 @@ if (ENTRY) {
     for (const x of P.noneEx) console.log(`  no anchor, e.g.: ${x}`)
     if (P.off.length) process.exitCode = 1
   }
+  // (I3, I4 and I5 on the lay the product makes, each page as the entry laid it: I5 by ink against the breaker's stated tolerance
+  // and each member's own size floor, I3 by ink against all that stays (ink-gate.ts), every member named; a page the entry laid
+  // whose lay was not handed back fails the run: the gate did not judge it)
+  {
+    const r2 = (b) => `[${b.map((v) => Math.round(v * 100) / 100).join(', ')}]`
+    const ink = theirs.ink.filter((o) => !o.own),
+      own = theirs.ink.filter((o) => o.own)
+    const kinds = new Map()
+    for (const o of ink) kinds.set(o.kind, (kinds.get(o.kind) ?? 0) + 1)
+    theirs.inv.I3 = ink.length
+    console.log(`the invariants on the entry's lay (each page as layPage laid it; I3 by ink, I4, I5 by ink): ${JSON.stringify({ pages: theirs.pages, read: theirs.read, laid: theirs.inv.laid, lines: theirs.inv.lines, I3: ink.length, I4: theirs.inv.I4.length, I5: theirs.inv.I5.length, I5floor: theirs.inv.I5floor.length, unread: theirs.inv.unread })}`)
+    console.log(`I3 by ink on the entry's lay (ink-gate.ts): ${ink.length} overlaps of a laid unit's drawn ink with ink that stays or another's (${[...kinds].map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}); beside, ${own.length} with ink its own original's lines met already (the page's own setting, not held); ${theirs.turned} runs set along a direction read by their corners' box; ${theirs.unmeasured} runs no measure holds the ink of, not read`)
+    for (const o of ink) console.log(`  entry I3: ${o.pair} p${o.page} ord ${o.ord} over ${o.kind}${o.piece ? ` ${o.piece}` : ''} of ord ${o.with}: ${r2(o.a)} meets ${r2(o.b)}`)
+    // (AXT_GATE_INK=<file>: every overlap, held or not, a line of its facts)
+    if (process.env.AXT_GATE_INK) writeFileSync(process.env.AXT_GATE_INK, theirs.ink.map((o) => `${o.pair}\tp${o.page}\t${o.ord}\t${o.kind}\t${o.piece ?? ''}\t${o.with}\t${o.own ? 'own' : 'held'}\t${r2(o.a)}\t${r2(o.b)}\n`).join(''), { flag: 'a' })
+    console.log(`I5 on the entry's lay, each line past its slot by its ink beyond the breaker's ${LINE_TOLERANCE} pt (count, largest excess pt): ${[...theirs.I5by].map(([k, b]) => `${k} ${b.n} (${b.max.toFixed(2)})`).join('; ') || 'none'}; under its own size floor ${theirs.inv.I5floor.length}; lines no measure holds the ink of ${theirs.inv.unread}`)
+    for (const k of ['I4', 'I5', 'I5floor']) for (const e of theirs.inv[k]) console.log(`  entry ${k}: ${e}`)
+    if (theirs.read < theirs.pages) {
+      console.log(`the entry's lay not handed back on ${theirs.pages - theirs.read} of ${theirs.pages} pages: not judged`)
+      process.exitCode = 1
+    }
+    const P = theirs.purity
+    console.log(`I6, each page laid twice by the entry over the same inputs (purity): ${P.pages} pages, ${P.differ.length} whose two Pages differ${P.differ.length ? `: ${P.differ.slice(0, 12).join(', ')}` : ''}; the second lays ${Math.round(P.ms)} ms`)
+    if (P.differ.length) process.exitCode = 1
+  }
   // (I6 across the pages' lays, cross-lay.ts: a unit laid otherwise by two pages' lays fails the run, but where the head pass's
-  // known cause tells it (headOf reading the paragraph over it filled by one lay, at its fit by the other: LATER.md), counted
+  // known cause tells it (headOf reading the paragraph over it filled by one lay, at its fit by the other: the rebuild's later work), counted
   // and listed apart)
   const X = entry.crossLay
   console.log(`I6 across the pages' lays (cross-lay.ts): ${X.units} units begun on a pass page, ${X.twice} laid by two pages' lays or more; ${X.head.length + X.other.length} laid otherwise: ${X.head.length} by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${X.other.length} by another cause`)

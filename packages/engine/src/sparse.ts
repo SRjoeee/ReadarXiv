@@ -1,6 +1,6 @@
-// B, the marked compile's PDF, stored without the pixels of its images (the performance design's Q3, 2026-11-13). The
+// B, the marked compile's PDF, stored without the pixels of its images (PDF-READER §19.7). The
 // instrument keeps B so that a later prepare need not run TeX again, and every reading of B is PDF.js's worker guarded so that
-// no image's pixels are decoded (src/pdf-reader/engine/layout/pdf-lite.mjs; the box's own): an image XObject gives the operator
+// no image's pixels are decoded (compile/pdf-lite.ts; the box's own): an image XObject gives the operator
 // list its paint operator, its id, width and height, from its dictionary alone, and its data is read only by the decode the
 // guard stops (PDF.js 6.3.289's buildPaintImageXObject, after the operator is added). So the data of those streams is bytes
 // nothing reads, and on an image-heavy paper it is nearly all of B (2610.37818v1: 31.43 of 32.23 MB in 412 streams).

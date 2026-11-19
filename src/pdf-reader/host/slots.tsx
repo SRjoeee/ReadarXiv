@@ -20,6 +20,9 @@ export interface ConfigStore {
   state(): { config: Config | null; pack: PackState | null }
   subscribe(listener: () => void): () => void
   patch(change: (latest: Config) => Config): void
+  /** the translator the reader's own calls ask first, which the service menu names and checks (UI.md S-P-46): each reader's
+   *  host says it beside the chain its calls go to */
+  askedFirst(config: Config): string
 }
 
 const openOptions = (section: string) => void browser.tabs.create({ url: (browser.runtime.getURL as (p: string) => string)(`/options.html#${section}`) })
@@ -32,10 +35,12 @@ export function ServiceMenu({ controller, store }: { controller: ReaderControlle
   const pop = usePopover('listbox')
   // before the settings land the defaults stand in the button's place, greyed, so that the bar does not reflow (S-R-21)
   const config = state.config ?? DEFAULT_CONFIG
-  const items = lock.locked ? [] : serviceItems(config, state.pack, rejected).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.selected, disabled: i.disabled && !i.action }))
+  // the translator asked first, named and checked: the stored one may be another (the install's Microsoft, nobody's pick)
+  const asked = store.askedFirst(config)
+  const items = lock.locked ? [] : serviceItems(config, state.pack, rejected).map(i => ({ id: i.id, name: i.name, hint: i.hint, checked: i.id === asked, disabled: i.disabled && !i.action }))
   return (
     <>
-      <ToolbarButton label={S.rows.service} value={serviceName(config.provider, config.services)} anchor={pop.anchor} disabled={lock.locked} why={lock.why} {...(lock.locked ? {} : pop.trigger)} className="menu-btn">
+      <ToolbarButton label={S.rows.service} value={serviceName(asked, config.services)} anchor={pop.anchor} disabled={lock.locked} why={lock.why} {...(lock.locked ? {} : pop.trigger)} className="menu-btn">
         <Icon node={ChevronDown} size={12} className="text-ink-3" />
       </ToolbarButton>
       {!lock.locked && (
@@ -48,7 +53,8 @@ export function ServiceMenu({ controller, store }: { controller: ReaderControlle
               if (id === MANAGE_SERVICES || item?.action) return openOptions('translate/services')
               // a service another tab deleted meanwhile is not written: the chain would take an unknown id for Microsoft
               // while the bar showed the raw id (the popup's rule)
-              store.patch(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id } : c))
+              // (a pick, recorded: the PDF reader follows it, v22)
+              store.patch(c => (isBuiltInService(id) || c.services.some(s => s.id === id) ? { ...c, provider: id, providerChosen: true } : c))
             }} />
         </Popover>
       )}

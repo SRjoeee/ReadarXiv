@@ -5,7 +5,7 @@
 import { askedOf, chainOf, Fault, type FetchInit, type FetchReply, type Store, tagsWire, type Translator, type UnitIn } from '@readarxiv/translate'
 import { describe, expect, it, vi } from 'vitest'
 import type { KeyValues } from '@/cache/translate-store'
-import { CHAIN_CONFIG_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision } from '@/config/revision'
+import { CHAIN_CONFIG_FIELDS, READER_CHAIN_FIELDS, VOLATILE_CONFIG_FIELDS, chainConfigChanged, chainRevision, readerChainChanged } from '@/config/revision'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
 import { unitOfWire } from '@/core/protector/units'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
@@ -27,7 +27,7 @@ const reply = (status: number, body: unknown): FetchReply => ({ ok: status < 300
  * The endpoints, scripted: Microsoft answers each text with `ms(text)` (its markers wire), Google echoes (its tags wire);
  * every request counted by host
  */
-function endpoints(o: { ms?: (text: string) => string | null; msStatus?: () => number; google?: (text: string) => string } = {}) {
+function endpoints(o: { ms?: (text: string) => string | null; msStatus?: () => number; google?: (text: string) => string; googleStatus?: () => number } = {}) {
   const sent = { microsoft: 0, google: 0 }
   const fetch = async (url: string, init: FetchInit): Promise<FetchReply> => {
     if (url.includes('microsoft')) {
@@ -37,6 +37,8 @@ function endpoints(o: { ms?: (text: string) => string | null; msStatus?: () => n
       return reply(200, (JSON.parse(init.body) as string[]).map(t => ({ translations: [{ text: o.ms ? o.ms(t) : t }] })))
     }
     sent.google++
+    const gStatus = o.googleStatus?.() ?? 200
+    if (gStatus !== 200) return reply(gStatus, 'busy')
     const texts = (JSON.parse(init.body) as [[string[]]])[0][0]
     return reply(200, [texts.map(t => (o.google ? o.google(t) : t))])
   }
@@ -239,6 +241,67 @@ describe('the rows: a page opened again (stage 4b deliverable 4)', () => {
   })
 })
 
+// The PDF reader's calls (`surface: 'pdf'`; the owner's ruling of 2026-11-19): for a reader who never chose a translator, the
+// website's chain, Google's then Microsoft's, on the same one chain and its store; the page's calls on the same transport as
+// before, their rows, their hand-overs and their status their own
+describe("the PDF reader's calls", () => {
+  const pdf = { surface: 'pdf' as const }
+  it("chosen by nobody: Google's first, the page's calls Microsoft's as before, on one transport", async () => {
+    const h = harness()
+    const t = await h.make()
+    expect(ids(await t.translate({ units: [unit('a'), plain('c', 'Plain words.')], target: 'cmn', ...pdf }))).toEqual(['a:google-web', 'c:google-web'])
+    expect(h.sent).toEqual({ microsoft: 0, google: 1 })
+    expect(ids(await t.translate({ units: [unit('b'), plain('d', 'Other words.')], target: 'cmn' }))).toEqual(['b:microsoft', 'd:microsoft'])
+    expect(h.sent).toEqual({ microsoft: 1, google: 1 })
+  })
+  it('a unit Google refuses goes to Microsoft alone, for that unit', async () => {
+    const e = endpoints({ google: t => (t.includes('<') ? 'lost the tag' : t) })
+    const h = harness({}, { fetch: e.fetch })
+    const t = await h.make()
+    expect(ids(await t.translate({ units: [unit('a'), plain('c', 'Plain words.')], target: 'cmn', ...pdf }))).toEqual(['a:microsoft', 'c:google-web'])
+    expect(e.sent).toEqual({ microsoft: 1, google: 1 })
+  })
+  it("a 429 of Google's cools it and sends its units to Microsoft at once; the hand-over is the PDF reader's status's, not the page's", async () => {
+    const e = endpoints({ googleStatus: () => 429 })
+    const h = harness({}, { fetch: e.fetch })
+    const t = await h.make()
+    expect(ids(await t.translate({ units: [unit('a'), plain('c', 'Plain words.')], target: 'cmn', ...pdf }))).toEqual(['a:microsoft', 'c:microsoft'])
+    expect(e.sent).toEqual({ microsoft: 1, google: 1 })
+    expect(await t.status(undefined, pdf)).toMatchObject({ providerId: 'google-web', engine: { id: 'microsoft', demoted: { id: 'google-web', kind: 'rate-limit' } }, demotions: [{ id: 'google-web', kind: 'rate-limit' }] })
+    expect(await t.status()).toMatchObject({ providerId: 'microsoft', engine: { id: 'microsoft' }, demotions: [] })
+  })
+  it("the PDF reader's status names its own chain: Google's first, its identity apart from the page's; the page's status as before", async () => {
+    const t = await harness().make()
+    const page = await t.status()
+    const reader = await t.status(undefined, pdf)
+    expect(page).toMatchObject({ providerId: 'microsoft', chosen: 'microsoft', renderPath: 'markers', chain: ['microsoft', 'google-web'] })
+    expect(reader).toMatchObject({ providerId: 'google-web', chosen: 'microsoft', available: true, chain: ['google-web', 'microsoft'], targetLanguage: page.targetLanguage, revision: page.revision })
+    expect(reader.identity).toMatch(/^[0-9a-f]{32}$/)
+    expect(reader.identity).not.toBe(page.identity)
+  })
+  it("the PDF reader's rows are its chain's: a page's call of the same unit reads none of them, nor they the page's", async () => {
+    const stores = { answers: memory(), rows: memory() }
+    const t = await harness({}, {}, stores).make()
+    await t.translate({ units: [unit('a')], target: 'cmn', ...pdf })
+    const page = await t.translate({ units: [unit('a')], target: 'cmn' })
+    expect([ids(page), page.ok && page.cached]).toEqual([['a:microsoft'], 0])
+    const again = await t.translate({ units: [unit('a')], target: 'cmn', ...pdf })
+    expect([ids(again), again.ok && again.cached]).toEqual([['a:google-web'], 1])
+    expect(stores.rows.entries.size).toBe(2)
+  })
+  it("a reader who chose keeps the page's chain in the PDF reader: Microsoft's first, the same identity and rows", async () => {
+    for (const provider of ['microsoft', 'google-web'] as const) {
+      const h = harness({ provider, providerChosen: true })
+      const t = await h.make()
+      const r = await t.translate({ units: [plain('c', 'Plain words.')], target: 'cmn', ...pdf })
+      expect(ids(r), provider).toEqual([`c:${provider}`])
+      expect((await t.status(undefined, pdf)).identity, provider).toBe((await t.status()).identity)
+      const page = await t.translate({ units: [plain('c', 'Plain words.')], target: 'cmn' })
+      expect(page.ok && page.cached, provider).toBe(1)
+    }
+  })
+})
+
 describe('the connection test', () => {
   const fakeLlm = (send: Translator['send']) => (service: typeof SVC, _c: Config, onStatus?: (s: number) => void): Translator => ({
     identity: `llm:${service.id}`, digest: tagsWire.digest, context: true, limits: { chars: 1000, units: 4, inFlight: 4, callMs: 1000, reask: 0 },
@@ -339,8 +402,16 @@ describe('the status', () => {
 })
 
 describe('chainConfigChanged: which configuration changes rebuild the chain', () => {
-  it('every configuration field is classified explicitly, and the two tables together cover Config exactly', () => {
-    expect([...CHAIN_CONFIG_FIELDS, ...VOLATILE_CONFIG_FIELDS].sort()).toEqual(Object.keys(DEFAULT_CONFIG).sort())
+  it('every configuration field is classified explicitly, and the three tables together cover Config exactly', () => {
+    expect([...CHAIN_CONFIG_FIELDS, ...READER_CHAIN_FIELDS, ...VOLATILE_CONFIG_FIELDS].sort()).toEqual(Object.keys(DEFAULT_CONFIG).sort())
+  })
+
+  it("the mark of a translator chosen shapes the PDF reader's chain alone: it rebuilds the chain in force, and is no change of a page's settings (v22)", async () => {
+    const chose = { ...DEFAULT_CONFIG, providerChosen: true }
+    expect(readerChainChanged(DEFAULT_CONFIG, chose)).toBe(true)
+    expect(readerChainChanged(DEFAULT_CONFIG, structuredClone(DEFAULT_CONFIG))).toBe(false)
+    expect(chainConfigChanged(DEFAULT_CONFIG, chose)).toBe(false)
+    expect(await chainRevision(chose)).toBe(await chainRevision(DEFAULT_CONFIG))
   })
 
   it('switching the display mode, style, preload or glossary does not rebuild: the page is often translating then, and a rebuild would clear the token buckets and the demotion records', () => {

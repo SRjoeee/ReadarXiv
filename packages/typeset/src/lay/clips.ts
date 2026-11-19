@@ -3,8 +3,8 @@
 // it the crop draws, inside its own brackets where the translation sets its own round it; a label's crop here: its label's
 // boxes, Label.ink and its name, number and punctuation), and the page's every piece's (each element's ink and brackets,
 // each label's and babel name's counter's, on the pages the page's crops are cut from). No margin of the typesetter's: a
-// glyph's antialiased edge is a device pixel of the render a crop is cut from, which the reader alone knows (round 5's
-// parity: a margin fixed in points leaves a 1x screen's edge pixels out). What the part does not state a crop cannot keep
+// glyph's antialiased edge is a device pixel of the render a crop is cut from, which the reader alone knows (a margin
+// fixed in points leaves a 1x screen's edge pixels out). What the part does not state a crop cannot keep
 // apart: ink in no group (a table's rule, a figure's stroke), ink of an element its box leaves out (a glyph PDF.js reads as
 // a blank, an extensible delimiter: locate's element boxes are its glyphs of a Unicode that is not blank), and, for a crop
 // cut from another page of its member, the ink of that page's members that are not this page's.

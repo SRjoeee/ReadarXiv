@@ -490,6 +490,56 @@ describe('layPage (design-a §1.2) over a part and its rows', () => {
     const both = layPage(pt, rows, rules, metrics()).members
     expect(both.map((m) => m.state)).toEqual(['laid', 'laid'])
   })
+  it('ends a head’s room on the row it shares with a member not laid where TeX ended the head there: that member’s text stays', () => {
+    // (2608.06701v1-zh p6 on the door's rows: a run-in heading of two lines, its last line the row its paragraph's first line
+    // goes on; the paragraph had no row, its original text stays on the row. The heading's translation, one line, was moved onto
+    // the row by X.lastLines, whose slot there ran to the measure, and drawn over the paragraph's text: the row's room was cut
+    // at the follower only where the follower's join states ink kept between the two, never where the follower is not laid)
+    const head = member({
+      ord: 0,
+      kind: 'heading',
+      lines: [
+        [1, 0, 72, 300, 712, 719, 710, 72, 300, 0, 10],
+        [1, 0, 72, 100, 700, 707, 698, 72, 300, 2, 10],
+      ],
+      room: { below: 0, next: 300 },
+    })
+    const idB = 'b'.repeat(64)
+    const para = member({
+      ord: 1,
+      text: idB,
+      join: [5],
+      lines: [
+        [1, 0, 105, 300, 700, 707, 698, 72, 300, 2, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 300, 0, 10],
+      ],
+    })
+    const pt: Part = { ...part(head), flows: [[head, para]] }
+    // (the head's translation, 155 wide: one line of its first row's room, past the 28 its own text took on the shared row)
+    const headRow = row([{ t: 'text', s: 'Ein Vergleich mit den Varianten' }])
+    const paraRow = { ...row([{ t: 'text', s: 'ein Satz' }]), id: idB }
+    const onRow = (ms: ReturnType<typeof layPage>['members']) => ms[0]!.lines.filter(([y]) => y === 700)
+    // (the paragraph not laid: left by the reader's option, or no row by the rows' end; the head laid, and nothing of it on the
+    // row past where TeX ended its text there, so that TeX's own separation stands before the paragraph's text)
+    const cases: [Rows, Parameters<typeof layPage>[2], string][] = [
+      [rowsOf([headRow, paraRow], true), rulesFor('de', { leave: ['para'] }), 'left'],
+      [rowsOf([headRow], true), rules, 'none'],
+    ]
+    for (const [rows, r, state] of cases) {
+      const laid = layPage(pt, rows, r, metrics()).members
+      expect(laid.map((m) => m.state)).toEqual(['laid', state])
+      expect(laid[1]!.off).toBe(0)
+      expect(onRow(laid).filter(([, , x1]) => x1 > 100 + 1e-6)).toEqual([])
+    }
+    // (its near miss: the paragraph laid, the head moved onto the row as before, past its original end, and the paragraph laid
+    // from its end on the row: S.rowStart, from the head's ink end, which this file's metrics put at its last word's start)
+    const both = layPage(pt, rowsOf([headRow, paraRow], true), rules, metrics()).members
+    expect(both.map((m) => m.state)).toEqual(['laid', 'laid'])
+    const [hy, , hx1] = both[0]!.lines.at(-1)!
+    expect(hy).toBe(700)
+    expect(hx1).toBeGreaterThan(100)
+    expect(both[1]!.lines[0]![0]).toBe(700)
+  })
   it('lets a run-in head take its row before it shrinks: the head and its paragraph at their size (2611.03178v1-zh p16)', () => {
     // (a bold head at 72-100 on the row of its paragraph, which TeX set from 105 on: its translation, eight characters, 40 wide
     // at its size where its own line holds 28: the fit shrank it to 0.85 to fit there, and the size tie set its paragraph at

@@ -30,7 +30,7 @@
 			"formatter": { "enabled": false }
 		},
 		{
-			"includes": ["packages/engine/src/fonts/font-coverage.ts", "packages/engine/src/fonts/font-letters.ts"],
+			"includes": ["packages/engine/src/fonts/font-coverage.ts", "packages/text/src/font-letters.ts"],
 			"formatter": { "enabled": false }
 		},
 		{

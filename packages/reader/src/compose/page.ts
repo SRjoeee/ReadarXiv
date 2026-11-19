@@ -1,7 +1,6 @@
-// What the reader paints a page from: `Page`, as interfaces/page design-a §1.2 decides it (DECISION: "L4 (reader shell)
-// consumes Page only"). The typesetter (packages/typeset, lane L3) makes it; until its `layPage` is exported, the reader states
-// the shape here, word for word, and takes the call that makes one as a dependency (`Lay`), so that lane L3's `layPage`
-// replaces the fixtures' stand-in behind the same call. When typeset exports these types, this file imports them.
+// What the reader paints a page from: `Page`, which the reader consumes alone. The typesetter (packages/typeset, its
+// `layPage`) makes it and exports no type of it, so the reader states the shape here, word for word, and takes the call
+// that makes one as a dependency (`Lay`): the typesetter's `layPage` and the fixtures' stand-in behind the same call.
 import type { LinkBorder, Part, Row } from '@readarxiv/format'
 
 export type Box = [x0: number, y0: number, x1: number, y1: number]

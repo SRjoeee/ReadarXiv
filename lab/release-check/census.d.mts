@@ -9,20 +9,30 @@ export interface Tree {
   chains: { count: number; orders: number; chains: { file: string; kinds: string[]; builds: string[]; implementation: string[] }[]; implementations: { id: string; file: string; hosts: string[] }[] }
   gpl: { file: string; repo: string; path: string; code: number; role: string; reachedBy: { build: string; path: string[] }[] }[]
   debt: {
-    rules: { ledger: boolean; recorded: string | null; unexplained: number; magnitudes: number; notJudged: number; list: { at: string; key: string | null; repo: string; file: string; line: number }[] }
+    rules: { ledger: boolean; recorded: string | null; unexplained: number; magnitudes: number; notJudged: number; budgets: number; list: { at: string; key: string | null; repo: string; file: string; line: number }[] }
     thresholds: { all: Counts; headline: Counts; headlineTunedNoReason: number; list: { class: string; name: string | null; unit?: string; source?: string | null; at: string }[] }
     budgets: { count: number; unmeasured: number; headline: number; headlineUnmeasured: number; byUnit: Counts; bySource: Counts }
-    vocabularies: { count: number; headline: number; list: { form: string; size: number; name: string | null; at: string }[] }
-    lists: { headline: Counts; list: { form: string; size: number; name: string | null }[] }
+    vocabularies: { count: number; headline: number; list: { form: string; size: number; name: string | null; at: string; repo: string; headline: boolean; by: string }[] }
+    lists: { headline: Counts; list: { form: string; size: number; name: string | null; at: string; repo: string; headline: boolean; class: string }[] }
     papers: { id: string; at: string }[]
     texFiles: { name: string; at: string }[]
     versions: { count: number; mirrors: number; schema: number; content: number; list: { name: string; value: string | number; at: string; mirror: boolean; schema: boolean }[] }
   }
   types: { engine: number; engineAll: number; unchecked: number; mjs: number; any: number; nocheck: string[]; suppressions: number; casts: number; unsafeCasts: number; nonNull: number; packages: { suppressions: number; casts: number; unsafeCasts: number; nonNull: number } }
   duplicates: { groups: number; lines: number; copied: string[] }
-  dead: { modules: number; moduleList: string[]; deadExportList: string[]; deadExports: number; testOnlyExports: number }
+  dead: {
+    modules: number
+    moduleList: string[]
+    deadExportList: string[]
+    deadExports: number
+    testOnlyExports: number
+    /** each import that took every export of a product module, and why */
+    wholeImports: { from: string; line: number; to: string; why: string }[]
+    /** each namespace import of a product module: the members it reads, and where it escapes whole */
+    namespaceImports: { from: string; role: string; line: number; to: string; reads: string[]; whole: { line: number; why: string }[] | null }[]
+  }
   functions: { count: number; longest: Fn | null; over500: number; over1000: number; over1000List: Fn[]; ten: Fn[]; tenLongest: number; byRepo: Record<string, { longest: Fn | null; over500: number; over1000: Fn[]; ten: Fn[]; tenLongest: number }> }
-  history: { files: number; todays: number; dated: number; measuredDates: number; named: number; lines: number; byFile: { repo: string; file: string; lines: number; at: number[] }[] }
+  history: { files: number; todays: number; dated: number; measuredDates: number; named: number; forms: Record<string, number>; attribution: number; lines: number; byFile: { repo: string; file: string; lines: number; at: number[] }[] }
 }
 type Fn = { repo: string; file: string; line: number; name: string; code: number; at: string }
 export interface Census {
@@ -31,6 +41,8 @@ export interface Census {
 }
 export declare const DEFINITIONS: Record<string, string>
 export declare function census(trees: { today: Scan[] | null; now: Scan[]; rulesLedger?: { recorded?: { commit?: string | null }; rules: Record<string, { verdict: string }> } | null }): Promise<Census>
+/** a view's rule debt: its thresholds, budgets, vocabularies and lists, each in the debt areas' headline or not */
+export declare function debtOf(view: { label: string; scans: Scan[]; files: { id: string; repo: string; path: string; f: unknown; scan: Scan }[]; keys?: Map<unknown, string> | null }, rulesLedger?: unknown): Tree['debt']
 export declare function headlineOf(c: Census): { id: string; measure: string; values: unknown[]; target: string | null }[]
 export declare function numbersOf(c: Census): Record<string, unknown>
 type Judged = { current: { NOW: Part; AFTER: Part | null }; lines: Line[] }

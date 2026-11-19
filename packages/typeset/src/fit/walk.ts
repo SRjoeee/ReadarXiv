@@ -1,8 +1,7 @@
-// X.walk (design-b §1.5, T31): the fit's states, from the most natural, each knob taken to its bound before the next, and a
-// unit laid at the first state at which every token is placed. Ported from engine 065c1d973 layer2.mjs L2:4040-4134
-// (statesOf, sameState, sharedStates, layoutUnit2; moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript),
-// held by the walk's, the chain's and the fill's replays on the corpus. The `borrow` knob is today's: a block's lines laid on into
-// the room under its last line, before its leading and its size (the owner's ruling of 2026-11-08, borrowing bounded by TeX's
+// X.walk: the fit's states, from the most natural, each knob taken to its bound before the next, and a unit laid at the
+// first state at which every token is placed (statesOf, sameState, sharedStates, layoutUnit2), held by the walk's, the
+// chain's and the fill's replays on the corpus. The `borrow` knob: a block's lines laid on into
+// the room under its last line, before its leading and its size (docs/PDF-READER.md §18.11, borrowing bounded by TeX's
 // facts: so that a page's body keeps one size); the room is TeX's (lay/adapt.ts), stated on each block (`free`).
 import { type Broken, breakLines, kernOf, lineExtent, SQUEEZE, tokW } from '../breaker/break.ts'
 import { laidOut } from '../breaker/place.ts'
@@ -19,8 +18,8 @@ export const firstCompress = (P: { compressMax: number }): number => (P.compress
 
 /**
  * How far under TeX's text block bottom a unit's last line may stand, in points, where that keeps the unit from a step down
- * the size ladder (docs/PDF-READER.md §18.37, the owner's ruling of 2026-11-12). Production borrows past the bottom; 1.5 is the
- * value the owner looked at the pages with on the test site before he ruled. Over the 22 parity pairs it keeps six units
+ * the size ladder (docs/PDF-READER.md §18.37). Production borrows past the bottom; 1.5 is the value the pages were judged at
+ * on the test site before the rule was set. Over the 22 parity pairs it keeps six units
  * larger, each needing 0.08 to 1.36 pt while laid (2608.16117v1-de unit 86 1.36, unit 99 1.05; 2602.23285v2-ja unit 29 1.22,
  * unit 90 0.99: the four production keeps at their size with a line past the bottom); a borrowed line's ink stays inside its
  * class's `\maxdepth`, the depth TeX itself lets a last line hang under the bottom (deepest 3.73 pt, elsarticle at 12 pt's 6)
@@ -29,7 +28,7 @@ export const PAST_FOOT = 1.5
 
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
 function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Generator<FitState> {
-  // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
+  // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back; down from it)
   const t0 = P.cjk ? (P.trackStart ?? 0) : 0
   // (capScale: the most its lines' room between the rules over and under them leaves it, cellBands: never above)
   const top = Math.min(1, P.capScale ?? 1)
@@ -115,7 +114,7 @@ function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Genera
 }
 /**
  * The walk's tries, from its `skip`th state on: each state of statesOf as it comes. For a merged table cell the lay fills
- * (P.words, docs/PDF-READER.md §18.75) the size never gives way to whole words (the owner's answer of 2026-11-16): each size's
+ * (P.words, docs/PDF-READER.md §18.75) the size never gives way to whole words: each size's
  * states (a run of statesOf's at one scale) are laid between words first, then the same states as before, `split` (a word cut
  * where a line must end), before the next size's; the size steps down only where neither sets it
  */
@@ -212,8 +211,8 @@ const ROOM_ALL = 99
 /** a lay of the fit's: its state, its slots, B.break's lines, the size */
 type Lay = { st: FitState; S: Slot[]; r: Broken; f: number }
 /**
- * The walk lays no state that surely fails, and re-breaks nothing where the breaks cannot change (the coordinator's rulings of
- * 2026-11-16, docs/PDF-READER.md §18.88). A state's lay, `at`:
+ * The walk lays no state that surely fails, and re-breaks nothing where the breaks cannot change (docs/PDF-READER.md
+ * §18.88). A state's lay, `at`:
  * - The bound (outfills): where the text, packed as tight as B.break packs it, outfills the state's slots, the state fails as
  *   surely as laid; it is passed, unlaid. Any knob's state, the first of a size step's too.
  * - The floor: what B.break sets on each line is a function of the text, the size, the tracking, the word rule and each line's
@@ -241,7 +240,7 @@ function fitLays(tokens: readonly Token[], blocks: readonly FitBlock[], s: numbe
   const free = !tokens.some((t) => t.pageBreak !== undefined || (t.newline !== undefined && (t.room ?? 0) > 0))
   type Floor = Lay & { at: number[] | null; extents: ReturnType<typeof lineExtent>[] }
   /** the floor of the knob last asked: its lay; none where it asks a measure the host has not (MissingMeasure: a replay's table of
-   *  today's measures, which holds none today's walk did not lay), and every state of the knob is then laid as before */
+   *  recorded measures, which holds none the recorded walk did not lay), and every state of the knob is then laid as before */
   let floor: { st: FitState; lay: Floor | null } | null = null
   const misses: FitState[] = []
   /** the floor's lay of state `st`'s knob, each of its lines' slot (none where a line opened, or stands on no slot of its own) */
@@ -408,10 +407,10 @@ function fitLays(tokens: readonly Token[], blocks: readonly FitBlock[], s: numbe
 }
 /**
  * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped (which the
- * host never draws: run.mjs fitFurther).
+ * host never draws: fitFurther takes it on).
  * `s`: the original's size (PDF units). Returns { lines, f, s, scale, state, knob, clipped, lostChars, chars, tried }.
  * `failed`: the parameters of a fit of the same tokens on the same blocks that set them at none of its states, strictly or
- * run past a kept region (a clipped layoutUnit2), which differ from P only in what statesOf reads (run.mjs fitFurther's step
+ * run past a kept region (a clipped layoutUnit2), which differ from P only in what statesOf reads (fitFurther's step
  * below the floor: `floor`): the states the two fits share have been laid already, so this fit goes on from the first state of
  * its own. Null where it has no state of its own
  */

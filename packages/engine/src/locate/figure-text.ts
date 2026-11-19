@@ -1,20 +1,19 @@
-// COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none), and, marked CHANGED, a line of a
+// COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at this package's modules and, where
+// marked COPY, a turned glyph's owner read where the page states one (streamOf, `turnedOwners`), and, marked CHANGED, a line of a
 // justified paragraph set from its start (setsOf), a run ended where it goes into or out of a face of one pitch (`fixed`, Rule 1's
-// fact) and a run gone on across a size change inside a word (figureUnitsOf `sized`): run by locate over arXiv's page (../ink.ts),
-// held equal to today's by tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
+// fact) and a run gone on across a size change inside a word (figureUnitsOf `sized`): run by locate over arXiv's page (../ink.ts).
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
-// rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
+// content-classes.ts): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
 // a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units
-// (pipeline/page-pass.mjs figureUnits), translated with them whatever the reader's toggles, and drawn in its own run's box by the
-// layer where they show the class (run.mjs
-// paintFigures, layer-proto/figure-fit.mjs), its ink hidden by its own optional-content group (`f<k>`, wrap.ts). Read in
-// the maker child from what it already has: the pages pageInk read (`indices` and `turned`) and own.mjs's ownership. Nothing of
+// (ink.ts inkOf), translated with them whatever the reader's toggles, and drawn in its own run's box by the
+// typesetter where the reader shows the class (S.figures: its lay/figures.ts and
+// shared/figure-fit.ts), its ink hidden by its own optional-content group (`f<k>`, wrap.ts). Read in
+// locate from what it already has: the pages pageInk read (`indices` and `turned`) and the ownership ink.ts gives. Nothing of
 // arXiv's PDF, no layout file, no position estimated: every place is our glyphs'.
 //
 // Which glyphs: those no unit owns, no blank, inside a figure our compile set —
 //   - an included PDF's: shown inside a form XObject (pageInk's `form`; pdfTeX includes a PDF, and an EPS made one, as a form);
-//   - a TikZ or pgfplots picture's: between the picture's points `zs` and `ze` (layout/marks.mjs POINTS_TEX, inside pgf's
+//   - a TikZ or pgfplots picture's: between the picture's points `zs` and `ze` (marks/marks.ts POINTS_TEX, inside pgf's
 //     \pgfsys@beginpicture and \pgfsys@endpicture, in the picture's own box: TeX sets its text in our fonts; pageInk's
 //     `pictures`).
 // Level and turned alike (a y-axis title set at 90 degrees keeps its turn).
@@ -40,8 +39,8 @@
 // is not wholly inside the clip in force (an included figure's viewport cuts off what it does not show: pageInk's `clipped`) or
 // inside its page's box, and one a glyph of which stands past BAND_MAX of its size from its baseline (its own ink, level or
 // turned): its size is not its glyphs' (OriginLab's Type 3 faces, glyphs of 2048 units an em under a font matrix of 10/2048,
-// shown at a size of about 1, stand 7 of it tall), so that a translation drawn at its size would be a tenth of the original,
-// and its row's band is one no part's reader takes (layer-proto/figure-rows.mjs checkFigures). A font that gives no Unicode a
+// shown at a size of about 1, stand 7 of it tall), so that a translation drawn at its size would be a tenth of the original
+// (PDF-READER §19.12, `outsized`). A font that gives no Unicode a
 // reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.ts unicodeOf).
 //
 // Each unit's place, in its own frame (its first glyph's origin, along its direction, up across it): its box from its first
@@ -53,20 +52,22 @@
 // them). A unit whose band meets other ink inside its box — another glyph's, a stroke's segment widened by its half line width,
 // a fill's edge, an image's or a shading's box —, but a fill that holds the whole band (a node's fill, the plot's background), is
 // `crowded`: a translation there could cover that ink, so it stays the original's. Ink is what the page shows: a glyph wholly
-// outside the clip in force and any paint at an alpha of 0 (pageInk's `unseen`) are none, neither a label's nor its crowding, and
-// nor is what an opaque fill painted over it before the text covers (pageInk's `opaque`: a gridline under an annotation's box). A
+// outside the clip in force, a glyph an opaque fill painted after it covers whole, and any paint at an alpha of 0 (pageInk's
+// `unseen`) are none, neither a label's nor its crowding (a word a label's box is painted over is no label), and nor is what an
+// opaque fill painted over it before the text covers along the text's band (pageInk's `opaque`: a gridline under an annotation's
+// box). A
 // stroke painted before the text that crosses the band only below its baseline (a gridline under a legend entry's descenders) is
-// under the text, as a ground is: it crowds nothing and ends no free line, and the unit carries its depth (`under`): whether a
-// translation meets it is told where the translation's faces and size are known, by the layer (figure-fit.mjs).
+// under the text, as a ground is: it crowds nothing and ends no free line, and the unit carries its depth (`under`), which the
+// typesetter's fit does not read: width is its only test (PDF-READER §19.12).
 //
-// Its set and its room (the owner's rule of 2026-10-29: the labels of one group set at one size, the original's, each keeping the
-// original's alignment; a translation may take free space, never touching other ink nor leaving its figure; a group that cannot
-// fit shrinks as one). A unit in a column — runs of one figure, size and direction whose starts, ends or middles lie on one line
+// Its set and its room (PDF-READER §19.12: the labels of one group a set, each keeping the original's alignment; a
+// translation may take free space, never touching other ink nor leaving its figure; each sized by its own width alone).
+// A unit in a column — runs of one figure, size and direction whose starts, ends or middles lie on one line
 // within ALIGN_TOL (across their direction; for turned runs a level or upright line of the page too), two units or more among
 // them (a legend's "…" tells its column's start) — keeps its column's edge as its anchor, whatever it read alone (a legend's
 // entry with its frame right after it was set from its end, the longest one centred). The units of one column, and those of one
-// figure, size and direction on one baseline, are one set (`set`, its first unit's k), which the layer fits at one size
-// (layer-proto/figure-fit.mjs fitFigureSet). Its room (`before`, `after`) is the free line beside its box: to the nearest ink
+// figure, size and direction on one baseline, are one set (`set`, its first unit's k): the part's size tie, which no size
+// reads. Its room (`before`, `after`) is the free line beside its box: to the nearest ink
 // its band meets (or the edge of the ground it stands on), ROOM_CLEAR short of it, within its figure's extent (pageInk's
 // `figures` and its glyphs), half the line to another unit's band (the other half that unit's), short of a unit of another
 // direction's band and room, ROOM_MAX at most.
@@ -140,7 +141,7 @@ export interface TodayShape {
   pattern?: boolean
   opaque?: boolean
 }
-/** a page as the figure reading takes one (wrapFinal's pages): its level and turned glyphs, its pictures' points, the regions TeX
+/** a page as the figure reading takes one (A's: locate/ink.ts): its level and turned glyphs, its pictures' points, the regions TeX
  *  set, the turned glyphs' owners where it states them, its view, its boxes (stride 4) and each box's kind (`paths`, one a box:
  *  pageInk's with `indices`), the boxes painted before each glyph (`boxAt`), its paths' lines (`shapes`), its figures' extents,
  *  the boxes not shown (`unseen`) and those its groups' bounds cut (`cut`) */
@@ -406,8 +407,7 @@ interface Evidence {
 }
 
 /** a unit's band's ascent and descent at most, in em: past it no glyph stands at the size the unit is drawn at, so a run a glyph of
- *  which stands further from its baseline is no unit (below). The value is the reader's, which holds a figure row's band to it:
- *  today's src/pdf-reader/engine/layer-proto/figure-rows.mjs:37 BAND_MAX (checkFigures) (its copy in deps.mjs until 2026-11-14) */
+ *  which stands further from its baseline is no unit (below; PDF-READER §19.12, `outsized`) */
 const BAND_MAX = 4
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
@@ -461,8 +461,8 @@ const UNREAD = /[\uE000-\uF8FF\uFFFD\p{Cc}]|[\u{F0000}-\u{10FFFF}]/u
  * A page's glyphs as one stream, level and turned, in the order the content shows them (by show and place in it), each with its
  * frame: origin (ox, oy), end (ex, ey), direction (ux, uy), size, its band's ascent and descent in em, its own ink up and down
  * from its baseline in em (`up`, `down`: a level glyph's band is its ink; a turned glyph's band is its font's, its ink pageInk's
- * `up` and `down`), its font, fill, whether it is shown in a form, its picture depth, and its owner's group (level glyphs alone
- * are owned: own.mjs reads no turned glyph)
+ * `up` and `down`), its font, fill, whether it is shown in a form, its picture depth, and its owner's group (a level glyph's in
+ * `owners`, a turned one's where the page states one, `turnedOwners`)
  */
 function streamOf(pg: FigurePage, owners: readonly (OwnerName | null | undefined)[] | undefined): StreamGlyph[] {
   const G = pg.glyphs ?? [],
@@ -528,7 +528,7 @@ function streamOf(pg: FigurePage, owners: readonly (OwnerName | null | undefined
       pid: x.pid ?? 0,
     })
   }
-  // (COPY: a turned glyph's owner where the page states one, `turnedOwners`: today's pages own none, own.mjs reads no turned glyph)
+  // (COPY: a turned glyph's owner where the page states one, `turnedOwners` (ink.ts); none where it states none)
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]!
@@ -594,7 +594,7 @@ function inFrame(f: Frame, b: readonly number[]): [number, number, number, numbe
 }
 
 /**
- * The figure units of a document. `pages` (page p at index p - 1) as wrapFinal reads them — `glyphs` (pageInk's with `indices`),
+ * The figure units of a document. `pages` (page p at index p - 1) as locate/ink.ts has them — `glyphs` (pageInk's with `indices`),
  * `turned` (pageInk's `turned`), `boxes` (stride 4), `paths`, `points` —; `own`, ownOf's result for them (its `glyphs[p - 1][g]`,
  * a group or null). Returns { units, glyphs, turned, stats }: `units` each { k, page, group, text, font, size, fill, angle (degrees,
  * anticlockwise), x, y (its first glyph's origin), ux, uy, length (its box along its direction), ascent, descent (its band, em),
@@ -634,7 +634,7 @@ export function figureUnitsOf(
   // (a glyph's face: its font's name, a subset's tag aside. Matplotlib (3.11) writes the characters past its first subset of a
   // face, the minus sign and the ligatures its text shaping sets (ff, fi, fl, ffi), into a second subset of the same face, so that
   // one label switched fonts inside a word: "di" | "ff" | "erence (points)", "Jury" | "−" | "equal-weight pool" were units of their
-  // own, the fragments translated as words (2610.21085v1's Figures 3 and 4; 66 labels on 12 of the sweep's 87 papers))
+  // own, the fragments translated as words (2610.21085v1's Figures 3 and 4; 66 labels on 12 of 87 papers))
   const faceOf = (name: string | undefined) => {
     let f = face.get(name)
     if (f === undefined) {
@@ -669,7 +669,7 @@ export function figureUnitsOf(
   // (TeX's own glyph in a picture after a run of TeX's that spells a word: its line goes on over faces and colours, math aside)
   const texLine = (x: StreamGlyph, run: Run) =>
     run.word && !x.form && !run.form && x.picture > 0 && famOf(x.font) !== 'math' && famOf(run.font) !== 'math'
-  // (CHANGED: a word is told by its spacing, not its sizes, the owner's rule of 2026-11-10. A glyph is of the run's sizes where it
+  // (CHANGED: a word is told by its spacing, not its sizes, PDF-READER §18.24. A glyph is of the run's sizes where it
   // is set at one of them, within 1 %, as a run's glyphs were of its one size; or where it stands no word space past the glyph
   // before it (SPACE_GAP of their size, as `word` reads one below; a space glyph is a word space), its word's whatever its
   // size, whose size is the run's then too, so that the words after it at either size go on with it. iclr2025's faked small
@@ -683,7 +683,7 @@ export function figureUnitsOf(
     glyphMaps: Map<number, number>[] = [],
     turnedMaps: Map<number, number>[] = []
   // (CHANGED: the ink each crowded unit's band meets, by its k, and its stroke under its text: locate's relation reading judges
-  // it, figure-lines.ts, the owner's reformulation of 2026-11-10)
+  // it, figure-lines.ts, PDF-READER §18.26)
   const met = new Map<number, { items: TodayMet[]; under: number | null }>()
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
@@ -827,29 +827,29 @@ export function figureUnitsOf(
       if (!WORD.test(text.normalize('NFKC'))) continue
       if (gs.some((x) => UNREAD.test(x.u)) || text.length > FIGURE_TEXT_MAX) continue
       // (the caps count the figures' text the reading takes, every run that spells a word, shown whole or not: what shows of it
-      // never moves where they fall. Where the units alone counted, #555's runs no page shows (2610.19159v1's invisible Type 3
-      // text over its pp. 2-17's pictures) let the cap fall later, in p67's box, and the lines past it that the ink units had
-      // translated became figure units, one of them crowded by its own underscore: English (the sweep of 1e01ce14))
+      // never moves where they fall. Were the units alone counted, runs no page shows (2610.19159v1's invisible Type 3 text
+      // over its pp. 2-17's pictures) would let the cap fall later, in p67's box, and the lines past it that the ink units
+      // translate would become figure units, one of them crowded by its own underscore and left in English)
       if (onPage >= unitsPage || taken >= unitsDoc) {
         stats.past++
         continue
       }
       onPage++
       taken++
-      // (a run TeX set in a code region (pageInk's `regions`, marks.mjs regionsTex) is code, kept as the paper has it, never a figure's
+      // (a run TeX set in a code region (pageInk's `regions`, marks.ts regionsTex) is code, kept as the paper has it, never a figure's
       // text, wherever it stands: 2610.19159v1's transcripts, in mdframed boxes TikZ draws, were cut into figure units word by word
       // and translated. Counted under the caps as any run, so that where they fall moves with no judgment of a run's, and a column's
-      // edge it tells others as before)
+      // edge it tells others as any run does)
       if (r.code) continue
-      // (a run its clip cuts, or its page's edge, whole or in part, or one painted at an alpha of 0, is not shown whole: no text a
-      // translation could stand for, and a row whose origin is off its page no part's reader takes, figure-rows.mjs checkFigures)
+      // (a run its clip cuts, or its page's edge, whole or in part, one painted at an alpha of 0, or one a glyph of which an opaque
+      // fill painted after it covers whole, is not shown whole: no text a translation could stand for)
       if (r.clipped || gs.some((x) => offPage(x.ox, x.oy) || offPage(x.ex, x.ey))) {
         stats.clipped++
         continue
       }
       // (a run a glyph of which stands past BAND_MAX of its size from its baseline is not set at its size: its glyphs are drawn at a
       // scale its size does not tell (2608.08481v1's OriginLab faces, 7 of it tall), a translation drawn at its size would be a
-      // tenth of the original, and its row's band no part's reader takes, figure-rows.mjs checkFigures)
+      // tenth of the original)
       if (gs.some((x) => !(x.up <= BAND_MAX && x.down >= -BAND_MAX))) {
         stats.outsized++
         continue
@@ -924,7 +924,7 @@ export function figureUnitsOf(
         (i) => glyphMap.has(i),
       ),
     )
-    // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step, lane mem-back)
+    // (the page read: nothing here reads its shapes again, which a reader may let go, `done`: locate's ink step)
     done?.(pi)
   })
   return { units, glyphs: glyphMaps, turned: turnedMaps, stats, met, holds }
@@ -997,8 +997,8 @@ export function containersOf(
     // (the nodes of a box round a whole chart, 2608.06701v1 p2). A fill or a frame under words of one line, inside that line's
     // band (one band's height over and under its baseline, the reach figure-lines' torn reads a line's own ink in), is a
     // decoration that goes with its words: a code chip in a bubble (2608.06701v1 p9, 0.96 of the size), where a node's box
-    // stands past it (2608.06007v1 p8, 1.5 of the size and more). Other ink inside, a stroke, a legend's samples, is no reason:
-    // the coordinator's reading of 2026-11-11, what would end up in the wrong place, never whether ink is)
+    // stands past it (2608.06007v1 p8, 1.5 of the size and more). Other ink inside, a stroke, a legend's samples, is no reason
+    // (PDF-READER §18.36): what counts is what would end up in the wrong place, never whether ink is)
     for (let c = 0; c + 3 < B.length && alone; c += 4) {
       if (c / 4 === b || U?.has(c / 4)) continue
       const inner = SH.get(c / 4)
@@ -1075,7 +1075,7 @@ export function interiorOf(segs: ArrayLike<number>, x: number, y: number): boole
   return c
 }
 
-/** the page's text lines a unit's column is read from: the level glyphs a unit owns (own.mjs's groups), by baseline, a line
+/** the page's text lines a unit's column is read from: the level glyphs a unit owns (its group in `owners`), by baseline, a line
  *  cut where two glyphs stand a size apart (two columns' lines on one baseline), each { y, x0, x1, size } by its glyphs'
  *  advances */
 function columnLinesOf(pg: FigurePage, owners: readonly (OwnerName | null | undefined)[] | undefined): ColumnLine[] {
@@ -1168,7 +1168,7 @@ function spanIn(u: FigureUnit, b: readonly number[]): [number, number] {
  *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
  *  one figure, one direction, one size), and the lines its edges may share (`axes`: across its direction always; for a run
  *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line), and
- *  (CHANGED) its word space (`space`, spaceOf: setsOf's measure). Its size is setsOf's to key (CHANGED: today's keyed it to the
+ *  (CHANGED) its word space (`space`, spaceOf: setsOf's measure). Its size is setsOf's to key (CHANGED: within 1 %, not to the
  *  hundredth, see there) */
 function edgesOf(r: Run, gs: readonly StreamGlyph[]): Evidence {
   const f = r.frame,
@@ -1206,14 +1206,14 @@ function spaceOf(f: Frame, gs: readonly StreamGlyph[], size: number): number | n
 }
 
 /** the edges a column may share, in the order a tie between them is broken (a column is read from its start) */
-const EDGES = Object.freeze(['start', 'end', 'centre'] as const)
+const EDGES = Object.freeze(['start', 'end', 'centre'] as const satisfies readonly Anchor[])
 /** the lines a column's edges lie on: across the runs' direction (`along`: one place along it), upright (`x`), level (`y`) */
 const AXES = Object.freeze(['along', 'x', 'y'] as const)
 /** a line a column's edges lie on (AXES) */
 type Axis = (typeof AXES)[number]
 
 /**
- * A page's units in their columns and sets (the owner's rule of 2026-10-29: the labels of one group set at one size, each
+ * A page's units in their columns and sets (PDF-READER §19.12: the labels of one group a set, each
  * keeping the original's alignment). A column: the runs of one key (one figure, direction and size) whose starts, ends or
  * middles lie on one line within ALIGN_TOL of their size — across their direction, or for runs turned off the page's axes on
  * a level or upright line of the page (a turned axis's labels, each ending at its tick) —, units or not (a legend's "…", a
@@ -1221,8 +1221,8 @@ type Axis = (typeof AXES)[number]
  * edge the most of its runs share; where edges tie, the one the most of the column's units read alone (roomOf), else the
  * first of EDGES — whatever it read alone: a legend's entry with its frame near its end is set from its start as its column
  * is. A set: the units of one column of one edge, and the units of one key on one baseline (within RUN_DY of their size: an
- * axis's words, a legend laid in a row), joined; its number `set` is its first unit's k, which the layer fits it by
- * (figure-fit.mjs fitFigureSet: one size for all). Counts the sets of two units or more (`sets`), the units in them
+ * axis's words, a legend laid in a row), joined; its number `set` is its first unit's k: the part's size tie, which no size
+ * reads (each unit fitted by its own width, PDF-READER §19.12). Counts the sets of two units or more (`sets`), the units in them
  * (`grouped`) and those whose anchor the column changed (`aligned`)
  */
 function setsOf(
@@ -1237,8 +1237,8 @@ function setsOf(
   // votes are counted; the column line of each edge and axis, made for each)
   // (each edge's columns on each line: the runs of a key in the order of that edge's place, each joined to the one before
   // within the tolerance)
-  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. CHANGED: today's keyed the size to the
-  // hundredth, and 2411.13093v4 p18's lines 515 and 527, set at 7.07 pt among their paragraph's 7.06's, made a column of their own)
+  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. CHANGED: keyed to the hundredth, the size
+  // made 2411.13093v4 p18's lines 515 and 527, set at 7.07 pt among their paragraph's 7.06's, a column of their own)
   {
     const bySize = new Map<string, number[]>()
     // biome-ignore lint/suspicious/useIterableCallbackReturn: the list made and pushed to in one statement, as written; forEach drops what it returns
@@ -1305,7 +1305,7 @@ function setsOf(
   // their texts: one ("Population mean" twice, 2610.10492v1), none (2610.20808v1's "pt" "en" "es"), or one each, the one label
   // more letters, the other more spaces (2610.40394v1's "Ordinary Differential Equations" and "History & General Mathematics",
   // 2.348 pt both): no stretch, no measure. 2411.13093v4 p18's full lines' spaces run from 3.96 to 6.36 pt, its unjustified
-  // lines' 3.90. CHANGED: today's set a paragraph's indented line, which shares its end and not its start, from its end —
+  // lines' 3.90. CHANGED: a paragraph's indented line, which shares its end and not its start, is not set from its end:
   // 2411.13093v4 p18's prompt, an entry's translated first line flush against the box's right edge, its next line from the left)
   const measured = new Map<number, boolean>()
   const isMeasure = (line: Column, c: number) => {
@@ -1403,7 +1403,7 @@ function setsOf(
 
 /**
  * Each unit's room on its line (`before`, `after`: PDF units along its direction before its box's start and after its end), the
- * free line a translation longer than its original may take (the owner's rule of 2026-10-29: into free space, never touching
+ * free line a translation longer than its original may take (PDF-READER §19.12: into free space, never touching
  * other ink, never leaving its figure): the ink its band meets nearest along its baseline (roomOf's `free`: another glyph, a
  * stroke, a fill's edge, an image) less ROOM_CLEAR of its size; never past its figure's extent (pageInk's `figures`, with its
  * figure's glyphs) nor its page's box, where either edge of its band leaves them (spanIn); half the line between it and another unit whose band its own meets (a neighbour's translation may take
@@ -1490,7 +1490,7 @@ function roomsOf(pg: FigurePage, S: readonly StreamGlyph[], mine: readonly Mine[
     let before = Math.min(ROOM_MAX * u.size, free.before - clear),
       after = Math.min(ROOM_MAX * u.size, free.after - clear)
     // (its band as far as it stays inside its figure's extent and its page's box, both its edges: a turned label leaves a box
-    // where its band crosses the box's side, before its box's corners project there, the review of #490)
+    // where its band crosses the box's side, before its box's corners project there)
     for (const b of [ext.get(`${r.fid}:${r.pid}`), view]) {
       if (!b) continue
       const [s0, s1] = spanIn(u, b)
@@ -1508,7 +1508,7 @@ function roomsOf(pg: FigurePage, S: readonly StreamGlyph[], mine: readonly Mine[
     u.after = Math.max(0, after)
   })
   // (then a unit of another direction: its band with its room, as just found, stops this one's room short of it, and this one's
-  // its; each against the other's first finding, so that neither takes the place the other may, the review of #490)
+  // its; each against the other's first finding, so that neither takes the place the other may)
   const first = mine.map(({ u }) => reachOf(u))
   const cut = mine.map(({ u }): [number, number] => [u.before!, u.after!])
   mine.forEach(({ u }, i) => {
@@ -1558,7 +1558,8 @@ const angleOf = (f: Frame): number => {
 /**
  * A unit's room on its page: whether other ink lies inside its box's band (`crowded`), and its anchor (`start`, `centre`, `end`)
  * by the figure's lines right before and after it along its baseline. Other ink, what the page shows (pageInk's `unseen` none of
- * it: a glyph wholly outside the clip in force, any paint at an alpha of 0): every level glyph not the run's (its outline's
+ * it: a glyph wholly outside the clip in force or covered whole by an opaque fill painted after it, any paint at an alpha of 0):
+ * every level glyph not the run's (its outline's
  * box), every turned glyph's box but the run's own, an image's or a shading's box that does not hold the whole band, and a
  * figure's path by its lines where pageInk kept them (`shapes`: a stroke's segments widened by half its line width, a fill's
  * edges; a fill that holds the band, edges clear of it, is its background), else by its box, which a frame or a fill behind the
@@ -1609,8 +1610,8 @@ function roomOf(pg: FigurePage, f: Frame, u: FigureUnit, own: readonly StreamGly
       met.push(atBox)
     }
   }
-  // (the top, across its frame, of the strokes under its text: the depth a translation drawn there must stay above, told by the
-  // layer, which knows the translation's faces and size)
+  // (the top, across its frame, of the strokes under its text: the unit's `under`, which the typesetter's fit does not read,
+  // width its only test: PDF-READER §19.12)
   let underTop = -Infinity
   // (what may meet its band, its reach or its line, on the page: its frame's box there, a box apart from it no ink of them)
   const nearOf = (d: number): [number, number, number, number] => {
@@ -1723,7 +1724,7 @@ function roomOf(pg: FigurePage, f: Frame, u: FigureUnit, own: readonly StreamGly
     if (apartFar(...box) || mineB.has(b / 4) || U?.has(b / 4)) continue
     const e = inFrame(f, box)
     if (e[3] <= band[1] || e[1] >= band[3] || e[2] <= -far || e[0] >= u.length + far) continue
-    // (the crowding and the anchor by the ink within the reach, as before; the free line by every ink, a path's lines as far as
+    // (the crowding and the anchor by the ink within the reach alone; the free line by every ink, a path's lines as far as
     // its box shows them: a line its clip cuts off is no ink there)
     const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
     const shape = S?.get(b / 4),
@@ -1810,12 +1811,12 @@ function roomOf(pg: FigurePage, f: Frame, u: FigureUnit, own: readonly StreamGly
  *  before the text: painted `after` it, it covers the text, ink over the whole band. A fill painted before the text is its
  *  ground whatever its edges: one inside the band is a change of tone under the text and crowds nothing, its parts beside the
  *  box lines beside it; but a fill of a tiling pattern (pageInk's `pattern`), whose hatching is not read, a ground only where it
- *  holds the band, as before. A stroke (no fill) painted before the text whose part across the band, its half width out, lies
+ *  holds the band. A stroke (no fill) painted before the text whose part across the band, its half width out, lies
  *  wholly below the baseline and, as far as its box shows it, under the text's box is under the text: the original's own
  *  descenders were set over it (2610.21085v1's gridline under "jury, α = 8", the legend's other entry translated). It neither
- *  crowds the text nor ends its free line nor tells its anchor; it is told with its top (under1), so that the layer draws a
- *  translation over it only where the translation's own depth, in its faces at the size it is drawn at, stays above it
- *  (figure-fit.mjs): a CJK translation in its em box clears a gridline a Latin one's descenders cross. Such a part only beside the
+ *  crowds the text nor ends its free line nor tells its anchor; it is told with its top (under1), the unit's `under`, which the
+ *  typesetter's fit does not read: width is its only test, and at the original's size a translation stands in the band its
+ *  original stands in (PDF-READER §19.12). Such a part only beside the
  *  box is a line beside it, as any: where a longer translation would stand over it, its free line ends */
 function shapeRoom(
   shape: TodayShape,
@@ -1876,7 +1877,7 @@ function shapeRoom(
         b = Math.min(Math.max(p, q) + w, e[2] + SHOWN_SLACK)
       // (CHANGED, F3: a path whose extent is less than its own line's width is a dot, no line under the text: 2608.06701v1 p9's
       // member 651, a stroke 0.014 long and 0.16 wide 0.32 pt under its baseline read as a stroke 0.06 under it, every CJK
-      // translation's em box crowded by it, the line left the original's. A curve of short segments is a line as before)
+      // translation's em box crowded by it, the line left the original's. A curve of short segments is a line by its whole extent)
       if (top < 0 && a <= b && b > band[0] && a < band[2]) {
         if (!dot) under1(top, a, b)
         continue
@@ -1908,7 +1909,7 @@ function shapeRoom(
   // (a fill painted before the text, no stroke, is its ground whatever its edges, as the original was set on it: an edge inside
   // the band is a change of tone under the text, no ink over it, and crowds nothing; beside the box it tells the anchor and ends
   // the free line as any line does, so that a translation stays on its tone)
-  // (a tiling pattern's edge crowds as before: what its cells paint inside is not read, a hatching's lines among it)
+  // (a tiling pattern's edge crowds as any line's: what its cells paint inside is not read, a hatching's lines among it)
   const tone = shape.fill && !shape.stroke && !after && !shape.pattern
   for (const [a, b] of parts) {
     if (!tone || b <= band[0] || a >= band[2]) {

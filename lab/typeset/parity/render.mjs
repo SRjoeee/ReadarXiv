@@ -32,6 +32,7 @@ import { CACHE, paperOf } from '../../../packages/typeset/tests/replay/today.ts'
 import { L1_BUNDLES, L1_BUNDLES_DIR } from '../../../packages/typeset/tests/replay/l1.ts'
 import { bundlesLine, headsFor } from '../../../packages/typeset/tests/replay/bundles.ts'
 import { LAB, TODAY } from '../../../packages/typeset/tests/replay/tap.ts'
+import { offlineRoute } from '../offline-route.mjs'
 import { SLICES, TABLES } from '../served-metrics.mjs'
 import { analyse, boxesOf, strays } from './analyse.mjs'
 import { DEVICE_PT, inPlace, vacatedOf } from './fidelity.mjs'
@@ -102,7 +103,7 @@ const manifest = () => writeFileSync(join(WORK, 'raw', 'run.json'), `${JSON.stri
 manifest()
 // ---------------------------------------------------------------- today's page: esbuild over today's engine and the web
 const standIn = {
-  // (run.mjs opened with `records` and kept, as baseline/tools/reader.mjs's stand-in: the crops' audit; the drawing the same)
+  // (run.mjs opened with `records` and kept, as the baseline's reader tool's stand-in: the crops' audit; the drawing the same)
   name: 'run-stand-in',
   setup(b) {
     b.onResolve({ filter: /^\.\/run\.mjs$/ }, (a) =>
@@ -407,12 +408,7 @@ const pw = await import('playwright')
 const browser = await pw.chromium.launch({ args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1'] })
 const refused = []
 const guard = async (context) => {
-  await context.route('**/*', (route) => {
-    const u = route.request().url()
-    if (u.startsWith(server.origin) || u.startsWith('data:') || u.startsWith('blob:')) return route.continue()
-    refused.push(u)
-    return route.abort()
-  })
+  await context.route('**/*', offlineRoute(server, refused))
 }
 const wait = (ms) => new Promise((f) => setTimeout(f, ms))
 const frames = (page) => page.evaluate(() => new Promise((f) => requestAnimationFrame(() => requestAnimationFrame(f))))

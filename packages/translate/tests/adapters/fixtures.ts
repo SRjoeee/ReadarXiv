@@ -1,6 +1,6 @@
 // The adapters' fixture units and recorded replies. The replies marked "as it came" are Microsoft's, quoted from the
 // repository's own tests (tests/pdf-reader/mt-wire.test.ts, the comparison of 2026-10-05 over 2610.02069 and of
-// 2026-10-07 over 1706.03762; readarxiv-web worker/tests/mt.test.ts's reading table); none is fetched here.
+// 2026-10-07 over 1706.03762; the reading table of the website's own tests); none is fetched here.
 import type { UnitIn } from '../../src/contract.ts'
 import { el, quiet, span, t, unit } from '../pieces.ts'
 
@@ -165,6 +165,23 @@ export const LABEL_AFTER_BREAK: UnitIn = unit(
     el('n2', 'other'),
     span('h2', 'bold', [t('Only XYZ')], true),
     t(': A model trained with it alone.'),
+  ],
+  true,
+)
+/** a formula the text sets right before a forced break that states the line it ends (2608.12255v1's theorem, an address before
+ *  one in 2611.05979v1; words of our own): the formula is the sentence's before the break, which leads the label's, its
+ *  `\noindent` with it */
+export const FORMULA_BEFORE_BREAK: UnitIn = unit(
+  'formula-before-break',
+  [
+    t('The input is a grid and two constants '),
+    el('c'),
+    t('\n'),
+    el('b', 'break', '\n'),
+    t('\n'),
+    quiet('n'),
+    span('h', 'bold', [t('Output')], true),
+    t(': A binary string. Then we stop.'),
   ],
   true,
 )
@@ -369,6 +386,8 @@ export const TAGS_UNITS: UnitIn[] = [
   SILENT_STOP,
   /* 30, 31 */ ENTRY,
   TIE_PAST,
+  /* 32 */ LABEL_AFTER_BREAK,
+  /* 33 */ FORMULA_BEFORE_BREAK,
 ]
 export const MICROSOFT_UNITS: UnitIn[] = [
   ...UNITS,
@@ -383,6 +402,7 @@ export const MICROSOFT_UNITS: UnitIn[] = [
   /* 28 */ HEAD_STOP,
   /* 29 */ DISPLAY_ENDS,
   /* 30 */ DISPLAY_SIDE,
+  /* 31 */ FORMULA_BEFORE_BREAK,
 ]
 
 /** Microsoft's raw replies (as the adapter keeps them: the item's text, with its sentence lengths where given) */
@@ -455,12 +475,26 @@ export const MICROSOFT_REPLIES: { unit: number; raw: string; taken: boolean; why
   {
     unit: 23,
     raw: ms(
-      '我们比较以下两种设置：@a#\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
-      [49, 47, 49],
-      [21, 28, 23],
+      '我们比较以下两种设置：\n@a#@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
+      [36, 57, 51],
+      [12, 34, 28],
     ),
     taken: true,
-    why: "the line end after the break's marker kept and taken back, as Microsoft gave it on 2026-11-09 (words ours)",
+    why: "the line end before the break's stretch kept where it was written and taken back, Microsoft's sentence cut there (words ours)",
+  },
+  {
+    unit: 23,
+    raw: ms(
+      '我们@a#比较以下两种设置：\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
+    ),
+    taken: true,
+    why: 'the break’s stretch carried into the sentence before, its line end left there: read as it came (the translator’s order)',
+  },
+  {
+    unit: 31,
+    raw: ms('输入是一个网格和两个常数 @a#\n@b#@c# 输出 @d#：一个二进制串。然后我们停止。', [42, 36, 13], [17, 21, 7]),
+    taken: true,
+    why: 'a formula before the break the sentence’s before, the line end between their markers taken back (words ours)',
   },
   { unit: 24, raw: ms('列 str@a#s 包含 Ni@a#B，作者 Jane @c# Doe。'), taken: false, why: 'a marker doubled' },
   {
@@ -660,5 +694,23 @@ export const GOOGLE_REPLIES: { unit: number; raw: string; taken: boolean; why?: 
     raw: '作者 A. Author 和 B. Writer。<x id="4"/><b translate=no>x1</b>关于事物的研究。<x id="5"/><b translate=no>x2</b>载于系统会议论文集，第 <b translate=no>x3</b> 卷，第 1--10 页，2019。',
     taken: true,
     why: 'a bibliography entry’s parts are its blocks: a boundary marker before each `\\newblock`, its sentences there (tags.ts entry)',
+  },
+  {
+    unit: 32,
+    raw: '我们比较以下两种设置：<x id="8"/><b translate=no>x1</b> <b translate=no>x2</b> <b translate=no>x3</b><span id="4">无 XYZ</span>：一个未经 XYZ 任务训练的模型。<x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">仅 XYZ</span>：一个仅用它训练的模型。',
+    taken: true,
+    why: 'a forced break that states the line end ending its sentence leads the next: the boundary marker before its stretch (text.ts leadsNext)',
+  },
+  {
+    unit: 32,
+    raw: '我们比较以下两种设置：<x id="8"/><span id="4">无 XYZ</span><b translate=no>x1</b> <b translate=no>x2</b> <b translate=no>x3</b>：一个未经 XYZ 任务训练的模型。<x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">仅 XYZ</span>：一个仅用它训练的模型。',
+    taken: true,
+    why: 'the stretch the reply carried into the next sentence’s words: back right after the marker, as a stop’s glued elements (tags.ts leadsBack)',
+  },
+  {
+    unit: 33,
+    raw: '输入是一个网格和两个常数<b translate=no>x1</b> <x id="4"/><b translate=no>x2</b><span id="3">输出</span>：一个二进制串。<x id="5"/>然后我们停止。',
+    taken: true,
+    why: 'a formula before the break the sentence’s before: the boundary marker between it and the break (text.ts leadsNext)',
   },
 ]

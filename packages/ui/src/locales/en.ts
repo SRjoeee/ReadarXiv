@@ -83,7 +83,7 @@ const S: Locale['S'] = {
     translate: 'Translate this page',
     restore: 'Show original',
     // S-P-52: one word, to hold its half of the pair (144 px) with its shortcut label at the large buttons' 15 px / 600 —
-    // 'Translate again ⌥T' ran 2.4 px past both edges (Part 7's final review; tests/e2e/probes/popup-align.mjs checks it)
+    // 'Translate again ⌥T' ran 2.4 px past both edges (tests/e2e/probes/popup-align.mjs checks it)
     retranslate: 'Retranslate',
   },
   failed: {
@@ -174,7 +174,7 @@ const O: Locale['O'] = {
   fallbackResetFailed: 'The reset did not go through. Try again',
   undo: { deleted: name => `Deleted “${name}”`, undo: 'Undo' },
   /** One sentence for a failed save anywhere on the page (a schema error's JSON or anything else thrown by the
-   * caller's save must never reach the reader): a service's connection, a glossary row (fix round 1, item 1) */
+   * caller's save must never reach the reader): a service's connection, a glossary row */
   saveFailed: "Couldn't save. Try again.",
   appearance: {
     theme: 'Appearance',
@@ -214,7 +214,7 @@ const O: Locale['O'] = {
     paste: 'Paste lines of “source, translation” to add several at once',
     issue: { emptySource: 'The source is empty', emptyTarget: 'The translation is empty' },
     tooBig: 'The glossary is too long and was not saved. Remove some entries or shorten them',
-    /** beside O.saveFailed, once a write is refused (fix round 1, item 1) */
+    /** beside O.saveFailed, once a write is refused */
     retry: 'Try again',
   },
   services: {
@@ -367,6 +367,7 @@ const R: Locale['R'] = {
     goToArxiv: 'Go to arXiv',
     unreadable: 'The settings could not be read, so the defaults are in use',
     unreadableHint: 'The settings could not be read',
+    facesLost: "Some fonts didn't load. Reload to try again.",
   },
 }
 

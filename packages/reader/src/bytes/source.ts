@@ -1,19 +1,18 @@
-// An object read by ranges through the host's fetch (interfaces/host DECISION: one implementation, from the website's
-// `rangeSource`, readarxiv-web web/src/ranges.ts at 0bf496b5): every answer held to the object's length and validator, a read
-// bounded by its progress and never by its length, and, for arXiv's PDF, every whole chunk held to the digest the layer's head
-// names for it.
+// An object read by ranges through the host's fetch (one implementation for both hosts): every answer held to the object's
+// length and validator, a read bounded by its progress and never by its length, and, for arXiv's PDF, every whole chunk held
+// to the digest the layer's head names for it.
 //
 // - **Bound.** A 206 of exactly the bytes asked; its Content-Range's length the object's (given, or the first answer's and held
 //   after). On our server (`own`) a strong entity-tag is required and held (R2's httpEtag). Elsewhere (arXiv's own server, the
 //   extension's left) an entity-tag, where one is answered, is held for every answer after; none is required, since whether
-//   arXiv answers one is stage 5's measurement (host DECISION, open 1) and the chunks' digests hold the bytes once the head is in.
+//   arXiv answers one is unmeasured, and the chunks' digests hold the bytes once the head is in.
 //   One ask goes out before the length is known, the first read's: a read made while it is out waits for its answer, and takes
 //   its bytes from it where they are in it (the reader's own first read and PDF.js's open both ask the first chunk, and the
 //   website's gateway grants 16 file requests a window). A read made before the length was known ends at the object's last byte
-//   where it asks past it, each of its answers held to its own length (L11 third round, gap 6).
+//   where it asks past it, each of its answers held to its own length.
 // - **One URL a chunk on our server.** Chromium lets one request at a time write a URL's HTTP-cache entry, so that the ranges of
-//   one URL were read one after the other (8 chunks: 1.3 to 1.5 s against 0.35 to 0.5 s a URL each, W ranges.ts:478-488); our
-//   server reads the path alone. arXiv's URL is asked as it is, with `cache: 'no-store'` (unverified, host design-a §1.5).
+//   one URL were read one after the other (8 chunks: 1.3 to 1.5 s against 0.35 to 0.5 s a URL each, measured on the website); our
+//   server reads the path alone. arXiv's URL is asked as it is, with `cache: 'no-store'` (unverified).
 // - **Digests.** The head carries each 64 KiB chunk's digest of the original the layer was made over (format's `chunkDigests`).
 //   Every whole chunk fetched is digested as it comes, a chunk the store let go and fetched again too; once the digests are known
 //   (`prove`), every chunk read before is compared, and every chunk after is compared before it is given; before they are known,
@@ -24,13 +23,18 @@
 //   until it says it is online). RANGE_TRIES failures refuse the source as the network's, unless its owner keeps reading (the
 //   left, once its document is open). An answer that is not the object refuses it at once (`bytes`).
 import { toBase64Url, sha256 } from '@readarxiv/format'
-import { CHUNK, type ChunkStore } from './store.ts'
+import { CHUNK, chunkUrl, rangeOf } from './chunk.ts'
+import type { ChunkStore } from './store.ts'
 
-/** how long a read may go with nothing from the server before it is taken for stalled (W ranges.ts:16-29: a live link's silences
+// (a range's address is chunk.ts's, which a host's page reads before the reader's code has loaded; named here too, where the
+// website's tests take it)
+export { chunkUrl }
+
+/** how long a read may go with nothing from the server before it is taken for stalled (the website measured: a live link's silences
  *  are its round trip, a lossy one's TCP's backoff, 6.2 to 7 s; the one stall measured that came back lasted 9.5 s) */
 export const STALL_MS = 10_000
 /** how many times a range is asked, at most, where the network fails it, but by an owner that keeps reading */
-export const RANGE_TRIES = 2
+const RANGE_TRIES = 2
 /** the pause before a read the network failed at once is asked again, ms, doubled at each failure, to RETRY_MAX_MS;
  *  unmeasured */
 const RETRY_MS = 1_000
@@ -146,9 +150,6 @@ export interface OriginalSource extends ByteSource {
 const STRONG_ETAG = /^"[\x21\x23-\x7e]{1,200}"$/
 const CONTENT_RANGE = /^bytes (\d+)-(\d+)\/(\d+)$/
 const messageOf = (e: unknown): string => String((e as Error)?.message ?? e).slice(0, 300)
-/** the address a range of an object on our server is asked at: its own, with the range in its query (`r=<first>-<last>`) */
-export const chunkUrl = (url: string, begin: number, end: number): string =>
-  `${url}${url.includes('?') ? '&' : '?'}r=${begin}-${end - 1}`
 
 /** a chunk's digest as the head writes it: the first 16 bytes of its SHA-256, base64url (22 characters) */
 async function chunkDigest(bytes: Uint8Array): Promise<string> {
@@ -254,7 +255,7 @@ export function rangeSource(o: SourceOptions): OriginalSource {
     open: boolean,
   ): Promise<Uint8Array> {
     counts.asks++
-    const init: RequestInit = { headers: { range: `bytes=${begin}-${end - 1}` }, signal: attempt }
+    const init: RequestInit = { headers: { range: rangeOf(begin, end) }, signal: attempt }
     if (!o.own) init.cache = 'no-store'
     const r = await o.fetch(o.own ? chunkUrl(o.url, begin, end) : o.url, init)
     heard()

@@ -1,4 +1,4 @@
-// Tooltips (the reader's design, §6.1, §13; shared by every surface since the redesign's §2.3): one line always; after
+// Tooltips (the reader's design, §6.1, §13; shared by every surface): one line always; after
 // 500 ms of hover, at once on keyboard focus, never on a press; a shortcut or a second thought in a lighter span. A hint
 // popover (it closes no menu) anchored to its control by CSS anchor positioning, below it and kept inside the window by
 // position-try (controls.css .tip), so nothing is measured; above or aside where below has no room.

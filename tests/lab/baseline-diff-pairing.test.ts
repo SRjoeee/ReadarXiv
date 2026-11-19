@@ -3,14 +3,15 @@
 // of the baseline's with the candidate's on its first line's page and baseline, its extent meeting it; the rest in ord order
 // (the coordinator's ruling of 2026-11-10, lane fig-text). 2610.22197v1's eighteen units "lin2": F0 took four of them, on p12
 // and p13, into lines as elements; paired in ord order, the four after them were read against p15's (unwrapped, as before) and
-// stated lost. Synthetic dumps in the baseline's FORMAT.md form, run through the tool where lab-data holds it.
+// stated lost. Synthetic dumps in the form of the baseline's dump spec, run through the tool where lab-data holds it.
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const TOOL = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11/baseline/tools/diff.mjs'
+// (AXT_LAB_DATA the lab-data directory, none by default: unset, a path no machine holds, and the tests skip)
+const TOOL = join(process.env.AXT_LAB_DATA ?? '/dev/null/AXT_LAB_DATA-unset', 'refactor-2026-11/baseline/tools/diff.mjs')
 const ID = 'a'.repeat(64)
 const line = (page: number, x0: number, baseline: number) => ({ page, x0, x1: x0 + 20, baseline, top: baseline + 6, bottom: baseline - 2, size: 8 })
 const unit = (ord: number, state: string, at: [number, number, number] | null, why?: string) => ({

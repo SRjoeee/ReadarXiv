@@ -57,7 +57,7 @@ export const NEAR = {
    *  reader compares two layouts by, but the precision both are stated at, the hundredth, as the lay tests a line against its
    *  foot (breaker/break.mjs: a line under its foot by more than 0.05 fails). The stated bottom sits on the lines TeX set on it
    *  to that precision: of s88's 1,987 paragraph runs ending within 3 pt of it, 1,751 within 0.05 (0.00 on 1,696), the rest
-   *  0.16 pt or more off (room TeX left, or a line TeX set past it) (lanes/borrow-ink.md) */
+   *  0.16 pt or more off (room TeX left, or a line TeX set past it) (lane borrow-ink's record) */
   room: 0.05,
   /** the text's darkness: a share of the original text's own darkness */
   weight: 0.05,
@@ -457,11 +457,16 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     if (!lb || lb.line !== undefined || lb.align === undefined || lb.ink?.[0] !== n || !V.has(key)) continue
     V.set(key, V.get(key).filter((l) => l.rot || Math.abs(l.y - lb.ink[5]) > 0.5))
   }
+  // (a unit today drew that no member standing on the page holds: its original's lines from today's prepare dump. A group's key
+  // (several units of today's, keyed by its first) reads every unit of the group on the page, whichever of them today drew there,
+  // never its first unit's alone)
+  const todaysOf = (key) => groupOfKey.get(key)?.today ?? [Number(key.slice(1))]
   for (const key of T.keys()) {
     if (orig.has(key)) continue
-    const u = prepByOrd.get(Number(key.slice(1)))
-    if (!u) continue
-    const lines = (u.lines ?? []).filter((l) => l.page === n && !l.rot).map((l) => ({ x0: l.x0, x1: l.x1, y: l.baseline, top: Math.max(l.top, l.bottom), bottom: Math.min(l.top, l.bottom), size: l.size }))
+    const units = todaysOf(key).flatMap((o) => prepByOrd.get(o) ?? [])
+    if (!units.length) continue
+    const lines = units.flatMap((u) => (u.lines ?? []).filter((l) => l.page === n && !l.rot).map((l) => ({ x0: l.x0, x1: l.x1, y: l.baseline, top: Math.max(l.top, l.bottom), bottom: Math.min(l.top, l.bottom), size: l.size })))
+    const u = units[0]
     orig.set(key, { kind: u.kind, align: null, style: null, lines, first: u.lines?.[0]?.page === n, part: null, size: lines[0]?.size ?? null })
   }
   // (the run-ins the part states (`led`, follower ord -> its leader's): a follower it joins to the member before it in its flow
@@ -506,7 +511,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // gives it, its spacing, its sentences: FRESH_UNJUDGED) is listed `fresh` there, never worse nor nearer; every other measure,
   // style among them (each side's share against the original's own), is judged as anywhere, its difference tagged (tagFresh).
   // The coordinator's ruling of 2026-11-11)
-  const freshKeys = new Set((v2.fresh ?? []).map(keyOfPart))
+  // (a group's member marks the group's key on a page it stands on (the group's `pages`, piecesJoin: the part's lines of it), or on
+  // every page where the join states none: on a page of the group's other members alone, their lines are laid with stored rows)
+  const standsOn = (o) => {
+    const g = groupOfKey.get(groupOfMember.get(o))
+    const pg = g?.pages?.[o]
+    return !pg?.length || pg.includes(n)
+  }
+  const freshKeys = new Set((v2.fresh ?? []).filter(standsOn).map(keyOfPart))
   // (each such difference keeps its words before the fresh rule's (`base`, what the second look on the re-lay finds it by,
   // freshResolve) and, where they are read, the characters each side drew of it (`chars`: the two texts' lengths, the sheet's why))
   const judgeFresh = (flag, unit, what, origV, t, v, eps, fmt = r2, base = what) => {
@@ -982,9 +994,14 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     }
     if (V.has(key)) continue
     const o = orig.get(key)
-    const src = prepByOrd.get(Number(key.slice(1)))?.text
-    const said = (todayRaw.get(key) ?? []).map((l) => l.text).join('')
-    if (typeof src === 'string' && bare(src) !== '' && bare(said) === bare(src)) {
+    // (each unit of today's the key holds that today drew on the page, its drawn text against its source's: a group's every one)
+    const drewHere = todaysOf(key).filter((t) => (todayRaw.get(`t${t}`) ?? []).some((l) => l.n > 0))
+    const echoes = (t) => {
+      const src = prepByOrd.get(t)?.text
+      const said = (todayRaw.get(`t${t}`) ?? []).map((l) => l.text).join('')
+      return typeof src === 'string' && bare(src) !== '' && bare(said) === bare(src)
+    }
+    if (drewHere.length && drewHere.every(echoes)) {
       echoed.push(`${key} ${o?.kind ?? ''}`.trim())
       continue
     }
@@ -1069,7 +1086,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const todayGroups = (rec.today.figures ?? []).map((g) => ({ id: g.id, box: spanOf(g.lines.filter((l) => l.n > 0).map(band)) })).filter((x) => x.box)
   const todayFigs = [...prepByOrd.values()].filter((u) => /figure/.test(u.kind ?? '')).map((u) => ({ id: u.ord, box: figBox(u) })).filter((x) => x.box)
   const linesOfMember = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], x1: l[3], y: l[4], size: l[10] ?? facts.get(ord).style?.size ?? 0 }))
-  for (const t of mutualBest(todayGroups, todayFigs).values()) {
+  for (const t of bestPairs(todayGroups, todayFigs).values()) {
     const ls = (prepByOrd.get(t)?.lines ?? []).filter((l) => l.page === n && !l.rot)
     if (!ls.length) continue
     const on = figDrawn.filter((u) => {
@@ -2072,25 +2089,6 @@ function drawnLabelOf(lines, label) {
 /** the box a list of boxes {x0, y0, x1, y1} spans, or null */
 const spanOf = (bs) =>
   bs.length ? { x0: Math.min(...bs.map((b) => b.x0)), y0: Math.min(...bs.map((b) => b.y0)), x1: Math.max(...bs.map((b) => b.x1)), y1: Math.max(...bs.map((b) => b.y1)) } : null
-const overlap = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0))
-/** each a of `as` paired with the b of `bs` its box overlaps most, where that a is also the one b's box overlaps most */
-function mutualBest(as, bs) {
-  const best = (x, ys) => {
-    let at = -1,
-      most = 0
-    ys.forEach((y, i) => {
-      const o = overlap(x.box, y.box)
-      if (o > most) [at, most] = [i, o]
-    })
-    return at
-  }
-  const out = new Map()
-  as.forEach((a, i) => {
-    const j = best(a, bs)
-    if (j >= 0 && best(bs[j], as) === i) out.set(a.id, bs[j].id)
-  })
-  return out
-}
 
 /**
  * The figure texts both sides translate on page n, v2's member ord → today's unit ord: today's own groups (g[data-f], drawn
@@ -2109,9 +2107,9 @@ function figuresMatched(groups, prep, facts, n) {
     .filter((m) => figure(m.kind))
     .map((m) => ({ id: m.ord, box: spanOf(m.lines.filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))) }))
     .filter((x) => x.box)
-  const groupOf = new Map([...mutualBest(g, t)].map(([gid, tid]) => [tid, gid]))
+  const groupOf = new Map([...bestPairs(g, t)].map(([gid, tid]) => [tid, gid]))
   const out = new Map()
-  for (const [today, ord] of mutualBest(t.filter((x) => groupOf.has(x.id)), v)) out.set(ord, groupOf.get(today))
+  for (const [today, ord] of bestPairs(t.filter((x) => groupOf.has(x.id)), v)) out.set(ord, groupOf.get(today))
   return out
 }
 

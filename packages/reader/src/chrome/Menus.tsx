@@ -59,7 +59,7 @@ export function ZoomMenu({ controller }: { controller: ReaderController }) {
 
 /** `name`: the toolbar's menu and the reading options' each have one, so that the capsule's choose-language action can
  *  open either (usePopover, App.tsx). The button names the target as the menu's rows do, by its own name, whatever the
- *  interface's language: Japanese in Japanese, never in English (the maintainer, 2026-10-04). The name and the rows carry
+ *  interface's language: Japanese in Japanese, never in English (UI.md §3.5). The name and the rows carry
  *  the language they are written in (`lang`) */
 export function LanguageMenu({ controller, name }: { controller: ReaderController; name?: string }) {
   // before the settings land the defaults stand in the button's place, greyed, so that the bar does not reflow (S-R-21)

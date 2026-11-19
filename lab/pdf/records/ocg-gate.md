@@ -102,8 +102,8 @@ and ja, 4 each: the table's rules crossing the rectangles of the `\#` cells now 
 left English 86 -> 62, cells translated 41.0 % -> 43.8 %, text units left English 39 -> 38. The run before the text-symbol
 lead (a `\#` cell's "#" in `.p`, which the reader hides only for a found placeholder, so the original stood under the drawn
 one) had overlap 7 -> 20 (1512.03385v1 p7, 1810.04805v2 p7): the lead of text symbols alone now goes with the text.
-Crops of 1810.04805v2 p7 for the ruling (arXiv's own page, the old build, the new):
-`~/Downloads/readarxiv-test/route-ocg-cover-evidence/1810.04805v2-zh-p7-arxiv-old-new.png`.
+Crops of 1810.04805v2 p7 for the ruling (arXiv's own page, the old build, the new): the maintainer's, outside the
+repository.
 
 ## The run at `abb30736` (the release sweep of 2026-10-24: LAYOUT 20, REMOVAL 10)
 

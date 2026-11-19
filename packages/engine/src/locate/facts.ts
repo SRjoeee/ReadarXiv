@@ -1,14 +1,14 @@
-// The facts today's reader works out from the page's characters before it typesets (most of prepareUnit, and the readers the
-// run calls around a lay: interfaces/typeset-inputs.md §1B-§1F), read once by the prepare on arXiv's page with exact ownership
-// (stage 1a-2, contract stage1a2-facts.md). Each reading is pure, over a member's own glyphs and lines and the page's other
-// ink; where today's rule had a threshold that only guarded its re-derivation of ownership, ownership answers instead and the
-// threshold is gone; a threshold that is a typographic fact stays, named, with its source. File:line: today's engine at
-// 065c1d973 (`L2` layer-proto/layer2.mjs, `RUN` run.mjs, `TEX` tex.mjs, `MAKE` layout/make.mjs).
-import type { Ink, Line, Piece, Style } from '@readarxiv/format'
+// The facts the typesetter needs from the page's characters before it lays a unit (a unit's own readings, and the readers the
+// run calls around a lay), read once by the prepare on arXiv's page with
+// exact ownership. Each reading is pure, over a member's own glyphs and lines and the page's other
+// ink; no threshold guards a re-derivation of ownership (ownership is exact and answers instead), and a threshold that is a
+// typographic fact stays, named, with its source.
+import type { Ink, KnownElKind, Line, Piece, Style } from '@readarxiv/format'
+import { bareFontName as bare, readFontName as classifyFont, type FontNameClass } from '@readarxiv/text'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
 import { isInk, r2 } from './lines.ts'
-// (never through a module of today's makers: they import this file back, its classifyFont, and a cycle leaves one
+// (never through a module of the ink makers: they import this file back, its classifyFont, and a cycle leaves one
 // of them uninitialised where they load first, the parity's join)
 import * as accents from './accents.ts'
 
@@ -18,7 +18,7 @@ import * as accents from './accents.ts'
  * the face (an embedded subset) sets every character one advance at its size, within the face's own unit of it, a thousandth
  * (the PDF's widths are whole thousandths; one read off the page lands either side of one), and one program a narrow letter
  * and a wider one at that advance (a face's "i" and "m" share an advance only where it is a typewriter's; letters a
- * proportional face sets at one advance too, Helvetica's n, o, d and e at 556, are no evidence: Codex on #634, a figure's
+ * proportional face sets at one advance too, Helvetica's n, o, d and e at 556, are no evidence: a figure's
  * label "node" kept). Programs of one face may differ:
  * 2411.13093v4's Consolas subsets set 549 on p4 and 550 on p9 and p19, each its own one. Read off the glyphs, never the font's
  * name nor its FixedPitch flag, which producers state wrong: p19's Consolas subsets, 36 characters at 550 each, one flagged and
@@ -48,50 +48,12 @@ export function fixedFacesOf(glyphs: Iterable<DocGlyph>): Set<string> {
   return new Set([...faces].filter(([, f]) => f.one && f.letters).map(([face]) => face))
 }
 
-// ---------------------------------------------------------------- fonts (today's fonts.mjs classifyFont, ported as it is)
-/** the PostScript name without its subset tag */
-const bare = (name: string) => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
-export interface FontClass {
-  fam: 'serif' | 'sans' | 'mono' | 'math'
-  bold: boolean
-  italic: boolean
-  caps: boolean
-}
-/** a PDF font's class, weight, slant and small capitals from its PostScript name: today's classifyFont
- *  (layer-proto/fonts.mjs:42 at 065c1d973), its `design` and PDF.js's fallback guess left out (no rule of the part reads them) */
-export function classifyFont(name: string): FontClass {
-  const n = bare(name)
-  let fam: FontClass['fam'] = 'serif'
-  if (
-    /^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex|mib|syb)|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i.test(
-      n,
-    ) ||
-    /math|symbol/i.test(n)
-  )
-    fam = 'math'
-  else if (
-    /mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|beramono|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i.test(
-      n,
-    )
-  )
-    fam = 'mono'
-  else if (
-    /sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|^cmssbx|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i.test(
-      n,
-    )
-  )
-    fam = 'sans'
-  const bold =
-    /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmbxti|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i.test(
-      n,
-    )
-  const italic =
-    /italic|ital\b|ital$|oblique|slant|kursiv|inclined|^(cm|lm)ti|^cmsl|^sfti|^sfsl|^sfsi|^sfbi|^cmbxti|^cmbxsl|^cmssi|^cmitt|^cmsltt|^cmmi|-it$|-bi$|linlibertineti|linlibertinetbi|linbiolinumti|-ita?$|italicmt|obliquemt/i.test(
-      n,
-    )
-  const caps = /caps|^cmcsc|^sfcc|^sfxc|smallcap|-sc$|sc\d*$|^cmtcsc|^lmromancaps/i.test(n) && !/^cmsc/i.test(n)
-  return { fam, bold, italic, caps }
-}
+// ---------------------------------------------------------------- fonts (classifyFont: @readarxiv/text's)
+/** a PDF font's class, weight, slant and small capitals from its PostScript name: classifyFont
+ *  (held once in @readarxiv/text: readFontName), its `design` and PDF.js's fallback
+ *  guess left out (no rule of the part reads them) */
+export type FontClass = FontNameClass
+export { classifyFont }
 
 /**
  * A font's family keys as its PostScript name tells them, subset tag off: the name before its first hyphen (DejaVuSans and
@@ -102,6 +64,7 @@ export function classifyFont(name: string): FontClass {
  */
 export function familyKeysOf(name: string): readonly [string, string] {
   const n = bare(name)
+  // (PDF.js's style words: pdf.worker's Font reads /bold/i, /oblique|italic/i and /Black/ off a name)
   const styled = n
     .replace(/bold|oblique|italic/giu, '')
     .replace(/Black/gu, '')
@@ -118,7 +81,8 @@ export function oneFamily(a: string, b: string): boolean {
 export const sameFamily = (a: readonly [string, string], b: readonly [string, string]) =>
   (!!a[0] && a[0] === b[0]) || (!!a[1] && a[1] === b[1])
 
-const mostOf = <T>(xs: Iterable<T>): T | undefined => {
+/** the value most of `xs` hold, a tie to the one met first; undefined for none */
+export const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   const n = new Map<T, number>()
   let best: T | undefined
   let k = 0
@@ -132,6 +96,13 @@ const mostOf = <T>(xs: Iterable<T>): T | undefined => {
   }
   return best
 }
+const LETTER_OR_DIGIT = /[\p{L}\p{N}]/u
+/** a character's letters as two sides of an alignment compare them: decomposed, marks off, lower case, its letters and digits
+ *  alone (a ligature its letters) */
+export const fold = (ch: string): number[] =>
+  [...ch.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()]
+    .filter((c) => LETTER_OR_DIGIT.test(c))
+    .map((c) => c.codePointAt(0) as number)
 const real = (g: { u: string }) => /\S/.test(g.u)
 /** what a style is read off a glyph by: its Unicode, its font's base name, its size (up its line; `along` it, where that differs)
  *  and its fill. A glyph set level is one (DocGlyph); so is one set turned (DocTurned, a figure's turned text), whose font, size
@@ -166,10 +137,10 @@ export function changeOf(key: string, base: string): string {
 }
 
 /**
- * The style a run of glyphs is set in, as today's reader reads it off the page (C5 `originalStyle` L2:765: the majority font
- * class by character, math glyphs aside, its size the most common one; C5's `upper` L2:1099: most letters that can tell are
+ * The style a run of glyphs is set in, read off the page (the majority font
+ * class by character, math glyphs aside, its size the most common one; `upper`: most letters that can tell are
  * capitals): role, bold, slant from the fonts' names, size, fill (0xRRGGBB where not black), the design (the dominant font's
- * base name). TeX's own font state is stage 1b's: this is the value read, not stated
+ * base name). This is the value read, not TeX's own font state
  */
 export function styleOf(gs: readonly StyleGlyph[], fallbackSize = 10, source: string | null = null): Style {
   const txt = gs.filter(real)
@@ -181,7 +152,7 @@ export function styleOf(gs: readonly StyleGlyph[], fallbackSize = 10, source: st
   const fill = mostOf(by.map((g) => g.fill))
   const design = mostOf(by.map((g) => g.base))
   const letters = text.filter((g) => g.u.toLowerCase() !== g.u.toUpperCase())
-  // (with its source's text, today's rule (smallCapsOf L2:837, L2:1099): capitals the source writes lowercase, more than half
+  // (with its source's text: capitals the source writes lowercase, more than half
   // of its lowercase letters, set at their full size: a class's \MakeTextUppercase heading; an acronym the source writes in
   // capitals is no case change. Without it, most letters capitals)
   const capitals = letters.filter((g) => g.u === g.u.toUpperCase())
@@ -203,14 +174,14 @@ export function styleOf(gs: readonly StyleGlyph[], fallbackSize = 10, source: st
 }
 
 /**
- * A unit's size as today's reader reads it (C5, E6: layer2.mjs originalStyle L2:765 and unitSizeOf L2:796): the median (the
- * upper one of an even count) of its own text glyphs' sizes, its math fonts' glyphs aside; undefined where it has none (today
- * then reads the size off its lines' bands). Each glyph's size up the line, the size TeX was asked for: pdfTeX's font expansion
- * (microtype) scales a justified line's glyphs along it alone, by up to 2 % either way, to justify that line, and today's
- * pageChars2 (L2:188) read the size along it (PDF.js's item transform, Math.hypot(a, b)): a paragraph whose lines TeX stretched
+ * A unit's size read off its glyphs: the median (the
+ * upper one of an even count) of its own text glyphs' sizes, its math fonts' glyphs aside; undefined where it has none (its
+ * callers then read another). Each glyph's size up the line, the size TeX was asked for: pdfTeX's font expansion
+ * (microtype) scales a justified line's glyphs along it alone, by up to 2 % either way, to justify that line, and a reading of
+ * the size along the line (PDF.js's item transform, Math.hypot(a, b)) makes a paragraph whose lines TeX stretched
  * read larger than its font, one it shrank smaller (2610.40645v1 p12: \normalsize paragraphs at 10.69 to 11.13, every glyph
  * 10.91 up its line), which a lay that keeps its size (borrowing before shrinking) then drew larger than the original. Faked
- * small capitals, which today leaves out by its votes over the source's words (smallCapsOf), are not told here (stage 1b:
+ * small capitals, which a caller sets aside first (fakedCaps, by the source's letters), are not told here (nor is
  * TeX's font state)
  */
 export function unitSize(gs: readonly StyleGlyph[]): number | undefined {
@@ -219,13 +190,13 @@ export function unitSize(gs: readonly StyleGlyph[]): number | undefined {
     .map((g) => g.size)
     .sort((a, b) => a - b)
   // (as the page states it, not on the coordinates' 1/100 grid: a size is a font's scale, which the lay multiplies every width
-  // by; pdfTeX writes 10 pt as 9.9626 bp, and 9.96 set a 240 pt line 0.06 pt short of today's)
+  // by; pdfTeX writes 10 pt as 9.9626 bp, and 9.96 sets a 240 pt line 0.06 pt short of 9.9626's)
   return sizes.length ? (sizes[sizes.length >> 1] as number) : undefined
 }
 
-// ---------------------------------------------------------------- faked small capitals (C7)
-/** a faked small capital is set at most this share of the size the unit's letters of the source's case are (today's
- *  SMALL_CAPS_SHARE, L2:808: a fact of the classes that fake them) */
+// ---------------------------------------------------------------- faked small capitals
+/** a faked small capital is set at most this share of the size the unit's letters of the source's case are (a fact of
+ *  the classes that fake them) */
 export const SMALL_CAPS_SHARE = 0.9
 const casedChar = (ch: string) => ch.toLowerCase() !== ch.toUpperCase()
 const medianOf = (xs: readonly number[]) => {
@@ -233,7 +204,7 @@ const medianOf = (xs: readonly number[]) => {
   return s.length ? ((s[(s.length - 1) >> 1] as number) + (s[s.length >> 1] as number)) / 2 : 0
 }
 /**
- * A unit's faked small capitals, as today's reader reads them (smallCapsOf L2:837, inkSmallCaps L2:910): its text glyphs on
+ * A unit's faked small capitals: its text glyphs on
  * A walked in order against its source's letters (each glyph's letter the source's next one of the same letter, case aside);
  * a capital whose source letter is lowercase and whose size is at most SMALL_CAPS_SHARE of the size its letters of the
  * source's own case are set at is a faked small capital; `ratio` their median size over that, to the hundredth (Style.sc, the
@@ -241,14 +212,14 @@ const medianOf = (xs: readonly number[]) => {
  * text) or none told (a babel name, whose key is no text of it: IEEEtran's \refname "REFERENCES", R at 9.96 and EFERENCES at
  * 7.97, where \scshape changes the letters' forms and not the size TeX was asked for): where every cased glyph is a capital,
  * those at most SMALL_CAPS_SHARE of its full letters' size (the letters past SMALL_CAPS_SHARE of its largest). A
- * unit whose page sets half its source's lowercase letters or more, and no small capital, has none (today's shortcut).
+ * unit whose page sets half its source's lowercase letters or more, and no small capital, has none (a shortcut before the walk).
  * `upper`, in the text's capitals: the capitals the source writes lowercase set at their full size, more than half of its
- * letters that can tell (today's L2:1099); where no letter is of the source's own case, every one set as a capital, there is
+ * letters that can tell; where no letter is of the source's own case, every one set as a capital, there is
  * no size to tell a small capital by, and none is (drawn at the unit's size, theirs, the target's capitals look as the page's
- * do: REVTeX's "RELATED WORK"; today's walk answers none there). A unit whose source is its own case (an ink unit, or none
+ * do: REVTeX's "RELATED WORK"). A unit whose source is its own case (an ink unit, or none
  * told): every letter that can tell a capital, two at least, none faked small (a running head's "ABSTRACT"; "BERT (Ours)" is
- * set in its own case; today's inkSmallCaps answers none). `caps`, set in small capitals where it has faked ones: today's vote
- * (capsVote L2:933, read at L2:1094) over the letters the walk read, a faked small capital or a glyph of a face of real small
+ * set in its own case and has none). `caps`, set in small capitals where it has faked ones: a vote
+ * over the letters the walk read, a faked small capital or a glyph of a face of real small
  * capitals for, a letter the source writes lowercase set as itself against, the rest (digits, the source's own capitals)
  * nothing, a tie against; an ink unit's faked ones alone can tell, so it is set in them (Style.caps: its Latin translation is
  * drawn in small capitals, Style.sc the share it is drawn at)
@@ -281,10 +252,10 @@ export function fakedCaps<G extends StyleGlyph>(
   const anySmall = t.some((g) => g.size <= SMALL_CAPS_SHARE * big && g.u !== g.u.toLowerCase())
   const src = [...source]
   if (!anySmall && 2 * lows >= src.filter(isLow).length) return none
-  // (each glyph's letter the source's next one that spells it, case aside: the walk today makes over a word's characters)
+  // (each glyph's letter the source's next one that spells it, case aside: a walk over a word's characters)
   const changed: G[] = []
   const same: number[] = []
-  // (each glyph the walk read, and whether its source letter is a lowercase one: the letters today's vote reads)
+  // (each glyph the walk read, and whether its source letter is a lowercase one: the letters the `caps` vote reads)
   const walked: [G, boolean][] = []
   let lower = 0
   let at = 0
@@ -305,7 +276,7 @@ export function fakedCaps<G extends StyleGlyph>(
   const ref = same.length ? medianOf(same) : Number.NaN
   const small = new Set(same.length ? changed.filter((g) => g.size <= SMALL_CAPS_SHARE * ref) : [])
   // (in the text's capitals: the capitals the source writes lowercase set at their full size, more than half its letters that
-  // can tell (today's `upper`, L2:1099); a faked small capital is none)
+  // can tell; a faked small capital is none)
   const upperN = changed.length - small.size
   const upper = upperN > 0 && 2 * upperN > lower ? { upper: true as const } : {}
   if (!small.size) return { ...none, ...upper }
@@ -339,7 +310,7 @@ export function elementCase<G extends DocGlyph>(gs: readonly G[]): { glyphs: rea
   return { glyphs: gs.map((g) => (caps.small.has(g) ? glyphWith(g, { u: g.u.toLowerCase() }) : g)), ratio: caps.ratio }
 }
 
-/** an element's fill (B14, maker `fillOfGlyphs` MAKE:1123): the colour more than half its glyphs are filled with, where it is
+/** an element's fill: the colour more than half its glyphs are filled with, where it is
  *  not black; undefined else */
 export function fillOfGlyphs(gs: readonly DocGlyph[]): number | undefined {
   const t = gs.filter(real)
@@ -348,11 +319,18 @@ export function fillOfGlyphs(gs: readonly DocGlyph[]): number | undefined {
   return t.filter((g) => g.fill === f).length * 2 > t.length ? f : undefined
 }
 
-// ---------------------------------------------------------------- the class's tail (C20)
+// ---------------------------------------------------------------- the class's tail
 /** the most marks a class sets after a unit's text (amsthm's note ")."; a run-in head's "."; a style's stop after an entry):
- *  today's TAIL_MAX (L2:1577), a fact of the classes */
+ *  a fact of the classes */
 export const TAIL_MAX = 3
-const SENTENCE_KINDS = new Set(['stop', 'comma', 'semi', 'colon', 'excl', 'quest'])
+const SENTENCE_KINDS = new Set<string>([
+  'stop',
+  'comma',
+  'semi',
+  'colon',
+  'excl',
+  'quest',
+] satisfies readonly MarkKind[])
 /** the text a unit's source writes in its text pieces, its groups' too (no element's source) */
 export function sourceText(content: readonly Piece[]): string {
   let out = ''
@@ -488,9 +466,9 @@ export function lineEnd(gs: readonly DocGlyph[], q: number, o: LineEndOptions): 
     classifyFont(h.base).fam !== 'mono'
   return tex ? 'drop' : 'join'
 }
-/** a glyph as accents.mjs reads one: its Unicode, font, size, its advance along its line, its baseline and its ink's top */
+/** a glyph as accents.ts reads one: its Unicode, font, size, its advance along its line, its baseline and its ink's top */
 type AccentGlyph = Pick<DocGlyph, 'u' | 'font' | 'size' | 'x0' | 'x1' | 'y' | 'top'>
-/** each spacing accent's combining mark (accents.mjs COMBINING) */
+/** each spacing accent's combining mark (accents.ts COMBINING) */
 export const COMBINING = accents.COMBINING as ReadonlyMap<string, string>
 /** whether spacing accent `a` is set over letter `l` by TeX's \accent: the letter's accented form (NFC), or null */
 export const accentOver = accents.accentOver as (a: AccentGlyph, l: AccentGlyph) => string | null
@@ -499,8 +477,8 @@ export const accentOver = accents.accentOver as (a: AccentGlyph, l: AccentGlyph)
  * letter's, its text the accented letter. In Unicode an accent set over a letter is one character with it (NFC); TeX's
  * \accent (OT1's, every Computer Modern text font's) sets the accent, moves back over it and sets the letter (or the letter,
  * then the accent over it), so the glyphs read the two apart: "Kl¨otergens" for Klötergens (2602.23285v2 p2's citation; 44
- * element texts of 11 papers of the corpus). The rule is today's, one for every reading of text off a page's glyphs
- * (today/accents.mjs accentOver: one font, the accent's advance centred on the letter's, its baseline the letter's or raised
+ * element texts of 11 papers of the corpus). The rule is one for every reading of text off a page's glyphs
+ * (accents.ts accentOver: one font, the accent's advance centred on the letter's, its baseline the letter's or raised
  * over it by at most its height; the reader's joinAccents on the page's text items, the prepare's on its ink units' and
  * figures' words), each glyph joined once, the accent's letter the glyph after it, else the one before
  */
@@ -524,7 +502,7 @@ export function joinAccents(gs: readonly DocGlyph[]): readonly DocGlyph[] {
     return t === undefined ? [g] : t ? [glyphWith(g, { u: t })] : []
   })
 }
-/** a run of glyphs as the page's text layer reads it, today's rendering's text (tex.mjs renderingOf: the text layer's
+/** a run of glyphs as the page's text layer reads it (the text layer's
  *  characters inside its segments, a space of it between two of them, white space as one space, trimmed), but for a line
  *  TeX ended inside a word (lineEnd): its hyphen out where it is TeX's, and no space; each accent TeX set over its letter
  *  joined to it (joinAccents) */
@@ -559,7 +537,7 @@ export function urlCopyOf(gs: readonly DocGlyph[]): string {
   })
   return out.replace(/\s+/g, ' ').trim()
 }
-/** a run of glyphs as the text layer reads it, in runs of one fill (today's fillRunsOf L2:2920: each space the fill of the glyph
+/** a run of glyphs as the text layer reads it, in runs of one fill (each space the fill of the glyph
  *  before it), [text, fill] each, a line's end and an accent as textOf reads them; null where every glyph's fill is one (its
  *  style's) */
 export function fillRunsOf(glyphs: readonly DocGlyph[], o: LineEndOptions = {}): [string, number][] | null {
@@ -600,7 +578,7 @@ export function fillRunsOf(glyphs: readonly DocGlyph[], o: LineEndOptions = {}):
   return new Set(kept.map(([, f]) => f)).size > 1 ? kept : null
 }
 /** an element's own brackets: its first and last glyphs that set ink (isInk, whatever their Unicode: a big delimiter PDF.js reads
- *  as a blank is its last), where they pair ([ ], ( ), { }, ⟨ ⟩) around more (T12) */
+ *  as a blank is its last), where they pair ([ ], ( ), { }, ⟨ ⟩) around more */
 export function bracketsOf(gs: readonly DocGlyph[]): [DocGlyph, DocGlyph] | null {
   const PAIRS: Record<string, string> = { '[': ']', '(': ')', '{': '}', '\u27e8': '\u27e9' }
   const tg = gs.filter(isInk)
@@ -609,8 +587,10 @@ export function bracketsOf(gs: readonly DocGlyph[]): [DocGlyph, DocGlyph] | null
   return tg.length > 2 && b0 && b1 && PAIRS[b0.u] === b1.u ? [b0, b1] : null
 }
 
-/** a mark's kind (today's markKind L2:2363) */
-export function markKind(ch: string): string {
+/** the kinds of punctuation markKind names */
+export type MarkKind = 'stop' | 'comma' | 'semi' | 'colon' | 'excl' | 'quest' | 'close'
+/** a mark's kind: a sentence mark's name, `close` for a closing bracket or quote, else the mark itself */
+export function markKind(ch: string): MarkKind | string {
   if (/^[.\u3002\uFF0E\uFF61]$/u.test(ch)) return 'stop'
   if (/^[,\u3001\uFF0C\uFF64]$/u.test(ch)) return 'comma'
   if (/^[;\uFF1B]$/u.test(ch)) return 'semi'
@@ -621,6 +601,9 @@ export function markKind(ch: string): string {
   return ch
 }
 const TEX_TOKEN = /\\[A-Za-z@]+\*?|\\[\s\S]|---|--|''|``|[\s\S]/gu
+/** the tokens that set no ink: latex.ltx's \\@ (a space factor), \\, \\; \\: \\! (spaces) and ~ (the tie, \\nobreakspace); TeX's
+ *  primitives \\/ (an italic correction), \\  (a control space) and \\- (a discretionary hyphen); and { }, TeX's grouping
+ *  characters (catcodes 1 and 2) */
 const NO_INK = new Set(['\\@', '\\,', '\\;', '\\:', '\\!', '\\/', '\\ ', '\\-', '~', '{', '}'])
 const TEX_LIGATURE: Record<string, string> = {
   '---': '—',
@@ -632,7 +615,7 @@ const TEX_LIGATURE: Record<string, string> = {
   '"': '”',
 }
 /** the marks a source text ends with after its last letter or digit, as TeX prints them, and whether that content was
- *  reached (today's textEndMarks L2:1587; a command but a symbol's is a word: its text unknown here, it stops the marks) */
+ *  reached (a command but a symbol's is a word: its text unknown here, it stops the marks) */
 function textEndMarks(s: string): { marks: string[]; stopped: boolean } {
   const toks = String(s).match(TEX_TOKEN) ?? []
   const marks: string[] = []
@@ -646,10 +629,10 @@ function textEndMarks(s: string): { marks: string[]; stopped: boolean } {
   }
   return { marks, stopped: false }
 }
-/** the element kinds that set no ink (today's phClass `zero`, `space`; the adapter's `space` a tie, `break` a forced line break):
- *  passed over at a unit's end */
-const INKLESS_KINDS = new Set(['zero', 'space', 'break', 'other'])
-/** the marks a unit's source writes at its end, after its last letter, digit or element (today's sourceEndMarks L2:1608):
+/** the element kinds that set no ink (instrument.ts elementKindOf's: a tie's `space`, a forced break's `break`, and `other`,
+ *  an element no class names): passed over at a unit's end */
+const INKLESS_KINDS = new Set<string>(['space', 'break', 'other'] satisfies readonly KnownElKind[])
+/** the marks a unit's source writes at its end, after its last letter, digit or element:
  *  null where a symbol element stands among them (its ink is among the page's marks there, as many as its source does not
  *  tell) */
 export function sourceEndMarks(content: readonly Piece[]): string[] | null {
@@ -666,7 +649,7 @@ export function sourceEndMarks(content: readonly Piece[]): string[] | null {
     const p = flat[k] as Piece
     if (p.t === 'el') {
       if (INKLESS_KINDS.has(p.kind)) continue
-      // (a symbol, today's phClass `symbol`: an escaped character, \\%)
+      // (a symbol, the source's class `symbol`: an escaped character, \\%)
       if (p.kind === 'symbol' || /^\\[^A-Za-z\s]$/.test(p.src.trim())) return null
       break
     }
@@ -678,13 +661,13 @@ export function sourceEndMarks(content: readonly Piece[]): string[] | null {
   return out
 }
 /** a glyph a text font sets as punctuation (not a formula's: a math font's glyph is the formula's; not one whose Unicode is no
- *  reading of it, `nu`: today's L2:1666) */
+ *  reading of it, `nu`) */
 const isMark = (g: DocGlyph) => /^\p{P}$/u.test(g.u) && !g.nu && classifyFont(g.base).fam !== 'math'
 /**
- * The class's own marks after a unit's text (C20, today's tailOf L2:1638): its own glyphs on its last line after its last
+ * The class's own marks after a unit's text: its own glyphs on its last line after its last
  * letter, digit or element glyph (`after`, in stream order), less the marks its source writes there itself (`ends`, as many,
  * a sentence mark of the source's kind matched with the page's), each a punctuation mark in a text font, TAIL_MAX at most;
- * with its style. Today's test that the marks are "the unit's, erased as text" is ownership itself: `after` are the unit's
+ * with its style. That the marks are "the unit's, erased as text" is ownership itself: `after` are the unit's
  * own text glyphs
  */
 export function tailOf(after: readonly DocGlyph[], ends: readonly string[] | null): [string, Style][] | null {
@@ -707,9 +690,9 @@ export function tailOf(after: readonly DocGlyph[], ends: readonly string[] | nul
   return rest.map((g) => [g.u, styleOf([g], g.size)])
 }
 
-// ---------------------------------------------------------------- a label's parts (B16, C10, E3)
-/** a character a name word holds besides its letters, as today's head rule reads a name (rules/tex-names.mjs headInTarget:
- *  letters, combining marks, stops, apostrophes and hyphens; a float's "Fig." in labelInTarget L2:1184): an abbreviation's
+// ---------------------------------------------------------------- a label's parts
+/** a character a name word holds besides its letters (a head's name:
+ *  letters, combining marks, stops, apostrophes and hyphens; a float's "Fig." in the typesetter's labelInTarget): an abbreviation's
  *  stop is the name's; a glyph's text may be more than one of them (a ligature's "fi") */
 const NAME_WORD = /^[\p{L}\p{M}.'’-]+$/u
 /** the gap between two glyphs' advances that is a tie, TeX's interword glue, a tenth of their size or more: on the 87 papers'
@@ -755,15 +738,15 @@ function wordsOf(t: readonly DocGlyph[]): string {
  *  from its first letter, with the marks a word holds ("Figure", "Theorem", "Key Lemma", an abbreviation's "Fig.", "Thm."),
  *  read as letters: Unicode's compatibility form (NFKC), a ligature's glyph its letters ("Deﬁnition"'s U+FB01), a space where
  *  TeX set its glue (FLOAT_TIE).
- *  The punctuation is the marks after the number (":", ".", "("). Each with its ink on `page`. Today's head and float label
- *  readings (L2:1184-1195, L2:1245-1259) read the three off the label's text with a pattern of their shapes, which took one
- *  capital before a number's first dot and no more: "Corollary VI.2" was "CorollaryVI." and "2" (2610.21312v1) */
+ *  The punctuation is the marks after the number (":", ".", "("). Each with its ink on `page`. Not a pattern of the three's
+ *  shapes over the label's text, which takes one capital before a number's first dot and no more: "Corollary VI.2" would
+ *  read "CorollaryVI." and "2" (2610.21312v1) */
 export function labelParts(
   gs: readonly DocGlyph[],
   page: number,
 ): { name?: [string, Ink]; num?: [string, Ink]; punct?: [string, Ink]; unheld?: number } {
   const t = gs.filter(real)
-  // (across their advances, as the label's own ink and today's characters, which U.decor and U.label read the parts as: a
+  // (across their advances, as the label's own ink and the page's characters, which U.decor and U.label read the parts as: a
   // label drawn anew starts its line at its first glyph's advance, 2608.04322v1 p5's "IV." at 397.89, its outline at 398.07)
   const inkOf = (xs: DocGlyph[]): Ink => [
     page,
@@ -788,7 +771,7 @@ export function labelParts(
   // (its number the word after its last space, where that word is a number as LaTeX prints a counter: IEEEtran's "TABLE I", a
   // supplement's "Table S2" whose tie a justified line set tight (FLOAT_TIE), amsthm's "Corollary VI.2" under IEEEtran's
   // \Roman sections; the word as TeX printed it, an opening bracket before its first digit or letter with it: "Figure (1).",
-  // "Eq. (3)", whose bracket, read as neither part's, a relabel left out, "Abbildung 1)." (Codex on round 8's pull request))
+  // "Eq. (3)", whose bracket, read as neither part's, a relabel left out, "Abbildung 1).")
   const lastWord = lastWordOf(t, e)
   if (lastWord < e) s = lastWord
   else while (s > 0 && /[\p{N}.\-–]/u.test((t[s - 1] as DocGlyph).u)) s--
@@ -830,18 +813,18 @@ export function labelParts(
   return out
 }
 
-// ---------------------------------------------------------------- forced breaks and their room (C14, D9)
-/** the pitch of a run of baseline gaps: their median (today's break-room.mjs pitchOf) */
+// ---------------------------------------------------------------- forced breaks and their room
+/** the pitch of a run of baseline gaps: their median */
 export function pitchOf(gaps: readonly number[]): number | null {
   const g = gaps.filter((v) => v > 0).sort((a, b) => a - b)
   return g.length ? ((g[(g.length - 1) >> 1] as number) + (g[g.length >> 1] as number)) / 2 : null
 }
 /** the distance TeX puts between two lines with no room between them: the pitch, or TeX's \lineskip rule's where the next
- *  line is too tall (break-room.mjs naturalOf) */
+ *  line is too tall */
 export function naturalOf(pitch: number, depth: number, height: number, lineskip?: [number, number]): number {
   return lineskip && pitch - depth - height < lineskip[1] ? Math.max(pitch, depth + height + lineskip[0]) : pitch
 }
-/** the room after a break in pitches: the gap less the natural distance (break-room.mjs roomOf) */
+/** the room after a break in pitches: the gap less the natural distance */
 export function roomOf(gap: number, pitch: number, natural: number): number {
   return Math.max(0, Math.round(((gap - natural) / pitch) * 1000) / 1000)
 }
@@ -849,8 +832,8 @@ export function roomOf(gap: number, pitch: number, natural: number): number {
  * A forced break's line and room (El.ends): `line` the index of the line TeX ended at it (the line of the last glyph before its
  * point in B's stream, carried to A); its room after, in pitches, by the member's lines: the gap from that line's baseline to
  * the next one's against the paragraph's pitch, TeX's \baselineskip `stated` (Placed.lead, where its paragraph states it),
- * else the pitch of its other consecutive lines on that page and column (today's forcedBreaks TEX:120's geometry, which found
- * the line by its short end: SHORT; ownership and TeX's point find it instead), whose median a gap TeX's \lineskip rule opened
+ * else the pitch of its other consecutive lines on that page and column (its line found by ownership and TeX's point, never
+ * by its short end against a threshold), whose median a gap TeX's \lineskip rule opened
  * under a tall line passes for a pitch. No room where no pitch is known (one line, or a page change)
  */
 export function breakEnd(
@@ -877,10 +860,10 @@ export function breakEnd(
   return [line, roomOf(gap, pitch, naturalOf(pitch, L[4] - L[6], N[5] - N[4], lineskip))]
 }
 
-// ---------------------------------------------------------------- short skips (E15)
+// ---------------------------------------------------------------- short skips
 /** TeX's \abovedisplayshortskip: a display set under a line that ends \predisplaysize (2 em) or more before it, its top less
- *  than SHORT_SKIP of a size under that line's baseline (today's shortSkipsOf TEX:328, SHORT_SKIP and PREDISPLAY L2:3155,
- *  3158: TeX's rule read off the page, the display's size \predisplaysize's 2 em; TeX's own skip is stage 1b's) */
+ *  than SHORT_SKIP of a size under that line's baseline (SHORT_SKIP and PREDISPLAY:
+ *  TeX's rule read off the page, the display's size \predisplaysize's 2 em; TeX's own skip is not read here) */
 export const SHORT_SKIP = 0.3
 export const PREDISPLAY = 2
 /** the lines (indices) a display of the member stands under with TeX's short skip */
@@ -899,7 +882,7 @@ export function shortSkipLines(
   return out
 }
 
-// ---------------------------------------------------------------- room beside, a cell's band (E13, E27, E24)
+// ---------------------------------------------------------------- room beside, a cell's band
 /** a piece of the page's ink: its box and its baseline (a glyph's; a box's bottom) */
 export interface InkBox {
   x0: number
@@ -911,16 +894,16 @@ export interface InkBox {
 }
 /**
  * The free paper beside a member's lines on their baselines (Room.side): from the nearest glyph not its own standing on each
- * line's baseline (within 0.4 of its size: today's widen, RUN:1580, reads the page's characters on the line's baseline so,
+ * line's baseline (within 0.4 of its size: the page's characters on the line's baseline,
  * and no rule or image) to the left and to the right, within the text block `block` (its column's extent on the page), the
- * narrowest over its lines. Today's widen keeps clear of glyphs within 6 pt to the right and 1 pt to the left of the line,
- * which stood for the unit's own glyphs past its rectangle: ownership says which are its own (a named correction where
+ * narrowest over its lines. No margin keeps it clear of glyphs within 6 pt to the right and 1 pt to the left of the line,
+ * which would stand for the unit's own glyphs past its lines: ownership says which are its own (a named correction where
  * another unit's glyph stands that near). Its half an em off the ink is the typesetter's choice, the paper is the part's.
- * A table's cell, which today's never widened (its rectangle was its cell's), is also walled by `walls`, the painted boxes
- * beside its line whose height meets its band: in a table the paper beside a cell is its column's, up to its rules (the
- * maintainer, 2026-11-08: 1706.03762v7 p10's Table 4, its "Training" cells run over the rule into the first column). `wall`
- * says which of its sides stop at a wall, not a glyph (1 the left, 2 the right): today's further widening of a cell goes half
- * way to another's text and keeps a quarter of its size off any other ink (run.mjs paperTo)
+ * A table's cell is also walled by `walls`, the painted boxes
+ * beside its line whose height meets its band: in a table the paper beside a cell is its column's, up to its rules (else
+ * 1706.03762v7 p10's Table 4 has its "Training" cells run over the rule into the first column; PDF-READER §18.13). `wall`
+ * says which of its sides stop at a wall, not a glyph (1 the left, 2 the right): a cell's further widening goes half
+ * way to another's text and keeps a quarter of its size off a wall (the typesetter's lay/adapt.ts cellSideOf)
  */
 export function sideOf(
   lines: readonly Line[],
@@ -1005,11 +988,11 @@ export function staysOf(
   return out.length ? out : undefined
 }
 /**
- * A cell's clear band between the rules over and under its lines (Room.band; today's cellBands L2:352): over, the lowest
+ * A cell's clear band between the rules over and under its lines (Room.band): over, the lowest
  * rule at or above its first line's baseline, under, the highest at or below its last line's, each across its lines by more
  * than half a point; undefined where no rule stands over or under it. Where one stands on one side alone, the other side is
- * open (Room.bandOpen: 1 under, 2 over; today's cellBands found no rule there and capped nothing from it), the band there the
- * line's own bottom or top as before. `rules` the page's painted boxes
+ * open (Room.bandOpen: 1 under, 2 over: no rule caps it there), the band there the
+ * line's own bottom or top. `rules` the page's painted boxes
  */
 export function bandOf(
   lines: readonly Line[],
@@ -1041,7 +1024,7 @@ export function bandOf(
   return { band }
 }
 
-/** whether a line shares its baseline with ink that stays (Line PINNED; today's edgesOf `alone` RUN:1638, its baseline band
+/** whether a line shares its baseline with ink that stays (Line PINNED; its baseline band
  *  0.4 of a size): ink on that band, across its column, outside the line's own extent by half a point */
 export function pinnedOf(
   l: Line,
@@ -1061,12 +1044,12 @@ export const END = '~$'
 /** the element id of a member's trail (no piece's: a piece's id is its index; El.trail, docs/PDF-READER.md §18.16, §18.59) */
 export const TRAIL = '~'
 
-// ---------------------------------------------------------------- alignment read off the page (B3, E8)
-/** a line's centre off its column's centre by at most CENTRE points (the maker's CENTRE MAKE:96) and the inset off both edges
- *  of a one-line paragraph centred by its own glue (INSET ems, MAKE:98): the maker's reading where TeX does not tell */
+// ---------------------------------------------------------------- alignment read off the page
+/** a line's centre off its column's centre by at most CENTRE points and the inset off both edges
+ *  of a one-line paragraph centred by its own glue (INSET ems): the reading where TeX does not tell */
 export const CENTRE = 2
 export const INSET = 2
-/** a unit's alignment as the maker reads it where TeX did not state it (MAKE:2121-2135): centred where every line's centre is
+/** a unit's alignment read off its lines where TeX did not state it: centred where every line's centre is
  *  its column's (`edges`) and one line at least is short of it by an em; else justified. With TeX's 'j' (a one-line
  *  paragraph centred by its own \hfill), centred where its line also stands INSET ems off both edges */
 export function alignOf(
@@ -1100,7 +1083,7 @@ export function alignOf(
  * Whether a unit nothing tells the alignment of, and its column does not centre, is centred by its own block: its lines share
  * a middle and not their edges (cellCentred's reading), a single line by the lines stacked on it, the nearest over it and under
  * it that meet its extent within its leading `lead` (a tabular's centred column: an author block's name, place and e-mail).
- * A line the original centres stands on its own middle, never the page's or the column's (the maintainer, 2026-11-08:
+ * A line the original centres stands on its own middle, never the page's or the column's (PDF-READER §18.12; else
  * 2303.11366v4 p1's "Massachusetts Institute of Technology", centred under its name at 393.8, was read justified by the
  * column's middle at 306 and its translation set from its left edge); a paragraph's short last line shares its left edge
  * with the lines over it and stays its own
@@ -1121,7 +1104,7 @@ export function centredByBlock(own: readonly Line[], page: readonly Line[], lead
   const stack = [l, ...(over ? [over] : []), ...(under ? [under] : [])]
   return cellCentred(stack.map((x) => [x[2], x[3]])) === true
 }
-/** a single-line cell's centring by its table column's cells on its page (E8, today's cellCentred RUN:1508, its column by
+/** a single-line cell's centring by its table column's cells on its page (its column by
  *  table, column and span), where TeX stated no class for the cell (a template not LaTeX's: marks/channels.ts readAlign):
  *  every middle within 2 of every other and the widths spread by more than 4 (a column whose cells share a start or an end
  *  has its middles half the widths' spread apart); false where the middles spread; null where nothing tells */

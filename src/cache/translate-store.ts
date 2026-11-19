@@ -1,4 +1,4 @@
-// The background's stores of translation (DESIGN §9; interfaces/translate/DECISION.md "Rows" and "What stage 4 builds"):
+// The background's stores of translation (DESIGN §9; the translate decision, "Rows" and "What stage 4 builds"):
 // three tables of one IndexedDB database, each read and written in bulk, one transaction a call.
 // - `answers`: the chain's Store (`@readarxiv/translate` Ports.store), the raw reply a translator gave for the bytes it was
 //   sent, kept only once accepted and judged again on every read (a better reading of an old reply needs no new request);
@@ -17,7 +17,7 @@
 // named step, tests/cache/translate-store.test.ts opens a database made by version 2's schema).
 import Dexie, { type DexieOptions, type Table } from 'dexie'
 
-export const TRANSLATE_DB = 'axt-translation-cache'
+const TRANSLATE_DB = 'axt-translation-cache'
 
 export interface Limits {
   ttlMs: number
@@ -25,8 +25,8 @@ export interface Limits {
   maxBytes: number
   maxValueBytes: number
 }
-export const ANSWER_LIMITS: Limits = { ttlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 20_000, maxBytes: 50 * 2 ** 20, maxValueBytes: 64 * 1024 }
-export const OCR_LIMITS: Limits = { ...ANSWER_LIMITS, maxValueBytes: 256 * 1024 }
+const ANSWER_LIMITS: Limits = { ttlMs: 30 * 24 * 60 * 60 * 1000, maxEntries: 20_000, maxBytes: 50 * 2 ** 20, maxValueBytes: 64 * 1024 }
+const OCR_LIMITS: Limits = { ...ANSWER_LIMITS, maxValueBytes: 256 * 1024 }
 
 interface Entry {
   key: string

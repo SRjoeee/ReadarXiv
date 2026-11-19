@@ -24,9 +24,11 @@ import {
   LEAD_PUNCT,
   LETTER,
   LINE_END,
+  leadsNext,
   OWN_LEAD,
   SAYS,
   SENTINEL,
+  setsNoWord,
   standInOf,
 } from './text.ts'
 
@@ -89,12 +91,12 @@ const B_CLOSE = /<\/b\s*>/y
  * 65 places of 13,233 zh spans in the lab's Google store, and translated a span's words out of their sentence ("the {order}
  * we take" -> 命令, "each of the {m} coordinates" -> 米); written as a `<span>`, the dots were gone in 61 of 61 units and those
  * words read in their sentences (顺序, "m 个"); 3 of 122 units refused by the token contract (Google moved an element and
- * left its token as text: the next translator's). The element's tag is the shortest Google keeps whole (design-performance
- * Q5): of `<b>xn</b>`, `<b translate=no>xn</b>`, `<span translate=no>xn</span>` and `<span translate="no">xn</span>`, asked
- * in that order over 280 units of five languages (lane reply-dots, 2026-11-13), the bare `<b>` lost 173 of 1,909 elements
+ * left its token as text: the next translator's). The element's tag is the shortest Google keeps whole (DESIGN
+ * §6.2): of `<b>xn</b>`, `<b translate=no>xn</b>`, `<span translate=no>xn</span>` and `<span translate="no">xn</span>`, asked
+ * in that order over 280 units of five languages (measured 2026-11-13), the bare `<b>` lost 173 of 1,909 elements
  * (dropped, or merged into a word), `<b translate=no>` none, every class (a stop before an element, ellipses, lost stops, a
  * unit left as the source) as with `<span id="n" translate="no">`, the tag back as sent 1,909 of 1,909; asked again over
- * this wire, 48 merged cells and 20 units of the HTML page (lane wire-w, 2026-11-15), every class the same, 2,169 of 2,169
+ * this wire, 48 merged cells and 20 units of the HTML page (measured 2026-11-15), every class the same, 2,169 of 2,169
  * tags back. 12 to 16 % fewer characters are sent. A reply in the spelling before it (`<span id="n" translate="no">`) reads
  * as it did: a stored reply is read again
  */
@@ -219,7 +221,7 @@ const sentProjection = (content: readonly Piece[]): string =>
 const sentLength = (content: readonly Piece[]): number => sentProjection(content).length
 
 /**
- * Rule 3 of the reduction design (8.11; contract.ts `silent`): what sets nothing is not in the sentence. The unit's pieces as
+ * DESIGN §6.2 (contract.ts `silent`): what sets nothing is not in the sentence. The unit's pieces as
  * the wire sends them, the markers wire's rule (markers.ts itemsOf): a piece that sets nothing beside one that sets something,
  * white space alone between them, rides in that one's tag (before the first such of a stretch, else after the one before
  * it), the white space between them with it, out of the wire; one with no such neighbour stays in the pieces, `silent`, for
@@ -283,8 +285,9 @@ function offWire(content: readonly Piece[]): {
   return { content: list(content), riders, keep }
 }
 
-/** an element's own stop as the tags wire reads it: its punctuation; a line end is the markers wire's (Microsoft cuts its
- *  sentence there; here our cutter reads the sentences, and the tags' white space is none) */
+/** an element's own stop as the tags wire writes it: its punctuation. A line end is no character of the wire's (the tags' white
+ *  space is none): our cutter reads it as the sentence's end before the stretch it stands in (planTags `line`, text.ts
+ *  leadsNext) */
 const ownStop = (stop: string | undefined): string | undefined =>
   stop !== undefined && LINE_END.test(stop) ? undefined : stop
 
@@ -299,10 +302,14 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
   const items: Item[] = []
   /** each group's stop and the projection offset of its end, in order: the cutter reads it there */
   const stopsAt: [number, string][] = []
+  /** each element's kind, its own stop (punctuation, ownStop), the line end it states (text.ts leadsNext), what its host says
+   *  it reads as, and whether it begins a bibliography entry's block, by its projection offset */
   const kinds = new Map<
     number,
-    { kind: string; stop: string | undefined; reads: string | undefined; newblock: boolean }
+    { kind: string; stop: string | undefined; line: string | undefined; reads: string | undefined; newblock: boolean }
   >()
+  const lineOf = (stop: string | undefined): string | undefined =>
+    stop !== undefined && LINE_END.test(stop) ? stop : undefined
   /** each element's id by its projection offset */
   const idAt = new Map<number, string>()
   /** the ids of what rides in an element's tag before it and after it (offWire), by the offset of the first and the last
@@ -318,7 +325,13 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       if (p.t === 'text') at += p.s.length
       else if (silentPiece(p)) continue
       else if (p.t === 'el') {
-        kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads, newblock: !!p.newblock })
+        kinds.set(at, {
+          kind: p.kind,
+          stop: ownStop(p.stop),
+          line: lineOf(p.stop),
+          reads: p.reads,
+          newblock: !!p.newblock,
+        })
         idAt.set(at, p.id)
         at += 1
       } else at = readsOf(p.content, at)
@@ -345,7 +358,13 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
         // (it sets nothing, and no element beside it sets something: on no wire, back where its group begins or ends)
         items.push({ t: 'off', out: asOut([p]) })
       } else if (p.t === 'el') {
-        kinds.set(at, { kind: p.kind, stop: ownStop(p.stop), reads: p.reads, newblock: !!p.newblock })
+        kinds.set(at, {
+          kind: p.kind,
+          stop: ownStop(p.stop),
+          line: lineOf(p.stop),
+          reads: p.reads,
+          newblock: !!p.newblock,
+        })
         idAt.set(at, p.id)
         items.push({
           t: 'void',
@@ -512,30 +531,55 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       // (what the host says it reads as, but an annotation is one whatever its text: it belongs to the sentence before)
       const byKind = standInOf(k?.kind ?? 'other')
       const s = byKind !== 'annotation' && k?.reads !== undefined ? k.reads : byKind
-      return k?.stop ? `${s === undefined || s === 'annotation' || s === 'citation' ? 'Xx' : s}${k.stop}` : s
+      // (one that states a line end reads as it: the sentence ends there)
+      return k?.stop
+        ? `${s === undefined || s === 'annotation' || s === 'citation' ? 'Xx' : s}${k.stop}`
+        : (k?.line ?? s)
     }
     const wireAt = (c: number) => Math.min(wire.length, Math.max(0, (cutAt[c] as number) - lead))
-    /** the elements the source glues right after a sentence's stop, before projection offset `q` (only elements and white
-     *  space between them and `q`, none between the stop, with its closing marks, and the first): the first's offset, and
-     *  each one's id; null where the text before `q` is otherwise */
-    const glued = (q: number): { first: number; ids: string[] } | null => {
+    /** the stretch of elements right before projection offset `q` (only elements and white space between them and `q`), where
+     *  it leads the sentence that begins at `q` (text.ts leadsNext): the sentence before ended right before it, by its stop
+     *  (`stopped`: a stop of the text, with its closing marks, and nothing between it and the stretch's first element), or by
+     *  the line end one of its elements states, the stretch then the elements right before `q` that set no word (text.ts
+     *  setsNoWord), back to one that sets something or its own stop, which is the sentence's before. The first's offset, each
+     *  one's id, and whether a stop of the text ended it; null where it leads none */
+    const glued = (q: number): { first: number; ids: string[]; stopped: boolean } | null => {
       let k = q - 1
       let first = -1
+      let after = -1
+      let owned = false
       while (k >= 0 && (projection[k] === OBJ || WHITE.test(projection[k] as string))) {
-        if (projection[k] === OBJ) first = k
+        if (projection[k] === OBJ) {
+          first = k
+          // (for a line end: the elements that set no word right before q, back to one that sets something)
+          const e = kinds.get(orig[k] as number)
+          if (!owned && (e?.stop || !setsNoWord(e?.kind ?? 'other'))) owned = true
+          else if (!owned) after = k
+        }
         k--
       }
-      if (first < 0 || k !== first - 1) return null
-      while (k >= 0 && CLOSER.test(projection[k] as string)) k--
-      if (k < 0 || !STOP.test(projection[k] as string)) return null
+      if (first < 0) return null
+      let s = k
+      if (k === first - 1) while (s >= 0 && CLOSER.test(projection[s] as string)) s--
+      const stopped = k === first - 1 && s >= 0 && STOP.test(projection[s] as string)
+      const from = stopped ? first : after
+      if (from < 0) return null
+      const at: number[] = []
+      for (let i = from; i < q; i++) if (projection[i] === OBJ) at.push(orig[i] as number)
+      if (
+        !leadsNext(
+          stopped,
+          at.map((o) => kinds.get(o)?.line),
+        )
+      )
+        return null
       const ids: string[] = []
-      for (let i = first; i < q; i++)
-        if (projection[i] === OBJ) {
-          // (with what rides in its tag)
-          const r = riding.get(orig[i] as number)
-          ids.push(...(r?.before ?? []), idAt.get(orig[i] as number) as string, ...(r?.after ?? []))
-        }
-      return { first, ids }
+      for (const o of at) {
+        // (with what rides in its tag)
+        const r = riding.get(o)
+        ids.push(...(r?.before ?? []), idAt.get(o) as string, ...(r?.after ?? []))
+      }
+      return { first: from, ids, stopped }
     }
     /** whether the elements glued after a stop begin with a tie (the source reader's `space`: TeX's `~`, `\penalty10000\ `, a
      *  word space at which TeX sets no end-of-sentence space) right after it and then a word or a number: from the tie, the
@@ -544,17 +588,13 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
      *  `silent` is out of the projection already): text beginning with a letter or a digit, or an element the cutter reads as
      *  such, not a mark that annotates the sentence before (a note's mark, a footnote's call, a citation). The source itself
      *  states that stop no sentence's end. Where nothing sets a character up to the unit's end, the end stays */
-    const setsNone = (kind: string): boolean => {
-      const s = standInOf(kind)
-      return kind === 'other' || (s !== undefined && !s.trim())
-    }
     const tied = (g: { first: number }): boolean => {
       if (kinds.get(orig[g.first] as number)?.kind !== 'space') return false
       let next = g.first + 1
       while (
         next < projection.length &&
         projection[next] === OBJ &&
-        setsNone(kinds.get(orig[next] as number)?.kind ?? 'other')
+        setsNoWord(kinds.get(orig[next] as number)?.kind ?? 'other')
       )
         next++
       if (next >= projection.length) return false
@@ -569,8 +609,10 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     }
     // (on the wire a sentence ends at its stop: where the source glues an element after it, a note's mark, a footnote's call,
     // a forced break, the boundary marker stands right after the stop, before it; the cutter's sentence ends alone, an
-    // abbreviation's dot none. Google kept no stop before an element written as a word at a sentence's end, 0 of 80 such
-    // places, and 77 with the marker so, measured over the lab's Google store. The sentence stays the source's, the stop and
+    // abbreviation's dot none. A forced break that states the line end that ends its sentence leads the next one the same
+    // way, the boundary marker before the stretch it stands in, `glued` (text.ts leadsNext); a tie is read only after a stop.
+    // Google kept no stop before an element written as a word at a sentence's end, 0 of 80 such places, and 77 with the marker
+    // so, measured over the lab's Google store. The sentence stays the source's, the stop and
     // the element with it: a reading sets the boundary after the element, `leads`. Where the source ties a word or a number to
     // the stop, `tied`, the cutter's end there is none: no marker, no cut. No word list, no language's case: the tie is TeX's
     // own statement; over the lab's Google store at RB1, 533 such ends, every one after an initial or an abbreviation ("M.~Casals",
@@ -595,7 +637,7 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       for (const q of sentenceCuts(projection, standIn)) {
         const c = orig[q] as number
         const g = glued(q)
-        if (g && tied(g)) continue
+        if (g?.stopped && tied(g)) continue
         const moved = g ? wireAt(orig[g.first] as number) : null
         const w = moved !== null && moved > at ? moved : wireAt(c)
         if (w <= at || w >= wire.length) continue
@@ -607,7 +649,11 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
       // (the unit's last stop with elements glued after it, where the cutter would end a sentence were one to follow: a marker
       // of the wire's alone there, no sentence's start)
       const g = glued(projection.length)
-      if (g && !tied(g) && sentenceCuts(`${projection} ${NEXT}`, standIn).includes(projection.length + 1)) {
+      if (
+        g &&
+        !(g.stopped && tied(g)) &&
+        sentenceCuts(`${projection} ${NEXT}`, standIn).includes(projection.length + 1)
+      ) {
         const w = wireAt(orig[g.first] as number)
         if (w > at && w < wire.length) {
           endMark = slots.length + marks.length + 1
@@ -877,7 +923,7 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   // (and no string of the tokens' form outside the elements more often than the unit's own text holds it, whatever its number:
   // a reply that moved an element to another word and left its token behind as text, or that wrote a number of the text in
   // the tokens' form, shows a reader our wire's artefact, and is unread as one with an element lost is; a paper's own `x1`
-  // reads as its text. Google's replies in lane stray-stop's fill: 1706.03762v7's Table 1 caption left `x1` behind,
+  // reads as its text. Google's replies: 1706.03762v7's Table 1 caption left `x1` behind,
   // 2610.40576v1 wrote its `50` as `x50`; counted in the text as read, the reply's and the wire's alike: tokensIn)
   const source = tokensIn(plan.wire, plan)
   for (const [token, n] of tokensIn(raw, plan)) if (n > (source.get(token) ?? 0)) return null

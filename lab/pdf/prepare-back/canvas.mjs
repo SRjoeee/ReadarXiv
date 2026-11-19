@@ -5,16 +5,28 @@
 // erasure's E4: at most 0.1 % of their boxes' pixels, max channel Δ 16; docs/route/ocg-erasure.md §7.1). A page that differs
 // outside is rendered again up to three times (Chromium's own renders of a page may differ from each other), as ocg-gate.mjs.
 // Which shows were split is read from the two documents, not from the plan: an A show whose glyphs W shows in more than one.
-//   node --import tsx lab/pdf/prepare-back/canvas.mjs <candidate out> <papers.tsv> [--canvas=gpu|cpu] <id>…
+// The renderer is the software one (`--renderer=software`, the default): Chromium launched with `--disable-gpu`, so that its 2D
+// canvas is rasterised by Skia on the CPU, as on a runner with no GPU (a hosted Linux runner's headless Chromium falls back to
+// SwiftShader, on which it gives no 2D canvas to the GPU), and no GPU's driver or rasteriser is in the pixels; the browser's own
+// word on it (CDP SystemInfo, its 2D canvas `unavailable_software`) is printed first and a run whose canvas is not the software
+// one is refused (exit 2). `--renderer=gpu` measures this machine's GPU canvas instead (a reading, not the gate). PDF.js is set
+// up as the reader sets it (`enableHWA`, packages/reader/src/pdfjs/kit.ts; `--canvas=cpu` turns it off).
+//   node --import tsx lab/pdf/prepare-back/canvas.mjs <candidate out> <papers.tsv> [--renderer=software|gpu] [--canvas=gpu|cpu] <id>…
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pageInk } from '@readarxiv/engine'
 import { chromium } from 'playwright'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { servedPage } from './served-page.mjs'
 
 const [OUT, LIST] = process.argv.slice(2)
 const CANVAS = process.argv.find(a => a.startsWith('--canvas='))?.slice(9) ?? 'gpu'
+const RENDERER = process.argv.find(a => a.startsWith('--renderer='))?.slice(11) ?? 'software'
+if (!['software', 'gpu'].includes(RENDERER)) {
+  console.error(`canvas.mjs: --renderer=software|gpu (given ${RENDERER})`)
+  process.exit(2)
+}
 const IDS = process.argv.slice(4).filter(a => !a.startsWith('--'))
 // (--figures-off: also each page with its figure texts' groups OFF against A, the pixels changed outside their members' lines'
 // boxes counted: whether PDF.js hides a figure text written inside its form exactly)
@@ -128,7 +140,20 @@ async function rectsOf(A, W) {
   })
 }
 
-const browser = await chromium.launch({ channel: 'chromium' })
+const browser = await chromium.launch({ channel: 'chromium', args: RENDERER === 'software' ? ['--disable-gpu'] : [] })
+// (the browser's own word on its 2D canvas and its GL, before any page: a software run whose canvas the GPU draws is refused)
+{
+  const cdp = await browser.newBrowserCDPSession()
+  const { gpu } = await cdp.send('SystemInfo.getInfo')
+  await cdp.detach()
+  const canvas2d = gpu.featureStatus?.['2d_canvas'] ?? null
+  console.log(JSON.stringify({ renderer: RENDERER, canvas2d, gl: gpu.auxAttributes?.glRenderer ?? null, browser: browser.version() }))
+  if (RENDERER === 'software' && canvas2d !== 'unavailable_software') {
+    console.log(JSON.stringify({ refused: `the software renderer was asked and the browser's 2D canvas is ${canvas2d}` }))
+    await browser.close()
+    process.exit(2)
+  }
+}
 try {
   for (const id of IDS) {
     const A = new Uint8Array(readFileSync(join(dirs.get(id), 'arxiv.pdf')))
@@ -154,13 +179,7 @@ try {
     }
     const files = new Map([['a.pdf', A], ['w.pdf', SELF ? A : W]])
     const page = await browser.newPage()
-    await page.route('http://canvas.local/**', route => {
-      const path = new URL(route.request().url()).pathname
-      if (path === '/') return route.fulfill({ contentType: 'text/html', body: PAGE })
-      if (path.startsWith('/pdf/')) return route.fulfill({ contentType: 'application/pdf', body: Buffer.from(files.get(path.slice(5))) })
-      const f = join(PDFJS, path.slice('/pdfjs/'.length))
-      return existsSync(f) ? route.fulfill({ contentType: f.endsWith('.mjs') ? 'text/javascript' : 'application/octet-stream', body: readFileSync(f) }) : route.fulfill({ status: 404 })
-    })
+    await page.route('http://canvas.local/**', servedPage(PAGE, files, PDFJS))
     await page.goto(`http://canvas.local/?hwa=${CANVAS === 'gpu' ? 1 : 0}${NORMALIZE ? '&normalize=1' : ''}${FLUSH ? '&flush=1' : ''}`)
     await page.waitForFunction(() => window.gate)
     const call = (fn, ...a) => page.evaluate(([f, x]) => window.gate[f](...x), [fn, a])
@@ -192,6 +211,6 @@ try {
     }
     await page.close()
     if (ROWS) for (const r of rows) if (r.outside || r.share) console.log(JSON.stringify({ id, ...r }))
-    console.log(JSON.stringify({ id, canvas: CANVAS, ...(SELF ? { self: true } : {}), ...(NORMALIZE ? { normalize: true } : {}), ...(FLUSH ? { flush: true } : {}), pages: rows.length, splitShows: rows.reduce((n, r) => n + r.splitShows, 0), outsidePages: rows.filter(r => r.outside).map(r => [r.p, r.outside]), differingPages: rows.filter(r => r.any).map(r => [r.p, r.any]), shareMax: Math.max(0, ...rows.map(r => r.share)), maxDelta: Math.max(0, ...rows.map(r => r.max)), pagesWithResidue: rows.filter(r => r.share > 0).length, ...(FIGURES_OFF ? { figuresOff: { pages: rows.filter(r => r.figOff).length, outsidePages: rows.filter(r => r.figOff?.outside).map(r => [r.p, r.figOff.outside]), inside: rows.reduce((n, r) => n + (r.figOff?.inside ?? 0), 0) } } : {}) }))
+    console.log(JSON.stringify({ id, renderer: RENDERER, canvas: CANVAS, ...(SELF ? { self: true } : {}), ...(NORMALIZE ? { normalize: true } : {}), ...(FLUSH ? { flush: true } : {}), pages: rows.length, splitShows: rows.reduce((n, r) => n + r.splitShows, 0), outsidePages: rows.filter(r => r.outside).map(r => [r.p, r.outside]), differingPages: rows.filter(r => r.any).map(r => [r.p, r.any]), shareMax: Math.max(0, ...rows.map(r => r.share)), maxDelta: Math.max(0, ...rows.map(r => r.max)), pagesWithResidue: rows.filter(r => r.share > 0).length, ...(FIGURES_OFF ? { figuresOff: { pages: rows.filter(r => r.figOff).length, outsidePages: rows.filter(r => r.figOff?.outside).map(r => [r.p, r.figOff.outside]), inside: rows.reduce((n, r) => n + (r.figOff?.inside ?? 0), 0) } } : {}) }))
   }
 } finally { await browser.close() }

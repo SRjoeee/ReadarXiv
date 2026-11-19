@@ -1,5 +1,5 @@
 // lab/pdf/prepare-back/facts-vs-tap.mjs: the parts' facts against what today's reader worked out (stage 1a-2's deliverable 4).
-// For every unit a reader dump of the baseline lays (the tap's ledgers, readarxiv-lab-data/refactor-2026-11/baseline/tap: each
+// For every unit a reader dump of the baseline lays (the tap's ledgers, the lab baseline's tap: each
 // unit's last round's L5 and L6 slots), the fact as the prepare states it in its part (run.mjs's bundles and located files,
 // joined by the dump's ord) against today's value: equal, or different with its cause. A unit that stands elsewhere on arXiv's
 // page than on our compile (its place not `same`) is counted apart. Not shipped.
@@ -56,7 +56,7 @@ const FACTS = [
   ['mark after', 'D10, D11', s => (s.elements ? s.elements.modes.filter(x => /origAfter|heldAfter/.test(x[5])).length : undefined), m => (m.els ?? []).filter(([, e]) => e.after !== undefined).length, (a, b) => a === b],
 ]
 
-/** a difference's cause, by fact (each class's reading in lanes/L1-prepare.md) */
+/** a difference's cause, by fact (each class's reading in lane L1-prepare's record) */
 const overlaps = (k, l) => k[0] === l[0] && Math.min(k[4], l[5]) > Math.max(k[2], l[6])
 const displayRows = m => m.lines.filter(l => l[9] & KEPT && (m.els ?? []).some(([, e]) => e.kind === 'display' && e.ink.some(k => overlaps(k, l)))).length
 const CAUSE = {

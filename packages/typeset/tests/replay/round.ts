@@ -1,4 +1,4 @@
-// A unit's lay replayed from F2 to the round's last word (TAP.md §3, F2-F8, `out`, L9) by the package's own composition
+// A unit's lay replayed from F2 to the round's last word (the tap's spec §3, F2-F8, `out`, L9) by the package's own composition
 // (src/lay/member.ts layMember, layFlow's F2-F8 and L9), its trace compared with the round's ledger slots step by step: X.cut
 // (F2), S.onLeadRetry (F3), X.numbered (F4), S.overFollower (F5), X.further or X.runs (F6), S.settle (F7), S.share (F8), the
 // round's `out`, the unit's fill leadings (L9). The member is prepared from the round's inputs (fit-input.ts) and its slots:

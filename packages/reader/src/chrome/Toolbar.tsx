@@ -2,7 +2,7 @@
 // id, a host's own after it), the
 // centre (the display switch), the trail (the side-by-side pair, zoom, the translation's menus and the reading options,
 // the download, the settings, the way back), a hairline divider between the trail's groups. The page's banner, not an
-// ARIA toolbar: each control is a stop of its own, which a toolbar's arrow keys would not be (the interface review).
+// ARIA toolbar: each control is a stop of its own, which a toolbar's arrow keys would not be.
 // What leaves it in a narrow window is marked (`data-wide`, `data-side-by-side`; reader.css). Everything here goes
 // through the controller; nothing reads the viewers
 import { ArrowLeftRight, Link2, Minus, PanelLeft, Plus } from 'lucide'
@@ -35,8 +35,8 @@ export function Toolbar(props: BarProps) {
 }
 
 /** the bar where neither side has anything to show, by the website's rule: the lead's slot (its way home) and the reading
- *  options alone, in the bar's zones, so that each stays on its side at every width (today's web reader/LostBar.tsx); no
- *  zoom key is taken, nothing to zoom */
+ *  options alone, in the bar's zones, so that each stays on its side at every width (§6.6: the website's bar for a paper
+ *  arXiv does not have); no zoom key is taken, nothing to zoom */
 function BareBar({ controller }: { controller: ReaderController }) {
   const { slots } = useParts()
   return (
@@ -104,7 +104,7 @@ function PaperBar({ controller, contents, onContents }: BarProps) {
         >
           <Icon node={ArrowLeftRight} />
         </ToolbarButton>
-        {/* the sync the reader applies, not the stored setting a refused write or an address may leave behind (Part 2's final review) */}
+        {/* the sync the reader applies, not the stored setting a refused write or an address may leave behind */}
         <ToolbarButton
           label={R.sync}
           pressed={state.sync}

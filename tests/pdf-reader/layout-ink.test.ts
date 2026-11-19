@@ -790,6 +790,143 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
   })
 })
 
+// What an opaque fill painted after a glyph covers whole is not shown either (the figures' reading, beside the clip and the alpha
+// of 0): 2610.40394v1 p4 paints a figure label's first word, then the label box's white fill over it, then the label's own word,
+// and a reader of the page never sees the first. Opaque as a shape's `opaque` is: a colour at an alpha of 1, under no blend mode
+// but Normal and no soft mask, its groups' alike, every clip in force a rectangle on the page's axes. Whole: the glyph's ink box
+// (its outline's, else its advance and its font's band) inside the fill's region as the path states it, its straight edges exactly
+// and each curve by the box of its control points, which holds the curve, and inside the clip in force
+describe('ink an opaque fill painted after it covers whole is not shown (the figures\' reading)', () => {
+  const figureInk = (ops: Op[]) => pageInk(OPS, list(ops), commonObjs, { rotate: 0, turned: true, indices: true })
+  const form = (...inner: Op[]): Op[] => [[OPS.paintFormXObjectBegin, [Float32Array.from([1, 0, 0, 1, 0, 0]), Float32Array.from([0, 0, 200, 200])]], ...inner, [OPS.paintFormXObjectEnd, []]]
+  /** a path PDF.js gives (moveTo, lineTo, curveTo, closePath codes and their points) painted by `op`, with its box */
+  const path = (op: number, data: number[]): Op => {
+    const xs: number[] = [], ys: number[] = []
+    for (let i = 0; i < data.length; ) {
+      const o = data[i++]!, n = o === 0 || o === 1 ? 2 : o === 2 ? 6 : o === 3 ? 4 : 0
+      for (let q = 0; q < n; q += 2) { xs.push(data[i + q]!); ys.push(data[i + q + 1]!) }
+      i += n
+    }
+    return [OPS.constructPath, [op, [Float32Array.from(data)], Float32Array.from([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)])]]
+  }
+  /** a rectangle's subpath, its corners in turn from (x0, y0): anticlockwise, or clockwise */
+  const ring = (x0: number, y0: number, x1: number, y1: number, clockwise = false) =>
+    clockwise ? [0, x0, y0, 1, x0, y1, 1, x1, y1, 1, x1, y0, 4] : [0, x0, y0, 1, x1, y0, 1, x1, y1, 1, x0, y1, 4]
+  const rect = (x0: number, y0: number, x1: number, y1: number, op: number = OPS.fill) => path(op, ring(x0, y0, x1, y1))
+  /** a rectangle of rounded corners, each a cubic of arms 0.5523 r, as a drawing program writes a label's box */
+  const rounded = (x0: number, y0: number, x1: number, y1: number, r: number, op: number = OPS.fill) => {
+    const k = 0.5523 * r
+    return path(op, [
+      0, x0 + r, y0, 1, x1 - r, y0, 2, x1 - r + k, y0, x1, y0 + r - k, x1, y0 + r,
+      1, x1, y1 - r, 2, x1, y1 - r + k, x1 - r + k, y1, x1 - r, y1,
+      1, x0 + r, y1, 2, x0 + r - k, y1, x0, y1 - r + k, x0, y1 - r,
+      1, x0, y0 + r, 2, x0, y0 + r - k, x0 + r - k, y0, x0 + r, y0, 4,
+    ])
+  }
+  const colour = (c: string): Op => [OPS.setFillRGBColor, [c]]
+  const gs = (...entries: unknown[][]): Op => [OPS.setGState, [entries]]
+  /** a word at (x, y), size 10 in f1: each glyph 6 across, its band from y - 2 to y + 7 */
+  const word = (w: string, x: number, y: number) => text('f1', 10, [1, 0, 0, 1, x, y], show(...[...w].map(u => g(u, 600))))
+  /** each glyph of the page's `n`-th show: unseen or not */
+  const unseenOf = (r: ReturnType<typeof figureInk>, n: number) => r.glyphs.filter(x => x.n === n).map(x => x.unseen ?? false)
+  // ("Hid" from x 50 to 68, its band 98 to 107: the first show; "Lab" the second, on the same baseline from 58, over it, as the
+  // page sets the label's word: back from the first's end past a run's reach, a run of its own)
+  const hid = word('Hid', 50, 100), lab = word('Lab', 58, 100)
+
+  it('a word painted, then a white box over it, then the label\'s own word: the first is not shown, the box and the second are', () => {
+    const r = figureInk(form(...hid, colour('#ffffff'), rect(40, 90, 120, 115), colour('#000000'), ...lab))
+    expect(unseenOf(r, 0)).toEqual([true, true, true])
+    expect(unseenOf(r, 1)).toEqual([false, false, false])
+    // (every box is kept, none unseen: the statement is the covered glyphs' alone)
+    expect(r.boxes).toEqual([40, 90, 120, 115])
+    expect(r.unseen!.size).toBe(0)
+    // (a box of rounded corners alike, its corners clear of the word; black covers as white does)
+    expect(unseenOf(figureInk(form(...hid, colour('#ffffff'), rounded(40, 90, 120, 115, 6), colour('#000000'), ...lab)), 0)).toEqual([true, true, true])
+    expect(unseenOf(figureInk(form(...hid, rect(40, 90, 120, 115))), 0)).toEqual([true, true, true])
+  })
+  it('a glyph set turned alike, and its box with it', () => {
+    const r = figureInk(form(...text('f1', 10, [0, 1, -1, 0, 60, 40], show(g('T', 600))), colour('#ffffff'), rect(40, 30, 80, 60)))
+    expect(r.turned![0]).toMatchObject({ unseen: true })
+    expect(r.unseen!.has(r.turned![0]!.box)).toBe(true)
+  })
+  it('the covered word makes no unit; the label\'s own word is the unit it is with no covered word under it', () => {
+    const units = (ops: Op[]) => figureUnitsOf([figureInk(form(...ops))] as never, null).units
+    const covered = units([...hid, colour('#ffffff'), rect(40, 90, 120, 115), colour('#000000'), ...lab])
+    expect(covered.map(u => u.text)).toEqual(['Lab'])
+    // (the same box and word with nothing under it: the same unit, field for field)
+    const alone = units([colour('#ffffff'), rect(40, 90, 120, 115), colour('#000000'), ...lab])
+    expect(alone.map(u => u.text)).toEqual(['Lab'])
+    expect(covered[0]).toEqual(alone[0])
+  })
+
+  it('text painted after a fill (a label on its box, a cell on its background, a highlighted word) shows', () => {
+    const r = figureInk(form(colour('#ffffff'), rect(40, 90, 120, 115), colour('#ffd0d0'), rect(45, 95, 70, 110), colour('#000000'), ...hid))
+    expect(unseenOf(r, 0)).toEqual([false, false, false])
+    expect(figureUnitsOf([r] as never, null).units.map(u => u.text)).toEqual(['Hid'])
+  })
+  it('text under a fill that does not cover what lies under it shows: transparent, blended, under a soft mask, a pattern\'s, no colour, in a group painted so', () => {
+    const under = (...pre: Op[]) => unseenOf(figureInk(form(...hid, ...pre, rect(40, 90, 120, 115))), 0)
+    const shows = [false, false, false]
+    expect(under(colour('#ffffff'), gs(['ca', 0.5]))).toEqual(shows)
+    expect(under(colour('#ffffff'), gs(['BM', 'multiply']))).toEqual(shows)
+    expect(under(colour('#ffffff'), gs(['SMask', true]))).toEqual(shows)
+    expect(under([OPS.setFillColorN, ['TilingPattern', null, {}, [1, 0, 0, 1, 0, 0], [0, 0, 4, 4], 4, 4, 1, 1, false]])).toEqual(shows)
+    expect(under([OPS.setFillColorN, ['Shading', 'sh0', null]])).toEqual(shows)
+    expect(under([OPS.setFillTransparent, []])).toEqual(shows)
+    expect(unseenOf(figureInk(form(...hid, gs(['ca', 0.5]), [OPS.beginGroup, [{}]], colour('#ffffff'), rect(40, 90, 120, 115), [OPS.endGroup, [{}]])), 0)).toEqual(shows)
+    // (and the unit stays)
+    expect(figureUnitsOf([figureInk(form(...hid, colour('#ffffff'), gs(['ca', 0.5]), rect(40, 90, 120, 115)))] as never, null).units.map(u => u.text)).toEqual(['Hid'])
+  })
+  it('a glyph a fill covers in part shows: across its band, past its side, or one glyph whole and the next in part', () => {
+    expect(unseenOf(figureInk(form(...hid, colour('#ffffff'), rect(40, 90, 120, 103))), 0)).toEqual([false, false, false])
+    expect(unseenOf(figureInk(form(...hid, colour('#ffffff'), rect(40, 90, 67, 115))), 0)).toEqual([true, true, false])
+    // (an edge exactly on the glyph's ink holds it: H from 50 to 56)
+    expect(unseenOf(figureInk(form(...hid, colour('#ffffff'), rect(50, 98, 56, 107))), 0)).toEqual([true, false, false])
+    // (the unit of a word its fill covers across its band stays)
+    expect(figureUnitsOf([figureInk(form(...hid, colour('#ffffff'), rect(40, 90, 120, 103)))] as never, null).units.map(u => u.text)).toEqual(['Hid'])
+  })
+  it('a fill covers only inside the clip in force, and only where every clip is a rectangle on the page\'s axes', () => {
+    const clipTo = (pts: number[]): Op[] => [[OPS.clip, []], path(OPS.endPath, [0, pts[0]!, pts[1]!, ...pts.slice(2).flatMap((v, i) => (i % 2 ? [v] : [1, v])), 4])]
+    // (a rectangle's clip over the word: covered; one that leaves the word's last glyph out of view: that glyph shows)
+    expect(unseenOf(figureInk(form(...hid, [OPS.save, []], ...clipTo([40, 90, 120, 90, 120, 115, 40, 115]), colour('#ffffff'), rect(40, 90, 120, 115), [OPS.restore, []])), 0)).toEqual([true, true, true])
+    expect(unseenOf(figureInk(form(...hid, [OPS.save, []], ...clipTo([40, 90, 65, 90, 65, 115, 40, 115]), colour('#ffffff'), rect(40, 90, 120, 115), [OPS.restore, []])), 0)).toEqual([true, true, false])
+    // (a triangle's clip, kept as its box: what it shows is less than the box, nothing is covered)
+    expect(unseenOf(figureInk(form(...hid, [OPS.save, []], ...clipTo([40, 90, 120, 90, 40, 115]), colour('#ffffff'), rect(40, 90, 120, 115), [OPS.restore, []])), 0)).toEqual([false, false, false])
+    // (a form turned 30 degrees: its box no rectangle on the page's axes)
+    const c = Math.cos(Math.PI / 6), sn = Math.sin(Math.PI / 6)
+    const turnedForm: Op[] = [[OPS.paintFormXObjectBegin, [Float32Array.from([c, sn, -sn, c, 0, 0]), Float32Array.from([-500, -500, 500, 500])]], colour('#ffffff'), rect(-300, -300, 300, 300), [OPS.paintFormXObjectEnd, []]]
+    expect(unseenOf(figureInk(form(...hid, ...turnedForm)), 0)).toEqual([false, false, false])
+  })
+  it('a curve holds a glyph whole only where the glyph\'s ink is clear of the box of its control points; a hole holds nothing', () => {
+    // (a rounded box of radius 20: its bottom left corner's control points span 40 to 60 across, 90 to 110 up; H at 50 to 56 and
+    // i at 56 to 62 meet that box and show, H though the curve passes clear of it; d, at 62 to 68, is clear of every corner's)
+    expect(unseenOf(figureInk(form(...hid, colour('#ffffff'), rounded(40, 90, 160, 140, 20))), 0)).toEqual([false, false, true])
+    // (a ring of two subpaths, the word in its hole: even-odd, or nonzero with the inner one turning the other way, holds nothing;
+    // nonzero with both turning alike holds it)
+    const ringed = (op: number, clockwise: boolean) => unseenOf(figureInk(form(...hid, colour('#ffffff'), path(op, [...ring(20, 70, 140, 130), ...ring(40, 90, 120, 115, clockwise)]))), 0)
+    expect(ringed(OPS.eoFill, false)).toEqual([false, false, false])
+    expect(ringed(OPS.fill, true)).toEqual([false, false, false])
+    expect(ringed(OPS.fill, false)).toEqual([true, true, true])
+  })
+  it('a stroke, an image, a shading and an annotation\'s appearance painted over a glyph cover nothing it states', () => {
+    const over = (...ops: Op[]) => unseenOf(figureInk(form(...hid, ...ops)), 0)
+    const shows = [false, false, false]
+    // (a stroke paints its line's width, not its path's region: a line 40 wide over the word)
+    expect(over([OPS.setLineWidth, [40]], [OPS.setStrokeRGBColor, ['#ffffff']], path(OPS.stroke, [0, 40, 102, 1, 120, 102]))).toEqual(shows)
+    // (an image: its samples and its mask say what of it is opaque, and the operator list holds neither)
+    expect(over([OPS.save, []], [OPS.transform, [80, 0, 0, 25, 40, 90]], [OPS.paintImageXObject, ['img0', 8, 8]], [OPS.restore, []])).toEqual(shows)
+    // (a shading: what it paints is its own domain's, not read)
+    expect(over([OPS.save, []], [OPS.clip, []], rect(40, 90, 120, 115, OPS.endPath), [OPS.shadingFill, ['sh0']], [OPS.restore, []])).toEqual(shows)
+    // (an annotation's appearance: whether a viewer draws it is its flags', not the content's paint order)
+    expect(over([OPS.beginAnnotation, ['a1', [0, 0, 200, 200], [1, 0, 0, 1, 0, 0], [1, 0, 0, 1, 0, 0], false]], colour('#ffffff'), rect(40, 90, 120, 115), [OPS.endAnnotation, []])).toEqual(shows)
+  })
+  it('no reading but the figures\' is given it, and a fill painted before the glyph covers nothing', () => {
+    const plain = pageInk(OPS, list(form(...hid, colour('#ffffff'), rect(40, 90, 120, 115))), commonObjs, { rotate: 0 })
+    expect(plain.glyphs.map(x => x.unseen)).toEqual([undefined, undefined, undefined])
+    expect(unseenOf(figureInk(form(colour('#ffffff'), rect(40, 90, 120, 115), colour('#000000'), ...hid)), 0)).toEqual([false, false, false])
+  })
+})
+
 // The walk's guards (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus): each an abuse guard twenty
 // times or more above the corpus's heaviest page, so that no real page meets one; a page past the box budget degrades, its
 // text whole, and a page past the cap or the stack has no ink; no clock decides it but where a reader asks one (the reader's live fills)

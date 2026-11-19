@@ -6,22 +6,41 @@
 //   AXT_PAPER=<dir with arxiv.pdf> runs the stack's checks on that paper too (a lab paper, read in place, never copied)
 //   AXT_LINK=<latency ms>,<KB/s> shapes every page's link in Chromium (the first laid page's measurements: the slices of a CJK
 //   target are its last wait); AXT_DELTA_MS the pace of a corpus paper's rows arriving (one delta of DELTAS a step, 1000 ms)
+//   AXT_GROUP_PAGES=<id>:<page>,… the corpus pages I2 turns each group off on (the release check's twelve, gates.mjs
+//   GROUP_PAGES): a paper of them not among AXT_LAB_FIXTURES is read for I2 alone
+//   --seed=<fault> runs the harness with a fault of its own, on content of our own, that a check of the invariants must find:
+//   i2-left (s1-columns' layer served with a show of axt:1.1.t moved out of its group: turned off, the group leaves that mark
+//   drawn), i2-neighbour (… with the first line of the paragraph after the heading put inside the heading's text group: turned
+//   off, it hides a neighbour's ink), i7-unlit and i7-wide (I7's own copy of a committed page: a member's last lit box dropped,
+//   its first widened by 2 pt), i8-reverse (the reading's items reversed before the judge), digest-unheld
+//   (the storage check's range reader never given the head's digests)
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { toggleKind } from '@readarxiv/format'
+import { deflateSync, inflateSync } from 'node:zlib'
+import { chunkDigests, toggleKind, write } from '@readarxiv/format'
 import { build } from 'vite'
 import { kindShown } from '../src/compose/classes.ts'
+import { RETRY_MS } from '../src/session/client.ts'
 import { createContents, plainOf } from '../src/session/contents.ts'
+import { BACKOFF_MS, backoff } from '../src/session/machine.ts'
 import { judgePunct, measurePunct, PUNCT_TARGETS, punctRows } from './punct.mjs'
 import { answerBytes, startServer } from './server.mjs'
+import { bundleOf as readBundle, membersOfParts, orderOf, pdfjsNode, readingOf } from './text-order.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = join(HERE, '../../..')
 const argOf = (n) => process.argv.find((a) => a.startsWith(`--${n}=`))?.slice(n.length + 3) ?? null
 const only = argOf('only')?.split('|') ?? null
 const browserName = argOf('browser') ?? 'chromium'
+const SEEDS = ['i2-left', 'i2-neighbour', 'i7-unlit', 'i7-wide', 'i8-reverse', 'digest-unheld']
+const SEED = argOf('seed')
+if (SEED && !SEEDS.includes(SEED)) {
+  console.log(`FAIL seed: ${SEED} is none of ${SEEDS.join(', ')}`)
+  process.exit(2)
+}
+if (SEED) console.log(`seeded: ${SEED} (a fault of the harness's own; the checks it reaches are to fail)`)
 const RESOLVER_WALL = '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1, EXCLUDE localhost'
 
 await build({ configFile: join(HERE, 'vite.config.ts'), logLevel: 'warn' })
@@ -40,8 +59,9 @@ const objects = new Map(Object.entries(papers).map(([id, f]) => [`/api/v2/o/arxi
 // never laid from another run's data in their place. Each one's A, its bundle's objects under our server's paths, its dumps
 // and rows
 const FIX = join(HERE, 'fixtures')
-const LAB = '/Users/cheongzhiyan/Developer/readarxiv-lab-data/refactor-2026-11'
-const L1_BUNDLES = join(LAB, 'lanes/L1-out4/bundles')
+// (the lab-data directory: AXT_LAB_DATA, no default; only the corpus fixtures read it, and they stop without it)
+const LAB = process.env.AXT_LAB_DATA ? join(process.env.AXT_LAB_DATA, 'refactor-2026-11') : null
+const L1_BUNDLES = LAB && join(LAB, 'lanes/L1-out4/bundles')
 const RUN_BUNDLES = process.env.AXT_L1_BUNDLES ?? null
 const RUN_ROWS = process.env.AXT_LAB_ROWS ?? null
 if (RUN_BUNDLES && !RUN_ROWS) {
@@ -85,7 +105,24 @@ function runRowsOf(bundle, file) {
   return { identity, asked: asked.size, missing, extra, byId, rows: { format: 1, rows: [...got.values()] } }
 }
 const notBelonging = []
-for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)) {
+const labFixtures = (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
+/** I2's corpus pages (AXT_GROUP_PAGES): [paper, page]; a paper not among the lab fixtures read for I2 alone (`groupsOnly`) */
+const groupPages = (process.env.AXT_GROUP_PAGES ?? '')
+  .split(',')
+  .filter(Boolean)
+  .map((x) => {
+    const m = /^(.+):(\d+)$/.exec(x)
+    if (!m) throw new Error(`AXT_GROUP_PAGES: ${x} is not <id>:<page>`)
+    return [m[1], Number(m[2])]
+  })
+const groupOnly = [...new Set(groupPages.map(([id]) => id))].filter((id) => !labFixtures.includes(id))
+if ((labFixtures.length > 0 || groupPages.length > 0) && !LAB) {
+  console.log(
+    'FAIL fixtures: AXT_LAB_FIXTURES or AXT_GROUP_PAGES without AXT_LAB_DATA: set it to the lab-data directory the papers are read from',
+  )
+  process.exit(1)
+}
+for (const id of [...labFixtures, ...groupOnly]) {
   const papersJson = JSON.parse(readFileSync(join(LAB, 'baseline/corpora/papers.json'), 'utf8'))
   const p = papersJson.papers.find((x) => x.id === id)
   if (!p) throw new Error(`no corpus paper ${id}`)
@@ -105,6 +142,7 @@ for (const id of (process.env.AXT_LAB_FIXTURES ?? '').split(',').filter(Boolean)
     // (the rows served: the run's (their object), else the dump's (rowsOfDump))
     runRows: run ? { zh: run.rows } : null,
     face: 'cjk',
+    groupsOnly: groupOnly.includes(id),
   }
   if (run && (run.missing || run.extra))
     notBelonging.push(
@@ -127,6 +165,8 @@ if (notBelonging.length) {
   console.log(`FAIL fixtures: ${notBelonging.join('; ')}`)
   process.exit(1)
 }
+/** the fixtures the checks walk: every one but a paper read for I2 alone */
+const checkedNames = Object.keys(fixtures).filter((n) => !fixtures[n].groupsOnly)
 const indexOf = {}
 /** the stand-in of our server's v2 routes: each paper's document; a scenario a check sets (`modes[seg]`): 'not-opened' (a 404
  *  until the open, then preparing for `prepareMs`, then the document), 'stale' (a layer of another build and no run of the
@@ -315,6 +355,57 @@ function rowsOfDump(dump) {
     })),
   }
 }
+/**
+ * A seed's layer of fixture `name` (--seed=i2-left, i2-neighbour): its add-on followed by a section of the seed's own that
+ * writes page 1's content stream again (an incremental update, as the add-on is one over arXiv's file), the fault in it; a head
+ * naming that add-on, served under the fixture's objects, and the fixture's index pointing at it. `i2-left` takes a show of
+ * axt:1.1.t (the third line of the first paragraph) out of its group; `i2-neighbour` puts the first show of axt:3.1.t (the
+ * paragraph after the heading) inside axt:2.1.t (the heading's text) too. Our own fixture's bytes, never a paper's
+ */
+function seedLayer(name, seed) {
+  const f = fixtures[name]
+  const head = JSON.parse(readFileSync(join(f.bundle, 'head.json'), 'utf8'))
+  const addOn = readFileSync(join(f.bundle, `${head.addOn.digest}.addon`))
+  const s = addOn.toString('latin1')
+  const objs = /(\d+) 0 obj\s*<<([^>]*?)\/Length (\d+)([^>]*)>>\s*stream\r?\n/g
+  let num = null,
+    text = null
+  for (let m = objs.exec(s); m; m = objs.exec(s)) {
+    const at = m.index + m[0].length
+    const t = inflateSync(addOn.subarray(at, at + Number(m[3]))).toString('latin1')
+    if (t.includes('/OC /axt1.1.t BDC')) {
+      num = m[1]
+      text = t
+      break
+    }
+  }
+  if (!text) throw new Error(`seed ${seed}: no content stream of ${name}'s page 1 in its add-on`)
+  const was = text
+  if (seed === 'i2-left') text = text.replace(/\/OC \/axt1\.1\.t BDC (\(stay the pages[^)]*\) Tj) EMC/, '$1')
+  else text = text.replace(/\/OC \/axt3\.1\.t BDC (\([^)]*\) Tj) EMC/, '/OC /axt2.1.t BDC /OC /axt3.1.t BDC $1 EMC EMC')
+  if (text === was) throw new Error(`seed ${seed}: the show it moves is not in ${name}'s page 1`)
+  const trailer = [...s.matchAll(/trailer\s*<<([\s\S]*?)>>\s*startxref\s+(\d+)/g)].at(-1)
+  const key = (k) => new RegExp(`/${k} (\\d+(?: 0 R)?)`).exec(trailer[1])?.[1]
+  const body = deflateSync(Buffer.from(text, 'latin1'))
+  const base = readFileSync(f.pdf).length + addOn.length
+  const obj = Buffer.concat([
+    Buffer.from(`\n${num} 0 obj\n<< /Filter /FlateDecode /Length ${body.length} >>\nstream\n`, 'latin1'),
+    body,
+    Buffer.from('\nendstream\nendobj\n', 'latin1'),
+  ])
+  const tail =
+    `xref\n${num} 1\n${String(base + 1).padStart(10, '0')} 00000 n\r\n` +
+    `trailer\n<< /Size ${key('Size')} /Root ${key('Root')}${key('Info') ? ` /Info ${key('Info')}` : ''} /Prev ${trailer[2]} >>\n` +
+    `startxref\n${base + obj.length}\n%%EOF\n`
+  const seeded = Buffer.concat([addOn, obj, Buffer.from(tail, 'latin1')])
+  const digest = createHash('sha256').update(seeded).digest('hex')
+  const h = write('head', { ...head, addOn: { digest, bytes: seeded.length } })
+  const seg = indexOf[name].seg
+  twinObjects.set(`/api/v2/o/p/${seg}/fx/${digest}`, seeded)
+  twinObjects.set(`/api/v2/o/p/${seg}/fx/${h.digest}`, Buffer.from(h.bytes))
+  indexOf[name].head = h.digest
+}
+if (SEED === 'i2-left' || SEED === 'i2-neighbour') seedLayer('s1-columns', SEED)
 const fixtureRoute = {
   prefix: '/fixtures/',
   handle(_req, res, url) {
@@ -379,7 +470,7 @@ const rowsLess = (seg, t, page) => {
   rowsObjects.set(`/api/v2/o/${path}`, bytes)
   return { path, sha256, bytes: bytes.length }
 }
-/** a paper of a stale layer once opened (worker v2 machine.ts): prepared again, the old layer served meanwhile, the target's
+/** a paper of a stale layer once opened (as our server treats it): prepared again, the old layer served meanwhile, the target's
  *  work made by the open and not started (none of the wanted units told yet) */
 const staleOpened = (d, target) => ({
   ...d,
@@ -623,17 +714,20 @@ const v2Route = {
 }
 /** our site's static files the reader's own typesetter reads (compose/served.ts): the faces' tables, their slices and the
  *  hyphenation patterns, where this machine has them (the website's build's, read in place: licensed faces are never copied
- *  here); none, the checks that need them say so and pass nothing */
+ *  here): AXT_FACE_TABLES the tables' directory, AXT_FACE_SLICES the slices' directories joined by ':', AXT_HYPH the
+ *  patterns' directory, none by default; none, the checks that need them say so and pass nothing */
 const SITE = {
-  tables:
-    process.env.AXT_FACE_TABLES ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/refactor-read/web/src/fonts/static',
-  slices: (
-    process.env.AXT_FACE_SLICES ??
-    '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/static-fonts:/Users/cheongzhiyan/Developer/readarxiv-web-wt/rate-limit/web/public/static-fonts'
-  ).split(':'),
-  hyph: process.env.AXT_HYPH ?? '/Users/cheongzhiyan/Developer/readarxiv-web-wt/sweep/sweep-data/cache/static/hyph',
+  tables: process.env.AXT_FACE_TABLES ?? null,
+  slices: (process.env.AXT_FACE_SLICES ?? '').split(':').filter(Boolean),
+  hyph: process.env.AXT_HYPH ?? null,
 }
-const siteHas = existsSync(join(SITE.tables, 'index.json')) && SITE.slices.some((d) => existsSync(d))
+const siteHas =
+  SITE.tables !== null && existsSync(join(SITE.tables, 'index.json')) && SITE.slices.some((d) => existsSync(d))
+/** why the checks that need the served faces pass nothing: the directory that lacks them, or the variables to set */
+const siteNone =
+  SITE.tables === null
+    ? 'no served faces: AXT_FACE_TABLES and AXT_FACE_SLICES unset'
+    : `no served faces at ${SITE.tables}`
 const siteLog = []
 const siteRoute = {
   prefix: '/',
@@ -644,10 +738,10 @@ const siteRoute = {
     if (!table && !slice && !hyph) return false
     siteLog.push(url.pathname + url.search)
     const file = table
-      ? join(SITE.tables, `${table}.json`)
+      ? SITE.tables && join(SITE.tables, `${table}.json`)
       : slice
         ? SITE.slices.map((d) => join(d, slice)).find((f) => existsSync(f))
-        : join(SITE.hyph, `${hyph}.json`)
+        : SITE.hyph && join(SITE.hyph, `${hyph}.json`)
     if (!file || !existsSync(file)) {
       res.writeHead(404)
       return res.end()
@@ -656,7 +750,127 @@ const siteRoute = {
     return res.end(readFileSync(file))
   },
 }
-const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route, siteRoute] })
+/**
+ * Our site's faces stood in by files of our own, read by compose/served.ts as it reads the site's: every face of the catalogue
+ * in one group, `stand-in`, in three slices (the printable ASCII but 'b'; 'b' alone, which 8 of s1-columns' 15 German rows hold;
+ * everything past ASCII), each slice's file PDF.js's own Liberation Sans (its bytes: the slice's code points are its
+ * unicode-range), every language's patterns none. Served while a check sets `standIn`, whose `plan(k, n)` says how the n-th ask
+ * (from 1) of a file of slice k answers: 'drop' (aborted in the browser, as a link that drops requests: a failure for now), 404
+ * (not there), 'big' (a body past the reader's bound for a slice, CAPS.slice's 4 MiB), 'nofont' (bytes of our own no face is
+ * made of), 'cut' (the file's declared length, half its bytes, then the connection closed: a body the link cuts short), else
+ * the file; every ask of a slice logged with its time (the page's route table: newPage)
+ */
+const STAND_IN_SLICES = [
+  [0x20, 0x61, 0x63, 0x7e],
+  [0x62, 0x62],
+  [0xa0, 0x10ffff],
+]
+const STAND_IN_IDS = Object.keys((await import('@readarxiv/text')).FACES)
+const STAND_IN_BYTES = readFileSync(join(REPO, 'node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf'))
+const STAND_IN_FILE = /^\/static-fonts\/([0-9a-f]{2})[0-9a-f]{14}\.woff2$/
+/** @type {{ plan: (k: number, n: number) => 'drop' | 404 | 'big' | 'nofont' | 'cut' | 'file', log: { path: string, at: number }[] } | null} */
+let standIn = null
+const standInRoute = {
+  prefix: '/',
+  handle(req, res, url) {
+    if (!standIn) return false
+    const json = (v) => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(v))
+    }
+    if (url.pathname === '/static-fonts/index.json')
+      return json({
+        schema: 1,
+        fonts: 'stand-in',
+        faces: Object.fromEntries(STAND_IN_IDS.map((id) => [id, { group: 'stand-in' }])),
+      })
+    if (url.pathname === '/static-fonts/stand-in.json')
+      return json({
+        schema: 1,
+        group: 'stand-in',
+        slices: STAND_IN_SLICES,
+        faces: Object.fromEntries(
+          STAND_IN_IDS.map((id, i) => [
+            id,
+            STAND_IN_SLICES.map((_, k) => ({
+              path: `static-fonts/${k.toString(16).padStart(2, '0')}${i.toString(16).padStart(14, '0')}.woff2`,
+            })),
+          ]),
+        ),
+      })
+    if (/^\/hyph\/[a-z-]+\.json$/.test(url.pathname)) return json({ patterns: [], exceptions: [] })
+    if (!STAND_IN_FILE.test(url.pathname)) return false
+    // (cut short: its whole length declared, half its bytes sent, the connection closed)
+    if (req.headers['x-stand-in'] === 'cut') {
+      res.writeHead(200, { 'content-type': 'font/woff2', 'content-length': STAND_IN_BYTES.length })
+      res.write(STAND_IN_BYTES.subarray(0, STAND_IN_BYTES.length >> 1))
+      setTimeout(() => res.destroy(), 20)
+      return true
+    }
+    res.writeHead(200, { 'content-type': 'font/woff2' })
+    return res.end(STAND_IN_BYTES)
+  },
+}
+const server = await startServer({
+  out: join(HERE, '.out'),
+  objects,
+  routes: [fixtureRoute, v2Route, standInRoute, siteRoute],
+})
+/**
+ * The storage check's second origin (design-reduction 3g(2)): another server of ours on the loopback, at its own port, serving
+ * originals of our own as a mirror of arXiv's would (open to CORS, a range a 206): s1-columns' A and sample-1's, each as it is
+ * and with one byte changed (s1-columns' one chunk at its middle byte, its head read once the document is open: the chunk read
+ * before it compared then; sample-1's third chunk, its head read before any byte: each chunk compared as it is given), never
+ * anything else. `chunks` each one's digests as the head writes them: s1-columns' layer's head's own,
+ * sample-1's made by the head's recipe (format's chunkDigests: it has no layer)
+ */
+const elsewhereFiles = new Map()
+{
+  const s1 = readFileSync(fixtures['s1-columns'].pdf)
+  const s1Head = JSON.parse(readFileSync(join(fixtures['s1-columns'].bundle, 'head.json'), 'utf8'))
+  const sampleBytes = readFileSync(sample)
+  const changed = (b, at) => {
+    const c = Buffer.from(b)
+    c[at] = (c[at] ?? 0) ^ 0x01
+    return c
+  }
+  const sampleAt = 2 * 65536 + 4096
+  elsewhereFiles.set('s1.pdf', { bytes: s1, chunks: s1Head.original.chunks })
+  elsewhereFiles.set('s1-changed.pdf', {
+    bytes: changed(s1, s1.length >> 1),
+    chunks: s1Head.original.chunks,
+    at: s1.length >> 1,
+  })
+  elsewhereFiles.set('sample.pdf', { bytes: sampleBytes, chunks: chunkDigests(sampleBytes) })
+  elsewhereFiles.set('sample-changed.pdf', {
+    bytes: changed(sampleBytes, sampleAt),
+    chunks: chunkDigests(sampleBytes),
+    at: sampleAt,
+  })
+  if (chunkDigests(s1) !== s1Head.original.chunks) throw new Error("s1-columns' A is not the one its head names")
+}
+const elsewhere = await startServer({
+  out: join(HERE, '.out'),
+  routes: [
+    {
+      prefix: '/o/',
+      handle(req, res, url) {
+        const f = elsewhereFiles.get(url.pathname.slice(3))
+        if (req.method === 'OPTIONS') {
+          res.writeHead(204, {
+            'access-control-allow-origin': '*',
+            'access-control-allow-headers': 'range',
+            'access-control-allow-methods': 'GET, HEAD',
+          })
+          return res.end()
+        }
+        if (!f) return false
+        answerBytes(req, res, f.bytes, { type: 'application/pdf', cors: true })
+        return true
+      },
+    },
+  ],
+})
 
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
@@ -674,7 +888,25 @@ async function newPage(o = {}) {
   await context.route('**/*', async (route) => {
     const req = route.request(),
       url = new URL(req.url())
-    if (url.origin === server.origin) return route.continue()
+    // (a stand-in face's file, answered as the check's plan says: aborted here, as in a browser on a link that drops it)
+    const slice = standIn && url.origin === server.origin ? STAND_IN_FILE.exec(url.pathname) : null
+    if (slice) {
+      const n = standIn.log.filter((x) => x.path === url.pathname).length + 1
+      standIn.log.push({ path: url.pathname, at: performance.now() })
+      const how = standIn.plan(Number.parseInt(slice[1], 16), n)
+      if (how === 'drop') return route.abort('connectionaborted')
+      if (how === 404) return route.fulfill({ status: 404, body: '' })
+      if (how === 'big')
+        return route.fulfill({ status: 200, contentType: 'font/woff2', body: Buffer.alloc(5 * 1024 * 1024) })
+      if (how === 'nofont')
+        return route.fulfill({
+          status: 200,
+          contentType: 'font/woff2',
+          body: Buffer.from('not a font: bytes of our own'),
+        })
+      if (how === 'cut') return route.continue({ headers: { ...req.headers(), 'x-stand-in': 'cut' } })
+    }
+    if (url.origin === server.origin || url.origin === elsewhere.origin) return route.continue()
     // the stand-in of arXiv's own server: its PDF by ranges, no entity-tag promised
     if (url.origin === 'https://arxiv.org' && url.pathname.startsWith('/pdf/')) {
       const file =
@@ -909,6 +1141,30 @@ for (const [id, label] of [['2600.00001v1', 'sample-1'], ...(process.env.AXT_PAP
   })
 }
 
+// ---------------------------------------------------------------- I8 without a browser (text-order.mjs)
+/** a reading's text with its white space taken out: what the I8 judge compares */
+const plainText = (leaves) => leaves.join('').replace(/\s+/g, '')
+/** fixture `name`'s composed document as PDF.js reads it in Node (A and the bundle's add-on), once, and its parts' members */
+const nodeDocs = new Map()
+/** page n of fixture `name` read without a browser: its own text content, and the reading the composer's text module makes of it
+ *  over `page` (the Page the browser's composer committed) */
+async function nodeReadingOf(name, n, page) {
+  let d = nodeDocs.get(name)
+  if (!d) {
+    const { lib, options } = await pdfjsNode()
+    const b = readBundle(fixtures[name].bundle)
+    const A = readFileSync(fixtures[name].pdf)
+    const data = new Uint8Array(b.addOn ? Buffer.concat([A, b.addOn]) : A)
+    d = { task: lib.getDocument({ ...options, data }), members: membersOfParts(b.parts) }
+    d.doc = await d.task.promise
+    nodeDocs.set(name, d)
+  }
+  const p = await d.doc.getPage(n)
+  const content = await p.getTextContent({ includeMarkedContent: true })
+  const r = await readingOf(content, page, d.members)
+  return { leaves: r.leaves, entries: content.items, members: d.members }
+}
+
 // ---------------------------------------------------------------- deliverable 4: composing the right pane
 const laidShown = (page, n) =>
   waitFor(
@@ -917,7 +1173,7 @@ const laidShown = (page, n) =>
     n,
     20_000,
   )
-for (const name of Object.keys(fixtures)) {
+for (const name of checkedNames) {
   const lab = !!fixtures[name].face
   const target = lab ? 'zh' : 'de'
   await check(`compose: the original at once, then each laid page equal to its Page (${name})`, async () => {
@@ -963,23 +1219,21 @@ for (const name of Object.keys(fixtures)) {
       const text = await page.evaluate((n) => window.__h.textOf(n), n)
       if (process.env.AXT_DEBUG)
         console.log(JSON.stringify({ n, text: text.text.slice(0, 600), laid: text.laid.map((t) => t.slice(0, 40)) }))
+      // (I8: the layer's leaf spans, the reading a reader meets, judged by text-order.mjs's judge; and the reading made of the same
+      // Page without a browser, by the composer's text module in Node, held equal to it, white space aside)
+      const reading = await page.evaluate((n) => window.__h.readingOf(n), n)
+      const node = await nodeReadingOf(name, n, reading.page)
+      const leaves = SEED === 'i8-reverse' ? [...reading.leaves].reverse() : reading.leaves
+      const judged = orderOf(leaves, reading.page, node.members, node.entries)
       per.push({
         n,
         ...ink,
         // (each member's runs of text, in order, in the layer's text: the translation read in reading order)
-        textOk: text.runs.every((rs) => rs.every((t) => text.text.replace(/\s+/g, '').includes(t.replace(/\s+/g, '')))),
-        // (the first member whose translation the layer reads before the one before it, or not at all past it; none: in order)
-        outOfOrder: (() => {
-          let at = 0
-          const all = text.text.replace(/\s+/g, '')
-          for (const [k, rs] of text.runs.entries())
-            for (const t of rs) {
-              const i = all.indexOf(t.replace(/\s+/g, ''), at)
-              if (i < 0) return text.ords[k]
-              at = i
-            }
-          return null
-        })(),
+        textOk: judged.missing === null,
+        // (the first member whose translation the layer reads before the one before it; none: in order)
+        outOfOrder: judged.outOfOrder,
+        sameReading: plainText(reading.leaves) === plainText(node.leaves),
+        exactReading: reading.leaves.join('') === node.leaves.join(''),
         copied: text.copied.length,
         grid,
       })
@@ -1015,15 +1269,22 @@ for (const name of Object.keys(fixtures)) {
             x.grid.crops.css.every((v, i) => v === x.grid.view?.css[i]),
           `page ${x.n}: the crops' canvas ${x.grid.crops.px.join('×')} px in ${x.grid.crops.css.join('×')}${x.grid.crops.turn ? `, turned ${x.grid.crops.turn}` : ''}; the page view's ${x.grid.view?.px.join('×')} in ${x.grid.view?.css.join('×')}`,
         )
-      // I8: the text layer reads each laid member's translation, in order; a selection of it copies it
+      // I8: the text layer reads each laid member's translation, in order; a selection of it copies it; the reading made without
+      // a browser is the browser's
       assert(
         x.textOk && x.outOfOrder === null && x.copied > 0,
         `page ${x.n}: the text layer reads ${x.textOk ? `member ${x.outOfOrder} out of order` : 'not every translation'}`,
       )
+      assert(x.sameReading, `page ${x.n}: the reading made in Node is not the browser's`)
     }
     return {
       originalPage1Ms: Math.round(firstOriginal.at),
       layer,
+      readings: {
+        pages: per.length,
+        same: per.filter((x) => x.sameReading).length,
+        exact: per.filter((x) => x.exactReading).length,
+      },
       pages: per.map((x) => ({
         n: x.n,
         ink: x.ink,
@@ -1256,7 +1517,7 @@ async function typesetLinks(page, n) {
 await check(
   "compose: a laid page's links through the reader's own typesetter, every part link drawn by its fate and an anchor each: out of the paper through the host, inside it on the right, one no member owns at its own box (s1-columns)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s1-columns'].original)
     await page.evaluate(() => window.__h.layer('s1-columns', { typeset: true }))
@@ -1321,7 +1582,7 @@ await check(
 await check(
   "compose: a turned page's link through the reader's own typesetter, drawn by its fate, an anchor over its box, out of the paper through the host (s3-turned)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s3-turned'].original)
     await page.evaluate(() => window.__h.layer('s3-turned', { typeset: true }))
@@ -1346,7 +1607,7 @@ await check(
 await check(
   "compose: a note the source ties to the author block follows the names option through the reader's own typesetter: off as printed, on its variant with the block's name, never its own row; off and on again the same two drawings (s4-author, ICML's footnote shape; the owner's ruling of 2026-11-13, PDF-READER §18.71)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const OFF = { figures: true, tables: true, heads: true, references: false, names: false }
     const { page, context, errors } = await newPage()
     await page.evaluate((u) => window.__h.open(u), indexOf['s4-author'].original)
@@ -2162,7 +2423,7 @@ async function typesetLaid(name, target, o = {}) {
 await check(
   "reader: no engine given, the reader's own typesetter: the fixture's pages laid by layPage over our site's faces and patterns, the translation drawn; a toggle lays them again (the coordinator's priority of 2026-11-07)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const { page, context, errors, p, drawn, asked } = await typesetLaid('s1-columns', 'de')
     // (a toggle: the pages laid again, under the rules that leave what it leaves)
     const laysBefore = Number(p.lays ?? 0)
@@ -2196,11 +2457,11 @@ await check(
     }
   },
 )
-for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n)))) {
+for (const name of checkedNames.filter((n) => !existsSync(join(FIX, n)))) {
   await check(
     `reader: no engine given, the reader's own typesetter on a corpus paper (${name}, zh): laid, drawn`,
     async () => {
-      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      if (!siteHas) return { skipped: siteNone }
       const { context, errors, p, drawn, asked } = await typesetLaid(name, 'zh')
       await context.close()
       assert(!errors.filter((e) => !/status of 404/.test(e)).length, errors.join('; '))
@@ -2221,7 +2482,7 @@ for (const name of Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n))
   await check(
     `reader: the typesetter's first page while the target's rows arrive (${name}, zh, ${DELTAS} deltas): laid before the last row is in`,
     async () => {
-      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      if (!siteHas) return { skipped: siteNone }
       const seg = indexOf[name].seg
       const every = Number(process.env.AXT_DELTA_MS ?? 1000)
       modes[seg] = { kind: 'deltas', every }
@@ -2438,9 +2699,9 @@ async function linesInk(page, target, lines = null) {
 await check(
   "compose: the overlay's text drawn at the weight a canvas draws it (PDF.js's page's own), in the layer's ink, the PDF's black, a CJK run today's #141414: geometricPrecision, or auto where the reader's fixed probe in a served face lays out alike under both, decided once a reader (docs/PDF-READER.md §11.8; the maintainer's report of 2026-11-08: lighter than today's)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const out = {}
-    const corpus = Object.keys(fixtures).filter((n) => !existsSync(join(FIX, n)))
+    const corpus = checkedNames.filter((n) => !existsSync(join(FIX, n)))
     for (const [name, target] of [['s1-columns', 'de'], ...corpus.map((n) => [n, 'zh'])]) {
       const { page, context, errors } = await typesetLaid(name, target, {
         dpr: 2,
@@ -2518,7 +2779,7 @@ await check(
 await check(
   "compose: the weight check measures page 1's own overlay, the same element at every step, when page 2's is drawn first (s1-columns, de: the rows of the units page 1 alone holds come 8 s after the first follow; lane harness-weight, 2026-11-13: on 2609.26457v1 page 2 was drawn first, and the check chose page 2's running head and measured page 1's title in its place)",
   async () => {
-    if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+    if (!siteHas) return { skipped: siteNone }
     const seg = indexOf['s1-columns'].seg
     modes[seg] = { kind: 'late-page', page: 1, after: 8000 }
     try {
@@ -3312,7 +3573,7 @@ await check(
 )
 /** a host's sheet that takes a pane out of the display at no width, laid out still (as the package takes its left pane out:
  *  styles.ts, chrome/reader.css), read off the display's marks that the host mirrors onto <html> in a mutation observer's
- *  callback. The right's slots stay near and in view through it, so no observer tells them anything (lanes/switch-blank) */
+ *  callback. The right's slots stay near and in view through it, so no observer tells them anything (lane switch-blank's record) */
 const ZERO_WIDTH_PANES = `:root[data-axt-pdf-mode="original"] .pane[data-side="right"],
 :root[data-axt-pdf-mode="translation"] .pane[data-side="left"],
 :root[data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] {
@@ -3930,26 +4191,321 @@ await check(
   },
 )
 await check(
-  "reader: a face that cannot be had is the reader's state, the pages laid in its fallback (L11 second round, gap 6)",
+  "reader: a face that cannot be had is the reader's state, the pages laid in its fallback (L11 second round, gap 6), and the chrome's capsule says so in the catalogue's sentence (UI.md S-R-28)",
   async () => {
     const { page, context, errors } = await chromeLaid('s1-columns', { faces: 'missing' })
     await waitFor(page, () => window.__c.reader.state().faces === 'lost', null, 10_000)
+    // (the chrome's toast, its words told whole to a screen reader: the catalogue's sentence in the page's language, English)
+    await waitFor(page, () => !!document.querySelector('.capsule[data-kind="toast"]'), null, 5_000)
     const st = await page.evaluate(() => ({
       faces: window.__c.reader.state().faces,
       laid: window.__c.reader.probe().laidPages,
+      said: document.querySelector('.capsule[data-kind="toast"] .sr-only')?.textContent ?? null,
     }))
     const fine = await chromeLaid('s1-columns', {})
-    const other = await fine.page.evaluate(() => window.__c.reader.state().faces)
+    await fine.page.waitForTimeout(600)
+    const other = await fine.page.evaluate(() => ({
+      faces: window.__c.reader.state().faces,
+      toast: !!document.querySelector('.capsule[data-kind="toast"]'),
+    }))
     await context.close()
     await fine.context.close()
     assert(
       !errors.filter((e) => !/status of 404/.test(e)).length && !fine.errors.length,
       [...errors, ...fine.errors].join('; '),
     )
-    assert(st.faces === 'lost' && st.laid > 0 && other === null, `faces ${JSON.stringify({ st, other })}`)
+    assert(
+      st.faces === 'lost' &&
+        st.laid > 0 &&
+        st.said === "Some fonts didn't load. Reload to try again." &&
+        other.faces === null &&
+        !other.toast,
+      `faces ${JSON.stringify({ st, other })}`,
+    )
     return { ...st, other }
   },
 )
+
+// ---------------------------------------------------------------- a slice lost for now (compose/served.ts heal)
+/** s1-columns opened in German with no engine, over our own stand-in faces answered by `plan` (standIn; null: the site's faces
+ *  this machine has, siteRoute): the page's record of each change of the document's fonts (the served faces added in one
+ *  stretch), of the reader's faces state as it changes, and of each drawing of the translation made (whether its text holds a
+ *  'b', the stand-in slice a plan fails) */
+async function standInLaid(plan) {
+  standIn = plan ? { plan, log: [] } : null
+  const opened = await newPage()
+  await opened.page.evaluate(() => {
+    const add = document.fonts.add.bind(document.fonts)
+    window.__adds = []
+    let open = null
+    document.fonts.add = (f) => {
+      const family = f.family.replace(/"/g, '')
+      if (family.startsWith('axt-')) {
+        if (!open) {
+          const now = []
+          open = now
+          window.__adds.push(now)
+          queueMicrotask(() => {
+            open = null
+          })
+        }
+        open.push(`${family} ${f.weight} ${f.style} ${f.unicodeRange}`)
+      }
+      return add(f)
+    }
+    window.__drawn = []
+    new MutationObserver(() => {
+      for (const svg of document.querySelectorAll('.axt-over > svg')) {
+        if (svg.__seen) continue
+        svg.__seen = true
+        window.__drawn.push({
+          b: (svg.textContent ?? '').includes('b'),
+          faces: window.__h.readers[0]?.reader.state().faces ?? null,
+        })
+      }
+    }).observe(document.body, { childList: true, subtree: true })
+  })
+  await opened.page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', typeset: true, target: 'de' }))
+  await opened.page.evaluate(() => {
+    const r = window.__h.readers[0].reader
+    window.__faces = [r.state().faces]
+    r.subscribe(() => {
+      const f = r.state().faces
+      if (window.__faces.at(-1) !== f) window.__faces.push(f)
+    })
+  })
+  return opened
+}
+/** the stand-in's 'b' files asked, each with the times of its asks (ms, from its first) */
+const bAsks = () => {
+  const by = new Map()
+  for (const x of standIn?.log ?? [])
+    if (x.path.startsWith('/static-fonts/01')) by.set(x.path, [...(by.get(x.path) ?? []), x.at])
+  return [...by].map(([path, at]) => ({ path, at: at.map((t) => Math.round(t - (at[0] ?? 0))) }))
+}
+/** a page's errors but the stand-in's asks aborted or cut short on purpose */
+const unplanned = (errors) =>
+  errors.filter((e) => !/ERR_CONNECTION_ABORTED|ERR_CONTENT_LENGTH_MISMATCH|status of 404/.test(e))
+/** the timers' slack allowed under the pace, ms (a wait is never shorter than it was set; the log's clock is the harness's) */
+const SLACK_MS = 50
+await check(
+  "reader: a face's slice failing for now twice, then served (our own stand-in faces): its units the original's after the second failure, the notice told once, then laid in place without a reload (faces-heal F1-F3)",
+  async () => {
+    const { page, context, errors } = await standInLaid((k, n) => (k === 1 && n <= 4 ? 'drop' : 'file'))
+    try {
+      await page.evaluate(() => {
+        window.__same = true
+      })
+      await waitFor(page, () => window.__drawn.some((d) => d.b), null, 30_000)
+      await page.waitForTimeout(1500)
+      const st = await page.evaluate(() => ({
+        faces: window.__faces,
+        drawn: window.__drawn,
+        same: window.__same === true,
+        laid: window.__h.readers[0].reader.probe().laidPages,
+      }))
+      const asks = bAsks()
+      const firstB = st.drawn.findIndex((d) => d.b)
+      assert(!unplanned(errors).length, unplanned(errors).join('; '))
+      // (a file another face's ask first met once the first came, failing twice in its turn, may still be on its way)
+      assert(
+        asks.every((a) => a.at.length <= 5) &&
+          asks.some(
+            (a) => a.at.length === 5 && a.at[4] - a.at[3] >= BACKOFF_MS - SLACK_MS && a.at[1] >= RETRY_MS - SLACK_MS,
+          ),
+        `the 'b' files' asks: ${JSON.stringify(asks)}`,
+      )
+      assert(
+        JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+        `the faces state: ${JSON.stringify(st.faces)}`,
+      )
+      assert(
+        st.same && firstB > 0 && st.drawn.slice(0, firstB).some((d) => !d.b && d.faces === 'lost'),
+        `the drawings: ${JSON.stringify(st.drawn)}`,
+      )
+      return { asks, faces: st.faces, drawn: st.drawn.map((d) => (d.b ? 'b' : '-')).join(''), laid: st.laid }
+    } finally {
+      standIn = null
+      await context.close()
+    }
+  },
+)
+await check(
+  "reader: a face's slice not there (404; our own stand-in faces): its units the original's for the visit, the page laid with the rest, the slice asked no more (faces-heal F3)",
+  async () => {
+    const { page, context, errors } = await standInLaid((k) => (k === 1 ? 404 : 'file'))
+    try {
+      await waitFor(page, () => window.__drawn.length > 0 && window.__faces.includes('lost'), null, 30_000)
+      await page.waitForTimeout(8000)
+      const st = await page.evaluate(() => ({
+        faces: window.__faces,
+        drawn: window.__drawn,
+        laid: window.__h.readers[0].reader.probe().laidPages,
+      }))
+      const asks = bAsks()
+      assert(!unplanned(errors).length, unplanned(errors).join('; '))
+      assert(asks.length > 0 && asks.every((a) => a.at.length === 1), `the 'b' files' asks: ${JSON.stringify(asks)}`)
+      assert(
+        JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+        `the faces state: ${JSON.stringify(st.faces)}`,
+      )
+      assert(st.laid > 0 && !st.drawn.some((d) => d.b), `the drawings: ${JSON.stringify(st)}`)
+      return { asks, laid: st.laid, drawn: st.drawn.length }
+    } finally {
+      standIn = null
+      await context.close()
+    }
+  },
+)
+await check(
+  "reader: a face's slice failing for ever (our own stand-in faces): the page laid with the rest, the slice asked again at the session's pace (backoff after each ask, each ask asked once more after RETRY_MS) and no faster, over 14 s from its first ask, no page laid again for an ask that failed (faces-heal F1, F3)",
+  async () => {
+    const { page, context, errors } = await standInLaid((k) => (k === 1 ? 'drop' : 'file'))
+    try {
+      await waitFor(page, () => window.__drawn.length > 0 && window.__faces.includes('lost'), null, 30_000)
+      await page.waitForTimeout(1000)
+      const lays = await page.evaluate(() => window.__h.readers[0].reader.probe().lays)
+      const first = Math.min(
+        ...(standIn?.log ?? []).filter((x) => x.path.startsWith('/static-fonts/01')).map((x) => x.at),
+      )
+      await page.waitForTimeout(Math.max(0, first + 14_000 - performance.now()))
+      const asks = bAsks()
+      const st = await page.evaluate(() => ({
+        faces: window.__faces,
+        drawn: window.__drawn,
+        laid: window.__h.readers[0].reader.probe().laidPages,
+        lays: window.__h.readers[0].reader.probe().lays,
+      }))
+      assert(!unplanned(errors).length, unplanned(errors).join('; '))
+      // (each ask two fetches, RETRY_MS apart; the k-th ask again begins backoff(k) after the ask before it ended, its second
+      // fetch: 3, 6, 11 s from the first ask, the next at 20)
+      const paced = (at) => {
+        for (let j = 0; 2 * j + 1 < at.length; j++) if (at[2 * j + 1] - at[2 * j] < RETRY_MS - SLACK_MS) return false
+        for (let k = 1; 2 + 2 * k < at.length; k++)
+          if (at[2 + 2 * k] - at[1 + 2 * k] < backoff(k) - SLACK_MS) return false
+        return at.length <= 10
+      }
+      const within = (a) => a.at.filter((t) => t <= 14_000)
+      assert(
+        asks.every((a) => paced(within(a))) && asks.some((a) => within(a).length >= 8),
+        `the 'b' files' asks: ${JSON.stringify(asks)}`,
+      )
+      assert(
+        JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+        `the faces state: ${JSON.stringify(st.faces)}`,
+      )
+      assert(
+        st.laid > 0 && !st.drawn.some((d) => d.b) && st.lays === lays,
+        `the page: ${JSON.stringify({ ...st, lays0: lays })}`,
+      )
+      return { asks, laid: st.laid, lays: st.lays }
+    } finally {
+      standIn = null
+      await context.close()
+    }
+  },
+)
+for (const how of ['big', 'nofont']) {
+  await check(
+    `reader: a face's slice whose file is wrong (${how === 'big' ? 'a body past its bound' : 'bytes no face is made of'}; our own stand-in faces): the file's, not the link's: asked once, its units the original's for the visit, the notice told once, never asked again over 8 s (faces-heal, the coordinator's ruling)`,
+    async () => {
+      const { page, context, errors } = await standInLaid((k) => (k === 1 ? how : 'file'))
+      try {
+        await waitFor(page, () => window.__drawn.length > 0 && window.__faces.includes('lost'), null, 30_000)
+        const first = Math.min(
+          ...(standIn?.log ?? []).filter((x) => x.path.startsWith('/static-fonts/01')).map((x) => x.at),
+        )
+        await page.waitForTimeout(Math.max(0, first + 8000 - performance.now()))
+        const st = await page.evaluate(() => ({
+          faces: window.__faces,
+          drawn: window.__drawn,
+          laid: window.__h.readers[0].reader.probe().laidPages,
+        }))
+        const asks = bAsks()
+        assert(!unplanned(errors).length, unplanned(errors).join('; '))
+        assert(asks.length > 0 && asks.every((a) => a.at.length === 1), `the 'b' files' asks: ${JSON.stringify(asks)}`)
+        assert(
+          JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+          `the faces state: ${JSON.stringify(st.faces)}`,
+        )
+        assert(st.laid > 0 && !st.drawn.some((d) => d.b), `the drawings: ${JSON.stringify(st)}`)
+        return { asks, laid: st.laid, drawn: st.drawn.length }
+      } finally {
+        standIn = null
+        await context.close()
+      }
+    },
+  )
+}
+await check(
+  "reader: a face's slice whose body the link cuts short twice (its length declared, half its bytes, the connection closed; our own stand-in faces), then served: the link's: lost for now, asked again after BACKOFF_MS, laid in place (faces-heal, the coordinator's ruling)",
+  async () => {
+    const { page, context, errors } = await standInLaid((k, n) => (k === 1 && n <= 2 ? 'cut' : 'file'))
+    try {
+      await waitFor(page, () => window.__drawn.some((d) => d.b), null, 30_000)
+      await page.waitForTimeout(1500)
+      const st = await page.evaluate(() => ({ faces: window.__faces, drawn: window.__drawn }))
+      const asks = bAsks()
+      assert(!unplanned(errors).length, unplanned(errors).join('; '))
+      // (a body that breaks is not asked again within its ask: two asks, one fetch each, then the heal's)
+      assert(
+        asks.every((a) => a.at.length <= 3) &&
+          asks.some((a) => a.at.length === 3 && a.at[2] - a.at[1] >= BACKOFF_MS - SLACK_MS),
+        `the 'b' files' asks: ${JSON.stringify(asks)}`,
+      )
+      assert(
+        JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+        `the faces state: ${JSON.stringify(st.faces)}`,
+      )
+      const firstB = st.drawn.findIndex((d) => d.b)
+      assert(firstB > 0 && st.drawn.slice(0, firstB).some((d) => !d.b), `the drawings: ${JSON.stringify(st.drawn)}`)
+      return { asks, faces: st.faces, drawn: st.drawn.map((d) => (d.b ? 'b' : '-')).join('') }
+    } finally {
+      standIn = null
+      await context.close()
+    }
+  },
+)
+for (const faces of ['stand-in', 'site']) {
+  await check(
+    `reader: no failure (${faces === 'site' ? "the site's faces this machine has" : 'our own stand-in faces'}): the asks of the faces, their order, the changes of the document's fonts and what is drawn, printed for a comparison with the base (faces-heal F4)`,
+    async () => {
+      if (faces === 'site' && !siteHas) return { skipped: siteNone }
+      const { page, context, errors } = await standInLaid(faces === 'site' ? null : () => 'file')
+      try {
+        await waitFor(page, () => window.__drawn.length > 0, null, 30_000)
+        await page.waitForTimeout(3000)
+        const st = await page.evaluate(() => ({
+          asked: window.__h.readers[0].asked.map((a) => a.url).filter((u) => /^\/(static-fonts|hyph)\//.test(u)),
+          adds: window.__adds,
+          faces: window.__faces,
+          texts: [...document.querySelectorAll('.axt-over > svg')].map((s) => s.textContent ?? ''),
+          probe: window.__h.readers[0].reader.probe(),
+        }))
+        assert(!errors.length, errors.join('; '))
+        assert(st.texts.length > 0 && st.texts.some((t) => t.includes('b')), `drawn: ${JSON.stringify(st.texts)}`)
+        const digest = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, 16)
+        return {
+          asks: st.asked.length,
+          slices: st.asked.filter((u) => u.endsWith('.woff2')).length,
+          asksDigest: digest(st.asked),
+          asksSortedDigest: digest([...st.asked].sort()),
+          fontChanges: st.adds.length,
+          facesAdded: st.adds.flat().length,
+          addsDigest: digest(st.adds),
+          faces: st.faces,
+          drawings: st.texts.length,
+          textsDigest: digest([...st.texts].sort()),
+          laidPages: st.probe.laidPages,
+          lays: st.probe.lays,
+        }
+      } finally {
+        standIn = null
+        await context.close()
+      }
+    },
+  )
+}
 await check(
   "reader: a paper arXiv does not have: the state says why (the original not found, the layer refused as not found), for the host's own page (L11 difference 3)",
   async () => {
@@ -4204,7 +4760,7 @@ for (const host of ['web', 'ext'])
   await check(
     `reader: a part of the layer answered gone once its head was read asks the document once, and the layer our server serves now is laid without a reload (${host}'s host)`,
     async () => {
-      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      if (!siteHas) return { skipped: siteNone }
       const name = 's1-columns'
       const seg = indexOf[name].seg
       modes[seg] = { kind: 'moved', switched: false }
@@ -4300,7 +4856,7 @@ await check(
 )
 
 // ---------------------------------------------------------------- stage 5a, deliverable 2 part A: today's behaviours over the stack
-// (each check names the rows of lanes/L4/list-b.md and list-a.md it holds; docs/PDF-READER.md §11.7-§11.11, §17)
+// (each check names the rows of lane L4's lists B and A it holds; docs/PDF-READER.md §11.7-§11.11, §17)
 const S1 = indexOf['s1-columns'].original,
   SAMPLE = '/api/v2/o/arxiv/2600_00001v1.pdf'
 const drawnOn = (page, side, n, key) =>
@@ -5441,7 +5997,7 @@ await check(
 
 // ---------------------------------------------------------------- the commit and paint times against the baseline (engine-view-host §9)
 const timings = {}
-for (const name of Object.keys(fixtures)) {
+for (const name of checkedNames) {
   for (const rate of [1, 4]) {
     await check(`timing: a laid page's commit and paint at ${rate}x CPU (${name})`, async () => {
       const { page, context, errors } = await newPage()
@@ -5489,7 +6045,7 @@ if (process.env.AXT_TIMINGS_OUT)
 
 // ---------------------------------------------------------------- the memory and paint of the two ways out of the residue
 const ways = {}
-for (const name of Object.keys(fixtures).filter((n) => fixtures[n].face)) {
+for (const name of checkedNames.filter((n) => fixtures[n].face)) {
   await check(
     `ways: memory and paint, (a) pages not laid from the original, (b) both panes the composed document (${name})`,
     async () => {
@@ -5527,7 +6083,7 @@ const leftRuns = {}
 const leftPapers = [
   ['2600.00001v1', '/api/v2/o/arxiv/2600_00001v1.pdf'],
   ...Object.entries(indexOf)
-    .filter(([n]) => fixtures[n].face)
+    .filter(([n]) => fixtures[n].face && !fixtures[n].groupsOnly)
     .map(([n, x]) => [n, x.original]),
   ...(process.env.AXT_PAPER ? [['lab', '/api/v2/o/arxiv/lab.pdf']] : []),
 ]
@@ -5585,7 +6141,7 @@ if (process.env.AXT_LEFT_OUT)
 
 // ---------------------------------------------------------------- I1 and the split residue (lane L1's finding 2), both ways out
 const residues = {}
-for (const name of Object.keys(fixtures)) {
+for (const name of checkedNames) {
   await check(`I1: all groups on is arXiv's page, the split residue measured (${name})`, async () => {
     const { page, context, errors } = await newPage({ dpr: 2 })
     const lab = !!fixtures[name].face
@@ -5630,6 +6186,249 @@ for (const name of Object.keys(fixtures)) {
 if (process.env.AXT_RESIDUE_OUT)
   (await import('node:fs')).writeFileSync(process.env.AXT_RESIDUE_OUT, `${JSON.stringify(residues, null, 1)}\n`)
 
+// ---------------------------------------------------------------- I2: a group turned off in the reader's canvas
+/** I2's verdict over the pages a check read (main.ts groupsOff): judged, the groups whose off state changed a neighbour's pixel,
+ *  left some of their own ink drawn, or whose stated ink holds a text item no group of ours holds; reported, the groups whose
+ *  own ink stands past the layer's statement of it */
+function i2Of(pages) {
+  const rows = pages.flatMap((p) => p.rows.map((r) => ({ ...r, n: p.n })))
+  const at = (r, k) => (r[`${k}At`] ? ` at ${JSON.stringify(r[`${k}At`])}` : '')
+  return {
+    pages: pages.length,
+    groups: rows.length,
+    renders: pages.reduce((a, p) => a + p.renders, 0),
+    ms: pages.reduce((a, p) => a + p.ms, 0),
+    hidingNothing: rows.filter((r) => r.changed === 0).length,
+    beyond: rows.filter((r) => r.beyond > 0).map((r) => `p${r.n} ${r.name} ${r.beyond} px${at(r, 'beyond')}`),
+    judged: [
+      ...rows
+        .filter((r) => r.neighbour > 0)
+        .map((r) => `p${r.n} ${r.name}: ${r.neighbour} px of a neighbour changed${at(r, 'neighbour')}`),
+      ...rows
+        .filter((r) => r.shown > 0)
+        .map((r) => `p${r.n} ${r.name}: ${r.shown} px of its own ink left drawn${at(r, 'shown')}`),
+      ...rows
+        .filter((r) => r.unheld > 0)
+        .map(
+          (r) => `p${r.n} ${r.name}: ${r.unheld} text items in its stated ink that no group holds${at(r, 'unheld')}`,
+        ),
+    ],
+  }
+}
+/** paper `name`'s original opened and its layer read with no composer, then its pages `pages` (every one where none) turned off
+ *  group by group in the right's own page view */
+async function groupsRead(name, pages = null) {
+  const { page, context, errors } = await newPage({ dpr: 2 })
+  try {
+    await page.evaluate((u) => window.__h.open(u), indexOf[name].original)
+    const total = await page.evaluate((n) => window.__h.openLayer(n).then((x) => x.head.paper.pages), name)
+    const out = []
+    for (const n of pages ?? Array.from({ length: total }, (_, i) => i + 1)) {
+      await page.evaluate((n) => window.__h.panes.goToPage('right', n), n)
+      await waitFor(
+        page,
+        (n) => window.__h.marks.some((m) => m.what === 'drawn' && m.side === 'right' && m.page === n),
+        n,
+        30_000,
+      )
+      const r = await page.evaluate(
+        ([n, crops]) => window.__h.groupsOff(n, { crops }),
+        [n, !!process.env.AXT_GROUPS_OUT],
+      )
+      // (AXT_GROUPS_OUT: each crop beside it, a PNG, and out of the record)
+      for (const x of r.rows)
+        if (x.crops) {
+          const { writeFileSync } = await import('node:fs')
+          for (const [k, url] of Object.entries(x.crops))
+            writeFileSync(
+              `${process.env.AXT_GROUPS_OUT}-${name}-p${n}-${x.name.replace(/[:.]/g, '_')}-${k}.png`,
+              Buffer.from(url.split(',')[1], 'base64'),
+            )
+          delete x.crops
+        }
+      out.push(r)
+    }
+    assert(!errors.length, errors.join('; '))
+    return out
+  } finally {
+    await context.close()
+  }
+}
+const groupsOut = {}
+const i2Title = (what) =>
+  `I2: each group turned off in the reader's canvas hides exactly its ink, no neighbour's pixel changing, none of its own left drawn, no mark of its stated ink outside every group (${what})`
+const i2Check = (name, pages) => async () => {
+  const read = await groupsRead(name, pages)
+  groupsOut[`${name}${pages ? ` p${pages.join(',')}` : ''}`] = read
+  const v = i2Of(read)
+  assert(!v.judged.length, v.judged.slice(0, 6).join('; '))
+  return { ...v, judged: 0, beyond: v.beyond.length, beyondFirst: v.beyond.slice(0, 3) }
+}
+for (const name of checkedNames.filter((n) => existsSync(join(FIX, n))))
+  await check(i2Title(`${name}, every page`), i2Check(name, null))
+for (const id of new Set(groupPages.map(([id]) => id))) {
+  const pages = groupPages.filter(([x]) => x === id).map(([, n]) => n)
+  await check(i2Title(`${id}, p${pages.join(', p')}`), i2Check(id, pages))
+}
+if (process.env.AXT_GROUPS_OUT)
+  (await import('node:fs')).writeFileSync(process.env.AXT_GROUPS_OUT, `${JSON.stringify(groupsOut, null, 1)}\n`)
+
+// ---------------------------------------------------------------- I7 at the reader's seam; I8 on the typesetter's pages
+/** fixture `name` laid by the reader's own typesetter (layer's `typeset`, its rows given and ended at once), every page brought
+ *  into view and committed in turn: at each, I7 at the seam (main.ts sameBoxes) and, once its drawing is in place, its text
+ *  layer's reading against the one the composer's text module makes of the same Page in Node, and the I8 judge's */
+const seams = {}
+async function seamWalk(name) {
+  if (seams[name]) return seams[name]
+  const target = fixtures[name].face ? 'zh' : 'de'
+  const seed = SEED === 'i7-unlit' ? 'unlit' : SEED === 'i7-wide' ? 'wide' : null
+  const { page, context, errors } = await newPage({ dpr: 2 })
+  try {
+    await page.evaluate((u) => window.__h.open(u), indexOf[name].original)
+    const pages = await page.evaluate(
+      ([n, t]) => window.__h.layer(n, { typeset: true, target: t, end: true }).then(() => window.__h.head.paper.pages),
+      [name, target],
+    )
+    const out = { target, pages, i7: [], readings: [] }
+    for (let n = 1; n <= pages; n++) {
+      await page.evaluate((n) => window.__h.panes.goToPage('right', n), n)
+      await waitFor(page, (n) => !!window.__h.composer.laid(n) || window.__h.composer.settled(n), n, 60_000)
+      const r = await page.evaluate(([n, s]) => window.__h.sameBoxes(n, s ? { seed: s } : {}), [n, seed])
+      if (!r) continue
+      out.i7.push(r)
+      if (!r.laid) continue
+      await laidShown(page, n)
+      const reading = await page.evaluate((n) => window.__h.readingOf(n), n)
+      if (!reading) {
+        out.readings.push({ n, none: true })
+        continue
+      }
+      const node = await nodeReadingOf(name, n, reading.page)
+      const leaves = SEED === 'i8-reverse' ? [...reading.leaves].reverse() : reading.leaves
+      out.readings.push({
+        n,
+        same: plainText(reading.leaves) === plainText(node.leaves),
+        exact: reading.leaves.join('') === node.leaves.join(''),
+        ...orderOf(leaves, reading.page, node.members, node.entries),
+      })
+    }
+    out.errors = errors.filter((e) => !/status of 404/.test(e))
+    seams[name] = out
+    return out
+  } finally {
+    await context.close()
+  }
+}
+for (const name of checkedNames) {
+  await check(
+    `I7: a laid unit's boxes the left pane lights are the boxes the right hides and keeps, at the reader's seam (the committed Page's lit boxes against the groups the right's page view draws off and the layer's statement of their ink, within the part's rounding), every page laid (${name}, the reader's own typesetter)`,
+    async () => {
+      if (!siteHas) return { skipped: siteNone }
+      const w = await seamWalk(name)
+      assert(!w.errors.length, w.errors.join('; '))
+      const differ = w.i7.flatMap((p) => p.differ.map((d) => ({ n: p.n, ...d })))
+      const sum = (k) => w.i7.reduce((a, p) => a + p[k], 0)
+      const out = {
+        pages: w.pages,
+        laidPages: w.i7.filter((p) => p.laid).length,
+        members: sum('laid'),
+        mirrored: sum('mirrored'),
+        turned: sum('turned'),
+        litBoxes: sum('boxes'),
+        hiddenBoxes: sum('hidden'),
+        differ: differ.length,
+      }
+      if (process.env.AXT_SEAMS_OUT)
+        (await import('node:fs')).writeFileSync(
+          `${process.env.AXT_SEAMS_OUT}-${name}.json`,
+          `${JSON.stringify({ ...out, differ }, null, 1)}\n`,
+        )
+      assert(
+        !differ.length && out.members > 0,
+        `${differ.length} members of ${out.members}: ${differ
+          .slice(0, 4)
+          .map((d) => JSON.stringify(d))
+          .join('; ')}`,
+      )
+      return out
+    },
+  )
+  await check(
+    `I8: the text layer of every page the reader's own typesetter lays reads the translation in reading order, and the reading the composer's text module makes without a browser is the browser's, white space aside (${name})`,
+    async () => {
+      if (!siteHas) return { skipped: siteNone }
+      const w = await seamWalk(name)
+      const r = w.readings
+      const bad = r.filter((x) => x.none || !x.same || x.missing !== null || x.outOfOrder !== null)
+      assert(
+        r.length > 0 && !bad.length,
+        `${bad.length} of ${r.length} pages: ${bad
+          .slice(0, 4)
+          .map((x) => JSON.stringify(x))
+          .join('; ')}`,
+      )
+      return {
+        pages: r.length,
+        same: r.filter((x) => x.same).length,
+        exact: r.filter((x) => x.exact).length,
+        members: r.reduce((a, x) => a + x.members, 0),
+      }
+    },
+  )
+}
+
+// ---------------------------------------------------------------- the storage check (design-reduction 3g(2))
+await check(
+  "storage: the original served from a second origin with one byte changed is refused as `digest`, and served unchanged from it accepted: the reader's range reader holds every chunk to the digest the head names, whoever served it (s1-columns' A under its layer's head; sample-1, four chunks, under the head's recipe)",
+  async () => {
+    const { page, context } = await newPage()
+    try {
+      const out = {}
+      for (const key of ['s1.pdf', 's1-changed.pdf', 'sample.pdf', 'sample-changed.pdf']) {
+        const f = elsewhereFiles.get(key)
+        out[key] = await page.evaluate(
+          ([u, c, unheld, headFirst]) => window.__h.elsewhere(u, c, { unheld, headFirst }),
+          [`${elsewhere.origin}/o/${key}`, f.chunks, SEED === 'digest-unheld', key.startsWith('sample')],
+        )
+      }
+      assert(new URL(elsewhere.origin).port !== new URL(server.origin).port, 'the second origin is ours')
+      for (const k of ['s1-changed.pdf', 'sample-changed.pdf']) {
+        const x = out[k]
+        assert(
+          x.refusal === 'digest' && x.refused.join(',') === 'digest',
+          `${k}, one byte changed at ${elsewhereFiles.get(k).at}: ${JSON.stringify(x)}`,
+        )
+      }
+      for (const k of ['s1.pdf', 'sample.pdf']) {
+        const x = out[k]
+        assert(
+          x.opened === true &&
+            x.pages > 0 &&
+            x.proved === true &&
+            x.read === true &&
+            x.refusal === null &&
+            x.digested.proven === x.chunks,
+          `${k} served unchanged: ${JSON.stringify(x)}`,
+        )
+      }
+      return Object.fromEntries(
+        Object.entries(out).map(([k, x]) => [
+          k,
+          {
+            chunks: x.chunks,
+            readBeforeTheHead: x.readBefore.chunks,
+            proved: x.proved,
+            read: x.read,
+            refusal: x.refusal,
+          },
+        ]),
+      )
+    } finally {
+      await context.close()
+    }
+  },
+)
+
 // ---------------------------------------------------------------- the full-width punctuation (lane cjk-punct, punct.mjs)
 // s1-columns laid by the reader's own typesetter in each CJK target, the interface the owner's (the document zh-CN), every laid
 // page's drawing measured as the browser drew it (AXT_PUNCT_OUT=<file> writes the measures)
@@ -5638,7 +6437,7 @@ for (const target of PUNCT_TARGETS)
   await check(
     `compose: full-width punctuation as its face draws it (s1-columns, ${target}): no mark's ink on a neighbour's, one place in its box a character in a face, every run drawn at the layout's advance (docs/PDF-READER.md §18.48)`,
     async () => {
-      if (!siteHas) return { skipped: `no served faces at ${SITE.tables}` }
+      if (!siteHas) return { skipped: siteNone }
       const { page, context, errors } = await newPage({ viewport: { width: 5000, height: 900 } })
       try {
         await page.evaluate(() => {
@@ -5680,6 +6479,7 @@ if (process.env.AXT_PUNCT_OUT)
 
 await browser.close()
 await server.close()
+await elsewhere.close()
 if (violations.length)
   console.log(`FAIL route table: ${violations.length} requests off the fixtures: ${violations.slice(0, 5).join(', ')}`)
 const failed = results.filter((r) => !r.ok).length + (violations.length ? 1 : 0)

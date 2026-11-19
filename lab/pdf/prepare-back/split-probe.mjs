@@ -4,10 +4,11 @@
 // number. Per page: the glyphs whose device position differs at all, the largest difference, and the glyphs that change
 // Skia's subpixel bucket (a quarter pixel across, Chromium's text positioning) or its whole pixel.
 //   node --import tsx lab/pdf/prepare-back/split-probe.mjs <candidate out> <papers.tsv> <id> [pages a-b] [--list=<n>]
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { chromium } from 'playwright'
+import { servedPage } from './served-page.mjs'
 
 const [OUT, LIST, ID, RANGE] = process.argv.slice(2).filter(a => !a.startsWith('--'))
 const LISTN = Number(process.argv.find(a => a.startsWith('--list='))?.slice(7) ?? 0)
@@ -46,13 +47,7 @@ const files = new Map([['a.pdf', A], ['w.pdf', W]])
 const browser = await chromium.launch({ channel: 'chromium' })
 try {
   const page = await browser.newPage()
-  await page.route('http://probe.local/**', route => {
-    const path = new URL(route.request().url()).pathname
-    if (path === '/') return route.fulfill({ contentType: 'text/html', body: PAGE })
-    if (path.startsWith('/pdf/')) return route.fulfill({ contentType: 'application/pdf', body: Buffer.from(files.get(path.slice(5))) })
-    const f = join(PDFJS, path.slice('/pdfjs/'.length))
-    return existsSync(f) ? route.fulfill({ contentType: f.endsWith('.mjs') ? 'text/javascript' : 'application/octet-stream', body: readFileSync(f) }) : route.fulfill({ status: 404 })
-  })
+  await page.route('http://probe.local/**', servedPage(PAGE, files, PDFJS))
   await page.goto('http://probe.local/')
   await page.waitForFunction(() => window.probe)
   const call = (fn, ...a) => page.evaluate(([f, x]) => window.probe[f](...x), [fn, a])

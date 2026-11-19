@@ -18,13 +18,13 @@ again in the translation.
 
 | Package | What it is | Its entry, the names that matter | May import |
 |---|---|---|---|
-| `@readarxiv/format` (`packages/format`) | The bundle's schema (`packages/format/src/schema.ts`), its one reader and writer (`packages/format/src/io.ts`), a unit's id (`packages/format/src/ids.ts`), and the documents our server gives a reader (`packages/format/src/doc.ts`) | `read`, `write`, `unitId`, `PaperDoc`, `OpenAsk`, `fold`, `FORMAT` | no package |
-| `@readarxiv/text` (`packages/text`) | The sentence cuts several packages share (`packages/text/src/sentences.ts`), and a token's edge punctuation, the identifier's and the flush number's (`packages/text/src/edges.ts`) | `sentenceCuts`, `ABBR`, `edgeMark` | no package |
-| `@readarxiv/ui` (`packages/ui`) | The controls, the design tokens and the one string catalogue of the extension, the reader and the website | the controls, `ROLES`, `S` | no package |
+| `@readarxiv/format` (`packages/format`) | The bundle's schema (`packages/format/src/schema.ts`), its one reader and writer (`packages/format/src/io.ts`), a unit's id (`packages/format/src/ids.ts`), and the documents our server gives a reader (`packages/format/src/doc.ts`) | `read`, `write`, `unitId`, `PaperDoc`, `OpenAsk`, `fold`, `FORMAT`, `FORMATS` (what a reader's open names, and a host that opens a paper ahead of it) | no package |
+| `@readarxiv/text` (`packages/text`) | The sentence cuts several packages share (`packages/text/src/sentences.ts`), a token's edge punctuation, the identifier's and the flush number's (`packages/text/src/edges.ts`), and the font tables the prepare and the typesetter both read, held once: the face catalogue and the role table's groups (`font-faces.ts`, its FACE_TABLE the one the website's fonts are built from), each face's letters (`font-letters.ts`, made from the coverage table), a PostScript or NFSS name's design (`font-classes.ts`) and today's reading of a font's name (`font-names.ts`) | `sentenceCuts`, `ABBR`, `edgeMark`, `FACES`, `HOLDS`, `classifyFont`, `familyOfFonts`, `readFontName` | no package |
+| `@readarxiv/ui` (`packages/ui`) | The controls, the design tokens and the one string catalogue of the extension, the reader and the website | the controls, `ROLES`, `S`; for a host's own pages, with no pack and no control, `@readarxiv/ui/languages` (`LOCALE_CODES`, `pickLocale`) and `@readarxiv/ui/bands` (`BUILT_IN_BANDS`) | no package |
 | `@readarxiv/engine` (`packages/engine`) | The prepare: a paper's source and arXiv's PDF in, its bundle out | `prepare` (`packages/engine/src/prepare.ts`), `prepareFront`, `prepareBack`, `align`, `locate`, `wrap`, `bundle` | format, text |
 | `@readarxiv/typeset` (`packages/typeset`) | A page's translation laid into the room arXiv's page gives it: rules, language data, the breaker, the fit, the page fill | `layPage` (`packages/typeset/src/lay/entry.ts`), `rulesFor` | format, text |
-| `@readarxiv/translate` (`packages/translate`) | The translator contract, the adapters (Microsoft, Google, the browser's built-in) and the chain that falls back between them | `chainOf`, `identityOf`, `keyOf`, `unitInOf`, `askedOf`, `accept` | format, text |
-| `@readarxiv/reader` (`packages/reader`) | The bilingual reader: the session, the panes and page stack, composing, the highlight, the chrome | `openReader` (`packages/reader/src/reader.ts`), `openSession`, `mountChrome`, the `Host` it runs in | format, typeset, text, ui |
+| `@readarxiv/translate` (`packages/translate`) | The translator contract, the adapters (Microsoft, Google, the browser's built-in) and the chain that falls back between them | `chainOf`, `identityOf`, `keyOf`, `unitInOf`, `askedOf`, `accept`, `adapterOf` (the adapter an identity is of) | format, text |
+| `@readarxiv/reader` (`packages/reader`) | The bilingual reader: the session, the panes and page stack, composing, the highlight, the chrome | `openReader` (`packages/reader/src/reader.ts`), `openSession`, `mountChrome`, the `Host` it runs in; what a host's page does before the reader's code has loaded, `@readarxiv/reader/early` (`firstAsk`, `themeOf`, `dimmed`: no package reached) | format, typeset, text, ui |
 
 The directions point one way, and `scripts/check-boundary.mjs` holds them (its table `PACKAGES`; it runs in `pnpm lint`): a
 package imports another only through its entry, `@readarxiv/<name>`, never a deep or a relative path into it; no package
@@ -155,8 +155,9 @@ compiles. What the host owns enters as `host`: the compile, PDF.js and its optio
 it serves, where each object goes.
 
 1. A's facts (`originalFactsOf`: its page count, its day, the TeX Live year its banner names) and the tree (`treeOf`: the
-   paper's declaration, else the banner's year, else the default). A paper of another tree is answered with that tree before
-   anything is compiled.
+   paper's declaration, else the banner's year, else the default). A paper whose A is past the page bound (`PAGES_MAX` in
+   `packages/engine/src/prepare.ts`, 10,000 pages) is refused `too-large` as soon as its page count is read, before its tree;
+   a paper of another tree is answered with that tree before anything is compiled.
 2. The front half, `prepareFront` (`packages/engine/src/front.ts`), in a frame of its own so that the source's files are let go
    before the back half begins. Its stored half, `compiledOf` (`packages/engine/src/compiled.ts`), opens the paper with the
    source reader (`packages/engine/src/source/latex-front.ts`), makes the bibliography where TeX must, hands the source's units
@@ -189,8 +190,10 @@ prepare is the private repository's and not described here.
 4. The layer's units are the `Units` objects the head names (`layerUnitsOf`, `packages/reader/src/session/machine.ts`), read
    once: the contents, the kept units and the rows come from them, never from the document's `layer.units`, which is our
    server's word for what its own run was given. The rows are made here: `Host.translate` (`src/pdf-reader/host/translate.ts`,
-   each unit through `unitInOf`) sends them to the background, whose transport (`src/providers/transport.ts`) runs them through
-   the one chain (`chainOf`, made once in `src/entrypoints/background/index.ts`), the page in view first. The background keeps
+   each unit through `unitInOf`) sends them to the background, marked the PDF reader's (`readerTransport`), whose transport
+   (`src/providers/transport.ts`) runs them through the one chain (`chainOf`, made once in `src/entrypoints/background/index.ts`)
+   with the PDF reader's translators (`readerTranslatorsOf`, `src/providers/translators.ts`: Google's then Microsoft's, the
+   website's order, until the reader picks a service; the HTML page's chain once one is picked), the page in view first. The background keeps
    each accepted raw reply (the chain's store) and each row (`src/cache/translate-store.ts`).
 5. Each page's part is read as the page comes near, and the composer (`packages/reader/src/compose/composer.ts`) lays it with the
    reader's typesetter (`packages/reader/src/compose/typeset.ts`, `layPage`) once every row and face the page waits for is in. A laid page
@@ -208,29 +211,33 @@ typesetter and the painter, is the package's, the same on both hosts.
 
 ## 4. The invariants, and the gates that hold them
 
-Hosted CI (`.github/workflows/ci.yml`) runs `pnpm typecheck`, `pnpm lint`, `pnpm build` and `pnpm test`. Every other gate runs
-by `pnpm release-check --tier fast|full|release` (`lab/release-check/run.mjs`; each gate, the invariants it holds and the gaps
-it states, in `lab/release-check/gates.mjs`; where each tier runs, `lab/release-check/CI.md`), the full and release tiers on
-the lab's data, which the repository does not hold.
+Hosted CI (`.github/workflows/ci.yml`) runs the release check's fast tier on every pull request and every push to `main` and
+`rebuild/v2`: `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test` and the census of this tree (`check`), the reader
+package's harness (`reader`), the extension's offline browser suites (`extension`); today's layer's small capitals run on the
+maintainer's machine alone (`lab/release-check/CI.md`). Every
+gate runs by `pnpm release-check --tier fast|full|release` too (`lab/release-check/run.mjs`; each gate, the invariants it holds
+and the gaps it states, in `lab/release-check/gates.mjs`; where each tier runs, `lab/release-check/CI.md`), the full and release
+tiers on the lab's data, which the repository does not hold, by hand on the maintainer's machine: no runner of his serves this
+public repository.
 
 I1 to I10 and D are the approved design's invariants as `lab/release-check/gates.mjs` states them, with the gaps it states;
 a gate is named by its id there. The rows after them are this repository's own.
 
 | Invariant | Held by | Not held |
 |---|---|---|
-| I1: all groups on, the composed page paints what A paints, glyph, box and pixel | `prepare` (PDF.js's proofs over the corpus, `lab/pdf/prepare-back/prove.mjs` (a)); `pixels` (poppler); `canvas` (Chromium); `harness` (the reader's fixtures) | in the reader, held on the harness's fixtures alone; `canvas` has passed only with a stand-in (`--normalize`) |
-| I2: a group off hides exactly its ink, and no pixel outside it changes | `prepare` (proof (c′)); `pixels` (Cairo) | no gate turns a group off in the reader |
-| I3: a laid unit's ink stays inside its regions and room and overlaps no other ink | `harness`; `typeset-today`, `reader-parts`; `display`, `display-wide` | |
+| I1: all groups on, the composed page paints what A paints, glyph, box and pixel | `prepare` (PDF.js's proofs over the corpus, `lab/pdf/prepare-back/prove.mjs` (a)); `pixels` (poppler); `canvas` (Chromium's software 2D canvas, every call rasterised as it is made, no stand-in; the split shows' residue held to its record, `lab/release-check/canvas.json`); `harness` (the reader's fixtures) | the split shows' residue: a glyph after a split drawn a sub-pixel step off on 9 pages of the canvas's 12 papers (`INVARIANTS` I1's gap) |
+| I2: a group off hides exactly its ink, and no pixel outside it changes | `prepare` (proof (c′)); `pixels` (Cairo); `harness` (the fixtures) and `harness-lab` (twelve corpus pages, `GROUP_PAGES`): each group turned off in the reader's own page view | |
+| I3: a laid unit's ink stays inside its regions and room and overlaps no other ink | `harness`; `typeset-today`; `reader-parts` (by ink, on the lay the product makes of the rows the product's acceptance rule takes, a row it refuses withheld as the product withholds it, `lab/typeset/gate-rows.mjs`: each laid run's measured ink against every other laid unit's and all the part states stays, an element's overlap said by the element, `packages/typeset/tests/replay/ink-gate.ts`); `display`, `display-wide` | a figure's drawing that stands on no member's text line, which no part states |
 | I4: every element of a laid unit appears exactly once | `harness`; `typeset-today`, `reader-parts` | |
-| I5: no line wider than its frame beyond the stated tolerance; no unit under the size floor | `typeset-today`, `reader-parts` | no gate counts the size floor |
-| I6: the same inputs give the same bytes (the prepare) and the same display list (the lay) | `prepare-same` (the corpus twice, `lab/pdf/prepare-back/same.mjs`); `sentence-cover` (a unit laid alike by every page's lay that holds it); `packages/typeset/tests/replay/purity.test.ts`; the private repository's box tier (the corpus through the box) | a page laid twice is compared on one pair alone, with the lab's data |
-| I7: a unit's boxes on the left and on the right are the same boxes | no gate | |
-| I8: the text layer of a laid page reads the translation in reading order | `harness`; `harness-lab` (five corpus papers); the website's reader checks (private) | not over the corpus |
+| I5: no line wider than its frame beyond the stated tolerance; no unit under the size floor | `typeset-today`; `reader-parts` (on the lay the product makes: a line past its slot by its ink beyond the breaker's 0.01 pt, an end mark held to its ink where TeX set it; a member under its own floor) | the figure texts and the babel names, fitted by rules of their own: the Page states no scale or slot of theirs |
+| I6: the same inputs give the same bytes (the prepare) and the same display list (the lay) | `prepare-same` (the corpus twice, `lab/pdf/prepare-back/same.mjs`); `reader-parts`, `sentence-cover` (every page laid twice by the entry, the two Pages compared; a unit laid alike by every page's lay that holds it); `packages/typeset/tests/replay/purity.test.ts`; the private repository's box tier (the corpus through the box) | the units the head pass lays otherwise across the lays (headOf: a paragraph over the unit filled by one lay, not by the other), held where they are by `reader-parts`' record till the part states the head |
+| I7: a unit's boxes on the left and on the right are the same boxes | `harness-lab` (every page its five papers' laid by the reader's own typesetter) and `harness` (its fixtures, where the served faces are): the committed Page's lit boxes against the groups the right draws off and the part's statement of their ink | |
+| I8: the text layer of a laid page reads the translation in reading order | `harness`; `harness-lab` (five corpus papers, the reading made without a browser held equal to the browser's); `text-order` (every pair the run lays, read by the composer's text module in Node; its out-of-order members held to their record, `lab/release-check/text-order.json`); the website's reader checks (private) |  |
 | I9: the box refuses each escape of the security suite and has no network | the private repository's box tier | run under emulation alone |
-| I10: on both panes every drawn piece of a lit unit is in exactly one of its sentences, the same sentences on both | `sentence-cover`; `display`, `display-wide` | not over our server's own rows |
+| I10: on both panes every drawn piece of a lit unit is in exactly one of its sentences, the same sentences on both | `sentence-cover`; `reader-parts` (both rows stores); `display`, `display-wide` | not over our server's own rows |
 | D: no unit drawn or laid at the frozen baseline (the released reader's output, recorded in the lab) is lost, but for the acceptance list | `prepare-diff`; `typeset-today`; the private repository's sweep against its staging server | |
 | Display: no page drawn worse than today's reader draws it, a difference only where nearer A | `display` (`lab/typeset/parity/`: both drawn beside A's page with the same rows) | |
-| I11: every box of a lit unit painted whole on both panes, as the reader's painter draws it | the reader gate's entry (`lab/typeset/gate-l1.mjs` with `--entry`, `lab/typeset/painted.mjs`: a box not painted whole fails its run), so `reader-parts` and `sentence-cover`; `packages/reader/tests/highlight-display-rows.test.ts`; `tests/lab/parity-paint-binds.test.ts` (the display gate's paint model the painter's outlines) | the release check counts no I11 of its own (`lab/release-check/gates.mjs` `entryRunOf` reads the run's exit): a run that also exits 1 for what it states, as the door's rows do for the added pairs' paragraph points, would pass a box not painted whole |
+| I11: every box of a lit unit painted whole on both panes, as the reader's painter draws it | the reader gate's entry (`lab/typeset/gate-l1.mjs` with `--entry`, `lab/typeset/painted.mjs`), counted from its summary by `reader-parts` and `sentence-cover` (`lab/release-check/gates.mjs` `entryRunOf`: 0 the only passing value, never read from the run's exit); `packages/reader/tests/highlight-display-rows.test.ts`; `tests/lab/parity-paint-binds.test.ts` (the display gate's paint model the painter's outlines) | |
 | A package imports only the packages `PACKAGES` allows, by entry; nothing of the extension | `scripts/check-boundary.mjs` (`pnpm lint`) | |
 | The core is platform-free (today's engine and the gate's rules for it went at the cut-over) | `scripts/check-boundary.mjs` | |
 | A transition path is imported by an old path or the lab alone | `tests/pdf-reader/engine-contract.test.ts` | |
@@ -242,7 +249,8 @@ a gate is named by its id there. The rows after them are this repository's own.
 | A unit's id is its kind and its pieces' source, nothing else | `packages/format/tests/format.test.ts` | |
 | One writer of A's ownership; the members' lists agree with it | `packages/engine/tests/helpers/locate.ts` (every locate test fails on a disagreement not carried) | over the corpus the lab's runner writes the findings (`ownership/<id>.json`) and its exit does not take them |
 | A unit is located only where every glyph it owns on B has a partner on A | `packages/engine/tests/locate.test.ts` | |
-| The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
+| The prepare's entry re-exports each module's own values; the front half's files are let go before the back half; a run given a stored instrument hands out none; a paper whose A is past the page bound is refused `too-large` before its tree and any compile | `packages/engine/tests/entry.test.ts`, `packages/engine/tests/front.test.ts` | |
+| What a host takes ahead of the reader or around it is the packages' own, through entries that reach no package or no pack: the original's first ask and the look (`@readarxiv/reader/early`), the interface's languages and the built-in bands (`@readarxiv/ui/languages`, `@readarxiv/ui/bands`) | `packages/reader/tests/early.test.ts`, `packages/ui/tests/host-entries.test.ts` | |
 | Each behaviour digest is the hash of its case table's outcomes | `packages/translate/tests/digests.test.ts`, `packages/translate/tests/chain-digest.test.ts`, `tests/providers/prompt.test.ts`; `pnpm digests` | |
 | A translator is sent no field of identity (`src`, `keys`, `open`, `close`, `depth`, `of`) | `packages/translate/tests/bundle.test.ts` | |
 | A row's statement digest (`askedOf`) moves with every field a translator is given and with no order of keys; the extension's row key holds it, every stored key where it was | `packages/translate/tests/bundle.test.ts`; `tests/providers/row-key.test.ts` (the HTML fixtures' blocks on both wires, the reader's fixture bundles' units) | |
@@ -260,9 +268,9 @@ a gate is named by its id there. The rows after them are this repository's own.
 
 | A change of | Belongs in | What moving it costs |
 |---|---|---|
-| how the source is read: a command's arguments, a piece's kind, what a unit holds | the source reader, `packages/engine/src/source/latex-front.ts`, and its tables in `packages/engine/src/source/` (`tex-names.json` is made by `lab/pdf/spikes/tex-names-make.mjs`, `latexml-args.ts` by `scripts/latexml-args.mjs`) | the units whose content changes take new ids and are translated again; it is the compile side (below) |
+| how the source is read: a command's arguments, a piece's kind as it is marked (a display TeX set at it is the instrument's statement, below), where a display a paper's own macro sets ends (`PhPiece.closes`), what a unit holds | the source reader, `packages/engine/src/source/latex-front.ts`, and its tables in `packages/engine/src/source/` (`tex-names.json` is made by `lab/pdf/spikes/tex-names-make.mjs`, `latexml-args.ts` by `scripts/latexml-args.mjs`) | the units whose content changes take new ids and are translated again; it is the compile side (below) |
 | what the marked compile is asked and what TeX states back: the marks, the probe, the frames, skips and alignments of the log | `packages/engine/src/marks/` (`marks.ts` writes and reads the probe; `channels.ts` reads TeX's statements), the compile's driver `packages/engine/src/compile/` | the compile side: a host that keys the stored instrument by the code of `compiled.ts`, `plan.ts` and what they reach compiles every paper once more; a change of the TeX the marks write (`LAYOUT_TEX`) or of how the ownership reads the points (`followsOf`) moves the instrument the same way |
-| what the instrument says of B: an element's class, a piece TeX set no ink for | `packages/engine/src/instrument/instrument.ts`, its typed seam `packages/engine/src/instrument.ts` | after TeX: a stored instrument stays good, nothing compiles again; the bundle's objects move |
+| what the instrument says of B: an element's class, a display TeX set at a piece (`texDisplaysOf`, PDF-READER §18.95: the kind every reader after the compile reads), a piece TeX set no ink for | `packages/engine/src/instrument/instrument.ts`, its typed seam `packages/engine/src/instrument.ts` | after TeX: a stored instrument stays good, nothing compiles again; the bundle's objects move |
 | which of a table's cells and a figure's texts are kept as written | `packages/engine/src/instrument/language.ts` (the rules), read by `unitFactsOf` in `packages/engine/src/instrument/instrument.ts` over the table blocks the source reader states (`packages/engine/src/source/latex-front.ts`) and by `packages/engine/src/locate/ink.ts`; the typesetter holds no table rule but a group's lay (`packages/typeset/src/lay/entry.ts`) | the units' `kept` moves, with `PIPELINE_VERSION`: a unit kept is asked no more, one no longer kept is asked |
 | which glyph of A a unit owns, whether it is located, what a member states | `packages/engine/src/align/`, `packages/engine/src/locate/` (the phases' order in `locate.ts`; ownership written only by `ownership.ts`; the facts read off A in `facts.ts` and `facts-pass.ts`); written into the part by `packages/engine/src/bundle/bundle.ts` | the parts move. Proof: the lab's corpus run object for object against the last (`lab/pdf/prepare-back/same.mjs`), the differential (`prepare-diff`) |
 | which ink a reader can hide | the groups, `groupsOf` in `packages/engine/src/locate/ownership.ts`; the add-on, `packages/engine/src/wrap/wrap.ts` over `packages/engine/src/wrap.ts` | the add-on moves. Proof: `lab/pdf/prepare-back/prove.mjs`, `pixels` |

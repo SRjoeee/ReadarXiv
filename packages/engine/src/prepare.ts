@@ -41,7 +41,7 @@ export interface PrepareDeps {
   classesOf?: LocateOptions['classesOf']
   /** keep what is read (the lab's proofs and reviews): A's pages in the tally's `pagesA`, and the instrument's ink. Not kept (the
    *  box), each is let go once located: A's raw pages as locate's ink step reads them, A's Doc and B's (the instrument's `ink`,
-   *  its pages emptied, and its owners) once locate has ended, so that the wrap and the bundle run without them (lane mem-back) */
+   *  its pages emptied, and its owners) once locate has ended, so that the wrap and the bundle run without them */
   keep?: boolean
 }
 
@@ -77,7 +77,7 @@ export function readArxiv(
     shapesAll: true,
     extra: (OPS) => alignReader(OPS),
     annotations: true,
-    // (each font's own map: a glyph it gives no Unicode of is no reading of its text, A17)
+    // (each font's own map: a glyph it gives no Unicode of is no reading of its text)
     mapped: true,
   })
 }
@@ -90,7 +90,7 @@ export async function* prepareBack(
   const now = deps.now ?? (() => 0)
   const t0 = now()
   // (read, align and locate in a function of their own, whose frame ends with them: what they read is let go there, unless kept,
-  // and nothing of the wrap's or the bundle's holds it. Nulled inside one running function, it stayed reachable: lane L9)
+  // and nothing of the wrap's or the bundle's holds it. Nulled inside one running function, it would stay reachable)
   const p = await placedOf(ins, original, deps, now)
   const { located, mapping, times } = p
   const addOn = await wrap(original, located, p.wrapPages, deps)
@@ -197,6 +197,11 @@ async function placedOf(
   }
 }
 
+/** the most pages arXiv's PDF may have: a paper past it is refused `too-large` as soon as its page count is read, before its
+ *  tree is decided and before anything is compiled, nothing of it made. A budget, unmeasured: the value the engine's first
+ *  layout reader held a document's pages to, kept as it was; nothing states why 10,000 */
+const PAGES_MAX = 10_000
+
 /** what a prepare is handed, once: the source's files, A and, where a compile of the same original made them, the instrument's
  *  five objects (TeX does not run then) */
 export interface PrepareInputs {
@@ -301,6 +306,10 @@ async function frontOf(
     if (isMemoryError(e)) throw e
     return { ok: false, why: 'corrupt', detail: `arXiv's PDF cannot be read: ${short(e)}` }
   }
+  // (the page bound, at the first point the page count is known: a paper past it is refused before its tree, so that no host
+  // of another tree takes it up only to refuse it, and before the source's files are handed to any compile)
+  if (facts.pages > PAGES_MAX)
+    return { ok: false, why: 'too-large', detail: `arXiv's PDF has ${facts.pages} pages, past ${PAGES_MAX}` }
   lap('original')
   // ---- the tree, once: the paper's own declaration, else arXiv's banner, else the default
   const tree = treeOf({ files, banner: facts.banner, served: host.tree.served, fallback: host.tree.fallback })
@@ -347,7 +356,7 @@ async function frontOf(
 }
 
 /** the back half as it is, every object handed out as it is made; given the front half's own reading of an ink unit's pieces
- *  (instrument.mjs classesOf: each element's class) */
+ *  (instrument/instrument.ts classesOf: each element's class) */
 async function backOf(
   ins: Instrument,
   original: Uint8Array,

@@ -1,5 +1,5 @@
 // The reader's own LLM services (OpenAI-compatible endpoints: OpenRouter, DeepSeek, Ollama…) as a translator of the
-// chain (interfaces/translate/DECISION.md "Who builds translators": the extension's LLM service stays an adapter in the
+// chain (the translate decision, "Who builds translators": the extension's LLM service stays an adapter in the
 // app). The wire is the package's tags wire (`tagsWire`, Google's and Chrome's codec); a request is one structured-output
 // call through the AI SDK (generateText + Output.object, a zod schema of segments by id), the prompt the prompt library's
 // with the protocol block appended (prompt.ts), each wire a segment named by its index. What a failure means is this

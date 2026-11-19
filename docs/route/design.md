@@ -105,7 +105,7 @@ not tested, and rules inside text (`\underline`, OT1 `\_`) are not text.
 
 ## 3. Contracts
 
-### 3.1 Box: the base compile (pipeline lane; engine `layout/paper.mjs`, web `container/src/run/prep.ts`)
+### 3.1 Box: the base compile (pipeline lane; engine `layout/paper.mjs`, the container's prepare run)
 - The guard runs on **draft** compiles as today. Once it accepts, the box makes **one pdflatex pass** in final mode: the
   accepted files with DRAFT's `\PassOptionsToPackage{draft}{graphicx}` line replaced by an empty line (so no line moves),
   over the aux, bbl, lists and index the accepted compile wrote. No BibTeX, no rerun. Under `latex`, xelatex and lualatex
@@ -221,9 +221,9 @@ cache this rule costs 1 refused part of 210 (1 page of 1,457), which v0 draws to
 | 3.2 versions | Bundle reader tests: a BUNDLE 8 head with `source` reads; BUNDLE 7 heads still read with arXiv's base |
 | 3.3 check | Engine unit tests: each failing reason gives a fallback record with its code; a page-box mismatch; a page whose words differ from arXiv's (below 0.98) is not drawable and a unit on it gets no row |
 | 3.4 crop boxes | layout-make tests: placeholder segments equal the owned glyph boxes (no match calls); EMPTY, JOINED and OUTSIDE unchanged on the gate pack; LOST 0 on the pack |
-| 3.5 fallback | Web e2e (`layer-states.mjs`): `source: 'arxiv'` shows the original alone, with no 重试 for final whys; the layer draws nothing |
+| 3.5 fallback | Web e2e (its check of the layer's states): `source: 'arxiv'` shows the original alone, with no 重试 for final whys; the layer draws nothing |
 | 3.6 layer | layer-proto tests: a unit with no file rows is not drawn. Gate pack outputs: drawn units ≥ today's, invariants (a)–(m) no worse |
-| 3.7 host | e2e `page-boxes.mjs`: our bytes differ from arXiv's, the boxes are equal; extension run test with `source: 'ours'` |
+| 3.7 host | the website's e2e of the page boxes: our bytes differ from arXiv's, the boxes are equal; extension run test with `source: 'ours'` |
 | All | **Release sweep** (50 papers), the acceptance: ready count = today's; (a) "prose left English" and `unproven` down; no new (c), (d) or (e) violations; a fallback count for each why |
 
 ## 4. Owner decisions: all three decided (2026-10-22)

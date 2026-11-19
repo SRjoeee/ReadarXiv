@@ -1,5 +1,5 @@
 // A page's fill replayed (S.fill.page, design-b §1.6 L10): every unit of a pair laid by the chain from F2 to its fill leadings
-// (round.ts, its last round), then each of the ledger's passes (TAP.md §3 L10: `passes[]`, every call of the corpus) run by
+// (round.ts, its last round), then each of the ledger's passes (the tap's spec §3 L10: `passes[]`, every call of the corpus) run by
 // fillPass over its begun units in the order they were laid and those running on to the page, each answer against what the
 // tap read: the page's target (`told`), each unit's decision (`units`), the page's size (`size`), each unit filled (`filled`),
 // and each begun unit's final layout (its L10 slot). A pass any of whose units the chain did not lay is not replayed, and says

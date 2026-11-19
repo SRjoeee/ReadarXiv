@@ -407,7 +407,8 @@ export function createPopupState(host: PopupHost, seed: { rejected?: readonly st
       const next = await patchConfig(latest => (
         // The menu may have been built before another tab deleted this service; storing an id that
         // names nothing would leave the reader looking at a choice nothing honours (Codex on #157)
-        isBuiltInService(id) || latest.services.some(s => s.id === id) ? { ...latest, provider: id } : latest
+        // (a pick, recorded: the PDF reader follows it, v22)
+        isBuiltInService(id) || latest.services.some(s => s.id === id) ? { ...latest, provider: id, providerChosen: true } : latest
       ))
       if (next.provider !== id) return
       const packState = id === 'chrome-builtin' ? await surface.checkPack(next.targetLanguage) : surface.state().pack

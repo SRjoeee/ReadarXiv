@@ -1,11 +1,10 @@
-// U.lead over the part (today's run-in lead, RUN:2047-2072 over the facts a part states): a babel name the part binds to the
+// U.lead over the part (a run-in lead, over the facts a part states): a babel name the part binds to the
 // member after it in its flow (Placed.bound: amsthm's "Proof.", IEEEtran's "Abstract—", a class's "Appendix A") is that
 // member's lead: the name's word in the target, the joint TeX set after it (the member's own label on the name's line) and the
 // original's glue after the joint, then the translation; the member's first line from the name's start, its label the name and
 // the joint, drawn anew (its label group off), the name's text off with it. Where the joint cannot be drawn anew (the member's
-// label kept by the add-on: today's labelKept) or the name has no word of the target's, the name stays the original's and the
-// member is set after it, its first line pinned by the name's ink (today's edgesOf read it there) and its room beside it
-// stopped at the name.
+// label kept by the add-on) or the name has no word of the target's, the name stays the original's and the member is set
+// after it, its first line pinned by the name's ink and its room beside it stopped at the name.
 import type { Placed } from '@readarxiv/format'
 import type { TStyle } from '../breaker/tokens.ts'
 import { type PaperReading, tstyleOf } from './read.ts'
@@ -49,7 +48,7 @@ export function ledBy(
       }
     : null
   // (the glue after the joint, or after the name where none stands between: TeX's, none within a carry's 0.05 pt; and the
-  // glue between the name and its joint, "Figure 1:" (Codex on #624: "Abbildung1:"): every piece on the line the original's
+  // glue between the name and its joint, "Figure 1:" (without it "Abbildung1:"): every piece on the line the original's
   // separation after the one before it, as a run-in head's follower after the head, S.rowStart)
   const glue = f[2] - (joint ? joint.ink[3] : l[3])
   const between = joint ? joint.ink[1] - l[3] : 0
@@ -62,7 +61,7 @@ export function ledBy(
     gap: glue > 0.05 ? glue / size0 : 0,
     drawn: word.text + jText,
   }
-  // (its label the name and the joint: drawn anew from the name's start, as today's prep.label)
+  // (its label the name and the joint: drawn anew from the name's start)
   type Ink = NonNullable<Placed['label']>['ink']
   const nameInk: Ink = [l[0], l[2], l[6], l[3], l[5], l[4]]
   const ink: Ink = joint

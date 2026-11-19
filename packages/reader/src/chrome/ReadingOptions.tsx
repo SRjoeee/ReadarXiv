@@ -13,14 +13,14 @@ import { useSettingsLock } from './settings-lock.ts'
 import { ToolbarButton } from './ToolbarButton.tsx'
 import { useReader } from './use-reader.ts'
 
-/** the system's first (the maintainer, 2026-09-26); as icons, equal whatever the interface's language, as the display
+/** the system's first (S-R-08); as icons, equal whatever the interface's language, as the display
  *  switch's are, their words in tooltips and to screen readers: a word per third ran off its thumb in English */
 const APPEARANCES = ['system', 'light', 'dark'] as const
 const GLYPHS: Record<(typeof APPEARANCES)[number], IconNode> = { system: Monitor, light: Sun, dark: Moon }
 
 /** `bare`: the bar where neither side has anything to show (Toolbar.tsx BareBar): no row of a paper's (what leaves the bar in
  *  a narrow window, the highlight and its colour, what to translate), the appearance, the dimming and the host's own last rows
- *  kept (today's web ReadingOptions `lost`) */
+ *  kept (§6.6, `bar: 'bare'`) */
 export function ReadingOptions({ controller, bare = false }: { controller: ReaderController; bare?: boolean }) {
   // before the settings land the defaults stand in their places, greyed (S-R-21), so that the button that opens this holds
   // its place, and the narrow window's download and way back in it are reachable at once
@@ -30,7 +30,7 @@ export function ReadingOptions({ controller, bare = false }: { controller: Reade
   const pop = usePopover('dialog', 'options')
   const radios = useRef<(HTMLButtonElement | null)[]>([])
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
-  // the extension's appearance (the redesign's design, §3): chosen here, the popup and the settings page follow
+  // the extension's appearance (UI.md S-R-08, `theme`): chosen here, the popup and the settings page follow
   const appearance = prefs.theme
   const setAppearance = (a: (typeof APPEARANCES)[number]) => {
     if (!lock.locked) controller.setPrefs({ theme: a })
@@ -44,7 +44,7 @@ export function ReadingOptions({ controller, bare = false }: { controller: Reade
         {/* a paper's rows: none in the bare bar's options */}
         {!bare && (
           <>
-            {/* below 500 px the bar's download, settings and way back live here, before all (§5; the maintainer, 2026-09-26): the host's */}
+            {/* below 500 px the bar's download, settings and way back live here, before all (§5): the host's */}
             {slots.afterOptions?.('options')}
             {/* below 900 px the toolbar's language and service menus live here, first (the design, §5) */}
             <div className="row narrow-only">
@@ -53,7 +53,7 @@ export function ReadingOptions({ controller, bare = false }: { controller: Reade
             </div>
             {slots.beforeOptions?.('options')}
             <div className="sep narrow-only" />
-            {/* a switch's row is a label, its words a target too, as the popup's are (the interface review) */}
+            {/* a switch's row is a label, its words a target too, as the popup's are */}
             {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
             <label className="row">
               {S.rows.highlight}

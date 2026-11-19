@@ -1,9 +1,9 @@
 // The marked compile's log channels and what they state with B's points: each unit's alignment (AXT-ALIGN), the paper's
-// \lineskip (the probe's row), each page's text frame (AXT-BODY at each body's opening point). Read by the front half's adapter
-// (src/pdf-reader/engine/pipeline/instrument.mjs, through the package's entry). Of the instrument's types alone.
+// \lineskip (the probe's row), each page's text frame (AXT-BODY at each body's opening point). Read by the instrument
+// (instrument/instrument.ts) and through the package's entry. Of the instrument's types alone.
 import { GLUE_NAMES, type GlueName, type ParaMeasure, type TexFrame } from '../instrument.ts'
 
-/** the code of a paragraph's skips (marks.mjs alignCode): both sides stretching and \parfillskip none past them, centred;
+/** the code of a paragraph's skips: both sides stretching and \parfillskip none past them, centred;
  *  \rightskip alone flush left; \leftskip alone flush right; neither justified */
 const alignCode = (lo: number, ls: number, ro: number, rs: number, po: number, ps: number): 'j' | 'l' | 'c' | 'r' => {
   const L = lo > 0 || ls > 0
@@ -18,8 +18,8 @@ const alignCode = (lo: number, ls: number, ro: number, rs: number, po: number, p
 const CELL_CLASS: readonly ('c' | 'l' | 'r' | undefined)[] = ['c', 'l', 'r']
 /**
  * Each unit's alignment as its end mark states it (AXT-ALIGN, its 79-column wrap joined, in the order TeX set the paragraphs):
- * none for one TeX set last in an \hbox (marks.mjs readAlign: a caption set as a paragraph and then in a box). A unit TeX set
- * as paragraphs of two alignments has its first's: the unit is its first occurrence (own.mjs MR 3, the marks' and the
+ * none for one TeX set last in an \hbox (a caption set as a paragraph and then in a box). A unit TeX set
+ * as paragraphs of two alignments has its first's: the unit is its first occurrence (own/own.ts ownOf, the marks' and the
  * instrument's ownership; pdfTeX keeps a destination set twice at its first), the text a template sets again after it its
  * copy, never its own (2608.25210v2's title and authors, centred by \maketitle and set again ragged right in VLDB's "PVLDB
  * Reference Format"; 2610.22065v1's title in ACM's reference format, justified; an author's name in an e-mail footnote): an
@@ -31,7 +31,7 @@ const CELL_CLASS: readonly ('c' | 'l' | 'r' | undefined)[] = ['c', 'l', 'r']
  * lines a paragraph's. The cell's first (tabularx sets its table once for each trial width, the same). A cell no template of
  * LaTeX's set (a plain \halign) states nothing. A unit that is no cell's but its cell's one unit, set in its line (an author
  * block's name or place in the tabular \maketitle sets it in: its AXT-ALIGN `h`, an \hbox's, which tells nothing), states its
- * cell's class the same way (marks.mjs LAYOUT_TEX)
+ * cell's class the same way (marks.ts LAYOUT_TEX)
  */
 export function readAlign(log: string): Map<number, 'j' | 'l' | 'c' | 'r'> {
   const text = log.replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
@@ -191,7 +191,7 @@ const BP_PER_SP = BP_PER_PT / 65536
  *  ships it) */
 type TexBody = { side: 0 | 1 | 2; column: number; text: number; x: number; foot?: number }
 /**
- * Each bracketed body's statement (marks.mjs LAYOUT_TEX's `AXT-BODY <n> <side> <\columnwidth> <\textwidth> <x> <depth>`,
+ * Each bracketed body's statement (marks.ts LAYOUT_TEX's `AXT-BODY <n> <side> <\columnwidth> <\textwidth> <x> <depth>`,
  * written at the shipout beside the body's opening point `bs<n>`), by its serial: the first (a box shipped twice states it
  * twice, the same). A line not of the form is passed over: a compile made before the statement, or an engine with no saved
  * position (its x empty), states none; one made before the depth states no foot
@@ -250,8 +250,8 @@ function taggedLines(log: string, tag: string): string[] {
 /**
  * Each unit's \baselineskip and \parskip, natural, where its paragraph ends (LINES_TEX's `AXT-LINES <unit> <\prevgraf>
  * <\baselineskip> <size> <\parskip>`, the last TeX pass's), in PDF units, by unit index: TeX's normal paragraph separation
- * there, their sum, which the next ink under a borrowed line keeps (the owner's ruling of 2026-11-08); and \parskip's shrink, a
- * third, where it is of points (TeX's least separation there is the natural less it: the display design's 2d, rule 2), none
+ * there, their sum, which the next ink under a borrowed line keeps (PDF-READER §18.11); and \parskip's shrink, a
+ * third, where it is of points (TeX's least separation there is the natural less it: PDF-READER §18.76), none
  * where it is of an infinite order. A unit TeX set no paragraph for (a caption measured in a box alone, a heading, the front
  * matter's) states none; nor does a compile made before \parskip was stated
  */
@@ -311,7 +311,7 @@ export function readMeasures(log: string): Map<number, ParaMeasure> {
   const out = new Map<number, ParaMeasure>()
   for (const line of taggedLines(log, 'AXT-MEASURE ')) {
     const w = line.trim().split(/ +/)
-    if (w.length < 8) continue
+    // (a record cut short before its count reads no count: Number(undefined) is no integer)
     const n = Number(w[1])
     const count = Number(w[7])
     if (!Number.isInteger(n) || out.has(n) || !Number.isInteger(count) || count < 0 || w.length !== 8 + 2 * count)
@@ -435,7 +435,7 @@ const BCP47 = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/
 const FULL_NAME = /^\p{L}[\p{L}\p{M}'’-]*(?: [\p{L}\p{M}'’-]+)*$/u
 /** a macro's meaning as TeX writes it (`\meaning`): its body after `macro:->`, a definition of no parameter alone */
 const MEANING = /^(?:\\(?:long|protected|outer) )*macro:->(.*)$/
-/** a babel name macro as the layout compile's own wrapper leaves it (marks.mjs NAMES_TEX: `\relax\axtnma{<key>}<its text>
+/** a babel name macro as the layout compile's own wrapper leaves it (marks.ts NAMES_TEX: `\relax\axtnma{<key>}<its text>
  *  \axtnmb{<key>}`, \meaning's spacing): the text it wraps */
 const NAME_WRAP = /^\\relax \\axtnma \{[a-z]{1,16}\}(.*)\\axtnmb \{[a-z]{1,16}\}$/
 const UTF8 = new TextDecoder('utf-8')
@@ -449,7 +449,7 @@ function textOf(written: string): string {
 }
 /**
  * Each reference's item type and the full name the paper gives it, by the reference's place in the list the marked compile was
- * given (marks.mjs refsTex: `AXT-REF <i> <type>`, then `AXT-REFNAME <i> <slot> <\meaning>` for each of cleveref's capitalised
+ * given (marks.ts refsTex: `AXT-REF <i> <type>`, then `AXT-REFNAME <i> <slot> <\meaning>` for each of cleveref's capitalised
  * and own names, hyperref's \<type>autorefname and LaTeX's \<type>name that is defined, in that order, written once the last
  * page is out). The type is the label's anchor's (hyperref's, and LaTeX's own since 2023: `figure.caption.12`'s `figure`, as
  * hyperref's own \autoref reads it), else cleveref's where it wrote one; the name the first of those that is a full name
