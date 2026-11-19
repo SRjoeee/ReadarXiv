@@ -1,6 +1,5 @@
-// A laid page painted over its page view (design §4.5 "Painting"): the SVG painter, today's look (layer2.mjs svgOfUnit: a
-// <text> a line at its baseline, a <tspan> a run of one face at its own place, an oblique run skewed about its baseline, a line
-// set turned turned about its origin as svgOfFigure turns a figure's text), drawn
+// A laid page painted over its page view (design §4.5 "Painting"): the SVG painter (a <text> a line at its baseline, a <tspan>
+// a run of one face at its own place, an oblique run skewed about its baseline, a line set turned turned about its origin), drawn
 // from `Page` alone; and the crops, each element's (or label's) own ink cut from the crop render of the page it stands on and
 // drawn where its item stands, darkened into the page so that paint order cannot change a pixel (design-a §1.4). A crop is cut
 // by its own ink as TeX set it (its item's `ink`, the part's boxes) and its antialiased edge, a device pixel of the render it is
@@ -8,7 +7,7 @@
 // and label of the page, so a source cut whole carries their ink (2610.21312v1-zh p5 t58: line 2's glyph tops left as dots),
 // and a margin fixed in points is no antialiased edge at every zoom (a 1x screen's at 100 %: a device pixel 0.75 pt). A member laid
 // across a page break may carry an element of one page onto a line of the other (its Ink's page): that crop is cut from its own
-// page's render, as today's were (triage-1 B, 2608.16117v1-de t11's p3 element on p4's line).
+// page's render, where its ink is (2608.16117v1-de t11's p3 element on p4's line).
 //
 // The painting is in the page's own units (an SVG viewBox of the page, a canvas over the page's frame), so that a zoom scales it
 // by CSS with the page view's own canvas, and nothing of it is made again at a scale (the crops are drawn again only where the
@@ -77,7 +76,7 @@ export function svgOf(page: Page, vp: PageViewport, faces: Faces, lang = ''): SV
       for (const it of items) {
         if (isCrop(it)) continue
         // (a run set along a direction, a figure text the original sets turned: its line's <text> turned about the line's origin,
-        // as today's svgOfFigure turns it, the SVG's y down; the run at its place along it, its raise across it)
+        // the SVG's y down; the run at its place along it, its raise across it)
         const turn = it.dir
           ? `translate(${X(x0)} ${Y(y)}) rotate(${n2((-Math.atan2(it.dir[1], it.dir[0]) * 180) / Math.PI)})`
           : ''
@@ -437,7 +436,7 @@ const held = new WeakMap<HTMLCanvasElement, { grid: [number, number]; box: PxBox
 const cropsIn = (over: HTMLElement) => over.querySelector<HTMLCanvasElement>(':scope > canvas.axt-crops')
 
 /**
- * A page kept off the view lets its crops canvas's page-sized bitmap go (design-performance-2026-11-13 Q7): the crops' box
+ * A page kept off the view lets its crops canvas's page-sized bitmap go (docs/PDF-READER.md §11.8): the crops' box
  * (`cropsBox`) copied one to one into a canvas of its own, never in the document and read by the CPU (`willReadFrequently`:
  * its pixels the renderer's, not the GPU's), and the canvas made 0 × 0, the element kept in place. The device pixels the copy
  * holds (what the page keeps beside its page view), its box marked on the canvas (`data-axt-away`) while it is away

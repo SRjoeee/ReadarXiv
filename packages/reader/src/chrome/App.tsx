@@ -132,8 +132,8 @@ function chooseLanguage() {
 /**
  * One pane: the scroller the engine draws into (and owns: it replaces the right one as translations come), and what floats
  * over it, its page pill and its scroll indicator, shown while it scrolls without React rendering on a scroll. `empty`: an
- * address with no paper has nothing in either pane, and the pill's arrows, though drawn transparent, are in the Tab order
- * and a "1 / 0" pager that does nothing stood before the card's link (Codex on #329): the pane is inert, as a closed
+ * address with no paper has nothing in either pane, yet the pill's arrows, though drawn transparent, would be in the Tab
+ * order, a "1 / 0" pager that does nothing before the card's link (S-R-20): the pane is inert, as a closed
  * contents sidebar is
  */
 function Pane({

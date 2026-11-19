@@ -1,8 +1,8 @@
 // The display switch (the reader's design, §6.2): three equal 40 px segments in a well, whatever the interface's
 // language, the chosen one on a lifted thumb that slides; icons, the words in tooltips and to screen readers. A single
 // choice, so a radio group: arrows move the choice (a display that cannot be had skipped). No single key chooses one
-// anywhere on the page: 1, 2 and 3 did, which a stray keystroke or a spoken word could set off (WCAG 2.1.4; the
-// maintainer, 2026-09-26). A display that cannot be had is greyed, `aria-disabled` and still focusable, the arrows passing
+// anywhere on the page: 1, 2 and 3 did, which a stray keystroke or a spoken word could set off (WCAG 2.1.4;
+// §6.2). A display that cannot be had is greyed, `aria-disabled` and still focusable, the arrows passing
 // it: the translated ones with no translation, and those the host says this window cannot show (`off`: the website's
 // side by side on a phone, §6.2)
 import { useRef } from 'react'

@@ -1,11 +1,12 @@
 // The composed document's groups (design §4.5 "composing a page"): each laid unit's text, elements and label in optional-content
 // groups of the add-on, named `axt:<ord>.<page>.<t|e|l>` (format's groupName), every group ON by default so that the composed
 // page is arXiv's. A group belongs to one page, so one configuration holds every page's state at once and no render switches a
-// group for the page it draws (today's visibility.mjs serialised renders for it). Three configurations, each read once a
-// document (PDF.js 6.3.289 builds a new one per render it is not given one for: +23 MiB on a 147-page thesis, engine-view-host
-// §16): `allOn`, which is never changed (a page not laid: arXiv's); `laid`, in which the groups a committed page turns off are
-// off; `crops`, every unit's text group off and the rest on (the page's crop render: elements and labels, and the ink in no
-// group). A configuration is read at paint time, so `laid` is changed only for pages whose drawings are drawn again after.
+// group for the page it draws (switched for each render, the renders would have to run one at a time). Three configurations,
+// each read once a document (PDF.js 6.3.289 builds a new one per render it is not given one for: +23 MiB on a 147-page thesis,
+// engine-view-host §16): `allOn`, which is never changed (a page not laid: arXiv's); `laid`, in which the groups a committed
+// page turns off are off; `crops`, every unit's text group off and the rest on (the page's crop render: elements and labels,
+// and the ink in no group). A configuration is read at paint time, so `laid` is changed only for pages whose drawings are drawn
+// again after.
 import { groupName, groupOf } from '@readarxiv/format'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import type { OptionalContentConfig } from '../stack/stack.ts'

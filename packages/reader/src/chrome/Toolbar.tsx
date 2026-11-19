@@ -35,8 +35,8 @@ export function Toolbar(props: BarProps) {
 }
 
 /** the bar where neither side has anything to show, by the website's rule: the lead's slot (its way home) and the reading
- *  options alone, in the bar's zones, so that each stays on its side at every width (today's website bar for a lost paper); no
- *  zoom key is taken, nothing to zoom */
+ *  options alone, in the bar's zones, so that each stays on its side at every width (§6.6: the website's bar for a paper
+ *  arXiv does not have); no zoom key is taken, nothing to zoom */
 function BareBar({ controller }: { controller: ReaderController }) {
   const { slots } = useParts()
   return (

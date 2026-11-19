@@ -1,6 +1,6 @@
 // The page stack (design §4.5 "both panes are one kind of thing"): a slot for every page of a document, all under one scale,
 // each slot PDF.js's own page view of what that page shows now, drawn by the reader's one scheduler (in view, then near).
-// Built for the right pane first; the left is put on it only if it matches today's left (stage 2, deliverable 7).
+// Built for the right pane first; the left is put on it only if it matches the left PDF.js's viewer draws.
 //
 // - **Slots.** A slot is the page's box, sized by PDF.js's own rule (setLayerDimensions: `round(down, var(--total-scale-factor)
 //   × the page's size, var(--scale-round-x))`) under the stack's `--scale-factor`, so that a slot of either pane and a page box of
@@ -14,8 +14,8 @@
 //   in one task, once it has drawn: the slot's size and the pane's scroll never change, and nothing blank shows. Drawn is
 //   finished at the scale it stands at: PDF.js's draw resolves as well where it gave its drawing up (a page view reset by a new
 //   scale while it drew), and such a page view is drawn again at its turn (the reset's ask, which the scheduler keeps for a
-//   job asked while it runs), the slot showing what it showed meanwhile (staging, 2026-11-14: the relayout's fit landing while
-//   a page drew left it in place undrawn, in view, until a zoom).
+//   job asked while it runs), the slot showing what it showed meanwhile (on staging, the relayout's fit landing while a page
+//   drew left it in place undrawn, in view, until a zoom).
 // - **Near and far.** A slot one pane's height above or below the view is near (an IntersectionObserver, which sees a slot where
 //   it shows, the follower's transform and all: nothing is lent). A far slot lets its drawing go, canvas and all, but a laid
 //   page's (one with an overlay), which is kept off the view within the device's budget, the farthest from the view let go
@@ -167,7 +167,7 @@ interface LeftContent {
   key: string
   fallback: ViewContent
 }
-/** a page of text in grey, while there is no original to draw (round 4's skeleton) */
+/** a page of text in grey, while there is no original to draw */
 interface SkeletonContent {
   kind: 'skeleton'
   key: string
@@ -887,8 +887,8 @@ export function createStack(o: StackOptions): Stack {
       s.div.setAttribute(KEPT, '')
     } else if (putBack(s)) s.div.removeAttribute(KEPT)
   }
-  /** drawing d's overlay let go to its copy as d is kept off the view (its crops' page-sized bitmap: design-performance-2026-11-13
-   *  Q7, a far page holds one bitmap): the device pixels the copy holds */
+  /** drawing d's overlay let go to its copy as d is kept off the view (its crops' page-sized bitmap: a kept page holds one
+   *  bitmap, docs/PDF-READER.md §11.8): the device pixels the copy holds */
   function awayOf(d: Drawing): number {
     const c = d.content
     return d.over && isView(c) && c.away ? c.away(d.over) : 0

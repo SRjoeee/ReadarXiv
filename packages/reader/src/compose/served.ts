@@ -1,5 +1,5 @@
 // The served faces and the typesetter's Metrics over them (the default engine's: compose/typeset.ts). The faces are the files
-// our site serves, as today's reader reads them (src/pdf-reader/session/faces.ts servedFaces, layer-proto/fonts.mjs sliceFace):
+// our site serves:
 //
 //   GET /static-fonts/index.json                  { schema: 1, fonts, faces: { <face id>: { group }, … } }
 //   GET /static-fonts/<group>.json?fonts=<fonts>  { schema: 1, group, slices: [[start, end, …], …], faces: { <id>: [{ path } | null, …] } }
@@ -83,7 +83,7 @@ const inRanges = (r: readonly number[], cp: number) => {
   return false
 }
 const hex = (n: number) => n.toString(16).toUpperCase()
-/** a slice's unicode-range descriptor from its [start, end] pairs (today's layer-proto/fonts.mjs unicodeRangeOf) */
+/** a slice's unicode-range descriptor from its [start, end] pairs */
 export const unicodeRangeOf = (ranges: readonly number[]): string => {
   const out: string[] = []
   for (let i = 0; i + 1 < ranges.length; i += 2) {

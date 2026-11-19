@@ -26,7 +26,7 @@ export function ruleTag(target: string): string | null {
 
 /** what the first page laid in `target` reads before its slices, asked as the code loads (before the head is read, the composed
  *  document opened or a page laid, so that neither waits for them): the target's hyphenation patterns, the faces' index and the
- *  tables of the target's CJK faces (its body's and its bold's: Source Han Serif SC's is 39 KB). Staging, 2026-11-08: the
+ *  tables of the target's CJK faces (its body's and its bold's: Source Han Serif SC's is 39 KB). On staging, asked later, the
  *  patterns were the composed document's open's last round trip, and the index and the CJK table two more before page 1's
  *  first slice */
 export function warmTypeset(s: Pick<Served, 'hyph' | 'warm'>, target: string): void {
@@ -55,7 +55,7 @@ export interface TypesetOptions {
 /** the most a page's address may set the borrow past TeX's bottom to, in points: the deepest `\maxdepth` of the classes
  *  measured (article at 12 pt and IEEEtran, 6 pt; docs/PDF-READER.md §18.11); a larger value sets nothing */
 export const PAST_FOOT_MAX = 6
-/** the borrow past TeX's text block bottom a page's address sets (§18.37, the owner's switch of 2026-11-12): its `axt-borrow`
+/** the borrow past TeX's text block bottom a page's address sets (§18.37, "The switch"): its `axt-borrow`
  *  parameter, in points, read on a website's page (http or https) alone, never on an extension's: 0 turns the borrow off, a
  *  number to PAST_FOOT_MAX is its bound; undefined where the address sets nothing so (the typesetter's rule then) */
 export function pastFootOf(at: { protocol: string; search: string } | null): number | undefined {

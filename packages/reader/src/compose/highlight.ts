@@ -1,26 +1,25 @@
 // The highlight (design §4.5 "Highlight"; docs/PDF-READER.md §17): both panes light the same per-sentence boxes of the same unit,
 // from `Page.lit` (on the left from A, on the right as drawn), with `{id, s}` the only lit state: a member's ord and its sentence,
 // -1 for the whole member, -2 - k its display of piece k alone (Laid.lit's `own`: a display is a block of its own, the same ink on
-// both panes, lit only where the pointer is over it, never with its member: today's units.mjs displayBlockId, the owner's report
-// of 2026-11-09). What is painted is what is hit: a point lights the sentence whose box holds it, on the pane it is over, read
-// from the same boxes the bands are drawn from, the smaller unit winning where two overlap; a miss keeps what is lit 120 ms (the
-// HTML page's grace). A shape paints the union of its boxes and never part of one (paintRows: boxes on one band are never met);
-// its rows are one outline where they meet across, never across another block standing between two of them (a display, another
-// member's line: today's runs, cut there, highlight.mjs interrupted), which the outline would fill. A
-// page that is not laid lights from A on both panes (the right mirrors the left). The pointer lights, nothing else does: a click
-// holds nothing.
+// both panes, lit only where the pointer is over it, never with its member: docs/PDF-READER.md §17.9). What is painted is what
+// is hit: a point lights the sentence whose box holds it, on the pane it is over, read from the same boxes the bands are drawn
+// from, the smaller unit winning where two overlap; a miss keeps what is lit 120 ms (the HTML page's grace). A shape paints the
+// union of its boxes and never part of one (paintRows: boxes on one band are never met); its rows are one outline where they
+// meet across, never across another block standing between two of them (a display, another member's line: the run is cut
+// there), which the outline would fill. A page that is not laid lights from A on both panes (the right mirrors the left). The
+// pointer lights, nothing else does: a click holds nothing.
 //
-// Carried from today's lighting (src/pdf-reader/engine/view/lighting.mjs, highlight.mjs shapePath, overlay.mjs pinned at
-// baf2083e0): one outline a shape (3 px corners), padded 3 px beside and half the page's leading above and below; each shape in
-// CSS pixels of the page as it was drawn, scaled with the page about its origin (`scale: calc(var(--total-scale-factor) / s0)`),
-// so that a zoom's steps and a pinch move it on the compositor with no layout and no script (§10.1: percent positioning cost the
-// page's layout every frame); the left's layer put back in the same task where PDF.js's redraw removes it (§10.2). One look and
-// one paint a frame, the pointer read before anything is written; a scroll under a still pointer lights what comes under it; what
-// is lit drawn again by what replaces it, the resting pointer asked again. Nothing is computed while the switch is off; a page
-// another generation still shows is muted (nothing of it lit or hit on the right). A member set along a direction (a figure text
-// the original sets turned: Laid.lit's `dir`, its boxes in its run's frame) is lit as a band turned with its text about its own
-// centre, padded beside along its run and by half the leading across it, and hit where it is painted; a level box over it would
-// stand over its neighbours (a label set at 30° about twice its height).
+// The shapes (docs/PDF-READER.md §17.3): one outline a shape (3 px corners), padded 3 px beside and half the page's leading
+// above and below; each shape in CSS pixels of the page as it was drawn, scaled with the page about its origin
+// (`scale: calc(var(--total-scale-factor) / s0)`), so that a zoom's steps and a pinch move it on the compositor with no layout
+// and no script (§10.1: percent positioning cost the page's layout every frame); the left's layer put back in the same task
+// where PDF.js's redraw removes it (§10.2). One look and one paint a frame, the pointer read before anything is written; a
+// scroll under a still pointer lights what comes under it; what is lit drawn again by what replaces it, the resting pointer
+// asked again. Nothing is computed while the switch is off; a page another generation still shows is muted (nothing of it lit
+// or hit on the right). A member set along a direction (a figure text the original sets turned: Laid.lit's `dir`, its boxes in
+// its run's frame) is lit as a band turned with its text about its own centre, padded beside along its run and by half the
+// leading across it, and hit where it is painted; a level box over it would stand over its neighbours (a label set at 30° about
+// twice its height).
 import type { Panes, Side } from '../panes/panes.ts'
 import type { Clock } from '../stack/clock.ts'
 import type { Composer } from './composer.ts'
@@ -85,10 +84,10 @@ function pageBoxes(page: Page, side: Side, committed: boolean): Box[] {
  * Whether each of a shape's boxes (PDF units, y up), in the order given, stands apart from the one before it: another block
  * stands between them, a box of `others` that is none of the shape's whose middle is between the two and that stands in
  * their column (meets `column` across: [x0, x1], the extent the shape's member spans on the page, its sentences' boxes and its
- * displays', columnOf), the two at least the shorter one's height apart (room for a line). Today's highlight.mjs interrupted,
- * which cuts a run there, its own display included: a block in the column between two rows, whatever their width (the owner's
- * report of 2026-11-10 on 2610.17024v1 p9: two short rows either side of display (43), both left of its ink, were joined by a
- * strip down the column's edge over its row while the rows on arXiv's page, longer, were cut). Never the first
+ * displays', columnOf), the two at least the shorter one's height apart (room for a line). A run is cut there, its own display
+ * included: a block in the column between two rows, whatever their width, which the outline would fill (docs/PDF-READER.md
+ * §17.9; on 2610.17024v1 p9 two short rows either side of display (43), both left of its ink, were joined by a strip down the
+ * column's edge over its row while the rows on arXiv's page, longer, were cut). Never the first
  */
 export function apartRows(boxes: readonly Box[], others: readonly Box[], column: readonly [number, number]): boolean[] {
   const mine = new Set(boxes)
@@ -137,12 +136,12 @@ export const sharesBand = (boxes: readonly Box[]): boolean =>
  * and down) are never met: the union is cut into bands at every box's head and foot, each band's boxes one row where they meet
  * across (a row and the number TeX set beside it; two lines whose fonts' boxes overlap) and a row each where they stand apart
  * (a sentence's runs either side of another sentence's element, a line in the next column); a row joins the outline whose last
- * row stands on the band right above it and meets it across, else it begins its own. Before, every two rows next to each other
- * in their order from the top were met where their pads overlapped, as if one stood over the other: two boxes of one band were
- * cut at the middle of their overlap, the lower one's top and the upper one's foot lost (the owner's report of 2026-11-13 on
- * 2111.09276v1 p5: display (4), its second row's line holding its number's "(", lit as a band over its first row and a strip to
- * the number, its second row on neither pane; over the corpus's laid pages 27 kept displays a pane, 7 and 2 sentences, 11 and 4
- * members lit whole cut so). A shape of no two boxes on one band paints as before, row for row
+ * row stands on the band right above it and meets it across, else it begins its own. Every two rows next to each other in their
+ * order from the top met where their pads overlap, as if one stood over the other, would cut two boxes of one band at the middle
+ * of their overlap, the lower one's top and the upper one's foot lost (docs/PDF-READER.md §17.9; 2111.09276v1 p5: display (4),
+ * its second row's line holding its number's "(", lit as a band over its first row and a strip to the number, its second row on
+ * neither pane; over the corpus's laid pages 27 kept displays a pane, 7 and 2 sentences, 11 and 4 members lit whole cut so). A
+ * shape of no two boxes on one band paints as before, row for row
  */
 export function paintRows(boxes: readonly Box[], lead: number, cut?: Cut): PaintRow[] {
   if (!sharesBand(boxes)) {
@@ -249,8 +248,8 @@ function halfLeading(page: Page, side: Side, committed: boolean): number {
 }
 /**
  * Half the lower quartile of the gaps between each member's consecutive rows on a pane, PDF units (`members`: each member's
- * boxes there, one entry a sentence): its rows whatever sentence each is of, as today's lighting read a unit's consecutive
- * lines (view/highlight.mjs: the space between a unit's lines). Read inside each sentence alone, a pane whose sentences each
+ * boxes there, one entry a sentence): its rows whatever sentence each is of, the space between a member's lines being its
+ * leading. Read inside each sentence alone, a pane whose sentences each
  * hold one row (a translation's sentences are shorter than the original's), or whose rows a display parts, held no gap and
  * padded nothing: on 2610.10069v1-zh p21 the right pane's shapes stood on their glyphs' em boxes, a heading's flush with its
  * ink, where the left's were padded by 2.98 pt (the parity's highlight, lane parity-small). Two sentences' boxes on one row

@@ -29,10 +29,11 @@ export const LAYER_WHY: Readonly<Record<LayerWhy, Unavailable>> = {
 
 /**
  * Each stage of a prepare (our server's record's `prepare.stage`, its PREPARE_STAGES in order) at a fixed place on the prepare's
- * stretch, as a share of it: where the stage starts in the time a prepare takes, the mean of the two staging timelines of
- * 2026-11-11 (a new paper's, 2610.20266v1: 87.9 s; a paper prepared again after a deploy, 2610.21924v1: 95.6 s). Fetching is
- * short (10 % of the time), compiling the long one (59 % and 22 %), the units and their layout the rest, the bundle the last
- * few seconds. No time-based creeping: the line moves as the record's stage does, never back (ProgressLine; status.ts lineOf)
+ * stretch, as a share of it: where the stage starts in the time a prepare takes, the mean of the two staging timelines
+ * measured 2026-11-11 (a new paper's, 2610.20266v1: 87.9 s; a paper prepared again after a deploy, 2610.21924v1: 95.6 s).
+ * Fetching is short (10 % of the time), compiling the long one (59 % and 22 %), the units and their layout the rest, the
+ * bundle the last few seconds. No time-based creeping: the line moves as the record's stage does, never back (ProgressLine;
+ * status.ts lineOf)
  */
 const PREPARE_PLACES: Readonly<Record<string, number>> = {
   fetching: 0.02,

@@ -197,7 +197,7 @@ export interface ReaderState {
   /** when a retry of the run's failure is due, where the service named a time (a rows' wait); null: none named */
   failureAt: number | null
   languageSupported: boolean
-  /** what can be downloaded: nothing yet, the original, or the translation (Task 20 fills it) */
+  /** what can be downloaded: nothing yet, the original, or the translation (no host makes its PDF yet: open.ts) */
   download: 'none' | 'original' | 'translation'
   scale: number
   sides: Record<Side, { page: number; pages: number }>
@@ -289,7 +289,7 @@ export interface Session {
   goToPage(side: Side, page: number): void
   /** a patch of the preferences, on top of what the store holds when its turn comes */
   setPrefs(patch: PrefsPatch): void
-  /** the translation's bytes, to save (Task 20 fills it); null while there are none */
+  /** the translation's bytes, to save; null while there are none (no host makes them yet: open.ts) */
   pdfBytes(which: 'translation'): Promise<Uint8Array | null>
   /** arXiv's own PDF of the paper opened by the browser, in a tab of its own: the browser streams it and saves it. Never read
    *  through the reader (the whole file, for every reader, in case one asks to save it) */
@@ -557,7 +557,7 @@ function reduceRunFree(
       const lasting = LASTING.has(event.why)
       // (a wait the session goes on from by itself, as it says (`self`): the run it pauses stays the phase, its prepare's place
       // and its rows' coming with it, so that its line goes on and nothing reads as done between the session's own asks: one
-      // wait, the coordinator's R7 of 2026-11-12)
+      // wait, PDF-READER §8.1)
       const paused = GOES_ON.has(event.why) && !!event.self
       return {
         ...state,
@@ -713,7 +713,7 @@ export function createController({
       later((s) => s.setDisplay(display))
     },
     hold: (on) => later((s) => s.hold?.(on)),
-    // the interface's switch is the owner's design or nothing (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth addendum): top alignment, or off
+    // the interface's switch has one mode (PDF-READER §3, sync scrolling): top alignment, or off
     setSync: (on) => later((s) => s.setSyncMode(on ? 'same' : 'off')),
     zoomBy: (factor) => {
       set({ zoom: null })

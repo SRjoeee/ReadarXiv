@@ -12,7 +12,7 @@
 // page is laid out and before it paints, rendered there at once: measured in an effect, which runs after the paint, a lead too
 // narrow for the id drew it for two frames before it went (the pin's wave-1 review); measured in a layout effect, inside React's
 // commit, the reads laid the document out for them before the browser would (a new reader's first layout, 22 ms of the main
-// thread at 1x, 93 ms at 4x: the rules audit of 2026-11-04)
+// thread at 1x, 93 ms at 4x, measured 2026-11-04)
 import { ArrowUpRight } from 'lucide'
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'

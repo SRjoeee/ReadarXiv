@@ -1,6 +1,6 @@
 // Composing the right pane (design §4.5 "composing a page"; the page design A §2.2, §2.3): what each slot of the right
-// stack shows, from the documents open and the pages laid. Today's layer side (src/pdf-reader/engine/view/layer-side.mjs at
-// baf2083e0, docs/PDF-READER.md §11.8) carried over the stack: each behaviour with the reason it was found.
+// stack shows, from the documents open and the pages laid. The layer side (docs/PDF-READER.md §11.8) over the stack: each
+// behaviour with the reason it was found.
 //
 // - A page not laid is arXiv's: the panes' original content (the left's own drawing while the page waits for its layer, its own
 //   page view once it stays the original's, the skeleton with no original), or, by the reader's choice (`unlaid: 'composed'`),
@@ -29,7 +29,7 @@
 //   units, begun before the bundle states which units are cut into sentences, replaced mid-way by one on the layer's, which
 //   states the same ids again with their sentences: our server's units wanted and its recent run; format.ts fits)
 //   lays again the pages that read it, as any landing that changes what a page read: laid once for good, a page lit its units
-//   whole in the tab that watched its rows arrive, and by sentence after a reload (staging, 2026-11-11: 1706.03762v7 p2,
+//   whole in the tab that watched its rows arrive, and by sentence after a reload (on staging: 1706.03762v7 p2,
 //   2610.21312v1 p1).
 // - **Translating marks** on near pages not laid (marks.ts).
 // - **The pages ahead**: once the rows have ended, the AHEAD_PAGES pages past the near ones the way the reader moves, laid and
@@ -324,7 +324,7 @@ export function createComposer(o: ComposerOptions): Composer {
         own: false,
         over: (at) => overlay(n, page, doc, g, at),
         again: (el, at) => cropsAgain(page, doc, g, el, at),
-        // (a far page's crops kept as a copy of their box, back in the task it returns: design-performance-2026-11-13 Q7)
+        // (a far page's crops kept as a copy of their box, back in the task it returns: docs/PDF-READER.md §11.8)
         away: cropsAway,
         back: (el, at) => cropsBack(el, cropGridOf(at).px),
         free: (el) => {
@@ -536,7 +536,7 @@ export function createComposer(o: ComposerOptions): Composer {
   }
   /** the page with every member whose groups the composed document does not hold made the original's (its ink would stay
    *  under its translation), its links back at A's boxes as the typesetter places a member not laid (Page.links' owner: the
-   *  part's links it owns on this page; one moved with its translation would open over the original's text, Codex on #626) */
+   *  part's links it owns on this page; one moved with its translation would open over the original's text) */
   function held(page: Page, part: Part): Page {
     const g = groups
     if (!g?.size) return page
@@ -556,9 +556,9 @@ export function createComposer(o: ComposerOptions): Composer {
   /** the rows page n still waited for when the faces of its rows in were last asked (`early`) */
   const earlyLeft = new Map<number, number>()
   /** a near page waiting for rows: the faces of the rows it has asked meanwhile, as it would wait for them were the rows ended
-   *  (that lay is never committed), so that its slices come while the rest of its rows do, not after its last one (staging,
-   *  2026-11-08: 2611.07042v1's page 1 had 32 of its 39 rows at 27 s and its last at 44.5 s, and only then asked its 49 slices,
-   *  2.5 MB, in 16 s). Asked again only once more of its rows are in */
+   *  (that lay is never committed), so that its slices come while the rest of its rows do, not after its last one (on staging,
+   *  measured 2026-11-08: 2611.07042v1's page 1 had 32 of its 39 rows at 27 s and its last at 44.5 s, and only then asked its
+   *  49 slices, 2.5 MB, in 16 s). Asked again only once more of its rows are in */
   function early(n: number, part: Part) {
     const left = pages.get(n)?.wait.rows.length ?? 0
     if (!left || rows?.done || (earlyLeft.get(n) ?? Number.POSITIVE_INFINITY) <= left) return
@@ -572,8 +572,8 @@ export function createComposer(o: ComposerOptions): Composer {
     if (want.length) wave.set(n, want)
   }
   /** the faces the round's pages wait for, asked in one wave in the view's order (the page in the middle first), each page laid
-   *  again once its own faces are in: never held by another page's (staging, 2026-11-08: 2611.07042v1's page 1, whose own
-   *  faces were 49 slices, 2.5 MB, waited for the 64 of its wave, 3.9 MB) */
+   *  again once its own faces are in: never held by another page's (measured on staging 2026-11-08: 2611.07042v1's page 1,
+   *  whose own faces were 49 slices, 2.5 MB, waited for the 64 of its wave, 3.9 MB) */
   function flushWave() {
     if (!wave.size) return
     const c = stack.centre() || 1

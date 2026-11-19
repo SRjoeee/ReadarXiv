@@ -3,12 +3,12 @@
 // bytes), over the host's fetch alone: one implementation for both hosts (the host decision: `follow`, `object` and the
 // server's rows are the reader's over `fetch`).
 //
-// Every ask is bounded by the network's silence (docs/PDF-READER.md §8.1, the coordinator's R6 of 2026-11-18): REQUEST_MS with
+// Every ask is bounded by the network's silence (docs/PDF-READER.md §8.1): REQUEST_MS with
 // nothing from the network, counted from the ask, then from its answer and from each part of its body as it is read (a
 // connection taken and never answered, or a body that stops, would otherwise hold the reader for good). Never one deadline over
 // the answer and its body: after a stall of the page's own thread across it, Chromium runs the answer's task first, the
 // deadline's timer next and the body's last, so an answer whose every byte had come was failed by the reader's own clock, one
-// request answered 200 in the page's list (staging, 2026-11-17, 2608.28692v1's rows; Chromium 153 on the loopback, the bound at
+// request answered 200 in the page's list (2608.28692v1's rows on staging; measured on the loopback, Chromium 153, the bound at
 // 2 s and the thread held 4 s from the ask: 16 reads of 30 failed so, none of 20 under this bound). A network that fails, a
 // 5xx or nothing in time asked once more after RETRY_MS, and a second failure is told by its cause: the network itself (the
 // fetch rejected, nothing in time, a body that broke: `Refused('network')`) or our server at fault (a 5xx: `Refused('server')`);
@@ -28,8 +28,8 @@ export const REQUEST_MS = 30_000
 export const RETRY_MS = 1_000
 /** how long a follow waits before it asks again once the last document heard says nothing runs for what is followed (the
  *  prepare, the target's run): our server's own reconnection time for such a stream, whose last frame that document is
- *  (`retry: 60000`, server design-a "Followers", as our server's paper tells it). Staging, 2026-11-07: a done paper asked again
- *  at once each time its one-frame stream ended, 18 to 50 times a second */
+ *  (`retry: 60000`, server design-a "Followers", as our server's paper tells it). Measured on staging 2026-11-07: a done paper
+ *  asked again at once each time its one-frame stream ended, 18 to 50 times a second */
 const IDLE_MS = 60_000
 
 /** a paper version's segment (L5's Seg: `.` and `/` as `_`, its version) */
@@ -94,8 +94,8 @@ function partsHeard(r: Response, heard: () => void): Response {
  * `url` asked and its answer read by `read`, neither silent for REQUEST_MS (the bound counted again when the answer comes and
  * at each part of its body read); the network, a 5xx or nothing in time asked once more after RETRY_MS, a second failure
  * `Refused('network')`; an answer under 500 the caller names (`askAgain`: the wait it gives) asked once more after that wait,
- * the one more ask's answer read as it is. A body that breaks or stops is the server out of reach at once (today's rule: the
- * answer came, so asking again is no better). An abort of the caller's is thrown as it is
+ * the one more ask's answer read as it is. A body that breaks or stops is the server out of reach at once (the answer came,
+ * so asking again is no better). An abort of the caller's is thrown as it is
  */
 export async function request<T>(
   a: Ask,
@@ -293,8 +293,8 @@ export async function follow(
     pollMs?: number
     /**
      * Once the last document heard says nothing runs, what the follow waits for before it asks again, in place of IDLE_MS: a
-     * promise that settles when the document is to be asked again (design-performance-2026-11-13 Q9: a settled tab asked once
-     * a minute, 60 asks an hour). Asked each time the follow settles; the follow's signal ends the wait. Absent: IDLE_MS
+     * promise that settles when the document is to be asked again (docs/PDF-READER.md §11.5: a settled tab asked once a
+     * minute, 60 asks an hour). Asked each time the follow settles; the follow's signal ends the wait. Absent: IDLE_MS
      */
     wake?(): Promise<void>
   },

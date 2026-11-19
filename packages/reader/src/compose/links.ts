@@ -1,12 +1,12 @@
 // A laid page's links (design §4.5: on a laid page the text layer and the links are ours, PDF.js's own would offer the hidden
 // original at its old places): `Page.links`, each an `<a href>` over its box, reached by Tab in the page's reading order, named
-// by the text drawn under it, followed by a click or Enter. Carried from today's link layer (src/pdf-reader/engine/view/links.mjs
-// at baf2083e0, docs/PDF-READER.md §11.9): a box of the page's frame in shares, so that a zoom moves nothing; a name set as an
-// attribute, never parsed; a link out of the paper through the host alone, an address of the allowed schemes only; a link inside
-// it followed by the reader; the PDF's border where it gives one (as PDF.js draws a link on the left).
+// by the text drawn under it, followed by a click or Enter. The link layer (docs/PDF-READER.md §11.9): a box of the page's frame
+// in shares, so that a zoom moves nothing; a name set as an attribute, never parsed; a link out of the paper through the host
+// alone, an address of the allowed schemes only; a link inside it followed by the reader; the PDF's border where it gives one
+// (as PDF.js draws a link on the left).
 //
-// What today's engine wrote into each record, the reader reads here: the name is the text the page's text layer holds under the
-// link (what is drawn there: the translation over a moved link, the original's text over one at its place, a crop's text), and
+// What each link is drawn with, the reader reads here: the name is the text the page's text layer holds under the link (what
+// is drawn there: the translation over a moved link, the original's text over one at its place, a crop's text), and
 // a link with none is named by the host's words by where it goes (UI.md S-R-25); the order is the text's (the first item of
 // the page's text content under it); the border is the one Page.links states, its own annotation's on A (Link.border, which the
 // typesetter carries onto each link it draws of it, moved or not), drawn as stated: a link with none on A draws none.

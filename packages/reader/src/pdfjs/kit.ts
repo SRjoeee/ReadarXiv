@@ -8,7 +8,7 @@
 // never the rest behind them), 64 KiB chunks (ranged.ts). The data files (cMaps, standard fonts, wasm) and the worker are
 // served from `<base>` = `/pdfjs/<version>/` by default, which the reader's build plugin (`@readarxiv/reader/vite`) fills.
 //
-// What of today's fixes stays: `forgetCancelledText` (a TextLayerBuilder cancelled keeps no hold on its spans: 6,729 detached
+// The fix the page views need: `forgetCancelledText` (a TextLayerBuilder cancelled keeps no hold on its spans: 6,729 detached
 // spans on the thesis, measured on the website), a per-document class patch, idempotent. `quietRoot`, `eagerPages` and `aheadHeld`
 // were PDFViewer's and go with it: the page stack sizes its own slots and has one scheduler. `globalThis.pdfjsLib` is set, since
 // PDF.js's viewer module reads it as it is evaluated.

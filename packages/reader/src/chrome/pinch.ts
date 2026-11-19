@@ -5,7 +5,7 @@
 // pinch). ⌘ and Ctrl with − and + zoom by a tenth; the browser's own zoom is taken only over the pages.
 // Only Ctrl makes a wheel a zoom (a pinch, and a mouse's Ctrl-wheel). A wheel with ⌘ held is a scroll and never zooms:
 // macOS's screenshot keys (⌘⇧4, ⌘⇧5) hold ⌘ while a scroll or its momentum runs, and the page zoomed under them while ⌘ made
-// a wheel a zoom (the owner's report of 2026-11-10); nor is ⌘ with the wheel Chrome's own zoom on macOS
+// a wheel a zoom (§6.8); nor is ⌘ with the wheel Chrome's own zoom on macOS
 import { type RefObject, useEffect } from 'react'
 import type { ReaderController, Side } from './model.ts'
 
