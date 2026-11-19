@@ -8720,7 +8720,15 @@ own), each part carrying its pages' cell rules (`rules`).
   fault of ours (343 rows): 2610.21377's pgffor loop headers written back with their body's brace doubled, 2610.21201's
   etoc depth tag whose end mark TeX wrote into the contents inside a `\csname` (ten errors, 36 pages to arXiv's 34),
   2610.21288's `\appendixname` wrapped by the babel names' marks under revtex4-2 and the appendix package (the job aborted).
-  Each check holds for any paper:
+  The guard reads our marks by their names wherever TeX writes our source back — an error's line of input and the levels of
+  context above it, a file a pass writes and reads back, a class's verbatim copy —, every reader by one list (`marks.ts`
+  `MARK_CS`): every control sequence of ours the marked source carries with a unit's name, `\axtmark`, `\axtend`, `\axtlines`,
+  `\axtpma`, `\axtpmm`, `\axtpm`, a head macro's `\axthpk`, a trailing macro's `\axttg`, `\axthmark`, `\axtcolour`, an author's
+  call `\axtcall` and backref's list `\axtbrname`; `tests/mirrors.test.ts` holds it to the marked original's TeX, every macro of
+  ours that TeX defines either in it or naming no unit (the babel names' marks, read apart; the first pass's asks, which no pass
+  the guard reads carries). Until 2026-11-19 its lists lacked `\axthpk`, `\axttg`, `\axtcall` and `\axtbrname`: a paper's own
+  error beside one keyed apart from the unmarked original's, and one written by name into a file, or a copy cut inside one, went
+  unseen. Each check holds for any paper:
   - *Before the compile, in the mark probe* (PIPELINE 43): where a unit of the main file stands in its preamble, the probe sets
     the preamble as the marked original writes it (`live.mjs` `markedPreamble`: the layout marks and their line probes, every
     class, no babel name wrapped, a unit whose writing unbalances its braces as the paper's own; `probeFiles` `preamble`, and

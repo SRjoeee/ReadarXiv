@@ -1,11 +1,11 @@
 // @vitest-environment node
 // The layout guard (compile/guard.ts) reads the marks our TeX writes into a paper's source wherever TeX writes them back: an
-// error's line of input and context in the log, the aux and the lists, a class's verbatim copy of the source. Each reader holds
-// the marks it must know by name, and here each place is fed a mark the guard's lists once lacked, on a paper of our own as the
-// marked original writes it: a paragraph that begins with a paper's macro (\axthpk{p<i>.<k>a} before it, marks.ts
-// layoutMarking), one that ends with a paper's macro glued to its last word (\axttg{p<i>.<k>g} after the unit's end mark), an
-// author block of two authors (\axtcall{<i>} before the second's \and, CALL_TEX), and backref's list after a bibliography
-// entry (\axtbrname{p<i>.<k>}, BACKREF_TEX).
+// error's line of input and context in the log, the aux and the lists, a class's verbatim copy of the source. Each reader reads
+// them by their names (marks/marks.ts MARK_CS). Here each place is fed the marks the guard's lists once lacked, on a paper of
+// our own as the marked original writes it — a paragraph that begins with a paper's macro (\axthpk{p<i>.<k>a} before it,
+// marks.ts layoutMarking), one that ends with a paper's macro glued to its last word (\axttg{p<i>.<k>g} after the unit's end
+// mark), an author block of two authors (\axtcall{<i>} before the second's \and, CALL_TEX), backref's list after a
+// bibliography entry (\axtbrname{p<i>.<k>}, BACKREF_TEX) —, then every reader every mark of MARK_CS.
 import { describe, expect, it } from 'vitest'
 import {
   auxUnits,
@@ -17,7 +17,7 @@ import {
   preambleUnits,
 } from '../src/compile/guard.ts'
 import { openPaper, originalFiles, type Spans } from '../src/compile/live.ts'
-import { LAYOUT_CLASSES } from '../src/marks/marks.ts'
+import { LAYOUT_CLASSES, MARK_CS } from '../src/marks/marks.ts'
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const dec = (b: Uint8Array | undefined) => new TextDecoder().decode(b ?? new Uint8Array(0))
@@ -138,5 +138,29 @@ describe('the marks our TeX writes that the guard once read as no mark of ours',
     expect(contextUnits(ctx('<argument> ', '...words of Smith\\axttg {p3.1g}\\etal ', ''), 9)).toEqual(new Set([3]))
     expect(contextUnits(ctx('<argument> ', '\\axthpk {p2.2a}\\bert ', '{} is'), 9)).toEqual(new Set([2]))
     expect(contextUnits(ctx('\\@author ->', '\\axtcall {5}\\and ', 'Bob Ray'), 9)).toEqual(new Set([5]))
+  })
+})
+
+describe("every reader of the guard reads every mark of ours (marks.ts MARK_CS, the marked original's TeX's: tests/mirrors.test.ts)", () => {
+  // (each mark with a placeholder's argument, `p3.1a`: unit 3 whichever mark carries it)
+  it.each([...MARK_CS])('\\%s', (name) => {
+    const mark = `\\${name}{p3.1a}`,
+      written = `\\${name} {p3.1a}`
+    // (the aux and the lists, where no text is set)
+    expect(marksOutOfPlace(`\\@writefile{toc}{\\etoc@depthtag {x${written}}}\n`)).toEqual(['p3.1a'])
+    // (an error's line of input as the unmarked original has it, and the context that shows what TeX read: the paper's own error
+    // with the mark taken out, ours without the original's)
+    const log = (input: string) =>
+      `! Undefined control sequence.\n<argument> ${written}\\foo \n${' '.repeat(`<argument> ${written}\\foo `.length)}\nl.7 ${input}\\foo\n${' '.repeat(`l.7 ${input}\\foo`.length)} words.\n\n`
+    expect(contextUnits(log(`Some ${mark}`), 9)).toEqual(new Set([3]))
+    expect(contextUnits(log(`Some ${mark}`), 9, ownErrors(log('Some ')))).toEqual(new Set())
+    // (the marked preamble: the mark's braces no group of the paper's)
+    const at = `! Missing \\endcsname inserted.\n<to be read again> \n                   \\unhbox \nl.5 \\author{${mark}\n${' '.repeat(`l.5 \\author{${mark}`.length)}\\foo Ann}\n\n`
+    expect(preambleUnits(at, 9, { first: 1, last: 20 })).toEqual(new Set([3]))
+    // (a class's verbatim copy of our line cut inside it)
+    const ours = new Map([['main.tex', enc(`${mark}Words \\axtend{3e}\n`)]])
+    expect(
+      cutCopyUnits({ files: new Map([['x.abs', enc(`${mark.slice(name.length + 1)}Words \\axtend{3e}\n`)]]) }, ours, 9),
+    ).toEqual(new Set([3]))
   })
 })

@@ -15,7 +15,7 @@ import { isMemoryError } from '../memory.ts'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.ts'
 import { texErrors, unitsAtErrors } from './tex-errors.ts'
 import { END_TEX } from './tex.ts'
-import { duplicatesIn } from '../marks/marks.ts'
+import { duplicatesIn, MARK_CS } from '../marks/marks.ts'
 import type { Fsys, SourceUnit } from '../source/latex-front.ts'
 import type { TexError, UnitLines } from './tex-errors.ts'
 import type { PdfLike } from './base.ts'
@@ -160,20 +160,10 @@ export function unbalancedUnits(
   return { units: out as Set<number>, other }
 }
 
-/** our marks that a file can hold: MARK_DEF's unit marks and LAYOUT_TEX's piece, heading and colour marks, each with its
- *  argument (a babel name's, \axtnma and \axtnmb, written through by design, is not one: NAME_MARK_FILE). Each is a macro our
- *  TeX defines: \axtmark and \axtend MARK_DEF's (source/latex-front.ts), \axtlines LINES_TEX's (compile/tex.ts), \axtpma,
- *  \axtpmm, \axtpm, \axthmark and \axtcolour LAYOUT_TEX's (marks/marks.ts): held to them by tests/mirrors.test.ts */
-const MARK_CS: ReadonlySet<string> = new Set([
-  'axtmark',
-  'axtend',
-  'axtlines',
-  'axtpma',
-  'axtpmm',
-  'axtpm',
-  'axthmark',
-  'axtcolour',
-] as const)
+/** our marks that a file can hold, each with its argument: every control sequence of ours the marked source carries with a
+ *  unit's name (marks/marks.ts MARK_CS; a babel name's, \axtnma and \axtnmb, written through by design, is not one:
+ *  NAME_MARK_FILE) */
+const MARKS: ReadonlySet<string> = new Set(MARK_CS)
 /** where a list's or a label's text stands, which LaTeX writes a unit's text into by design, its marks with it, and sets
  *  as text (the lists with every mark off, \@starttoc's \axt@off): the second argument of \contentsline (the kernel's, every
  *  class's list entry: \contentsline{type}{text}{page}{anchor}), and the third group of \newlabel's second (nameref's
@@ -204,7 +194,7 @@ export function marksOutOfPlace(text: string): string[] {
         let j = i + 1
         while (j < n && isLetter(text.charCodeAt(j))) j++
         const name = text.slice(i + 1, j)
-        if (MARK_CS.has(name)) {
+        if (MARKS.has(name)) {
           let k = j
           while (k < n && text[k] === ' ') k++
           if (text[k] === '{') {
@@ -252,7 +242,7 @@ const unitOfMark = (arg: string): number | null => {
   return m ? Number(m[1] ?? m[2]) : null
 }
 /** a mark of ours with its argument as TeX's log shows a line of input (MARK_CS) */
-const MARK_IN_LINE = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\s*\{([^{}\s]*)\}`, 'g')
+const MARK_IN_LINE = new RegExp(String.raw`\\(?:${MARK_CS.join('|')})\s*\{([^{}\s]*)\}`, 'g')
 /**
  * The marks of ours an error stands among, on its line of input as TeX's log shows it around the error's place (`before` read,
  * `after` not yet): those of the brace group TeX closed just before the place (a command that read its argument whole and
@@ -352,10 +342,10 @@ export function auxUnits(c: GuardCompile, count: number, job: string): Set<numbe
 const RECORD_FILE = /\.(?:pdf|dvi|xdv|log|blg|ilg|glg|synctex(?:\.gz)?|fls|fdb_latexmk)$/i
 /** a mark of ours as our source writes it, no space after its control word: in a file TeX wrote, a copy of our characters
  *  (\write writes a space after every control word, `\axtmark {2s}`) */
-const SOURCE_MARK = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\{[^{}\s]*\}`, 'g')
+const SOURCE_MARK = new RegExp(String.raw`\\(?:${MARK_CS.join('|')})\{[^{}\s]*\}`, 'g')
 const SOURCE_MARK_ONE = new RegExp(SOURCE_MARK.source)
 /** our TeX on a line of our source: each mark, a start mark with the \leavevmode before it */
-const OURS_ON_LINE = new RegExp(String.raw`(?:\\leavevmode)?\\(?:${[...MARK_CS].join('|')})\{([^{}\s]*)\}`, 'g')
+const OURS_ON_LINE = new RegExp(String.raw`(?:\\leavevmode)?\\(?:${MARK_CS.join('|')})\{([^{}\s]*)\}`, 'g')
 /**
  * The units whose TeX of ours a class's verbatim copy of our source lost (`c.files`, the files the compile wrote, where the host
  * gives them; `files`, the marked files it was asked with), ids below `count`: a line of a file TeX wrote that holds a mark as our
@@ -520,10 +510,8 @@ export function firstError(log: string | null | undefined): string | null {
 }
 
 /** the marks of ours a log's context may show, taken out before an error is compared with the unmarked original's: each
- *  mark with its argument, and the \leavevmode a unit's start mark comes with; the macros our TeX defines, as MARK_CS's (held to
- *  them by tests/mirrors.test.ts) */
-const OUR_MARKS =
-  /\\leavevmode\s*(?=\\axtmark\b)|\\(?:axtmark|axtend|axtlines|axtpma|axtpmm|axtpm|axthmark|axtcolour)\s*\{[^{}]*\}/g
+ *  mark with its argument (MARK_CS), and the \leavevmode a unit's start mark comes with */
+const OUR_MARKS = new RegExp(String.raw`\\leavevmode\s*(?=\\axtmark\b)|\\(?:${MARK_CS.join('|')})\s*\{[^{}]*\}`, 'g')
 const CONTEXT = 12
 const skeleton = (s: string): string => s.replace(OUR_MARKS, '').replace(/[^\x21-\x7e]/g, '')
 /** an error's identity whatever marks stand around it: its message and the text right before and after its place */
@@ -570,7 +558,7 @@ export function errorUnits(
 const NAME_MARK = /\\axt@?nm[ab]\b/
 /** a mark of ours in a line of TeX's context: MARK_IN_LINE's, or one whose argument the log cut at the line's end (`\\axtpmm {p1.3...`),
  *  which keeps its unit's number */
-const MARK_IN_CONTEXT = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\s*\{([^{}\s]*?)(?:\}|\.\.\.$)`, 'g')
+const MARK_IN_CONTEXT = new RegExp(String.raw`\\(?:${MARK_CS.join('|')})\s*\{([^{}\s]*?)(?:\}|\.\.\.$)`, 'g')
 /**
  * Each error of a log as texErrors reads it (its message, its line of input, the text before and after its place there),
  * with the levels of context TeX shows above the line of input: what it was reading when it raised the error, the

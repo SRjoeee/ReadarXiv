@@ -2269,6 +2269,32 @@ export function classNamesTex(texts: readonly string[]): string {
   return `\\makeatletter\\ifdefined\\axt@nmall\\ifdefined\\axt@nmwrap\\g@addto@macro\\axt@nmall{\\ifaxt@nmon${wraps}\\fi}\\fi\\fi\\makeatother`
 }
 
+/** the control sequences of ours the marked source carries, each with one argument that names its unit (compile/guard.ts
+ *  unitOfMark: a unit's own `216s`, `2e`, `14`, a cell's `t…`, a heading's `h…`, a placeholder's or a footnote call's `p…` or
+ *  `n…`, a colour piece's `c…`): the names the layout guard reads them by wherever TeX writes our source back — an error's line
+ *  of input and its context in the log, a file a pass writes and reads back, a class's verbatim copy. \axtmark and \axtend
+ *  MARK_DEF's (source/latex-front.ts), \axtlines LINES_TEX's (compile/tex.ts), \axtcall CALL_TEX's, the others LAYOUT_TEX's,
+ *  layoutMarking's: every macro of a letters-only name the marked original's TeX defines but those that name no unit, held to
+ *  them by tests/mirrors.test.ts: \axtskip and \axtendhook (MARK_DEF's glue and END_TEX's flag, never written), a babel name's
+ *  \axtnma and \axtnmb (written through by design: NAME_MARK_FILE; the guard reads them apart), and \axtask (the loop's first
+ *  pass's, its argument a sample's index: taken out of every file that pass wrote, and never the pass the guard reads). The TeX's
+ *  own lists are not made of it: each is what its place needs (UNMARK_CS, the PDF string's and the case change's), and the
+ *  marked source's bytes stay as they are */
+export const MARK_CS = [
+  'axtmark',
+  'axtend',
+  'axtlines',
+  'axtpma',
+  'axtpmm',
+  'axtpm',
+  'axthpk',
+  'axttg',
+  'axthmark',
+  'axtcolour',
+  'axtcall',
+  'axtbrname',
+] as const
+
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
  *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
  *  alternation and the prefilter from it, so the two cannot drift. Each a macro our TeX defines: \axtpma, \axtpmm, \axtpm,
