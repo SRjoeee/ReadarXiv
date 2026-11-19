@@ -8690,6 +8690,29 @@ its first row and the paragraph's text keeps its place.
   ink: 20 to 18 on the door's rows (the heading's two overlaps leave, none joins), 21 on Google's as before; I4, I5, the floors,
   I6, I10, I11 as before.
 
+### 18.98 An element stays with a held line only where TeX set it on that line (2026-11-19)
+
+An element of a unit's text is kept as ink where it stands (`El.keep`: in no group, never erased, the line's own next mark after
+it `El.after`) where TeX set it on a line the unit keeps (KEPT): a display's row, or a held line, ink inside the unit that no unit
+owns. Which line an element stands on is what its ink states: each box of its ink carries the baseline of the line TeX set it on,
+the unit's line its glyphs were cut into, else the line a box of it stands on (`locate/geometry.ts`). The facts pass keeps it with
+a KEPT line only where that line is the member's line on that baseline that holds the box across, one of the unit's own lines
+taken first where one is there (`locate/facts-pass.ts` readElements). It had taken the first of the member's lines whose fonts'
+box met the element's ink box: a formula taller than its text line, under a display row whose fonts' box reaches down into it,
+was kept with the row (2610.21765v1 p9 ord 143: its `max(·)`, `min(·)` and `var(·)`, their ink's top 620.07 against the row's
+box's bottom 620.04, 0.03 pt; their `El.after` the row's next glyphs). The lay read them two ways: ink kept, never erased (an
+element `El.keep`'s group stays on, `lay/entry.ts`), and a crop laid on its text line, which is not held: each formula drawn
+twice, 5.64 pt apart. Production drew the line once. No tolerance decides it: an ink box meeting a line's box is no fact of where
+TeX set the element.
+
+- **Kept as before:** an element whose ink's baseline is a KEPT line's, across it, and no line of the unit's own there (an image
+  set inside a held line, its bottom on that line's baseline), with the line's next mark after it.
+- **The class** (the base's chain over the 245 papers): 26 elements stated kept that are no display, 11 by locate's geometry
+  (outside the unit's lines, or its own rows), 7 by a KEPT line their ink box met while their baseline is the unit's own line:
+  2610.21765v1 p9 ord 143's three, and 2608.29181v2 ord 135's four on p28 (a theorem over pp27-29, each page's part stating
+  them), on three text lines under a display row whose box reaches 54 pt below its baseline. None stands on a KEPT line's
+  baseline.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

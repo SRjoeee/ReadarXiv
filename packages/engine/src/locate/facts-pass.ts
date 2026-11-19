@@ -515,14 +515,18 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     }
     if (el.ink.length && !el.keep) {
       // (its ink on a held line (KEPT): kept with it, and the line's own next mark after it; one outside the unit's
-      // lines is kept by locate (geometry.ts). Its line the one its ink stands on, across and along: a line of the other
-      // column at its height is none of its, 2610.20595v1 p9 ord 55's formulas beside a display row KEPT in the left column)
-      const on = el.ink.map((k) =>
-        mem.lines.findIndex(
-          (l) =>
-            l[0] === k[0] && Math.min(k[4], l[5]) > Math.max(k[2], l[6]) && Math.min(k[3], l[3]) > Math.max(k[1], l[2]),
-        ),
-      )
+      // lines is kept by locate (geometry.ts). Its line the one TeX set it on: the member's line on the baseline its ink box
+      // states (geometry.ts: the unit's line its glyphs were cut into, else the line it stands on), across it, one of the unit's
+      // own lines where one is there; a line of the other column on that baseline is none of its. A line whose box its ink only
+      // meets is none of its either: a display row KEPT over the text line a formula taller than its text stands on, the row's
+      // fonts' box reaching down into the formula's (2610.21765v1 p9 ord 143, by 0.03 pt): read as its line, the formula's
+      // ink stays and its crop is laid on its text line, drawn twice. PDF-READER §18.98)
+      const on = el.ink.map((k) => {
+        const at = (l: Line) =>
+          l[0] === k[0] && Math.abs(l[4] - k[5]) < ON_BASE && Math.min(k[3], l[3]) > Math.max(k[1], l[2])
+        const own = mem.lines.findIndex((l) => at(l) && !(l[9] & 1))
+        return own >= 0 ? own : mem.lines.findIndex(at)
+      })
       {
         const j = on.find((x) => x >= 0) ?? -1
         if (j >= 0 && (mem.lines[j] as Line)[9] & 1) {
