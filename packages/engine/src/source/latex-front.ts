@@ -7973,8 +7973,11 @@ export const markUnits = (
           (u.stored && !u.once) ||
           inMath(u)
         ? null
-        : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }
+        : { start: `${START_LEAD}\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }
 }
+/** what a unit's start mark is written after, right before it and part of it: the paragraph begun first (`\leavevmode\axtmark{…s}`),
+ *  so that the mark is set inside it whatever \everypar sets there (markUnits, frontMarks; a cell's, marks.ts layoutMarking) */
+export const START_LEAD = '\\leavevmode'
 /**
  * Whether a unit holds a subscript or a superscript of its own (a piece `_` or `^`, outside every formula the walker
  * knows): TeX reads it in math mode — a display of an environment the walker cannot tell, a key in an argument, lines
@@ -8058,7 +8061,7 @@ export function frontMarks(units: readonly SourceUnit<WalkFile>[]): (u: SourceUn
   }
   const marked = new Set(front.filter((u) => seen.get(keyOf(u))!.size === 1))
   return (u) =>
-    marked.has(u) ? { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` } : null
+    marked.has(u) ? { start: `${START_LEAD}\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` } : null
 }
 /** A translated line of names or places goes into \\axtwide (FIT_DEF), all of it — its marks, a \\IEEEauthorrefmark
  *  after the last name — inside the braces that hold it: in a box that does not wrap (a table's c column, where
