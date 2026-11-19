@@ -1142,7 +1142,11 @@ export function gateL1Pair(
       m: mm,
       before: x.before,
       after: x.after,
-      afterOpen: !!(nextUnit?.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as Raw | undefined)?.ok,
+      // (the member after it laid: on a store's rows, its unit has a Result the store gives (acceptedRows), as the entry opens a
+      // follower its rows set; on the door's, today's admission of its unit, which read the door's rows)
+      afterOpen: results
+        ? typeof x.after?.text === 'string' && !!results.get(x.after.text)?.ok
+        : !!(nextUnit?.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as Raw | undefined)?.ok,
       R,
       measure: (measure ?? (c.P as Raw).measure) as never,
       patterns: (c.P as Raw).patterns as never,
