@@ -102,7 +102,7 @@ appearance is dark, or is the system's and the system is dark.
 **Shared since 2026-09-27** (the extension's redesign, its design §2.1): these tokens are the extension's now, held as
 data in `packages/ui/src/tokens.ts`, from which `pnpm tokens` writes `packages/ui/src/tokens.css`; the reader's sheet imports it,
 with the controls it shares (`packages/ui/src/controls.css`, `packages/ui/src/controls/`). The values below are unchanged, and the
-reader was held to its pixels before and after the move (`lab/pdf/spikes/reader-pixels.mjs`). The
+reader was held to its pixels before and after the move (`c7e44a94b:lab/pdf/spikes/reader-pixels.mjs`). The
 extension adds roles the reader has no use for — the brand, success, the search mark, the page's and the popup's
 grounds — in the redesign's §2.1.
 
@@ -1123,8 +1123,8 @@ each piece. They stay in the source language, counted, and the failure is kept (
   build carries; `tests/e2e/lib/extension.mjs`), open it as its address says, for the browser checks and the probes.
 - **`?paper=` is an arXiv id or none** (`core/paper-id.ts`, read once by `addresses.ts` `paperOf`): anything else is an
   address with no paper, its card shown, and never a request or a link.
-- The demo papers stay reachable by address for the probes and the e2e checks (`?paper=<id>` without `live=1`, the
-  probes' form since the prototype), never from the interface.
+- The demo papers that today's reader opened by address for its probes (`?paper=<id>` without `live=1`) went with it at
+  the cut-over, and their maker before them.
 
 ### 11.2 The engine, moved
 

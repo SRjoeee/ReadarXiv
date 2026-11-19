@@ -21,10 +21,9 @@ program, the typesetting gates and the checks that need a TeX page) is in `parke
 | `lab/pdf/records/` | What the gates recorded, kept for the next change to be held to: the instant layer's fidelity, completeness and cost, the layout marks' quality on the corpus, the layout maker on the researched papers. Counts, ids and measures only; no paper's content. |
 | `lab/pdf/package.json` | The layer lab's start script. PDF.js, which the Node spikes read PDFs with and whose standard fonts and cmaps they load by path, is the repository's own, pinned once in the root manifest and read from the root's `node_modules/pdfjs-dist/`. |
 | `lab/pdf/data/`, `lab/pdf/out/` | Made on a machine, git-ignored (`lab/pdf/.gitignore`): the corpus, the runs and the fixtures (`data/`), and what the gates write (`out/`). The gates read `lab/pdf/data` and `lab/pdf/out`. On the maintainer's machine both are assembled by per-entry links into the maintainer's data checkouts (one holds `data/corpus` and `out/corpus-meta.json`, the other the run outputs), never by a link to a whole directory, because some gates write their verdict files into `out/` and a whole-directory link would overwrite the checkout's. Nothing in them is ever committed. |
-| `lab/pdf/poc-reader/papers/` | The demo papers the reader's browser checks open, made by `c7e44a94b:lab/pdf/spikes/reader-papers.mjs`; git-ignored. The directory keeps the name of the proof of concept it was made for. |
 
 The launch helper of the browser checks, `launchWithReader`, is `tests/e2e/lib/extension.mjs`: Chromium with the build
-loaded, and the demo papers staged into a temporary copy of the build. The probes in `tests/e2e/probes/` use it too.
+loaded. The probes in `tests/e2e/probes/` use it too.
 
 ## What is not here, and why
 
@@ -643,17 +642,18 @@ Records: `lab/pdf/records/layout-marks.md` (historical since 2026-11-13: the ret
 
 ### The reader's browser checks
 
-These open the reader on the demo papers and need no TeX page. `pnpm build` first; each exits non-zero on a failure.
+The checks that opened today's reader on its demo papers (`c7e44a94b:lab/pdf/spikes/reader-papers.mjs` made them) went at the
+cut-over with that reader, and the papers' maker before them: the rebuilt reader's browser checks are the reader package's
+harness (`packages/reader/e2e/run.mjs`) and the extension's e2e scripts. They were:
 
-| File | What it checks |
+| File | What it checked |
 |---|---|
-| `lab/pdf/spikes/reader-ui.mjs` | The reader's interface (`docs/PDF-READER.md` §4–§8, §13): the controls, the menus, the states, the keyboard; screenshots in `out/reader-ui/`; the states a demo paper never reaches are put on screen by the events a run would send (`window.__reader.host`). |
-| `lab/pdf/spikes/reader-settings.mjs` | The reader and the extension's settings (§3, §9.1): the display opened in, written back, followed from another tab. |
-| `lab/pdf/spikes/reader-perf.mjs` | The performance gates of §12: the backdrop blur, dark pages, the scroll listeners, the animations. |
-| `lab/pdf/spikes/pinch-overlays.mjs` | The overlays through a pinch (§10.1–§10.2): drift, cost, the redraw. |
-| `lab/pdf/spikes/reader-pixels.mjs` | The reader's pixels and tokens against a recorded baseline (`--baseline` records) (§4.1): the toolbar, its menus and tooltip, the status capsule and the cards. The baseline is kept in `out/reader-pixels/`, which the repository does not hold: record it on the build before a change, compare on the build after. |
-| `lab/pdf/spikes/level-on-screen.mjs`, `early-scroll.mjs` | What the sync calls level against what the screen shows, and a side read before the pair is located. |
-| `c7e44a94b:lab/pdf/spikes/reader-papers.mjs` | Makes the demo papers into `lab/pdf/poc-reader/papers/`. |
+| `c7e44a94b:lab/pdf/spikes/reader-ui.mjs` | The reader's interface (`docs/PDF-READER.md` §4–§8, §13): the controls, the menus, the states, the keyboard; screenshots in `out/reader-ui/`; the states a demo paper never reaches are put on screen by the events a run would send (`window.__reader.host`). |
+| `c7e44a94b:lab/pdf/spikes/reader-settings.mjs` | The reader and the extension's settings (§3, §9.1): the display opened in, written back, followed from another tab. |
+| `c7e44a94b:lab/pdf/spikes/reader-perf.mjs` | The performance gates of §12: the backdrop blur, dark pages, the scroll listeners, the animations. |
+| `c7e44a94b:lab/pdf/spikes/pinch-overlays.mjs` | The overlays through a pinch (§10.1–§10.2): drift, cost, the redraw. |
+| `c7e44a94b:lab/pdf/spikes/reader-pixels.mjs` | The reader's pixels and tokens against a recorded baseline (`--baseline` records) (§4.1): the toolbar, its menus and tooltip, the status capsule and the cards. The baseline is kept in `out/reader-pixels/`, which the repository does not hold: record it on the build before a change, compare on the build after. |
+| `c7e44a94b:lab/pdf/spikes/level-on-screen.mjs`, `c7e44a94b:lab/pdf/spikes/early-scroll.mjs` | What the sync calls level against what the screen shows, and a side read before the pair is located. |
 
 The reader's checks that need the local TeX page (service faults, viewer faults, the live mode and its states) are
 parked with it: `parked/README.md`.

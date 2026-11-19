@@ -21,9 +21,7 @@ const PARTITIONED = { partitioned: true }
 /**
  * { context, worker, id, readerUrl(query) }: `profile` names the temporary profile's directory, `extension` another
  * build, `args` more of the browser's switches, `deviceScaleFactor` the pixel ratio its pages run at (the context's own: 1 by default), `languages` the browser's (its accept-languages, which the extension's first
- * target follows: `--lang` is ignored on macOS); the browser partitions storage as Chrome does. `demos`: the precompiled demo papers (lab/pdf/poc-reader/papers, made on this machine by lab/pdf/spikes/reader-papers.mjs) staged into
- * a temporary copy of the build, for the spikes that open them — a build never holds them, since arXiv's papers may not
- * be redistributed (Codex on #296).
+ * target follows: `--lang` is ignored on macOS); the browser partitions storage as Chrome does.
  *
  * `topLevel` (true unless said otherwise): a copy whose manifest lets the reader's address open as a page of its own, as a
  * release build's does not (above). `AXT_CHROME` in the environment runs another Chrome binary instead of Playwright's
@@ -37,7 +35,7 @@ const PARTITIONED = { partitioned: true }
  * filled the disk (25 GiB). `context.close()` removes them once the browser has exited; a context that closes on its
  * own (the browser crashing, a headed window shut) removes them from its `close` event
  */
-export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, topLevel = true, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null, backForwardCache = false, language = null } = {}) {
+export async function launchWithReader({ profile = 'reader', extension = BUILD, topLevel = true, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null, backForwardCache = false, language = null } = {}) {
   if (!existsSync(join(extension, 'pdf-reader.html'))) throw new Error(`no reader in ${extension}: \`pnpm build\` at the repository root`)
   const temporary = []
   const removeTemporary = () => {
@@ -48,17 +46,12 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   // A release build's reader acts only in a frame its PDF page made (src/entrypoints/pdf-reader/main.tsx): the spikes and
   // the checks that open the reader's address as a page of its own run a copy whose manifest lets them (`topLevel`, the
   // key TOP_LEVEL_READER_KEY there); `topLevel: false` runs the build as it ships
-  const papers = new URL('../../../lab/pdf/poc-reader/papers', import.meta.url).pathname
-  if (demos && !existsSync(papers)) throw new Error('no demo papers: node lab/pdf/spikes/reader-papers.mjs first')
-  if (demos || topLevel) {
+  if (topLevel) {
     const copy = mkdtempSync(join(tmpdir(), 'reader-build-'))
     temporary.push(copy)
     cpSync(extension, copy, { recursive: true })
-    if (demos) cpSync(papers, join(copy, 'pdf-reader/papers'), { recursive: true })
-    if (topLevel) {
-      const manifest = JSON.parse(readFileSync(join(copy, 'manifest.json'), 'utf8'))
-      writeFileSync(join(copy, 'manifest.json'), JSON.stringify({ ...manifest, axt_top_level_reader: true }, null, 2))
-    }
+    const manifest = JSON.parse(readFileSync(join(copy, 'manifest.json'), 'utf8'))
+    writeFileSync(join(copy, 'manifest.json'), JSON.stringify({ ...manifest, axt_top_level_reader: true }, null, 2))
     extension = copy
   }
   const profileDir = mkdtempSync(join(tmpdir(), `${profile}-`))

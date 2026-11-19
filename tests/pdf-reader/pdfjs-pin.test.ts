@@ -1,7 +1,7 @@
-// The PDF.js internals the engine reads (session.mjs) are checked in a real browser, by
-// lab/pdf/spikes/reader-ui.mjs ("the PDF.js internals the engine reads"): PDF.js's modern build does
-// not run in Node. This test fails on any other version of pdfjs-dist until that check has passed on it and CHECKED
-// names it (the reader's design, §10.4)
+// The PDF.js internals today's engine read (its session.mjs) were checked in a real browser, by
+// c7e44a94b:lab/pdf/spikes/reader-ui.mjs ("the PDF.js internals the engine reads"): PDF.js's modern build does
+// not run in Node. That session and that check went at the cut-over; this test holds pdfjs-dist at the version they
+// were checked on (the reader's design, §10.4) until a version is chosen anew
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 

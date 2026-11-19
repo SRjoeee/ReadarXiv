@@ -24,7 +24,7 @@ text, whose fonts are fetched on top.
 - **The renderers' resident memory** (every renderer process of the browser, the extension's pages and arXiv's included, by
   `ps`) stood at 0.82–1.01 GB after each paper; a rough upper bound, not the reader page's alone.
 - **No long task** was observed by the page's observer after its load (installed once the controller was there; the first
-  face and layout's task before it is not counted). `reader-perf` holds L7.
+  face and layout's task before it is not counted). `c7e44a94b:lab/pdf/spikes/reader-perf.mjs` held L7.
 - **2608.16117v1's 21 s to the original** is arXiv's PDF itself: the extension opens it by URL, and its first page is shown
   once PDF.js has what it needs of the file; its 9.5 s more to the first laid page include the digest of the whole PDF (the
   base's check), the composed document's open and the first page's laying. The other papers' original came in 0.7–3.1 s.
