@@ -22,31 +22,48 @@ The private repository's tiers run on its own runners (below); the report names 
 
 This repository is public. Anyone can open a pull request, and a pull request's run takes its workflow files from the pull
 request itself, so a rule about which workflow is meant to run is no boundary: what a run can reach is. The rules every workflow
-obeys, held by `tests/scripts/ci-workflows.test.ts` over every file of `.github/workflows` (each rule shown to refuse what it is
-for), with what is particular to the rules gate's workflows and to the fixtures' token in `tests/scripts/rules-workflows.test.ts`:
+obeys are readers of its text (`tests/scripts/workflow-rules.ts`), held by `tests/scripts/ci-workflows.test.ts` over every file
+of `.github/workflows`, with what is particular to the rules gate's workflows and to the fixtures' token in
+`tests/scripts/rules-workflows.test.ts`. No YAML parser: the files are held to the one plain form they are written in, and every
+reader fails closed on form. A spelling of YAML or of an expression it does not read is itself a violation, never a pass: a quoted
+key, a flow mapping, a key at another indentation, a script in double quotes (YAML reads its escapes before GitHub reads its
+expressions), an anchor, an alias, a merge, a tag, an escape, a step at another indentation (rule 0, `forms`). Each rule is shown to
+refuse what it is for in every spelling that could carry it (`tests/scripts/workflow-controls.ts`: 48 controls).
 
-1. **GitHub's runners alone.** Every job names a hosted image (`ubuntu-latest`, `ubuntu-24.04`); no workflow names
-   `self-hosted`. A runner registered to a public repository takes a job from any workflow that names its labels, a fork's pull
-   request's own workflow file included; on a personal account there are no runner groups to restrict it to chosen workflows, and
-   what would stand between a stranger's code and the maintainer's machine (the lab's data, licensed papers, his credentials) is
-   one person's approval of each outside run. GitHub's own guidance is to use self-hosted runners with private repositories
-   alone. So the full and release tiers stay on that machine, run by hand (below); no self-hosted job is written here, however
-   its triggers are set.
-2. **Events an outsider cannot turn into the repository's context.** A workflow runs on `push`, `pull_request`,
-   `workflow_dispatch` or `schedule` alone. A pull request's run, a fork's included, has no secret and a token that reads. No
-   workflow names `pull_request_target`, `workflow_run`, `issue_comment` or `workflow_call`, in a line or a comment.
-3. **A secret reaches one step.** A secret is named only as a value of a step's own environment (`NAME: ${{ secrets.NAME }}`),
-   never in a workflow's or a job's environment, never spliced into a script (no `${{` in a `run:` body: an expression's value
-   is passed through the environment), never passed on whole. `check`'s fixtures fetch and the rules gate's two pack restores
-   are the steps that hold the bucket's read token; the publish and rollback steps hold the publish secret.
-4. **GitHub's own actions, pinned.** Every `uses:` is an `actions/…` action at a full commit with its version beside it, one
-   commit an action across the workflows; pnpm comes from corepack at `package.json`'s version, not from a third party's action.
-5. **The least token.** Every workflow's permissions are `contents: read`; a write is held only where the test's list says why
-   (the rules gate's comment on its own pull request; the rollback's cancel of unfinished publishes).
-6. **No credential kept.** Every checkout has `persist-credentials: false`; nothing pushes with git.
-7. **The browser jobs hold nothing.** `reader` and `extension` hold no secret, variable, token, environment, cache or permission
-   of their own: a fork's pull request runs them as they are, and nothing they run reaches a credential.
-8. **No lab tier here.** No workflow runs `--tier full`, `--tier release` or names the lab's data.
+1. **GitHub's runners alone.** Every job has exactly one `runs-on:` naming a hosted image (`ubuntu-latest`, `ubuntu-24.04`) as a
+   plain value at the job's level; a flow sequence, an expression, a block sequence, a quoted key or an alias is refused, and no
+   workflow names `self-hosted` in any case. A runner registered to a public repository takes a job from any workflow that names
+   its labels, a fork's pull request's own workflow file included; on a personal account there are no runner groups to restrict it
+   to chosen workflows, and what would stand between a stranger's code and the maintainer's machine (the lab's data, licensed
+   papers, his credentials) is one person's approval of each outside run. GitHub's own guidance is to use self-hosted runners with
+   private repositories alone. So the full and release tiers stay on that machine, run by hand (below); no self-hosted job is
+   written here, however its triggers are set.
+2. **Events an outsider cannot turn into the repository's context.** A workflow's events are one block under `on:`, each a plain
+   key, among `push`, `pull_request`, `workflow_dispatch` and `schedule`. A pull request's run, a fork's included, has no secret
+   and a token that reads. No workflow names `pull_request_target`, `workflow_run`, `issue_comment` or `workflow_call`, in a line or
+   a comment, in any case.
+3. **A secret reaches one step.** The secrets context, in any spelling (its dot or its brackets, any case: expressions are
+   case-insensitive), stands only in a step's own environment's entry of the one form `NAME: ${{ secrets.NAME }}`, never in a
+   workflow's or a job's environment or an action's input, never passed on whole; the step that holds it names none of the job's
+   files a step writes for the steps after it (`GITHUB_ENV`, `GITHUB_OUTPUT`, `GITHUB_PATH`, `GITHUB_STATE`). No expression is
+   spliced into a script, whatever the script's style (no `${{` in a `run:` body: an expression's value is passed through the
+   environment). `check`'s fixtures fetch and the rules gate's two pack restores are the steps that hold the bucket's read token;
+   the publish and rollback steps hold the publish secret.
+4. **GitHub's own actions, listed and pinned.** Every `uses:` is a plain step key naming one of the actions the rules list
+   (`actions/checkout`, `actions/setup-node`, `actions/cache/restore`, `actions/cache/save`, `actions/upload-artifact`: none runs
+   an input as a script) at a full commit with its version beside it, one commit an action across the workflows; pnpm comes from
+   corepack at `package.json`'s version, not from a third party's action.
+5. **The least token.** Every workflow's permissions begin with `contents: read`. A `permissions:` key stands only at the
+   workflow's level or a job's, as a block of `<scope>: read|write|none` entries and nothing else; any other spelling or place is
+   refused. And, whatever that reading sees, every `write` anywhere in a workflow is a scope its file may write: a write is held
+   only where the rules' list says why (the rules gate's comment on its own pull request; the rollback's cancel of unfinished
+   publishes).
+6. **No credential kept.** Every checkout is a plain step with `persist-credentials: false` in its block of inputs;
+   `persist-credentials` in any other spelling is refused; nothing pushes with git.
+7. **The browser jobs hold nothing.** `reader` and `extension` name no secret, variable or token in any spelling or case, and hold
+   no environment, cache, permission, service or container of their own: a fork's pull request runs them as they are, and nothing
+   they run reaches a credential.
+8. **No lab tier here.** No workflow runs the release check itself, a `--tier` in any spelling, or names the lab's data.
 
 The alternative to the full tier by hand, if the maintainer wants it in Actions: a private mirror of this repository (pushed by
 him, with no other collaborator; a private repository's forks run no workflows unless he allows it) with its own self-hosted
