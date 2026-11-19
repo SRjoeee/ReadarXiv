@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { PageMember } from '../../src/lay/page.ts'
 import type { Laid, Metrics, Page } from '../../src/types.ts'
 import { invariantsOf, LINE_TOLERANCE, samePage } from './gate-l1.ts'
-import { drawnInk, inkOverlaps, keptInk } from './ink-gate.ts'
+import { boxOfRect, drawnInk, inkOverlaps, keptInk } from './ink-gate.ts'
 
 describe('I5 on the entry’s lay: a line past its slot by its ink beyond the breaker’s tolerance, a member under its own floor', () => {
   const R = { floor: 0.8, floorMin: 0.6 } as never
@@ -260,11 +260,104 @@ describe('I3 by ink on the page as the reader draws it: a laid unit’s ink agai
       page([laid(1, [run(100, 'abc'), [600, 100, 130, [{ s: 'turned', x: 100, face: 'f', size: 10, dir: [0, 1] }]]])]),
       metrics,
     )
-    expect(d.boxes).toEqual([
-      { ord: 1, box: [100, 698, 115, 707] },
-      { ord: 1, box: [93, 600, 102, 630] },
+    expect(d.inks.map((x) => [x.ord, boxOfRect(x.r)])).toEqual([
+      [1, [100, 698, 115, 707]],
+      [1, [93, 600, 102, 630]],
     ])
+    expect(d.inks[1]!.r).toEqual({ o: [100, 600], u: [0, 1], s: [0, 30], t: [-2, 7] })
     expect(d.turned).toBe(1)
+  })
+  it('reads an opening mark’s blank first half as no ink, by the served faces’ ink left', () => {
+    // (a footnote's translation opening with a CJK quotation mark the breaker hangs half an em before its measure, over its kept
+    // mark: the mark's ink in its em's second half, 5 of its 10)
+    const m: Metrics = {
+      ready: () => true,
+      advance: (_f, _s, t) => [...t].reduce((n, c) => n + (c === '“' ? 10 : 5), 0),
+      ink: (_f, _s, t) => [7, 2, [...t].reduce((n, c) => n + (c === '“' ? 10 : 5), 0)],
+    }
+    const served = { ...m, inkLeft: (_f: string, _s: number, t: string) => (t.startsWith('“') ? 5 : 0) }
+    const p = part([
+      placed(1, [line(100, 200)], {
+        label: { kind: 'mark', ink: [1, 92, 698, 99.4, 706, 700], style: { role: 'serif', size: 10 } } as never,
+      }),
+    ])
+    const hung = page([laid(1, [[700, 100, 200, [{ s: '“ab', x: 95, face: 'f', size: 10 }]]], 1)])
+    expect(inkOverlaps(hung, p, m, served).overlaps).toEqual([])
+    // (read from its advance's start, the blank half met the mark)
+    expect(inkOverlaps(hung, p, m).overlaps.map((o) => [o.ord, o.with, o.kind])).toEqual([[1, 1, 'label']])
+  })
+  it('reads a crop as the reader draws it, its rectangle cut by its own ink: a URL part never stands for the ink of the other', () => {
+    // (a URL TeX broke, its ink on its line 333-534 stated whole for each part; its second part 411.61-534.05 drawn at 333.28 of
+    // the next line, member 2's line in the other column ending at 300)
+    const p = part([placed(1, [line(333, 565, 465)]), placed(2, [line(70, 300, 451)])])
+    const crop = [
+      451,
+      333.28,
+      460,
+      [
+        {
+          s: '',
+          x: 333.28,
+          src: [1, 411.61, 447.68, 534.05, 457.31, 450.15],
+          k: 1,
+          piece: '18',
+          ink: [[333.16, 447.68, 534.05, 457.31]],
+        },
+      ],
+    ] as Laid['lines'][number]
+    const d = drawnInk(page([laid(1, [crop], 3), left(2)]), metrics)
+    expect(d.inks.map((x) => boxOfRect(x.r).map((v) => Math.round(v * 100) / 100))).toEqual([
+      [333.28, 448.53, 455.72, 458.16],
+    ])
+    expect(inkOverlaps(page([laid(1, [crop], 3), left(2)]), p, metrics).overlaps).toEqual([])
+  })
+  it('reads a run glyph by glyph where its box meets other ink: a descender at one end meets nothing at the other', () => {
+    const m: Metrics = {
+      ready: () => true,
+      advance: (_f, _s, t) => t.length * 5,
+      ink: (_f, _s, t) => [7, t.includes('g') ? 4 : 0.5, t.length * 5],
+    }
+    // (member 1's run "aaaag" at 100-125 on 700, its g's descender to 696; member 2's line 100-108 under its first a, its top 697)
+    const p = part([placed(1, [line(100, 125)]), placed(2, [[1, 0, 100, 108, 690, 697, 688, 100, 108, 0, 10]])])
+    expect(inkOverlaps(page([laid(1, [run(100, 'aaaag')]), left(2)]), p, m).overlaps).toEqual([])
+    // (under the g, it meets)
+    const under = part([placed(1, [line(100, 125)]), placed(2, [[1, 0, 119, 126, 690, 697, 688, 119, 126, 0, 10]])])
+    expect(
+      inkOverlaps(page([laid(1, [run(100, 'aaaag')]), left(2)]), under, m).overlaps.map((o) => [o.ord, o.with, o.kind]),
+    ).toEqual([[1, 2, 'text']])
+  })
+  it('reads a run set along a direction in its own frame: two labels turned 40 degrees whose page boxes meet, their inks apart', () => {
+    // (two turned figure texts of one axis, each its run along (0.766, 0.6428): their boxes on the page share a corner, their
+    // runs stand side by side; member 2 left the original's, its line on A stated by its box and its run)
+    const u: [number, number] = [0.766, 0.6428]
+    const p = part([
+      placed(1, [[1, 0, 248.86, 268.17, 461.68, 477.84, 459.16, 0, 0, 0, 10]], {
+        kind: 'figure',
+        dir: u,
+        run: [253.75, 461.68, 16.06, 2.53, 4.48],
+      }),
+      placed(2, [[1, 0, 267.99, 287.61, 461.42, 477.83, 458.9, 0, 0, 0, 10]], {
+        kind: 'figure',
+        dir: u,
+        run: [272.89, 461.42, 16.45, 9.77, 4.49],
+      }),
+    ])
+    const turned = (x0: number, y: number, s: string) =>
+      [y, x0, x0 + 16, [{ s, x: x0, face: 'f', size: 7, dir: u }]] as Laid['lines'][number]
+    const m: Metrics = {
+      ready: () => true,
+      advance: (_f, _s, t) => t.length * 4,
+      ink: (_f, _s, t) => [5, 1.5, t.length * 4],
+    }
+    expect(inkOverlaps(page([laid(1, [turned(253.75, 461.68, 'abcd')]), left(2)]), p, m).overlaps).toEqual([])
+    // (laid onto the other's run, they meet)
+    expect(
+      inkOverlaps(page([laid(1, [turned(272.89, 461.42, 'abcd')]), left(2)]), p, m).overlaps.map((o) => [
+        o.ord,
+        o.with,
+        o.kind,
+      ]),
+    ).toEqual([[1, 2, 'text']])
   })
 })
 
