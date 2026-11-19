@@ -1,5 +1,3 @@
-// COPIED from src/pdf-reader/engine/rules/content-classes.mjs (abe884b5e) for the ink makers beside it, which locate runs over arXiv's page,
-// without the readings of the reader's toggles, which nothing of the packages calls (the reader's are packages/format's).
 // The content classes (docs/route/orphan-text.md): every text glyph of our final pass belongs to exactly one, and each class
 // has one translation path and one reader toggle. One table, read by locate (ledger.ts, ink-units.ts; the
 // reader's toggles keep their own, packages/reader compose/classes.ts): a class is translated once on the server, into the

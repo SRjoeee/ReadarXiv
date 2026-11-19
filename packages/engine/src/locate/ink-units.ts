@@ -1,14 +1,4 @@
-// COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at this package's modules and, where
-// marked COPY, nothing else but twelve changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
-// head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
-// placeholder stated, `glyphs.runs`; an e-mail address or an identifier a kept run of its own, addressed, and a group of local parts before their
-// domain one over its words and lines, groupedAddresses; a formula's TeX specials written as TeX sets
-// them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
-// leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
-// a paragraph TeX ended between two lines parts them; a display TeX set one kept block, its number with it, keptUnitsOf; rule 8 by
-// the source's ties, no share; a leader dot set against a contents line's text on the leaders' grid the leaders', leaderOf;
-// a link annotation over part of a unit's text a link group round the glyphs it holds, linkGroupsOf): run
-// by locate over arXiv's page (../ink.ts).
+// Run by locate over arXiv's page (../ink.ts).
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
 // glyphs, so that it is translated and drawn as any unit. Read from the ledger's lines (ledger.ts: each line of glyphs

@@ -1,7 +1,4 @@
-// COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at this package's modules and, where
-// marked COPY, a turned glyph's owner read where the page states one (streamOf, `turnedOwners`), and, marked CHANGED, a line of a
-// justified paragraph set from its start (setsOf), a run ended where it goes into or out of a face of one pitch (`fixed`, Rule 1's
-// fact) and a run gone on across a size change inside a word (figureUnitsOf `sized`): run by locate over arXiv's page (../ink.ts).
+// Run by locate over arXiv's page (../ink.ts).
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // content-classes.ts): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
 // a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units

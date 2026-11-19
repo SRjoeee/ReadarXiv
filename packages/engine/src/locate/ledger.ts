@@ -1,7 +1,4 @@
-// COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at the package's modules and, where
-// marked COPY, nothing else but two changes, marked CHANGED (a formula's interior: an orphan line between two of a formula's lines
-// the formula's; a float of a type with no counter no float: its text the page's own outside the bodies): run by locate over
-// arXiv's page (../ink.ts).
+// Run by locate over arXiv's page (../ink.ts).
 // ADDED (no class moves): the float lines, each line the depth rule reads as its float's text (RULES' last `figures`), stated
 // with its float and why no unit owns it, and counted (`floatLines`, `floatCount`): PDF-READER §18.45.
 // The ledger of our final pass (docs/route/orphan-text.md, stage 1): every text glyph of every page given exactly one content
