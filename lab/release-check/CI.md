@@ -150,8 +150,9 @@ started by hand, not by a runner (Security, rule 1).
   name it, or every paper is "missing a compile" (exit 3); `lanes/L3/replay/`: the typesetter's derived inputs;
   `lanes/L6/capture.jsonl`: today's readers' replies, and `lanes/L6/capture-today.json`: today's typing of them, frozen
   (`lab/translate/today-typed.ts`); `lanes/cjk-punct/blast/pairs.txt`: the 90 pairs of the stored rows the rounds' reader gate
-  walks; `google-rows/ef6989debed1` and `lanes/converge-7/tools-b15/{google-rows.mts,rows-register.mjs}`: the lab's Google store
-  and the rounds' tools that read it through the tree's chain and lay the reader gate over it; `baseline/corpora/papers.json`:
+  walks; `google-rows/ef6989debed1` and `lanes/converge-7/tools-b15/google-rows.mts`: the lab's Google store and the rounds' tool
+  that reads it through the tree's chain (the reader gate lays the rows it writes itself, `AXT_GATE_ROWS`; a unit the store holds
+  no reply to is `unavailable`, which fails the gate: a round whose units move refills the store, keyless, before it runs); `baseline/corpora/papers.json`:
   the harness's corpus papers, opened from this run's bundles with this run's rows of them, `reader-parts`' Google rows);
   today's side of the display gates frozen (`AXT_TODAY_FROZEN`, in the lab's archive); the release sweep's cache and the
   reader's served faces, which the typeset runners read (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`); Playwright's
@@ -225,8 +226,9 @@ window the coordinator gives.
   { status, commit, date, evidence }`, `commit` this repository's commit that run was made against); without it each stays
   NO-GO, and a result recorded at another commit is stale.
 - **An invariant no gate holds, or one whose gap says what stands, keeps the release NO-GO** by design. I7 has had a gate
-  since 2026-11-19 (`harness-lab`'s check at the reader's seam); I1's and I8's gaps say what stands, each held to its record
-  (`canvas.json`, `text-order.json`) until the coordinator's ruling.
+  since 2026-11-19 (`harness-lab`'s check at the reader's seam); I1's gap says what stands, held to its record
+  (`canvas.json`) until the coordinator's ruling; I8 has none (`text-order` reads no member out of order, and `text-order.json`
+  names none).
 - **Minutes**: about 80 in all (the full tier's, the pixel proofs 25, the canvas 2 on the software canvas, its two runs' lines
   equal, the speed check about 12, the online scripts about 15), and `perf-release`'s 100 to 130.
 - **Secret**: none for this repository's gates (the free engines need no key; an LLM service in the placeholder run would take
