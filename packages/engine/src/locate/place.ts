@@ -198,7 +198,8 @@ export function place(
   // shows they are its text. That is a hunk align classes `hyphen` (A's glyphs there spell B's once line-end hyphens are out:
   // a word arXiv's page broke at a line end where our compile did not) whose B side holds the unit's glyphs alone, or none.
   // A glyph drawn inside a form XObject between glyphs that are not is an included figure's own text, no glyph of the unit's
-  // text: it stays unclaimed (born.ts gives it to a figure text). Any other is text A sets inside the unit that our compile
+  // text: it stays unclaimed (the figure reading's to make a figure text of, or the original's ink: no unit is born of a glyph
+  // a form shows, born.ts). Any other is text A sets inside the unit that our compile
   // does not: a content difference, and the unit stays the original's (as for B's glyphs with no partner; no fuzzy rescue).
   // A unit that stays the original's holds those glyphs as A's ink (HELD): they are no unit born on A)
   const unpaired: [number, [number, number]][] = []

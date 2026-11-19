@@ -8,7 +8,7 @@
 // ownership (its text taken), `stats.born`, `stats.bornGlyphs`, `born` (assigned: read by phase 7 and close).
 import { type Piece, unitId } from '@readarxiv/format'
 import { HUNK, hunkName } from '../align/align.ts'
-import { bornOf } from './born.ts'
+import { BORN_KIND, bornOf } from './born.ts'
 import { sourceText } from './facts.ts'
 import { inkOf } from './ink.ts'
 import { SET_AGAIN } from './members.ts'
@@ -149,12 +149,10 @@ export function unitsBornOnA(w: Work, claims: Claims): void {
   // ---- the units born on A, from the glyphs B never printed
   const born = new Map<number, { kind: string; content: Piece[] }>()
   for (const b of bornOf(inkA, m, claims, pageA, setA)) {
-    const mem = empty(w, -1, b.kind, unitId(b.kind, b.content))
+    const mem = empty(w, -1, BORN_KIND, unitId(BORN_KIND, b.content))
     mem.located = true
-    // (text inside an included figure, a form XObject: a figure's text, which the wrap writes in its form, as a figure unit's)
-    mem.figure = b.kind === 'inkfigures'
     claims.take(mem, { text: b.glyphs })
-    born.set(mem.ord, { kind: b.kind, content: b.content })
+    born.set(mem.ord, { kind: BORN_KIND, content: b.content })
     members.push(mem)
     stats.born++
     stats.bornGlyphs += b.glyphs.length

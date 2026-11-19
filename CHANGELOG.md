@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, the numbers, tick labels and symbols inside a figure stay exactly as the paper draws them on a page of a paper's second file, such as its supplement. A row of an axis's tick labels had been drawn as one short line at the row's left end, with the axis title's symbol moved into it, and that title had been left untranslated.
 - Fixed: in the PDF reader, a list the paper sets as lines of their own, each opened by a bold label after a line break of the author's ("No NSP: …"), keeps each label at the start of its line in Japanese, Korean and Chinese. A translation service could carry the line break into the middle of the sentence before it, so the line broke after that sentence's first words and the label ran on at the end of the line.
 - Fixed: in the PDF reader, the last line of a proof that ends with its end-of-proof square keeps its place above the next paragraph. It could be drawn lower, over the first line of the paragraph after it.
 - Fixed: in the PDF reader, a formula in a line of text right under a displayed equation is drawn once, in its translated line. Where the formula stood taller than its line and touched the equation's space above it, the printed formula stayed beside the translation's copy of it, so it was shown twice, a little apart.
