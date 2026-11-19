@@ -174,8 +174,9 @@ const O: Locale['O'] = {
   saveFailed: '儲存失敗，請再試一次',
   appearance: {
     theme: '外觀',
-    // the theme switch's three equal segments hold 274 px at a 320 px window (ui-shots.mjs): the platform's longer
-    // "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese and English are
+    // the theme switch's three equal segments hold 274 px at a 320 px window (tests/e2e/probes/ui-shots.mjs): the
+    // platform's longer "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese
+    // and English are
     themes: { system: '跟隨系統', light: '淺色', dark: '深色' },
     dim: '深色模式下調暗 PDF 頁面',
     dimHint: '深色外觀下調暗 PDF 頁面；標示與圖中譯文保持原色',

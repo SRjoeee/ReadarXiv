@@ -22,7 +22,7 @@ const FIELD: Record<string, string> = {
 const S = {
   brand: 'Read arXiv', // S-P-01
   settings: '设置', // S-P-02
-  /** P0, no paper in the tab (the redesign's §5.4, §10.1): find one (S-P-03…08) */
+  /** P0, no paper in the tab: find one (S-P-03…08) */
   find: {
     lead: '打开 arXiv 论文（HTML 或 PDF）即可翻译', // S-P-03
     field: '按标题、作者、摘要或链接搜索论文', // S-P-04
@@ -33,7 +33,7 @@ const S = {
     /** the paper a link or an id names: a name and an id, the same in every language */
     paper: (id: string) => `arXiv ${id}`, // S-P-07
   },
-  /** An arXiv paper's page that has not answered yet (the redesign's §5.4): not P0, and no field */
+  /** An arXiv paper's page that has not answered yet: not P0, and no field */
   loading: '页面加载中', // S-P-03d
   rows: {
     service: '翻译服务', // S-P-10
@@ -44,7 +44,7 @@ const S = {
     images: '图片翻译', // S-P-85
     style: '译文样式', // S-P-82; the same name as “Reading · Translation style” in the settings: the two are one thing
     manageStyles: '管理译文样式…', // S-P-83: the last row of the style menu, opening the settings at “Appearance”
-    managePrompts: '管理提示词…', // S-P-49: the prompt menu's last row (the redesign's §5.3), opening the settings at the prompts
+    managePrompts: '管理提示词…', // S-P-49: the prompt menu's last row, opening the settings at the prompts
   },
   service: {
     microsoft: 'Microsoft 翻译',
@@ -73,7 +73,7 @@ const S = {
     // S-P-32: the chosen service cannot run and nothing takes over; the reason alone
     cannotRun: (why: string) => why,
     llmNoKey: 'LLM 尚未配置 API Key',
-    llmRejected: 'API Key 已失效', // S-P-32e: a key the endpoint refused (the redesign's §5.2)
+    llmRejected: 'API Key 已失效', // S-P-32e: a key the endpoint refused
     chromeNoPack: 'Chrome 翻译的语言包尚未下载',
     chromeDownloading: 'Chrome 翻译的语言包下载中，约需 1 分钟',
     microsoftUnsupported: 'Microsoft 翻译不支持所选语言',
@@ -137,7 +137,7 @@ const S = {
 const O = {
   title: '设置',
   more: '更多',
-  /** The four sections of the sidebar (the redesign's design, §6.1); their hashes are these ids */
+  /** The four sections of the sidebar; their hashes are these ids */
   sections: { translate: '翻译', appearance: '外观', reading: '阅读', data: '数据' },
   search: {
     placeholder: '搜索设置',

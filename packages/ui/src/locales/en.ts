@@ -83,7 +83,7 @@ const S: Locale['S'] = {
     translate: 'Translate this page',
     restore: 'Show original',
     // S-P-52: one word, to hold its half of the pair (144 px) with its shortcut label at the large buttons' 15 px / 600 —
-    // 'Translate again ⌥T' ran 2.4 px past both edges (Part 7's final review; tests/e2e/probes/popup-align.mjs checks it)
+    // 'Translate again ⌥T' ran 2.4 px past both edges (tests/e2e/probes/popup-align.mjs checks it)
     retranslate: 'Retranslate',
   },
   failed: {

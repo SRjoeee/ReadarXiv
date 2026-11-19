@@ -176,7 +176,7 @@ const O: Locale['O'] = {
   saveFailed: '保存できませんでした。もう一度お試しください',
   appearance: {
     theme: '外観',
-    // the theme switch's three equal segments hold 274 px at a 320 px window (ui-shots.mjs): the platform's longer
+    // the theme switch's three equal segments hold 274 px at a 320 px window (tests/e2e/probes/ui-shots.mjs): the platform's longer
     // "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese and English are
     themes: { system: 'システム', light: 'ライト', dark: 'ダーク' },
     dim: 'ダークモードで PDF ページを暗くする',

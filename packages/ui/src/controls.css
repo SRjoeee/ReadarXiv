@@ -1,4 +1,4 @@
-/* The controls the extension's pages share (the redesign's design, §2.3): the reader's segmented control, popover,
+/* The controls the extension's pages share (docs/UI.md): the reader's segmented control, popover,
    tooltip, switch and swatch, moved here unchanged so that the popup and the settings page draw the same ones. The
    component rules join the page's `components` layer; the tokens they name are tokens.css's */
 @layer components {
@@ -62,8 +62,8 @@
   .switch[aria-disabled="true"], .swatch[aria-disabled="true"] { opacity: 0.45; cursor: default; }
   .swatch[aria-pressed="true"]:not(:focus-visible) { outline: 1.5px solid var(--line-strong); outline-offset: 2px; }
 }
-/* The controls the pages add (the redesign's design, §2.1, §5, §6, §8; Part 3's interfaces), every measure the
-   prototypes' (the popup's, and the settings page's settings-2). Each class compounds with its control's own, so
+/* The controls the pages add (docs/UI.md), every measure the approved prototypes' (the popup's and the settings
+   page's). Each class compounds with its control's own, so
    that nothing here reaches an element that is not one of these controls */
 @layer components {
   /* buttons: the brand for the one primary action, a neutral one (its grey small, the fill large), a text one with no
@@ -135,7 +135,7 @@
   .seg.fit .thumb { position-anchor: --seg-on; inset-inline-start: anchor(start); width: anchor-size(width); translate: none; transition: inset-inline-start 220ms var(--ease), width 220ms var(--ease); }
   /* a menu's rows for the pages (§5.3): a name over its hint, the row at least 40 px (the service menu); a
      neutral button in a row (the pack's download: 24 px, 9 in, radius 6, 12 px), on the active row the lift's ground,
-     since in dark the neutral's equals the row's fill (ruling 5); a sample drawn in a style at a row's end (the style
+     since in dark the neutral's equals the row's fill; a sample drawn in a style at a row's end (the style
      menu); the last row, which leads to managing the list, in ink-2. The reader's rows are untouched */
   .pop .item.two { height: auto; min-height: 40px; padding-block: 5px; }
   .pop .item .t { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
@@ -157,8 +157,8 @@
 @keyframes pop-in { from { opacity: 0; scale: 0.97; translate: 0 -4px; } }
 @media (prefers-reduced-motion: reduce) { @keyframes pop-in { from { opacity: 0; } } }
 /* a line of words that takes another's place (the settings page's description, §8): 3 px up and in, 180 ms where it is
-   named; a fade alone under reduced motion. Moved from reader.css unchanged (Part 3); the reader's capsule now moves its
-   words with its box (capsule-motion.ts) */
+   named; a fade alone under reduced motion. The reader's capsule moves its words with its box instead
+   (capsule-motion.ts) */
 @keyframes words-in { from { opacity: 0; translate: 0 3px; } }
 @media (prefers-reduced-motion: reduce) { @keyframes words-in { from { opacity: 0; } } }
 @media (prefers-reduced-motion: reduce) { .seg .thumb { transition: none; } .switch::after { transition: none; } }

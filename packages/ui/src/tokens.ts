@@ -1,4 +1,4 @@
-// The extension's design tokens (the redesign's design, §2.1): one source for every surface — the reader, the popup,
+// The extension's design tokens (docs/UI.md §5): one source for every surface — the reader, the popup,
 // the settings page, and the shadow roots the content script puts on arXiv's pages. Here, with the controls that draw
 // in them; src/shared/tokens.ts hands them to src/core (the floating button, the failure widget, the figure viewer),
 // which imports no UI (hard rule 8). A surface names a role; nothing else in the tree writes a colour.
@@ -26,7 +26,7 @@ export const RAMP = {
   'n-10': { light: 'oklch(0.235 0.012 255)', dark: 'oklch(0.935 0.005 255)' },
 } as const satisfies Record<string, Themed>
 
-/** The roles, by what they are for (the redesign's design, §2.1). The reader's come first, with its values */
+/** The roles, by what they are for (docs/UI.md §5). The reader's come first, with its values */
 export const ROLES = {
   canvas: '$n-3',
   chrome: '$n-0',
@@ -36,7 +36,7 @@ export const ROLES = {
   'ink-3': '$n-7',
   /** an edge that marks a choice, a step lighter than the focus's ink so that the two read apart */
   'line-strong': '$n-7',
-  /** dark: the well sunk below the chrome and the thumb raised above it, and a stronger fill (Part 6 of the reader) */
+  /** dark: the well sunk below the chrome and the thumb raised above it, and a stronger fill */
   well: { light: '$n-3', dark: '$n-2' },
   lift: { light: '$n-0', dark: '$n-5' },
   fill: { light: '$n-3', dark: '$n-4' },
@@ -60,7 +60,7 @@ export const ROLES = {
   page: '$n-1',
   /** the popup's grouped rows and its notes */
   group: '$n-2',
-  /** a hovered or open row in the popup's group (§5.1; the controller's ruling 9): a step under the group, both themes */
+  /** a hovered or open row in the popup's group: a step under the group, both themes */
   'group-hover': '$n-3',
   button: { light: '$n-2', dark: '$n-4' },
   /** the small button asking to confirm a destructive action: its words in danger read 4.83:1 and 5.01:1 on it */

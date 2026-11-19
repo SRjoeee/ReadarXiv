@@ -1,14 +1,13 @@
-// A menu's rows (the reader's design, §6.7; the redesign's design, §5.3; UI.md §4): 30 px, an 8 px radius, the name at
+// A menu's rows (the reader's design, §6.7; UI.md §4): 30 px, an 8 px radius, the name at
 // the row's start, a hint after it and the chosen one's check at the row's very end, in a slot every row of a choice
 // keeps, so that a new choice moves nothing else; the list's behaviour is the shared one
 // (ui/menu-nav.ts). A listbox of options (a choice among values), or a menu of radios (the zoom) or of plain items (the
-// download). Moved from the reader
-// (pdf-reader/ui/ReaderMenu.tsx) for the extension's pages, which add these and change no row the reader draws: two
+// download). The extension's pages add these and change no row the reader draws: two
 // lines, each hint under its name (the service menu); a neutral button in a row, which picking the row presses (the
 // Chrome pack's download), a loader turning while it runs; a sample drawn in a style at a row's end (the style menu);
 // the last row, which leads to managing the list, never chosen, a separator before it; and the language of a row's
 // own words, so that a language's own name or a sample in another script is read and drawn as that language. The active
-// row stays in view as it moves and as the list opens (the retired popup menu did; Part 7's final review). A search
+// row stays in view as it moves and as the list opens. A search
 // field takes the focus as its menu opens, but not under a finger, where it would raise the on-screen keyboard over the
 // list (`touchFirst`)
 import { Check, Loader } from 'lucide'
@@ -174,7 +173,7 @@ export function MenuList({
   // the element with the focus takes the keys and names the active item (aria-activedescendant): the search field, a
   // combobox that controls the list, when there is one; the list itself when there is none, or when it takes the
   // focus as the menu opens under a finger. Only those elements handle them, neither inside the other, or a key would
-  // be handled twice as it bubbles (the final review: the arrows skipped every other language)
+  // be handled twice as it bubbles (the arrows would skip every other language)
   const keys = { 'aria-activedescendant': nav.activeId, onKeyDown: nav.onKeyDown }
   // the list holding the focus over a search field (under a finger, with a keyboard attached): a letter typed there is
   // the search's, so it moves into the field and goes on the end of the query, as the field would have taken it had it
@@ -251,7 +250,7 @@ export function MenuList({
               {(item.separatorBefore || item.manage) && <hr role="none" className="sep" />}
               {/* a row that is disabled but has an action can still be operated (its action runs): aria-disabled would
                   tell assistive technology it is not, so only a row disabled with no action carries it; the other
-                  gets `unavailable` instead, greyed the same way but clicked and keyed like any row (ruling 11) */}
+                  gets `unavailable` instead, greyed the same way but clicked and keyed like any row */}
               {/* biome-ignore lint/a11y/useKeyWithClickEvents: the list's keys choose it (ui/menu-nav.ts) */}
               {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: an option, a menu radio or a menu item, by the list's kind */}
               {/* biome-ignore lint/a11y/noStaticElementInteractions: an option or a menu item, by the list's kind */}
