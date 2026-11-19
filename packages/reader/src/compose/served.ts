@@ -240,7 +240,7 @@ class NoFace extends Error {
 /**
  * Whether a failure says the FILE is wrong, not the link: not there (a 404, a 410), a body past its cap (`bodyWithin`'s
  * Refused('bad')), bytes no face is made of (NoFace). A slice is a file named by its content: its size and its bytes are what
- * they are, and will not be otherwise (the coordinator's ruling of 2026-11-19, lane faces-heal). Anything else that fails is
+ * they are, and will not be otherwise. Anything else that fails is
  * the link's and may pass: the network, a 5xx or nothing in time (each asked once more within its ask), another answer under
  * 500 (a 408 or a 429 above all, asked once more after its Retry-After), a body the link breaks or that stops (a declared
  * length not reached, a stream reset: Refused('network'))
