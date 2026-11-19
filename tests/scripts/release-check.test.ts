@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, harnessLabJudge, INVARIANTS, PARAS_HELD, productionRowsOf, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, harnessLabJudge, INVARIANTS, PARAS_HELD, productionRowsOf, RECORDED, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { papersOf } from '../../lab/release-check/papers.mjs'
 import { ADDED, ADDED_HEADING } from '../../lab/typeset/added.mjs'
 import { isProduction, type Row, rowsAgainst } from '../../lab/typeset/parity/production-rows.mjs'
@@ -319,106 +319,121 @@ describe('the equivalence gates, in either shape of their tools', () => {
     expect(gate('translate-equivalence').judge!(ctxAt('/repo', work), [run(0)])).toMatchObject({ pass: false, numbers: { compared: 2, disagree: 1 } })
   })
 
-  it('holds I10 by a gate of its own, the runner with the reading from the part, counted only where the entry laid pieces', () => {
+  /** a reader gate run's summary with --entry (gate-l1.mjs), every count it states; `o` the counts that are not 0 (`pieces` the
+   *  entry's pieces, 0: it laid nothing; `drop` a line left out, as a run cut short leaves it) */
+  type Said = { pairs?: number; pieces?: number; I10?: number; I11?: number; head?: number; other?: number; purity?: number; reads?: number; off?: number; F28?: number; threw?: number; I3?: number; I4?: number; I5?: number; floor?: number; unread?: number; drop?: RegExp }
+  const said = (o: Said = {}) =>
+    [
+      `{"pairs":${o.pairs ?? 123},"laid":1,"adapted":1,"pages":2568,"twoPages":1,"twoPagesDiffer":0,"threw":${o.threw ?? 0}}`,
+      "a page's lay (layPagePrepared, L8-E1), ms: p50 4.1, p90 9.9, p99 21.5, max 80 over 2568 pages; the adapter (L6) 10 ms in all, 0 a page",
+      `F28 the spacing rule over the members read (21007 body; 1215 float): (i) a float's member above its rule-1 pitch ${o.F28 ?? 0}; (ii) a body member (a note too) the fill lays above its page's target and band 0 (beside: 1 the fill lays not, kept at its fit); (iii) under its script's floor 0; (iv) a step smaller though it sets whole at its size, no stated cause 0; beside, the size steps a stated cause explains (the evening's §18.57, a size tie's §18.64), by target: none`,
+      'invariants over the laid members (page by page): {"laid":23180,"lines":59870,"I3":1,"I4":0,"I5":2}; I3: x; I4: ; I5: y',
+      "the entry (layPage over each part and its rows): 23133 of the runner's members laid alike, 63 not: x | y; a page, ms: p50 16.9, p90 49.1, p99 86.8, max 162 over 2568 pages",
+      `I10, the sentence cover (cover.ts): 47530 member-pages lit, ${o.pieces ?? 3132773} pieces; ${o.I10 ?? 0} faults`,
+      `I11, every lit box painted whole on both panes (painted.mjs): 2568 pages, 167856 shapes, 306100 boxes; ${o.I11 ?? 0} not painted whole; 3612 boxes of turned members painted box by box (not read); 1177 ms`,
+      `the paragraph points (paras-gate.ts): 36 stated (27 group; 9 word); 8 with an anchor in their row (8 group); of those, their member laid: ${8 - (o.off ?? 0)} opened (their first word starts a line of the member), 5 of them on TeX's line, ${o.off ?? 0} NOT (run on); not laid: none`,
+      `the invariants on the entry's lay (each page as layPage laid it; I3 by ink, I4, I5 by ink): {"pages":2568,"read":2568,"laid":32000,"lines":70000,"I3":${o.I3 ?? 0},"I4":${o.I4 ?? 0},"I5":${o.I5 ?? 0},"I5floor":${o.floor ?? 0},"unread":${o.unread ?? 0}}`,
+      `I3 by ink on the entry's lay (ink-gate.ts): ${o.I3 ?? 0} overlaps of a laid unit's drawn ink with ink that stays or another's (none); beside, 40 with ink its own original's lines met already (the page's own setting, not held); 3612 runs set along a direction read by their corners' box; 0 runs no measure holds the ink of, not read`,
+      `I6, each page laid twice by the entry over the same inputs (purity): 2568 pages, ${o.purity ?? 0} whose two Pages differ; the second lays 60000 ms`,
+      `I6 across the pages' lays (cross-lay.ts): 25883 units begun on a pass page, 9687 laid by two pages' lays or more; ${(o.head ?? 11) + (o.other ?? 0)} laid otherwise: ${o.head ?? 11} by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${o.other ?? 0} by another cause`,
+      `the reads gate, default (author): 2568 pages laid, 42940 row ids read; ${o.reads ?? 0} read outside the page's wait set, on ${o.reads ?? 0} pages`,
+      "the reads gate, every option on (none left): 2568 pages laid, 48719 row ids read; 0 read outside the page's wait set, on 0 pages",
+    ]
+      .filter((l) => !o.drop?.test(l))
+      .join('\n')
+  /** a run of the set, then the added pairs walked apart (`added` their counts) */
+  const apart = (o: Said = {}, added: Said = {}) => `${said(o)}\n${ADDED_HEADING} a-zh, b-zh\n${said({ pairs: 2, pieces: 5000, head: 0, ...added })}`
+
+  it('holds I10 by a gate of its own, the runner with the reading from the part, every count read from its summary, never its exit', () => {
     const cover = gate('sentence-cover')
     const ctx = ctxAt('/repo', '/work')
     expect(cover.holds).toEqual(['I10', 'I6'])
     expect(cover.steps!(ctx)[0]?.cmd).toEqual(['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/sentence-cover'])
-    const said = (pieces: number, faults: number, other = 0) =>
-      `{"pairs":123,"laid":1,"pages":2}\nI10, the sentence cover (cover.ts): 9 member-pages lit, ${pieces} pieces; ${faults} faults\nI6 across the pages' lays (cross-lay.ts): 90 units begun on a pass page, 9 laid by two pages' lays or more; ${2 + other} laid otherwise: 2 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${other} by another cause`
-    expect(cover.judge!(ctx, [run(0, said(4767634, 0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634, I6head: 2, I6other: 0 }, findings: { I10: { held: true, count: 0 }, I6: { held: true, count: 0 } } })
-    // (a unit laid otherwise by two pages' lays, another cause than the head pass's: the run exits 1 and ends whole, I10 still
-    // counted, I6 counted against)
-    expect(cover.judge!(ctx, [run(1, said(4767634, 0, 1))])).toMatchObject({ pass: false, findings: { I10: { held: true, count: 0 }, I6: { held: false, count: 1 } } })
-    expect(cover.judge!(ctx, [run(0, said(4767634, 5))])).toMatchObject({ pass: false, findings: { I10: { held: false, count: 5 } } })
-    // (a paragraph point the row anchors and the page runs on (paras-gate.ts): the run exits 1 and ends whole, I10 and I6 still
-    // counted, the points' counts reported; held, it fails the gate, from the round the engine half lands in: PARAS_HELD)
-    const points = `${said(4767634, 0)}\nthe paragraph points (paras-gate.ts): 8 stated (8 group); 6 with an anchor in their row (6 sentence; 2 no row); of those, their member laid: 4 opened (their first word starts a line of the member), 3 of them on TeX's line, 2 NOT (run on); not laid: none`
+    expect(cover.judge!(ctx, [run(0, said())])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 3132773, I6head: 11, I6other: 0, I11: 0, purity: 0 }, findings: { I10: { held: true, count: 0 }, I6: { held: true, count: 0 } } })
+    // (a unit laid otherwise by two pages' lays, another cause than the head pass's; a page whose two lays differ: I6 counted against)
+    expect(cover.judge!(ctx, [run(1, said({ other: 1 }))])).toMatchObject({ pass: false, findings: { I10: { held: true, count: 0 }, I6: { held: false, count: 1 } } })
+    expect(cover.judge!(ctx, [run(1, said({ purity: 2 }))])).toMatchObject({ pass: false, findings: { I6: { held: false, count: 2 } } })
+    expect(cover.judge!(ctx, [run(0, said({ I10: 5 }))])).toMatchObject({ pass: false, findings: { I10: { held: false, count: 5 } } })
+    // (a paragraph point the row anchors and the page runs on (paras-gate.ts): counted; held, it fails the gate (PARAS_HELD); not
+    // held, it is reported and the gate passes)
     expect(PARAS_HELD).toBe(true)
-    expect(cover.judge!(ctx, [run(1, points)])).toMatchObject({ pass: false, numbers: { I10: 0, I6other: 0, parasAnchored: 6, parasOpened: 4, parasOnTexLine: 3, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
-    // (not held, as before the engine half's round: reported, the gate passing)
-    expect(sentenceCoverJudge([run(1, points)], false).pass).toBe(true)
-    expect(sentenceCoverJudge([run(0, points.replace('2 NOT', '0 NOT'))], true).pass).toBe(true)
-    // (nothing laid: no finding, no pass; a run that did not end whole: its count is not read)
-    const none = cover.judge!(ctx, [run(1, said(0, 0))])
+    expect(cover.judge!(ctx, [run(1, said({ off: 2 }))])).toMatchObject({ pass: false, numbers: { I10: 0, I6other: 0, parasAnchored: 8, parasOpened: 6, parasOnTexLine: 5, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
+    expect(sentenceCoverJudge([run(1, said({ off: 2 }))], false).pass).toBe(true)
+    // (nothing laid, or a count the summary does not state (a run cut short): no finding, no pass, the line named)
+    const none = cover.judge!(ctx, [run(1, said({ pieces: 0 }))])
     expect(none.pass).toBe(false)
     expect(none.findings).toBeUndefined()
-    expect(cover.judge!(ctx, [run(1, said(100, 0))]).findings).toBeUndefined()
-    // (the added pairs walked apart after the set, lab/typeset/added.mjs: the set's numbers read before the heading, theirs after
-    // it as `added`; a fault of theirs fails the gate, the set's count unmoved)
-    const apart = (faults: number) => `${said(4767634, 0)}\n${ADDED_HEADING} a-zh, b-zh\n${said(5000, faults).replace('"pairs":123', '"pairs":2')}`
-    expect(cover.judge!(ctx, [run(0, apart(0))])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 4767634, pairs: 123, added: { pairs: 2, I10: 0, pieces: 5000, I6other: 0 } } })
-    expect(cover.judge!(ctx, [run(0, apart(3))])).toMatchObject({ pass: false, numbers: { I10: 0, added: { I10: 3 } } })
-    expect(typesetOf(apart(3))).toMatchObject({ pairs: 123, I10: 0, added: { pairs: 2, I10: 3 } })
-    // (a row id read outside a page's wait set: the runner exits 1 for it, as for a paragraph point run on; read whole, it fails
-    // the gate, never hidden by the points' exit beside it)
-    const reads = (outside: number) => `the reads gate, default (author): 9 pages laid, 90 row ids read; ${outside} read outside the page's wait set, on ${outside} pages\nthe reads gate, every option on (none left): 9 pages laid, 99 row ids read; 0 read outside the page's wait set, on 0 pages`
-    expect(typesetOf(reads(3))).toMatchObject({ readsPages: 9, readsOutside: 3 })
-    expect(sentenceCoverJudge([run(1, `${points}\n${reads(0)}`)], false)).toMatchObject({ pass: true, numbers: { readsOutside: 0, parasOff: 2 } })
-    expect(cover.judge!(ctx, [run(1, `${points}\n${reads(0)}`)])).toMatchObject({ pass: false, numbers: { readsOutside: 0, parasOff: 2 } })
-    expect(cover.judge!(ctx, [run(1, `${points}\n${reads(3)}`)])).toMatchObject({ pass: false, numbers: { readsOutside: 3, parasOff: 2 }, findings: { I10: { held: true, count: 0 } } })
-    expect(cover.judge!(ctx, [run(1, `${apart(0)}\n${reads(2)}`)])).toMatchObject({ pass: false, numbers: { added: { readsOutside: 2 } } })
+    expect(cover.judge!(ctx, [run(0, said({ drop: /^I11/ }))])).toMatchObject({ pass: false, note: 'not stated: I11' })
+    // (the exit is no count: a run that exits 0 with a count against it fails; one that exits 1 with every count held passes)
+    expect(cover.judge!(ctx, [run(0, said({ reads: 3 }))])).toMatchObject({ pass: false, numbers: { readsOutside: 3 }, note: 'counted against it: readsOutside 3' })
+    expect(cover.judge!(ctx, [run(1, said())]).pass).toBe(true)
+    // (the added pairs walked apart after the set: theirs read after the heading and held as the set's)
+    expect(cover.judge!(ctx, [run(0, apart())])).toMatchObject({ pass: true, numbers: { I10: 0, pieces: 3132773, pairs: 123, added: { pairs: 2, I10: 0, pieces: 5000, I6other: 0 } } })
+    expect(cover.judge!(ctx, [run(0, apart({}, { I10: 3 }))])).toMatchObject({ pass: false, numbers: { I10: 0, added: { I10: 3 } } })
+    expect(cover.judge!(ctx, [run(1, apart({}, { reads: 2 }))])).toMatchObject({ pass: false, numbers: { added: { readsOutside: 2 } } })
+    // (their paragraph points held as the set's: reported where not held, failing where held; their I6 too)
+    expect(sentenceCoverJudge([run(1, apart({}, { off: 5 }))], false)).toMatchObject({ pass: true, numbers: { parasOff: 0, added: { pairs: 2, parasOff: 5 } } })
+    expect(sentenceCoverJudge([run(1, apart({}, { off: 5 }))]).pass).toBe(false)
+    expect(sentenceCoverJudge([run(1, apart({}, { other: 1 }))])).toMatchObject({ pass: false, numbers: { I6other: 0, added: { I6other: 1 } } })
+    expect(typesetOf(apart({}, { I10: 3 }))).toMatchObject({ pairs: 123, I10: 0, I11: 0, F28: [0, 0, 0, 0], threw: 0, purity: 0, entry: { pages: 2568, read: 2568, I3: 0, I3own: 40, turned: 3612 }, added: { pairs: 2, I10: 3 } })
   })
 
-  it("lays the stored rows' pairs over each rows store as the round's reader gate does, I3, I4 and I5 counted, the runner's own verdicts held", () => {
+  it("turns red on an I11 fault on the door's store while its paragraph points stand: the exit is never the count", () => {
+    // (the door's run exits 1 for its paragraph points run on, reported here, not held; an I11 fault beside them exits 1 alike,
+    // so a judge that read the run whole by its exit and its stated verdicts never saw it)
+    const named = (as: string, exit: number, text: string): StepRun => ({ cmd: ['x'], as, exit, ms: 0, log: '', text })
+    const total = 'total over 92 pairs: units 32833, google 32247, microsoft 569, ok self 17'
+    const stores = (door: Said) => [named('door', 1, apart(door)), named('rows', 0, total), named('google', 0, apart())]
+    expect(readerPartsJudge(stores({ off: 2 }), false).pass).toBe(true)
+    expect(readerPartsJudge(stores({ off: 2, I11: 3 }), false)).toMatchObject({ pass: false, numbers: { door: { I11: 3, parasOff: 2 } }, note: expect.stringMatching(/door: counted against it: I11 3/) })
+  })
+
+  it("lays the stored rows' pairs over each rows store as the round's reader gate does, every invariant a count of its summary held to 0 or to the last round's record", () => {
     const refactor = mkdtempSync(join(tmpdir(), 'release-check-lab-'))
     dirs.push(refactor)
     mkdirSync(join(refactor, 'lanes/cjk-punct/blast'), { recursive: true })
     writeFileSync(join(refactor, 'lanes/cjk-punct/blast/pairs.txt'), 'a-zh b-ja\nc-de\n')
     const ctx: Ctx = { root: '/repo', labData: refactor, refactor, work: '/work', online: false, minFree: 0 }
     const rp = gate('reader-parts')
-    expect([rp.tier, rp.holds, rp.after]).toEqual(['full', ['I3', 'I4', 'I5'], ['prepare']])
+    expect([rp.tier, rp.holds, rp.after]).toEqual(['full', ['I3', 'I4', 'I5', 'I6', 'I10'], ['prepare']])
     const steps = rp.steps!(ctx)
     const pairs = ['a-zh', 'b-ja', 'c-de', ...ADDED]
     expect(steps.map(x => x.as)).toEqual(['door', 'rows', 'google'])
     expect(steps[0]).toMatchObject({ cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/reader-parts/door', ...pairs], slot: 'run', env: { AXT_L1_BUNDLES: '/work/prepare/bundles', AXT_GATE_ENTRY: '1' }, all: true })
     expect(steps[1]?.cmd).toEqual(['node', '--experimental-strip-types', join(refactor, 'lanes/converge-7/tools-b15/google-rows.mts'), '/repo', '/work/reader-parts/google-rows', join(refactor, 'google-rows/ef6989debed1'), ...pairs])
-    expect(steps[2]).toMatchObject({ cmd: ['node', '--import', join(refactor, 'lanes/converge-7/tools-b15/rows-register.mjs'), 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/reader-parts/google', ...pairs], env: { AXT_B14_ROWS: '/work/reader-parts/google-rows' } })
-    // (the judge: both stores read whole, their counts as findings, the rows made with none unavailable)
-    const said = (I3: number, I5: number) =>
-      [
-        `invariants over the laid members (page by page): {"laid":23966,"lines":60866,"I3":${I3},"I4":0,"I5":${I5}}; I3: x; I4: ; I5: y`,
-        "the entry (layPage over each part and its rows): 24056 of the runner's members laid alike, 244 not: x | y; a page, ms: p50 4.1, p90 9.9, p99 21.5, max 80 over 2568 pages",
-        'I10, the sentence cover (cover.ts): 47028 member-pages lit, 3145597 pieces; 0 faults',
-        "I6 across the pages' lays (cross-lay.ts): 26254 units begun on a pass page, 9770 laid by two pages' lays or more; 11 laid otherwise: 11 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), 0 by another cause",
-        "the reads gate, default (author): 2568 pages laid, 45463 row ids read; 0 read outside the page's wait set, on 0 pages",
-      ].join('\n')
+    expect(steps[2]).toMatchObject({ cmd: ['node', 'lab/typeset/gate-l1.mjs', '--entry', '--reading=part', '--out=/work/reader-parts/google', ...pairs], env: { AXT_GATE_ROWS: '/work/reader-parts/google-rows' } })
     const named = (as: string, exit: number, text: string): StepRun => ({ cmd: ['x'], as, exit, ms: 0, log: '', text })
     const total = 'total over 92 pairs: units 32833, google 32247, microsoft 569, ok self 17'
     expect(rowsOf(total)).toEqual({ pairs: 92, units: 32833, google: 32247, microsoft: 569, okSelf: 17 })
-    const ok = readerPartsJudge([named('door', 0, said(3, 2)), named('rows', 0, total), named('google', 0, said(3, 2))])
-    expect(ok).toMatchObject({ pass: true, numbers: { door: { alike: 24056, not: 244, I3: 3, I4: 0, I5: 2, I10: 0 }, google: { I3: 3 }, rows: { units: 32833 }, layP50: 4.1, layP90: 9.9, layP99: 21.5, layPages: 2568 }, findings: { I3: { held: false, count: '3 (door), 3 (google)' }, I4: { held: true, count: 0 }, I5: { held: false } } })
-    // (a seeded fault: no reply stored for units the chain asks, so the rows are not the round's; a run that did not end whole)
-    expect(readerPartsJudge([named('door', 0, said(0, 0)), named('rows', 0, `${total}, refused unavailable 4`), named('google', 0, said(0, 0))])).toMatchObject({ pass: false, note: expect.stringMatching(/no reply to 4 units/) })
-    expect(readerPartsJudge([named('door', 0, said(0, 0)), named('rows', 0, total), named('google', 1, 'the entry laid nothing: I10 not counted')]).pass).toBe(false)
-    expect(readerPartsJudge([named('door', 0, said(0, 0)), named('rows', 2, '')]).pass).toBe(false)
-    // (held to the last integrated round's counts: a count above them fails the gate (a seeded overlap: 3 -> 13), one below is said)
-    const record = { commit: 'abc', counts: { door: { I3: 3, I4: 0, I5: 2 }, google: { I3: 3, I4: 0, I5: 2 } } }
-    const stores = (I3: number, I5: number) => [named('door', 0, said(I3, I5)), named('rows', 0, total), named('google', 0, said(3, 2))]
-    expect(readerPartsJudge(stores(3, 2), false, record)).toMatchObject({ pass: true })
-    expect(readerPartsJudge(stores(13, 2), false, record)).toMatchObject({ pass: false, note: 'above the last round\'s (abc): I3 3 -> 13 (door)' })
-    expect(readerPartsJudge(stores(1, 2), false, record)).toMatchObject({ pass: true, note: 'below the last round\'s (abc), the record to lower: I3 3 -> 1 (door)' })
-    // (the committed record names every part the gate counts)
-    expect(Object.keys(readerPartsRecord(join(import.meta.dirname, '../..')).counts)).toEqual(['door', 'door, added', 'google', 'google, added'])
+    const stores = (door: Said, google: Said = {}, rows = total) => [named('door', 1, apart(door)), named('rows', 0, rows), named('google', 0, apart(google))]
+    const ok = readerPartsJudge(stores({ I3: 3, I5: 2 }, { I3: 3, I5: 2 }))
+    expect(ok).toMatchObject({ pass: true, numbers: { door: { alike: 23133, not: 63, I3: 3, I4: 0, I5: 2, I5floor: 0, I6head: 11, I10: 0, I11: 0, runner: { I3: 1, I5: 2 } }, google: { I3: 3 }, rows: { units: 32833 }, layP50: 16.9, layP90: 49.1, layP99: 86.8, layPages: 2568 }, findings: { I3: { held: false, count: '3 (door), 3 (google)' }, I4: { held: true, count: 0 }, I5: { held: false }, I6: { held: true, count: 0 }, I10: { held: true, count: 0 } } })
+    // (seeded faults: no reply stored for units the chain asks, so the rows are not the round's; a run that laid nothing)
+    expect(readerPartsJudge(stores({}, {}, `${total}, refused unavailable 4`))).toMatchObject({ pass: false, note: expect.stringMatching(/no reply to 4 units/) })
+    expect(readerPartsJudge([named('door', 0, said()), named('rows', 0, total), named('google', 1, 'the entry laid nothing: I10 not counted')]).pass).toBe(false)
+    expect(readerPartsJudge([named('door', 0, said()), named('rows', 2, '')]).pass).toBe(false)
+    // (and every other count held to 0, a fault on either store, the set's or the added pairs')
+    for (const [o, k] of [[{ purity: 1 }, 'purity 1'], [{ F28: 2 }, 'F28 2'], [{ threw: 1 }, 'threw 1'], [{ unread: 4 }, 'unread 4'], [{ other: 1 }, 'I6other 1']] as const)
+      expect([k, readerPartsJudge(stores(o)).note]).toEqual([k, expect.stringContaining(`door: counted against it: ${k}`)])
+    expect(readerPartsJudge([named('door', 0, apart({}, { I11: 1 })), named('rows', 0, total), named('google', 0, apart())])).toMatchObject({ pass: false, note: expect.stringMatching(/I11 1 \(added\)/) })
+    // (held to the last integrated round's record, by store and part: a count above it fails the gate (a seeded overlap: 3 -> 13),
+    // one below is said, a part's count the record lacks fails)
+    const counts = { I3: 3, I4: 0, I5: 2, I5floor: 0, I6head: 11 }
+    const zero = { I3: 0, I4: 0, I5: 0, I5floor: 0, I6head: 0 }
+    const record = { commit: 'abc', counts: { door: counts, 'door, added': zero, google: counts, 'google, added': zero } }
+    const at = (door: Said) => stores({ I3: 3, I5: 2, ...door }, { I3: 3, I5: 2 })
+    expect(readerPartsJudge(at({}), false, record)).toMatchObject({ pass: true })
+    expect(readerPartsJudge(at({ I3: 13 }), false, record)).toMatchObject({ pass: false, note: "above the last round's (abc): I3 3 -> 13 (door)" })
+    expect(readerPartsJudge(at({ I3: 1 }), false, record)).toMatchObject({ pass: true, note: "below the last round's (abc), the record to lower: I3 3 -> 1 (door)" })
+    expect(readerPartsJudge(at({ head: 12 }), false, record)).toMatchObject({ pass: false, note: "above the last round's (abc): I6head 11 -> 12 (door)" })
+    expect(readerPartsJudge(at({ floor: 1 }), false, record)).toMatchObject({ pass: false, note: "above the last round's (abc): I5floor 0 -> 1 (door)" })
+    expect(readerPartsJudge(at({}), false, { commit: 'abc', counts: { door: counts, google: counts } })).toMatchObject({ pass: false, note: expect.stringMatching(/no count of the last round's record for I3 \(door, added\)/) })
+    // (the committed record names every part the gate counts, each count the gate holds to it)
+    const committed = readerPartsRecord(join(import.meta.dirname, '../..'))
+    expect(Object.keys(committed.counts)).toEqual(['door', 'door, added', 'google', 'google, added'])
+    for (const c of Object.values(committed.counts)) expect(Object.keys(c).sort()).toEqual([...RECORDED].sort())
     // (the page's layout, design §7, is the entry's on the door's rows)
     expect(TARGETS.find(t => t.id === 'layout')?.from).toBe('reader-parts')
-  })
-  it("holds the added pairs' paragraph points as the set's, the two lanes' changes to the judge joined", () => {
-    const said = (pieces: number, faults: number, other = 0) =>
-      `{"pairs":123,"laid":1,"pages":2}\nI10, the sentence cover (cover.ts): 9 member-pages lit, ${pieces} pieces; ${faults} faults\nI6 across the pages' lays (cross-lay.ts): 90 units begun on a pass page, 9 laid by two pages' lays or more; ${2 + other} laid otherwise: 2 by the head pass (known: headOf reads the paragraph over the unit as one lay filled it and the other did not), ${other} by another cause`
-    const points = (off: number) =>
-      `the paragraph points (paras-gate.ts): 5 stated (5 group); 5 with an anchor in their row (5 sentence; 0 no row); of those, their member laid: 5 opened (their first word starts a line of the member), ${5 - off} of them on TeX's line, ${off} NOT (run on); not laid: none`
-    // (the set clean; the added pairs walked apart after the heading, their points `off` run on, their I6 `other`)
-    const added = (off: number, other = 0) => `${said(4767634, 0)}\n${points(0)}\n${ADDED_HEADING} a-zh, b-zh\n${said(5000, 0, other).replace('"pairs":123', '"pairs":2')}\n${points(off)}`
-    // (1) the added pairs' points run on, not held: the run exits 1 and is whole, it passes, the numbers carry their points
-    expect(PARAS_HELD).toBe(true)
-    expect(sentenceCoverJudge([run(1, added(5))], false)).toMatchObject({ pass: true, numbers: { I10: 0, I6other: 0, parasOff: 0, added: { pairs: 2, I10: 0, I6other: 0, parasAnchored: 5, parasOpened: 5, parasOnTexLine: 0, parasOff: 5 } } })
-    // (2) the same, held (the default since the engine half's round): it fails; with none of theirs run on it passes
-    expect(sentenceCoverJudge([run(1, added(5))]).pass).toBe(false)
-    expect(sentenceCoverJudge([run(0, added(0))]).pass).toBe(true)
-    // (3) the set clean and the added pairs with a unit laid otherwise by another cause than the head pass's: it fails, the
-    // added pairs held as the set's inside the one function
-    expect(sentenceCoverJudge([run(1, added(0, 1))])).toMatchObject({ pass: false, numbers: { I6other: 0, added: { I6other: 1 } } })
   })
   it("reads the display gate's verdict as measure.mjs states it: its pages, the pages worse than today's and each measure's, in both modes, today's rows production's", () => {
     const ctx = ctxAt('/repo', '/work')
