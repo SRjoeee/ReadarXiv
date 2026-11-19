@@ -1,5 +1,5 @@
-// Each placeholder's own ink in the marked compile, by content-stream order (Plan 8b, Task 6b; spec §4.2; the stream
-// ownership spike of 2026-10-06). LAYOUT_TEX sets a point, `/axt-<name> ri`, beside each destination it sets
+// Each placeholder's own ink in the marked compile, by content-stream order (spec §4.2). LAYOUT_TEX sets a point,
+// `/axt-<name> ri`, beside each destination it sets
 // (layout/marks.mjs), and points around each column's body (bs<n>, be<n>, in \@makecol, else at \@outputpage) and each float's box (fs<n>,
 // fe<n>); pageInk reads them in order among the glyphs and the boxes (layout/ink.mjs). A piece's own ink is what the
 // content stream shows between its two points: every glyph and rule TeX set for it, its scripts, limits, bars and
@@ -558,7 +558,7 @@ function headEntries(
  * set as ” by OT1); nothing before the text after it but rules, those rules its own (\\_ before \\allowbreak); an opening
  * alone followed by placeholders with no mark of their own and nothing else up to the next marked piece's opening
  * (`through`, marks.mjs followsOf), what stands between the two its own and theirs; and a later unit's opening next, as a
- * later unit's start mark is (that unit's label on its line left out). The sweep of 2026-10-24.
+ * later unit's start mark is (that unit's label on its line left out).
  * The maker's reading takes `through` too where the marking gives a `split` (marks.mjs followsOf: a paper's macro and the one
  * placeholder after it no mark could stand before, \\footnote after \\xspace, the macro's text known): the glyphs to the next
  * marked piece's point parted, the macro's those that set its text from the first, character for character (textedTo), the
@@ -567,7 +567,7 @@ function headEntries(
  * - A display that ends a footnote (footEnd: a display, its unit's last visible piece, after the unit's end mark, outside the
  *   bodies, no mark after it on its page): what its region holds from it to the page's folio (folioOf), each of its lines
  *   indented from the footnote's own and near the one before; with no folio, a line at the footnote's edge (a note after it
- *   with no mark) or one apart (the page's foot), none (the release sweep of 2026-10-24, 2610.16663v1 p16u58: the maker left
+ *   with no mark) or one apart (the page's foot), none (2610.16663v1 p16u58: the maker left
  *   it LOST, the erasure the unit the original's).
  */
 export function ownedOf(

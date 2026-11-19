@@ -43,8 +43,8 @@
 // decompose as its base letters: TeX's accents, ligatures, letter symbols, hyphenation and punctuation are no unit's evidence),
 // a wrapper's own words at its slot and lines of their own no unit's aside (spells), or it is `unhidden: 'spell'`; its label
 // must be a label's form (a number, an item's mark,
-// a caption's name and number) or empty, else the label is left the original's ink (`labelKept`, the coordinator's amendment of
-// 2026-10-28) where its ink is apart from the text's, and the unit `spell` where it is not.
+// a caption's name and number) or empty, else the label is left the original's ink (`labelKept`, PDF-READER §19.9) where its
+// ink is apart from the text's, and the unit `spell` where it is not.
 //
 // Pure arithmetic over what pageInk read (layout/ink.mjs, `indices`); imports the stream's regions and a unit's source text.
 // An original module (no port statement).
