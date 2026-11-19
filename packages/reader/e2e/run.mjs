@@ -13,7 +13,9 @@ import { fileURLToPath } from 'node:url'
 import { toggleKind } from '@readarxiv/format'
 import { build } from 'vite'
 import { kindShown } from '../src/compose/classes.ts'
+import { RETRY_MS } from '../src/session/client.ts'
 import { createContents, plainOf } from '../src/session/contents.ts'
+import { BACKOFF_MS, backoff } from '../src/session/machine.ts'
 import { judgePunct, measurePunct, PUNCT_TARGETS, punctRows } from './punct.mjs'
 import { answerBytes, startServer } from './server.mjs'
 
@@ -667,7 +669,63 @@ const siteRoute = {
     return res.end(readFileSync(file))
   },
 }
-const server = await startServer({ out: join(HERE, '.out'), objects, routes: [fixtureRoute, v2Route, siteRoute] })
+/**
+ * Our site's faces stood in by files of our own, read by compose/served.ts as it reads the site's: every face of the catalogue
+ * in one group, `stand-in`, in three slices (the printable ASCII but 'b'; 'b' alone, which 8 of s1-columns' 15 German rows hold;
+ * everything past ASCII), each slice's file PDF.js's own Liberation Sans (its bytes: the slice's code points are its
+ * unicode-range), every language's patterns none. Served while a check sets `standIn`, whose `plan(k, n)` says how the n-th ask
+ * (from 1) of a file of slice k answers: 'drop' (aborted in the browser, as a link that drops requests: a failure for now), 404
+ * (not there), else the file; every ask of a slice logged with its time (the page's route table: newPage)
+ */
+const STAND_IN_SLICES = [
+  [0x20, 0x61, 0x63, 0x7e],
+  [0x62, 0x62],
+  [0xa0, 0x10ffff],
+]
+const STAND_IN_IDS = Object.keys((await import('@readarxiv/text')).FACES)
+const STAND_IN_BYTES = readFileSync(join(REPO, 'node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf'))
+const STAND_IN_FILE = /^\/static-fonts\/([0-9a-f]{2})[0-9a-f]{14}\.woff2$/
+/** @type {{ plan: (k: number, n: number) => 'drop' | 404 | 'file', log: { path: string, at: number }[] } | null} */
+let standIn = null
+const standInRoute = {
+  prefix: '/',
+  handle(_req, res, url) {
+    if (!standIn) return false
+    const json = (v) => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(v))
+    }
+    if (url.pathname === '/static-fonts/index.json')
+      return json({
+        schema: 1,
+        fonts: 'stand-in',
+        faces: Object.fromEntries(STAND_IN_IDS.map((id) => [id, { group: 'stand-in' }])),
+      })
+    if (url.pathname === '/static-fonts/stand-in.json')
+      return json({
+        schema: 1,
+        group: 'stand-in',
+        slices: STAND_IN_SLICES,
+        faces: Object.fromEntries(
+          STAND_IN_IDS.map((id, i) => [
+            id,
+            STAND_IN_SLICES.map((_, k) => ({
+              path: `static-fonts/${k.toString(16).padStart(2, '0')}${i.toString(16).padStart(14, '0')}.woff2`,
+            })),
+          ]),
+        ),
+      })
+    if (/^\/hyph\/[a-z-]+\.json$/.test(url.pathname)) return json({ patterns: [], exceptions: [] })
+    if (!STAND_IN_FILE.test(url.pathname)) return false
+    res.writeHead(200, { 'content-type': 'font/woff2' })
+    return res.end(STAND_IN_BYTES)
+  },
+}
+const server = await startServer({
+  out: join(HERE, '.out'),
+  objects,
+  routes: [fixtureRoute, v2Route, standInRoute, siteRoute],
+})
 
 const pw = await import('playwright')
 const browser = await pw[browserName].launch({ args: browserName === 'chromium' ? [RESOLVER_WALL] : [] })
@@ -685,6 +743,15 @@ async function newPage(o = {}) {
   await context.route('**/*', async (route) => {
     const req = route.request(),
       url = new URL(req.url())
+    // (a stand-in face's file, answered as the check's plan says: aborted here, as in a browser on a link that drops it)
+    const slice = standIn && url.origin === server.origin ? STAND_IN_FILE.exec(url.pathname) : null
+    if (slice) {
+      const n = standIn.log.filter((x) => x.path === url.pathname).length + 1
+      standIn.log.push({ path: url.pathname, at: performance.now() })
+      const how = standIn.plan(Number.parseInt(slice[1], 16), n)
+      if (how === 'drop') return route.abort('connectionaborted')
+      if (how === 404) return route.fulfill({ status: 404, body: '' })
+    }
     if (url.origin === server.origin) return route.continue()
     // the stand-in of arXiv's own server: its PDF by ranges, no entity-tag promised
     if (url.origin === 'https://arxiv.org' && url.pathname.startsWith('/pdf/')) {
@@ -3975,6 +4042,225 @@ await check(
     return { ...st, other }
   },
 )
+
+// ---------------------------------------------------------------- a slice lost for now (compose/served.ts heal)
+/** s1-columns opened in German with no engine, over our own stand-in faces answered by `plan` (standIn; null: the site's faces
+ *  this machine has, siteRoute): the page's record of each change of the document's fonts (the served faces added in one
+ *  stretch), of the reader's faces state as it changes, and of each drawing of the translation made (whether its text holds a
+ *  'b', the stand-in slice a plan fails) */
+async function standInLaid(plan) {
+  standIn = plan ? { plan, log: [] } : null
+  const opened = await newPage()
+  await opened.page.evaluate(() => {
+    const add = document.fonts.add.bind(document.fonts)
+    window.__adds = []
+    let open = null
+    document.fonts.add = (f) => {
+      const family = f.family.replace(/"/g, '')
+      if (family.startsWith('axt-')) {
+        if (!open) {
+          const now = []
+          open = now
+          window.__adds.push(now)
+          queueMicrotask(() => {
+            open = null
+          })
+        }
+        open.push(`${family} ${f.weight} ${f.style} ${f.unicodeRange}`)
+      }
+      return add(f)
+    }
+    window.__drawn = []
+    new MutationObserver(() => {
+      for (const svg of document.querySelectorAll('.axt-over > svg')) {
+        if (svg.__seen) continue
+        svg.__seen = true
+        window.__drawn.push({
+          b: (svg.textContent ?? '').includes('b'),
+          faces: window.__h.readers[0]?.reader.state().faces ?? null,
+        })
+      }
+    }).observe(document.body, { childList: true, subtree: true })
+  })
+  await opened.page.evaluate(() => window.__h.reader('s1-columns', { host: 'web', typeset: true, target: 'de' }))
+  await opened.page.evaluate(() => {
+    const r = window.__h.readers[0].reader
+    window.__faces = [r.state().faces]
+    r.subscribe(() => {
+      const f = r.state().faces
+      if (window.__faces.at(-1) !== f) window.__faces.push(f)
+    })
+  })
+  return opened
+}
+/** the stand-in's 'b' files asked, each with the times of its asks (ms, from its first) */
+const bAsks = () => {
+  const by = new Map()
+  for (const x of standIn?.log ?? [])
+    if (x.path.startsWith('/static-fonts/01')) by.set(x.path, [...(by.get(x.path) ?? []), x.at])
+  return [...by].map(([path, at]) => ({ path, at: at.map((t) => Math.round(t - (at[0] ?? 0))) }))
+}
+/** a page's errors but the stand-in's asks aborted on purpose */
+const unplanned = (errors) => errors.filter((e) => !/ERR_CONNECTION_ABORTED|status of 404/.test(e))
+/** the timers' slack allowed under the pace, ms (a wait is never shorter than it was set; the log's clock is the harness's) */
+const SLACK_MS = 50
+await check(
+  "reader: a face's slice failing for now twice, then served (our own stand-in faces): its units the original's after the second failure, the notice told once, then laid in place without a reload (faces-heal F1-F3)",
+  async () => {
+    const { page, context, errors } = await standInLaid((k, n) => (k === 1 && n <= 4 ? 'drop' : 'file'))
+    try {
+      await page.evaluate(() => {
+        window.__same = true
+      })
+      await waitFor(page, () => window.__drawn.some((d) => d.b), null, 30_000)
+      await page.waitForTimeout(1500)
+      const st = await page.evaluate(() => ({
+        faces: window.__faces,
+        drawn: window.__drawn,
+        same: window.__same === true,
+        laid: window.__h.readers[0].reader.probe().laidPages,
+      }))
+      const asks = bAsks()
+      const firstB = st.drawn.findIndex((d) => d.b)
+      assert(!unplanned(errors).length, unplanned(errors).join('; '))
+      // (a file another face's ask first met once the first came, failing twice in its turn, may still be on its way)
+      assert(
+        asks.every((a) => a.at.length <= 5) &&
+          asks.some(
+            (a) => a.at.length === 5 && a.at[4] - a.at[3] >= BACKOFF_MS - SLACK_MS && a.at[1] >= RETRY_MS - SLACK_MS,
+          ),
+        `the 'b' files' asks: ${JSON.stringify(asks)}`,
+      )
+      assert(
+        JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+        `the faces state: ${JSON.stringify(st.faces)}`,
+      )
+      assert(
+        st.same && firstB > 0 && st.drawn.slice(0, firstB).some((d) => !d.b && d.faces === 'lost'),
+        `the drawings: ${JSON.stringify(st.drawn)}`,
+      )
+      return { asks, faces: st.faces, drawn: st.drawn.map((d) => (d.b ? 'b' : '-')).join(''), laid: st.laid }
+    } finally {
+      standIn = null
+      await context.close()
+    }
+  },
+)
+await check(
+  "reader: a face's slice not there (404; our own stand-in faces): its units the original's for the visit, the page laid with the rest, the slice asked no more (faces-heal F3)",
+  async () => {
+    const { page, context, errors } = await standInLaid((k) => (k === 1 ? 404 : 'file'))
+    try {
+      await waitFor(page, () => window.__drawn.length > 0 && window.__faces.includes('lost'), null, 30_000)
+      await page.waitForTimeout(8000)
+      const st = await page.evaluate(() => ({
+        faces: window.__faces,
+        drawn: window.__drawn,
+        laid: window.__h.readers[0].reader.probe().laidPages,
+      }))
+      const asks = bAsks()
+      assert(!unplanned(errors).length, unplanned(errors).join('; '))
+      assert(asks.length > 0 && asks.every((a) => a.at.length === 1), `the 'b' files' asks: ${JSON.stringify(asks)}`)
+      assert(
+        JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+        `the faces state: ${JSON.stringify(st.faces)}`,
+      )
+      assert(st.laid > 0 && !st.drawn.some((d) => d.b), `the drawings: ${JSON.stringify(st)}`)
+      return { asks, laid: st.laid, drawn: st.drawn.length }
+    } finally {
+      standIn = null
+      await context.close()
+    }
+  },
+)
+await check(
+  "reader: a face's slice failing for ever (our own stand-in faces): the page laid with the rest, the slice asked again at the session's pace (backoff after each ask, each ask asked once more after RETRY_MS) and no faster, over 14 s from its first ask, no page laid again for an ask that failed (faces-heal F1, F3)",
+  async () => {
+    const { page, context, errors } = await standInLaid((k) => (k === 1 ? 'drop' : 'file'))
+    try {
+      await waitFor(page, () => window.__drawn.length > 0 && window.__faces.includes('lost'), null, 30_000)
+      await page.waitForTimeout(1000)
+      const lays = await page.evaluate(() => window.__h.readers[0].reader.probe().lays)
+      const first = Math.min(
+        ...(standIn?.log ?? []).filter((x) => x.path.startsWith('/static-fonts/01')).map((x) => x.at),
+      )
+      await page.waitForTimeout(Math.max(0, first + 14_000 - performance.now()))
+      const asks = bAsks()
+      const st = await page.evaluate(() => ({
+        faces: window.__faces,
+        drawn: window.__drawn,
+        laid: window.__h.readers[0].reader.probe().laidPages,
+        lays: window.__h.readers[0].reader.probe().lays,
+      }))
+      assert(!unplanned(errors).length, unplanned(errors).join('; '))
+      // (each ask two fetches, RETRY_MS apart; the k-th ask again begins backoff(k) after the ask before it ended, its second
+      // fetch: 3, 6, 11 s from the first ask, the next at 20)
+      const paced = (at) => {
+        for (let j = 0; 2 * j + 1 < at.length; j++) if (at[2 * j + 1] - at[2 * j] < RETRY_MS - SLACK_MS) return false
+        for (let k = 1; 2 + 2 * k < at.length; k++)
+          if (at[2 + 2 * k] - at[1 + 2 * k] < backoff(k) - SLACK_MS) return false
+        return at.length <= 10
+      }
+      const within = (a) => a.at.filter((t) => t <= 14_000)
+      assert(
+        asks.every((a) => paced(within(a))) && asks.some((a) => within(a).length >= 8),
+        `the 'b' files' asks: ${JSON.stringify(asks)}`,
+      )
+      assert(
+        JSON.stringify(st.faces) === JSON.stringify([null, 'lost']),
+        `the faces state: ${JSON.stringify(st.faces)}`,
+      )
+      assert(
+        st.laid > 0 && !st.drawn.some((d) => d.b) && st.lays === lays,
+        `the page: ${JSON.stringify({ ...st, lays0: lays })}`,
+      )
+      return { asks, laid: st.laid, lays: st.lays }
+    } finally {
+      standIn = null
+      await context.close()
+    }
+  },
+)
+for (const faces of ['stand-in', 'site']) {
+  await check(
+    `reader: no failure (${faces === 'site' ? "the site's faces this machine has" : 'our own stand-in faces'}): the asks of the faces, their order, the changes of the document's fonts and what is drawn, printed for a comparison with the base (faces-heal F4)`,
+    async () => {
+      if (faces === 'site' && !siteHas) return { skipped: siteNone }
+      const { page, context, errors } = await standInLaid(faces === 'site' ? null : () => 'file')
+      try {
+        await waitFor(page, () => window.__drawn.length > 0, null, 30_000)
+        await page.waitForTimeout(3000)
+        const st = await page.evaluate(() => ({
+          asked: window.__h.readers[0].asked.map((a) => a.url).filter((u) => /^\/(static-fonts|hyph)\//.test(u)),
+          adds: window.__adds,
+          faces: window.__faces,
+          texts: [...document.querySelectorAll('.axt-over > svg')].map((s) => s.textContent ?? ''),
+          probe: window.__h.readers[0].reader.probe(),
+        }))
+        assert(!errors.length, errors.join('; '))
+        assert(st.texts.length > 0 && st.texts.some((t) => t.includes('b')), `drawn: ${JSON.stringify(st.texts)}`)
+        const digest = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, 16)
+        return {
+          asks: st.asked.length,
+          slices: st.asked.filter((u) => u.endsWith('.woff2')).length,
+          asksDigest: digest(st.asked),
+          asksSortedDigest: digest([...st.asked].sort()),
+          fontChanges: st.adds.length,
+          facesAdded: st.adds.flat().length,
+          addsDigest: digest(st.adds),
+          faces: st.faces,
+          drawings: st.texts.length,
+          textsDigest: digest([...st.texts].sort()),
+          laidPages: st.probe.laidPages,
+          lays: st.probe.lays,
+        }
+      } finally {
+        standIn = null
+        await context.close()
+      }
+    },
+  )
+}
 await check(
   "reader: a paper arXiv does not have: the state says why (the original not found, the layer refused as not found), for the host's own page (L11 difference 3)",
   async () => {
