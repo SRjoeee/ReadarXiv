@@ -726,8 +726,8 @@ describe('a template of closed types is closed', () => {
       [
         "export type Role = 'serif' | 'sans'",
         "export type Slant = 'italic' | 'upright'",
-        'export type Change = Role | Slant | `${Role}-${Slant}`',
-        'export type Loose = Role | `${string}-x`',
+        `export type Change = Role | Slant | \`\${Role}-\${Slant}\``,
+        `export type Loose = Role | \`\${string}-x\``,
         "export const FACED = new Set<string>(['serif', 'sans-italic', 'upright'] satisfies readonly Change[])",
         "export const LOOSE = new Set<string>(['serif', 'a-x', 'b-x'] satisfies readonly Loose[])",
         'export const faced = (c: Change, l: Loose): boolean => FACED.has(c) || LOOSE.has(l)',

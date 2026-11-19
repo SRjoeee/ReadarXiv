@@ -370,7 +370,7 @@ const judgedWordsOf = (pattern, flags) => {
 function hitWhole(l, key, rulesLedger) {
   const row = key ? rulesLedger?.rules?.[key] : null
   const entries = l.nodes?.entries
-  if (!row || row.kind !== 'list' || !Array.isArray(row.hits) || !row.hits.length || !entries || row.entriesDigest !== digestOf(entries)) return false
+  if (row?.kind !== 'list' || !Array.isArray(row.hits) || !row.hits.length || !entries || row.entriesDigest !== digestOf(entries)) return false
   const literal = l.nodes.literal
   const judged = row.judged !== undefined ? (literal?.type === 'RegExpLiteral' ? judgedWordsOf(literal.pattern, literal.flags ?? '') : null) : entries
   if (!judged || judged.length !== row.hits.length || !entries.every(e => judged.includes(e))) return false
