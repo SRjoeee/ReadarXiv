@@ -1,4 +1,4 @@
-// Composing the right pane (design §4.5 "composing a page"; the page design A §2.2, §2.3): what each slot of the right
+// Composing the right pane: what each slot of the right
 // stack shows, from the documents open and the pages laid. The layer side (docs/PDF-READER.md §11.8) over the stack: each
 // behaviour with the reason it was found.
 //
@@ -11,7 +11,7 @@
 //   one task (the stack's swap), with its size and the pane's scroll unchanged; its crops drawn again after a zoom.
 // - **Laying, one page at a time.** The near pages are laid the page in the middle of the view first (then the pages after it
 //   at an equal distance); from a page's commit until it is in place no other page is laid, HOLD_MS at most, so that the page
-//   the reader waits on is shown first (layer-side.mjs `hold`). A page commits when nothing it waits for is missing: its rows,
+//   the reader waits on is shown first. A page commits when nothing it waits for is missing: its rows,
 //   or its faces (asked in one wave for the near pages, the middle page first, each page laid again once its own are in; a page
 //   still waiting for rows asks meanwhile those of the rows it has). A page laid remembers every row its lay read and what it
 //   saw of it (a translation, a refusal, none in yet), and is laid again, alone, when a row lands that stands otherwise than
@@ -78,15 +78,15 @@ const cropGridOf = (at: SlotAt) => cropGrid(at.viewport, outputScaleOf(at), roun
 /** the laid pages a reader keeps, at most (a page's Page is some kilobytes; past it the least recently shown is let go) */
 export const PAGES_KEPT = 600
 /** how long a page's drawing, once committed, may take to be put in place before its slot shows the original's page, ms
- *  (layer-side.mjs PAGE_MS; PDF-READER §11.8); a ruling, unmeasured */
+ *  (PDF-READER §11.8); a ruling, unmeasured */
 export const PAGE_MS = 30_000
-/** the longest a page's commit holds the laying of the next, ms (reader.mjs HOLD_MS; PDF-READER §11.8): the commit's wait for
+/** the longest a page's commit holds the laying of the next, ms (PDF-READER §11.8): the commit's wait for
  *  the left's page, LEFT_WAIT_MS, and its copy's drawing in tenths of a second; past it the hold is a promise gone astray.
  *  Unmeasured */
 export const HOLD_MS = 2000
-/** how many pages past the near ones are laid ahead, the way the reader moves (layer-side.mjs AHEAD_PAGES) */
+/** how many pages past the near ones are laid ahead, the way the reader moves */
 export const AHEAD_PAGES = 2
-/** how long the near pages stay where they are before a window ahead is begun, ms (layer-side.mjs AHEAD_SETTLE_MS): a page
+/** how long the near pages stay where they are before a window ahead is begun, ms: a page
  *  of a steady scroll comes near every half second or so, a fling's every tenth, as the scroll probe of PDF-READER §11.8
  *  measured them (1,500 px/s, a fling of 2,600 px, on 1706.03762v7) */
 export const AHEAD_SETTLE_MS = 150
@@ -498,7 +498,7 @@ export function createComposer(o: ComposerOptions): Composer {
     }
     if (mine !== gen || disposed) return
     if (!part) {
-      // (no part: the page is arXiv's, as the owner decided; a page the generation before laid goes back to it)
+      // (no part: the page is arXiv's; a page the generation before laid goes back to it)
       P.nothing = true
       if (commits.has(n)) uncommit(n)
       settledNow(n)
@@ -738,7 +738,7 @@ export function createComposer(o: ComposerOptions): Composer {
     marks.mark(n, slot, (vp?.viewBox as number[] | undefined) ?? null, vp?.rotation ?? 0, boxes)
   }
 
-  // ---------------------------------------------------------------- the pages ahead (layer-side.mjs layAhead)
+  // ---------------------------------------------------------------- the pages ahead
   let aheadAc: AbortController | null = null,
     aheadDir = 1,
     nearLo = 0,

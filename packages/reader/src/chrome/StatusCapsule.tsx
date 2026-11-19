@@ -212,7 +212,7 @@ export function StatusCapsule({
   )
 }
 
-/** how long the narrow window's words are read before they leave, ms: the maintainer's ruling (UI.md S-R-14), unmeasured */
+/** how long the narrow window's words are read before they leave, ms: a ruling (UI.md S-R-14), unmeasured */
 const NARROW_MS = 5000
 /** how long a run's wait lasts before its capsule enters, ms (PDF-READER §6.6): a wait the reader cannot perceive is not
  *  announced. Of the family of the page's mark, which PDF.js shows after 400 ms (`--loading-icon-delay`), and of the

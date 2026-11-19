@@ -1,7 +1,7 @@
-// A laid page painted over its page view (design §4.5 "Painting"): the SVG painter (a <text> a line at its baseline, a <tspan>
+// A laid page painted over its page view: the SVG painter (a <text> a line at its baseline, a <tspan>
 // a run of one face at its own place, an oblique run skewed about its baseline, a line set turned turned about its origin), drawn
 // from `Page` alone; and the crops, each element's (or label's) own ink cut from the crop render of the page it stands on and
-// drawn where its item stands, darkened into the page so that paint order cannot change a pixel (design-a §1.4). A crop is cut
+// drawn where its item stands, darkened into the page so that paint order cannot change a pixel. A crop is cut
 // by its own ink as TeX set it (its item's `ink`, the part's boxes) and its antialiased edge, a device pixel of the render it is
 // cut from round it, clear of every other piece's ink and its edge (the Page's `inks`): the crop render shows every element
 // and label of the page, so a source cut whole carries their ink (2610.21312v1-zh p5 t58: line 2's glyph tops left as dots),
@@ -33,7 +33,7 @@ function frameOf(vp: PageViewport): [number, number, number, number] {
 /** how far the page is turned (its /Rotate, as its viewport shows it): 0, 90, 180 or 270 */
 const turnOf = (vp: PageViewport): number => (((vp.rotation ?? 0) % 360) + 360) % 360
 /** the page's viewport as it would be unturned, at the same scale: what the overlay's drawing (its SVG, its crops, its links) is
- *  made in, turned then with the page as PDF.js turns its layers (the sheet's `[data-axt-turn]`; the maintainer's B-408: a
+ *  made in, turned then with the page as PDF.js turns its layers (the sheet's `[data-axt-turn]`: a
  *  page turned a quarter has its translation drawn turned with it, as the original's content is) */
 export const uprightOf = (vp: PageViewport): PageViewport => (turnOf(vp) ? vp.clone({ rotation: 0 }) : vp)
 /** an element of the overlay drawn in the page's own frame, marked to be turned with the page (none where it is not turned) */

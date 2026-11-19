@@ -1,6 +1,6 @@
 // The reader's state as the chrome's events (model.ts SessionEvent): what changed between two states of openReader, in the
-// words the chrome's model folds, as it folds the extension's today session's. One fold for every host that mounts the chrome
-// over openReader (the extension's v2 page and the website's had a copy each, L11's gap 1): a host's `open` tells the chrome
+// words the chrome's model folds, as it folds the extension's v1 session's (src/pdf-reader/session). One fold for every host
+// that mounts the chrome over openReader, so that no host holds a copy of it: a host's `open` tells the chrome
 // `eventsOf(told, reader.state())` at each of the reader's changes.
 import { kindOfWhy } from '@readarxiv/format'
 import type { ProviderErrorKind } from '@readarxiv/ui'

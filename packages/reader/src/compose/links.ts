@@ -1,4 +1,4 @@
-// A laid page's links (design §4.5: on a laid page the text layer and the links are ours, PDF.js's own would offer the hidden
+// A laid page's links (on a laid page the text layer and the links are ours, PDF.js's own would offer the hidden
 // original at its old places): `Page.links`, each an `<a href>` over its box, reached by Tab in the page's reading order, named
 // by the text drawn under it, followed by a click or Enter. The link layer (docs/PDF-READER.md §11.9): a box of the page's frame
 // in shares, so that a zoom moves nothing; a name set as an attribute, never parsed; a link out of the paper through the host
@@ -23,9 +23,9 @@ export const urlAllowed = (url: string): boolean => {
     return false
   }
 }
-/** the characters of a link's name at most (links.mjs NAME_MAX: more is no link a page has); unmeasured */
+/** the characters of a link's name at most (more is no link a page has); unmeasured */
 const NAME_MAX = 2000
-/** the widest link border drawn, px whatever the zoom (links.mjs BORDER_MAX); unmeasured */
+/** the widest link border drawn, px whatever the zoom; unmeasured */
 const BORDER_MAX = 20
 const pct = (v: number) => `${Math.round(v * 1e4) / 1e4}%`
 const hashOf = (dest: string) => `#${encodeURIComponent(dest)}`
@@ -70,7 +70,7 @@ export function textUnder(content: TextContent | null, box: Box): { name: string
     const it = items[i] as TextContent['items'][number]
     if (!isText(it) || !it.str) continue
     const [a, b, , d, e, f] = it.transform as number[]
-    // (upright items only: a turned one is the left's alone, textlayer.mjs itemsOf)
+    // (upright items only: a turned one is the left's alone)
     if (b !== 0) continue
     const size = Math.abs(d as number) || Math.abs(a as number) || 1
     const y = (f as number) + 0.3 * size

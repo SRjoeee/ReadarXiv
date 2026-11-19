@@ -1,4 +1,4 @@
-// The visitor's preferences, one shape in both hosts (the host design A §1.1): what the reader reads, writes as a
+// The visitor's preferences, one shape in both hosts: what the reader reads, writes as a
 // patch and watches through `host.prefs`. Each host maps its own store to it; neither store changes (the extension's saved
 // configuration keeps its schema: its adapter maps `mode` + `pdfReader.*`, the website keeps its `axt.*` keys).
 

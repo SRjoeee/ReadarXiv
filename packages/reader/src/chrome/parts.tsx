@@ -1,8 +1,8 @@
-// What a host gives the chrome besides its session (the host design A §1.1 Slots): its own controls in their approved
-// places, and the words that are its own. The extension's service menu goes before the reading options, its download, settings
+// What a host gives the chrome besides its session (its slots): its own controls in their approved places, and the words
+// that are its own. The extension's service menu goes before the reading options, its download, settings
 // and way back after them (in the bar, and as the reading options' first rows in a narrow window); its "open the settings"
-// stands under a failure's card. The target languages are named by the host's own tables (the extension's are ported from
-// another project and stay in it), and a failure's reason is worded by the host, which knows whether its translator has a key.
+// stands under a failure's card. The target languages are named by the host's own tables (the extension's are its own and
+// stay in it), and a failure's reason is worded by the host, which knows whether its translator has a key.
 import { createContext, type ReactNode, useContext } from 'react'
 import { LOCALES, localeInUse, type ProviderErrorKind } from '@readarxiv/ui'
 import { DEFAULTS, type Prefs } from '../prefs.ts'
@@ -37,7 +37,7 @@ export interface Slots {
 }
 /**
  * A host's words for the states the status capsule and the failure cards show, each in place of the catalogue's (the
- * website's own sentences: its words today): one override typed by state, never a second catalogue; a state the host does
+ * website's own sentences): one override typed by state, never a second catalogue; a state the host does
  * not word keeps the catalogue's. A run under way (queued, translating, reconnecting) has no sentence of the
  * catalogue's (the progress line under the bar shows it, the extension's approved look): where a host words it, the capsule
  * says it too, with the spinner. A function is given what the state holds (a place in the queue, a count, the time a retry
@@ -108,8 +108,8 @@ export interface Parts {
   languages: Languages
   /** the host's words for the capsule's and the cards' states; none: the catalogue's */
   words?: StateWords
-  /** the narrow window's rule, where side by side shows the translation alone (the host design A §6, one of the
-   *  host-divergent behaviours): `told` (the extension's, the default) keeps side by side chosen on the display switch and
+  /** the narrow window's rule, where side by side shows the translation alone (PDF-READER §5; one of the behaviours the
+   *  hosts differ in): `told` (the extension's, the default) keeps side by side chosen on the display switch and
    *  says so in the capsule (S-R-14); `shown` (the website's, PDF-READER §5) shows the translation chosen
    *  with side by side greyed (the stored side by side kept for a wider window), and says so only where a window that showed
    *  the paper side by side was narrowed while reading; and while the paper is made (prepared, translated after its prepare,

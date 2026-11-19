@@ -4,7 +4,7 @@
    would reach inside PDF.js's viewers: their layout assumes the browser's defaults (a box-sizing of ours shifted
    the highlight). The chrome — every control the page draws — takes its own small base under the class
    `chrome`; the viewers keep theirs */
-/* the extension's tokens (the redesign's design, §2.1): the ramp, the roles and their dark values, generated from
+/* the extension's tokens (UI.md §5): the ramp, the roles and their dark values, generated from
    src/shared/tokens.ts; the reader's own layout values stay below */
 @import "@readarxiv/ui/tokens.css";
 @import "@readarxiv/ui/controls.css";
@@ -52,31 +52,31 @@
 header.bar {
   position: fixed; inset: 0 0 auto 0; z-index: 20; height: var(--bar);
   /* the trail keeps its width and the lead gives way: squeezed, the switch moves off the centre rather than being drawn
-     over, and nothing is pushed past the window's edge (Part 6's interface review: overlaps from 500 to 1210 px) */
+     over, and nothing is pushed past the window's edge (else the zones overlap between 500 and 1210 px) */
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr); align-items: center; gap: 16px;
   padding-inline: 8px; background: var(--chrome); box-shadow: 0 0.5px 0 var(--chrome-line); color: var(--ink);
 }
 /* the lead's width is the grid's, which the trail narrows: the title leaves when there is too little of it to read
-   (PaperTitle measures the id against it), whatever the window's width (the interface review) */
+   (PaperTitle measures the id against it), whatever the window's width */
 [data-zone="lead"] { container: lead / inline-size; }
 /* the contents move the document area at once, so that each side is refitted once to its new width; it is drawn sliding
-   there by a transform (App.tsx), on the compositor: a transition of `left` refitted both sides on every frame (the
-   final review: 12 scale changes a toggle) */
+   there by a transform (App.tsx), on the compositor: a transition of `left` refitted both sides on every frame (12 scale
+   changes a toggle) */
 .doc { position: fixed; inset: var(--bar) 0 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; }
 html[data-axt-contents] .doc { left: var(--side); }
 .pane { position: relative; min-width: 0; overflow: hidden; timeline-scope: --pane-y; }
 /* a pane's scroller (App.tsx draws it, the reader draws into it): filling the pane, placed as PDF.js's viewer requires of
    the element it scrolls (it throws where that is not placed absolutely); the chrome's own, so that a host's page sheet needs
-   none of it (the extension's engine.css held it, the website's v2 page carried a copy: L11's gap 4) */
+   none of it */
 .pane .viewerContainer { position: absolute; inset: 0; overflow: auto; overflow-anchor: none; scroll-timeline: --pane-y block; scrollbar-width: none; }
 /* one display alone, or side by side in a narrow window: the scroller spans the window, the page centred in it (§3). The view's
    marks are read wherever they are written around the panes: on the reader's root (the package's, panes.ts), which a host
-   gives as <body> or any element around the chrome, and on <html> (the extension's today engine). Read on <html> alone, a
-   host that opened the reader on <body> showed both panes side by side in every display (L11 third round, gap 1) */
+   gives as <body> or any element around the chrome, and on <html> (the extension's own engine). Read on <html> alone, a
+   host that opened the reader on <body> would show both panes side by side in every display */
 [data-axt-pdf-mode="original"] .doc, [data-axt-pdf-mode="translation"] .doc, [data-axt-narrow] .doc { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
 /* the original's pane out of the display: laid out still, at no width and out of sight, as the reader's own sheet takes it out
-   (styles.ts). It is PDF.js's viewer, which the reader still fits and scrolls there: taken out by display: none, PDF.js had no
-   offsetParent to scroll ("offsetParent is not set -- cannot scroll", an error on every narrow window: gap 2). At no width it
+   (styles.ts). It is PDF.js's viewer, which the reader still fits and scrolls there: taken out by display: none, PDF.js has no
+   offsetParent to scroll ("offsetParent is not set -- cannot scroll", an error on every narrow window). At no width it
    draws no page (none is in its view) */
 [data-axt-pdf-mode="translation"] .pane[data-side="left"],
 [data-axt-pdf-mode="bilingual"][data-axt-narrow] .pane[data-side="left"] { position: absolute; inset-block: 0; inset-inline-start: 0; inline-size: 0; visibility: hidden; }
@@ -86,7 +86,7 @@ html[data-axt-contents] .doc { left: var(--side); }
 [data-axt-pdf-mode="bilingual"][data-axt-swapped] .pane[data-side="left"] { order: 2; }
 
 /* ----- PDF.js's pages: a hairline and a soft shadow, 14 px apart (§4.1); PDF.js's own border and its margin, whose
-   foot is negative, give way (as in the harness the maintainer approved) ----- */
+   foot is negative, give way ----- */
 .pdfViewer .page { border: 0 !important; margin-block: 14px !important; box-shadow: var(--page-shadow); }
 /* dark pages (§4.3): the canvas alone inverted, a page not drawn yet already its colour, so nothing flashes white; the
    highlight and the figures keep their colours, the band screened over the dark page as it is multiplied over a white one
@@ -104,7 +104,7 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   [data-zoom] > .tbtn::before { inset-inline: 0; }
   .tbtn[aria-expanded="true"], .tbtn[aria-pressed="true"] { background: var(--fill); color: var(--ink); }
   /* a hover's look only where a pointer hovers: on a touch screen :hover latches after a tap and reads as a state stuck
-     on (the interface review); every :hover below is held the same way (tests/styles/reader-sheet.test.ts) */
+     on; every :hover below is held the same way (tests/styles/reader-sheet.test.ts) */
   @media (hover: hover) { .tbtn:hover { background: var(--fill); color: var(--ink); } }
   .chrome a.tbtn { text-decoration: none; }
   .tbtn:active { scale: 0.96; }
@@ -154,7 +154,7 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   .entry { display: flex; align-items: center; gap: 2px; height: 28px; padding-inline: 0 8px; border-radius: 6px; }
   .entry[aria-current="true"] { background: var(--fill); }
   @media (hover: hover) { .entry:hover { background: var(--fill); } }
-  /* the link is the row from top to bottom: the row is lit as a whole, and pressed as a whole (the interface review) */
+  /* the link is the row from top to bottom: the row is lit as a whole, and pressed as a whole */
   .entry a { display: flex; flex: 1; min-width: 0; align-items: baseline; gap: 8px; padding-block: 5px; color: inherit; text-decoration: none; }
   .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500; }
   .entry[aria-current="true"] .t { font-weight: 600; }
@@ -163,8 +163,8 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   [data-level="3"] > .entry { padding-inline-start: 28px; }
   :is([data-level="2"], [data-level="3"]) .t { font-size: 12px; font-weight: 400; color: var(--ink-2); }
   .fold { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--ink-3); }
-  /* its target 24 × 24 (WCAG 2.5.8), its drawing 18: grown up, down and away from its link, never toward it (#299;
-     Part 6's interface review). A leaf's is hidden with it */
+  /* its target 24 × 24 (WCAG 2.5.8), its drawing 18: grown up, down and away from its link, never toward it (#299).
+     A leaf's is hidden with it */
   .fold::before { content: ""; position: absolute; inset: -3px 0 -3px -6px; }
   .fold svg { transition: rotate 150ms ease-out; }
   .fold[aria-expanded="true"] svg { rotate: 90deg; }
@@ -215,14 +215,14 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
      line of its own. A change's old and new words share its one grid cell, the old taken out of the flow where they
      stand, so that the cell is the new words' width and nothing is laid out side by side.
      17 px, whole: 1.35 of 12.5 px is 16.875, which Chromium shares out unevenly, and the words sat 0.94 px above the
-     capsule's middle (the web's round-1 drafts, measured at 200 %; the maintainer, 2026-10-04) */
+     capsule's middle (measured at 200 %) */
   .capsule .words { position: relative; display: grid; justify-items: start; flex: none; padding-block: 8px; line-height: 17px; }
   .capsule .words > .line { grid-area: 1 / 1; white-space: nowrap; }
   .capsule .words > .line[data-state="out"] { position: absolute; inset-block-start: 0; inset-inline-start: 0; }
   /* one line wherever it fits, the box's width the motion's, and what follows the words pinned to its end, so that it
      travels with the end as the box opens and closes; in a window too narrow for the sentence the words wrap, balanced,
-     the box's width its own, and the icon and the actions keep their size (Part 6's interface review: at 320 px the
-     English capsules ran past both edges, their action with them) */
+     the box's width its own, and the icon and the actions keep their size (else, at 320 px, the English capsules run
+     past both edges, their action with them) */
   .capsule .after { display: inline-flex; flex: none; align-items: center; gap: 8px; width: max-content; }
   .capsule:not([data-wrap]) > .after, .capsule > .after[data-state="out"] { position: absolute; inset-block: 0; inset-inline-end: var(--capsule-end); }
   .capsule > .after[data-state="out"] { pointer-events: none; }
@@ -284,7 +284,7 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
 @media (width < 400px) { header.bar { gap: 8px; } }
 @media (width < 360px) { header.bar { gap: 6px; } [data-zone="trail"] > .divider { display: none; } }
 /* forced colours (Windows' contrast themes) drop the fills and the rings: a pressed button takes the system's
-   Highlight, as a selection does (the interface review) */
+   Highlight, as a selection does */
 @media (forced-colors: active) {
   .tbtn[aria-pressed="true"]:not([aria-disabled="true"]) { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .tbtn[aria-disabled="true"] { color: GrayText; }
@@ -297,10 +297,10 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   @keyframes capsule-in { from { opacity: 0; } }
   @keyframes capsule-out { to { opacity: 0; } }
 }
-/* the rest of the chrome's movements, each a fade or nothing when the reader asks for less motion (§4.2; Part 6's
-   accessibility audit): the contents slide in at once, the capsule does not travel with them, the link's arrow does
-   not nudge, the disclosure does not turn, the switch's knob and the indicator's thumb do not glide or widen, the
-   card's button and the capsule's chip are not pressed in */
+/* the rest of the chrome's movements, each a fade or nothing when the reader asks for less motion (§4.2): the contents
+   slide in at once, the capsule does not travel with them, the link's arrow does not nudge, the disclosure does not turn,
+   the switch's knob and the indicator's thumb do not glide or widen, the card's button and the capsule's chip are not
+   pressed in */
 @media (prefers-reduced-motion: reduce) {
   .toc, html[data-axt-contents] .toc { transition: visibility 0s; }
   .capsule-slot { transition: none; }

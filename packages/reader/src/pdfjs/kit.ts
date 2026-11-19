@@ -1,7 +1,7 @@
-// PDF.js inside the reader (design §4.5 "PDF.js's set-up lives in the reader, so both hosts run the same"; the host
-// design A §1.2, §1.5; design-b §1.7): the library and its viewer components loaded once a page, the options the website
-// measured for every document, the one fix of PDF.js's page views the reader still needs, and a worker per document role per
-// reader, made over its own port (never GlobalWorkerOptions), so that two readers on one page share none.
+// PDF.js inside the reader (its set-up lives in the reader, so both hosts run the same): the library and its viewer
+// components loaded once a page, the options the website measured for every document, the one fix of PDF.js's page views
+// the reader still needs, and a worker per document role per reader, made over its own port (never GlobalWorkerOptions), so
+// that two readers on one page share none.
 //
 // The options (the website's, each measured): `enableHWA` (GPU-backed canvases: without it a pinch in WebKit took 40 to
 // 75 ms a frame); `disableStream` and `disableAutoFetch` (a paper read by ranges, a document reading what its pages need and

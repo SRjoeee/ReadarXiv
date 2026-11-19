@@ -1,7 +1,7 @@
-// The reader's client of our server's v2 routes (L5's routes: `GET /api/v2/papers/<seg>?t=&f=` follows, a whole document an
+// The reader's client of our server's v2 routes (`GET /api/v2/papers/<seg>?t=&f=` follows, a whole document an
 // answer or a stream frame, never starting work; `POST /api/v2/open` starts what is missing; `GET /api/v2/o/<path>` immutable
-// bytes), over the host's fetch alone: one implementation for both hosts (the host decision: `follow`, `object` and the
-// server's rows are the reader's over `fetch`).
+// bytes), over the host's fetch alone: one implementation for both hosts (`follow`, `object` and the
+// server's rows are the reader's, over `fetch`).
 //
 // Every ask is bounded by the network's silence (docs/PDF-READER.md §8.1): REQUEST_MS with
 // nothing from the network, counted from the ask, then from its answer and from each part of its body as it is read (a
@@ -28,7 +28,7 @@ export const REQUEST_MS = 30_000
 export const RETRY_MS = 1_000
 /** how long a follow waits before it asks again once the last document heard says nothing runs for what is followed (the
  *  prepare, the target's run): our server's own reconnection time for such a stream, whose last frame that document is
- *  (`retry: 60000`, server design-a "Followers", as our server's paper tells it). Measured on staging 2026-11-07: a done paper
+ *  (`retry: 60000`, as our server's paper tells it). Measured on staging 2026-11-07: a done paper
  *  asked again at once each time its one-frame stream ended, 18 to 50 times a second */
 const IDLE_MS = 60_000
 

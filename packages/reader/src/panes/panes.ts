@@ -1,4 +1,4 @@
-// The two panes (design §4.5; docs/PDF-READER.md §11.7): arXiv's PDF in the left, the right a page stack of the same pages at
+// The two panes (docs/PDF-READER.md §11.7): arXiv's PDF in the left, the right a page stack of the same pages at
 // the same sizes and scale, each page the best version of it there is (composing's: compose/). Both panes hold the same pages at
 // the same places, so the sync is the identity follower, the highlight needs no map, and a click levels the same point of the
 // same page. The reading view's geometry, follower, inputs, zoom, fits, pinch, displays and jumps, each with the fix it found,
@@ -45,9 +45,9 @@ const LAID_MS = 100
 /** room left above a heading gone to (CSS px) */
 const HEADING_ROOM = 28
 /** the most the pages ahead of the view wait to be drawn (ms), from the panes' laying out: a layer's first page lets them go
- *  sooner (places.mjs AHEAD_HOLD_MS, the web's holdAhead alike; PDF-READER §11.7); a ruling, unmeasured */
+ *  sooner (the web's holdAhead alike; PDF-READER §11.7); a ruling, unmeasured */
 const AHEAD_HOLD_MS = 15_000
-/** the paper's language, on the text layers of the original's words (docs/PDF-READER.md §13, text-layer.mjs SOURCE_LANG): the
+/** the paper's language, on the text layers of the original's words (docs/PDF-READER.md §13): the
  *  reader asks every translation from English */
 const SOURCE_LANG = 'en'
 /** PDF.js's page view states (pdf_viewer.mjs RenderingStates) */
@@ -742,7 +742,7 @@ export function createPanes(o: PanesOptions): Panes {
   )
   on('pagechanging', () => tellLeftPage())
   // a page view's text layer holds the original's words: marked as the paper's language, the layer alone, so that the page's
-  // name, its links' names and the chrome keep the interface's (reader-view.mjs sourceText)
+  // name, its links' names and the chrome keep the interface's
   on('textlayerrendered', (e: { source?: { textLayer?: { div?: HTMLElement } } }) =>
     e.source?.textLayer?.div?.setAttribute('lang', SOURCE_LANG),
   )
@@ -795,7 +795,7 @@ export function createPanes(o: PanesOptions): Panes {
    * `replace`). Fresh (`fresh`, or the kept position not standing: `rightKnown`) where the pane has moved before its scroll event
    * came: the reader moved it itself (its places put, a relayout), or a scale, a display or a resize moved its pages; told from
    * kept values there, 2 of 248 tells differed over the lab paper's display change and narrow view, the kept position the old
-   * scale's while the places were the new one's (lane reader-q7's record, Q8)
+   * scale's while the places were the new one's (docs/PDF-READER.md §17.9)
    */
   function tellRightPage(fresh = false) {
     if (!right.pages || !shown(R)) return
@@ -864,7 +864,7 @@ export function createPanes(o: PanesOptions): Panes {
     leftAt.clear()
     for (const list of leftWaits.values()) for (const f of list) f()
     leftWaits.clear()
-    // (the slots keep their sizes and show the skeleton until an original is shown again, places.mjs setDocument(null))
+    // (the slots keep their sizes and show the skeleton until an original is shown again)
     right.blank()
     viewer.setDocument(null as never)
     linkService.setDocument(null as never)
@@ -983,7 +983,7 @@ export function createPanes(o: PanesOptions): Panes {
     follower.zoomed()
   }
 
-  // ---------------------------------------------------------------- the pinch (reader-view.mjs, kept: docs/PDF-READER.md §6.8)
+  // ---------------------------------------------------------------- the pinch (docs/PDF-READER.md §6.8)
   let pinchRest = 1,
     pinchScale = 0,
     pinchWay = 0

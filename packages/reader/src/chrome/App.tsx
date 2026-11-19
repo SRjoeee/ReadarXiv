@@ -76,8 +76,7 @@ function Page({ controller }: { controller: ReaderController }) {
   // refitted once to its new width, and is drawn sliding there by a transform, on the compositor (reader.css .doc)
   const [contents, setContents] = useState(false)
   // the value last drawn: the area slides only when it changes, never as the page mounts — a first-run flag was spent
-  // by StrictMode's second run of this effect, and a development build slid the area in on every load (Part 7's final
-  // review)
+  // by StrictMode's second run of this effect, and a development build slid the area in on every load
   const drawn = useRef(contents)
   useLayoutEffect(() => {
     const root = document.documentElement
@@ -103,8 +102,8 @@ function Page({ controller }: { controller: ReaderController }) {
     <>
       <Toolbar controller={controller} contents={contents} onContents={() => setContents((open) => !open)} />
       <Outline controller={controller} open={contents} />
-      {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region (Part 6's
-          accessibility audit); its layout is the class's */}
+      {/* the page's main landmark, beside the toolbar's banner and the contents' complementary region, so that a screen
+          reader reaches each; its layout is the class's */}
       <main className="doc" ref={doc}>
         <Pane controller={controller} side="left" scroller={left} card={state.leftCard} empty={state.noPaper} />
         <Pane controller={controller} side="right" scroller={right} card={state.card} empty={state.noPaper} />
@@ -117,8 +116,8 @@ function Page({ controller }: { controller: ReaderController }) {
 }
 
 /** the capsule's choose-language action: the language menu itself, the toolbar's, or below 900 px the one the reading
- *  options hold (§5), opened in them — its search takes the focus, whatever rows come before it (the branch review:
- *  below 500 px the focus went to the download) */
+ *  options hold (§5), opened in them — its search takes the focus, whatever rows come before it (else, below 500 px, the
+ *  focus goes to the download) */
 function chooseLanguage() {
   const inBar = document.querySelector<HTMLElement>('[popovertarget="pop-language"]')
   if (inBar?.offsetParent) {

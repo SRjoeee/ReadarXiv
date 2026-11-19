@@ -172,7 +172,7 @@ export function capsuleOf(
       return { kind: 'saveFailed', words: plain(words.saveFailed ?? O.saveFailed) }
   }
   // no paper: its card says that much, and nothing about a paper is true of it. A failure's card is the pane's whole answer, but
-  // the original's own card standing apart: the translation's state is told beside it (L11 third round, gap 5)
+  // the original's own card standing apart: the translation's state is told beside it (PDF-READER §6.6)
   if (state.noPaper || (state.phase === 'failed' && !originalApart(state, words)) || state.phase === 'loading')
     return null
   // before anything else: it says why the translated displays are greyed (S-R-17)
@@ -292,8 +292,8 @@ const DOWNLOAD = 0.15,
 /** where the prepare's stretch ends, and the translation that follows it in the same process starts */
 const PREPARED = DOWNLOAD + (1 - DOWNLOAD) * PREPARE
 /** `held`: the original held on screen by the host's rules (heldOf): while the paper is made the line is the original's load, whole
- *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display, the
- *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3). `prepared`: this
+ *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display:
+ *  nothing a website reader sees changes at the cut-over, PDF-READER §6.6). `prepared`: this
  *  process of the line had the paper's first making (ProgressLine): the translation takes what remains after the prepare's
  *  stretch, never a share of the whole that leaves the line standing still; a process without one keeps the download's base */
 export function lineOf(state: ReaderState, held = false, prepared = false): Line {
@@ -379,7 +379,7 @@ interface Look {
   tone?: 'alert' | 'wait'
 }
 /** the failures that are a wait, not a fault: our server or the service out of reach for now (the one such kind the website's
- *  run reaches the chrome as: events.ts kindOf; the extension's today session says `timeout` and `rate-limit` too, its chain's
+ *  run reaches the chrome as: events.ts kindOf; the extension's v1 session says `timeout` and `rate-limit` too, its chain's
  *  kinds as they are, but its parts draw no sign by state) */
 const WAITS: ReadonlySet<ProviderErrorKind> = new Set(['network'])
 
@@ -449,7 +449,7 @@ export function cardOf(
   if (state.failures.pdf !== null && words.originalLost && !words.openOriginal)
     return { reason: words.originalLost, action: state.selfAsks.pdf ? null : 'retry' }
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's (the extension's
-  // today session says `rate-limit`, its chain's kind as it is). A key's reason is the key's only where the service chosen
+  // v1 session says `rate-limit`, its chain's kind as it is). A key's reason is the key's only where the service chosen
   // carries one (the host's reason). No retry where the session asks again by itself for the failure the card shows
   const self = words.openOriginal || state.failures.pdf === null ? state.selfAsks.service : state.selfAsks.pdf
   return {

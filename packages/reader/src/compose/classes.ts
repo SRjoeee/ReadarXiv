@@ -49,7 +49,7 @@ export const sameClasses = (
   )
 
 /** the unit kinds the toggles `classes` leave the original's (over the defaults): what the typesetter's rules are given to leave
- *  (typeset Rules `leave`, the reader's choices of design-a §1.2), in a stable order */
+ *  (typeset Rules `leave`, the reader's choices), in a stable order */
 export function leftKinds(classes?: Readonly<Partial<Record<ClassName, boolean>>> | null): string[] {
   return Object.keys(TOGGLE_OF)
     .filter((kind) => !kindShown(kind, classes))

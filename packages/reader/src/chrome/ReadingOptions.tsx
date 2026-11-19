@@ -30,7 +30,7 @@ export function ReadingOptions({ controller, bare = false }: { controller: Reade
   const pop = usePopover('dialog', 'options')
   const radios = useRef<(HTMLButtonElement | null)[]>([])
   const names = { light: R.options.light, dark: R.options.dark, system: R.options.system }
-  // the extension's appearance (the redesign's design, §3): chosen here, the popup and the settings page follow
+  // the extension's appearance (UI.md S-R-08, `theme`): chosen here, the popup and the settings page follow
   const appearance = prefs.theme
   const setAppearance = (a: (typeof APPEARANCES)[number]) => {
     if (!lock.locked) controller.setPrefs({ theme: a })
@@ -53,7 +53,7 @@ export function ReadingOptions({ controller, bare = false }: { controller: Reade
             </div>
             {slots.beforeOptions?.('options')}
             <div className="sep narrow-only" />
-            {/* a switch's row is a label, its words a target too, as the popup's are (the interface review) */}
+            {/* a switch's row is a label, its words a target too, as the popup's are */}
             {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
             <label className="row">
               {S.rows.highlight}

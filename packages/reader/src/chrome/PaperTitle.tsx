@@ -7,10 +7,10 @@
 // that voice and not the interface's (WCAG 3.1.2; PDF-READER §6.1). The id's link is named by what is
 // on it and what it does (WCAG 2.5.3), the tooltip being hidden from assistive technology. The id leaves when the lead cannot
 // hold it beside the contents' button: its own width, measured as it is drawn, against the lead's, which the grid gives
-// and a long language's menus or a long service name narrow (the interface review: the id was drawn under the switch).
+// and a long language's menus or a long service name narrow (else the id is drawn under the switch).
 // The first answer is given before the first paint, in the lead's observer's first callback, which the browser calls once the
 // page is laid out and before it paints, rendered there at once: measured in an effect, which runs after the paint, a lead too
-// narrow for the id drew it for two frames before it went (the pin's wave-1 review); measured in a layout effect, inside React's
+// narrow for the id drew it for two frames before it went; measured in a layout effect, inside React's
 // commit, the reads laid the document out for them before the browser would (a new reader's first layout, 22 ms of the main
 // thread at 1x, 93 ms at 4x, measured 2026-11-04)
 import { ArrowUpRight } from 'lucide'

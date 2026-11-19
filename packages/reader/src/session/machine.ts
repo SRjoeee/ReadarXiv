@@ -1,4 +1,4 @@
-// The session as an explicit machine (the host decision, design-b §1: the session's machine first): `step(state, input)`
+// The session as an explicit machine: `step(state, input)`
 // pure and total; the resources each state owns declared by `resources(state)`, a map of tickets the runtime acquires and
 // releases by diffing it after every step (nobody writes "release"); every asynchronous result returned as an input carrying its
 // ticket, and dropped (before step) where that ticket is no longer live, so that a stale open, a late answer or a result of a
@@ -6,7 +6,7 @@
 // an input too: `step` takes the time it is applied at, and every timer is minted from it.
 //
 // `step = settle ∘ apply`: `apply` folds the input into its region; `settle` mints the tickets now wanted and clears the ones no
-// longer wanted, in this order (design-b §1.3): the original while there is a paper; `engaged` once a translated display is chosen
+// longer wanted, in this order: the original while there is a paper; `engaged` once a translated display is chosen
 // in a visible document (never back within a visit); the link while engaged, online and shown, the target one the reader sets,
 // the layer not refused, the look not stopped, something still to come of our server (rows made here: until the layer is final),
 // and no open asked meanwhile of a paper the follow says is not opened; the open (our server's: a follow never starts work, the
@@ -52,7 +52,7 @@ export const dirOf = (catalog: Pick<Ref, 'path'>): string => catalog.path.slice(
 const layerUnitsOf = (catalog: Pick<Ref, 'path'>, head: Pick<Head, 'units'>): ObjectAt[] =>
   head.units.map((sha256) => ({ path: `${dirOf(catalog)}/${sha256}`, sha256 }))
 
-/** the policy's constants, the same in both hosts (design-b §4) */
+/** the policy's constants, the same in both hosts */
 const GATE_MS = 1500
 const PREFS_MS = 1500
 export const BACKOFF_MS = 1000

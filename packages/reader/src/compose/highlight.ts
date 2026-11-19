@@ -1,4 +1,4 @@
-// The highlight (design §4.5 "Highlight"; docs/PDF-READER.md §17): both panes light the same per-sentence boxes of the same unit,
+// The highlight (docs/PDF-READER.md §17): both panes light the same per-sentence boxes of the same unit,
 // from `Page.lit` (on the left from A, on the right as drawn), with `{id, s}` the only lit state: a member's ord and its sentence,
 // -1 for the whole member, -2 - k its display of piece k alone (Laid.lit's `own`: a display is a block of its own, the same ink on
 // both panes, lit only where the pointer is over it, never with its member: docs/PDF-READER.md §17.9). What is painted is what
@@ -252,7 +252,7 @@ function halfLeading(page: Page, side: Side, committed: boolean): number {
  * leading. Read inside each sentence alone, a pane whose sentences each
  * hold one row (a translation's sentences are shorter than the original's), or whose rows a display parts, held no gap and
  * padded nothing: on 2610.10069v1-zh p21 the right pane's shapes stood on their glyphs' em boxes, a heading's flush with its
- * ink, where the left's were padded by 2.98 pt (the parity's highlight, lane parity-small). Two sentences' boxes on one row
+ * ink, where the left's were padded by 2.98 pt (the parity's highlight). Two sentences' boxes on one row
  * overlap and make no gap. The parity's measure reads the paint with this function (lab/typeset/parity/verdict.mjs)
  */
 export function halfLeadingOf(members: readonly (readonly (readonly Box[])[])[]): number {
@@ -273,7 +273,7 @@ export function halfLeadingOf(members: readonly (readonly (readonly Box[])[])[])
  * One outline of a shape's rectangles stacked from the top (CSS pixels, y down): an SVG path, every corner rounded to `radius`
  * (or half its shorter side), the inner ones too; rectangles that do not meet across by more than two radii, and one `apart`
  * from the one above it (another block between them, apartRows), are outlines of their own in the one path (a sentence's first
- * row right of its last; its rows either side of a display). highlight.mjs shapePath, carried: an outline joins its rows at the
+ * row right of its last; its rows either side of a display). An outline joins its rows at the
  * upper one's foot on the right and the lower one's head on the left, so that it fills what stands between two of them
  */
 export function shapePath(
@@ -492,7 +492,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
         const layer = layerOf(side, n)
         const frame = panes.frameOf(side, n)
         if (!layer || !frame) continue
-        // (a turned page's layer: the page's own frame, turned with the page as its drawing is, the maintainer's B-408)
+        // (a turned page's layer: the page's own frame, turned with the page as its drawing is)
         if (frame.turn && layer.dataset.axtTurn !== String(frame.turn)) {
           layer.dataset.axtTurn = String(frame.turn)
           layer.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${frame.w}px)`)
@@ -551,7 +551,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
             el.append(path)
           }
           // (its pixels at the scale it was drawn at, scaled with the page about the page's origin: a zoom's steps and a pinch
-          // move it on the compositor, overlay.mjs pinned)
+          // move it on the compositor)
           Object.assign((el as HTMLElement).style, {
             left: `${X0}px`,
             top: `${Y0}px`,

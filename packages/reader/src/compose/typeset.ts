@@ -1,5 +1,5 @@
 // The reader's own typesetter, openReader's engine where its host gives none (a host may still give its own: the e2e's fixture
-// lay): lane L3's `layPage` over the rule set's rules for the target the rows are of (`rulesFor`), the reader's "What to
+// lay): the typesetter's `layPage` over the rule set's rules for the target the rows are of (`rulesFor`), the reader's "What to
 // translate" as the rules' choices (`leave`: the unit kinds the toggles leave the original's), the hyphenation patterns those
 // rules read, and the reader's own Metrics over the served faces (served.ts). Bound once the head is read (the composed
 // document's open); the rules are made again as the target or the toggles change, so that a toggle lays the pages again (the
@@ -98,7 +98,7 @@ export async function typesetLay(o: TypesetOptions): Promise<Lay> {
     if (!r) return { page: part.page, wait: { rows: [], faces: [] }, members: [], links: [] }
     if ('wait' in r)
       return { page: part.page, wait: { rows: [], faces: [[HYPH_WAIT, r.wait]] }, members: [], links: [] }
-    // (typeset's Page and the reader's are the one shape design-a decides: compose/page.ts states it word for word)
+    // (typeset's Page and the reader's are one shape: compose/page.ts states it word for word)
     return layPage(part, rows, r, o.served.metrics) as unknown as Page
   }
 }

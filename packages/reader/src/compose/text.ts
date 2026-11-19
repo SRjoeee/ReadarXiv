@@ -1,5 +1,5 @@
-// A laid page's text layer (design §4.5 "Text and links"; design-a §1.4 "hiding and text by the same groups"; docs/PDF-READER.md
-// §11.11): arXiv's text content of the page in content-stream order, the items under a group that is off dropped and the member's
+// A laid page's text layer (docs/PDF-READER.md §11.11; what is hidden and what is text read by the same groups): arXiv's
+// text content of the page in content-stream order, the items under a group that is off dropped and the member's
 // laid items put at its first dropped item, so that selection, the browser's find and a screen reader meet one copy of the text,
 // in reading order (I8). Built by PDF.js's own TextLayerBuilder (its handling of a drag and of a copy):
 //
@@ -215,7 +215,7 @@ export function laidText(
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i] as Entry
     // (rotated and vertical text, an axis label turned a quarter, is left out of the layer: the left's layer has it,
-    // textlayer.mjs itemsOf, "Not in v1")
+    // PDF-READER §11.11, "Not in v1")
     if (isText(e) && !upright(e, content)) continue
     if (isText(e) || e.type !== 'beginMarkedContentProps' || e.tag !== 'OC') {
       stream.push({ kind: 'kept', e })

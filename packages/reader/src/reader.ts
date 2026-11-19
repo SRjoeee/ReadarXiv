@@ -1,4 +1,4 @@
-// openReader (the host decision: A's host, B's session): a reader in `root` for one paper, over a host that gives the
+// openReader: a reader in `root` for one paper, over a host that gives the
 // network, where arXiv's bytes are read first, the preferences, and optionally the rows made here. Everything else is the
 // reader's own and the same in both hosts: the byte store, PDF.js and its workers, the v2 client, the objects, composing, the
 // highlight. A reader owns all it makes (no state outside a reader): its marks are on `root`, its sheets and faces in it, its
@@ -189,7 +189,7 @@ export interface Reader {
   close(): void
 }
 
-/** what lays a page: the reader's own typesetter where a host gives none (lane L3's layPage over the rule set's rules, the
+/** what lays a page: the reader's own typesetter where a host gives none (the typesetter's layPage over the rule set's rules, the
  *  served faces and the reader's Metrics: compose/typeset.ts, served.ts); a host's own where it gives one (the e2e's fixture
  *  lay), with the faces its pages name. Given an engine without `lay`, nothing is laid and every page stays arXiv's */
 export interface Engine {
@@ -588,7 +588,7 @@ export function openReader(
     const s = served
     if (!s) return none
     const { pastFootOf, typesetLay } = await import('./compose/typeset.ts')
-    // (the borrow past TeX's bottom as the website's address sets it for the visit, the owner's switch: PDF-READER §18.37)
+    // (the borrow past TeX's bottom as the website's address sets it for the visit: PDF-READER §18.37's switch)
     const pastFoot = pastFootOf(typeof location === 'undefined' ? null : location)
     return typesetLay({
       served: s,
@@ -1002,7 +1002,7 @@ export function openReader(
             })
           }
         } catch (e) {
-          // (these rows will not come: a page another target still shows goes back to the original's, layer-side.mjs dropOthers)
+          // (these rows will not come: a page another target still shows goes back to the original's)
           if (!signal.aborted) {
             rowsDone = true
             rowsIn([])
