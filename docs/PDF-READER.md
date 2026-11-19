@@ -8720,6 +8720,38 @@ glyph neither crowds a label, nor ends its free line, nor stands in a box beside
 figure-lines.ts), nor is ink beside a member's lines or under them (flows.ts, facts-pass.ts, geometry.ts); the reader gate's I3
 by ink reads what the part states, so the covered word, no member, is no ink there.
 
+- **A label the page itself overpaints in part stays as the page shows it** (the coordinator's ruling of 2026-11-19). A run that
+  holds a glyph the page does not show, whether a clip or a cover hides it, is not a text the engine can state whole: it makes
+  no unit, and its glyphs the page shows stay the original's. 2610.21201v1's Figure 1 (p3) sets "sample size M", "Slow rate M"
+  and "Fast rate M", then a white box over each M and a P in its place: the page reads "sample size P", and so does the reader,
+  as printed (before, the label's translation carried the M the page hides, beside the page's P). A run read at its shown words
+  alone would read a fragment as a text wherever a shape covers part of a word (a card's label whose tops alone stand over the
+  card in front of it); a run cut at its covered glyphs where what stays is whole words waits (LATER.md).
+- **A text drawn over its hidden copy is one text.** A figure drawn twice in one place, its first copy under the second's
+  fills, was read as text drawn twice: the two copies interleaved into one unit ("BBlloocckk nn −− 11", 2607.24653v2 p3) or the
+  shown copy held as the original's (`unwrapped`). With the first copy no ink, the shown copy is read alone: "Block n − 1",
+  drawn; its room and its anchor are no longer bounded by ink nobody sees.
+- **Measured** (the walk over arXiv's PDFs of the 245 papers, the base's and this one's; the chain over the 245 from their stored
+  compiles against the base's): 802 level glyphs and 50 turned ones newly not shown, in 181 shows on 19 papers, each covered
+  by a fill of a colour at an alpha of 1 under Normal; every other glyph, box, shape and cap of every page as before, the walk
+  9.6 % longer (18.2 s to 19.9 s over 5,896 pages). Looked at on arXiv's page (crops of 22 of the covering fills, on 15 papers),
+  no covered glyph is visible; where the page shows the same words, a copy painted after the cover shows them (70 of the 181
+  shows have one: a figure drawn twice, a cell's text painted again after its fill). The bundles of 230 papers byte for byte; of the 15 that move, every one of the class: 21 units leave, their ink
+  hidden whole (2610.40394v1's five "Proof", earlier versions of figures painted over, a stacked card's labels) or their run
+  holding a hidden glyph (2610.21201v1's three labels, two turned labels and a card's label whose glyphs the page does not show
+  or shows a fragment of); 6 come, shown texts read whole without their hidden copies interleaved ("Block n − 1", "Symbol (ri,
+  si)" and "Meaning", "fused scene memory M_Z", held as a text with a script set apart); of nine labels the base held as drawn
+  twice eight are drawn, and 2610.21313v1's "SAMA" is kept as a name; 53 members' rooms and two anchors read without the hidden ink ("Accuracy"
+  centred, as its four sibling labels). No unit id of a unit that stays moves, and no wire: on Google's, Microsoft's and Chrome's
+  76,894 units sent alike; the units that leave ask nothing, the six that come ask once. No compile key moves (the marked TeX's
+  engine bundle unchanged). The reader gate on both stores: no member joins the held overlaps (door 18, Google 21), and the five
+  overlaps it set aside as the page's own setting on 2610.40394v1 p4 leave (339 to 334, 717 to 712); the runner's dumps byte for
+  byte. text-order over the 92 pairs: none out of order (34,777 members to 34,769), that page's five no longer. The display
+  gate, both modes, its 22 pairs and the added: no page newly worse (5 and 13 worse, as the line's sheets; the moved differences
+  on 1810.04805v2 p5 and 2610.21313v1 p3-p4 the same values under renumbered members); over the changed pairs' pages,
+  2610.40394v1-zh p4 worse by 11 differences, by 2 now (a size off before as now, and the count of figure texts drawn, which
+  counted the five hidden words).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
