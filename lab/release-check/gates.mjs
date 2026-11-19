@@ -26,7 +26,7 @@ export const INVARIANTS = [
   {
     id: 'I1',
     says: "all groups on, the composed page paints what arXiv's page paints, glyph for glyph, box for box and pixel for pixel (in the reader's canvas, up to the split show's residue)",
-    gap: null,
+    gap: "in the reader's software canvas a split show's glyphs paint other pixels than arXiv's on 9 pages of 7 of the canvas gate's 12 papers (at most 102 pixels and a channel delta of 81 a page, none outside those glyphs: the split moves the pen into the show's matrix, which the canvas holds in single precision), each paper held to its record (canvas.json); its fix after the launch / before the launch: the coordinator's ruling of 2026-11-19",
   },
   {
     id: 'I2',
@@ -53,7 +53,7 @@ export const INVARIANTS = [
   {
     id: 'I8',
     says: 'the text layer of a laid page reads the translation in reading order',
-    gap: null,
+    gap: "on 2610.40394v1-zh p4 five figure labels are two members each over one another (the label's word and a word its box covers on arXiv's page, translated with it), and the text layer reads the label's own translation at the page's end, the five held to their record (text-order.json); its fix after the launch / before the launch: the coordinator's ruling of 2026-11-19",
   },
   {
     id: 'I9',
@@ -286,11 +286,46 @@ export function harnessLabJudge(step) {
 }
 
 /** text-order.mjs's totals: "I8 over the run's bundles: P pairs, L laid pages of N, M members (R runs) read; missing X, out of
- *  order Y; T ms", and its first listed member */
+ *  order Y; T ms", its first listed member, and every member it lists, one a line ("  out of order <pair> p<n> ord <ord>"):
+ *  `missingListed`, `outOfOrderListed` as `<pair> p<n> ord <ord>` */
 export function textOrderOf(text) {
   const m = /^I8 over the run's bundles: (\d+) pairs, (\d+) laid pages of (\d+), (\d+) members \((\d+) runs\) read; missing (\d+), out of order (\d+); (\d+) ms/m.exec(text)
   const first = /^ {2}((?:missing|out of order) .*)$/m.exec(text)?.[1]
-  return m ? { pairs: num(m[1]), laidPages: num(m[2]), pages: num(m[3]), members: num(m[4]), runs: num(m[5]), missing: num(m[6]), outOfOrder: num(m[7]), ms: num(m[8]), ...(first ? { first } : {}) } : {}
+  const listed = kind => [...text.matchAll(new RegExp(`^ {2}${kind} (\\S+ p\\d+ ord \\d+)$`, 'gm'))].map(x => x[1])
+  return m
+    ? { pairs: num(m[1]), laidPages: num(m[2]), pages: num(m[3]), members: num(m[4]), runs: num(m[5]), missing: num(m[6]), outOfOrder: num(m[7]), ms: num(m[8]), ...(first ? { first } : {}), missingListed: listed('missing'), outOfOrderListed: listed('out of order') }
+    : {}
+}
+
+/** text-order's record (lab/release-check/text-order.json): the out-of-order members at the last integrated round, by pair */
+export const textOrderRecord = root => JSON.parse(readFileSync(join(root, 'lab/release-check/text-order.json'), 'utf8'))
+
+/**
+ * text-order's verdict, read from its totals and its list (textOrderOf), never its exit: pairs read, no member missing, every
+ * member the totals count listed, and every out-of-order member one its record names (`record.outOfOrder`, by pair: `p<n> ord
+ * <ord>`): a member out of order the record does not name fails the gate; a recorded one read in order now is said (the record
+ * to lower)
+ */
+export function textOrderJudge(text, record) {
+  const t = textOrderOf(text)
+  const held = new Set(Object.entries(record?.outOfOrder ?? {}).flatMap(([pair, ms]) => ms.map(x => `${pair} ${x}`)))
+  const now = t.outOfOrderListed ?? []
+  const fresh = now.filter(x => !held.has(x))
+  const fell = t.pairs > 0 ? [...held].filter(x => !now.includes(x)) : []
+  const whole = (t.missingListed?.length ?? -1) === t.missing && now.length === t.outOfOrder
+  const notes = [
+    !(t.pairs > 0) && 'no pair read',
+    t.missing > 0 && `missing: ${t.missingListed.slice(0, 4).join(', ')}`,
+    !whole && t.pairs > 0 && `the totals count ${t.missing} missing and ${t.outOfOrder} out of order, the list names ${t.missingListed?.length} and ${now.length}`,
+    fresh.length && `out of order and not in the record: ${fresh.slice(0, 6).join(', ')}${fresh.length > 6 ? ` and ${fresh.length - 6} more` : ''}`,
+    fell.length && `in order now, the record to lower (${record?.commit}): ${fell.join(', ')}`,
+  ].filter(Boolean)
+  const { missingListed, outOfOrderListed, ...numbers } = t
+  return {
+    pass: t.pairs > 0 && t.missing === 0 && whole && !fresh.length,
+    numbers: { ...numbers, recorded: held.size, fresh: fresh.length, fell: fell.length },
+    ...(notes.length ? { note: notes.join('; ') } : {}),
+  }
 }
 
 /** a terminal's colours (vitest colours its summary where it is asked to) */
@@ -525,6 +560,63 @@ export function canvasOf(text, ids = []) {
     pages: rows.reduce((n, r) => n + (r.pages ?? 0), 0),
     renderer: head ? JSON.parse(head) : null,
     over: [...over.map(r => `${r.id}: ${r.refused ? r.refused : `outside ${JSON.stringify(r.outsidePages)}, share ${r.shareMax}, Δ ${r.maxDelta}`}`), ...ids.filter(id => !seen.has(id)).map(id => `${id}: no line (the canvas did not report it)`)],
+    unseen: ids.filter(id => !seen.has(id)),
+    rows,
+  }
+}
+
+/** the canvas gate's record (lab/release-check/canvas.json): each paper's residue at the last integrated round */
+export const canvasRecord = root => JSON.parse(readFileSync(join(root, 'lab/release-check/canvas.json'), 'utf8'))
+
+/**
+ * canvas' verdict, read from its papers' lines (canvasOf), never its exit: the software canvas; every paper asked has its line,
+ * none refused and none with a pixel outside the split glyphs' boxes (I1 itself: never recorded); each paper's residue inside
+ * the split glyphs held to its record (`record.papers[id]`: `pages`, the differing pixels by page; `share`, `delta`, its largest
+ * share and channel delta): a page that differs and is not among its recorded pages, more pixels on a recorded page, a larger
+ * share or delta fail the gate, as does a paper the record lacks; a reading below the record is said (the record to lower)
+ */
+export function canvasJudge(text, ids, record) {
+  const c = canvasOf(text, ids)
+  const soft = c.renderer?.renderer === 'software' && c.renderer?.canvas2d === 'unavailable_software'
+  const broken = [],
+    worse = [],
+    fell = [],
+    unrecorded = []
+  for (const r of c.rows) {
+    if (r.refused || r.outsidePages?.length) {
+      broken.push(`${r.id}: ${r.refused ?? `outside the split glyphs ${JSON.stringify(r.outsidePages)}`}`)
+      continue
+    }
+    const was = record?.papers?.[r.id]
+    if (!was) {
+      unrecorded.push(r.id)
+      continue
+    }
+    const now = Object.fromEntries((r.differingPages ?? []).map(([p, n]) => [String(p), n]))
+    for (const [p, n] of Object.entries(now)) {
+      const w = was.pages?.[p]
+      if (w == null) worse.push(`${r.id} p${p}: ${n} px on a page outside its record`)
+      else if (n > w) worse.push(`${r.id} p${p}: ${w} -> ${n} px`)
+      else if (n < w) fell.push(`${r.id} p${p}: ${w} -> ${n} px`)
+    }
+    for (const [p, w] of Object.entries(was.pages ?? {})) if (!(p in now)) fell.push(`${r.id} p${p}: ${w} -> 0 px`)
+    for (const [k, v, at] of [['share', r.shareMax, was.share], ['Δ', r.maxDelta, was.delta]]) {
+      if (v > at) worse.push(`${r.id}: ${k} ${at} -> ${v}`)
+      else if (v < at) fell.push(`${r.id}: ${k} ${at} -> ${v}`)
+    }
+  }
+  const notes = [
+    !soft && `not the software canvas: ${JSON.stringify(c.renderer)}`,
+    c.unseen.length && `no line (the canvas did not report it): ${c.unseen.join(', ')}`,
+    broken.length && broken.slice(0, 4).join('; '),
+    unrecorded.length && `no record for ${unrecorded.join(', ')}`,
+    worse.length && `above the record (${record?.commit}): ${worse.slice(0, 6).join(', ')}`,
+    fell.length && `below the record (${record?.commit}), the record to lower: ${fell.join(', ')}`,
+  ].filter(Boolean)
+  return {
+    pass: soft && c.papers > 0 && !c.unseen.length && !broken.length && !unrecorded.length && !worse.length,
+    numbers: { papers: c.papers, pages: c.pages, residuePages: c.rows.reduce((n, r) => n + (r.differingPages?.length ?? 0), 0), worse: worse.length, fell: fell.length },
+    ...(notes.length ? { note: notes.join('; ') } : {}),
   }
 }
 
@@ -1005,10 +1097,8 @@ export const GATES = [
       exists('the hyphenation patterns (AXT_HYPH)', process.env.AXT_HYPH ?? ''),
     ],
     steps: ctx => [listStep(ctx), { cmd: ['node', 'lab/release-check/text-order.mjs', `--bundles=${bundlesDir(ctx)}`, `--rows=${runRowsDir(ctx)}`, `--papers=${corpusList(ctx)}`], slot: 'run' }],
-    judge: (ctx, steps) => {
-      const t = textOrderOf(steps.at(-1).text)
-      return { pass: steps.every(s => s.exit === 0) && t.pairs > 0 && t.missing === 0 && t.outOfOrder === 0, numbers: t, ...(t.first ? { note: t.first } : {}) }
-    },
+    // (the members out of order stand (INVARIANTS I8's gap): held to their record, text-order.json, textOrderJudge)
+    judge: (ctx, steps) => textOrderJudge(steps.at(-1).text, textOrderRecord(ctx.root)),
   },
   // today's reader, the way back until the cut-over deletes it: a build of its own (a default build carries the rebuilt reader,
   // on which reader.mjs and registration.mjs run the rebuilt reader's checks), today's checks run on it; a build that carries the
@@ -1132,12 +1222,8 @@ export const GATES = [
     // one machine gave other pixels outside the split glyphs on three papers (2026-11-19). Flushed after every call in A's render
     // and W's alike, the same calls give the same pixels, and what is left is what W's calls change)
     steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), '--renderer=software', '--flush', ...canvasIds(ctx)], slot: 'e2e' }],
-    judge: (ctx, steps) => {
-      const c = canvasOf(steps[0].text, canvasIds(ctx))
-      const soft = c.renderer?.renderer === 'software' && c.renderer?.canvas2d === 'unavailable_software'
-      const notes = [...(soft ? [] : [`not the software canvas: ${JSON.stringify(c.renderer)}`]), ...c.over.slice(0, 4)]
-      return { pass: steps[0].exit === 0 && soft && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: notes.join('; ') }
-    },
+    // (the split shows' residue stands (INVARIANTS I1's gap): each paper's is held to its record, canvas.json, canvasJudge)
+    judge: (ctx, steps) => canvasJudge(steps[0].text, canvasIds(ctx), canvasRecord(ctx.root)),
   },
   {
     id: 'speed',

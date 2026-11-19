@@ -6,8 +6,9 @@
 //
 // The judge (`orderOf`, the harness's I8 since stage 2): each laid member's runs of text (its laid items but its crops, in
 // order) found in the reading, white space aside, each after the one before it, the members taken in the order their first line
-// stands in the page's own text content; `missing` the first member a run of which the reading never holds, `outOfOrder` the
-// first a run of which it holds only before the run before it.
+// stands in the page's own text content; `missingAll` every member a run of which the reading never holds, `outOfOrderAll` the
+// fewest members that, taken out, leave the rest read in that order (a longest chain of their places in the reading), each in
+// the stream's order; `missing`, `outOfOrder` the first of each (a record names each member: lab/release-check/text-order.json).
 //
 // Over every pair a run lays, in Node: lab/release-check/text-order.mjs.
 import { readFileSync } from 'node:fs'
@@ -78,38 +79,62 @@ export function orderOf(leaves, page, members, entries) {
       t: m.lines.flatMap(([, , , its]) => its.filter((i) => !('src' in i)).map((i) => i.s)).filter((s) => s.trim()),
     }))
     .sort((a, b) => a.at - b.at)
-  // (members whose places are one item of the stream (two members' boxes over the same text: a figure's labels set over each
-  // other) stand in no order the stream decides: each read in its own order after the members before them, in either order
-  // among themselves)
-  let missing = null,
-    outOfOrder = null,
-    at = 0
-  for (let g = 0; g < runs.length; ) {
-    let end = g
-    while (end < runs.length && runs[end].at === runs[g].at) end++
-    let next = at
-    for (const r of runs.slice(g, end)) {
-      let from = at
-      for (const t of r.t) {
-        const s = t.replace(SPACE, '')
-        if (!all.includes(s)) {
-          missing ??= r.ord
-          continue
-        }
-        const i = all.indexOf(s, from)
-        if (i < 0) outOfOrder ??= r.ord
-        else from = i
-      }
-      next = Math.max(next, from)
+  // (each member's places in the reading: every index of its first run from which its runs read in their order (white space
+  // aside); a member a run of which the reading never holds is missing. Members whose places in the stream are one item (two
+  // members' boxes over the same text: a figure's labels set over each other) stand in no order the stream decides: taken in
+  // the order of their first place)
+  const missingAll = [],
+    judged = []
+  for (const r of runs) {
+    const ss = r.t.map((t) => t.replace(SPACE, '')).filter(Boolean)
+    if (!ss.length) continue
+    if (ss.some((x) => !all.includes(x))) {
+      missingAll.push(r.ord)
+      continue
     }
-    at = next
-    g = end
+    const places = []
+    for (let i = all.indexOf(ss[0]); i >= 0; i = all.indexOf(ss[0], i + 1)) {
+      let from = i
+      for (const x of ss.slice(1)) {
+        from = all.indexOf(x, from)
+        if (from < 0) break
+      }
+      if (from >= 0) places.push(i)
+    }
+    judged.push({ ord: r.ord, at: r.at, places })
   }
+  judged.sort(
+    (a, b) => a.at - b.at || (a.places[0] ?? Number.POSITIVE_INFINITY) - (b.places[0] ?? Number.POSITIVE_INFINITY),
+  )
+  // (out of order: the fewest members that, taken out, leave the rest read in the stream's order: a longest chain of the
+  // members, one place each, whose places never go back (patience sorting, a member's places tried from its last so that no
+  // member extends its own chain). A member read late is out of order alone, never every member after it)
+  const tails = []
+  judged.forEach((m, k) => {
+    for (let q = m.places.length - 1; q >= 0; q--) {
+      const c = m.places[q]
+      let lo = 0,
+        hi = tails.length
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (tails[mid].pos <= c) lo = mid + 1
+        else hi = mid
+      }
+      const node = { pos: c, k, prev: lo > 0 ? tails[lo - 1] : null }
+      if (lo === tails.length) tails.push(node)
+      else if (c < tails[lo].pos) tails[lo] = node
+    }
+  })
+  const chained = new Set()
+  for (let n = tails.at(-1) ?? null; n; n = n.prev) chained.add(n.k)
+  const outOfOrderAll = judged.filter((_, k) => !chained.has(k)).map((m) => m.ord)
   return {
     members: runs.length,
     runs: runs.reduce((n, r) => n + r.t.length, 0),
-    missing,
-    outOfOrder,
+    missing: missingAll[0] ?? null,
+    outOfOrder: outOfOrderAll[0] ?? null,
+    missingAll,
+    outOfOrderAll,
     order: runs.map((r) => [r.ord, r.at]),
   }
 }

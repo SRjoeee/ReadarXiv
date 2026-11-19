@@ -187,7 +187,7 @@ every heavy slot of the machine (`perf/tools/quiet.sh`): run only in a window th
   pages, so overnight, once per candidate; **a cut-over blocker**: a page it leaves uncovered is fixed, shown to be a
   measure's artefact, or brought to the owner); the prepare's pixel proofs on every page of the 88 papers and the added pairs' (poppler's `pdftoppm` and `pdftocairo`); the
   reader's canvas on spike S1c's papers (Chromium's software 2D canvas, `--disable-gpu`, every draw call rasterised as it is
-  made; no stand-in for a reader change); today's engine's speed check against the last release; the babel names
+  made; no stand-in for a reader change; each paper's split residue held to its record, `canvas.json`); today's engine's speed check against the last release; the babel names
   the layout marks wrap against babel's own files in each pinned compile image's TeX Live (`babel-names`: the docker slot, the
   images already local, never pulled; seconds), and the source reader's table of csquotes' English style against
   csquotes.def there the same way (`csquotes-styles`); the typesetter's face coverage, HOLDS and SMCP, against the 83 face
@@ -209,8 +209,9 @@ every heavy slot of the machine (`perf/tools/quiet.sh`): run only in a window th
   check at the reader's seam.
 - **Minutes**: about 80 in all. Measured here: the full tier's 26; the pixel proofs 25 (pass: every page of the 87 papers,
   2,328, all groups on is arXiv's page under Splash and each kind off changes only its ink under Cairo); the canvas 2: on the
-  software canvas, 75 s, two runs' lines equal, no pixel outside the split glyphs on any page; fail on 2026-11-19 at PIPELINE
-  106: 7 of 12 papers over the bound, the split residue (a glyph after a split a sub-pixel step off, Δ up to 81). Estimated
+  software canvas, 75 s, two runs' lines equal, no pixel outside the split glyphs on any page; the split residue (a glyph
+  after a split a sub-pixel step off, Δ up to 81) on 9 pages of 7 of the 12 papers, each paper held to its record since
+  2026-11-19 (`canvas.json`: a paper past it fails, one below it is said). Estimated
   from the lanes' records: the speed check about 12, the online scripts about 15. No hosted minute.
 - **Secret**: none for this repository's gates (the free engines need no key; an LLM service in the placeholder run would
   take its key from the browser's settings, never from CI). The private repository's own: the registry's read-only

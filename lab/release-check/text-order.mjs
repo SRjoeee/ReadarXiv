@@ -6,8 +6,9 @@
 // the harness's I8 judge (packages/reader/e2e/text-order.mjs, whose reading harness-lab holds equal to the browser's):
 //   node lab/release-check/text-order.mjs --bundles=<dir> --rows=<dir> --papers=<papers.tsv> [--seed=swap] [<pair>…]
 // It needs the served faces (AXT_FACE_TABLES, AXT_FACE_SLICES) and the patterns (AXT_HYPH), lab data: without them it says so
-// and exits 2. One line a pair; the totals; exit 1 where a member is missing or out of order. `--seed=swap`: the check's own
-// fault, the first and the last translated item of each laid page's reading swapped (red). Not shipped.
+// and exits 2. One line a pair; the totals; every member missing or out of order, one a line; exit 1 where there is one.
+// `--seed=swap`: the check's own fault, the first and the last translated item of each laid page's reading swapped (red). Not
+// shipped.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { bundleOf, membersOfParts, orderOf, pdfjsNode, readingOf } from '../../packages/reader/e2e/text-order.mjs'
@@ -105,8 +106,8 @@ async function main() {
         const j = orderOf(r.leaves, page, members, content.items)
         line.members += j.members
         total.runs += j.runs
-        if (j.missing !== null) line.missing.push(`p${n} ord ${j.missing}`)
-        if (j.outOfOrder !== null) line.outOfOrder.push(`p${n} ord ${j.outOfOrder}`)
+        for (const o of j.missingAll) line.missing.push(`p${n} ord ${o}`)
+        for (const o of j.outOfOrderAll) line.outOfOrder.push(`p${n} ord ${o}`)
       }
     } finally {
       await task.destroy()
@@ -125,8 +126,8 @@ async function main() {
   console.log(
     `I8 over the run's bundles: ${total.pairs} pairs, ${total.laidPages} laid pages of ${total.pages}, ${total.members} members (${total.runs} runs) read; missing ${total.missing.length}, out of order ${total.outOfOrder.length}; ${ms} ms${SEED ? ` (seeded: ${SEED})` : ''}`,
   )
-  for (const x of [...total.missing.map((m) => `missing ${m}`), ...total.outOfOrder.map((m) => `out of order ${m}`)].slice(0, 40))
-    console.log(`  ${x}`)
+  // (every member listed, one a line: the gate's judge holds each out-of-order member to its record, lab/release-check/text-order.json)
+  for (const x of [...total.missing.map((m) => `missing ${m}`), ...total.outOfOrder.map((m) => `out of order ${m}`)]) console.log(`  ${x}`)
   process.exit(total.missing.length || total.outOfOrder.length ? 1 : 0)
 }
 
