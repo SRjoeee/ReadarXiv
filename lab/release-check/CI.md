@@ -23,8 +23,7 @@ The private repository's tiers run on its own runners (below); the report names 
 This repository is public. Anyone can open a pull request, and a pull request's run takes its workflow files from the pull
 request itself, so a rule about which workflow is meant to run is no boundary: what a run can reach is. The rules every workflow
 obeys are readers of its text (`tests/scripts/workflow-rules.ts`), held by `tests/scripts/ci-workflows.test.ts` over every file
-of `.github/workflows`, with what is particular to the rules gate's workflows and to the fixtures' token in
-`tests/scripts/rules-workflows.test.ts`. No YAML parser: the files are held to the one plain form they are written in, and every
+of `.github/workflows`. No YAML parser: the files are held to the one plain form they are written in, and every
 reader fails closed on form. A spelling of YAML or of an expression it does not read is itself a violation, never a pass: a quoted
 key, a flow mapping, a key at another indentation, a script in double quotes (YAML reads its escapes before GitHub reads its
 expressions), an anchor, an alias, a merge, a tag, an escape, a step at another indentation (rule 0, `forms`). A line led by `#`
@@ -49,8 +48,7 @@ refuse what it is for in every spelling that could carry it (`tests/scripts/work
    workflow's or a job's environment or an action's input, never passed on whole; the step that holds it names none of the job's
    files a step writes for the steps after it (`GITHUB_ENV`, `GITHUB_OUTPUT`, `GITHUB_PATH`, `GITHUB_STATE`). No expression is
    spliced into a script, whatever the script's style (no `${{` in a `run:` body: an expression's value is passed through the
-   environment). `check`'s fixtures fetch and the rules gate's two pack restores are the steps that hold the bucket's read token;
-   the publish and rollback steps hold the publish secret.
+   environment). `check`'s fixtures fetch is the step that holds the bucket's read token.
 4. **GitHub's own actions, listed and pinned.** Every `uses:` is a plain step key naming one of the actions the rules list
    (`actions/checkout`, `actions/setup-node`, `actions/cache/restore`, `actions/cache/save`, `actions/upload-artifact`: none runs
    an input as a script) at a full commit with its version beside it, one commit an action across the workflows; pnpm comes from
@@ -58,8 +56,7 @@ refuse what it is for in every spelling that could carry it (`tests/scripts/work
 5. **The least token.** Every workflow's permissions begin with `contents: read`. A `permissions:` key stands only at the
    workflow's level or a job's, as a block of `<scope>: read|write|none` entries and nothing else; any other spelling or place is
    refused. And, whatever that reading sees, every `write` anywhere in a workflow is a scope its file may write: a write is held
-   only where the rules' list says why (the rules gate's comment on its own pull request; the rollback's cancel of unfinished
-   publishes).
+   only where the rules' list says why, and the list names none.
 6. **No credential kept.** Every checkout is a plain step with `persist-credentials: false` in its block of inputs;
    `persist-credentials` in any other spelling is refused; nothing pushes with git.
 7. **The browser jobs hold nothing.** `reader` and `extension` name no secret, variable or token in any spelling or case, and hold
@@ -103,7 +100,6 @@ scripts on the job's own build.
 | `contract` | 1 s | in `check` (inside `pnpm test`) |
 | `census` (this tree alone) | 8 s | in `check` |
 | `harness` (93 checks) | 239 to 310 s | about 8 min |
-| `e2e:small-caps` (three browsers) | 4 to 15 s | not run there (below) |
 | `e2e:reader` (81 checks on the default build: `tests/e2e/reader-v2.mjs`, `reader-v2-layer.mjs`) | 77 s | about 3 min |
 | `e2e:framing` (22) | 64 to 66 s | about 2 min |
 | `e2e:a11y` (15) | 33 to 34 s | about 1 min |
@@ -111,15 +107,7 @@ scripts on the job's own build.
 | `e2e:registration` (74 on the default build) | 31 to 34 s | about 1 min |
 | the three jobs, in parallel | | `check` 5 to 8 min, `reader` 6 (run 44432025091), `extension` about 12 (Chromium's system libraries alone took 8 min of it there): about 12 min of a pull request's wall clock |
 
-**Kept off GitHub's runners: `e2e:small-caps`.** It holds today's layer (`src/pdf-reader/engine`), which the cut-over deletes.
-Its two measures of a run are today's layer's own: the width it lays a run at, measured on a canvas at 100 px and scaled, and the
-width the run's `<tspan>` is drawn at, read by `getSubStringLength` at the drawn size (20 px). On the hosted runner's Chromium
-(Linux, a device scale of 1) glyph advances come whole pixels at each of those sizes (its own synthesis of the same words reads
-247.00, 319.00, 239.00 px in SVG and canvas alike), so the two disagree by up to 4.48 px over a heading, and the layout, laid on
-those whole-pixel measures, stands 0.18 to 0.70 PDF units off Firefox's and WebKit's (run 44432025091: 13 of 28; Firefox and WebKit
-pass every case there). On macOS Chromium measures and draws with fractional advances (250.00 against 249.99 px, WebKit's own
-249.99), and all 28 pass. A platform difference of today's reader, production's, not of a change here: the check stays the
-maintainer's machine's, in the fast tier run there, until its code goes. The rebuilt reader's checks that hold a drawn run against
+**Not shown by the hosted tier.** The rebuilt reader's checks that hold a drawn run against
 its layout (the harness's full-width punctuation, laid by the reader's own typesetter over the served faces) skip on the runner
 for want of those faces: the rebuilt reader's drawing against its layout on Linux is not shown by the hosted tier.
 

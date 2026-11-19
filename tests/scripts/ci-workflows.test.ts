@@ -14,27 +14,19 @@ import { browserJobs, codeOf, rulesFor } from './workflow-rules'
 // is one of GitHub's own the list names, pinned by its commit, every token reads and nothing more unless the list below says why, no
 // checkout keeps a credential, no lab tier runs here. Each reader fails closed on form (a spelling it does not read is refused), and
 // each rule is shown to refuse what it is for, every spelling that could carry it included (tests/scripts/workflow-controls.ts).
-// And the hosted jobs run the release check's fast tier as gates.mjs states it, gate by gate. tests/scripts/rules-workflows.test.ts
-// holds what is particular to the rules gate's three workflows and to the fixtures' token in ci.yml; `actionlint` checks the syntax
-// where it is installed.
+// And the hosted jobs run the release check's fast tier as gates.mjs states it, gate by gate. `actionlint` checks the syntax where
+// it is installed.
 
 const ROOT = resolve(__dirname, '../..')
 const DIR = join(ROOT, '.github/workflows')
 const NAMES = readdirSync(DIR).filter(n => /\.ya?ml$/.test(n)).sort()
 const text = (name: string) => readFileSync(join(DIR, name), 'utf8')
-/** every write a token holds, where and why: the rules gate's comment on its own pull request, and the rollback's cancel of the
- *  publishes not finished (rules-point.yml, the one job that holds it, with no secret) */
-const WRITES: Record<string, string[]> = {
-  'rules-gate.yml': ['workflow: pull-requests'],
-  'rules-point.yml': ['cancel-publishes: actions'],
-}
+/** every write a token holds, where and why: none */
+const WRITES: Record<string, string[]> = {}
 const RULES = { ...rulesFor(WRITES), 'browser jobs': browserJobs }
 /** the fast tier's gates no hosted job runs, each with its reason: they run on the maintainer's machine, in the fast tier run
- *  there (lab/release-check/CI.md) */
-const NOT_HOSTED: Record<string, string> = {
-  'e2e:small-caps':
-    "it holds today's layer (src/pdf-reader/engine), which the cut-over deletes. On the hosted runner's Chromium (Linux, a device scale of 1) glyph advances come whole pixels at the size a run is drawn and at the size today's layer measures it, so a run is drawn up to 4.5 px off its measured width and laid up to 0.7 PDF units off Firefox's and WebKit's (run 44432025091): a platform difference of today's reader, production's, not of a change here. A check of the maintainer's machine until its code goes",
-}
+ *  there (lab/release-check/CI.md); none */
+const NOT_HOSTED: Record<string, string> = {}
 
 /** a workflow's jobs by name, each with its text (the comments before the next job's name stay with the one above it) */
 const jobsOf = (yml: string) => new Map(yml.slice(yml.indexOf('\njobs:\n') + 7).split(/\n(?= {2}[a-z][a-z-]*:\n)/).flatMap(part => { const name = /^ {2}([a-z][a-z-]*):/m.exec(part)?.[1]; return name ? [[name, part] as [string, string]] : [] }))
@@ -45,8 +37,8 @@ const escaped = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const runs = (step: string, command: string) => new RegExp(`(^|\\n)\\s*run: ${escaped(command)}$`, 'm').test(step)
 
 describe('every workflow', () => {
-  it('is read here, the four there are among them (a workflow added later is read without a line here)', () => {
-    expect(NAMES).toEqual(expect.arrayContaining(['ci.yml', 'rules-gate.yml', 'rules-point.yml', 'rules-publish.yml']))
+  it('is read here, the one there is among them (a workflow added later is read without a line here)', () => {
+    expect(NAMES).toEqual(expect.arrayContaining(['ci.yml']))
   })
 
   it('obeys every rule', () => {

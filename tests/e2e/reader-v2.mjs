@@ -245,7 +245,7 @@ try {
      *  the page that framed it, the popup closed). Playwright races every evaluation against its frame's end and rejects it with
      *  "Frame was detached" when the end is told first, the click already done; the panel's frame is the extension's process and
      *  its removal the PDF page's, so either may reach Playwright first. A frame detached, a page closed, is the press done:
-     *  the checks after it read whether the reader came (tests/e2e/reader.mjs's entries, the same) */
+     *  the checks after it read whether the reader came */
     const pressEntry = (frame, which) => frame.evaluate(({ which, sources }) => [...document.querySelectorAll('button')].find(b => new RegExp(sources[which]).test(b.textContent ?? ''))?.click(), { which, sources })
       .catch(e => { if (!/detached|closed/i.test(e.message)) throw e })
 

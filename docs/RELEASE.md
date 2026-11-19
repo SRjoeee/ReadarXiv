@@ -44,7 +44,8 @@ rebuild line, where staging serves another round behind a tester gate a fresh pr
 
 ## Going back from the rebuilt reader's release
 
-The first release whose PDF reader is the rebuilt one (`AXT_READER` `v2`, the build's default: `wxt.config.ts:69-82`) changes
+The first release whose PDF reader is the rebuilt one (the one reader this tree builds: the switch `AXT_READER` went with
+today's reader at the cut-over) changes
 what a reader's machine holds against 0.5.2, the version the Chrome Web Store holds. Contract by contract: what is migrated
 forward, what 0.5.2 refuses, what a reader on 0.5.2 sees, and what this release meets when it comes back. Read from the code at
 the release's head and at the tag `v0.5.2`; the two IndexedDB stores are measured (the next section).
@@ -86,15 +87,14 @@ such a build:
 2. reads the release's `CONFIG_VERSION`. A tree at a lower number puts every reader who updated on the defaults (above): an
    upload of 0.5.2's tree is no way back, and `next` at `065c1d973` (21, today's reader) is one only while the release is
    at 21;
-3. runs a PDF reader whose API the website still serves. Today's reader (`AXT_READER=today pnpm build`, `wxt.config.ts:69-82`;
-   `lab/release-check/today-build.sh` builds it for the release check's full tier) reads the first API, and it goes with the
-   cut-over's deletion of today's reader. After that deletion, and once the website stops answering the first API, the
-   reader has no way back, only forward;
+3. runs a PDF reader whose API the website still serves. Today's reader reads the first API; this tree holds it no more (the
+   cut-over deleted it), the line before the cut-over does (`AXT_READER=today pnpm build` at `c7e44a94b:wxt.config.ts:69-82`).
+   Once the website stops answering the first API, the reader has no way back, only forward;
 4. needs no store step to work (measured, the next section); the release that comes forward after it carries the null steps
    of the recipe there.
 
 Which build is made ready before the upload, and kept for how long, is the maintainer's to choose: a commit of this release's
-line that still holds today's reader and the release's configuration steps, built with `AXT_READER=today` under a higher
+line before the cut-over that still holds today's reader and the release's configuration steps, built with `AXT_READER=today` under a higher
 number, or `next`'s tree while the release is at 21. Neither has been uploaded or installed over this release's stores; the
 stores' half of it is measured, the rest is read from the code.
 

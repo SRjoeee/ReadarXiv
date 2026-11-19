@@ -28,7 +28,7 @@ import { prepare } from '../../packages/engine/src/prepare.ts'
 
 const run = promisify(execFile)
 const docker = spawnSync('docker', ['image', 'inspect', COMPILE_IMAGE], { stdio: 'ignore' }).status === 0
-/** every compile's date, the lab's (scripts/make-sample-bundle.mjs) */
+/** every compile's date, the lab's (2026-10-06) */
 const EPOCH = 1791244800
 const enc = (s: string) => new TextEncoder().encode(s)
 
