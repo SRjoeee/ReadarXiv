@@ -1,5 +1,5 @@
 // wrap(bytesA, located, pagesA): arXiv's own runs wrapped in optional content, as an incremental update over arXiv's exact
-// bytes (design §4.1 "the add-on, exactly"; spike S1c's wrapA.mjs). Today's wrapOf and planOf as they are (wrap.ts), each page
+// bytes (design §4.1 "the add-on, exactly"; spike S1c's wrapA.mjs), by wrapOf and planOf (wrap.ts), each page
 // planned from the groups locate carried onto A: `<ord>.<page>.t` a member's text, `.e` its travelling elements, `.l` its
 // label (design §4.5). wrapOf refuses what it cannot prove (an encrypted file, a page past its bounds, a form partly owned, a
 // split it cannot make, …): a page it refuses keeps every unit on it the original's. Its own proofs run inside it (each page's
@@ -19,7 +19,7 @@ export interface AddOn {
   groups: Set<string>
   ocgs: Map<string, number>
   /** the groups that owned an image the wrap could not tell apart (planOf's `lost`: the page's images painted are not as many
-   *  as PDF.js's reading of them), none of which is wrapped: their members stay the original's (today's wrapFinal, `unhidden`) */
+   *  as PDF.js's reading of them), none of which is wrapped: their members stay the original's */
   lost: Set<string>
   stats: Wrap['stats']
 }
