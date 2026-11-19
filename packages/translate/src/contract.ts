@@ -22,8 +22,10 @@ export type SpanStyle = string
 /**
  * A unit's content, as the source reader types it. A piece's id is local to its unit. An `el` travels whole and is never
  * translated; `stop` is the punctuation the element itself sets at its end that is its sentence's (a display's `x = y.`),
- * or a line end (white space) where it ends its sentence and sets no punctuation (a forced break a run-in label follows),
- * stated by the source reader, which a wire may write after the element so that the sentence ends there. A `span` holds
+ * which a wire may write after the element so that the sentence ends there, or a line end (white space) where it ends its
+ * sentence and sets no punctuation (a forced break a run-in label follows), stated by the source reader: the sentence ends
+ * before the elements that set no word around the break, which every wire sends as the next sentence's first thing
+ * (wire/text.ts leadsNext). A `span` holds
  * pieces; `must` marks one that comes back exactly once or the reply is refused (a link, a run-in label); a span without it
  * may come back unstyled, its words outside it. Where a wire sends it on no wire (the markers wire, the runs floor), its
  * head still comes back inside it, in a copy that holds it alone (accept.ts headLength: the elements before its first word,

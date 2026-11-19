@@ -43,9 +43,30 @@ export function standInOf(kind: string): 'annotation' | 'citation' | string | un
   return undefined
 }
 
-/** an element's stop that is white space alone: a line end it states (a forced break a run-in label follows), which the
- *  markers wire writes where Microsoft cuts its sentence; never punctuation of the element's own */
+/** whether an element of this kind sets no word of the text: one its reader states nothing of (`other`: the PDF's source
+ *  reader's kind for a skip, a switch) or one the cutter reads as white space (a space, a forced break) */
+export const setsNoWord = (kind: string): boolean => kind === 'other' || (standInOf(kind) ?? 'x').trim() === ''
+
+/** an element's stop that is white space alone: a line end it states (a forced break a run-in label follows, no stop ending
+ *  the text before it: the source reader's run-in rule), the end of the sentence before the stretch it stands in (leadsNext);
+ *  never punctuation of the element's own */
 export const LINE_END = /^\s+$/
+
+/**
+ * Whether a stretch of elements, white space alone between them, LEADS the next sentence: the sentence before ended right
+ * before the stretch, by a stop of its text set right before the stretch's first element (`stopped`), or by the line end one of
+ * its elements states (LINE_END, among its `stops`: the source's own statement that the text before the forced break ended its
+ * sentence; the stretch then the elements that set no word around the break, setsNoWord, its skip before it, its `\noindent`
+ * after it, past any that sets a word, a formula or an address, which is the sentence's before it). TeX ends the line there and
+ * sets the stretch first on the next, so every wire sends it as the next sentence's first thing, never as the last of the
+ * sentence it ends: there a translator's word order carries it into that sentence (Microsoft set a break so written
+ * mid-sentence in Japanese, Korean and Chinese, in every reply asked, where a break after a full stop, the next sentence's
+ * first thing, stood before its label in every one). The markers wire writes the line end before the stretch's marker (a stop
+ * of the text stands there already); the tags wire's cutter ends the sentence at the line end and sets its boundary marker
+ * before the stretch's first element, the stretch read back as that sentence's lead (tags.ts `leads`)
+ */
+export const leadsNext = (stopped: boolean, stops: readonly (string | undefined)[]): boolean =>
+  stopped || stops.some((s) => LINE_END.test(s ?? ''))
 
 /** a display's kind (the source reader's) */
 export const DISPLAY = 'display'
