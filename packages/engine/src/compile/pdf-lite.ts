@@ -1,4 +1,4 @@
-// PDF.js's worker without the images' pixels, for the server-side reads of arXiv's PDF (the layout maker's ink read, the marks
+// PDF.js's worker without the images' pixels, for the server-side reads of arXiv's PDF (the prepare's ink reads, the marks
 // read, the add-on's plans): they want each image's PLACEMENT, which is its paint operator under the current transform, and never
 // its pixels.
 //
@@ -19,16 +19,16 @@
 // ever. Masks and small inline images are decoded and awaited inside the operator list's own stream; they are not touched.
 // The same document's Link annotations (getAnnotations) come without their overlaid text: PDF.js makes it by extracting the page's
 // whole text a second time for every page that holds a link (through its Intersector, which reads the glyphs as that extraction
-// sets them); the marks read and the layout maker never read it (they find the glyphs under a link themselves: layer-proto/links.mjs
-// annotsOf), and a second guard skips that extraction for a document that opts in. The draw geometry (pipeline/draw-data.mjs)
+// sets them); the marks read and locate never read it (they find the glyphs under a link themselves: locate/links.ts
+// linksOnA), and a second guard skips that extraction for a document that opts in. The draw geometry (PDF-READER §19.6)
 // ships it, as the browser's own reading has it: a document read for its draw opts in with `maxImageSize: LINK_TEXT_PIXELS`
-// instead, the image guard on and the text guard off (its pages' annotations, read once for the draw and the maker, keep their
+// instead, the image guard on and the text guard off (its pages' annotations, read once for the draw and locate, keep their
 // overlaid text exactly as a stock worker makes it). The one extraction cannot be shared with the page's getTextContent: through an
 // Intersector PDF.js builds no item's string, and its whitespace reads an item's string's length.
 //
 // GLYPH OUTLINES IN FLOAT32. Where PDF.js draws a glyph as a path (in Node, whose font face it disables), the worker compiles the
 // glyph's outline into a typed array and the API side views the bytes it is sent as one (`<font>_path_<char>`, a FontPathInfo,
-// which layout/ink.mjs reads for a glyph's own ink). PDF.js 6.3.289 takes a Float16Array on each side where the runtime has one
+// which ink.ts outlineBox reads as the glyph's ink). PDF.js 6.3.289 takes a Float16Array on each side where the runtime has one
 // (FeatureTest.isFloat16ArraySupported: Node 24 on, every current browser), else a Float32Array (Node 22). Half precision moves
 // an outline's points (0.291 is 0.291016), a glyph's ink in its last places and so a rounded coordinate of the layout (494.89 is
 // 494.9 on 1706.03762v7), so the engine's output would depend on the runtime. `float32Outlines(api, worker)` makes the choice
@@ -43,12 +43,12 @@
 //   globalThis.pdfjsWorker = worker
 //   const doc = await getDocument({ data, maxImageSize: NO_IMAGE_PIXELS, ... }).promise
 // once, before the first getDocument (a file of liteWorkerSource's text, imported, is the same module). A document whose pages'
-// draw geometry is read (pipeline/draw-data.mjs) is opened with `maxImageSize: LINK_TEXT_PIXELS` and `fontExtraProperties: true`:
+// draw geometry is read (PDF-READER §19.6) is opened with `maxImageSize: LINK_TEXT_PIXELS` and `fontExtraProperties: true`:
 // without the latter a font carries no ToUnicode map and every page tells its draw as none (`why: 'props'`).
-// Server-side only: the browser layer (the extension, run.mjs's rendering, copyOf) keeps stock
+// Server-side only: the browser layer (the extension's rendering) keeps stock
 // PDF.js, which has to decode the images it draws.
 //
-// BUMPING PDFJS (layout versions.mjs): the anchor is one line of the worker. Install the new version, run
+// BUMPING PDFJS: the anchor is one line of the worker. Install the new version, run
 // tests/pdf-reader/pdf-lite.test.ts: it counts the anchor in the installed worker and compares an operator list's digest with and
 // without the guard. If the line moved, read buildPaintImageXObject again (is the decode still unawaited, and is `this.options` still
 // the evaluator's?), change ANCHOR and GUARD (TEXT_ANCHOR and TEXT_GUARD: read Page.getAnnotationsData again) together, and set LITE_PDFJS.
@@ -71,8 +71,8 @@ export const LINK_TEXT_PIXELS = Number.MAX_SAFE_INTEGER - 1
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
 const GUARD = `if (this.options.maxImageSize >= ${LINK_TEXT_PIXELS}) throw new Error("image pixels not decoded");\n      `
 /** the one condition of Page.getAnnotationsData under which a Link annotation's overlaid text is made: the page's whole text
- *  extracted again, through an Intersector, for every page that holds a link. The server's readers (the marks read, the
- *  layout maker) take an annotation's rectangle and destination and find the glyphs under it themselves: for a document that
+ *  extracted again, through an Intersector, for every page that holds a link. The server's readers (the marks read,
+ *  locate) take an annotation's rectangle and destination and find the glyphs under it themselves: for a document that
  *  opts in with NO_IMAGE_PIXELS, the condition is false and no text is extracted (`overlaidText` stays unset); the annotations are
  *  the same. LINK_TEXT_PIXELS leaves it as it stands */
 const TEXT_ANCHOR = '} else if (annotation.overlaysTextContent && isVisible) {'

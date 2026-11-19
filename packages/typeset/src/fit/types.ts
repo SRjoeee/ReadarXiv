@@ -1,6 +1,6 @@
-// The shapes the breaker and the fit read and make (today's: layer2.d.mts Block2, Slot, Layout, LaidLine), for the facades
-// of the modules moved as JavaScript (breaker/*.types.ts, fit/*.types.ts, shared/*.types.ts). Today's intermediate
-// shapes (design-b §1.4): the adapter from format's Part to them is layFlow's.
+// The shapes the breaker and the fit read and make (a block, a state, the parameters, a laid line, a layout), which the
+// breaker's, the fit's, the shared steps' and the lay's modules import. The typesetter's intermediate shapes: the adapter
+// from format's Part to them is layFlow's.
 import type { FitMeasure } from '../breaker/measure.ts'
 import type { Patterns } from '../breaker/hyph.ts'
 import type { Token } from '../breaker/tokens.ts'

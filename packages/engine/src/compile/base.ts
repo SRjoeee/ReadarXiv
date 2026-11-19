@@ -1,6 +1,6 @@
-// Our compile as the base page (the layer route's step 2, design note §3.1 and §3.3): the checks a base page of ours passes
+// Our compile as the base page (docs/route/design.md §3.1 and §3.3): the checks a base page of ours passes
 // before a layer is drawn over it, each a pure function over PDF.js documents (or their text) that the caller opens and
-// destroys. The base page is the final pass of the marked original (layout/paper.mjs markedOfPaper `base`): the files the
+// destroys. The base page is the final pass of the marked original (paper.ts markedOfPaper `base`): the files the
 // guard accepted with graphicx's draft option taken out, one TeX pass over the aux and lists the draft compile wrote.
 //  - finalCheck: the final pass placed every mark where the draft did (its `axt-` destinations by name, page and position,
 //    within MARK_TOL), on as many pages of the same boxes: the marks are read from the draft, the ink from the final pass, so
@@ -16,11 +16,11 @@
 // their own methods.
 import { isMemoryError } from '../memory.ts'
 
-/** a mark's place in two compiles of one page is the same within this, PDF units (the design's 0.01 pt) */
+/** a mark's place in two compiles of one page is the same within this, PDF units (docs/route/design.md §3.1: 0.01 pt) */
 export const MARK_TOL = 0.01
 /** a page box's corner in two PDFs is the same within this, PDF units */
 export const BOX_TOL = 0.01
-/** the marks' destinations' prefix (marks.mjs MARK_DEF's \pdfdest names) */
+/** the marks' destinations' prefix (latex-front.ts MARK_DEF's \pdfdest names) */
 const PREFIX = 'axt-'
 
 /** what the checks read of a PDF.js document (PDFDocumentProxy's members they call): every one of them is called, its
@@ -123,9 +123,9 @@ function boxesDiffer(a: readonly PageBox[], b: readonly PageBox[], what: readonl
 }
 
 /**
- * The final pass against the draft it was made of (design §3.1, the exact check): { ok: true, marks } with the count of
- * `axt-` destinations, where both have the same pages and boxes and the same destinations, each on the same page within
- * MARK_TOL of the same place; else { ok: false, why }. `draft`, `final`: PDF.js documents of the two
+ * The final pass against the draft it was made of (docs/route/design.md §3.1, the exact check): { ok: true, marks } with the
+ * count of `axt-` destinations, where both have the same pages and boxes and the same destinations, each on the same page
+ * within MARK_TOL of the same place; else { ok: false, why }. `draft`, `final`: PDF.js documents of the two
  */
 export async function finalCheck(
   draft: PdfLike,
@@ -157,9 +157,9 @@ export async function finalCheck(
 }
 
 /**
- * Our base page against arXiv's PDF (design §3.3.4): { equal: true, pages } where both have the same page count and every
- * page the same box (BOX_TOL, its rotation and unit too), else { equal: false, pages: [ours, arXiv's], why }. `ours`, `arxiv`:
- * PDF.js documents
+ * Our base page against arXiv's PDF (docs/route/design.md §3.3, check 4): { equal: true, pages } where both have the same page
+ * count and every page the same box (BOX_TOL, its rotation and unit too), else { equal: false, pages: [ours, arXiv's], why }.
+ * `ours`, `arxiv`: PDF.js documents
  */
 export async function boxesCheck(
   ours: PdfLike,
@@ -176,7 +176,7 @@ export async function boxesCheck(
 /**
  * Our base page's M pages followed by arXiv's pages past them, as one PDF.js document (`numPages` arXiv's N): the composed
  * document a delta over arXiv's PDF makes of a paper of several toplevel sources whose first is compiled alone (the pages past
- * ours are the original's by construction), for the base page's checks and the maker to read as they read a whole base. With
+ * ours are the original's by construction), for the base page's checks to read as they read a whole base. With
  * `replaced` (a Set of pages), only those of our M are ours and every other is arXiv's: the composed document a delta that
  * replaces those pages makes. Its destinations, page indices and metadata are ours (the marks are our compile's)
  */
@@ -208,10 +208,10 @@ const UNIT_NAME = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
 const SAMPLES = 4
 
 /**
- * Mark text in a PDF's text (design §3.3.2): `pages`, each page's text (its text items' strings joined, as PDF.js gives them),
- * in page order. Gives { pages, units, samples }: the pages whose text holds a mark of ours (MARK_TEXT), the units the names
- * printed there name (a mark inside the unit's own source: leaving the unit unmarked takes it away), and the first SAMPLES hits
- * ([page, text]); no page where none does
+ * Mark text in a PDF's text (docs/route/design.md §3.3, check 2): `pages`, each page's text (its text items' strings joined,
+ * as PDF.js gives them), in page order. Gives { pages, units, samples }: the pages whose text holds a mark of ours (MARK_TEXT),
+ * the units the names printed there name (a mark inside the unit's own source: leaving the unit unmarked takes it away), and
+ * the first SAMPLES hits ([page, text]); no page where none does
  */
 export function markTextOf(pages: readonly unknown[] | null | undefined) {
   return marksIn(pages, () => true)

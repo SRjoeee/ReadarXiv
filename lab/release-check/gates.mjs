@@ -26,12 +26,12 @@ export const INVARIANTS = [
   {
     id: 'I1',
     says: "all groups on, the composed page paints what arXiv's page paints, glyph for glyph, box for box and pixel for pixel (in the reader's canvas, up to the split show's residue)",
-    gap: "the composed page in the reader is held on the harness's own fixtures only; on corpus papers the harness measures its residue and holds nothing, and the canvas gate (the release tier's) passed in lane L1 only with a stand-in (`--normalize`) for a reader change not built",
+    gap: "in the reader's software canvas a split show's glyphs paint other pixels than arXiv's on 9 pages of 7 of the canvas gate's 12 papers (at most 102 pixels and a channel delta of 81 a page, none outside those glyphs: the split moves the pen into the show's matrix, which the canvas holds in single precision), each paper held to its record (canvas.json); its fix after the launch / before the launch: the coordinator's ruling of 2026-11-19",
   },
   {
     id: 'I2',
     says: 'a group off hides exactly its ink, rules and images included; no pixel outside that ink changes',
-    gap: 'no check of a group turned off in the reader; the prepare proves it in PDF.js and Cairo only',
+    gap: null,
   },
   {
     id: 'I3',
@@ -52,12 +52,12 @@ export const INVARIANTS = [
   {
     id: 'I7',
     says: "a unit's boxes on the left and on the right are the same boxes",
-    gap: "no gate: the harness holds the slots' page boxes at five scales and the highlight lighting one unit on both panes, not a unit's boxes",
+    gap: null,
   },
   {
     id: 'I8',
     says: 'the text layer of a laid page reads the translation in reading order',
-    gap: 'held on the fixtures and five corpus papers (the harness; the website\'s e2e on fixtures); not on the corpus',
+    gap: "on 2610.40394v1-zh p4 five figure labels are two members each over one another (the label's word and a word its box covers on arXiv's page, translated with it), and the text layer reads the label's own translation at the page's end, the five held to their record (text-order.json); its fix after the launch / before the launch: the coordinator's ruling of 2026-11-19",
   },
   {
     id: 'I9',
@@ -282,8 +282,54 @@ export function harnessLabJudge(step) {
     l1: of.filter(m => m[2] === "lane L1's").map(m => m[1]),
   }
   const refused = /^FAIL fixtures: (.*)$/m.exec(text)?.[1] ?? null
-  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : null)
-  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+  // (I7 and the typesetter's pages' I8 hold nothing where the served faces are not there: a line of theirs that says so fails
+  // the gate, never passes it)
+  const unheld = [...text.matchAll(/^ok {3}(I7|I8): .*\(([^()]+)\) \{"skipped":"([^"]*)"\}$/gm)].map(m => `${m[1]} (${m[2]}): ${m[3]}`)
+  const note = refused ?? (numbers.l1.length ? `laid from lane L1's bundle and today's dump, not from this run's rows: ${numbers.l1.join(', ')}` : unheld.length ? `held nothing: ${unheld.join('; ')}` : null)
+  return { pass: step.exit === 0 && !refused && !numbers.l1.length && !unheld.length && !/route table violated/.test(text), numbers, ...(note ? { note } : {}) }
+}
+
+/** text-order.mjs's totals: "I8 over the run's bundles: P pairs, L laid pages of N, M members (R runs) read; missing X, out of
+ *  order Y; T ms", its first listed member, and every member it lists, one a line ("  out of order <pair> p<n> ord <ord>"):
+ *  `missingListed`, `outOfOrderListed` as `<pair> p<n> ord <ord>` */
+export function textOrderOf(text) {
+  const m = /^I8 over the run's bundles: (\d+) pairs, (\d+) laid pages of (\d+), (\d+) members \((\d+) runs\) read; missing (\d+), out of order (\d+); (\d+) ms/m.exec(text)
+  const first = /^ {2}((?:missing|out of order) .*)$/m.exec(text)?.[1]
+  const listed = kind => [...text.matchAll(new RegExp(`^ {2}${kind} (\\S+ p\\d+ ord \\d+)$`, 'gm'))].map(x => x[1])
+  return m
+    ? { pairs: num(m[1]), laidPages: num(m[2]), pages: num(m[3]), members: num(m[4]), runs: num(m[5]), missing: num(m[6]), outOfOrder: num(m[7]), ms: num(m[8]), ...(first ? { first } : {}), missingListed: listed('missing'), outOfOrderListed: listed('out of order') }
+    : {}
+}
+
+/** text-order's record (lab/release-check/text-order.json): the out-of-order members at the last integrated round, by pair */
+export const textOrderRecord = root => JSON.parse(readFileSync(join(root, 'lab/release-check/text-order.json'), 'utf8'))
+
+/**
+ * text-order's verdict, read from its totals and its list (textOrderOf), never its exit: pairs read, no member missing, every
+ * member the totals count listed, and every out-of-order member one its record names (`record.outOfOrder`, by pair: `p<n> ord
+ * <ord>`): a member out of order the record does not name fails the gate; a recorded one read in order now is said (the record
+ * to lower)
+ */
+export function textOrderJudge(text, record) {
+  const t = textOrderOf(text)
+  const held = new Set(Object.entries(record?.outOfOrder ?? {}).flatMap(([pair, ms]) => ms.map(x => `${pair} ${x}`)))
+  const now = t.outOfOrderListed ?? []
+  const fresh = now.filter(x => !held.has(x))
+  const fell = t.pairs > 0 ? [...held].filter(x => !now.includes(x)) : []
+  const whole = (t.missingListed?.length ?? -1) === t.missing && now.length === t.outOfOrder
+  const notes = [
+    !(t.pairs > 0) && 'no pair read',
+    t.missing > 0 && `missing: ${t.missingListed.slice(0, 4).join(', ')}`,
+    !whole && t.pairs > 0 && `the totals count ${t.missing} missing and ${t.outOfOrder} out of order, the list names ${t.missingListed?.length} and ${now.length}`,
+    fresh.length && `out of order and not in the record: ${fresh.slice(0, 6).join(', ')}${fresh.length > 6 ? ` and ${fresh.length - 6} more` : ''}`,
+    fell.length && `in order now, the record to lower (${record?.commit}): ${fell.join(', ')}`,
+  ].filter(Boolean)
+  const { missingListed, outOfOrderListed, ...numbers } = t
+  return {
+    pass: t.pairs > 0 && t.missing === 0 && whole && !fresh.length,
+    numbers: { ...numbers, recorded: held.size, fresh: fresh.length, fell: fell.length },
+    ...(notes.length ? { note: notes.join('; ') } : {}),
+  }
 }
 
 /** a terminal's colours (vitest colours its summary where it is asked to) */
@@ -586,15 +632,75 @@ export function drawnOf(dir, within = null) {
 
 /** canvas.mjs's line a paper, held to the bound its header names (the erasure's E4: at most 0.1 % of the split glyphs'
  *  pixels, max channel Δ 16; no pixel outside them); a paper it refused (`{ id, refused }`: no add-on) or did not report at
- *  all, of the `ids` asked, is over, by name */
+ *  all, of the `ids` asked, is over, by name. `renderer`: its first line, the browser's own word on the canvas it drew on
+ *  (`{ renderer, canvas2d, gl, browser }`), null where it printed none */
 export function canvasOf(text, ids = []) {
   const rows = text.split('\n').filter(l => l.startsWith('{"id"') && (l.includes('"splitShows"') || l.includes('"refused"'))).map(l => JSON.parse(l))
   const over = rows.filter(r => r.refused || r.outsidePages?.length || r.shareMax > 0.001 || r.maxDelta > 16)
   const seen = new Set(rows.map(r => r.id))
+  const head = text.split('\n').find(l => l.startsWith('{"renderer"'))
   return {
     papers: rows.length,
     pages: rows.reduce((n, r) => n + (r.pages ?? 0), 0),
+    renderer: head ? JSON.parse(head) : null,
     over: [...over.map(r => `${r.id}: ${r.refused ? r.refused : `outside ${JSON.stringify(r.outsidePages)}, share ${r.shareMax}, Δ ${r.maxDelta}`}`), ...ids.filter(id => !seen.has(id)).map(id => `${id}: no line (the canvas did not report it)`)],
+    unseen: ids.filter(id => !seen.has(id)),
+    rows,
+  }
+}
+
+/** the canvas gate's record (lab/release-check/canvas.json): each paper's residue at the last integrated round */
+export const canvasRecord = root => JSON.parse(readFileSync(join(root, 'lab/release-check/canvas.json'), 'utf8'))
+
+/**
+ * canvas' verdict, read from its papers' lines (canvasOf), never its exit: the software canvas; every paper asked has its line,
+ * none refused and none with a pixel outside the split glyphs' boxes (I1 itself: never recorded); each paper's residue inside
+ * the split glyphs held to its record (`record.papers[id]`: `pages`, the differing pixels by page; `share`, `delta`, its largest
+ * share and channel delta): a page that differs and is not among its recorded pages, more pixels on a recorded page, a larger
+ * share or delta fail the gate, as does a paper the record lacks; a reading below the record is said (the record to lower)
+ */
+export function canvasJudge(text, ids, record) {
+  const c = canvasOf(text, ids)
+  const soft = c.renderer?.renderer === 'software' && c.renderer?.canvas2d === 'unavailable_software'
+  const broken = [],
+    worse = [],
+    fell = [],
+    unrecorded = []
+  for (const r of c.rows) {
+    if (r.refused || r.outsidePages?.length) {
+      broken.push(`${r.id}: ${r.refused ?? `outside the split glyphs ${JSON.stringify(r.outsidePages)}`}`)
+      continue
+    }
+    const was = record?.papers?.[r.id]
+    if (!was) {
+      unrecorded.push(r.id)
+      continue
+    }
+    const now = Object.fromEntries((r.differingPages ?? []).map(([p, n]) => [String(p), n]))
+    for (const [p, n] of Object.entries(now)) {
+      const w = was.pages?.[p]
+      if (w == null) worse.push(`${r.id} p${p}: ${n} px on a page outside its record`)
+      else if (n > w) worse.push(`${r.id} p${p}: ${w} -> ${n} px`)
+      else if (n < w) fell.push(`${r.id} p${p}: ${w} -> ${n} px`)
+    }
+    for (const [p, w] of Object.entries(was.pages ?? {})) if (!(p in now)) fell.push(`${r.id} p${p}: ${w} -> 0 px`)
+    for (const [k, v, at] of [['share', r.shareMax, was.share], ['Δ', r.maxDelta, was.delta]]) {
+      if (v > at) worse.push(`${r.id}: ${k} ${at} -> ${v}`)
+      else if (v < at) fell.push(`${r.id}: ${k} ${at} -> ${v}`)
+    }
+  }
+  const notes = [
+    !soft && `not the software canvas: ${JSON.stringify(c.renderer)}`,
+    c.unseen.length && `no line (the canvas did not report it): ${c.unseen.join(', ')}`,
+    broken.length && broken.slice(0, 4).join('; '),
+    unrecorded.length && `no record for ${unrecorded.join(', ')}`,
+    worse.length && `above the record (${record?.commit}): ${worse.slice(0, 6).join(', ')}`,
+    fell.length && `below the record (${record?.commit}), the record to lower: ${fell.join(', ')}`,
+  ].filter(Boolean)
+  return {
+    pass: soft && c.papers > 0 && !c.unseen.length && !broken.length && !unrecorded.length && !worse.length,
+    numbers: { papers: c.papers, pages: c.pages, residuePages: c.rows.reduce((n, r) => n + (r.differingPages?.length ?? 0), 0), worse: worse.length, fell: fell.length },
+    ...(notes.length ? { note: notes.join('; ') } : {}),
   }
 }
 
@@ -638,6 +744,28 @@ const todayE2e = (script, title) => ({
 const lab = (ctx, ...p) => join(ctx.refactor, ...p)
 /** the five corpus papers the reader package's harness opens (its I8 on the corpus) */
 const HARNESS_PAPERS = ['1512.03385v1', '1706.03762v7', '2609.26457v1', '2307.16209v1', '2610.20030v1']
+/** the twelve corpus pages the harness turns each group off on in the reader's canvas (I2), by a rule: four marks of a page (a
+ *  group of ours paints a path; one paints an image; two members' groups whose stated inks meet within half a point; a member
+ *  of a float), read by PDF.js over the composed document and by the part; for each of the five papers above and the first
+ *  paper by id whose group paints an image of those the run's rows hold in Chinese (none of the five holds one), for each mark
+ *  in that order, its page holding the mark that holds the most marks, the first at a tie; then, to twelve, each paper's page
+ *  holding the most groups, in the papers' order. Both TeX trees: 1706.03762v7, 2609.26457v1 and 2307.16209v1 are the 2023
+ *  tree's, the others the 2025 tree's. `node lab/release-check/group-pages.mjs <bundles> <papers.tsv> <prepare dumps> <rows>`
+ *  makes the list again by that rule (here as it made it over a run's bundles at PIPELINE 106, 2026-11-19) */
+export const GROUP_PAGES = [
+  '1512.03385v1:5',
+  '1512.03385v1:8',
+  '1706.03762v7:4',
+  '2609.26457v1:6',
+  '2307.16209v1:33',
+  '2610.20030v1:2',
+  '2610.20030v1:9',
+  '2610.19159v1:4',
+  '2610.19159v1:1',
+  '1512.03385v1:9',
+  '1706.03762v7:14',
+  '2609.26457v1:27',
+]
 const exists = (what, path) => ({ what, path })
 
 // The corpus the prepare's gates run, as the integration round's stage 1a runs it (lanes/converge-8/rf-chain.sh): the set's 88
@@ -802,7 +930,7 @@ export const GATES = [
     title: "the reader package's browser checks on its own fixtures (packages/reader/e2e/run.mjs)",
     tier: 'fast',
     stage: 'reader',
-    holds: ['I1', 'I3', 'I4', 'I8'],
+    holds: ['I1', 'I2', 'I3', 'I4', 'I8'],
     steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_TIMINGS_OUT: join(ctx.work, 'harness-timings.json') } }],
     judge: (ctx, steps) => {
       const text = steps[0].text
@@ -1011,10 +1139,10 @@ export const GATES = [
   },
   {
     id: 'harness-lab',
-    title: "the reader package's browser checks with five corpus papers, laid from this run's bundles and this run's rows of them (the prepare's bundles; reader-parts' rows step, Google's rows over them read from the lab's store, no translator asked); the text layer's order asserted; their I1 residue and I3 reported, not asserted",
+    title: "the reader package's browser checks with five corpus papers, laid from this run's bundles and this run's rows of them (the prepare's bundles; reader-parts' rows step, Google's rows over them read from the lab's store, no translator asked); the text layer's order asserted, and the reading made without a browser held equal to the browser's; I7 at the reader's seam on every page the reader's own typesetter lays; I2 in the reader's canvas on twelve corpus pages (GROUP_PAGES); their I1 residue and I3 reported, not asserted",
     tier: 'full',
     stage: 'reader',
-    holds: ['I8'],
+    holds: ['I2', 'I7', 'I8'],
     // (bundles and rows of the same run, never one without the other: the prepare's bundles (AXT_L1_BUNDLES) and the rows
     // reader-parts' rows step made over them (AXT_LAB_ROWS). The harness refuses bundles without rows, and stops before any
     // check where a paper's rows leave a unit its bundle asks without a row, or name units it does not hold ("rows do not belong
@@ -1028,9 +1156,31 @@ export const GATES = [
       exists("the corpus papers' list", lab(ctx, 'baseline/corpora/papers.json')),
       exists("today's reader dumps", lab(ctx, 'baseline/reader')),
       exists("this run's rows of its bundles (reader-parts' rows step)", runRowsDir(ctx)),
+      // (I7 and the typesetter's pages' I8 lay with the reader's own typesetter over the served faces: without them those checks
+      // would say "no served faces" and hold nothing, so the gate is skipped, named)
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
     ],
-    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_LAB_ROWS: runRowsDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
+    steps: ctx => [{ cmd: ['node', 'packages/reader/e2e/run.mjs'], slot: 'e2e', env: { AXT_LAB_FIXTURES: HARNESS_PAPERS.join(','), AXT_GROUP_PAGES: GROUP_PAGES.join(','), AXT_L1_BUNDLES: bundlesDir(ctx), AXT_LAB_ROWS: runRowsDir(ctx), AXT_TIMINGS_OUT: join(ctx.work, 'harness-lab-timings.json') } }],
     judge: (ctx, steps) => harnessLabJudge(steps[0]),
+  },
+  {
+    id: 'text-order',
+    title: "the text layer of every laid page reads the translation in reading order, over every pair this run lays (reader-parts' Google rows over the prepare's bundles): each page laid by the reader's own typesetter in Node, its text layer's reading made by the composer's text module without a browser (lab/release-check/text-order.mjs over packages/reader/e2e/text-order.mjs, whose reading harness-lab holds equal to the browser's), judged by the harness's I8 judge",
+    tier: 'full',
+    stage: 'reader',
+    holds: ['I8'],
+    after: ['prepare', 'reader-parts'],
+    needs: ctx => [
+      ...corpusNeeds(ctx),
+      exists("this run's rows of its bundles (reader-parts' rows step)", runRowsDir(ctx)),
+      exists("the reader's served faces' tables (AXT_FACE_TABLES)", join(TABLES, 'index.json')),
+      exists("the reader's served faces (AXT_FACE_SLICES)", SLICES.find(d => existsSync(d)) ?? SLICES[0]),
+      exists('the hyphenation patterns (AXT_HYPH)', process.env.AXT_HYPH ?? ''),
+    ],
+    steps: ctx => [listStep(ctx), { cmd: ['node', 'lab/release-check/text-order.mjs', `--bundles=${bundlesDir(ctx)}`, `--rows=${runRowsDir(ctx)}`, `--papers=${corpusList(ctx)}`], slot: 'run' }],
+    // (the members out of order stand (INVARIANTS I8's gap): held to their record, text-order.json, textOrderJudge)
+    judge: (ctx, steps) => textOrderJudge(steps.at(-1).text, textOrderRecord(ctx.root)),
   },
   // today's reader, the way back until the cut-over deletes it: a build of its own (a default build carries the rebuilt reader,
   // on which reader.mjs and registration.mjs run the rebuilt reader's checks), today's checks run on it; a build that carries the
@@ -1143,17 +1293,19 @@ export const GATES = [
   },
   {
     id: 'canvas',
-    title: "all groups on in the reader's canvas: arXiv's page against the composed document in Chromium, on spike S1c's papers (lab/pdf/prepare-back/canvas.mjs, the bound its header names)",
+    title: "all groups on in the reader's canvas: arXiv's page against the composed document in Chromium's software 2D canvas (the renderer a runner with no GPU has; no stand-in for an unbuilt reader change), every draw call rasterised as it is made in both, on spike S1c's papers (lab/pdf/prepare-back/canvas.mjs, the bound its header names)",
     tier: 'release',
     stage: 'corpus',
     holds: ['I1'],
     after: ['prepare'],
     needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 88 papers', lab(ctx, PAPERS))],
-    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), ...canvasIds(ctx)], slot: 'e2e' }],
-    judge: (ctx, steps) => {
-      const c = canvasOf(steps[0].text, canvasIds(ctx))
-      return { pass: steps[0].exit === 0 && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: c.over.slice(0, 4).join('; ') }
-    },
+    // (--flush: Chromium rasterises a 2D canvas's recorded calls in batches whose ends fall where the page's task yields, and the
+    // same calls give other pixels for other batch ends (arXiv's page against itself so too): unflushed, two runs of the gate on
+    // one machine gave other pixels outside the split glyphs on three papers (2026-11-19). Flushed after every call in A's render
+    // and W's alike, the same calls give the same pixels, and what is left is what W's calls change)
+    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), '--renderer=software', '--flush', ...canvasIds(ctx)], slot: 'e2e' }],
+    // (the split shows' residue stands (INVARIANTS I1's gap): each paper's is held to its record, canvas.json, canvasJudge)
+    judge: (ctx, steps) => canvasJudge(steps[0].text, canvasIds(ctx), canvasRecord(ctx.root)),
   },
   {
     id: 'speed',

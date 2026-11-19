@@ -743,3 +743,191 @@ describe('a template of closed types is closed', () => {
     expect(c.trees.NOW.debt.lists.list.map((x) => x.name)).toEqual(['LOOSE'])
   })
 })
+
+describe('the history reading (DEFINITIONS.history)', () => {
+  // each case one comment line of a package's source; `told` the lines read as history, `attribution` those read apart
+  const read = (lines: string[]) => {
+    const h = factsOf('packages/p/src/x.ts', `${lines.join('\n')}\nexport const x = 1\n`).history!
+    const told = new Set([...h.todays, ...h.dated, ...h.named, ...Object.values(h.forms).flat()])
+    return { told: [...told].sort((a, b) => a - b), attribution: h.attribution }
+  }
+  it('reads a map to the old engine: a line map, a file and its line, its paths, its commits, a port statement', () => {
+    const { told } = read([
+      '// layer2.mjs L2:3283-3893 and RUN:2022, TEX:120',
+      '// a line rectangle (tex.mjs:269 texRects)',
+      '// Ported from engine 065c1d973 run.mjs fillPage',
+      '// Carried from the website own store, as it was at baf2083e0',
+      '// (today/ink-units.mjs keptUnitsOf)',
+      '// (src/pdf-reader/engine/view/links.mjs)',
+      '// COPIED as it is from the engine sheet (abe884b5e)',
+      '// carried from page to page in order: one map for the glyphs',
+      "// a punctuation mark moved from after it (cite.sty's own)",
+      '// the bytes taken from the store where they are in it',
+      '// graphics-def 8d691483be, the version its driver states',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+  it("reads 'today' without the 's where it names the old engine, never the word's ordinary use", () => {
+    const { told } = read([
+      '// laid as today draws it',
+      '// where today decides them',
+      "// the extension's today session says it",
+      '// \\today in our compiles is the day arXiv printed',
+      '// `today`: the ownership records the lab checks',
+      '// `state`, what exists today: built or planned',
+      '// held equal by tests/pdf-reader/locate-ink-today.test.ts',
+      "// the last step's log, whatever the earlier passes' hold (BusyTeX's pipeline empties them today)",
+      "// the original's own family. Today, measured against what arXiv's PDFs embed: Times → Nimbus Roman",
+    ])
+    expect(told).toEqual([1, 2, 3])
+  })
+  it('reads a document, a note or a piece of work that is not in this repository', () => {
+    const { told } = read([
+      '// (design-b §1.5, T25)',
+      '// the host design A §1.1',
+      '// (design §4.5 "Painting")',
+      '// a unit kind, of the dump spec §2',
+      '// engine-view-host §16',
+      '// the redesign\'s design, §2.1',
+      "// the compile move's B3",
+      "// the reader's design §15",
+      '// DESIGN §7.2, docs/route/design.md §3.4',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+  it("reads a pull request's review, never the product's own `review` or an issue of the tracker", () => {
+    const { told } = read([
+      "// the original's anchor stays with it, #626's review",
+      "// PR #620's re-review",
+      '// the review of #490',
+      '// whatever the width (the interface review)',
+      "// drew it for two frames (the pin's wave-1 review)",
+      '// the `review` faces are served for the web',
+      '// (#636: 100 units were 199 requests)',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5])
+  })
+  it('reads a lane, a triage, a part, a stage, a numbered ruling and an option by name, never a word of the code', () => {
+    const { told } = read([
+      "// (triage-1 B: 2608.16117v1-de p4's t11)",
+      '// (L11 third round, gap 5)',
+      "// lane L7's record",
+      '// (lane style-wire, on the corpus)',
+      "// (Part 3's interfaces)",
+      '// (stage 1b states them)',
+      "// lab option (i)'s frame share",
+      '// a sentence lit with the one before (ruling 5)',
+      "// the coordinator's R7: the network down",
+      '// a design-performance item (Q7)',
+      '// its lane cuts them by its own limits alone',
+      '// evened by a size step in the first round',
+      '// R1 of PDF-READER §18.72: no ordinary word',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  })
+  it('reads who decided, never an owner that is a part of the code', () => {
+    const { told } = read([
+      "// (the owner's ruling, docs/PDF-READER.md §18.13)",
+      '// (the maintainer plans more interface languages)',
+      '// a page that is arXiv\'s, as the owner decided',
+      '// (his answer: the size never gives way to whole words)',
+      '// is told to the owner (`refused`), who fails the page',
+      '// asked of the owner (`contentOf(n)`)',
+      "// the label stays the owner's, its group off",
+    ])
+    expect(told).toEqual([1, 2, 3, 4])
+  })
+  it("counts a licence's statement of third-party origin apart, never one of our own code's", () => {
+    const { told, attribution } = read([
+      '// Ported from reference/read-frog/src/x.ts@abc1234 (GPL-3.0), 2026-01-01, modified',
+      '//',
+      '// The conversion (cmykToRgb) is ported from pdfjs-dist 6.3.289 (Mozilla, Apache-2.0), src/core/colorspace.js, its',
+      '// #toRgb, 2026-10-19, modified: one colour at a time into a clamped array, no buffer.',
+      "// Ported from the website's prototype, 2026-10-06, as it stood",
+    ])
+    expect(attribution).toEqual([1, 3, 4])
+    expect(told).toEqual([5])
+  })
+  it("reads no date inside a git ref's name, and a date beside it as a date", () => {
+    const { told } = read([
+      '// top alignment (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md §4)',
+      '// decided 2026-10-07 beside it',
+    ])
+    expect(told).toEqual([2])
+  })
+})
+
+describe("the history reading: this repository's own names, a third party's files (DEFINITIONS.history)", () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'census-names-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('package.json', JSON.stringify({ name: 'e4', dependencies: { libx: '1.0.0' } }))
+    put('.gitignore', 'node_modules\n')
+    // a dependency's distribution: its build files, one of whose names this repository also holds (tools/lib.mjs)
+    put('node_modules/libx/package.json', JSON.stringify({ name: 'libx' }))
+    put('node_modules/libx/build/lib.worker.mjs', 'export {}\n')
+    put('node_modules/libx/build/lib.mjs', 'export {}\n')
+    put('tools/lib.mjs', 'export {}\n')
+    // this repository's documents: a label given right after a bold rule, a part of it named, a table of stages
+    put(
+      'docs/DESIGN.md',
+      [
+        '# Design',
+        '## 16. The prepare',
+        '**The marked compile is the pass loop** (Q1, the lab design): the files carried in (`carried`, Q1\'s option (i)).',
+        '**A marked request that dies is asked once more, reduced** (Q2; `reduce`).',
+        '**Over the 88** (stage 1a, a lane of the lab): every object the same.',
+        '',
+      ].join('\n'),
+    )
+    put(
+      'docs/route/notes.md',
+      ['## 7. Versions, stages', '', '| Stage | Scope |', '|---|---|', '| 1 (built) | the ledger |', '| 2 (built) | ink units |', '| 5 (built) | figure text |', ''].join('\n'),
+    )
+    // a file that cites both documents, and one that cites none
+    put(
+      'packages/p/src/a.ts',
+      [
+        "// the pass loop (DESIGN §16's Q1)",
+        '// asked once more without the optional classes (Q2)',
+        '// carried into pass 1 (option (i) of Q1)',
+        '// a folio: stage 2 brackets them (notes.md §7)',
+        "// a folio: the lab plan's stage 3 (notes.md §7)",
+        "// the worker's Glyph (lib.worker.mjs:32428-32439): the library's contract",
+        '// a line rectangle (tex.mjs:269 texRects)',
+        "// the run (Q7, the lab's performance design)",
+        "// the old reader's parse (lib.mjs:12)",
+        '// (docs/route/notes.md stage 5)',
+        "// a page's figure texts (the content class `figures`, docs/route/notes.md",
+        '// stage 5), each drawn in its translation',
+        '// a gate, which must count none (stage 1a fails a paper with one; DESIGN §16)',
+        'export const a = 1',
+        '',
+      ].join('\n'),
+    )
+    put('packages/p/src/b.ts', ['// the pass loop (Q1, convergeThenMark)', '// built for the right pane first (stage 2, deliverable 7)', 'export const b = 1', ''].join('\n'))
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    execFileSync('git', ['add', '-A'], { cwd: root })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const told = async (path: string) => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const h = scanTree('engine', root, ENGINE_PROFILE).files.get(path)!.history!
+    return [...new Set([...h.todays, ...h.dated, ...h.named, ...Object.values(h.forms).flat()])].sort((a, b) => a - b)
+  }
+  it('reads no name a document of this repository defines in a file that cites it, and every other as before', async () => {
+    // Q1, Q2 and Q1's option (i) are DESIGN's labels, stages 2 and 5 rows of notes.md's table of stages (a stage named on the
+    // line after the document's path too): this file cites both. Stage 3 and Q7 are no document's; a file that cites neither
+    // document reads Q1 and stage 2 as the lab's. A stage named after a bold heading (DESIGN's stage 1a) is the lab's, cited
+    expect((await told('packages/p/src/a.ts')).filter(l => l <= 5 || l >= 8)).toEqual([5, 8, 9, 13])
+    expect(await told('packages/p/src/b.ts')).toEqual([1, 2])
+  })
+  it("reads no file a dependency distributes, cited by its line, as the old engine's; one this repository holds too stays", async () => {
+    // lib.worker.mjs is libx's alone; tex.mjs is no dependency's; lib.mjs is libx's and this repository's (tools/lib.mjs)
+    expect((await told('packages/p/src/a.ts')).filter(l => l >= 6 && l <= 9)).toEqual([7, 8, 9])
+  })
+})

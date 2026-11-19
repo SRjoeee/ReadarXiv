@@ -1,18 +1,17 @@
 // What a reader translates on a laid page (the reading options' "What to translate", docs/PDF-READER.md §15): five toggles over
 // the content classes, a unit's class a pure function of its toggleKind (format's: the block its source ties it to, Unit.of and
-// Placed.of, else its kind: a note the source writes in an author command's argument is the author block's, the owner's ruling
-// of 2026-11-13), so that the server and every reader tell it alike; every caller reads a unit's or a member's through it. A toggle
-// shows or hides what was made, in place: nothing is fetched or translated again. Carried from today's table
-// (src/pdf-reader/engine/rules/content-classes.mjs UNIT_CLASS, TOGGLE_DEFAULTS at baf2083e0): `always` and `never` are no toggle.
+// Placed.of, else its kind: a note the source writes in an author command's argument is the author block's, docs/PDF-READER.md
+// §18.71), so that the server and every reader tell it alike; every caller reads a unit's or a member's through it. A toggle
+// shows or hides what was made, in place: nothing is fetched or translated again; `always` and `never` are no toggle.
 import type { ClassName } from '../prefs.ts'
 
 /** a unit kind's toggle, or 'always' (the source's body, the generated names, the contents, notes and orphans; and `textnames`,
- *  a name or a place of the author block a class prints away from the block under the title, which no toggle governs: the
- *  owner's ruling of 2026-11-09, docs/PDF-READER.md §19.13) */
+ *  a name or a place of the author block a class prints away from the block under the title, which no toggle governs:
+ *  docs/PDF-READER.md §19.13) */
 const TOGGLE_OF: Readonly<Record<string, ClassName>> = {
   cell: 'tables',
   author: 'names',
-  // (an author block's places: the names' toggle with its names, the whole block one toggle, the owner's ruling of 2026-10-30)
+  // (an author block's places: the names' toggle with its names, the whole block one toggle, docs/PDF-READER.md §19.13)
   affiliation: 'names',
   inknames: 'names',
   figure: 'figures',
@@ -23,7 +22,7 @@ const TOGGLE_OF: Readonly<Record<string, ClassName>> = {
   inkreferences: 'references',
 }
 
-/** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads, tables and figures on; names and
+/** each toggle's default, where a reader has set none (docs/PDF-READER.md §9.1): heads, tables and figures on; names and
  *  references off */
 export const CLASS_DEFAULTS: Readonly<Record<ClassName, boolean>> = {
   figures: true,
@@ -50,7 +49,7 @@ export const sameClasses = (
   )
 
 /** the unit kinds the toggles `classes` leave the original's (over the defaults): what the typesetter's rules are given to leave
- *  (typeset Rules `leave`, the reader's choices of design-a §1.2), in a stable order */
+ *  (typeset Rules `leave`, the reader's choices), in a stable order */
 export function leftKinds(classes?: Readonly<Partial<Record<ClassName, boolean>>> | null): string[] {
   return Object.keys(TOGGLE_OF)
     .filter((kind) => !kindShown(kind, classes))

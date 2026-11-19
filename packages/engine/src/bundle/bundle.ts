@@ -1,4 +1,4 @@
-// bundle(located, addOn, original): the bundle's objects (the page design A §1.1, §1.3, §2.1): `Units` (each distinct
+// bundle(located, addOn, original): the bundle's objects (ARCHITECTURE.md §2): `Units` (each distinct
 // unit once, what a translator reads, in windows under the Worker's 1 MiB), one self-sufficient `Part` a page that has
 // anything to lay, the add-on's bytes, and last the `Head` that names them all (the original's length, digest and 64 KiB
 // chunk digests among them). Every object is written by @readarxiv/format's `write`: canonical bytes, named by their digest.
@@ -67,7 +67,7 @@ export function stateOf(mem: Member, addOn: BundleInput['addOn']): MemberState {
   if (!mem.located) return { why: 'unlocated', drawn: false, fixed: 0 }
   // (its ink stays whatever the translation: no group of it. A text so left that is no kept unit (a figure text the figure
   // reading keeps, ink.ts; a cell held for its decorated word, §18.61) holds text a translation could be laid over, over ink
-  // that stays: unwrapped, the original's, #631's review, and no evidence for its table's group decision. A kept block holds
+  // that stays: unwrapped, the original's, and no evidence for its table's group decision. A kept block holds
   // none)
   if (mem.fixed) return mem.kept ? { drawn: false, fixed: 0 } : { why: 'unwrapped', drawn: false, fixed: 0 }
   if ('refused' in addOn) return { why: 'page', drawn: false, fixed: 0 }
@@ -251,7 +251,7 @@ function placedOf(
   if (mem.tail?.length) p.tail = mem.tail
   if (mem.read.length) p.read = [...new Set(mem.read)]
   if (mem.words) p.words = mem.words
-  // (the paragraphs TeX opened inside its text, each by its first word: locate's facts pass, design-display 2a)
+  // (the paragraphs TeX opened inside its text, each by its first word: locate's facts pass, PDF-READER §18.69)
   if (mem.paras?.length) p.paras = mem.paras
   // (beside them, the element each point stands directly after in the source, where one does: Placed.parasAfter)
   if (mem.paras?.length && mem.parasAfter) p.parasAfter = mem.parasAfter
@@ -432,7 +432,7 @@ export function* bundle(input: BundleInput): Generator<BundleObject> {
     const held = new Set(take.flatMap((i) => located.flows[i]!))
     const ties = located.ties.filter((_, t) => tieOrds[t]!.some((o) => held.has(o)))
     // (the page's annotations, and those of the members with a line on it on their other pages, with their page: a translation
-    // draws a member's piece on whichever of its pages its text falls, the link over it there, #626's review)
+    // draws a member's piece on whichever of its pages its text falls, the link over it there)
     const own = located.links.get(p) ?? []
     const across: NonNullable<Part['links']> = []
     for (const i of a)

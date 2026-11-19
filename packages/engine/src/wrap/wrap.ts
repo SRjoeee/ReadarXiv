@@ -1,7 +1,7 @@
 // wrap(bytesA, located, pagesA): arXiv's own runs wrapped in optional content, as an incremental update over arXiv's exact
-// bytes (design §4.1 "the add-on, exactly"; spike S1c's wrapA.mjs). Today's wrapOf and planOf as they are (wrap.ts), each page
-// planned from the groups locate carried onto A: `<ord>.<page>.t` a member's text, `.e` its travelling elements, `.l` its
-// label (design §4.5). wrapOf refuses what it cannot prove (an encrypted file, a page past its bounds, a form partly owned, a
+// bytes (ARCHITECTURE.md §2: the add-on), by wrapOf and planOf (wrap.ts), each page planned from the groups locate carried
+// onto A: `<ord>.<page>.t` a member's text, `.e` its travelling elements, `.l` its label (ARCHITECTURE.md §2). wrapOf
+// refuses what it cannot prove (an encrypted file, a page past its bounds, a form partly owned, a
 // split it cannot make, …): a page it refuses keeps every unit on it the original's. Its own proofs run inside it (each page's
 // new stream lexed again and its operators, ours taken out, A's; the section read back over A's bytes; the document's object
 // graph A's but for the catalog's optional content, the pages' contents and properties). The add-on is the section alone.
@@ -19,7 +19,7 @@ export interface AddOn {
   groups: Set<string>
   ocgs: Map<string, number>
   /** the groups that owned an image the wrap could not tell apart (planOf's `lost`: the page's images painted are not as many
-   *  as PDF.js's reading of them), none of which is wrapped: their members stay the original's (today's wrapFinal, `unhidden`) */
+   *  as PDF.js's reading of them), none of which is wrapped: their members stay the original's */
   lost: Set<string>
   stats: Wrap['stats']
 }
@@ -77,7 +77,7 @@ export async function wrap(
     }))
     const plan = planOf(glyphs, groups.glyphs, pg.paths, groups.boxes, pg.extra)
     for (const g of plan.lost) lost.add(g)
-    // (a turned glyph's group by its place in its show, as a level one's (wrapFinal's way); and one of no group is read as
+    // (a turned glyph's group by its place in its show, as planOf places a level one; and one of no group is read as
     // its own, none, so that a show it shares with a group's glyphs is split at it rather than giving it their group: the
     // proof that each group encloses exactly its ink found 3 such glyphs on 2 papers of the corpus)
     const turned = pg.turnedNK.length / 2

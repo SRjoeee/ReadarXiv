@@ -1,9 +1,8 @@
-// What the reader knows of its paper beside the layer (today's R engine/view/reader-view.mjs reportPaper, session/paper.ts,
-// core/pdf/entry.ts htmlVersionOf): its title, the PDF's own (its Info Title, arXiv's margin stamp dropped) else the one
-// arXiv's abstract page gives; and where arXiv has an HTML version of it, for a reader whose bilingual PDF cannot be had. Both
-// are asked through the host's fetch (the host design A §1.7: the extension's fallbacks, with no member of the host);
-// a host that does not serve arXiv's origin refuses them at once, and the reader then has no title of the page and offers the
-// HTML version, as a failed ask does.
+// What the reader knows of its paper beside the layer: its title, the PDF's own (its Info Title, arXiv's margin stamp dropped)
+// else the one arXiv's abstract page gives; and where arXiv has an HTML version of it, for a reader whose bilingual PDF cannot
+// be had. Both are asked through the host's fetch (the extension's fallbacks, with no member of the
+// host); a host that does not serve arXiv's origin refuses them at once, and the reader then has no title of the page and
+// offers the HTML version, as a failed ask does.
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
 import { bodyWithin } from './client.ts'
 

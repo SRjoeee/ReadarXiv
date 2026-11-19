@@ -1,6 +1,6 @@
 // The harness page: the reader's parts, driven by the checks (run.mjs) through `window.__h`. Nothing here reaches the network
 // but the page's own origin and the stand-in of arXiv's server, which the route table answers.
-import { groupName, type Head, type Part, read, type Row } from '@readarxiv/format'
+import { groupName, groupOf, type Head, type Part, type Placed, read, type Row } from '@readarxiv/format'
 import { composedSource } from '../../src/bytes/composed.ts'
 import { openRanged } from '../../src/bytes/ranged.ts'
 import { type OriginalSource, rangeSource } from '../../src/bytes/source.ts'
@@ -14,7 +14,8 @@ import { leftKinds } from '../../src/compose/classes.ts'
 import { ruleTag, typesetLay } from '../../src/compose/typeset.ts'
 import { groupsOf, type Groups } from '../../src/compose/groups.ts'
 import { createHighlight, type Highlight } from '../../src/compose/highlight.ts'
-import type { Ink, Item, Page } from '../../src/compose/page.ts'
+import type { Box, Ink, Item, Page } from '../../src/compose/page.ts'
+import type { OptionalContentConfig } from '../../src/stack/stack.ts'
 import { fixtureLay, inked, membersOf, pagesOf, type ReaderDump } from './convert.ts'
 import { createPanes, type Panes } from '../../src/panes/panes.ts'
 import { createStack, type Stack } from '../../src/stack/stack.ts'
@@ -104,6 +105,136 @@ function clipCrop(
       }
   return null
 }
+/** a line on A that holds ink that stays (Line's KEPT flag) */
+const KEPT = 1
+/**
+ * Every draw call on a 2D canvas rasterised as it is made while `flushing.on` (I2's renders; the canvas gate's `--flush`):
+ * Chromium records a 2D canvas's calls and rasterises them in batches whose ends fall where the page's task yields, and the same
+ * calls give other pixels for other batch ends (arXiv's page drawn twice so too); a one-pixel read after each call makes every
+ * render of the same calls the same pixels, so that two renders of a page differ only where their calls do
+ */
+const flushing = { on: false }
+{
+  const P = CanvasRenderingContext2D.prototype as unknown as Record<string, (...a: unknown[]) => unknown>
+  for (const name of [
+    'drawImage',
+    'fillText',
+    'strokeText',
+    'fill',
+    'stroke',
+    'fillRect',
+    'strokeRect',
+    'clearRect',
+    'putImageData',
+  ]) {
+    const f = P[name] as (...a: unknown[]) => unknown
+    P[name] = function (this: CanvasRenderingContext2D, ...a: unknown[]) {
+      const r = f.apply(this, a)
+      if (flushing.on) this.getImageData(0, 0, 1, 1)
+      return r
+    }
+  }
+}
+/**
+ * A member's ink on page `n` as the layer states it (the part's Placed, which the reader's typesetter reads its boxes from), by
+ * the group that holds it: its text group (bit 1) its lines but the KEPT ones, its element group (bit 2) its elements' ink but a
+ * kept element's (El.keep: TeX set it outside the unit's text, in no group), its label group (bit 4) its label's ink; `kept`,
+ * the ink it states that stays where it stands in no group of its own: its KEPT lines and its kept elements' ink. `displays`:
+ * its displays' ink (El kind 'display', lit as blocks of their own on both panes) and the KEPT lines on their rows, kept too
+ */
+function statedInk(m: Placed, n: number): { 1: Box[]; 2: Box[]; 4: Box[]; kept: Box[]; displays: Box[] } {
+  const out = { 1: [] as Box[], 2: [] as Box[], 4: [] as Box[], kept: [] as Box[], displays: [] as Box[] }
+  const area = (b: Box) => b[2] > b[0] && b[3] > b[1]
+  for (const [, el] of m.els ?? [])
+    for (const i of el.ink)
+      if (i[0] === n) {
+        const b: Box = [i[1], i[2], i[3], i[4]]
+        if (!area(b)) continue
+        if (el.kind === 'display') out.displays.push(b)
+        else if (el.keep) out.kept.push(b)
+        else out[2].push(b)
+      }
+  const onDisplay = (b: Box) =>
+    out.displays.some(
+      (d) =>
+        Math.min(b[2], d[2]) > Math.max(b[0], d[0]) &&
+        Math.min(b[3], d[3]) - Math.max(b[1], d[1]) > 0.5 * (b[3] - b[1]),
+    )
+  for (const l of m.lines) {
+    if (l[0] !== n) continue
+    const b: Box = [l[2], l[6], l[3], l[5]]
+    if (!area(b)) continue
+    if (!(l[9] & KEPT)) out[1].push(b)
+    else if (onDisplay(b)) out.displays.push(b)
+    else out.kept.push(b)
+  }
+  const li = m.label?.ink
+  if (li && li[0] === n && li[3] > li[1] && li[4] > li[2]) out[4].push([li[1], li[2], li[3], li[4]])
+  return out
+}
+/** box b grown by `d` on every side */
+const grown = (b: Box, d: number): Box => [b[0] - d, b[1] - d, b[2] + d, b[3] + d]
+/** the area of box `b` that no box of `cover` holds (rectangles, exact: b cut into strips at every edge of the cover) */
+function uncovered(b: Box, cover: readonly Box[]): number {
+  const xs = [b[0], b[2]]
+  for (const c of cover) for (const x of [c[0], c[2]]) if (x > b[0] && x < b[2]) xs.push(x)
+  xs.sort((p, q) => p - q)
+  let area = 0
+  for (let i = 0; i + 1 < xs.length; i++) {
+    const x0 = xs[i] as number,
+      x1 = xs[i + 1] as number
+    if (x1 <= x0) continue
+    const mid = (x0 + x1) / 2
+    const iv = cover
+      .filter((c) => c[0] <= mid && c[2] >= mid)
+      .map((c) => [Math.max(c[1], b[1]), Math.min(c[3], b[3])] as [number, number])
+      .filter(([a, z]) => z > a)
+      .sort((p, q) => p[0] - q[0])
+    let held = 0,
+      top = b[1]
+    for (const [a, z] of iv) {
+      if (z <= top) continue
+      held += z - Math.max(a, top)
+      top = z
+    }
+    area += (x1 - x0) * (b[3] - b[1] - held)
+  }
+  return area
+}
+/** the extent of the boxes of `of` within box `b` (each cut to b; a box that only touches it has none), or null */
+function extentIn(b: Box, of: readonly Box[]): Box | null {
+  let out: Box | null = null
+  for (const c of of) {
+    const x0 = Math.max(b[0], c[0]),
+      y0 = Math.max(b[1], c[1]),
+      x1 = Math.min(b[2], c[2]),
+      y1 = Math.min(b[3], c[3])
+    if (x1 <= x0 || y1 <= y0) continue
+    out = out
+      ? [Math.min(out[0], x0), Math.min(out[1], y0), Math.max(out[2], x1), Math.max(out[3], y1)]
+      : [x0, y0, x1, y1]
+  }
+  return out
+}
+/** a box of a member set along a direction (Laid.lit's `dir`: [s0, t0, s1, t1] along it and across it) as the page's box it
+ *  stands in */
+function pageBoxOf(b: Box, [ux, uy]: [number, number]): Box {
+  const pts = [
+    [b[0], b[1]],
+    [b[2], b[1]],
+    [b[0], b[3]],
+    [b[2], b[3]],
+  ].map(([s, t]) => [(s as number) * ux - (t as number) * uy, (s as number) * uy + (t as number) * ux] as const)
+  return [
+    Math.min(...pts.map((p) => p[0])),
+    Math.min(...pts.map((p) => p[1])),
+    Math.max(...pts.map((p) => p[0])),
+    Math.max(...pts.map((p) => p[1])),
+  ]
+}
+/** the hundredth of a point the part writes its numbers to, halved: two boxes read from the same numbers are the same boxes
+ *  within it (I7's tolerance; anything past it is not the numbers' rounding) */
+const PART_ROUNDING = 0.005
 const h = {
   panes: null as Panes | null,
   kit: null as Awaited<ReturnType<typeof loadKit>> | null,
@@ -196,6 +327,39 @@ const h = {
     h.marks.push({ what: 'opened', at: performance.now() - h.t0, r })
     return { pages: doc.numPages, asks: source.counts.asks, bytes: source.counts.bytes }
   },
+  /** the layer of fixture `name` over the original open, no composer: its head and parts read from our server's objects, the
+   *  original's chunks proved, the composed document opened over the same store and its groups read */
+  async openLayer(name: string) {
+    const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
+    const kit = h.kit as NonNullable<typeof h.kit>
+    const t0 = performance.now()
+    const head = read('head', await bytesOf(`${fx.objects}${fx.head}`), fx.head) as Head
+    h.head = head
+    const proved = await (h.source as OriginalSource).prove(head.original.chunks)
+    const addOn = rangeSource({ fetch: (u, i) => fetch(u, i), url: `${fx.objects}${head.addOn?.digest}`, own: true })
+    const src = composedSource(h.source as OriginalSource, head.original.bytes, addOn, head.addOn?.bytes ?? 0)
+    const composed = await openRanged(kit.lib as never, src, { options: kit.options('composed') }).promise
+    h.composed = composed
+    const groups = groupsOf(composed)
+    await groups.ready
+    h.groups = groups
+    const tOpen = performance.now() - t0
+    const parts = new Map<number, Part>()
+    await Promise.all(
+      head.parts.map(async (d, i) => {
+        if (d) parts.set(i + 1, read('part', await bytesOf(`${fx.objects}${d}`), d) as Part)
+      }),
+    )
+    h.parts = parts
+    // (the units the paper keeps as it is (Unit.kept), whose rows never come: the reader's rows say so, rows.ts)
+    const kept = new Set<string>()
+    for (const d of head.units)
+      for (const u of (
+        read('units', await bytesOf(`${fx.objects}${d}`), d) as { units: { id: string; kept?: unknown }[] }
+      ).units)
+        if (u.kept) kept.add(u.id)
+    return { fx, head, proved, composed, groups, parts, tOpen, kept }
+  },
   /**
    * The layer of fixture `name` over the original open: its head and parts read from our server's objects, the original's chunks
    * proved, the composed document opened over the same store, its groups read, the fixture's dump made into Pages, the rows
@@ -219,29 +383,12 @@ const h = {
        *  faces and patterns, the reader's Metrics) from the fixture's parts and its `<target>.rows.json`, not from its dump; the
        *  faces the served ones (`h.served`) */
       typeset?: boolean
+      /** the rows given ended at once (no other row will come: a unit with none is the original's, nothing waited for) */
+      end?: boolean
     } = {},
   ) {
-    const fx = await (await fetch(`/fixtures/${name}/index.json`)).json()
+    const { fx, head, proved, composed, groups, parts, tOpen, kept } = await h.openLayer(name)
     const kit = h.kit as NonNullable<typeof h.kit>
-    const t0 = performance.now()
-    const head = read('head', await bytesOf(`${fx.objects}${fx.head}`), fx.head) as Head
-    h.head = head
-    const proved = await (h.source as OriginalSource).prove(head.original.chunks)
-    const addOn = rangeSource({ fetch: (u, i) => fetch(u, i), url: `${fx.objects}${head.addOn?.digest}`, own: true })
-    const src = composedSource(h.source as OriginalSource, head.original.bytes, addOn, head.addOn?.bytes ?? 0)
-    const composed = await openRanged(kit.lib as never, src, { options: kit.options('composed') }).promise
-    h.composed = composed
-    const groups = groupsOf(composed)
-    await groups.ready
-    h.groups = groups
-    const tOpen = performance.now() - t0
-    const parts = new Map<number, Part>()
-    await Promise.all(
-      head.parts.map(async (d, i) => {
-        if (d) parts.set(i + 1, read('part', await bytesOf(`${fx.objects}${d}`), d) as Part)
-      }),
-    )
-    h.parts = parts
     const target = o.target ?? 'de'
     const all = (
       (await (await fetch(`/fixtures/${name}/${fx.rows[target] ?? `${target}.rows.json`}`)).json()) as { rows: Row[] }
@@ -273,6 +420,7 @@ const h = {
       target,
       done: false,
       get: (id: string) => given.get(id),
+      kept: (id: string) => kept.has(id),
       on(f: () => void) {
         listeners.add(f)
         return () => listeners.delete(f)
@@ -291,6 +439,7 @@ const h = {
       },
     }
     if ((o.rows ?? 'all') === 'all') rows.give()
+    if (o.end) rows.end()
     h.rows = rows
     h.faces ??= createFaces({
       table: faceTable(kit.base),
@@ -647,6 +796,396 @@ const h = {
       id: (h.composer as Composer).member(m.ord)?.text,
       on: ([1, 2, 4] as const).map((bit) => visible.get(groupName(m.ord, n, bit)) ?? null),
     }))
+  },
+  /**
+   * I2 on page n, read from the reader's own canvas: the right pane's page view (the stack drawing the composed document under an
+   * optional content configuration of the check's own, as the reader's page views draw it, every draw call rasterised as it is
+   * made: `flushing`) with every group on, with every group of the page off, with each group of the page on alone and with each
+   * off alone. A group's own ink as the canvas paints it is where it alone on differs from none on. Its ink as the layer states
+   * it (statedInk; the reader reads those boxes to place a text run in its group, compose/text.ts placesOf) is grown to whole
+   * device pixels and one more (the canvas's own rounding: an edge drawn into the pixel that holds it, antialiased into the
+   * next). For each group, from the pixels its off state changes against every group on:
+   * - `neighbour`: those outside its stated ink that are not its own ink, or that stand in another member's stated ink: a
+   *   neighbour's pixel changed (judged: none);
+   * - `beyond`: those of its own ink outside its stated ink and every other member's: its glyphs' ink past the layer's
+   *   statement of it (a line's box is its fonts' boxes up and down; reported, not judged);
+   * - `shown`: its own ink, painted by no other group, that shows with every group on and stays with it off (judged: none);
+   * - `unheld`: the page's text items (PDF.js's text content of the composed page) in no optional content run of ours, standing
+   *   in its stated ink and in no kept ink the layer states (KEPT lines, kept elements, displays, a group the document does not
+   *   hold): a mark of its statement drawn whatever its visibility (judged: none).
+   * `at`: a few of each's places, PDF units
+   */
+  async groupsOff(n: number, o: { crops?: boolean } = {}) {
+    const panes = h.panes as Panes
+    const stack = panes.right
+    const doc = h.composed as import('pdfjs-dist').PDFDocumentProxy
+    const cfg = (await doc.getOptionalContentConfig({ intent: 'display' })) as OptionalContentConfig
+    const ids = new Map<string, string>()
+    for (const [id, g] of cfg as unknown as Iterable<[string, { name?: unknown }]>)
+      if (typeof g?.name === 'string' && groupOf(g.name)) ids.set(g.name, id)
+    const here = [...ids.keys()].filter((name) => groupOf(name)?.page === n).sort()
+    const was = stack.contentOf
+    let k0 = 0
+    const t0 = performance.now()
+    /** page n drawn by the right's stack with the names given off, every other group on; its pixels */
+    const draw = async (off: readonly string[]) => {
+      const gone = new Set(off)
+      for (const [name, id] of ids) cfg.setVisibility(id, !gone.has(name), false)
+      const key = `i2:${n}:${++k0}`
+      const shown = new Promise<void>((done, fail) => {
+        const t = setTimeout(() => fail(new Error(`page ${n} not drawn with ${key} in 20 s`)), 20_000)
+        const stop = stack.on('shown', (e) => {
+          if (e.n !== n || e.key !== key) return
+          clearTimeout(t)
+          stop()
+          done()
+        })
+      })
+      stack.contentOf = (m) => (m === n ? { key, doc, config: Promise.resolve(cfg), own: false, over: null } : was(m))
+      stack.refresh(n)
+      await shown
+      const canvas = (stack.page(n) as HTMLElement).querySelector(
+        '.axt-slot-view .canvasWrapper canvas',
+      ) as HTMLCanvasElement
+      const c = new OffscreenCanvas(canvas.width, canvas.height).getContext('2d') as OffscreenCanvasRenderingContext2D
+      c.drawImage(canvas, 0, 0)
+      return { w: canvas.width, h: canvas.height, data: c.getImageData(0, 0, canvas.width, canvas.height).data }
+    }
+    const same = (A: Uint8ClampedArray, B: Uint8ClampedArray, i: number) =>
+      A[i] === B[i] && A[i + 1] === B[i + 1] && A[i + 2] === B[i + 2]
+    flushing.on = true
+    try {
+      const on = await draw([])
+      const none = await draw(here)
+      const vp = stack.viewport(n) as import('pdfjs-dist').PageViewport
+      const W = on.w,
+        H = on.h,
+        k = W / vp.width
+      /** a box of the page (PDF units) as the device pixels it is drawn in and one more on each side, inclusive */
+      const dev = (b: Box): [number, number, number, number] => {
+        const [ax, ay] = vp.convertToViewportPoint(b[0], b[3]) as [number, number],
+          [bx, by] = vp.convertToViewportPoint(b[2], b[1]) as [number, number]
+        return [
+          Math.max(0, Math.floor(Math.min(ax, bx) * k) - 1),
+          Math.max(0, Math.floor(Math.min(ay, by) * k) - 1),
+          Math.min(W - 1, Math.ceil(Math.max(ax, bx) * k) + 1),
+          Math.min(H - 1, Math.ceil(Math.max(ay, by) * k) + 1),
+        ]
+      }
+      const fill = (mask: Uint8Array, boxes: readonly Box[], v = 1) => {
+        for (const b of boxes) {
+          const [x0, y0, x1, y1] = dev(b)
+          for (let y = y0; y <= y1; y++) mask.fill(v, y * W + x0, y * W + x1 + 1)
+        }
+        return mask
+      }
+      const pdfAt = (p: number) =>
+        vp.convertToPdfPoint((p % W) / k, Math.floor(p / W) / k).map((v) => Math.round(v * 10) / 10)
+      const inBox = (b: Box, x: number, y: number) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]
+      // (the page's members, the stated ink of each group, and what the layer states stays in no group of the document)
+      const members = membersOf(h.parts.values())
+      const stated = new Map<string, Box[]>()
+      const staying: Box[] = []
+      for (const m of members.values()) {
+        const s = statedInk(m, n)
+        staying.push(...s.kept, ...s.displays)
+        for (const bit of [1, 2, 4] as const) {
+          if (!s[bit].length) continue
+          const name = groupName(m.ord, n, bit)
+          if (ids.has(name)) stated.set(name, s[bit])
+          else staying.push(...s[bit])
+        }
+      }
+      // (each stated group's member, by name; the stated ink of every member, each pixel the count of members stating it)
+      const ordOf = (name: string) => groupOf(name)?.ord ?? -1
+      const statedBy = new Map<number, Box[]>()
+      for (const [name, boxes] of stated) statedBy.set(ordOf(name), [...(statedBy.get(ordOf(name)) ?? []), ...boxes])
+      const stating = new Uint8Array(W * H)
+      for (const boxes of statedBy.values()) {
+        const m = fill(new Uint8Array(W * H), boxes)
+        for (let p = 0; p < W * H; p++)
+          if (m[p] && (stating[p] as number) < 255) stating[p] = (stating[p] as number) + 1
+      }
+      // (the page's text items in no optional content run of ours, by their place: text.ts's own reading of the runs)
+      const content = await (await doc.getPage(n)).getTextContent({ includeMarkedContent: true })
+      const free: [number, number][] = []
+      {
+        const depth: boolean[] = []
+        for (const e of content.items as {
+          str?: string
+          transform?: number[]
+          width?: number
+          type?: string
+          tag?: string
+        }[]) {
+          if (typeof e.str === 'string') {
+            if (!e.str.trim() || depth.some(Boolean)) continue
+            const [a, b, , , x, y] = e.transform as number[]
+            const len = Math.hypot(a as number, b as number) || 1
+            free.push([
+              (x as number) + ((a as number) / len) * ((e.width ?? 0) / 2),
+              (y as number) + ((b as number) / len) * ((e.width ?? 0) / 2),
+            ])
+          } else if (e.type === 'beginMarkedContentProps' || e.type === 'beginMarkedContent')
+            depth.push(e.type === 'beginMarkedContentProps' && e.tag === 'OC')
+          else if (e.type === 'endMarkedContent') depth.pop()
+        }
+      }
+      // pass 1: each group on alone: its own ink (where it differs from none on), and how many groups paint each pixel
+      const own = new Map<string, Int32Array>()
+      const painters = new Uint8Array(W * H)
+      for (const name of here) {
+        const only = await draw(here.filter((x) => x !== name))
+        const at: number[] = []
+        for (let p = 0, i = 0; p < W * H; p++, i += 4)
+          if (!same(only.data, none.data, i)) {
+            at.push(p)
+            if ((painters[p] as number) < 255) painters[p] = (painters[p] as number) + 1
+          }
+        own.set(name, Int32Array.from(at))
+      }
+      let cropsMade = 0
+      /** 48 device px a side of a render about pixel p, four times larger, as a PNG data URL */
+      const cropOf = async (img: { data: Uint8ClampedArray }, p: number) => {
+        const R = 24,
+          x0 = Math.max(0, (p % W) - R),
+          y0 = Math.max(0, Math.floor(p / W) - R),
+          w = Math.min(W - x0, 2 * R),
+          hh = Math.min(H - y0, 2 * R)
+        const part = new ImageData(w, hh)
+        for (let y = 0; y < hh; y++)
+          part.data.set(img.data.subarray(4 * ((y0 + y) * W + x0), 4 * ((y0 + y) * W + x0 + w)), 4 * y * w)
+        const a = new OffscreenCanvas(w, hh)
+        ;(a.getContext('2d') as OffscreenCanvasRenderingContext2D).putImageData(part, 0, 0)
+        const b = new OffscreenCanvas(4 * w, 4 * hh)
+        const g = b.getContext('2d') as OffscreenCanvasRenderingContext2D
+        g.imageSmoothingEnabled = false
+        g.drawImage(a, 0, 0, 4 * w, 4 * hh)
+        const blob = await b.convertToBlob({ type: 'image/png' })
+        return await new Promise<string>((done) => {
+          const r = new FileReader()
+          r.onload = () => done(String(r.result))
+          r.readAsDataURL(blob)
+        })
+      }
+      // pass 2: each group off alone, against every group on
+      const rows = []
+      for (const name of here) {
+        const mine = fill(new Uint8Array(W * H), stated.get(name) ?? [])
+        // (another member's stated ink: a pixel more members state than this group's own member)
+        const member = fill(new Uint8Array(W * H), statedBy.get(ordOf(name)) ?? [])
+        const ownMask = new Uint8Array(W * H)
+        for (const p of own.get(name) ?? []) ownMask[p] = 1
+        const off = await draw([name])
+        let changed = 0,
+          neighbour = 0,
+          beyond = 0,
+          shown = 0
+        const neighbourAt: number[][] = [],
+          beyondAt: number[][] = [],
+          shownAt: number[][] = []
+        let first = -1
+        for (let p = 0, i = 0; p < W * H; p++, i += 4) {
+          const d = !same(on.data, off.data, i)
+          if (d) {
+            changed++
+            if (!mine[p] && (!ownMask[p] || (stating[p] as number) > (member[p] as number))) {
+              neighbour++
+              if (first < 0) first = p
+              if (neighbourAt.length < 4) neighbourAt.push(pdfAt(p))
+            } else if (!mine[p]) {
+              beyond++
+              if (beyondAt.length < 4) beyondAt.push(pdfAt(p))
+            }
+          } else if (ownMask[p] && painters[p] === 1 && !same(on.data, none.data, i)) {
+            shown++
+            if (first < 0) first = p
+            if (shownAt.length < 4) shownAt.push(pdfAt(p))
+          }
+        }
+        // (the page's text items in no run of ours standing in its stated ink and in no kept ink: a mark of it drawn whatever
+        // its visibility)
+        const boxes = stated.get(name) ?? []
+        const unheldAt = free
+          .filter(([x, y]) => boxes.some((b) => inBox(b, x, y)) && !staying.some((b) => inBox(b, x, y)))
+          .map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10])
+        // (`crops`: around a group's first pixel judged, the page with every group on, with it off and with every group off, 48
+        // device px a side drawn four times larger, for a reader of the run to look at)
+        const crops =
+          o.crops && first >= 0 && cropsMade++ < 6
+            ? { on: await cropOf(on, first), off: await cropOf(off, first), none: await cropOf(none, first) }
+            : null
+        rows.push({
+          name,
+          stated: boxes.length,
+          own: own.get(name)?.length ?? 0,
+          changed,
+          neighbour,
+          beyond,
+          shown,
+          unheld: unheldAt.length,
+          ...(neighbourAt.length ? { neighbourAt } : {}),
+          ...(beyondAt.length ? { beyondAt } : {}),
+          ...(shownAt.length ? { shownAt } : {}),
+          ...(unheldAt.length ? { unheldAt: unheldAt.slice(0, 4) } : {}),
+          ...(crops ? { crops } : {}),
+        })
+      }
+      return { n, size: [W, H], groups: here.length, renders: k0, ms: Math.round(performance.now() - t0), rows }
+    } finally {
+      flushing.on = false
+      stack.contentOf = was
+      stack.refresh(n)
+    }
+  },
+  /**
+   * I7 at the reader's seam, on the right's committed page n: for every laid member, the boxes the highlight lights on the left
+   * pane (the committed Page's `lit.left`, every sentence's, as highlight.ts entriesOf reads them: a box set along a direction as
+   * the page's box it stands in) are the boxes the right hides (each of the member's groups the `laid` configuration holds off,
+   * as compose/groups.ts set it and the right's page view draws with it, its ink as the layer states it: statedInk) and keeps
+   * (its ink in no group, or in a group left on: lit with it on both panes; its displays apart, blocks of their own), within
+   * the part's own rounding (PART_ROUNDING; for a member set along a direction, its run's rounding turned onto the page with
+   * it): `hidden` every hidden box held by the lit boxes (its area no lit box holds
+   * counted), `lit` every lit box the extent of the hidden and kept ink inside it (one that holds none, or whose edge stands
+   * past that ink, counted). `seed`: the check's own fault on its copy of the page (`unlit`: a member's last lit box dropped;
+   * `wide`: its first lit box widened by 2 pt), the check's red
+   */
+  async sameBoxes(n: number, o: { seed?: 'unlit' | 'wide' } = {}) {
+    const committed = h.composer?.laid(n)
+    if (!committed) return null
+    const page = structuredClone(committed) as Page
+    const c = await (h.groups as Groups).laid
+    const off = new Set<string>()
+    for (const [, g] of c as unknown as Iterable<[string, { name?: unknown; visible: boolean }]>)
+      if (typeof g?.name === 'string' && !g.visible && groupOf(g.name)?.page === n) off.add(g.name)
+    let seeded = false
+    const out = { n, laid: 0, mirrored: 0, turned: 0, boxes: 0, hidden: 0, differ: [] as Record<string, unknown>[] }
+    for (const m of page.members) {
+      if (m.state !== 'laid') {
+        out.mirrored++
+        continue
+      }
+      const pl = h.composer?.member(m.ord)
+      if (!pl) continue
+      out.laid++
+      const dir = m.lit.dir
+      if (dir) out.turned++
+      let lit = m.lit.left.flat().map((b) => (dir ? pageBoxOf(b, dir) : ([...b] as Box)))
+      if (o.seed && !seeded && lit.length > 1) {
+        seeded = true
+        if (o.seed === 'unlit') lit = lit.slice(0, -1)
+        else lit[0] = [lit[0]?.[0] as number, lit[0]?.[1] as number, (lit[0]?.[2] as number) + 2, lit[0]?.[3] as number]
+      }
+      const s = statedInk(pl, n)
+      const hidden: Box[] = [],
+        kept: Box[] = [...s.kept]
+      for (const bit of [1, 2, 4] as const) (off.has(groupName(m.ord, n, bit)) ? hidden : kept).push(...s[bit])
+      out.boxes += lit.length
+      out.hidden += hidden.length
+      // (a member set along a direction: its lit boxes stated in its run's frame, each rounded there and turned onto the page,
+      // its hidden ones on the page's axes: the two roundings together)
+      const tol = dir ? PART_ROUNDING * (1 + Math.abs(dir[0]) + Math.abs(dir[1])) : PART_ROUNDING
+      const cover = lit.map((b) => grown(b, tol))
+      const unheld = hidden.map((b) => ({ b, area: uncovered(b, cover) })).filter((x) => x.area > tol * tol)
+      const both = [...hidden, ...kept]
+      const loose = lit
+        .map((b) => ({ b, ink: extentIn(b, both) }))
+        .filter(({ b, ink }) => !ink || ink.some((v, i) => Math.abs(v - (b[i] as number)) > tol))
+      if (unheld.length || loose.length)
+        out.differ.push({
+          ord: m.ord,
+          id: pl.text,
+          kind: pl.kind,
+          ...(dir ? { dir } : {}),
+          off: m.off,
+          ...(unheld.length
+            ? {
+                hiddenUnlit: unheld
+                  .slice(0, 3)
+                  .map((x) => ({ box: x.b.map((v) => +v.toFixed(2)), area: +x.area.toFixed(2) })),
+              }
+            : {}),
+          ...(loose.length
+            ? {
+                litBeyond: loose
+                  .slice(0, 3)
+                  .map((x) => ({ box: x.b.map((v) => +v.toFixed(2)), ink: x.ink?.map((v) => +v.toFixed(2)) ?? null })),
+              }
+            : {}),
+        })
+    }
+    return out
+  },
+  /** the right's committed page n as the text layer reads it: the Page (its members' laid items, as laidText reads them) and
+   *  the layer's own text items in order (its leaf spans: a span holding none of its own, PDF.js's marked content's not read
+   *  twice), so that a reading made without a browser from the same Page can be held against it */
+  readingOf(n: number) {
+    const page = h.composer?.laid(n)
+    const slot = (h.panes as Panes).right.page(n) as HTMLElement | null
+    const layer = slot?.querySelector('.axt-over .textLayer')
+    if (!page || !layer) return null
+    const leaves = [...layer.querySelectorAll('span')]
+      .filter((x) => !x.querySelector('span'))
+      .map((x) => x.textContent ?? '')
+    return { page, leaves }
+  },
+  /**
+   * The storage check (design-reduction 3g(2)): the original at `url`, on a server of another origin than ours, read by the
+   * reader's own range reader as the reader reads arXiv's copy (`own` false: no entity-tag asked, `no-store`) and opened by
+   * PDF.js, held to the head's chunk digests (`prove`, unless `unheld`: the seed's reader that never holds them) once the head
+   * is read: after the open (the chunks read before it compared then), or before any byte (`headFirst`: every chunk compared
+   * as it is given); then every chunk read. What was proven, read, and why the source was refused
+   */
+  async elsewhere(url: string, chunks: string, o: { unheld?: boolean; headFirst?: boolean } = {}) {
+    const kit = await loadKit()
+    const refused: string[] = []
+    // (a source refused while PDF.js opens the document: the open given up there, as the reader's session gives it up)
+    let refuse: (e: unknown) => void = () => {}
+    const refusal = new Promise<never>((_, no) => {
+      refuse = no
+    })
+    refusal.catch(() => {})
+    const source = rangeSource({
+      fetch: (u, i) => fetch(u, i),
+      url,
+      own: false,
+      store: chunkStore(),
+      refused: (e) => {
+        refused.push(e.kind)
+        refuse(e)
+      },
+    })
+    const first = o.headFirst && !o.unheld ? await source.prove(chunks) : null
+    const task = openRanged(kit.lib as never, source, { options: kit.options('original') })
+    let pages = 0,
+      opened: true | string = true
+    try {
+      pages = (await Promise.race([task.promise, refusal])).numPages
+    } catch (e) {
+      opened = String((e as Error)?.message ?? e).slice(0, 160)
+    }
+    const readBefore = o.headFirst ? { chunks: 0, proven: 0 } : { ...source.digested }
+    const proved = o.unheld ? null : o.headFirst ? first : await source.prove(chunks)
+    let read: true | string = true
+    const total = source.bound?.total ?? 0
+    try {
+      for (let a = 0; a < total; a += 65536) await source.read(a, Math.min(total, a + 65536))
+    } catch (e) {
+      read = (e as { kind?: string }).kind ?? String(e)
+    }
+    await Promise.race([task.destroy().catch(() => {}), new Promise((f) => setTimeout(f, 2000))])
+    kit.release('original')
+    return {
+      pages,
+      opened,
+      readBefore,
+      proved,
+      read,
+      refusal: source.refusal?.kind ?? null,
+      refused,
+      digested: source.digested,
+      chunks: Math.ceil(total / 65536),
+    }
   },
   /** another target whose rows are not in yet (`give` and `end` them later): the pages laid before kept until its commits */
   async retargetLater(target: string, name: string) {

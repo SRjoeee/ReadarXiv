@@ -1,6 +1,6 @@
-// The progress line along the toolbar's foot (the reader's design, §6.6; the maintainer, 2026-09-25): 2 px, quiet ink,
+// The progress line along the toolbar's foot (the reader's design, §6.6): 2 px, quiet ink,
 // its length the share of the process done — the PDF's download, the paragraphs translated, the final (status.ts lineOf):
-// one line that never starts again (the maintainer, 2026-10-02). It grows by a transform, on the compositor; it fades
+// one line that never starts again. It grows by a transform, on the compositor; it fades
 // out at the length it reached. Decorative: the capsule says in words what is under way, in the status region
 import { useRef } from 'react'
 import type { ReaderController } from './model.ts'

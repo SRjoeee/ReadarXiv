@@ -1,6 +1,6 @@
 // The reader's state for React: the controller is an external store (the reader's design, §11.3). A component takes the
 // part it shows, and renders again only when that part changes: a page turned in a pane renders its pill, not the page
-// (the final review: every event rendered the whole interface, a pinch twice a frame)
+// (else every event renders the whole interface, a pinch twice a frame)
 import { useRef, useSyncExternalStore } from 'react'
 import type { ReaderController, ReaderState } from './model.ts'
 

@@ -1,6 +1,5 @@
-// X.lastLines (design-b §1.5, T25; the ruling of 2026-10-19: a heading on the original's last baseline): a heading set in
-// fewer lines than the original's stands on its last ones. Ported from engine 065c1d973 layer2.mjs toLastLines
-// L2:4268-4314 (moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript), held by the walk's replays.
+// X.lastLines (docs/PDF-READER.md §18.11: a heading on the original's last baseline): a heading set in fewer lines than the
+// original's stands on its last ones, held by the walk's replays.
 import { originalLines } from '../unit/decor.ts'
 import type { FitBlock, LaidLine } from './types.ts'
 
@@ -8,24 +7,24 @@ import type { FitBlock, LaidLine } from './types.ts'
 type Row = { block: number; baseline: number; x0: number; x1: number; pitch?: number }
 
 /**
- * A heading its translation sets in fewer lines than the original's (P.lastLines, run.mjs: a section heading): its lines
+ * A heading its translation sets in fewer lines than the original's (P.lastLines: a section heading's): its lines
  * moved down onto the original's last ones, so that the room it frees falls above it, not between it and the text it heads
- * (the owner, 2026-10-19: 1810.04805's "C.2 Ablation for Different Masking Procedures", two lines, its Chinese one, left a
- * blank line before its paragraph; the coordinator's ruling: on the original's last baseline, past the page fill's floor,
+ * (docs/PDF-READER.md §18.11: 1810.04805's "C.2 Ablation for Different Masking Procedures", two lines, its Chinese one,
+ * left a blank line before its paragraph; so on the original's last baseline, past the page fill's floor,
  * footFloorAt, which would have left 7.4 pt of C.2's 13.5 under it). The last line goes onto the original's last baseline,
  * and every line above it as far down; each keeps its slot's measure (the first its start, where the heading's number is
- * drawn with it: run.mjs). Never nearer the next line of its column (the original's room under its last line, `below`:
- * P.halfLead, run.mjs edgesOf) than the size it is set at, `f`: the line's box clear of the next line's. Only a heading of
+ * drawn with it). Never nearer the next line of its column (the original's room under its last line, `below`:
+ * P.halfLead) than the size it is set at, `f`: the line's box clear of the next line's. Only a heading of
  * one block (its lines one run of a column); a body paragraph is never moved.
  *
  * Only where the lines keep their own room where they land (`slots`: the state's slots on the original's own rows, at its
  * pitch and with no page fill's floor, which the lines go past; the one within half a pitch of the row each is moved onto).
  * Its lines stay where they were laid if a line would end past where its new row's room ends: the stop of a row it shares
- * with the next unit, TeX's text ending there before what stays of the page (run.mjs keptAfter: amsthm's theorem note, whose
+ * with the next unit, TeX's text ending there before what stays of the page (amsthm's theorem note, whose
  * last row the theorem's body goes on after the note's `).`; 2610.18513v1 page 35, unit 316 moved down onto its row whole and
  * drawn over the body's first words), or a narrower measure. The same where a line after the first would start elsewhere
  * than on its row, or where the first line starts past its block's left edge with no start of its own (`start`: the number
- * run.mjs draws with it): what stands before it on its row stays there (a label kept as the original's, "Lemma A.2 ("), and
+ * drawn with it): what stands before it on its row stays there (a label kept as the original's, "Lemma A.2 ("), and
  * the text moved off it stood apart from it, at that line's indent on a row that has none. The lines are moved in place
  */
 export function toLastLines(

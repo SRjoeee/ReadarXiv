@@ -1,7 +1,7 @@
 // `@readarxiv/ui`: the controls, the tokens and the strings the extension, the reader and the website share. The kit's
 // sheet and the generated token sheet are the package's `./controls.css` and `./tokens.css`
 
-// the control kit (the redesign's Part 3)
+// the control kit
 export * from './controls/Button.tsx'
 export * from './controls/display-glyphs.ts'
 export * from './controls/Field.tsx'

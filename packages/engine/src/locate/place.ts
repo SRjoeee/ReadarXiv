@@ -12,8 +12,8 @@ import { cutLines, isInk } from './lines.ts'
 import type { Claims, Ink } from './ownership.ts'
 import { eachBetweenPaired, INKED_CLASSES, lettersIn, type Member, piecesOf, type Work } from './work.ts'
 
-/** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS, today's
- *  rules/text-symbols.mjs), read here so that the back half needs nothing of the front half but the table */
+/** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS),
+ *  read here so that the back half needs nothing of the front half but the table */
 const symbolText = (src: string): string | null => {
   const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src)
   return m && Object.hasOwn(TEXT_SYMBOLS, m[1] as string) ? (TEXT_SYMBOLS[m[1] as string] as string) : null
@@ -145,7 +145,7 @@ export function place(
   // and set none). They are no ink of A: its ink of the unit is the glyphs A set, whole, nothing between them another's or
   // none's, and the unit is located from them; its translation reads its source, those characters with it. A run at the
   // unit's start or end, or one whose neighbours' partners stand apart on A, is no such statement (a line A set elsewhere
-  // that no block move paired): a content difference, the unit the original's, as before)
+  // that no block move paired): a content difference, the unit the original's)
   const prevPaired = new Int32Array(list.length).fill(-1)
   for (let i = 0, last = -1; i < list.length; i++) {
     prevPaired[i] = last
@@ -250,7 +250,7 @@ export function place(
     )
   }
   // (an element TeX set ink for between its two points that its unit's ownership gives none of, glyph or box: its ink is not
-  // found, which is no statement that TeX set none (today's LOST, make.mjs, against its EMPTY: both its points stated and
+  // found, which is no statement that TeX set none (that needs both its points stated and
   // nothing between them, or TeX's probe said it sets none). Read as none, it is drawn as nothing while its ink is erased with
   // the unit's text or stays under the translation. A text macro whose glyphs there are the unit's text is found as that text.
   // The unit stays the original's)
@@ -271,7 +271,7 @@ export function place(
   // round, which no El states. They stay A's ink where they stand (HELD), and so does a label they cut from the unit's text,
   // the glyphs of no unit TeX set between them: 2610.37818v1 p14, sub-caption (a), which has no unit, given to (b)'s, "(a)" its
   // label and "Dark rim band" an element of no piece; read as (b)'s text its line ran over (a), (a)'s English was erased with
-  // nothing drawn there, and "(a)" drawn before "(b)" (the checkpoint's measure-4))
+  // nothing drawn there, and "(a)" drawn before "(b)")
   const sortedRoles = [...roleAt].sort((x, y) => x[0] - y[0])
   const loose = sortedRoles.filter(([, [role, k]]) => role === ROLE.element && k < 0).map(([a]) => a)
   if (loose.length) {

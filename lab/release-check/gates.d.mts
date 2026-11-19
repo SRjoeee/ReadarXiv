@@ -75,4 +75,44 @@ export declare function displayJudge(steps: StepRun[], planned: number, modes: [
 export declare function corpusLogOf(file: string): { papers: number; made: number; failed: string[]; refused: string[]; missingCompile: string[]; proofs: { a: number; c: number; on: number; offOutside: number } }
 export declare function drawnOf(dir: string, within?: string | null): { source: number; ink: number; figures: number; refusedWhole: number; papers: number }
 export declare function cachesOf(text: string): string
-export declare function canvasOf(text: string, ids?: string[]): { papers: number; pages: number; over: string[] }
+/** a canvas.mjs line of a paper: its pages, the pages that differ with their pixels, the largest share and delta, those outside */
+export type CanvasRow = { id: string; refused?: string; pages?: number; differingPages?: [number, number][]; outsidePages?: [number, number][]; shareMax?: number; maxDelta?: number }
+export declare function canvasOf(
+  text: string,
+  ids?: string[],
+): {
+  papers: number
+  pages: number
+  renderer: { renderer: string; canvas2d: string | null; gl: string | null; browser: string } | null
+  over: string[]
+  /** the papers asked that have no line */
+  unseen: string[]
+  rows: CanvasRow[]
+}
+/** the canvas gate's record (lab/release-check/canvas.json): each paper's residue by page, its largest share and delta */
+export type CanvasRecord = { format: string; says: string; commit: string; round: string; papers: Record<string, { pages: Record<string, number>; share: number; delta: number }>; why: Record<string, string> }
+export declare function canvasRecord(root: string): CanvasRecord
+/** canvas' verdict over its papers' lines, each paper's residue held to its record; never its exit */
+export declare function canvasJudge(text: string, ids: string[], record: CanvasRecord | null): Judged
+/** text-order.mjs's totals (pairs, laid pages, members, runs, missing, out of order, ms), its first listed member, and every
+ *  member it lists (`<pair> p<n> ord <ord>`) */
+export declare function textOrderOf(text: string): {
+  pairs?: number
+  laidPages?: number
+  pages?: number
+  members?: number
+  runs?: number
+  missing?: number
+  outOfOrder?: number
+  ms?: number
+  first?: string
+  missingListed?: string[]
+  outOfOrderListed?: string[]
+}
+/** text-order's record (lab/release-check/text-order.json): the out-of-order members by pair, `p<n> ord <ord>` */
+export type TextOrderRecord = { format: string; says: string; commit: string; round: string; outOfOrder: Record<string, string[]>; why: Record<string, string> }
+export declare function textOrderRecord(root: string): TextOrderRecord
+/** text-order's verdict over its totals and its list, each out-of-order member held to its record; never its exit */
+export declare function textOrderJudge(text: string, record: TextOrderRecord | null): Judged
+/** the corpus pages harness-lab turns each group off on (I2), `<id>:<page>`, by the rule its comment states */
+export declare const GROUP_PAGES: string[]
