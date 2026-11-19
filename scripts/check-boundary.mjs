@@ -302,6 +302,30 @@ export function packageViolations(files, { root = '.' } = {}) {
   return out
 }
 
+/** A testing entry (a manifest's `./testing`: `@readarxiv/translate/testing`, the test adapters; `@readarxiv/reader/testing`, the
+ *  reader's internals a host's tests read), named by its package, and the files that hold it, a package's src/testing/ */
+const TESTING_SPEC = /^@readarxiv\/[^/]+\/testing(?:\/|$)/
+const TESTING_FILES = /^packages\/[^/]+\/src\/testing(?:\/|$)/
+const IN_PACKAGE_SRC = /^packages\/[^/]+\/src\//
+/** a file a build ships from: the extension's src/ and a package's src/, a testing entry's own files apart */
+const isProduct = file => (file.startsWith('src/') || IN_PACKAGE_SRC.test(file)) && !TESTING_FILES.test(file)
+
+/** What the product files among `files` name of a testing entry, by its package's name or by a path into its files: a testing
+ *  entry is for tests, the lab and a host's own tests alone, so that nothing a build ships reaches it. Every module a file names
+ *  counts, a type-only import included (as the packages' rule counts it). Every file is read from `root` */
+export function testingViolations(files, { root = '.' } = {}) {
+  const out = []
+  for (const file of files) {
+    if (!isProduct(file) || !CODE.test(file)) continue
+    for (const { spec } of namedModulesOf(readFileSync(resolve(root, file), 'utf8'))) {
+      if (spec === null) continue
+      if (TESTING_SPEC.test(spec)) out.push({ file, spec, why: 'a testing entry: tests, the lab and a host\'s own tests import it, never a file a build ships' })
+      else if (TESTING_FILES.test(resolveSpecifier(file, spec.replace(QUERY, '')))) out.push({ file, spec, why: 'a path into a testing entry\'s files: tests, the lab and a host\'s own tests import it, never a file a build ships' })
+    }
+  }
+  return out
+}
+
 /** The file a repository path names as the compiler finds it: the path itself, an extension added, an index file, a
  *  TypeScript source behind a `.js` name; null where there is none */
 function sourceOf(path, root) {
@@ -376,4 +400,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1)
   }
   console.log(`boundary check: ${packages.length} package files import no extension code, no platform module and only the packages PACKAGES allows, by entry`)
+  const products = trackedFiles().filter(isProduct)
+  const testing = testingViolations(products)
+  if (testing.length > 0) {
+    console.error('A file a build ships imports a testing entry (a testing entry is for tests, the lab and a host\'s own tests):')
+    for (const v of testing) console.error(`  ${v.file}: ${v.spec} (${v.why})`)
+    process.exit(1)
+  }
+  console.log(`boundary check: ${products.length} product files import no testing entry`)
 }

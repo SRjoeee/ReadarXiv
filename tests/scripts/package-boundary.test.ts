@@ -9,6 +9,8 @@ import {
   PACKAGES,
   packageFiles,
   packageViolations,
+  testingViolations,
+  trackedFiles,
   // @ts-expect-error — a plain node script, deliberately dependency-free and untyped
 } from '../../scripts/check-boundary.mjs'
 
@@ -186,5 +188,64 @@ describe('the repository\'s own packages', () => {
       expect(files.has(`packages/${pkg}/src/index.ts`)).toBe(true)
       expect(files.has(`packages/${pkg}/tests/index.test.ts`)).toBe(true)
     }
+  })
+})
+
+// A testing entry (`@readarxiv/translate/testing`, `@readarxiv/reader/testing`) is for tests, the lab and a host's own tests:
+// no file a build ships from (the extension's src/, a package's src/ but the entry's own files) names it (testingViolations)
+describe('the testing entries', () => {
+  /** what the testing rule refuses in a tree, as { file, spec } pairs */
+  const testingRefused = (files: Record<string, string>) => {
+    const t = tree(files)
+    return (testingViolations(t.files, { root: t.root }) as Violation[]).map((v) => ({ file: v.file, spec: v.spec }))
+  }
+  it('refuses one by its package name, from the extension and from a package, in every form, a type-only import too', () => {
+    expect(
+      testingRefused({
+        'src/entrypoints/pdf-reader/main.ts': "import { open } from '@readarxiv/reader/testing'\n",
+        'src/pdf-reader/host/x.ts': "export { memoryStore } from '@readarxiv/translate/testing'\nconst t = await import('@readarxiv/reader/testing')\n",
+        'packages/engine/src/x.ts': "import type { FakeTranslator } from '@readarxiv/translate/testing'\n",
+      }),
+    ).toEqual([
+      { file: 'src/entrypoints/pdf-reader/main.ts', spec: '@readarxiv/reader/testing' },
+      { file: 'src/pdf-reader/host/x.ts', spec: '@readarxiv/translate/testing' },
+      { file: 'src/pdf-reader/host/x.ts', spec: '@readarxiv/reader/testing' },
+      { file: 'packages/engine/src/x.ts', spec: '@readarxiv/translate/testing' },
+    ])
+  })
+  it("refuses a path into a testing entry's files, from inside its package, by a relative path out of src/ or by an alias", () => {
+    expect(
+      testingRefused({
+        'packages/reader/src/x.ts': "import { open } from './testing/index.ts'\n",
+        'src/pdf-reader/y.ts': "import { memoryStore } from '../../packages/translate/src/testing/ports.ts'\n",
+        'src/z.ts': "import { open } from '@@/packages/reader/src/testing'\n",
+      }),
+    ).toEqual([
+      { file: 'packages/reader/src/x.ts', spec: './testing/index.ts' },
+      { file: 'src/pdf-reader/y.ts', spec: '../../packages/translate/src/testing/ports.ts' },
+      { file: 'src/z.ts', spec: '@@/packages/reader/src/testing' },
+    ])
+  })
+  it("lets tests, the lab, the scripts, a package's tests and the entry's own files import it", () => {
+    const named = "import { open } from '@readarxiv/reader/testing'\nimport { memoryStore } from '@readarxiv/translate/testing'\n"
+    expect(
+      testingRefused({
+        'tests/pdf-reader/x.test.ts': named,
+        'lab/translate/x.ts': named,
+        'scripts/x.mjs': named,
+        'packages/reader/tests/x.test.ts': named,
+        'packages/translate/src/testing/suite.ts': "import { fakeClock } from './ports.ts'\nimport { chainOf } from '../chain.ts'\n",
+      }),
+    ).toEqual([])
+  })
+  it("lets a product import a package's other entries, and a module of its own that is only named for testing", () => {
+    expect(
+      testingRefused({
+        'src/x.ts': "import { firstAsk } from '@readarxiv/reader/early'\nimport { a } from './testing-words.ts'\nimport { b } from '@readarxiv/reader'\n",
+      }),
+    ).toEqual([])
+  })
+  it("holds in the repository's own tree", () => {
+    expect(testingViolations(trackedFiles())).toEqual([])
   })
 })
