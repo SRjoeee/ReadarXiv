@@ -22,6 +22,7 @@ import { deflateSync, inflateSync } from 'node:zlib'
 import { chunkDigests, toggleKind, write } from '@readarxiv/format'
 import { build } from 'vite'
 import { kindShown } from '../src/compose/classes.ts'
+import { DISPLAY_MARKS } from '../src/panes/panes.ts'
 import { RETRY_MS } from '../src/session/client.ts'
 import { createContents, plainOf } from '../src/session/contents.ts'
 import { BACKOFF_MS, backoff } from '../src/session/machine.ts'
@@ -3613,31 +3614,33 @@ for (const path of ['original', 'original, swapped', 'translation']) {
         viewport: { width: 1512, height: 862 },
         dpr: 2,
       })
-      await page.evaluate((css) => {
-        const style = document.createElement('style')
-        style.textContent = css
-        document.head.append(style)
-        const marks = ['data-axt-pdf-mode', 'data-axt-narrow', 'data-axt-swapped']
-        const copy = () => {
-          for (const a of marks) {
-            const v = document.body.getAttribute(a)
-            if (v === null) document.documentElement.removeAttribute(a)
-            else if (document.documentElement.getAttribute(a) !== v) document.documentElement.setAttribute(a, v)
-          }
-        }
-        copy()
-        new MutationObserver(copy).observe(document.body, { attributes: true, attributeFilter: marks })
-        // (a page view the stack puts in place is drawn then: read in the swap's own microtask checkpoint)
-        window.__undrawnPut = []
-        new MutationObserver((records) => {
-          for (const r of records)
-            for (const node of r.addedNodes) {
-              const v = node.classList?.contains('axt-slot-view') ? node.querySelector(':scope > .page') : null
-              if (v && !(v.hasAttribute('data-loaded') && v.querySelector('.canvasWrapper > canvas')))
-                window.__undrawnPut.push(Number(r.target.dataset?.pageNumber ?? 0))
+      await page.evaluate(
+        ([css, marks]) => {
+          const style = document.createElement('style')
+          style.textContent = css
+          document.head.append(style)
+          const copy = () => {
+            for (const a of marks) {
+              const v = document.body.getAttribute(a)
+              if (v === null) document.documentElement.removeAttribute(a)
+              else if (document.documentElement.getAttribute(a) !== v) document.documentElement.setAttribute(a, v)
             }
-        }).observe(document.body, { childList: true, subtree: true })
-      }, ZERO_WIDTH_PANES)
+          }
+          copy()
+          new MutationObserver(copy).observe(document.body, { attributes: true, attributeFilter: marks })
+          // (a page view the stack puts in place is drawn then: read in the swap's own microtask checkpoint)
+          window.__undrawnPut = []
+          new MutationObserver((records) => {
+            for (const r of records)
+              for (const node of r.addedNodes) {
+                const v = node.classList?.contains('axt-slot-view') ? node.querySelector(':scope > .page') : null
+                if (v && !(v.hasAttribute('data-loaded') && v.querySelector('.canvasWrapper > canvas')))
+                  window.__undrawnPut.push(Number(r.target.dataset?.pageNumber ?? 0))
+              }
+          }).observe(document.body, { childList: true, subtree: true })
+        },
+        [ZERO_WIDTH_PANES, [...DISPLAY_MARKS]],
+      )
       await page.evaluate(() => window.__c.open('s1-columns', {}))
       await waitFor(page, () => (window.__c.reader?.probe().laidPages ?? 0) > 0, null, 25_000)
       // (page 1 laid and drawn on the right: the view the owner switched from)

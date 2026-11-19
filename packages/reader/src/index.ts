@@ -16,7 +16,8 @@ export {
   type ReaderState,
   type Result,
 } from './reader.ts'
-export type { Side, Zoom } from './panes/panes.ts'
+// the reader's marks of the display on its root, which a host whose sheet reads them on another element copies there
+export { DISPLAY_MARKS, type Side, type Zoom } from './panes/panes.ts'
 // PDF.js's builds: which one a browser runs; the legacy one itself is `@readarxiv/reader/pdfjs-legacy`'s
 export { buildFor, legacyRuns, modernRuns } from './pdfjs/builds.ts'
 export type { PdfBuild, PdfModules } from './pdfjs/kit.ts'

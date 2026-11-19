@@ -20,7 +20,7 @@ import type { FaceTable } from './compose/faces.ts'
 import type { Highlight } from './compose/highlight.ts'
 import type { Lay } from './compose/page.ts'
 import { CATALOGUE_WORDS, type Words } from './compose/words.ts'
-import { createPanes, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
+import { createPanes, DISPLAY_MARKS, type Display, type Panes, type Side, type Zoom } from './panes/panes.ts'
 import { type Kit, loadKit, type PdfBuild } from './pdfjs/kit.ts'
 import { follow, objectStore, open, Refused, segOf } from './session/client.ts'
 import { type Contents, createContents, type OutlineEntry, type Rect } from './session/contents.ts'
@@ -1319,7 +1319,7 @@ export function openReader(
         // (what the reader put in the root and the panes taken away; what the host had there stays)
         for (const [el, kept] of had) for (const c of [...el.children]) if (!kept.has(c)) c.remove()
         root.classList.remove('axt-reader')
-        for (const a of ['data-axt-pdf-mode', 'data-axt-narrow', 'data-axt-swapped']) root.removeAttribute(a)
+        for (const a of DISPLAY_MARKS) root.removeAttribute(a)
         for (const k of BAND_VARS) root.style.removeProperty(k)
       })
       listeners.clear()
