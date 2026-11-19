@@ -20,7 +20,7 @@
 // in the family's italic; no math face), size, colour, direction and figure (one form painted, one picture: pageInk's `fid` and
 // `pid`, so that two figures side by side never make one label), on one baseline (within RUN_DY of their size across it), at
 // most RUN_GAP of its size past the run's end along it and not back over it by more than RUN_BACK; any other glyph between ends
-// the run. (CHANGED) A word is told by its spacing, not its sizes: a glyph on the run's baseline no word space past the glyph
+// the run. A word is told by its spacing, not its sizes: a glyph on the run's baseline no word space past the glyph
 // before it (SPACE_GAP of their size) is that glyph's word's whatever its size, and every size a word of the run holds is the
 // run's then (a faked small capital's word: its capital at the line's size, its rest smaller). TeX's own text in a picture (a
 // glyph of no form, between the picture's points: a TikZ node's, a tcolorbox's that pgf draws) is TeX's line: once its run spells a word, a glyph of another face (no math face) or another colour goes on with it, so
@@ -210,11 +210,11 @@ export interface TodayFigureUnit {
   before?: number
   after?: number
   under?: number | null
-  /** (CHANGED, F3) kept for being drawn twice over itself (figure-lines.ts doubledOf): the made unit's `double` */
+  /** (F3) kept for being drawn twice over itself (figure-lines.ts doubledOf): the made unit's `double` */
   double?: true
-  /** (CHANGED, F3) kept for a script or an accent set apart from its base (figure-lines.ts setApart): the made unit's `script` */
+  /** (F3) kept for a script or an accent set apart from its base (figure-lines.ts setApart): the made unit's `script` */
   script?: true
-  /** (CHANGED, §18.61) held with its label, a decorated word standing in another line of it or on its printed line
+  /** (§18.61) held with its label, a decorated word standing in another line of it or on its printed line
    *  (figure-lines.ts figureLinesOf): the made unit's `decorated: 'label'` */
   decorated?: 'label'
 }
@@ -282,7 +282,7 @@ export interface TodayFigures {
   /** (the copy's) each crowded figure text's met ink, by its k, and the depth under its baseline of the stroke under its text;
    *  an uncrowded one's tones under part of it alone */
   met: Map<number, { items: TodayMet[]; under: number | null }>
-  /** (CHANGED, F3) each closed path that holds two units or more alone, the innermost of nested ones: its page, its box index, the
+  /** (F3) each closed path that holds two units or more alone, the innermost of nested ones: its page, its box index, the
    *  units it holds, its shape, and the glyphs inside it that no unit holds, the line reading's to place (containersOf;
    *  figure-lines.ts takes the path where it sets each on one of the path's lines) */
   holds?: FigureHold[]
@@ -422,7 +422,7 @@ export const ANCHOR_REACH = 1.5
 const ANCHOR_RATIO = 2
 /** the band a translation is drawn in, descent and ascent in em, at the least: a unit is crowded where other ink meets it */
 export const DRAW_BAND = Object.freeze([-0.15, 0.88] as const)
-/** CHANGED: the band's height, in sizes (figure-lines' BAND_EM) */
+/** the band's height, in sizes (figure-lines' BAND_EM) */
 const BAND = DRAW_BAND[1] - DRAW_BAND[0]
 /** a unit's band inside its box, shrunk by this share of its size at each edge before other ink is looked for in it (an
  *  antialiased edge, a glyph's side bearing) */
@@ -475,7 +475,7 @@ function streamOf(pg: FigurePage, owners: readonly (OwnerName | null | undefined
     else if (nm === PICTURE_END) d = Math.max(0, d - 1)
     depthAtPoint[i + 1] = d
   }
-  // (each glyph TeX set in a code region, by its points (pageInk's `regions`): its run is no unit, below; and (CHANGED) each one
+  // (each glyph TeX set in a code region, by its points (pageInk's `regions`): its run is no unit, below; and each one
   // TeX set in a display, the formula's, kept as the paper has it wherever it stands, but what it set there in text mode)
   const code = regionMask(pg.regions, G.length, 'code'),
     display = regionMask(pg.regions, G.length, 'display'),
@@ -525,7 +525,7 @@ function streamOf(pg: FigurePage, owners: readonly (OwnerName | null | undefined
       pid: x.pid ?? 0,
     })
   }
-  // (COPY: a turned glyph's owner where the page states one, `turnedOwners` (ink.ts); none where it states none)
+  // (a turned glyph's owner where the page states one, `turnedOwners` (ink.ts); none where it states none)
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]!
@@ -644,7 +644,7 @@ export function figureUnitsOf(
   // hyphen (DejaVuSans and DejaVuSans-Oblique, XCharter-Roman and XCharter-Bold), neither a math face. A plotting program sets a
   // formula's letter in the family's italic inside a label ("jury, α = 1": matplotlib's mathtext α in DejaVuSans-Oblique), and a
   // label cut there was a fragment ("jury,") whose room ended at the letter: drawn at 0.66. TeX's math faces are families of
-  // their own (CMMI10 against CMR10) and stay apart. CHANGED: or the name without PDF.js's own style words and its hyphens
+  // their own (CMMI10 against CMR10) and stay apart. Or the name without PDF.js's own style words and its hyphens
   // (facts.ts familyKeysOf): a bold word inside a row of ArialMT is set in Arial-BoldMT, whose part before the hyphen is "Arial",
   // and the row was cut there, "Open" | "the relevant" (2608.06701v1 p2's bubbles))
   const family = new Map<string | undefined, readonly [string, string]>()
@@ -658,7 +658,7 @@ export function figureUnitsOf(
   }
   const oneLine = (a: string, b: string) =>
     faceOf(a) === faceOf(b) || (sameFamily(familyOf(a), familyOf(b)) && famOf(a) !== 'math' && famOf(b) !== 'math')
-  // (CHANGED: a run goes on over faces and colours, but never into or out of a face of one pitch: `fixed`, the faces the document
+  // (a run goes on over faces and colours, but never into or out of a face of one pitch: `fixed`, the faces the document
   // sets at one pitch (facts.ts fixedFacesOf, read off the glyphs' advances, per font program), which locate gives where Rule 1
   // keeps such text (PDF-READER §18.22). 2610.19159v1's transcript box titles, TeX's lines in pgf's pictures, set a path in
   // typewriter between a title's words: one figure text, the path translated inside the title; its own figure text now, kept)
@@ -666,7 +666,7 @@ export function figureUnitsOf(
   // (TeX's own glyph in a picture after a run of TeX's that spells a word: its line goes on over faces and colours, math aside)
   const texLine = (x: StreamGlyph, run: Run) =>
     run.word && !x.form && !run.form && x.picture > 0 && famOf(x.font) !== 'math' && famOf(run.font) !== 'math'
-  // (CHANGED: a word is told by its spacing, not its sizes, PDF-READER §18.24. A glyph is of the run's sizes where it
+  // (a word is told by its spacing, not its sizes, PDF-READER §18.24. A glyph is of the run's sizes where it
   // is set at one of them, within 1 %, as a run's glyphs were of its one size; or where it stands no word space past the glyph
   // before it (SPACE_GAP of their size, as `word` reads one below; a space glyph is a word space), its word's whatever its
   // size, whose size is the run's then too, so that the words after it at either size go on with it. iclr2025's faked small
@@ -679,7 +679,7 @@ export function figureUnitsOf(
   const units: FigureUnit[] = [],
     glyphMaps: Map<number, number>[] = [],
     turnedMaps: Map<number, number>[] = []
-  // (CHANGED: the ink each crowded unit's band meets, by its k, and its stroke under its text: locate's relation reading judges
+  // (the ink each crowded unit's band meets, by its k, and its stroke under its text: locate's relation reading judges
   // it, figure-lines.ts, PDF-READER §18.26)
   const met = new Map<number, { items: TodayMet[]; under: number | null }>()
   // (the runs that spell a word the caps have counted, units or not)
@@ -698,7 +698,7 @@ export function figureUnitsOf(
     boxed: 0,
     interior: 0,
   }
-  // (CHANGED: F3's containers, each closed path that holds two of a page's units or more and no other glyph: containersOf)
+  // (F3's containers, each closed path that holds two of a page's units or more and no other glyph: containersOf)
   const holds: FigureHold[] = []
   pages.forEach((pg, pi) => {
     // (the page's text lines a unit's column is read from, made once a page and call, of this call's owners)
@@ -891,7 +891,7 @@ export function figureUnitsOf(
           ? 'start'
           : // biome-ignore lint/suspicious/noAssignInExpressions: the page's column lines made once, where a unit first asks them, as written
             (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
-      // (CHANGED: a crowded unit's met ink and its tones, an uncrowded one's tones under part of it, for the relation reading)
+      // (a crowded unit's met ink and its tones, an uncrowded one's tones under part of it, for the relation reading)
       if (room.crowded) {
         u.why = 'crowded'
         stats.crowded++
@@ -909,7 +909,7 @@ export function figureUnitsOf(
     // (the page's units in their columns and sets, then each one's room on its line)
     setsOf(mine, evidence, stats)
     roomsOf(pg, S, mine)
-    // (CHANGED: the closed paths that hold units alone, read while the page's shapes are kept: the lines of a node, F3)
+    // (the closed paths that hold units alone, read while the page's shapes are kept: the lines of a node, F3)
     holds.push(
       ...containersOf(
         pg,
@@ -928,7 +928,7 @@ export function figureUnitsOf(
 }
 
 /**
- * CHANGED (F3, the container step): the closed paths of a page that hold units alone. A path is closed where every segment's end
+ * (F3, the container step) the closed paths of a page that hold units alone. A path is closed where every segment's end
  * is met by another's (to the hundredth of a unit); it holds a unit where every glyph of the unit has its ink's centre inside the
  * path, the box tested first (a cheap rejection: the glyph's ink inside the path's box) and the interior deciding (the even-odd
  * rule over its segments: a diamond's corners are no inside of it, 2608.06701v1 p2's "yes" beside "Any signal detected?"); it
@@ -1165,7 +1165,7 @@ function spanIn(u: FigureUnit, b: readonly number[]): [number, number] {
  *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
  *  one figure, one direction, one size), and the lines its edges may share (`axes`: across its direction always; for a run
  *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line), and
- *  (CHANGED) its word space (`space`, spaceOf: setsOf's measure). Its size is setsOf's to key (CHANGED: within 1 %, not to the
+ *  its word space (`space`, spaceOf: setsOf's measure). Its size is setsOf's to key (within 1 %, not to the
  *  hundredth, see there) */
 function edgesOf(r: Run, gs: readonly StreamGlyph[]): Evidence {
   const f = r.frame,
@@ -1186,7 +1186,7 @@ function edgesOf(r: Run, gs: readonly StreamGlyph[]): Evidence {
   }
 }
 
-/** (CHANGED) a run's word space: the mean of the gaps between its glyphs past SPACE_GAP of its size, a word's; null where it has
+/** a run's word space: the mean of the gaps between its glyphs past SPACE_GAP of its size, a word's; null where it has
  *  none (one word) */
 function spaceOf(f: Frame, gs: readonly StreamGlyph[], size: number): number | null {
   let sum = 0,
@@ -1234,7 +1234,7 @@ function setsOf(
   // votes are counted; the column line of each edge and axis, made for each)
   // (each edge's columns on each line: the runs of a key in the order of that edge's place, each joined to the one before
   // within the tolerance)
-  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. CHANGED: keyed to the hundredth, the size
+  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. Keyed to the hundredth, the size
   // made 2411.13093v4 p18's lines 515 and 527, set at 7.07 pt among their paragraph's 7.06's, a column of their own)
   {
     const bySize = new Map<string, number[]>()
@@ -1302,7 +1302,7 @@ function setsOf(
   // their texts: one ("Population mean" twice, 2610.10492v1), none (2610.20808v1's "pt" "en" "es"), or one each, the one label
   // more letters, the other more spaces (2610.40394v1's "Ordinary Differential Equations" and "History & General Mathematics",
   // 2.348 pt both): no stretch, no measure. 2411.13093v4 p18's full lines' spaces run from 3.96 to 6.36 pt, its unjustified
-  // lines' 3.90. CHANGED: a paragraph's indented line, which shares its end and not its start, is not set from its end:
+  // lines' 3.90. A paragraph's indented line, which shares its end and not its start, is not set from its end:
   // 2411.13093v4 p18's prompt, an entry's translated first line flush against the box's right edge, its next line from the left)
   const measured = new Map<number, boolean>()
   const isMeasure = (line: Column, c: number) => {
@@ -1594,7 +1594,7 @@ function roomOf(pg: FigurePage, f: Frame, u: FigureUnit, own: readonly StreamGly
     after = Infinity,
     freeBefore = Infinity,
     freeAfter = Infinity
-  // (CHANGED: each item of ink the band meets, a glyph's index `g` or a box's `b` with its box and its lines where pageInk kept
+  // (each item of ink the band meets, a glyph's index `g` or a box's `b` with its box and its lines where pageInk kept
   // them; the scan goes on past the first, so that a unit the relation reading frees has its room and anchor read whole)
   const met: MetItem[] = [],
     metBox = new Set<number>(),
@@ -1727,7 +1727,7 @@ function roomOf(pg: FigurePage, f: Frame, u: FigureUnit, own: readonly StreamGly
     const shape = S?.get(b / 4),
       after = b / 4 >= over
     atBox = { b: b / 4, box: [B[b]!, B[b + 1]!, B[b + 2]!, B[b + 3]!], shape: shape ?? null, kind: pg.paths?.[b / 4] }
-    // (CHANGED: a tone painted before the text, a fill of no stroke and no pattern an edge of whose box stands inside the text's
+    // (a tone painted before the text, a fill of no stroke and no pattern an edge of whose box stands inside the text's
     // extent, across its band: a tone under part of it, a highlight under a stretch of its words, which crowds nothing (shapeRoom);
     // recorded for the relation reading (figure-lines.ts), which carries one holding a stretch of its words whole with them)
     if (
@@ -1872,7 +1872,7 @@ function shapeRoom(
       const top = Math.max(ts + (te - ts) * lo, ts + (te - ts) * hi) + w
       const a = Math.max(Math.min(p, q) - w, e[0] - SHOWN_SLACK),
         b = Math.min(Math.max(p, q) + w, e[2] + SHOWN_SLACK)
-      // (CHANGED, F3: a path whose extent is less than its own line's width is a dot, no line under the text: 2608.06701v1 p9's
+      // (F3: a path whose extent is less than its own line's width is a dot, no line under the text: 2608.06701v1 p9's
       // member 651, a stroke 0.014 long and 0.16 wide 0.32 pt under its baseline read as a stroke 0.06 under it, every CJK
       // translation's em box crowded by it, the line left the original's. A curve of short segments is a line by its whole extent)
       if (top < 0 && a <= b && b > band[0] && a < band[2]) {
