@@ -20,7 +20,7 @@ const NOT_LITERAL = /[\\{}$~]/,
 const NOT_ITSELF = /--|``|''|[<>"|]/
 
 /**
- * A text piece (the soundness round of 2026-10-19): a placeholder whose plain text is its whole rendering, TeX setting its
+ * A text piece: a placeholder whose plain text is its whole rendering, TeX setting its
  * characters as they are written. A code or URL mark (\texttt, \verb, \lstinline, \url, \path) or a plain-text source (no
  * command), its argument literal: no command, group, math or tie (nor, but verbatim, a script mark, a comment, an
  * alignment tab or a parameter); outside the typewriter face (a plain-text source) no dash or quote ligature and none of

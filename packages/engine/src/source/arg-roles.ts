@@ -91,7 +91,7 @@ const MAY_BE_TEXT = new Set(['t', 'c', 'a', 'v', 'm'])
 /**
  * Commands whose parameters are delimited by tokens only their package's definition names, which neither LaTeXML's
  * bindings nor a paper's files hold: nothing in the source tells `\\foreach \\ii in {0,...,3} {…}` from prose, so the
- * forms are written out here, one by one (the 50-paper sweep, 2026-10-19). The rule they serve is the role table's own:
+ * forms are written out here, one by one (those a sweep of 50 papers met). The rule they serve is the role table's own:
  * an argument of role x, s or n is never walked as text, and never takes a mark.
  * - pgffor's \\foreach <variables> [<options>] in {<list>} {<body>}: the variables, options and `in` up to the list's
  *   brace (b, code), the list (a group: code), the body (a group: content, walked, a paragraph in it a unit of its own).

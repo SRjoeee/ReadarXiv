@@ -50,8 +50,8 @@ export type PhPiece = {
   readonly brk?: true
   readonly closes?: number
 }
-/** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84); LaTeX's
- *  `\\break`, which ends the line it stands in in a paragraph (the coordinator's ruling 4 of 2026-11-16: the marked compile
+/** a forced break's source: `\\\\`, its star, its optional argument; \\newline; LaTeX's
+ *  `\\break`, which ends the line it stands in in a paragraph (PDF-READER §18.77: the marked compile
  *  states where, BREAKS_TEX's point; amsart's `\\hfill\\break\\indent` in 2608.03841v2's addresses) */
 export const BREAK_SOURCE = /^\\\\\*?(?:\[[^\]]*\])?$|^\\(?:newline|break)$/
 /** a placeholder of the source `src`, stating whether it is a forced break of its unit's text (`brk`, §18.75): where its source
@@ -336,7 +336,7 @@ export { latin1 }
  * each. A file the front end writes back (patch: its units' marks and translations) is written from this text, with LF,
  * which TeX reads the same. Every other file is copied as it is, a class or a package the front end read among them;
  * the passes live.mjs runs over such a copy (literalNames, stripPdftexOption, localizeNames) give the same text on its
- * own line ends as on this one (the 12 CR files of 180 papers, 2026-10-20). So do the guard's brace balance and the
+ * own line ends as on this one (the 12 CR files of 180 papers, measured 2026-10-20). So do the guard's brace balance and the
  * probe of the main file, which read through this too
  */
 export const texText = (bytes: Uint8Array): string => latin1(bytes).replace(/\r\n?/g, '\n')
@@ -361,7 +361,7 @@ const isUtf8Text = (t: string) => {
   }
 }
 /**
- * A file's input encoding as its characters (S2 of 2026-10-24): a unit's text is UTF-8 bytes read latin1 (mt.mjs utf8
+ * A file's input encoding as its characters: a unit's text is UTF-8 bytes read latin1 (mt.mjs utf8
  * decodes it), so a file that is not UTF-8 has each of its text pieces turned into UTF-8 by the encoding the main file's
  * \\usepackage[…]{inputenc} declares — latin1 its characters as they are, cp1252 (ansinew) Windows' — and by latin1, what
  * pdfTeX reads a byte as, where it declares none or one this table does not hold. Read as UTF-8, 2610.20581's latin1
@@ -432,7 +432,7 @@ const SUBFIGURE_STY = new Set(['subfigure', 'subtable'])
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
  *  places between them units of their own (frontBlock): the authors' names of kind 'author', the affiliations,
  *  institutions and addresses of kind 'affiliation', both the reader's "names" (the whole block one toggle:
- *  docs/route/orphan-text.md §5, the owner's ruling of 2026-10-30); the marks, e-mail and web addresses, ORCIDs and spacing
+ *  docs/route/orphan-text.md §5, PDF-READER §19.13); the marks, e-mail and web addresses, ORCIDs and spacing
  *  stay. The blocks: latex.ltx's \\author, authblk.sty's \\affil, revtex4-2.cls's and acmart.cls's \\affiliation, llncs.cls's
  *  \\institute, amsart.cls's \\address */
 const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
@@ -456,7 +456,7 @@ const AUTHOR_KINDS: KeySet<string> = new Set(['author', 'affiliation'])
 /** whether a unit is of an author block (AUTHOR_KINDS): what the TeX path sets and keeps as one block, names and places alike */
 export const inAuthorBlock = (u: { kind?: string } | null | undefined): boolean => AUTHOR_KINDS.has(u?.kind)
 /**
- * The author block a note is tied to by the source (the owner's ruling of 2026-11-13: text the paper's code ties to the author
+ * The author block a note is tied to by the source (PDF-READER §18.71: text the paper's code ties to the author
  * block follows the names option both ways; a region of its own is body text): a note's unit gets `of: 'author'` where (1) it
  * is written inside the argument of a command the role table names `author` (FRONT_ROLES, LaTeXML's bindings: \\author, \\affil,
  * \\icmlauthor …), at any depth, the innermost such command's argument being the walk's `within` (a \\thanks inside \\title's is
@@ -961,8 +961,8 @@ const ACCENT_MARKS: Readonly<Record<string, string>> = {
  * sets the source's accent: LaTeX's UTF-8 table declares each (utf8enc.dfu, the accent itself under pdfLaTeX, in OT1,
  * T1, T2A and inside CJKutf8's environment alike), and Latin Modern, TeX Gyre (Termes, Heros, Cursor, Pagella) and CMU
  * hold each in every face, upright, bold, italic, sans, mono and small capitals (XeLaTeX with fontspec and xeCJK; a
- * paper's own XeLaTeX font sets the same letter for the source's accent, its TU composite). Measured on TL 2026,
- * 2026-10-05: of the 221 letters the ten accents make, 167 are declared, and the fonts lack 22 of those (Ḃ Ḟ Ẏ Ḱ Ẑ Ǩ
+ * paper's own XeLaTeX font sets the same letter for the source's accent, its TU composite). On TL 2026,
+ * measured 2026-10-05: of the 221 letters the ten accents make, 167 are declared, and the fonts lack 22 of those (Ḃ Ḟ Ẏ Ḱ Ẑ Ǩ
  * in either case, and CMU but for its upright roman the cedilla's Ģ Ķ Ļ Ņ Ŗ): 145 letters. Any other accent or letter
  * keeps the accent a placeholder, as before
  */
@@ -1058,7 +1058,7 @@ const NOTE_MARKS: ReadonlySet<string> = new Set(
  * group ending it with it (`\\textless 5` is "<5"), a control symbol alone (`5\\% of` is "5% of": TeX skips no space after one),
  * an empty group right after it with it; where the paper does not define the command itself (ownLetters); with where its source
  * ends, or null. A placeholder, it went out as a marker, and Microsoft split the term there ("R&D" came back as "D", a verb, then "R&"); as
- * text the translator reads the term, and a percent comes back glued as the paper sets it (2026-11-11, Microsoft's Chinese and
+ * text the translator reads the term; a percent comes back glued as the paper sets it (measured 2026-11-11, Microsoft's Chinese and
  * Japanese on 110 units of the 88 papers, each sent both ways: none refused, 131 of 134 percents glued, every "R&D" one word;
  * over the 88, 1,520 such placeholders in 776 units of 65 papers, and 96 of the textcomp symbols)
  */
@@ -1146,7 +1146,7 @@ const TBLR_ENVS = ['tblr', 'longtblr', 'talltblr']
 const FULL_RULE =
   /^(?:hline|hdashline|firsthline|lasthline|Hline|toprule|midrule|bottomrule|specialrule|Xhline|thickhline|hhline|tabucline|endhead|endfirsthead)$/
 /** a rule across the table that a class defines, read as a rule for a block's bounds (R4, tableGrid's `band`) and as before
- *  otherwise (a cell's content: the header, which today's reader reads too, is read off FULL_RULE alone): REVTeX's \\colrule
+ *  otherwise (a cell's content: the header is read off FULL_RULE alone): REVTeX's \\colrule
  *  (revtex4-2.cls), the one such rule of the corpus's tables (2610.20716v1) */
 const CLASS_RULE = /^colrule$/
 /** a rule under some columns of the table, its columns its argument's range {a-b} (TeX's \\cline, booktabs' \\cmidrule,
@@ -1217,7 +1217,7 @@ function argsBySpec(s: string, i: number, spec: string) {
   return i
 }
 /**
- * A table's body as its cells lay it out (Problem 1 of the table-groups brief, 2026-10-07): each cell's stretch of the
+ * A table's body as its cells lay it out: each cell's stretch of the
  * source [start, end) between its separators — `&` and the row's end (`\\\\`, `\\tabularnewline`), outside braces, math,
  * comments and nested environments —, its row, its first column and the columns it spans (\\multicolumn{n}), and whether
  * its row is the header's. The header is the rows from the first that holds anything up to the first rule across the
@@ -3079,8 +3079,8 @@ const joinSkips = <Q extends SourcePiece<WalkFile>>(a: TextPiece, b: TextPiece, 
  * is (startOf passes it over, its ink the original's: 2610.19159v1's 44 items of a hand-made list, `\\textbullet The …`); but a
  * note's mark (NOTE_MARKS) right after a word with no space (past the groups closed after it and the marks before it: a run of
  * marks), an element of the text as its call in a superscript is (`Beren Millidge\\textdagger`: as text the dagger was glued to
- * the name, the person no longer the one its references name; the coordinator's ruling of 2026-11-11). Elsewhere a note's sign is
- * text (`(\\S\\ref{…})`, `in \\S 3`). The coordinator's statement of 2026-11-16 (B): the characters a paper types as text are the
+ * the name, the person no longer the one its references name). Elsewhere a note's sign is
+ * text (`(\\S\\ref{…})`, `in \\S 3`). PDF-READER §18.83: the characters a paper types as text are the
  * text's in every position; only a sign set as a mark is the edge before the first word
  */
 export function textSymbolHere(char: string, before: readonly PieceLike[]): boolean {
@@ -4698,7 +4698,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
     }
-    // any other conditional TeX closes with a \\fi: one branch is what TeX sets (S4 of 2026-10-24: 2610.21098's
+    // any other conditional TeX closes with a \\fi: one branch is what TeX sets (2610.21098's
     // \\ifdefined\\BottleneckPreprint, both its branches' sentences one unit). Where its own text decides it
     // (conditionalValue: \\iftrue, \\if 0) the live branch is walked, the rest stays in the source; where it does not and
     // both branches hold words, neither branch is the translator's (`skipped.ifUnknown`): left English, never the branch
@@ -5392,7 +5392,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // a macro whose body sets words of its own around its argument (\\newcommand{\\nb}[1]{Notebook~#1}) is no wrapper: its
       // call is its expansion, text whose source is the call (expandedText), or where the body is more than text, the
       // call one placeholder. As a pair around its argument, the translator was sent "(4--6)" for "(Notebook 4--Notebook
-      // 6)" (2610.21547's eleven units, S1 of 2026-10-24)
+      // 6)" (2610.21547's eleven units)
       if (arg && !macro.then && setsWords(macro)) {
         // (a macro inside its own expansion, or expansions nested past a few levels — a recursive call in a branch TeX never
         // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder; a failed
@@ -6137,7 +6137,7 @@ function entriesLast(units: SourceUnit<WalkFile>[]) {
 /** the commands of a bibliography that set their last argument as text, by how many arguments come before it: REVTeX's and
  *  acmart's fields (\\bibinfo{title}{…}, \\bibfield{author}{…}), REVTeX's name fonts, a quoted or shown title, IEEEtran's
  *  language, and REVTeX's link with no address (\\href@noop {} {…}, its head's `\\@secondoftwo`: a journal part with no DOI,
- *  a note; its content the text, with the groups it holds, nothing to link: the coordinator's step D of 2026-11-11, PDF-READER
+ *  a note; its content the text, with the groups it holds, nothing to link: PDF-READER
  *  §18.33). Any other command of a .bbl is what the walk makes of it elsewhere: \\newblock a placeholder, \\url and \\href
  *  theirs, \\emph a pair */
 const BIB_TEXT = new Map([
@@ -6158,7 +6158,7 @@ const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|prima
 /**
  * A bibliography (thebibliography's body, `from` after its \\begin, `to` its \\end): each \\bibitem's entry, from its key's
  * group to the next \\bibitem or the end, is one unit of kind `reference` (the reader's "References"), whole: the names it
- * opens with are the entry's, never a unit of their own nor of the "names" toggle (the owner's ruling of 2026-10-28: the
+ * opens with are the entry's, never a unit of their own nor of the "names" toggle (PDF-READER §19.13: the
  * references and the author block are each their own toggle's, decoupled — "names" is the author block under the title alone —,
  * and an entry is never set in two pieces styled apart). Its label (\\bibitem's optional argument, set in the list's label
  * box) and its key are no piece of it; what precedes the first \\bibitem (the style's \\providecommand's) is no unit, nor is
@@ -6249,7 +6249,7 @@ const texMarks = (t: string) =>
  * The characters a pair's command prints around its argument `arg`, by its definition (`macro`: paperMacros' or bibDefinitions'),
  * where its replacement text is that argument between marks and nothing else — no letter, no digit, no command, no group:
  * `{``#1''}`, 2610.10069v1's \\enquote and REVTeX's .bbl's — as { before, after }, TeX's ligatures read; null else. What a command
- * prints as characters is characters (the coordinator's ruling of 2026-11-11): the marks are text of the unit, its source with
+ * prints as characters is characters (PDF-READER §18.32): the marks are text of the unit, its source with
  * them, and what a translator does with quotation marks is the translator's
  */
 function wrapOf(macro: Macro | BibDef | undefined, arg: number) {
@@ -6487,7 +6487,7 @@ const APART = (p: SourcePiece<WalkFile> | undefined) =>
       p.src ?? '',
     ))
 /**
- * An entry's numbers, each a placeholder: what the original's ink keeps (the owner, 2026-10-25: labels, numbers, years, DOIs,
+ * An entry's numbers, each a placeholder: what the original's ink keeps (PDF-READER §19.13: labels, numbers, years, DOIs,
  * web addresses and formulas stay the original's ink), each token of a text piece that holds a digit and no letter, with white
  * space or a piece that sets no letter on either side (APART), so that no mark of its goes inside a word or between two glyphs
  * TeX kerns. A piece whose source is other bytes than its text (an accent's letter joined into its word, a file transcoded:
@@ -7182,8 +7182,8 @@ export function unitText(u: { pieces: readonly SourcePiece<WalkFile>[] }): strin
 // ---------------------------------------------------------------- pseudo-translation
 /**
  * Per target language, the length of a real translation in grapheme clusters per letter of the English it comes from,
- * and a sample text (one English sentence as Microsoft's free endpoint translates it). Measured over 48 prose units of
- * four papers of four document classes (parked/lab/spikes/lang-ratio.mjs, 2026-09-22; each language's quartiles lie within 10 %
+ * and a sample text (one English sentence as Microsoft's free endpoint translates it). Measured 2026-09-22 over 48 prose units of
+ * four papers of four document classes (parked/lab/spikes/lang-ratio.mjs; each language's quartiles lie within 10 %
  * of its ratio): a page count or a line break measured on the pseudo-translation stands for the real one's only if it
  * is as long and written like the language. The first ratios, guessed (zh 0.45, ja 0.55, de 1.15), were a third too
  * long for Chinese and a sixth too short for German.
@@ -7683,7 +7683,7 @@ export function patch(
 /** \\axtend{name}: a unit's end mark, which must not change where a line breaks. A mark after glue — the glue xeCJK sets
  *  after a full-width stop — makes that glue a place to break before it, and in a full last line TeX took it: the mark
  *  alone on a line of its own, one line more in the caption, and no word beside the mark to bound the unit with (the
- *  owner's Figure 1, 2026-09-23, in the browser's XeTeX). So the glue is taken off, the mark set against the last
+ *  caption of a Figure 1 in the browser's XeTeX). So the glue is taken off, the mark set against the last
  *  letter, and the same glue put back after it: where a paragraph ends \\par takes it off as before, and inside a line
  *  it breaks where it did. \\relax first: XeTeX sets a word, and xeCJK's glue after it, only when a command that does
  *  not expand comes, so a test before one would look at the list without them. On one line: a line end in the macro
@@ -7868,9 +7868,9 @@ export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox
  *  \\if@twocolumn false) — which places.mjs counts columns by, page by page (a two-column body and a one-column
  *  appendix, Chinese 2608.02163). The most columns in force at any mark made since the last page went out, or as the
  *  page goes out: ltxgrid closes its grid at \\end{document} before the last page goes out (\\close@column@grid), and
- *  read then alone every revtex and aastex paper's last page was one column (the review of 2026-10-01). And as
+ *  read then alone every revtex and aastex paper's last page was one column. And as
  *  \\end{document} begins, before the grid closes: a last page with no unit mark on it — the references alone — was
- *  read one column too (2608.20847's page 9, aastex 2608.12606's page 20; the re-review of 2026-10-02) */
+ *  read one column too (2608.20847's page 9, aastex 2608.12606's page 20) */
 export const MARK_DEF = `${[
   '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
   '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',

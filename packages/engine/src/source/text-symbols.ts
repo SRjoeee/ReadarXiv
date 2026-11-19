@@ -1,8 +1,8 @@
 // src/pdf-reader/engine/rules/text-symbols.mjs
 // LaTeX's text symbols: one table for every reader of a placeholder that is one. The layout maker draws a symbol it cannot
 // mark as its character where arXiv's page shows that character on the unit's line (layout/marks.mjs, make.mjs); the layer
-// draws one from its source as text, whose glyph its line's erasing covers (layer-proto/layer2.mjs texToText2, textSymbol:
-// the controller's text-symbol ruling of 2026-10-15). Two copies of it drifted apart: the layer knew none of
+// draws one from its source as text, whose glyph its line's erasing covers (texToText2, textSymbol:
+// the layer's reading, copied in instrument/instrument.ts). Two copies of it drifted apart: the layer knew none of
 // \textbackslash, \textasciicircum and \textbar, which the maker's had, read them as a paper's own macros, and left their
 // units the original's (2610.19159: 256 units, with \textquotesingle and \textquotedbl, which neither had). Imports nothing.
 
