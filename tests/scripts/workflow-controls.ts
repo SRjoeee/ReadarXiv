@@ -22,7 +22,8 @@ export function controlsOf(ci: string): Control[] {
   /** a line of the extension job (its timeout, the job's last key before its steps), and of the reader job's */
   const inExtension = (lines: string) => once('    timeout-minutes: 45\n', `    timeout-minutes: 45\n${lines}`)
   const inReader = (lines: string) => once('    timeout-minutes: 30\n', `    timeout-minutes: 30\n${lines}`)
-  const asScript = (run: string) => once('run: pnpm e2e:small-caps', run)
+  /** the reader job's last step's script (the harness), replaced */
+  const asScript = (run: string) => once('run: node packages/reader/e2e/run.mjs', run)
   const c = (rule: string, what: string, text: string): Control => ({ rule, what, text })
   return [
     // the runner
@@ -42,7 +43,7 @@ export function controlsOf(ci: string): Control[] {
     c('secrets', "a secret in a job's environment", inReader(`    env:\n      TOKEN: ${EXPR('secrets.ANY')}\n`)),
     c('secrets', "a secret in a job's environment, by the bracket form", inReader(`    env:\n      TOKEN: ${EXPR("secrets['READARXIV_CI_TOKEN']")}\n`)),
     c('secrets', "a secret in a job's environment, the context in capitals", inReader(`    env:\n      TOKEN: ${EXPR('SECRETS.ANY')}\n`)),
-    c('secrets', "every secret at once, in a step's environment", asScript(`run: pnpm e2e:small-caps\n        env:\n          ALL: ${EXPR('toJSON(secrets)')}`)),
+    c('secrets', "every secret at once, in a step's environment", asScript(`run: node packages/reader/e2e/run.mjs\n        env:\n          ALL: ${EXPR('toJSON(secrets)')}`)),
     c('secrets', "a secret in an action's input, spelt as an environment's entry", once('          node-version: 22\n', `          node-version: 22\n          TOKEN: ${EXPR('secrets.ANY')}\n`)),
     c('secrets', 'a secret handed to the steps after through GITHUB_ENV', once('run: node scripts/fetch-fixtures.mjs', 'run: echo "T=$READARXIV_CI_TOKEN" >> "$GITHUB_ENV"')),
     c('secrets', 'a secret in a script', asScript(`run: echo "${EXPR('secrets.ANY')}"`)),

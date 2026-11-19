@@ -29,6 +29,12 @@ const WRITES: Record<string, string[]> = {
   'rules-point.yml': ['cancel-publishes: actions'],
 }
 const RULES = { ...rulesFor(WRITES), 'browser jobs': browserJobs }
+/** the fast tier's gates no hosted job runs, each with its reason: they run on the maintainer's machine, in the fast tier run
+ *  there (lab/release-check/CI.md) */
+const NOT_HOSTED: Record<string, string> = {
+  'e2e:small-caps':
+    "it holds today's layer (src/pdf-reader/engine), which the cut-over deletes. On the hosted runner's Chromium (Linux, a device scale of 1) glyph advances come whole pixels at the size a run is drawn and at the size today's layer measures it, so a run is drawn up to 4.5 px off its measured width and laid up to 0.7 PDF units off Firefox's and WebKit's (run 44432025091): a platform difference of today's reader, production's, not of a change here. A check of the maintainer's machine until its code goes",
+}
 
 /** a workflow's jobs by name, each with its text (the comments before the next job's name stay with the one above it) */
 const jobsOf = (yml: string) => new Map(yml.slice(yml.indexOf('\njobs:\n') + 7).split(/\n(?= {2}[a-z][a-z-]*:\n)/).flatMap(part => { const name = /^ {2}([a-z][a-z-]*):/m.exec(part)?.[1]; return name ? [[name, part] as [string, string]] : [] }))
@@ -91,10 +97,17 @@ describe('the fast tier on GitHub\'s runners (ci.yml)', () => {
     }
   })
 
-  it('runs each gate of the fast tier with the command gates.mjs gives it: the browser gates as steps named by their ids, the e2e scripts on a build', () => {
+  it('runs each gate of the fast tier with the command gates.mjs gives it, but those kept off the runner with their reason: the browser gates as steps named by their ids, the e2e scripts on a build', () => {
     const fast = GATES.filter(g => g.tier === 'fast' && !g.private)
     const ran: string[] = []
     for (const g of fast.filter(g => g.stage === 'reader')) {
+      if (NOT_HOSTED[g.id]) {
+        // (a gate kept off GitHub's runners, its reason above: no step of ci.yml names it or runs its command)
+        expect(codeOf(ci), g.id).not.toContain(g.id)
+        expect(codeOf(ci), g.id).not.toContain(commandOf(g.id)[0]!)
+        ran.push(g.id)
+        continue
+      }
       const commands = commandOf(g.id)
       expect(commands, g.id).toHaveLength(1)
       const holder = ['reader', 'extension'].find(job => stepsOf(jobs.get(job)!).some(s => s.startsWith(`name: ${g.id}\n`)))

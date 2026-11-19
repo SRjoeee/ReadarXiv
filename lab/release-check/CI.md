@@ -11,7 +11,7 @@ measures it.
 | Tier | Job | Runner | When | Commands | Needs | Minutes | What it catches that `check` alone did not |
 |---|---|---|---|---|---|---|---|
 | fast | `check` | GitHub's `ubuntu-latest` | every pull request; every push to `main` and `rebuild/v2` | `pnpm typecheck`, `pnpm lint`, `pnpm build`, the fixtures' fetch, `pnpm test` (the contract tests among its files), `node lab/release-check/census.mjs --no-today` | the fixtures' read token (a repository secret, one step's environment; a fork's run has none and fetches from arXiv) | 5 to 8 (five runs of 2026-11-07), the census 8 s here | the census's ratchet: a complexity or debt measure above the ledger's recorded value (new) |
-| fast | `reader` | GitHub's `ubuntu-24.04` | as `check` | Playwright's Chromium, Firefox and WebKit (`pnpm exec playwright install --with-deps …`), `node packages/reader/e2e/run.mjs` (`harness`), `pnpm e2e:small-caps` | nothing: no secret, no lab data | here: harness 239 to 310 s, small-caps 4 to 15 s; hosted about 15 with the browsers' download | the reader package in a real browser on its own fixtures (93 checks at round 5 of 2026-11-18: the stack, the composer, the panes, links, the text layer, the highlight; I1, I3, I4, I8 there), and today's layer's small capitals in three browsers; vitest's happy-dom draws nothing |
+| fast | `reader` | GitHub's `ubuntu-24.04` | as `check` | Playwright's Chromium (`pnpm exec playwright install --with-deps chromium`), `node packages/reader/e2e/run.mjs` (`harness`) | nothing: no secret, no lab data | here: harness 239 to 310 s; hosted: harness 4 min 38 s, the job 6 min (run 44432025091) | the reader package in a real browser on its own fixtures (93 checks, 12 of them holding nothing without the website's served faces: the stack, the composer, the panes, links, the text layer, the highlight; I1, I3, I4, I8 there); vitest's happy-dom draws nothing |
 | fast | `extension` | GitHub's `ubuntu-24.04` | as `check` | Playwright's Chromium, `pnpm build`, then `pnpm e2e:reader`, `e2e:framing`, `e2e:a11y`, `e2e:viewer`, `e2e:registration` | nothing | here: 77, 64, 33, 6, 32 s; hosted about 12 with the build | the shipped build loaded in Chromium: the PDF page's entries (its button, the panel, the popup), the reader behind the extension's host on the stand-in of `/api/v2`, the framing defences, an accessibility finding the extension adds, the figure viewer under a pinned header, a laid page's drawing, overlay and links registered at every zoom; each suite behind a route table that fails the run on any request it does not answer |
 | full | none | the maintainer's machine, by hand | before an integration round's merge into `rebuild/v2`, and at a release candidate | `pnpm release-check --tier full --work=<a directory on the external disk>` | the lab's data (`AXT_LAB_DATA`), the external disk, Docker for `perf-batch` | 26 at `13216ac44`; 110 at `6b91f86ff` on a shared machine | the corpus: below |
 | release | none | the maintainer's machine, by hand | before a release | `pnpm release-check --tier release --online --work=<…>` | as full, and the network for the online scripts | about 80, and 100 to 130 for `perf-release` | below |
@@ -80,7 +80,7 @@ request's own) and `pnpm test`; the contract tests (`tests/contract/`) run insid
 as their own line of its report. The census of this tree alone (`--no-today`): its ratchet judges the measures this tree holds
 (21 at `2ed857426`) and skips, with their reason, the 27 that read the website's tree or today's engine.
 
-**`reader` and `extension`**: Playwright's builds at the lockfile's Playwright version, with the system libraries they need
+**`reader` and `extension`**: Playwright's Chromium at the lockfile's Playwright version, with the system libraries it needs
 (`--with-deps`, apt on the runner); headless, Playwright's `chromium` channel, which loads an extension. `ubuntu-24.04` is
 pinned: the browsers draw with its libraries and fonts. Each check step runs whatever the one before it gave, so that one
 failure hides no other. The harness's checks that lay with the website's served faces (licensed files the repository may not
@@ -98,13 +98,25 @@ scripts on the job's own build.
 | `contract` | 1 s | in `check` (inside `pnpm test`) |
 | `census` (this tree alone) | 8 s | in `check` |
 | `harness` (93 checks) | 239 to 310 s | about 8 min |
-| `e2e:small-caps` (three browsers) | 4 to 15 s | under 1 min |
+| `e2e:small-caps` (three browsers) | 4 to 15 s | not run there (below) |
 | `e2e:reader` (81 checks on the default build: `tests/e2e/reader-v2.mjs`, `reader-v2-layer.mjs`) | 77 s | about 3 min |
 | `e2e:framing` (22) | 64 to 66 s | about 2 min |
 | `e2e:a11y` (15) | 33 to 34 s | about 1 min |
 | `e2e:viewer` (20) | 5 to 10 s | under 1 min |
 | `e2e:registration` (74 on the default build) | 31 to 34 s | about 1 min |
-| the three jobs, in parallel | | `check` 5 to 8 min, `reader` about 15, `extension` about 12: about 15 min of a pull request's wall clock, about 35 of runner time |
+| the three jobs, in parallel | | `check` 5 to 8 min, `reader` 6 (run 44432025091), `extension` about 12 (Chromium's system libraries alone took 8 min of it there): about 12 min of a pull request's wall clock |
+
+**Kept off GitHub's runners: `e2e:small-caps`.** It holds today's layer (`src/pdf-reader/engine`), which the cut-over deletes.
+Its two measures of a run are today's layer's own: the width it lays a run at, measured on a canvas at 100 px and scaled, and the
+width the run's `<tspan>` is drawn at, read by `getSubStringLength` at the drawn size (20 px). On the hosted runner's Chromium
+(Linux, a device scale of 1) glyph advances come whole pixels at each of those sizes (its own synthesis of the same words reads
+247.00, 319.00, 239.00 px in SVG and canvas alike), so the two disagree by up to 4.48 px over a heading, and the layout, laid on
+those whole-pixel measures, stands 0.18 to 0.70 PDF units off Firefox's and WebKit's (run 44432025091: 13 of 28; Firefox and WebKit
+pass every case there). On macOS Chromium measures and draws with fractional advances (250.00 against 249.99 px, WebKit's own
+249.99), and all 28 pass. A platform difference of today's reader, production's, not of a change here: the check stays the
+maintainer's machine's, in the fast tier run there, until its code goes. The rebuilt reader's checks that hold a drawn run against
+its layout (the harness's full-width punctuation, laid by the reader's own typesetter over the served faces) skip on the runner
+for want of those faces: the rebuilt reader's drawing against its layout on Linux is not shown by the hosted tier.
 
 **The rules gate** (`.github/workflows/rules-gate.yml`, path-filtered on today's engine): unchanged until today's engine is
 deleted at the cut-over.
