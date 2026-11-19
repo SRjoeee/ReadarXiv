@@ -174,11 +174,13 @@ export const HISTORY = {
   named: /\b(?:Codex|Devin|Copilot|CodeRabbit)\b|\bround (?:[A-Z]{1,2})?\d+\b|\b(?:Plan|Task) \d+[a-z]?\b/,
   forms: {
     /** a map to the engine the packages replace: a line map (`L2:3283`, `RUN:2022`, `TEX:120`, `MAKE:382`), a file of it and
-     *  its line (`tex.mjs:269`), its paths (`src/pdf-reader/engine/…`, `today/….mjs`), its commits (`engine 065c1d973`,
-     *  `at baf2083e0`, `(abe884b5e)`), and a port statement: ported, carried, copied or moved from it, the website, the
-     *  server, a path or a file (never a move the code makes: carried from page to page, moved from after it) */
+     *  its line (`tex.mjs:269`; never a file a dependency of this repository distributes and none of its own files is named,
+     *  PDF.js's `pdf.worker.mjs:41738`: the library's, cited as the contract the code is written to, DISTRIBUTED), its paths
+     *  (`src/pdf-reader/engine/…`, `today/….mjs`), its commits (`engine 065c1d973`, `at baf2083e0`, `(abe884b5e)`), and a port
+     *  statement: ported, carried, copied or moved from it, the website, the server, a path or a file (never a move the code
+     *  makes: carried from page to page, moved from after it) */
     ported:
-      /\b(?:RUN|L1|L2|TEX|MAKE)\s?:\s?\d|\.mjs:\d|\bsrc\/pdf-reader\/engine\b|(?<![\w/.-])today\/[\w./-]+\.mjs\b|\b(?:engine|at) (?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,12}\b|\((?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{9}\)|\b(?:[Pp]orted|[Cc]arried|COPIED|[Mm]oved)(?: whole| into the engine package)?(?: as it is)? from(?:\s*$| (?:today['’]s\b|the (?:engine|website|server|reader|extension|old)\b|engine\b|src\/|[\w./-]+\.(?:mjs|css|tsx?|js)\b))/,
+      /\b(?:RUN|L1|L2|TEX|MAKE)\s?:\s?\d|[\w.-]*\.mjs:\d|\bsrc\/pdf-reader\/engine\b|(?<![\w/.-])today\/[\w./-]+\.mjs\b|\b(?:engine|at) (?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,12}\b|\((?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{9}\)|\b(?:[Pp]orted|[Cc]arried|COPIED|[Mm]oved)(?: whole| into the engine package)?(?: as it is)? from(?:\s*$| (?:today['’]s\b|the (?:engine|website|server|reader|extension|old)\b|engine\b|src\/|[\w./-]+\.(?:mjs|css|tsx?|js)\b))/,
     /** "today" without the 's where it names that engine: its path (`today/…`), "as today", "where today decides", "(today",
      *  "the extension's today session", today doing what the engine did; never the word's own use (TeX's \today, a name in
      *  code, a file's name, what exists today, a third party's behaviour today, "Today, measured …") */
@@ -195,8 +197,9 @@ export const HISTORY = {
       /#\d+(?:['’]s)? (?:re-)?reviews?\b|\breviews? of (?:#\d|20\d\d|round)|\b(?:PR|pull request) #\d+|\bre-review\b|\b(?:interface|final|branch) review\b|\bwave-\d review\b|\b(?:Codex|Devin|Copilot|CodeRabbit) on #\d+/,
     /** a piece of work by its name: a lane (L7, style-wire, one with its record or its date), a triage, a numbered round,
      *  a part, a wave, a stage, a design's item (Q7, D6's), a lab option; never a word of the code (its lane, a pass's
-     *  first round, a stage of a document of this repository, cited on the line before as `docs/route/….md` and continued) */
-    work: /\blanes? (?:[A-Z]\d*\b|[a-z0-9]+(?:-[a-z0-9]+)+\b)|\blane [a-z0-9-]+(?=['’]s (?:record|probe|fill|spec)\b|, 20\d\d|\))|\btriage-\d|\b[A-Z]\d+ \w+ round\b|\bround-\d|\b(?:Part|wave) \d+\b|\bwave-\d\b|(?<!\.md,? |^[\s*]*)\bstage \d+[a-z]?(?:-\d+)?\b|\bQ\d+\b|\bD\d+['’]s\b|\b(?:lab )?option \((?:i{1,3}|iv|v)\)/,
+     *  first round), nor a name a document of this repository defines where the file cites that document (DEFINED: DESIGN
+     *  §16's Q1 and Q2, docs/route/orphan-text.md §7's stages) */
+    work: /\blanes? (?:[A-Z]\d*\b|[a-z0-9]+(?:-[a-z0-9]+)+\b)|\blane [a-z0-9-]+(?=['’]s (?:record|probe|fill|spec)\b|, 20\d\d|\))|\btriage-\d|\b[A-Z]\d+ \w+ round\b|\bround-\d|\b(?:Part|wave) \d+\b|\bwave-\d\b|\bstage \d+[a-z]?(?:-\d+)?\b|\bQ\d+\b|\bD\d+['’]s\b|\b(?:lab )?option \((?:i{1,3}|iv|v)\)/,
     /** a ruling or a decision by its number (ruling 5, decision 1, the coordinator's R7, R1 of a date); never an item of a
      *  document's section (R1 of PDF-READER §18.72) */
     ruling: /\b(?:ruling|decision)s? \d+\b|['’]s R\d+\b|\bR\d+(?:, R\d+)* of 20\d\d/,
@@ -214,6 +217,116 @@ const REF_DATE = /\b[A-Za-z][\w.-]*-20\d\d-\d\d-\d\d(?=:[\w./-])/g
  *  names a licence and says the code is ported, copied, adapted or derived from its upstream; counted apart, not as history */
 const LICENCE = /\b(?:A?GPL|LGPL)-\d(?:\.\d)?(?:-only|-or-later)?\b|\bApache-2\.0\b|\bMIT\b|\bBSD-[234]-Clause\b|\bMPL-2\.0\b|\bISC\b/
 const ORIGIN = /\b(?:ported|copied|adapted|derived|taken) from\b/i
+
+/** DEFINED: the names a document of this repository defines, in the shapes the `work` form reads: a design's item it gives
+ *  as the label of a bold statement of the rule it names (DESIGN §16: `**The marked compile is the pass loop** (Q1, …`), a
+ *  part of such a label it names (`Q1's option (i)`), and a stage, a part or a wave as a row of a table whose first column
+ *  names the kind (docs/route/orphan-text.md §7: `| Stage | … |`, `| 2 (built) | … |`: stage 2). A stage in parentheses after
+ *  a bold heading is no definition: PDF-READER writes `**Over the 88** (stage 1a, …)` to say where a measurement was made,
+ *  the lab's stage. Each name as the `work` match reads it */
+export function definedNamesOf(text) {
+  const out = new Set()
+  for (const m of text.matchAll(/\*\*[^*\n]+\*\*\s*\((Q\d+|D\d+)(?=[,;:)\s])/g)) out.add(m[1])
+  for (const m of text.matchAll(/\b(Q\d+)['’]s option \(([ivx]+)\)/g)) out.add(`${m[1]}'s option (${m[2]})`)
+  const lines = text.split('\n')
+  for (let i = 0; i + 1 < lines.length; i++) {
+    const head = /^\|\s*(Stage|Part|Wave)s?\s*\|/i.exec(lines[i])
+    if (!head || !/^\|\s*:?-{3,}/.test(lines[i + 1])) continue
+    for (let j = i + 2; j < lines.length && lines[j].startsWith('|'); j++) {
+      const row = /^\|\s*(\d+[a-z]?)\b/.exec(lines[j])
+      if (row) out.add(`${head[1].toLowerCase()} ${row[1]}`)
+    }
+  }
+  return out
+}
+/** how a file's comments cite a document of this repository: by its file name (`orphan-text.md`, `docs/DESIGN.md`), or an
+ *  upper-case name by itself before its section (`DESIGN §16`, `PDF-READER §18.11`) */
+const citationOf = path => {
+  const base = path.split('/').pop()
+  const stem = base.replace(/\.md$/, '')
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const byStem = /[A-Z]/.test(stem) && stem === stem.toUpperCase() ? `|(?<![\\w.-])${esc(stem)} §` : ''
+  return new RegExp(`(?<![\\w.-])${esc(base)}(?![\\w-])${byStem}`)
+}
+/** DISTRIBUTED: the file names the dependencies of this repository distribute (each package.json's dependencies, their
+ *  files in node_modules four levels down, a package of their own aside) that no file of this repository bears: a third
+ *  party's file a comment cites by its line, the contract the code is written to, not the old engine's */
+export function distributedOf(root, paths) {
+  const own = new Set(paths.map(p => p.split('/').pop()))
+  const out = new Set()
+  const walk = (dir, depth) => {
+    let names = []
+    try {
+      names = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const n of names) {
+      if (n.name === 'node_modules') continue
+      const p = join(dir, n.name)
+      let dirLike = n.isDirectory()
+      if (n.isSymbolicLink()) {
+        try {
+          dirLike = statSync(p).isDirectory()
+        } catch {
+          continue
+        }
+      }
+      if (dirLike) {
+        if (depth < 4) walk(p, depth + 1)
+      } else if (/\.(?:m|c)?js$/.test(n.name) && !own.has(n.name)) out.add(n.name)
+    }
+  }
+  for (const manifest of paths.filter(p => p === 'package.json' || /^packages\/[^/]+\/package\.json$/.test(p))) {
+    let pkg = null
+    try {
+      pkg = JSON.parse(readFileSync(join(root, manifest), 'utf8'))
+    } catch {
+      continue
+    }
+    const at = posix.dirname(manifest)
+    const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies })
+    for (const d of deps) walk(join(root, at, 'node_modules', d), 0)
+  }
+  return out
+}
+/** what the history reading reads of the tree besides a file's own text: each document of this repository with the names it
+ *  defines and how a comment cites it (DEFINED), and the file names only a dependency distributes (DISTRIBUTED) */
+export function historyContextOf(docs, distributed) {
+  return { docs: docs.map(d => ({ path: d.path, names: definedNamesOf(d.text), cites: citationOf(d.path) })), distributed }
+}
+/** a `work` match's name as a document defines it (definedNamesOf's), or null: a design's item, a stage, a part or a wave by
+ *  its number, a label's option by the label it is of on the same line */
+const workKey = (s, line) => {
+  if (/^Q\d+$/.test(s)) return s
+  const d = /^D(\d+)['’]s$/.exec(s)
+  if (d) return `D${d[1]}`
+  const st = /^stage (\d+[a-z]?)/i.exec(s)
+  if (st) return `stage ${st[1]}`
+  const pw = /^(Part|wave) (\d+)$/i.exec(s)
+  if (pw) return `${pw[1].toLowerCase()} ${pw[2]}`
+  const o = /option \(([ivx]+)\)$/.exec(s)
+  if (o) {
+    const q = new RegExp(`(Q\\d+)['’]s option \\(${o[1]}\\)|option \\(${o[1]}\\) of (Q\\d+)`).exec(line)
+    return q ? `${q[1] ?? q[2]}'s option (${o[1]})` : null
+  }
+  return null
+}
+const globalOf = re => new RegExp(re.source, `${re.flags}g`)
+const FORMS_G = new Map()
+/** whether a form counts a line: one of its matches stands that no name of this repository's (DEFINED) and no file of a
+ *  third party's (DISTRIBUTED) answers for */
+function formCounts(k, re, line, defined, distributed) {
+  if (!re.test(line)) return false
+  if ((k !== 'work' || !defined.size) && (k !== 'ported' || !distributed?.size)) return true
+  if (!FORMS_G.has(k)) FORMS_G.set(k, globalOf(re))
+  for (const m of line.matchAll(FORMS_G.get(k))) {
+    if (k === 'work' && defined.has(workKey(m[0], line))) continue
+    if (k === 'ported' && /\.mjs:\d$/.test(m[0]) && distributed.has(m[0].replace(/:\d$/, ''))) continue
+    return true
+  }
+  return false
+}
 const UPPER = /^[A-Z][A-Z0-9_]*$/
 
 const pluginsOf = path => {
@@ -257,14 +370,14 @@ const textOf = (text, n) => text.slice(n.start, n.end)
  * never holds them), the file's syntax tree (`ast`) and each threshold's and list's own nodes (`nodes`: the literal, its
  * declaration or the comparison or call it stands in), for the rule ledger's instrument (lab/rules/sites.mjs).
  */
-export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
+export function factsOf(path, text, { tokens = true, nodes = false, history = null } = {}) {
   const kind = kindOf(path)
   const head = text.split('\n').slice(0, 12).join('\n')
   const f = { path, kind, bytes: Buffer.byteLength(text), generated: GENERATED.test(head), ported: PORTED.test(text.split('\n').slice(0, 30).join('\n')), copied: COPIED.test(head), parsed: true }
   if (kind === 'style' || kind === 'html' || kind === 'data' || kind === 'other') {
     const comments = kind === 'style' ? commentsByScan(text, true) : kind === 'html' ? [...text.matchAll(/<!--[\s\S]*?-->/g)].map(m => [m.index, m.index + m[0].length]) : []
     f.lines = countLines(lineKinds(text, comments))
-    if (kind === 'style') f.history = historyIn(text, comments.map(([s, e]) => ({ start: s, value: text.slice(s, e) })))
+    if (kind === 'style') f.history = historyIn(text, comments.map(([s, e]) => ({ start: s, value: text.slice(s, e) })), history)
     f.imports = kind === 'html' ? [...text.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(m => ({ spec: m[1].startsWith('.') || m[1].startsWith('/') ? (m[1].startsWith('/') ? `.${m[1]}` : m[1]) : `./${m[1]}`, names: ['*'], type: false, line: 1, whole: "a page's script" })) : kind === 'style' ? [...withoutRanges(text, comments).matchAll(/@import\s+(?:url\()?["']([^"')]+)["']/g)].map(m => ({ spec: m[1], names: ['*'], type: false, line: 1, whole: "a style sheet's import" })) : []
     return f
   }
@@ -293,7 +406,7 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
   if (nodes) Object.defineProperty(f, 'ast', { value: ast })
   const commentsOnLine = new Map()
   for (const c of ast.comments) for (let l = lineAt[c.start]; l <= lineAt[c.end - 1]; l++) commentsOnLine.set(l, [...(commentsOnLine.get(l) ?? []), c.value])
-  f.history = historyIn(text, ast.comments)
+  f.history = historyIn(text, ast.comments, history)
   // (a statement's own comments: those that open their line; the parser hands a comment that ends the line before to the
   // next statement too)
   const leading = node =>
@@ -729,8 +842,9 @@ export function factsOf(path, text, { tokens = true, nodes = false } = {}) {
 }
 
 /** the comment lines of a text that tell history (HISTORY), by line number: each comment `{ start, value }` cut at its
- *  newlines, so that a line's comment text is the part of a comment that stands on it */
-function historyIn(text, comments) {
+ *  newlines, so that a line's comment text is the part of a comment that stands on it. `context` (historyContextOf): the
+ *  names the documents this file's comments cite define, and the files only a dependency distributes, which no form counts */
+function historyIn(text, comments, context = null) {
   const breaks = []
   for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) breaks.push(i)
   // (a line's number: one more than the line breaks before the offset)
@@ -751,6 +865,8 @@ function historyIn(text, comments) {
   }
   const lines = [...byLine].sort((a, b) => a[0] - b[0])
   const apart = attributionOf(lines)
+  const said = lines.map(([, t]) => t).join('\n')
+  const defined = new Set((context?.docs ?? []).filter(d => d.names.size && d.cites.test(said)).flatMap(d => [...d.names]))
   const h = { todays: [], dated: [], measuredDates: [], named: [], forms: Object.fromEntries(Object.keys(HISTORY.forms).map(k => [k, []])), attribution: [] }
   for (const [line, t] of lines) {
     if (apart.has(line)) {
@@ -761,7 +877,7 @@ function historyIn(text, comments) {
     const dates = t.replace(REF_DATE, '')
     if (HISTORY.dated.test(dates)) (MEASUREMENT.test(dates) ? h.measuredDates : h.dated).push(line)
     if (HISTORY.named.test(t)) h.named.push(line)
-    for (const [k, re] of Object.entries(HISTORY.forms)) if (re.test(t)) h.forms[k].push(line)
+    for (const [k, re] of Object.entries(HISTORY.forms)) if (formCounts(k, re, t, defined, context?.distributed)) h.forms[k].push(line)
   }
   return h
 }
@@ -1504,7 +1620,12 @@ export function typeCheckedOf(scan, graph) {
 /** a repository's tree read whole: every file's place and facts */
 export function scanTree(repo, root, profile, { tokens = true, nodes = null } = {}) {
   const files = new Map()
-  for (const path of listFiles(root, profile.exclude ?? [])) {
+  const paths = listFiles(root, profile.exclude ?? [])
+  // (what the history reading reads of the tree besides each file: this repository's documents, the files its dependencies
+  // distribute)
+  const docs = paths.filter(p => /\.md$/.test(p) && (p.startsWith('docs/') || !p.includes('/'))).map(p => ({ path: p, text: readFileSync(join(root, p), 'utf8') }))
+  const history = historyContextOf(docs, distributedOf(root, paths))
+  for (const path of paths) {
     const kind = kindOf(path)
     if (kind === 'other' || kind === 'data') {
       if (kind === 'data' && placeOf(path, profile).role === 'product') files.set(path, { path, kind, bytes: statSync(join(root, path)).size, ...placeOf(path, profile), lines: { code: 0, comment: 0, blank: 0 }, imports: [] })
@@ -1513,7 +1634,7 @@ export function scanTree(repo, root, profile, { tokens = true, nodes = null } = 
     }
     const text = readFileSync(join(root, path), 'utf8')
     // (`nodes`: a test of a path, the files whose syntax trees and items' nodes are kept; the spread copies what is enumerable)
-    const f = factsOf(path, text, { tokens, nodes: Boolean(nodes?.(path)) })
+    const f = factsOf(path, text, { tokens, nodes: Boolean(nodes?.(path)), history })
     const kept = { ...f, ...placeOf(path, profile) }
     if (f.ast) Object.defineProperties(kept, { ast: { value: f.ast }, text: { value: text } })
     if (f.listCands) Object.defineProperties(kept, { listCands: { value: f.listCands }, types: { value: f.types } })

@@ -34,7 +34,12 @@ export interface Profile {
 }
 export interface Scan { repo: string; root: string; profile: Profile; files: Map<string, Facts & { area: string; role: string }> }
 /** `nodes`: the syntax tree and each item's nodes kept, not enumerable (the rule ledger's, lab/rules/sites.mjs) */
-export declare function factsOf(path: string, text: string, options?: { tokens?: boolean; nodes?: boolean }): Facts
+/** what the history reading reads of a tree besides a file (census-lib.mjs historyContextOf) */
+export type HistoryContext = { docs: { path: string; names: Set<string>; cites: RegExp }[]; distributed: Set<string> }
+export declare function definedNamesOf(text: string): Set<string>
+export declare function distributedOf(root: string, paths: string[]): Set<string>
+export declare function historyContextOf(docs: { path: string; text: string }[], distributed: Set<string>): HistoryContext
+export declare function factsOf(path: string, text: string, options?: { tokens?: boolean; nodes?: boolean; history?: HistoryContext | null }): Facts
 export declare function lineKinds(text: string, comments: [number, number][]): ('code' | 'comment' | 'blank')[]
 export declare function thresholdOf(t: { value: number; raw: string; name: string | null; comment: string; line: number; context: string }): Threshold
 export declare function alternativesOf(pattern: string): string[]
