@@ -1,4 +1,4 @@
-// The layout guard (R1, 2026-10-19): the marked original must be the paper. A unit mark is TeX of ours inserted into the
+// The layout guard (PDF-READER §19.6): the marked original must be the paper. A unit mark is TeX of ours inserted into the
 // paper's own source, and the front end's reading of a construct it does not know (pgffor's `\foreach \i in {…}`, etoc's
 // `\etocdepthtag.toc{…}`, a length argument) can make the marked original another document than arXiv's: a brace the
 // writer doubled, a mark TeX writes into a file and reads back where no text is set, an error the paper's own source does

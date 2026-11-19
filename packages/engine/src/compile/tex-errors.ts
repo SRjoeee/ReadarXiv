@@ -1,6 +1,6 @@
-// A compile's TeX errors and the units they stand in: live.mjs's safety net, which sets a unit TeX cannot set in the
-// source so that the rest of the paper is set translated (exp-freeze-2026-10-07:experiments/pdf-bilingual/plans/2026-10-04-compile-resilience.md,
-// Task 2). The same for native nonstop latexmk, which logs every error, and for the TeX page's BusyTeX, which halts on
+// A compile's TeX errors and the units they stand in, which the layout guard reads (guard.ts: the units a marked compile's
+// TeX errors stand in are left unmarked, PDF-READER §19.6). The same for native nonstop latexmk, which logs every error,
+// and for the TeX page's BusyTeX, which halts on
 // the first: TeX writes each as `! <message>`, the levels of input it was reading, and at the base level `l.<n>`, the
 // line of the file it was reading and the text of that line before and after its place
 import { latin1 as latin1Of } from '../bounded-reads.ts'

@@ -1,7 +1,5 @@
 // The line probes the marked original reports each unit's lines with (LINES_TEX, read by readLines: layout/marks.mjs), and the
-// mark every compile ends with (END_TEX, completeLog). The TeX of the typesetting rule that grew here (a unit set at a smaller
-// size or face, a float held to its original's page, a typeset plan) went with the compiled translation (2026-11-04, the
-// rules audit's F4).
+// mark every compile ends with (END_TEX, completeLog).
 import { lastTexLog, PARA_END_TEX } from '../source/latex-front.ts'
 
 /** Once the last page is out, AXT-END in the log: the pass reached the document's end (completeLog). Every compile
@@ -10,8 +8,8 @@ import { lastTexLog, PARA_END_TEX } from '../source/latex-front.ts'
 export const END_TEX = String.raw`\ifdefined\AddToHook\ifdefined\axtendhook\else\let\axtendhook\relax\AddToHook{enddocument/afterlastpage}{\message{^^JAXT-END^^J}}\fi\fi
 `
 /** a unit's line count, leading, size and \parskip at its paragraph's end (PARA_END_TEX), in the log: its \baselineskip and
- *  \parskip are TeX's normal paragraph separation there, which the next ink under a borrowed line keeps (the borrowing ruling
- *  of 2026-11-08, marks/channels.ts readSkips; readLines reads the rest). Through \message: \typeout
+ *  \parskip are TeX's normal paragraph separation there, which the next ink under a borrowed line keeps (the borrowing rule,
+ *  PDF-READER §18.11, marks/channels.ts readSkips; readLines reads the rest). Through \message: \typeout
  *  reads \prevgraf as 0. A unit whose group closed with no paragraph gives none. No probe from restricted horizontal
  *  mode, where a caption is measured in an \hbox. And each column the output routine makes at a forced break
  *  (\outputpenalty -10000: \newpage, \clearpage's, \pagebreak; LaTeX's float passes run below it), as AXT-FORCED: where

@@ -1,9 +1,8 @@
 // The paper's pipeline before any compile (docs/PDF-READER.md §19.3): a paper's files opened into its units (openPaper), and
 // the files the prepare compiles from them — the mark probe (probeFiles), the marked original (originalFiles, markedPreamble) —
 // with the readings of a compile (ranThrough, stoppedShort, readingsOf, citationLines, listsMissing, notFound) and the units a
-// target keeps (keptFor). The compiled translation that grew here (the translation set by TeX, its strategies, its typesetting
-// rule and its copies' cache) was parked, then taken out (2026-11-04, the rules audit's F4): the layer draws the translation
-// over our base page, and the web's rows hold it.
+// target keeps (keptFor). No translation is set by TeX here: the layer draws the translation over our base page, and the
+// web's rows hold it.
 import { analyze } from '../source/paper-meta.ts'
 import { paperNames, theoremNames } from '../source/paper-names.ts'
 import {
@@ -187,9 +186,9 @@ export const stoppedShort = (log: string | null | undefined): boolean =>
  * neither stopped short (stoppedShort) nor ended before the document's end — every compile carries END_TEX, and only a
  * pass that set the last page logs it (completeLog). A pass halted at a TeX error writes no such line, whatever the
  * compiler made of it: a TeX page that took a halted pass's status for a success gave 2610.02069's final as the 18 pages
- * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole (2026-10-05); a
+ * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole; a
  * marked original taken on its PDF alone gave 2610.20713's layout from the 7 pages of 15 TL2025 set before its hundredth
- * error (2026-10-19). Whether it gave a PDF is the caller's to ask: a draft gives none
+ * error. Whether it gave a PDF is the caller's to ask: a draft gives none
  */
 export const ranThrough = (c: Compiled | null | undefined): boolean =>
   !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
@@ -197,9 +196,9 @@ export const ranThrough = (c: Compiled | null | undefined): boolean =>
  *  `base`) is its files with this line made NO_DRIVER_GROUP, one line, so that no line of them moves */
 export const DRAFT_OPTION = '\\PassOptionsToPackage{draft}{graphicx}'
 /** The final pass's first line, in DRAFT_OPTION's place: graphicx's drivers for pdfTeX and LuaTeX made to include a PDF as
- *  arXiv's do. pdftex.def 1.2d and luatex.def 1.2f (graphics-def 8d691483be, 2025-09-20; CTAN 2025-09-30) write a
- *  transparency group, /Group<</S/Transparency/K false/I false>>, on every PDF page they include; arXiv's TeX Live 2025 is the
- *  state of 2025-08-03 (info.arxiv.org, no tlmgr update since), whose pdftex.def 1.2c and luatex.def 1.2d write none, and the
+ *  arXiv's do. pdftex.def 1.2d and luatex.def 1.2f (graphics-def 8d691483be) write a
+ *  transparency group, /Group<</S/Transparency/K false/I false>>, on every PDF page they include; arXiv's TeX Live 2025, frozen
+ *  with no tlmgr update (info.arxiv.org), holds pdftex.def 1.2c and luatex.def 1.2d, which write none, and the
  *  pinned tree's are the later ones. With the group every figure form of ours differs from arXiv's, so that the delta copies
  *  none of them (2610.30034v1 shipped its whole 5.46 MB base, 0.20 MB as a delta without it; 2610.30875v1 3.73 MB, 0.30 MB),
  *  and poppler draws the figures' lines heavier than arXiv's PDF. Each hook runs once its driver is read and, where the driver
@@ -272,8 +271,7 @@ export const notFound = (log: string | null | undefined): Set<string> =>
  *  units by their indices, or `name`) and the order TeX sets them in where it is not theirs
  *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
  *  after the rest, latex-front.mjs entriesLast). No unit is kept for what its words look like: a table's cell is text like any
- *  other and the translator decides a name (the owner, 2026-11-13); the old reader's name rule is its own (src/pdf-reader/engine/
- *  pipeline/live.mjs openPaper) */
+ *  other and the translator decides a name (PDF-READER §18.72) */
 export function openPaper(files: ReadonlyMap<string, Uint8Array>) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
@@ -543,9 +541,9 @@ export function markedPreamble(
  *  space in math as a \\^ error, 74 errors and a page more than arXiv's. On by default without `layout`, as the bytes were
  *  before. `reduced` (with `layout`: a reduced marked compile, design-performance Q2): no TeX of an optional class of points
  *  (marks.mjs POINT_CLASSES, LAYOUT_TEX_REDUCED), on the one line it stands on, so that no line moves; without `layout` the
- *  bytes as before. `statements` (with `layout`: the rebuilt prepare's marked compile, compiled.ts compiledOf): the statements
- *  today's reader's compile does not make (marks.ts STATEMENTS_TEX), right after the layout marks on their line, none in a
- *  reduced compile (they state no ownership and no text); off, the bytes as before */
+ *  bytes as before. `statements` (with `layout`: the rebuilt prepare's marked compile, compiled.ts compiledOf): the
+ *  separations, measures, forced breaks and whole-page brackets of marks.ts STATEMENTS_TEX, right after the layout marks
+ *  on their line, none in a reduced compile (they state no ownership and no text); off, the bytes as before */
 export function originalFiles(
   { fsys, project: read, meta }: Paper,
   {
