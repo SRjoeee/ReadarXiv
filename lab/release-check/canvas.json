@@ -1,0 +1,24 @@
+{
+  "format": "readarxiv/canvas 1",
+  "says": "the canvas gate's residue at the last integrated round, by paper (lab/release-check/gates.mjs canvasJudge): `pages`, the pixels that differ from arXiv's page, by page; `share`, the largest share of a page's split glyphs' boxes that differs; `delta`, the largest channel delta. All groups on, Chromium's software 2D canvas, every draw call rasterised as it is made (--renderer=software --flush), no pixel outside the split glyphs' boxes (never recorded: I1 itself). The gate fails where a paper's page differs that is not named here, where a named page differs by more pixels, where the share or the delta rises, or where a paper is not here; it says where one fell, and the round that moves a value writes it here with its cause",
+  "commit": "9fe1c29e4",
+  "round": "lane v2-harness: the canvas gate over its 12 papers (the prepare's add-ons of the release run of 2026-11-19), twice equal",
+  "papers": {
+    "1007.0072v1": { "pages": {}, "share": 0, "delta": 0 },
+    "1512.03385v1": { "pages": { "11": 56 }, "share": 0.000706749457317381, "delta": 68 },
+    "1706.03762v7": { "pages": { "2": 50 }, "share": 0.0003921722420487078, "delta": 81 },
+    "2307.16209v1": { "pages": { "60": 96 }, "share": 0.0009864770438571253, "delta": 77 },
+    "2608.06007v1": { "pages": { "14": 2, "17": 57 }, "share": 0.0012349691257718556, "delta": 73 },
+    "2609.26457v1": { "pages": {}, "share": 0, "delta": 0 },
+    "2610.20030v1": { "pages": { "5": 102 }, "share": 0.0009692961199646492, "delta": 71 },
+    "2610.21765v1": { "pages": {}, "share": 0, "delta": 0 },
+    "2610.30854v1": { "pages": {}, "share": 0, "delta": 0 },
+    "2610.37668v1": { "pages": {}, "share": 0, "delta": 0 },
+    "2610.40394v1": { "pages": { "3": 70 }, "share": 0.000361811330897137, "delta": 81 },
+    "2610.42112v1": { "pages": { "1": 71, "26": 40 }, "share": 0.0018058690744920992, "delta": 72 }
+  },
+  "why": {
+    "residue": "a glyph of a show the add-on splits (the wrap's optional content cut between two glyphs of one TJ) is drawn a fraction of a pixel from where arXiv's unsplit show draws it: the split moves the pen into the show's matrix, which the canvas holds in single precision (2610.20030v1 p5: two glyphs 4.95e-5 device px apart across a quarter-pixel boundary; no number of the add-on re-anchors the second chunk), and Skia's glyph cache rounds the two to other sub-pixel positions",
+    "production": "the released reader's composed page by the same measure (production's objects of pipeline 76): the same on 1706.03762v7 p2 and 2610.42112v1 p26; more on 2307.16209v1 p60 and 2610.40394v1 p3 (its base is our compile's whole PDF: about 1 to 1.6 % of the page), on 2610.42112v1 p1 (7057 px) and on 1512.03385v1 p11 (412 px); none on 2608.06007v1 p14 and p17 and on 2610.20030v1 p5, where this tree's residue stands alone"
+  }
+}

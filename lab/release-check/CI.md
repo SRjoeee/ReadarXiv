@@ -213,7 +213,8 @@ window the coordinator gives.
   package; it goes with today's engine at the cut-over.
 - **Adds to full**: `display-wide` (the display gate over every pair of the stored rows, about 2.5 hours of browser slots,
   overnight, once per candidate; **a cut-over blocker**); the prepare's pixel proofs on every page (poppler); the reader's canvas
-  on spike S1c's papers; today's engine's speed check; `babel-names` and `csquotes-styles` (each pinned compile image's TeX
+  on spike S1c's papers (Chromium's software 2D canvas, every draw call rasterised as it is made, no stand-in for a reader
+  change; each paper's split residue held to its record, `canvas.json`); today's engine's speed check; `babel-names` and `csquotes-styles` (each pinned compile image's TeX
   Live, the docker slot, the images already local, never pulled); `face-files` (the lab's 83 face files, fontTools); the online
   scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`, `e2e:local-endpoint`,
   `e2e:image`) and the live placeholder run, each under the project's User-Agent and never against our production server
@@ -223,9 +224,11 @@ window the coordinator gives.
   release sweep. A result of theirs for the release candidate is written into the private gates' file (`--private`, `result:
   { status, commit, date, evidence }`, `commit` this repository's commit that run was made against); without it each stays
   NO-GO, and a result recorded at another commit is stale.
-- **I7 keeps the release NO-GO until it has a gate.** An invariant no gate holds is NO-GO by design.
-- **Minutes**: about 80 in all (the full tier's, the pixel proofs 25, the canvas 2, the speed check about 12, the online
-  scripts about 15), and `perf-release`'s 100 to 130.
+- **An invariant no gate holds, or one whose gap says what stands, keeps the release NO-GO** by design. I7 has had a gate
+  since 2026-11-19 (`harness-lab`'s check at the reader's seam); I1's and I8's gaps say what stands, each held to its record
+  (`canvas.json`, `text-order.json`) until the coordinator's ruling.
+- **Minutes**: about 80 in all (the full tier's, the pixel proofs 25, the canvas 2 on the software canvas, its two runs' lines
+  equal, the speed check about 12, the online scripts about 15), and `perf-release`'s 100 to 130.
 - **Secret**: none for this repository's gates (the free engines need no key; an LLM service in the placeholder run would take
   its key from the browser's settings, never from CI).
 

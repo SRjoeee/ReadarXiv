@@ -22,3 +22,11 @@ gate's rows), else, the harness run by hand with neither, lane L1's bundles and 
 them. A run's rows that hold no file of a paper ("no rows of this run for <id>: expected <file>"), or that leave a unit of its
 bundle without a row or name units it does not hold ("rows do not belong to these bundles"), stop the harness before any
 check: a paper is never laid from another run's data in their place.
+
+`AXT_GROUP_PAGES=<id>:<page>,…` names the corpus pages the harness turns each group off on in the reader's canvas (I2; the
+release check's `harness-lab` gives the twelve of `lab/release-check/gates.mjs` `GROUP_PAGES`), each paper read from the same
+bundles and rows; a paper of them that `AXT_LAB_FIXTURES` does not name is read for I2 alone. The harness's seeded faults
+(`--seed=…`, listed at the head of `run.mjs`), each of which a check of the invariants must find, are made of these fixtures:
+`s1-columns`' layer written again with a show taken out of its group or a neighbour's put in one, a check's own copy of a
+committed page, and our own originals served from a second origin of the loopback with one byte changed (`sample-1`, under
+`tests/fixtures/pdf/`, among them), never a paper's.
