@@ -22,12 +22,13 @@
 //   it: the summary line alone, nothing written.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import * as PL from '@cantoo/pdf-lib'
 import { analyze, inMemory, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { filesUnder } from '../spikes/files-under.mjs'
 import { deflate, inflate } from './codec.mjs'
 import { flatOf, pieceKOf } from './pieces.mjs'
 import { silentInkOf } from './silent-gate.mjs'
@@ -79,7 +80,6 @@ const tree = treeOf({ files: source, banner: facts.banner, served: SERVED, fallb
 const year = tree.tree, declared = tree.declared, banner = facts.banner
 const IMAGE = PINS.images[year].texlive
 // ---- compiles: only read, by the cache key every lane computes (the image, the request's shape and every file)
-const filesUnder = (d, rel = '') => readdirSync(join(d, rel), { withFileTypes: true }).flatMap(x => (x.isDirectory() ? filesUnder(d, join(rel, x.name)) : [join(rel, x.name)]))
 async function compile(req) {
   const all = new Map(source)
   for (const [p, b] of req.overrides ?? []) all.set(p, b)
