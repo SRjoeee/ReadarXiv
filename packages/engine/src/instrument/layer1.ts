@@ -353,7 +353,7 @@ export function texToText(src: string): string {
   // (textArgsOf: a rule's sizes, keys, a file, a label go). A \rule is v0's own (ZERO): a strut nothing, a bar in a
   // line looked for on the page and cropped, as the layout maker asks TeX about it (layout/marks.mjs RULE)
   if (textless(src) && !RULE.test(src)) return ''
-  // a math shift at either end goes, not an escaped dollar ending the source (\$ drew as "\": 2026-10-07)
+  // a math shift at either end goes, not an escaped dollar ending the source (stripped, \$ would draw as "\")
   let s = textArgsOf(src)
     .replace(/^\$\$?|(?<!\\)\$\$?$/g, '')
     .replace(/^\\\(|\\\)$/g, '')

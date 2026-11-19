@@ -1,19 +1,19 @@
-// The front half's adapter (the rebuild's stage 1a; the one front half since the rebuilt one was deleted on 2026-11-09, DESIGN
-// §16): the one adapter from today's front end, marks and compile outputs to the prepare's seam, the Instrument
+// The front half's adapter (the one front half, DESIGN
+// §16): the one adapter from the source reader's, the marks' and the compile's outputs to the prepare's seam, the Instrument
 // (packages/engine/src/instrument.ts). The only code that knows
-// today's shapes on the back half's side. What it reads is what wrapFinal reads before it wraps (layout/wrap-final.mjs): our
+// the front end's shapes on the back half's side. What it reads is what wrapFinal reads before it wraps: our
 // marked final pass B read once by the engine package's readPdf (pageInk with the wrap's options: the same pages wrapFinal
-// reads), each glyph's and rule's owner by today's ownership of the source units (own.mjs by the marks' points), and TeX's
+// reads), each glyph's and rule's owner by the ownership of the source units (own/own.ts by the marks' points), and TeX's
 // statements in the marked compile's log (the units' alignments, \lineskip, each page's text frame). It writes nothing and wraps nothing: the back half
-// carries the ownership onto arXiv's page. It states source units alone: the ink units, kept blocks and figure texts (today's
+// carries the ownership onto arXiv's page. It states source units alone: the ink units, kept blocks and figure texts (the
 // ledger, ink-units.mjs, figure-text.mjs) are made by the back half's locate on arXiv's page, of the glyphs no source unit owns
 // there (packages/engine/src/locate/ink.ts), from B's marks the Doc carries (its points and DocPage.marks).
 //
-// The units, in today's bundle's order, so that a unit's index is today's id: the paper's source units, its names (cleveref's
+// The units, in the bundle's order (a unit's index is the one its marks name): the paper's source units, its names (cleveref's
 // and the counters' words, kind `name`); then one unit for each babel name's key that occurs (kind `name`, `name` its key:
-// drawn in the target's word, never translated). Each unit's content is today's pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
+// drawn in the target's word, never translated). Each unit's content is its pieces typed: a text, an element (`el`, its kind marks.mjs classOf's,
 // `other` for an invisible one), a group's open and close as a span (its style read off its command, a link's `must`), a nested
-// unit; strings as Unicode (today's engine holds them as UTF-8 bytes read latin1), its id format's unitId.
+// unit; strings as Unicode (the front end holds them as UTF-8 bytes read latin1), its id format's unitId.
 import {
   boxedAlignOf,
   framesOf,
@@ -162,14 +162,14 @@ export type InstrumentInput = {
   made?: { compiler?: string; tree?: string; front?: string }
 }
 
-// (locate/ink.ts's unicodeOf, the one copy: still this module's export, which today's engine path re-exports,
+// (locate/ink.ts's unicodeOf, the one copy: still this module's export, re-exported by
 // src/pdf-reader/engine/pipeline/instrument.mjs)
 export { unicodeOf }
 /** a unit's start point and end point (MARK_DEF's `<i>s`/`<i>e`, a heading's `h<i>…`, a cell's `t<i>…`), by unit index */
 const START_POINT = /^[ht]?(\d+)s$/
 const END_POINT = /^[ht]?(\d+)e$/
 
-/** a group's style, read off its command: what today's front end leaves to the reader's regex tables (transition). The
+/** a group's style, read off its command (the source reader states none). The
  *  commands: latex.ltx's \textbf, \bfseries, \textit, \itshape, \emph, \em, \textsl, \slshape, \texttt, \ttfamily, \verb,
  *  \textsc, \scshape, \underline; fontmath.ltx's \mathbf; article.cls's \bf, \it, \sl, \tt; amsbsy.sty's \boldsymbol;
  *  listings.sty's \lstinline; hyperref.sty's \href, \hyperlink, \hyperref and url.sty's \url; color.sty's \textcolor,
@@ -186,7 +186,7 @@ const SPAN_STYLES: readonly (readonly [RegExp, string])[] = [
 const styleOf = (src: string | undefined): string =>
   SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
 
-/** what today's wire reads of an element's source, stated so that no translator reads a source: backref's list set after the
+/** what a wire reads of an element's source, stated so that no translator reads a source: backref's list set after the
  *  unit's text (`after`, BACKREF_GAP); a display's own stop
  *  (mt.mjs displayStop: the punctuation it sets at its end that is its sentence's, `x = y.`, which a wire writes after the
  *  element so that the sentence ends there: in Microsoft's recorded answers no display ending its sentence had the sentence cut
@@ -214,11 +214,11 @@ export const entryOf = (u: { readonly kind: string }): boolean => u.kind === ENT
 /** backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST: the piece the front end ends the entry's first
  *  paragraph in, no byte of the source, its ink between the marks LAYOUT_TEX's hook sets around the list): TeX sets it after the
  *  entry's text and is no word of it — backref.sty's parscan reads the entry to its paragraph's end (`\BR@@bibitem#1#2\par`),
- *  sets it, then the list (\BR@backref, \newblock's glue before it) —, stated `after` with the white space today's wire puts
+ *  sets it, then the list (\BR@backref, \newblock's glue before it) —, stated `after` with the white space a wire puts
  *  before it after the translation (mt.mjs listOf, TRANSLATE_VERSION 7: an en space; on the wire Microsoft's Chinese read the
  *  list's marker as a page number and wrote the character for "page" before it, 2610.37668v1, 5 of 41 entries) */
 const BACKREF_GAP = '\u2002'
-/** today's flat pieces ([open … close] pairs) as nested ones, and its run-in labels `must` (runIns); a source unit's are stated
+/** a unit's flat pieces ([open … close] pairs) as nested ones, and its run-in labels `must` (runIns); a source unit's are stated
  *  once TeX's glyphs are read (piecesOf, marksOf) */
 export const contentOf = (pieces: readonly SrcPiece[], o: PiecesOptions = {}): Piece[] => runIns(piecesOf(pieces, o))
 /** a declaration a group scopes, as a placeholder's whole source: one of LaTeX's declarations of a font, a size, a paragraph's
@@ -235,8 +235,8 @@ const SCOPED = new RegExp(
  * `\\relax`, a `\\nobreak`, a `\\protect`, a `\\-`, gives it nothing to carry: 2610.21377v1's 176 `{.\\nobreak\\kern0.3333em}`, F9 (c)),
  * both of its ends in the unit.
  * Such a group sets no face, no fill, no link and no paragraph of its own (TeX sets its content as it would with no group), and
- * a span of it has nothing to carry but costs a tag pair on the tags wire: it is its content (lane style-wire C, the coordinator's
- * ruling of 2026-11-11). Over the 88 papers' bundles, 20,172 pairs and 2,943 bare groups, every fill on one also its link's around
+ * a span of it has nothing to carry but costs a tag pair on the tags wire: it is its content (PDF-READER §18.31).
+ * Over the 88 papers' bundles, 20,172 pairs and 2,943 bare groups, every fill on one also its link's around
  * it; a group the front end says nothing of, as `\\enquote` (its quotes TeX's), stays one
  */
 export function passThroughOf(pieces: readonly SrcPiece[]): Set<number> {
@@ -279,9 +279,9 @@ const SWITCH_FACE: Readonly<Record<string, string>> = {
  * style, SpanAt.cmd), no element of its text, and the group is stated as `\\emph{…}`'s is. Read as an element, the group was
  * `other`: the typesetter drew its face off the element alone, so a translation that lost the element lost the face; a group
  * holding an element is placed nowhere (packages/translate groups.ts); the tags wire sent an empty element first in its pair.
- * Over r19's bundles (2026-11-12) 610 bibliography units in 22 papers held an italic stretch on arXiv's page their unit stated as
- * no italic group, 589 of them in such a group (16,680 letters; PDF-READER §18.56). A size, a family, a colour, a switch that is
- * not first: as before
+ * Over the 88 papers' bundles (measured 2026-11-12), 610 bibliography units in 22 papers held an italic stretch on arXiv's page
+ * their unit stated as no italic group, 589 of them in such a group (16,680 letters; PDF-READER §18.56). A size, a family, a
+ * colour, a switch that is not first: as before
  */
 export function switchesOf(pieces: readonly PieceIn[]): Map<number, { at: number; cmd: string; face: string }> {
   const out = new Map<number, { at: number; cmd: string; face: string }>()
@@ -301,12 +301,10 @@ const switchedOf = (pieces: readonly PieceIn[]): Set<number> =>
 /**
  * In a bibliography entry, the face groups that fill a field whose pair passThroughOf writes as its content (`\\bibinfo{journal}{
  * \\emph{…}}`, REVTeX's `\\bibfield{journal}{\\emph{\\bibinfo{journal}{…}}\\ }`): each of the group's ends stands at such a pair's
- * edge, outside it or inside it, white space aside. Today's wire (mt.mjs planOf) sends a .bbl field's pair as markers, a pair
- * that sets more than a style, and a face group whose two ends stand at those markers is kept by its boundary rule, so its face
- * comes back: on the parity's pairs, 86 of 86 such fields came back whole, 61 of them inside a clause (lane style-wire, the
- * coordinator's ruling of 2026-11-11). With the field's pair no group (C) and a markers wire that sends `must` groups alone, v2
- * drew those faces upright (round 8 B8's toggles-on sheet: 32 references). So such a face group is `must`: what production shows,
- * nothing more; a face that fills no field stays upright on a markers wire, in production and in v2 alike. A face group: a
+ * edge, outside it or inside it, white space aside. Such a face group is `must` (PDF-READER §18.38), so that the face a field
+ * is set in comes back with its words: the field's pair is no group (passThroughOf) and a markers wire sends `must` groups
+ * alone, so as any other group its face would come back upright. Nothing more: a face that fills no field stays upright on a
+ * markers wire. A face group: a
  * command that sets italic, bold or small capitals (styleOf), or a bare group a face switch opens (`{\\em …}`), holding text of
  * its own on the wire (not placeholders alone: a volume's number is its original's ink, its face with it). By open's index
  */
@@ -345,7 +343,7 @@ export function fieldFacesOf(pieces: readonly SrcPiece[]): Set<number> {
         ['italic', 'bold', 'sc'].includes(styleOf(src)) ||
         (src === '{' && first?.t === 'ph' && FACE_SWITCH.test(unicodeOf(first.src ?? '')))
       // (and text of its own on the wire: a group holding placeholders alone, REVTeX's `\\textbf{\\bibinfo{volume}{27}}`, goes as one
-      // marker on today's wire and its number's ink carries its face)
+      // marker on the wire and its number's ink carries its face)
       if (!face || !pieces.slice(o + 1, k).some((q) => q.t === 'text' && /\S/.test(q.s))) return
       const b = before(o),
         i = after(o),
@@ -374,7 +372,7 @@ export function passedOf(pieces: readonly SrcPiece[]): number[] {
   })
   return out
 }
-/** today's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
+/** a unit's flat pieces ([open … close] pairs) as nested ones: an open starts a span, a close ends the innermost; a close with no
  *  open wraps what came before it at its level (the group began before the unit), an open left at the end has no close; an
  *  element's wire facts (wireFacts), and a reference's item's full name where the marked compile stated one, with the language
  *  TeX declared for it (`nameOf` { name, lang }: the engine's readRefNames over marks.mjs refsTex's statements) */
@@ -507,7 +505,7 @@ export function marksOf(
   return spans.map(([id, x]) => (styles.has(id) ? [id, { ...x, style: styles.get(id) }] : [id, x]))
 }
 
-// ---- today's reader's reading of an element's source: layer2.mjs texToText2, phClass2, textSymbol and phClassProven copied as they are (L2:273-338 at
+// ---- the layer's reading of an element's source: layer2.mjs texToText2, phClass2, textSymbol and phClassProven copied as they are (L2:273-338 at
 // 065c1d973; layer2.mjs builds a canvas as it loads, which no Node run of the prepare has), held equal to them by
 // tests/pdf-reader/instrument-classes.test.ts
 /** a placeholder's source as plain text, its environment, label and alignment marks left out (iteration 1's texToText
@@ -587,7 +585,7 @@ const ACCENTS: Readonly<Record<string, string>> = {
   k: '\u0328',
   r: '\u030A',
 }
-/** (an alignment tab goes, not an escaped ampersand: "Vinyals \& Kaiser" drew as "Vinyals \ Kaiser", 2026-10-07; a LaTeX
+/** (an alignment tab goes, not an escaped ampersand: else "Vinyals \& Kaiser" draws as "Vinyals \ Kaiser"; a LaTeX
  *  text symbol, alone or before an empty group, is its character, the maker's table's: rules/text-symbols.mjs) */
 function texToText2(src: string): string {
   const own = symbolText(src)
@@ -732,8 +730,7 @@ const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
  * holding none of the marks texToText2 writes for a formula's structure, `_`, `^`, `/` or `√(` (a text source's one
  * grapheme is that character: \_ is the maker's TEXT symbol too, marks.mjs TEXT_SYMBOLS). Any other is a formula the page
  * sets as ink of its own ($\sum_{\alpha}^{\beta}$ drawn "Σ_α^β", $\int_{-\infty}^{\infty}$ "∫_(-∞)^∞",
- * $\frac{\alpha}{\beta}$ "α/β"), which the file must find like any formula: phClassProven's 'other' (the controller's
- * ruling of 2026-10-15)
+ * $\frac{\alpha}{\beta}$ "α/β"), which the file must find like any formula: phClassProven's 'other'
  */
 function textSymbol(src: string): boolean {
   const t = symbolDrawn(src)
@@ -747,10 +744,10 @@ function phClassProven(src: string): { cls: string; unknown?: true } {
   return c.cls === 'symbol' && !textSymbol(src) ? { cls: 'other' } : c
 }
 
-// ---- what the typesetter's rules read of a piece's source besides its class (the rest of today's reads of `src`: tokensOf2's
+// ---- what the typesetter's rules read of a piece's source besides its class (the rest of the rules' reads of `src`: tokensOf2's
 // glue, style commands and links L2:2406-2620, U.breaks' forced breaks TEX:84, U.rename's citation notes L2:1279, U.elements'
 // macros learnt by their source L2:1382), stated as facts so that the part carries them and no rule reads a source; glueOf
-// and the note's reading copied from today's as they are, held equal to them by tests/pdf-reader/instrument-classes.test.ts. A
+// and the note's reading copied from layer2.mjs as they are, held equal to them by tests/pdf-reader/instrument-classes.test.ts. A
 // forced break is the source reader's statement on its piece (forcedBreak, §18.75), not read here from its source. A
 // dimension in TeX's units of measure: pt, bp, mm, cm, in, pc, dd, cc, sp, and the font's em
 const DIMEN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(pt|bp|mm|cm|in|pc|dd|cc|sp|em)$/
@@ -787,17 +784,17 @@ export function glueOf(
   const brk = m[1] !== 'kern'
   return d[2] === 'em' ? { em: Number(d[1]), brk } : { bp: Number(d[1]) * BP[d[2]!]!, brk }
 }
-/** a forced break's source, the pattern the source reader states a placeholder one by (phPiece), under today's name: today's
- *  reader reads its own copy of it (tex.mjs:84) and re-exports this one (pipeline/instrument.mjs) */
+/** a forced break's source, the pattern the source reader states a placeholder one by (phPiece), under the name
+ *  src/pdf-reader/engine/pipeline/instrument.mjs re-exports it by */
 export { BREAK_SOURCE as FORCED_BREAK } from '../source/latex-front.ts'
 /**
  * The kind a bundle's element states (the translator contract's ElKind, what a sentence cutter reads it as): a tie `~` a
  * `space` (TeX's interword space, which it sets whatever the space factor: the author's word that a stop before it ends no
  * sentence), a forced line break a `break` (the source reader's statement, forcedBreak: a line's end, which in a paragraph
  * separates its words as a space does; `\\\\`, and a paper's row-ending macro inside a grid cell, §18.75), each read so by
- * today's cutter (mt.mjs splitContextOf); any other today's classOf's, `other` where it names none.
- * Before, both were `other`, which the package's cutter reads as a word: `R.~S.~Sutton` was cut after its initials, and a line
- * after `\\` ran on into the next only by the source's own line end (lane fig-cut, 2026-11-10). Neither enters a unit's id
+ * a sentence cutter; any other marks.ts classOf's, `other` where it names none.
+ * As `other`, which the package's cutter reads as a word, `R.~S.~Sutton` would be cut after its initials, and a line
+ * after `\\` would run on into the next only by the source's own line end. Neither enters a unit's id
  * (format's unitId reads an element's source)
  */
 export const elementKindOf = (p: PieceLike | null | undefined): string =>
@@ -881,7 +878,7 @@ export function spansOf(
   return out
 }
 
-/** each element's class as today's reader reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
+/** each element's class as the layer reads its source (layer2.mjs phClassProven, its symbol phClass2's; texToText2, its copy text; a symbol's drawn
  *  text and raise, resolvePlaceholders L2:1395-1403; a footnote's mark, L2:1404): what the part states of it, by piece id;
  *  and what the rest of the rules read of its source (sourceFactsOf), `colours` the unit's colour pieces' fills by index */
 /** a control sequence url.sty's \\urldef defines (`\\urldef\\cs\\url{…}`, a url command's), stored as that command sets it */
@@ -975,8 +972,8 @@ export function classesOf(
     // (a text piece, TeX setting its characters as written: a code or URL mark, a plain-text source; no formula, drawnAs
     // L2:1778 formulaOf)
     if (textPieceOf(as)) x.literal = true
-    // (a text macro's text, the marking's probe's: what TeX sets for it (the marks file's `texts`), which today's reader finds
-    // its rendering by among the unit's characters where the macro's glyphs are the unit's text (no points of its own))
+    // (a text macro's text, the marking's probe's: what TeX sets for it (the marks file's `texts`), which the typesetter draws it
+    // as where the macro's glyphs are the unit's text (no points of its own))
     const t = (c.cls === 'macro' || c.cls === 'umacro') && texts ? (texts.get(p.src) ?? texts.get(src)) : undefined
     if (typeof t === 'string' && /\S/.test(t)) x.text = t
     // (the text TeX set for it where the document uses it, every glyph stated as itself: the loop's first pass's ask)
@@ -1043,7 +1040,7 @@ function piecesByPoints(
   return out
 }
 
-/** a text as a lead is spelled by its glyphs, as today's maker finds a head piece (make.mjs besideMarks, charsOf): NFKC, in
+/** a text as a lead is spelled by its glyphs, so that a text and the glyphs that set it read alike: NFKC, in
  *  lower case, white space out. Case aside: faked small capitals set the source's lowercase letters as capitals, which the
  *  page's text reads as such (2608.06701v1's \\textsc{LivePlan} "LIVEPLAN") */
 const leadNorm = (t: string): string => t.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
@@ -1079,7 +1076,7 @@ function leadParts(
  * and where no point of its unit opened before it, a lead's (own.mjs MR 5b: a cell that opens with a paper's macro, where no
  * mark goes, 1810.04805v2's `\\bertbase (Single)`; its ink TeX set right before the start point, claimed by the text the probe
  * showed the macro sets): its lead's pieces (leadParts) by their texts, nearest the start first, each glyph read against the
- * text from its end (marks.mjs leadStep), case aside, as today's maker finds a head piece (make.mjs besideMarks). Only where the texts spell
+ * text from its end (marks.ts leadStep), case aside. Only where the texts spell
  * the unit's whole run of such glyphs on the page, exactly as own.mjs claimed it; else none, as before. `open` the points open
  * at the page's start (piecesByPoints'), the pages read in order with one map
  */
@@ -1157,7 +1154,7 @@ export function glyphPiecesOf(
 
 /**
  * Each element's places in B's stream, from the marked compile's points (Instrument `places`): a placeholder's two points
- * `p<u>.<k>a` and `p<u>.<k>b` (u today's unit index, k its piece's); a paper's macro at a unit's head, its point \\axthpk's before
+ * `p<u>.<k>a` and `p<u>.<k>b` (u the unit's index, k its piece's); a paper's macro at a unit's head, its point \\axthpk's before
  * the unit's start point, its span ending at the start point or at the next such point of the unit, whichever stands first on
  * the page; one after the unit's end, its point \\axttg's `p<u>.<k>g` after the group it stands in, its span beginning at the
  * unit's end point before it and holding whatever TeX set between, so that no glyph there states it set none. A span of these
@@ -1213,9 +1210,9 @@ export function placesOf(
  *  id: a paper's macro the marking's probe said sets none (its `inkless`, to which the marking gives no point); and a text
  *  macro (classesOf's macro or umacro) the marking never marks, its rendering never ink by the marking's own reading (marks.mjs
  *  classOf null: INVISIBLE, STRUCTURE, textless; a .bbl's \newblock, \ttfamily, \sloppy), whose places therefore no compile
- *  states. Today's reader drew such a piece as nothing, proven (tex.mjs inklessOf: a text macro the file holds no row for sets
- *  no ink, and the file holds a row for each marked piece alone); stated nothing, the typesetter leaves its unit unproven (a
- *  paper's own macro of no stated ink and no text: lay/read.ts), every BibTeX entry English. `units` today's, `classes` each
+ *  states. Stated empty, such a piece is drawn as nothing, proven (El.text ''); stated nothing, the typesetter leaves its
+ *  unit unproven (a paper's own macro of no stated ink and no text: lay/read.ts), every BibTeX entry English. `units` the
+ *  source units, `classes` each
  *  unit's classesOf by piece id */
 export function inklessPieces(
   units: readonly Unit[],
@@ -1254,8 +1251,8 @@ const inked = (g: InkGlyph | undefined): boolean => /\S/.test(g?.u ?? '') && !g?
  * ahead, the marking gives no point, between the end point and `\\showDOI`'s opening one, where nothing stands wherever TeX
  * broke the line before the DOI; a `\\endgroup` after the last word, the next unit's start point next. Where the lower of the
  * two is the opening point of a piece TeX gave no closing one, and everything between them is that piece's by the ownership,
- * what the pieces after it set is in that piece's ink. This replaces a reading of the line beside the unit's mark (today's
- * maker's besideMarks), which line breaking decided: 19 of 2402.10294v1's 86 references were English where its DOI began
+ * what the pieces after it set is in that piece's ink. The points decide it, never the line beside the unit's mark, which
+ * line breaking decides: read by that line, 19 of 2402.10294v1's 86 references were English where its DOI began
  * mid-line. A unit whose points TeX set more than once is not read. `pages` the adapter's (glyphs, boxes, points), `owners` the
  * instrument's glyphs' and boxes' owners by page
  */
@@ -1530,8 +1527,8 @@ function spelledRun(
  * Returns `ink`, the claims, each { unit, piece, page (0-based), glyphs, role }; and `unfound`, the text macros of a probe's text so
  * read and not found, their own points bounding none ({ unit, piece }): their glyphs, past the end point, are no text of their
  * unit's, which the probe's text says (PieceClass.text: drawn as the unit's text, the typesetter's `textOnly`). `pages` the
- * adapter's, `units` today's, `glyphs` the owners by page, `classes` each unit's classesOf by piece id, `inkless` the macros TeX
- * said set no ink
+ * adapter's, `units` the source units, `glyphs` the owners by page, `classes` each unit's classesOf by piece id, `inkless`
+ * the macros TeX said set no ink
  */
 export function tailInkOf(
   pages: readonly InkPage[],
@@ -1913,7 +1910,7 @@ export function unmarkedInkOf(
  * The pieces TeX set before their unit's start point, as Instrument `outside` pieces (rootcause/lave.md §2): the marking passes
  * over a unit's head (marks.mjs passedOver) and patch sets the start point before the piece latex-front.mjs startOf names, so
  * whatever TeX set for a piece before that one stands before the unit's text, which begins at the point, and is never erased
- * with it: drawn as nothing, its ink, wherever TeX set it, the original's (today's OUTSIDE, make.mjs outsideOf: a head piece
+ * with it: drawn as nothing, its ink, wherever TeX set it, the original's (format's El.keep: a head piece
  * not found, before its start mark). Only where the ownership gives the unit's text nothing before the start point in B's
  * stream; a unit whose points TeX set more than once is not read. `pages` the adapter's, `owners` the instrument's glyphs'
  */
@@ -2068,7 +2065,7 @@ export function stateDisplays(
 }
 
 /**
- * The Instrument of today's marked compile. `paper` live.mjs openPaper's (its bibliography made); `finalPdf` our marked final
+ * The Instrument of the marked compile. `paper` live.mjs openPaper's (its bibliography made); `finalPdf` our marked final
  * pass's bytes; `options` the marks file's (`texts`, `inkless`); `log` the marked compile's last pass's log; `pdfjs` { getDocument,
  * OPS } and `documentOptions` the host's (the same as wrapFinal is given, so that the pages read are its); `made` { compiler,
  * tree, front }. Returns the Instrument, and `today` (the ownership's own records, for the lab's checks)
@@ -2085,9 +2082,9 @@ export function nameGroupOf(g: string | null | undefined): { occurrence: string;
  * What the instrument states of each of the paper's units from the front end's facts beside them (live.mjs openPaper), by
  * index: `float`, a caption's float type (LaTeX's \\@captype there, `floatTypes`: the part's Label.float, by which its label
  * is drawn in the target's word); `kept`, a unit the paper keeps as it is, never translated: the body of an algorithm float
- * (`pseudocode`: kept as the original as code is, the owner's ruling of 2026-11-08; its caption is the float's, translated), and a
+ * (`pseudocode`: kept as the original as code is, PDF-READER §18.62; its caption is the float's, translated), and a
  * table's cell or a figure's text that holds no ordinary word (`words`, R1 of PDF-READER §18.72: language.ts keptAsWritten over
- * its content, its elements by kind; the owner's direction of 2026-11-13: decide what is content from the source's facts), or whose
+ * its content, its elements by kind: what is content decided from the source's facts), or whose
  * words are the paper's own names (`paperNames`, R2: a title-case word its running text writes capitalised mid-sentence and never in
  * lower case, language.ts paperNamesOf); `why`, each kept unit's reason, the rule that keeps it ('pseudocode' first, then 'words',
  * 'paperNames'), which the lab's dump states (`keptBy`) and the bundle does not carry
@@ -2125,7 +2122,7 @@ export function unitFactsOf(paper: InstrumentPaper): {
 const JUDGED = new Set(['cell', 'figure'])
 
 /**
- * The cells held whole as the original for a decorated word they hold (PDF-READER §18.61, the owner's ruling of 2026-11-12: until
+ * The cells held whole as the original for a decorated word they hold (PDF-READER §18.61: until
  * a decoration can follow its words, a cell is never translated around one, no half-original line), by unit index: each a table's
  * cell (the front end's `cell`) the paper does not keep already (`kept`, unitFactsOf's), holding a placeholder whose source the
  * probe states TeX set beside a decoration of its own (`decorated`, marks.mjs readInkDecorated: soul's ground, underline or
@@ -2421,8 +2418,8 @@ export async function instrumentOf({
     const spans = marksOf(out[i]!.content, textGlyphs.get(i) ?? [], out[i]!.spans ?? [], textOf)
     if (spans.length) out[i]!.spans = spans
   })
-  // (TeX's \lineskip and \lineskiplimit: the mark probe's, which its log alone holds (layout/paper.mjs, the options' `lineskip`,
-  // what today's file states); the marked compile's log where the options have none)
+  // (TeX's \lineskip and \lineskiplimit: the mark probe's, which its log alone holds (compile/paper.ts, the options' `lineskip`,
+  // what the plan states); the marked compile's log where the options have none)
   const lineskip = options.lineskip ?? readSkipProbe(log)
   // (TeX's paragraph ends, its `qe<n><code>` points, where the marked compile set them: a paragraph ends before that glyph)
   const paragraphEnds = read.pages.map(({ raw }) => (raw?.paraEnds ?? []).map((x) => x.glyph))
@@ -2447,7 +2444,7 @@ export async function instrumentOf({
   const measures = [...readMeasures(lastTexLog(log))]
     .filter(([, x]) => x.shape || x.hangindent !== 0 || x.leftskip !== 0 || x.rightskip !== 0)
     .map(([para, x]) => ({ para, ...x }))
-  // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u today's unit index, k its piece's: where the element begins
+  // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u the unit's index, k its piece's: where the element begins
   // and ends in B's stream)
   const places = placesOf(pages, units.length)
   // (the pieces TeX sets no ink for (inklessPieces), and those TeX's points prove set nothing of their own (boundedEmpty): their
