@@ -1,6 +1,6 @@
 // An arXiv source package → its files. arXiv's /src/<id> sends a gzipped tar, or a single gzipped TeX file, or (for a
 // paper without source) a PDF. Runs in Node and in the browser: DecompressionStream and Uint8Array only.
-import { normalizePath } from './latex-front.ts'
+import { normalizePath } from '../../../packages/engine/src/source/latex-front.ts'
 
 const text = (b: Uint8Array, from: number, to: number): string => {
   let s = ''
@@ -51,7 +51,7 @@ export function untar(b: Uint8Array): Map<string, Uint8Array> {
 
 /** whether a body is a tar: its first header block's magic field, six bytes at offset 257 (POSIX.1's ustar format, IEEE Std
  *  1003.1: "ustar" and a NUL; GNU tar's "ustar "), read where the body holds the whole field, through byte 262; a shorter body
- *  holds no header block and is one TeX file, whatever its bytes at 257 read (packages/engine/tests/tar.test.ts) */
+ *  holds no header block and is one TeX file, whatever its bytes at 257 read (tests/lab/tar.test.ts) */
 const isTar = (b: Uint8Array): boolean => b.length > 262 && text(b, 257, 262) === 'ustar'
 const isPdf = (b: Uint8Array): boolean => text(b, 0, 5) === '%PDF-'
 

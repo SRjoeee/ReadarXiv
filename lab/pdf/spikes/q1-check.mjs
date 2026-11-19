@@ -47,7 +47,7 @@ import { readAlign, readBoxAlign, readCellBoxes, readRefNames, readSkips } from 
 import { POINT_CLASSES, pointClassOf, readColours, readSkipProbe } from '../../../packages/engine/src/marks/marks.ts'
 import { opened, storedInstrumentOf, withBbl } from '../../../packages/engine/src/plan.ts'
 import { jobName, lastTexLog, latin1, latin1Bytes } from '../../../packages/engine/src/source/latex-front.ts'
-import { unpackSource } from '../../../packages/engine/src/source/tar.ts'
+import { unpackSource } from '../prepare-back/tar.ts'
 import { deflate, inflate } from '../prepare-back/codec.mjs'
 import { stampsOf } from './build-stamps.mjs'
 import { latexmkEngine } from './compile-image.mjs'

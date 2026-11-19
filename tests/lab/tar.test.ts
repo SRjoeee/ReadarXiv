@@ -1,9 +1,9 @@
-// An arXiv source body (source/tar.ts unpackSource): a gzipped tar, a single gzipped TeX file, or a PDF. A tar is told by its
+// An arXiv source body (lab/pdf/prepare-back/tar.ts unpackSource): a gzipped tar, a single gzipped TeX file, or a PDF. A tar is told by its
 // first header block's magic field, six bytes at offset 257 (POSIX.1's ustar format: "ustar" and a NUL, GNU tar's "ustar "); a
 // body that ends before that field's last byte holds no header block, so it is a single file, whatever its last bytes read
 import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { unpackSource } from '../src/source/tar.ts'
+import { unpackSource } from '../../lab/pdf/prepare-back/tar.ts'
 
 const enc = new TextEncoder()
 /** a ustar archive of `files` (each a 512-byte header, its data padded to 512, and the two zero blocks that end it) */
