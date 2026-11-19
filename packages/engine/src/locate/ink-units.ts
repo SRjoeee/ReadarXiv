@@ -1606,7 +1606,7 @@ const BRACKET = /^([bf])([se])(\d+)$/
 const CLOSES = /^(?:\d+|[th]\d+)e$|^[bf][se]\d+$/
 /** a unit's, a heading's or a cell's start mark */
 const OPENS = /^(?:\d+|[th]\d+)s$/
-/** a paragraph end's code (ink.mjs PARA_END: `qe<n><code>`) */
+/** a paragraph end's code (../ink.ts PARA_END: `qe<n><code>`) */
 const endCode = (name: string) => name.at(-1)
 
 /**
