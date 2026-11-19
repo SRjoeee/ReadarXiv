@@ -7,6 +7,7 @@ export const TRANSLATE_PURPOSE =
   'the translator contract, its adapters and the chain that falls back between them' as const
 
 export { ACCEPT_DIGEST, accept, asOut, projectionOf, type Refusal, validSentences } from './accept.ts'
+export { FIRST_BATCH_MAX, NEXT_BATCH_MAX } from './batches.ts'
 export { askedOf, NESTED_KIND, unitInOf } from './bundle.ts'
 export { chainOf, identityOf, keyOf, realClock, rowContextOf } from './chain.ts'
 export { sha256Hex } from './sha256.ts'

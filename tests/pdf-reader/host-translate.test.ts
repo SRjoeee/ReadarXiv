@@ -3,11 +3,11 @@
 // withdrawn when done; through the background's own transport and chain, the requests and round trips of a 3-page open
 import { describe, expect, it } from 'vitest'
 import { kindOfWhy, type Unit } from '@readarxiv/format'
-import { chainOf, type FetchInit, type FetchReply, google, microsoft, type Translator, type UnitIn } from '@readarxiv/translate'
+import { chainOf, type FetchInit, type FetchReply, FIRST_BATCH_MAX, google, microsoft, NEXT_BATCH_MAX, type Translator, type UnitIn } from '@readarxiv/translate'
 import { fakeClock, scriptedFetch } from '@readarxiv/translate/testing'
 import { MockLanguageModelV4 } from 'ai/test'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
-import { FIRST_BATCH, hostTranslate, NEXT_BATCH, readerTransport, WHY_OF } from '@/pdf-reader/host/translate'
+import { hostTranslate, readerTransport, WHY_OF } from '@/pdf-reader/host/translate'
 import { llmTranslator } from '@/providers/llm'
 import { CancelledScopeRegistry } from '@/providers/request/cancellation'
 import { createLocalTransport, type TranslationTransport } from '@/providers/transport'
@@ -57,7 +57,7 @@ const microsoftEcho = (_url: string, init: FetchInit) => ({ status: 200, body: J
 const googleEcho = (_url: string, init: FetchInit) => ({ status: 200, body: JSON.stringify([(JSON.parse(init.body) as [[string[]]])[0][0]]) })
 
 describe('the reader host translate through the background', () => {
-  it('sends the units in calls of plain source (the first FIRST_BATCH characters), with the target and the paper\'s context, and yields one Result a unit, in order', async () => {
+  it('sends the units in calls of plain source (the first FIRST_BATCH_MAX characters), with the target and the paper\'s context, and yields one Result a unit, in order', async () => {
     const { transport, asked, cancelled } = fake()
     const t = hostTranslate({ transport, paper: '2600.00001v1' })
     const rows = await all(t([unit('u1', [{ t: 'text', s: 'one' }]), unit('u2', [{ t: 'text', s: 'two' }]), unit('u3', [{ t: 'text', s: 'three' }])], 'de', { signal: new AbortController().signal, context: { title: 'T', abstract: 'A' } }))
@@ -86,7 +86,7 @@ describe('the reader host translate through the background', () => {
     }
   })
   it("a 3-page open goes as production's batches of plain source, by this case's own numbers: the first call at most 2,500 characters, then at most 12,000 a call, one call at a time (7, 34 and 7 units)", async () => {
-    expect([FIRST_BATCH, NEXT_BATCH]).toEqual([2500, 12000])
+    expect([FIRST_BATCH_MAX, NEXT_BATCH_MAX]).toEqual([2500, 12000])
     const { transport, asked } = fake()
     const rows = await all(hostTranslate({ transport, paper: 'p' })(threePages(), 'de', { signal: new AbortController().signal }))
     expect(rows.length).toBe(48)
