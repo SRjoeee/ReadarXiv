@@ -642,7 +642,12 @@ function copyOf(src: string): string {
  * phClass, with the paper's own macros told apart: a command no table knows (\bert, \oursfull{}, $\dmodel$, $\cla$) has
  * no plain text, which iteration 1 called a symbol and drew as nothing, though the page renders it ("BERT",
  * "ImageNet", "d_model"): 'umacro' for one in text (drawn as the page's text), 'other' with `unknown` for one in math
- * (a crop). Its rendering is looked for on the page like any other.
+ * (a crop). Its rendering is looked for on the page like any other. The commands that render no plain text: latex.ltx's
+ * \sqrt, \frac, \bigl, \bigr, \Bigl, \Bigr, \mbox, \textrm, \textbf, \textit, \underline, \begin, \end, \label, \nonumber,
+ * \quad, \qquad; fontmath.ltx's \big, \Big, \bigg, \Bigg, \mathrm, \mathbf, \mathit, \mathsf, \mathtt, \mathcal and the accents
+ * \hat, \widehat, \tilde, \widetilde, \bar, \vec, \dot, \ddot; amsmath.sty's \dfrac, \tfrac, \notag; amsfonts.sty's \mathbb,
+ * \mathfrak; amsbsy.sty's \boldsymbol; bm.sty's \bm; amstext.sty's \text; amsopn.sty's \operatorname; TeX's primitives \left,
+ * \right, \hbox, \overline, \limits, \nolimits, \displaystyle, \textstyle, \scriptstyle
  */
 const STRUCTURAL = new Set([
   'sqrt',
@@ -684,7 +689,6 @@ const STRUCTURAL = new Set([
   'overline',
   'underline',
   'vec',
-  've',
   'dot',
   'ddot',
   'limits',
