@@ -8726,8 +8726,8 @@ own), each part carrying its pages' cell rules (`rules`).
   `\axtpma`, `\axtpmm`, `\axtpm`, a head macro's `\axthpk`, a trailing macro's `\axttg`, `\axthmark`, `\axtcolour`, an author's
   call `\axtcall` and backref's list `\axtbrname`; `tests/mirrors.test.ts` holds it to the marked original's TeX, every macro of
   ours that TeX defines either in it or naming no unit (the babel names' marks, read apart; the first pass's asks, which no pass
-  the guard reads carries). Until 2026-11-19 its lists lacked `\axthpk`, `\axttg`, `\axtcall` and `\axtbrname`: a paper's own
-  error beside one keyed apart from the unmarked original's, and one written by name into a file, or a copy cut inside one, went
+  the guard reads carries). A name the list lacks is a mark the guard does not see: a paper's own error beside it keys apart
+  from the unmarked original's and is read as ours, and one written by name into a file, or a copy cut inside one, goes
   unseen. Each check holds for any paper:
   - *Before the compile, in the mark probe* (PIPELINE 43): where a unit of the main file stands in its preamble, the probe sets
     the preamble as the marked original writes it (`live.mjs` `markedPreamble`: the layout marks and their line probes, every

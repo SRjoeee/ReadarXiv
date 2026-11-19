@@ -1,11 +1,12 @@
 // @vitest-environment node
 // The layout guard (compile/guard.ts) reads the marks our TeX writes into a paper's source wherever TeX writes them back: an
 // error's line of input and context in the log, the aux and the lists, a class's verbatim copy of the source. Each reader reads
-// them by their names (marks/marks.ts MARK_CS). Here each place is fed the marks the guard's lists once lacked, on a paper of
-// our own as the marked original writes it — a paragraph that begins with a paper's macro (\axthpk{p<i>.<k>a} before it,
-// marks.ts layoutMarking), one that ends with a paper's macro glued to its last word (\axttg{p<i>.<k>g} after the unit's end
-// mark), an author block of two authors (\axtcall{<i>} before the second's \and, CALL_TEX), backref's list after a
-// bibliography entry (\axtbrname{p<i>.<k>}, BACKREF_TEX) —, then every reader every mark of MARK_CS.
+// them by their names (marks/marks.ts MARK_CS): a name missing there is a mark the guard does not see. Here each place is fed the
+// marks the marking writes beside a paper's own macros and calls, on a paper of our own as the marked original writes it — a
+// paragraph that begins with a paper's macro (\axthpk{p<i>.<k>a} before it, marks.ts layoutMarking), one that ends with a
+// paper's macro glued to its last word (\axttg{p<i>.<k>g} after the unit's end mark), an author block of two authors
+// (\axtcall{<i>} before the second's \and, CALL_TEX), backref's list after a bibliography entry (\axtbrname{p<i>.<k>},
+// BACKREF_TEX) —, then every reader every mark of MARK_CS.
 import { describe, expect, it } from 'vitest'
 import {
   auxUnits,
@@ -57,7 +58,7 @@ const marked = () => {
 const error = (message: string, level: string, line: number, before: string, after: string) =>
   `! ${message}\n${level}\n${' '.repeat(level.length)}\nl.${line} ${before}\n${' '.repeat(`l.${line} `.length + before.length)}${after}\n\n`
 
-describe('the marks our TeX writes that the guard once read as no mark of ours', () => {
+describe("the marks our TeX writes beside a paper's own macros and calls, read as ours at each place", () => {
   it('are in the marked original as layoutMarking writes them', () => {
     const { lineOf } = marked()
     expect(lineOf('\\axthpk{p').text).toBe(
@@ -89,7 +90,7 @@ describe('the marks our TeX writes that the guard once read as no mark of ours',
     expect(marksOutOfPlace('\\newlabel{k\\axtend {3e}\\axttg {p3.1g}}{{1}{3}}\n')).toEqual(['3e', 'p3.1g'])
     expect(marksOutOfPlace('\\etoc@depthtag {Ann Lee\\axtend {1e} \\axtcall {5}\\and }\n')).toEqual(['1e', '5'])
     expect(marksOutOfPlace('\\@writefile{toc}{\\etoc@depthtag {\\axtbrname {p7.3}}}\n')).toEqual(['p7.3'])
-    // (2608.20144v1's kind: an author block in a contents entry's text, set as text there)
+    // (an author block in a contents entry's text, set as text there)
     expect(
       marksOutOfPlace(
         '\\@writefile{toc}{\\contentsline {author}{\\axtmark {1s}Ann Lee\\axtend {1e}\\axtcall {5}\\axthpk {p5.0a}\\me }{1}{}}\n',
