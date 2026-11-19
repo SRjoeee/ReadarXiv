@@ -8656,7 +8656,41 @@ rows, 23,180 by the runner). And the release check read each run whole by its ex
   release check's own rows step at this head finds no reply in the lab's Google store to 239 units its chain asks, at the base
   as here: its Google numbers are read over the round's rows.
 
-### 18.97 What an opaque fill painted after a glyph covers whole is not on the page (the coordinator's ruling of 2026-11-19)
+### 18.97 What is not laid stays where TeX set it, and nothing laid runs over it on a row they share (2026-11-19)
+
+A member whose last line is a row TeX shares with the next member of its flow (`Placed.join`: a run-in heading and its
+paragraph, a theorem's note and its text) may lay its translation over that row to its end only where the next member is laid
+after it, from where it ends (S.rowStart). Where the next member is not laid — no row by the rows' end, a row every translator
+refused, a reading left `unproven`, a kind the reader's option leaves, a unit the paper keeps — its text stays on the row where
+TeX set it, and nothing laid may be drawn over it. The member's room on the row then ends where TeX ended its text there (its
+last line's end on A), so that TeX's own separation stands before the text that stays: the stop a row already took where the
+next member's join states ink kept between the two (U.decor's `keptAfter`, the block's `stop`, B.slots), now taken from the next
+member's not being laid too (`lay/adapt.ts`, `afterOpen`). Only the row's room was cut at a follower not laid before, and only
+where a head took the follower's row by S.overFollower: a heading of several lines, justified, has its measure on its last
+row, and X.lastLines moved a one-line translation onto that row and drew it over the paragraph's text (2608.06701v1-zh p6 on
+the door's rows: the heading's one line to x 205 over its paragraph's original text from x 93, the paragraph without a row;
+production had its row and laid it after the heading). Laid with the stop, the heading stays on
+its first row and the paragraph's text keeps its place.
+
+- **A row no member is laid from keeps no share for one.** The member's share of the row is then `kept` (S.share), as where ink
+  stays between: the page fill may track its line within the stop, where it had held the row's end for a follower that is never
+  laid.
+- **A single line meets the stop before its own widening.** A one-line member's room on its row had been widened to half its
+  size before the follower's first glyph (U.decor's `widen`, Room.side); the stop now ends it at TeX's own end, and a translation
+  wider than the original there is set smaller, as on any row where ink stays after it.
+- **Not covered:** a follower refused by its own lay after the member before it was laid with the row open (`unfit`): S.relay
+  lays a member again only where it took the follower's row by S.overFollower.
+- **Measured** (2026-11-19, the 90 pairs' entry lay of every page, the reader gate's rows): rows of a laid member whose follower
+  is not laid: 158 on the door's rows (148 with no row, 10 kept by the paper), 1 drawn over the follower's text (the heading
+  above), 16 nearer it than TeX's separation, 139 within their own end; 13 on Google's (10 kept, 2 unproven, 1 refused by its
+  own lay with no line of its member on the row), none over. Moved by the stop: 151 member-pages on 39 pairs on the door's rows
+  and 12 on 2 pairs on Google's, every one such a member: the heading above back on its first row; 11 lines that ran past their
+  own end now ending at it, some set smaller (2610.19159v1-ja's run-in heads 8.97 to 8.72 and 8.72 to 8.22); 140 tracked wider
+  within the stop by the page fill, by up to 14 pt; one paragraph's second line 2.7 pt lower by the fill. The reader gate's I3 by
+  ink: 20 to 18 on the door's rows (the heading's two overlaps leave, none joins), 21 on Google's as before; I4, I5, the floors,
+  I6, I10, I11 as before.
+
+### 18.98 What an opaque fill painted after a glyph covers whole is not on the page (the coordinator's ruling of 2026-11-19)
 
 2610.40394v1's Figure 1 (p4) sets each of its five labels in a box of rounded corners, and the program that drew it paints a
 word, then the box's white fill over it, then the label's own word: a reader of arXiv's page sees "Completeness", never the
@@ -8861,7 +8895,16 @@ own), each part carrying its pages' cell rules (`rules`).
   fault of ours (343 rows): 2610.21377's pgffor loop headers written back with their body's brace doubled, 2610.21201's
   etoc depth tag whose end mark TeX wrote into the contents inside a `\csname` (ten errors, 36 pages to arXiv's 34),
   2610.21288's `\appendixname` wrapped by the babel names' marks under revtex4-2 and the appendix package (the job aborted).
-  Each check holds for any paper:
+  The guard reads our marks by their names wherever TeX writes our source back — an error's line of input and the levels of
+  context above it, a file a pass writes and reads back, a class's verbatim copy —, every reader by one list
+  (`packages/engine/src/marks/marks.ts` `MARK_CS`): every control sequence of ours the marked source carries with a unit's
+  name, `\axtmark`, `\axtend`, `\axtlines`, `\axtpma`, `\axtpmm`, `\axtpm`, a head macro's `\axthpk`, a trailing macro's
+  `\axttg`, `\axthmark`, `\axtcolour`, an author's call `\axtcall` and backref's list `\axtbrname`;
+  `packages/engine/tests/mirrors.test.ts` holds it to the marked original's TeX, every macro of ours that TeX defines either in
+  it or naming no unit (the babel names' marks, read apart; the first pass's asks, which no pass the guard reads carries), and
+  `packages/engine/tests/guard-marks.test.ts` every reader to every name. A name the list lacks is a mark the guard does not see: a paper's own error beside it keys apart
+  from the unmarked original's and is read as ours, and one written by name into a file, or a copy cut inside one, goes
+  unseen. Each check holds for any paper:
   - *Before the compile, in the mark probe* (PIPELINE 43): where a unit of the main file stands in its preamble, the probe sets
     the preamble as the marked original writes it (`live.mjs` `markedPreamble`: the layout marks and their line probes, every
     class, no babel name wrapped, a unit whose writing unbalances its braces as the paper's own; `probeFiles` `preamble`, and
@@ -11326,7 +11369,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   or a shading not holding the band) is `crowded`, left the original's: a translation there could cover that ink. Ink is what
   the page shows, and a ground lies under the text (PIPELINE 56, the owner's report of 2026-11-02 on 1706.03762v7 pp13-15,
   whole stretches of its attention figures' labels English): a glyph wholly outside the clip in force, a glyph an opaque fill
-  painted after it covers whole (§18.97), and any paint at an alpha of 0, a constant's or a transparency group's painted at 0
+  painted after it covers whole (§18.98), and any paint at an alpha of 0, a constant's or a transparency group's painted at 0
   (PDF 11.6.6), are no ink (pageInk's `unseen`, the figures' reading alone; its boxes kept, at their index, for every other
   reader), neither crowding a label nor ending its free line, and a run of such glyphs is no unit, as a run the clip cuts is not. A glyph is wholly outside by its own ink (its outline across, else
   its advance); a Type 3 glyph is seen as PDF.js draws it, which runs its procedure whatever the rendering mode: one that begins
