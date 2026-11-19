@@ -1,4 +1,4 @@
-// Segmented controls (the redesign's design, §2.3, §5.1, §6.4, §8; Part 3's interfaces): a single choice drawn as the
+// Segmented controls (docs/UI.md): a single choice drawn as the
 // reader's `.seg` — a radio group whose arrows move the choice past a segment that cannot be had, the focus going with
 // it (radioKeys). Equal segments slide their thumb by `translate` (the reader's --i and --n); `fit` segments take their
 // words' widths, and the thumb follows the chosen one by anchor positioning: the chosen segment carries the anchor name

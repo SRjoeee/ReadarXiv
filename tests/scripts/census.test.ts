@@ -709,3 +709,153 @@ describe("the repository's debt areas", () => {
     expect(headline('OTHER')).toBe(false)
   })
 })
+
+// A template literal type over closed unions holds as few members as they do: a list declared of a union that holds one is a
+// vocabulary (a face's change, `${Role}-${Slant}`); a template with an open part (`${string}`) holds any string and is open.
+describe('a template of closed types is closed', () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'axt-census-template-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    put(
+      'packages/engine/src/index.ts',
+      [
+        "export type Role = 'serif' | 'sans'",
+        "export type Slant = 'italic' | 'upright'",
+        `export type Change = Role | Slant | \`\${Role}-\${Slant}\``,
+        `export type Loose = Role | \`\${string}-x\``,
+        "export const FACED = new Set<string>(['serif', 'sans-italic', 'upright'] satisfies readonly Change[])",
+        "export const LOOSE = new Set<string>(['serif', 'a-x', 'b-x'] satisfies readonly Loose[])",
+        'export const faced = (c: Change, l: Loose): boolean => FACED.has(c) || LOOSE.has(l)',
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  it('reads a list declared of a union of templates over closed unions as a vocabulary, and one with an open part as a list', async () => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const c = await census({ today: null, now: [scanTree('engine', root, ENGINE_PROFILE)] })
+    expect(c.trees.NOW.debt.vocabularies.list.map((x) => [x.name, x.by])).toEqual([['FACED', 'declared of Change']])
+    expect(c.trees.NOW.debt.lists.list.map((x) => x.name)).toEqual(['LOOSE'])
+  })
+})
+
+describe('the history reading (DEFINITIONS.history)', () => {
+  // each case one comment line of a package's source; `told` the lines read as history, `attribution` those read apart
+  const read = (lines: string[]) => {
+    const h = factsOf('packages/p/src/x.ts', `${lines.join('\n')}\nexport const x = 1\n`).history!
+    const told = new Set([...h.todays, ...h.dated, ...h.named, ...Object.values(h.forms).flat()])
+    return { told: [...told].sort((a, b) => a - b), attribution: h.attribution }
+  }
+  it('reads a map to the old engine: a line map, a file and its line, its paths, its commits, a port statement', () => {
+    const { told } = read([
+      '// layer2.mjs L2:3283-3893 and RUN:2022, TEX:120',
+      '// a line rectangle (tex.mjs:269 texRects)',
+      '// Ported from engine 065c1d973 run.mjs fillPage',
+      '// Carried from the website own store, as it was at baf2083e0',
+      '// (today/ink-units.mjs keptUnitsOf)',
+      '// (src/pdf-reader/engine/view/links.mjs)',
+      '// COPIED as it is from the engine sheet (abe884b5e)',
+      '// carried from page to page in order: one map for the glyphs',
+      "// a punctuation mark moved from after it (cite.sty's own)",
+      '// the bytes taken from the store where they are in it',
+      '// graphics-def 8d691483be, the version its driver states',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+  it("reads 'today' without the 's where it names the old engine, never the word's ordinary use", () => {
+    const { told } = read([
+      '// laid as today draws it',
+      '// where today decides them',
+      "// the extension's today session says it",
+      '// \\today in our compiles is the day arXiv printed',
+      '// `today`: the ownership records the lab checks',
+      '// `state`, what exists today: built or planned',
+      '// held equal by tests/pdf-reader/locate-ink-today.test.ts',
+      "// the last step's log, whatever the earlier passes' hold (BusyTeX's pipeline empties them today)",
+      "// the original's own family. Today, measured against what arXiv's PDFs embed: Times → Nimbus Roman",
+    ])
+    expect(told).toEqual([1, 2, 3])
+  })
+  it('reads a document, a note or a piece of work that is not in this repository', () => {
+    const { told } = read([
+      '// (design-b §1.5, T25)',
+      '// the host design A §1.1',
+      '// (design §4.5 "Painting")',
+      '// a unit kind, of the dump spec §2',
+      '// engine-view-host §16',
+      '// the redesign\'s design, §2.1',
+      "// the compile move's B3",
+      "// the reader's design §15",
+      '// DESIGN §7.2, docs/route/design.md §3.4',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+  it("reads a pull request's review, never the product's own `review` or an issue of the tracker", () => {
+    const { told } = read([
+      "// the original's anchor stays with it, #626's review",
+      "// PR #620's re-review",
+      '// the review of #490',
+      '// whatever the width (the interface review)',
+      "// drew it for two frames (the pin's wave-1 review)",
+      '// the `review` faces are served for the web',
+      '// (#636: 100 units were 199 requests)',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5])
+  })
+  it('reads a lane, a triage, a part, a stage, a numbered ruling and an option by name, never a word of the code', () => {
+    const { told } = read([
+      "// (triage-1 B: 2608.16117v1-de p4's t11)",
+      '// (L11 third round, gap 5)',
+      "// lane L7's record",
+      '// (lane style-wire, on the corpus)',
+      "// (Part 3's interfaces)",
+      '// (stage 1b states them)',
+      "// lab option (i)'s frame share",
+      '// a sentence lit with the one before (ruling 5)',
+      "// the coordinator's R7: the network down",
+      '// a design-performance item (Q7)',
+      '// its lane cuts them by its own limits alone',
+      '// (docs/route/orphan-text.md stage 5)',
+      '// evened by a size step in the first round',
+      '// R1 of PDF-READER §18.72: no ordinary word',
+      '// a page\'s figure texts (the content class `figures`, docs/route/orphan-text.md',
+      '// stage 5), each drawn in its translation',
+    ])
+    expect(told).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  })
+  it('reads who decided, never an owner that is a part of the code', () => {
+    const { told } = read([
+      "// (the owner's ruling, docs/PDF-READER.md §18.13)",
+      '// (the maintainer plans more interface languages)',
+      '// a page that is arXiv\'s, as the owner decided',
+      '// (his answer: the size never gives way to whole words)',
+      '// is told to the owner (`refused`), who fails the page',
+      '// asked of the owner (`contentOf(n)`)',
+      "// the label stays the owner's, its group off",
+    ])
+    expect(told).toEqual([1, 2, 3, 4])
+  })
+  it("counts a licence's statement of third-party origin apart, never one of our own code's", () => {
+    const { told, attribution } = read([
+      '// Ported from reference/read-frog/src/x.ts@abc1234 (GPL-3.0), 2026-01-01, modified',
+      '//',
+      '// The conversion (cmykToRgb) is ported from pdfjs-dist 6.3.289 (Mozilla, Apache-2.0), src/core/colorspace.js, its',
+      '// #toRgb, 2026-10-19, modified: one colour at a time into a clamped array, no buffer.',
+      "// Ported from the website's prototype, 2026-10-06, as it stood",
+    ])
+    expect(attribution).toEqual([1, 3, 4])
+    expect(told).toEqual([5])
+  })
+  it("reads no date inside a git ref's name, and a date beside it as a date", () => {
+    const { told } = read([
+      '// top alignment (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md §4)',
+      '// decided 2026-10-07 beside it',
+    ])
+    expect(told).toEqual([2])
+  })
+})

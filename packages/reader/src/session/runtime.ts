@@ -1,8 +1,8 @@
-// The session's runtime (design-b §1.6): the state held, inputs applied one at a time in arrival order (an input given while one
+// The session's runtime: the state held, inputs applied one at a time in arrival order (an input given while one
 // is applied waits its turn), an input whose ticket is not live dropped before `step` and counted (routing: the region code holds
 // no guard), and after every step the resources diffed: a ticket new is acquired by its slot's handler, once the releases of
 // that slot under way have settled, a ticket gone released (its signal aborted, its release run), dependents first. An acquisition that resolves after its ticket went is let go at once
-// by the handler's own signal. The live tickets equal `resources(state)`'s keys after every step (checked: I1 of design-b).
+// by the handler's own signal. The live tickets equal `resources(state)`'s keys after every step (checked).
 import { type Effect, type Input, resources, type Spec, type State, step, type Ticket, ticketOf } from './machine.ts'
 
 type Emit = (x: Input) => void
@@ -48,7 +48,7 @@ export function createRuntime(o: {
   let applying = false
   const pending: Promise<unknown>[] = []
   /** each slot's releases under way: a ticket of the slot is acquired once they have settled, never sleeping on them. A PDF.js
-   *  role's worker goes only after its document's `destroy()` has resolved (design-b §1.6), and a replacement opened before
+   *  role's worker goes only after its document's `destroy()` has resolved, and a replacement opened before
    *  then took the outgoing document's worker, which the release then destroyed under it */
   const settling = new Map<Spec['slot'], Promise<void>>()
   const emitFor =

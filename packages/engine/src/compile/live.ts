@@ -1,9 +1,7 @@
 // The paper's pipeline before any compile (docs/PDF-READER.md §19.3): a paper's files opened into its units (openPaper), and
 // the files the prepare compiles from them — the mark probe (probeFiles), the marked original (originalFiles, markedPreamble) —
-// with the readings of a compile (ranThrough, stoppedShort, readingsOf, citationLines, listsMissing, notFound) and the units a
-// target keeps (keptFor). The compiled translation that grew here (the translation set by TeX, its strategies, its typesetting
-// rule and its copies' cache) was parked, then taken out (2026-11-04, the rules audit's F4): the layer draws the translation
-// over our base page, and the web's rows hold it.
+// with the readings of a compile (ranThrough, stoppedShort, listsMissing, notFound). No translation is set by TeX here: the
+// layer draws the translation over our base page, and the web's rows hold it.
 import { analyze } from '../source/paper-meta.ts'
 import { paperNames, theoremNames } from '../source/paper-names.ts'
 import {
@@ -96,7 +94,7 @@ export type AskPlan = {
   asked: string[]
 }
 /**
- * Where the ink probe asks each of `samples` where the document uses it (the compile move's F15, PDF-READER §18.80; the loop's
+ * Where the ink probe asks each of `samples` where the document uses it (F15, PDF-READER §18.80; the loop's
  * first pass, compile/paper.ts markedOfPaper `asks`): right before its first use in a unit of the paper's own, in the order the
  * units stand, that is safe to ask at. Not in a unit nested in another (it is written inside its outer one, whose use is asked),
  * a heading's or a caption's argument (COPIED), an algorithm float's body (the front end's `pseudocode`); not a sample whose own
@@ -176,7 +174,7 @@ export type OriginalOptions = {
  *  exceeded, a hundred errors, its own confusion. Whatever PDF it left is part of the paper: XeTeX ships the pages it set
  *  before the stop, and xdvipdfmx makes them a PDF (pdfTeX writes none). A compiler that answers with any PDF it made —
  *  the gates' native one, latexmk -f in nonstop mode — gave 2608.16117's Chinese final, three pages of forty, as set
- *  (its comment never ended: latex-front.mjs LINE_ENVS); the TeX page's BusyTeX halts on a TeX error, and gives none */
+ *  (its comment never ended: source/latex-front.ts LINE_ENVS); the TeX page's BusyTeX halts on a TeX error, and gives none */
 export const stoppedShort = (log: string | null | undefined): boolean =>
   /^(?:! Emergency stop\.|! TeX capacity exceeded, sorry|\(That makes 100 errors; please try again\.\)|! This can't happen|! I can't go on meeting you like this)/m.test(
     lastTexLog(log),
@@ -187,19 +185,19 @@ export const stoppedShort = (log: string | null | undefined): boolean =>
  * neither stopped short (stoppedShort) nor ended before the document's end — every compile carries END_TEX, and only a
  * pass that set the last page logs it (completeLog). A pass halted at a TeX error writes no such line, whatever the
  * compiler made of it: a TeX page that took a halted pass's status for a success gave 2610.02069's final as the 18 pages
- * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole (2026-10-05); a
+ * set before the halt, its bibliography empty, every citation "(?, ?)", and the run stored it as whole; a
  * marked original taken on its PDF alone gave 2610.20713's layout from the 7 pages of 15 TL2025 set before its hundredth
- * error (2026-10-19). Whether it gave a PDF is the caller's to ask: a draft gives none
+ * error. Whether it gave a PDF is the caller's to ask: a draft gives none
  */
 export const ranThrough = (c: Compiled | null | undefined): boolean =>
   !!c?.ok && !stoppedShort(c.log) && completeLog(c.log)
-/** DRAFT's first line, graphicx's draft option alone: the final pass of the marked original (layout/paper.mjs markedOfPaper
+/** DRAFT's first line, graphicx's draft option alone: the final pass of the marked original (paper.ts markedOfPaper
  *  `base`) is its files with this line made NO_DRIVER_GROUP, one line, so that no line of them moves */
 export const DRAFT_OPTION = '\\PassOptionsToPackage{draft}{graphicx}'
 /** The final pass's first line, in DRAFT_OPTION's place: graphicx's drivers for pdfTeX and LuaTeX made to include a PDF as
- *  arXiv's do. pdftex.def 1.2d and luatex.def 1.2f (graphics-def 8d691483be, 2025-09-20; CTAN 2025-09-30) write a
- *  transparency group, /Group<</S/Transparency/K false/I false>>, on every PDF page they include; arXiv's TeX Live 2025 is the
- *  state of 2025-08-03 (info.arxiv.org, no tlmgr update since), whose pdftex.def 1.2c and luatex.def 1.2d write none, and the
+ *  arXiv's do. pdftex.def 1.2d and luatex.def 1.2f (graphics-def 8d691483be) write a
+ *  transparency group, /Group<</S/Transparency/K false/I false>>, on every PDF page they include; arXiv's TeX Live 2025, frozen
+ *  with no tlmgr update (info.arxiv.org), holds pdftex.def 1.2c and luatex.def 1.2d, which write none, and the
  *  pinned tree's are the later ones. With the group every figure form of ours differs from arXiv's, so that the delta copies
  *  none of them (2610.30034v1 shipped its whole 5.46 MB base, 0.20 MB as a delta without it; 2610.30875v1 3.73 MB, 0.30 MB),
  *  and poppler draws the figures' lines heavier than arXiv's PDF. Each hook runs once its driver is read and, where the driver
@@ -225,7 +223,7 @@ const DRAFT = `${[
   '\\def\\Gin@setfile#1#2#3{\\leavevmode\\global\\advance\\axt@g\\@ne\\axtmark{g\\the\\axt@g a}\\axt@setfile{#1}{#2}{#3}%',
   '\\axtmark{g\\the\\axt@g b}\\rlap{\\raise\\Gin@req@height\\hbox{\\axtmark{g\\the\\axt@g t}}}}}\\makeatother',
 ].join('\n')}\n`
-/** where the main file's \\begin{document} stands as TeX finds it (latex-front.mjs documentBounds: none in a comment, a
+/** where the main file's \\begin{document} stands as TeX finds it (source/latex-front.ts documentBounds: none in a comment, a
  *  definition or a filecontents), -1 where it has none: what goes before the document goes there */
 const beginDocument = (text: string): number => documentBounds(text).begin
 /** an aux's lines of one command, those whose braces close on the line: a line cut short would stop TeX reading the
@@ -255,7 +253,7 @@ const listsOf = (aux: string | null | undefined): Map<string, string> => {
  *  79 of its own is joined to the next too, so what is looked for in it is not anchored to a line's start) */
 const unwrapped = (log: string): string => log.replace(/^(.{79})\n/gm, '$1')
 /** whether a pass set a contents list from nothing: one its aux writes (listsOf) whose file the pass did not find
- *  (LaTeX's \@input: "No file <job>.<ext>."), as a pass does that was given no aux of its own (the F2 re-review's N2) —
+ *  (LaTeX's \@input: "No file <job>.<ext>."), as a pass does that was given no aux of its own —
  *  the list set empty, every unit after it early by its height. `main`, the project's main file (the job's name) */
 export const listsMissing = (r: { log?: string; aux?: string | null }, main: string): boolean => {
   const log = unwrapped(lastTexLog(r.log))
@@ -267,13 +265,12 @@ export const notFound = (log: string | null | undefined): Set<string> =>
   new Set([...unwrapped(lastTexLog(log)).matchAll(/No file (\S+?)\.(?=\s|$)/g)].map((m) => m[1]!))
 
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
- *  float (`inFloat`, their indices, latex-front.mjs loadProject's), each caption's float type (`floatTypes`, [index, type]), the
+ *  float (`inFloat`, their indices, latex-front.ts loadProject's), each caption's float type (`floatTypes`, [index, type]), the
  *  units of an algorithm float's body (`pseudocode`, their indices), each table block's text cells (`tableBlocks`, R4: a cell's
  *  units by their indices, or `name`) and the order TeX sets them in where it is not theirs
  *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
- *  after the rest, latex-front.mjs entriesLast). No unit is kept for what its words look like: a table's cell is text like any
- *  other and the translator decides a name (the owner, 2026-11-13); the old reader's name rule is its own (src/pdf-reader/engine/
- *  pipeline/live.mjs openPaper) */
+ *  after the rest, source/latex-front.ts entriesLast). No unit is kept here: which units are kept as written is decided
+ *  later, from these facts (instrument/instrument.ts unitFactsOf, PDF-READER §18.72) */
 export function openPaper(files: ReadonlyMap<string, Uint8Array>) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
@@ -283,8 +280,8 @@ export function openPaper(files: ReadonlyMap<string, Uint8Array>) {
   // source's, sent to the translator once: source/paper-names.ts, bundleUnitsOf)
   const texts = texFilesOf(fsys, meta.main),
     names = paperNames(texts)
-  // (the printed names of its theorem-like environments among them, the label forms of its heads: the wrap's `names`,
-  // layout/own.mjs)
+  // (the printed names of its theorem-like environments among them, the label forms of its heads: own/own.ts ownOf's
+  // `names`)
   return {
     fsys,
     meta,
@@ -301,7 +298,7 @@ export function openPaper(files: ReadonlyMap<string, Uint8Array>) {
 }
 
 /**
- * The definitions a paper's .bbl makes for itself (`<job>.bbl`, the one TeX reads: shipped or made, layout/paper.mjs
+ * The definitions a paper's .bbl makes for itself (`<job>.bbl`, the one TeX reads: shipped or made, compile/paper.ts
  * madeBibliography), in the lines before its first entry (`\\bibitem`, harvard's `\\harvarditem`), in their order, as the styles
  * write them: a `\\providecommand` (an elsarticle .bbl's `\\providecommand{\\DOIprefix}{doi:}`); a `\\newcommand`, set as a
  * `\\providecommand` (alpha's `\\etalchar`: where the paper defined it before, the .bbl's \\newcommand is an error and the paper's
@@ -315,7 +312,7 @@ export function openPaper(files: ReadonlyMap<string, Uint8Array>) {
  * macros: their calls an error there, no answer and no text (2010.11929v2's `\\doi{…}`, 2608.25210v2's `\\natexlab{a}`). Read as
  * TeX reads the .bbl: a comment (an unescaped `%` to its line's end) taken out with its line's end and the next line's leading
  * blanks, so that neither a commented-out definition nor a brace in a comment counts; and one read under `\\makeatletter` given
- * in it again, `@` a letter as it was there (the reviews of #486). Anything else of the head (a length, a \\renewcommand, which
+ * in it again, `@` a letter as it was there. Anything else of the head (a length, a \\renewcommand, which
  * would replace the paper's own, a group, whose definitions are its own) is passed over. '' where the paper has no .bbl, or none
  */
 export function bblProvides(fsys: Fsys, main: string): string {
@@ -351,7 +348,7 @@ export function bblProvides(fsys: Fsys, main: string): string {
   }
   /** the end past the conditional that opens at `i`, at its matching \\fi (the primitive conditionals nested in it counted), or -1:
    *  also where a word that may be a conditional of a package's or a \\newif's (\\ifpdf, \\if@foo) stands in it before its end, whose
-   *  \\fi no reading of the head alone tells from the guard's (the review of #492), the block then passed over head by head */
+   *  \\fi no reading of the head alone tells from the guard's, the block then passed over head by head */
   const conditional = (i: number) => {
     // biome-ignore lint/suspicious/noAssignInExpressions: each conditional's match taken in the loop's test (the module's own form)
     for (let depth = 0, m: RegExpExecArray | null; (m = at(IF_FI, i)); i = m.index + m[0].length) {
@@ -396,6 +393,7 @@ const COMMAND =
 const CONDITIONAL =
   /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\ifx\s*\\(?:undefined|@undefined)\s*\\(?:[A-Za-z@]+|.)|\\if(?:defined|csname)(?![A-Za-z@])/y
 /** the next primitive conditional ([1] `if…`) or \\fi ([1] `fi`), or any other control sequence passed over ([2] its word) */
+// (the conditionals: TeX's seventeen and e-TeX's three, \ifdefined, \ifcsname and \iffontchar, every one a primitive)
 // biome-ignore format: its flags as the module writes them (the formatter would sort them, another literal)
 const IF_FI =
   /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|([A-Za-z@]+)|.)/ys
@@ -415,11 +413,11 @@ const LET = /\\let(?![A-Za-z@])\s*(\\(?!csname(?![A-Za-z@]))(?:[A-Za-z@]+|.))\s*
 const uncommentedTex = (t: string): string => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g, '$1')
 /** the preamble alone, closed at once: its log names the document's font families; with `marks`, the layout marks' TeX
  *  (MARK_DEF, LAYOUT_TEX) first and, after \begin{document}, the mark probe
- *  (layout/marks.mjs markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
+ *  (marks/marks.ts markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
  *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units, paper.project.complete)`) are the paper's own switch, and what
  *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`; and its units' leads, last: leadSamples); under
- *  `latex` (latex-front.mjs dviEngine), each
- *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
+ *  `latex` (source/latex-front.ts dviEngine), each
+ *  followed by its DVI marks (DVI_MARK_DEF, marks/marks.ts DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
 export function probeFiles(
   { fsys, project, meta }: Paper,
@@ -452,7 +450,7 @@ export function probeFiles(
     ],
   ])
 }
-/** the text of each of the paper's TeX files (a class's own name it calls: marks.mjs classNamesTex) */
+/** the text of each of the paper's TeX files (a class's own name it calls: marks/marks.ts classNamesTex) */
 const texsOf = (fsys: Fsys): string[] =>
   fsys
     .list()
@@ -464,7 +462,7 @@ const PREAMBLE_LINES = '\\protected\\def\\axtlines#1{}'
  * The paper's preamble as the marked original writes it, for the mark probe (probeFiles `preamble`): the main file's text up to its
  * \begin{document} with the layout marks and their line probes (originalFiles `layout`, `lines`), every class marked as no probe's
  * answer takes one off, `complete` as the marked original's, no babel name wrapped, a unit whose writing changes its file's brace
- * balance written as the paper's own (layout/guard.mjs unbalancedUnits) — so that TeX reads the units the preamble holds, marked,
+ * balance written as the paper's own (guard.ts unbalancedUnits) — so that TeX reads the units the preamble holds, marked,
  * where the marked compile will, before it: a class's command that reads its argument as data raises its errors at our marks
  * there (2610.37668v1's myarxiv `\author`, a name's initials taken through a `\csname`). With the line of the probe's main file it
  * begins on (`first`: the probe's head before it) and its last (`last`). Null where no unit of the main file stands in its preamble:
@@ -516,35 +514,35 @@ export function markedPreamble(
 }
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
- *  `lines`, each unit's lines in its log (typeset/tex.mjs LINES_TEX), which the layout marks read. `spans`, an object, gets
+ *  `lines`, each unit's lines in its log (compile/tex.ts LINES_TEX), which the layout marks read. `spans`, an object, gets
  *  `lines()`: each unit's lines and bytes in the files as written ({ file, unit, first, last, from, to }), worked out when
- *  asked — where the paper's own errors stand (layout/guard.mjs). With
- *  `layout`, a list of classes (layout/marks.mjs), the layout marks too: the units marked by layoutMarking, each
+ *  asked — where the paper's own errors stand (compile/guard.ts). With
+ *  `layout`, a list of classes (marks/marks.ts), the layout marks too: the units marked by layoutMarking, each
  *  placeholder of those classes and each cell and heading, and LAYOUT_TEX after MARK_DEF; `spans` names the paper's own
- *  units; `switches`, the paper's own switch (layout/marks.mjs readMarkProbe: TeX's answers to the mark probe), the
+ *  units; `switches`, the paper's own switch (marks/marks.ts readMarkProbe: TeX's answers to the mark probe), the
  *  marks taken off where TeX said they change what follows, and where it gave no answer; without `switches`, the marks
  *  as before; `inkless`, the paper's macros TeX said set no ink (readInkProbe), given no mark; `complete`, the paper's macros
- *  that read nothing past their arguments (layout/marks.mjs completeCalled), and `apart`, those whose box TeX began with no
+ *  that read nothing past their arguments (marks/marks.ts completeCalled), and `apart`, those whose box TeX began with no
  *  character (readInkApart), as layoutMarking takes them; and a babel name a style
- *  writes literally wrapped as the macro's text is (layout/marks.mjs literalNames). Without `layout`, the bytes as
- *  before. With `layout`, the layout guard's two remedies (layout/guard.mjs): `unmarked`, unit indices each written as
+ *  writes literally wrapped as the macro's text is (marks/marks.ts literalNames). Without `layout`, the bytes as
+ *  before. With `layout`, the layout guard's two remedies (compile/guard.ts): `unmarked`, unit indices each written as
  *  the paper's own bytes (patch `asSource`: no mark, no layout mark, no span), and `names` false, no babel name marked
  *  (none wrapped literally, LAYOUT_TEX's \axt@nmall made \relax on LAYOUT_TEX's own line: NAMES_OFF).
- *  Neither given: the bytes as before. Under `latex` (latex-front.mjs dviEngine: arXiv's DVI compiler), MARK_DEF and
- *  LAYOUT_TEX each followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX: xdvipdfmx's specials where pdfTeX
+ *  Neither given: the bytes as before. Under `latex` (source/latex-front.ts dviEngine: arXiv's DVI compiler), MARK_DEF and
+ *  LAYOUT_TEX each followed by its DVI marks (DVI_MARK_DEF, marks/marks.ts DVI_LAYOUT_TEX: xdvipdfmx's specials where pdfTeX
  *  writes no PDF), on the lines they follow: no line of the paper moves; every other engine's bytes as before. `pastBegin`
  *  (on with `layout`: the layout compile, our base page): a unit's line probe after an environment's \\begin goes past the
- *  spaces \\begin skips (latex-front.mjs patch), which it would set; off, the bytes as before. `transcode`
+ *  spaces \\begin skips (source/latex-front.ts patch), which it would set; off, the bytes as before. `transcode`
  *  (off with `layout`: the layout compile, its pass loop's passes, our base page): a file of a declared Latin-1 family encoding
  *  that is not UTF-8 (project.transcode) is written as the paper's own bytes, under the paper's own \\usepackage[…]{inputenc},
  *  as every other file is. On, patch writes it as UTF-8, which only a translation of the source could have (this switches no
  *  inputenc option): 2610.20581's latin1 source, transcoded under its own inputenc, set each é as Ã© and each no-break
- *  space in math as a \\^ error, 74 errors and a page more than arXiv's. On by default without `layout`, as the bytes were
- *  before. `reduced` (with `layout`: a reduced marked compile, design-performance Q2): no TeX of an optional class of points
- *  (marks.mjs POINT_CLASSES, LAYOUT_TEX_REDUCED), on the one line it stands on, so that no line moves; without `layout` the
- *  bytes as before. `statements` (with `layout`: the rebuilt prepare's marked compile, compiled.ts compiledOf): the statements
- *  today's reader's compile does not make (marks.ts STATEMENTS_TEX), right after the layout marks on their line, none in a
- *  reduced compile (they state no ownership and no text); off, the bytes as before */
+ *  space in math as a \\^ error, 74 errors and a page more than arXiv's. On by default without `layout`.
+ *  `reduced` (with `layout`: a reduced marked compile, DESIGN §16's Q2): no TeX of an optional class of points
+ *  (marks/marks.ts POINT_CLASSES, LAYOUT_TEX_REDUCED), on the one line it stands on, so that no line moves; without `layout` the
+ *  bytes as before. `statements` (with `layout`: the prepare's marked compile, compiled.ts compiledOf): the
+ *  separations, measures, forced breaks and whole-page brackets of marks.ts STATEMENTS_TEX, right after the layout marks
+ *  on their line, none in a reduced compile (they state no ownership and no text); off, the bytes as before */
 export function originalFiles(
   { fsys, project: read, meta }: Paper,
   {
@@ -602,11 +600,12 @@ export function originalFiles(
     }
     // (the files as patch wrote them, the units' bytes in them, before the names' wraps below move what follows a wrap)
     patched = spans ? new Map(out) : null
-    // a babel name a style writes literally in the construct its macro names (marks.mjs literalNames), in any of the
+    // a babel name a style writes literally in the construct its macro names (marks/marks.ts literalNames), in any of the
     // package's style, class and source files (the main file's preamble), wrapped as the macro's own text is: no line
     // of any file gains or loses a line
     if (names)
       for (const path of fsys.list()) {
+        // (a file TeX reads as source, as guard.ts reads one: latex.ltx's .tex, cls, sty and its own .ltx)
         if (!/\.(?:sty|cls|tex|ltx)$/i.test(path)) continue
         const bytes = out.get(path) ?? fsys.read(path)
         if (!bytes) continue
@@ -629,7 +628,7 @@ export function originalFiles(
     patched = spans ? new Map(out) : null
   }
   const dvi = dviEngine(meta?.compiler)
-  // (with `layout`, each reference's item and its name asked of TeX at the document's end: marks.mjs refsTex, none for a paper with
+  // (with `layout`, each reference's item and its name asked of TeX at the document's end: marks.ts refsTex, none for a paper with
   // no reference, whose bytes stay as they were)
   const head =
     DRAFT +
@@ -656,7 +655,7 @@ export function originalFiles(
   }
   return out
 }
-/** a marked request's files reduced (design-performance Q2; compile/paper.ts markedOfPaper `reduce`): its main file's points'
+/** a marked request's files reduced (DESIGN §16's Q2; compile/paper.ts markedOfPaper `reduce`): its main file's points'
  *  TeX without the optional classes' (POINTS_TEX_REDUCED in POINTS_TEX's place) and without the statements after them (the bytes
  *  originalFiles `reduced` writes), every
  *  other file, the carried ones among them, as it is; a main file of no layout marks as it is */

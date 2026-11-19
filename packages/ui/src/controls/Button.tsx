@@ -1,4 +1,4 @@
-// The pages' buttons (the redesign's design, §2.1, §5, §6, §8; Part 3's interfaces): the one primary action of a view
+// The pages' buttons (docs/UI.md): the one primary action of a view
 // in the brand, a neutral one, a text one with no ground but its hover's, a raised one on a group (a note's). Three
 // sizes: lg fills its width (the popup's primary, its pair, its two entries), md a form's bar, sm a row's. An icon goes
 // before the words, a shortcut after them on the brand and a neutral one. A disabled one is aria-disabled: it stays in

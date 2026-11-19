@@ -106,8 +106,9 @@ const manifestText = (await import('node:fs')).readFileSync(`${BUILD}/manifest.j
 const API_HOSTS = ['https://readarxiv.com', ...['https://app-staging.readarxiv.org'].filter(host => manifestText.includes(host))]
 // (a copy of the build with the loopback and our server's hosts granted, which Chrome would ask the reader for in a prompt)
 copyWithGrants(BUILD, EXT, { hostPermissions: ['http://127.0.0.1/*', ...API_HOSTS.map(host => `${host}/*`)] })
-// (the back-forward cache on, as a reader's Chrome has it: the page's end is checked on it)
-const { context, worker, id, readerUrl } = await launchWithReader({ profile: 'reader-v2-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 }, args: [RESOLVER_WALL], backForwardCache: true })
+// (the back-forward cache on, as a reader's Chrome has it: the page's end is checked on it; the interface in Chinese, whatever the
+// machine's: the checks find the settings page's sections, the reader's cards and the settings' count by their Chinese words)
+const { context, worker, id, readerUrl } = await launchWithReader({ profile: 'reader-v2-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 }, args: [RESOLVER_WALL], backForwardCache: true, language: 'zh-CN' })
 const api = v2Api({ fixtures: [fixture], base: API_HOSTS[0], extension: `chrome-extension://${id}` })
 const guard = await routeTable(context, [
   ['https://arxiv.org', arxiv],
@@ -237,7 +238,13 @@ try {
     }
     const sources = { html: ENTRY.html.source, pdf: ENTRY.pdf.source }
     const panelEntries = frame => frame.evaluate(({ html, pdf }) => [...document.querySelectorAll('button')].filter(b => new RegExp(`${html}|${pdf}`).test(b.textContent ?? '')).map(b => ({ text: b.textContent?.trim(), disabled: b.getAttribute('aria-disabled') === 'true' })), sources)
+    /** an entry pressed: the press makes its panel or its popup go (the reader laid over the page, the panel's frame removed by
+     *  the page that framed it, the popup closed). Playwright races every evaluation against its frame's end and rejects it with
+     *  "Frame was detached" when the end is told first, the click already done; the panel's frame is the extension's process and
+     *  its removal the PDF page's, so either may reach Playwright first. A frame detached, a page closed, is the press done:
+     *  the checks after it read whether the reader came (tests/e2e/reader.mjs's entries, the same) */
     const pressEntry = (frame, which) => frame.evaluate(({ which, sources }) => [...document.querySelectorAll('button')].find(b => new RegExp(sources[which]).test(b.textContent ?? ''))?.click(), { which, sources })
+      .catch(e => { if (!/detached|closed/i.test(e.message)) throw e })
 
     const page = track(await context.newPage())
     await page.goto(`https://arxiv.org/pdf/${PAPER}`)

@@ -1,7 +1,6 @@
 // align(inkB, inkA): every glyph of B (our marked compile, the instrument) paired with its glyph on A (arXiv's PDF), where it
-// has one, by aligning the two documents' glyph sequences (design §4.1, the rules of the transfer; spike S1's align.mjs, its
-// results in spike-s1/notes.md §3–§7). And every rule and image of B with A's at its place in stream order between the same
-// neighbouring glyphs (S1d, spike-s1c/notes.md §5).
+// has one, by aligning the two documents' glyph sequences by the rules below (ARCHITECTURE.md §2, "Located"). And every rule
+// and image of B with A's at its place in stream order between the same neighbouring glyphs.
 //
 // - A glyph's key (a) is its font's base name (a subset's tag off) with its character code; key (b) its Unicode, tried for a
 //   stretch where (a) leaves glyphs unmatched there; the key that matches more wins, (a) on a tie.
@@ -71,6 +70,8 @@ interface AlignOptions {
   work?: number | undefined
 }
 
+/** the hyphens a Latin line may end with: Unicode's Hyphen property (PropList.txt) in the Basic Latin, Latin-1 Supplement
+ *  and General Punctuation blocks, U+002D HYPHEN-MINUS, U+2010 HYPHEN, U+00AD SOFT HYPHEN, U+2011 NON-BREAKING HYPHEN */
 const HYPHENS = new Set(['-', '‐', '­', '‑'])
 const FRAME_START = /^g(\d+)a$/
 const FRAME_END = /^g(\d+)b$/

@@ -1,7 +1,6 @@
-// X.runs (design-b §1.5, T6, T32, E28; the ruling of 2026-10-09: sizes per unit): a unit's runs between its displays, each
-// laid as its own text block, joined as one layout; and whether a layout keeps the pages its fit set its lines on. Ported
-// from engine 065c1d973 layer2.mjs L2:4163-4257, L2:4379-4400 (moved first as JavaScript by lab/typeset/move-fit.mjs, now
-// TypeScript), held by the chain's and the fill's replays on the corpus.
+// X.runs (docs/PDF-READER.md §18.7: sizes per unit): a unit's runs between its displays, each laid as its own text block,
+// joined as one layout; and whether a layout keeps the pages its fit set its lines on, held by the chain's and the fill's
+// replays on the corpus.
 import { textless } from '../breaker/cuts.ts'
 import type { Token } from '../breaker/tokens.ts'
 import type { FitBlock, FitParams, FitState, LaidLine, Layout } from './types.ts'
@@ -87,8 +86,8 @@ const runParams = (P: FitParams, run: Run, last: boolean): FitParams => ({
 })
 /**
  * A unit's runs (runsOf) laid each at its own state: the first of the fit's states at which its own text fits its own slots,
- * so that only a cramped run shrinks, its leading its own too (the owner's ruling of 2026-10-09, sizes per unit, carried to
- * its natural unit: a block between two displays reads as its own text block). Every run fits at the state the unit fitted
+ * so that only a cramped run shrinks, its leading its own too (docs/PDF-READER.md §18.7: sizes per unit, carried to its
+ * natural unit: a block between two displays reads as its own text block). Every run fits at the state the unit fitted
  * at (the unit's walk sets each run on its own slots), so each comes out at that state or a more natural one. One tracking
  * a paragraph: the walk tightens a run's tracking (and its CJK punctuation's compression) before it shrinks it, so a cramped
  * run is set tighter than a roomy one, and a paragraph's parts would read at two letter spacings, its roomy part's last line
@@ -173,11 +172,11 @@ export function joinRuns(runs: readonly (Pick<Run, 'bi0'> & { layout: Layout })[
  * the page fill spreads a unit's lines over its frames, and a looser leading holds fewer of them on a page's frame, so it can
  * carry text the source sets on one page over to the next, which the page cuts (pageCutsOf) only keep from the page before.
  * 2610.21884v1's unit 10 in Chinese, a paragraph over pages 1 and 2: its last run filled to 1.61 set a sentence of page 1 at
- * the top of page 2 (the sweep's (i)). Read for a unit's runs (run.mjs fillPage, fillLeadsOf): a unit of one run is filled as
- * before, byte for byte, though the same can befall it (34 pages of 19 Chinese papers move where it is read for every unit;
- * left to its own change). A line after a page break of the source's (`tokens`, the lines' own: withPageBreaks' token) may
- * stand on the break's page: its text is that page's in the source, and the line that holds the break ends where the
- * breaker ends it, sooner at a looser state (breakLines), so that the tail of that line goes on to the page it belongs to
+ * the top of page 2 (the sweep's (i)). Read for a unit's runs (fillPage, fillLeadsOf), not for a unit of one run, though the
+ * same can befall it: read for every unit, it would move 34 pages of 19 Chinese papers. A line after a page break of the
+ * source's (`tokens`, the lines' own: withPageBreaks' token) may stand on the break's page: its text is that page's in the
+ * source, and the line that holds the break ends where the breaker ends it, sooner at a looser state (breakLines), so that
+ * the tail of that line goes on to the page it belongs to
  */
 export function keepsPages(
   fit: readonly Pick<LaidLine, 'from' | 'page'>[],

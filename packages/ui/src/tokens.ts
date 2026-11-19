@@ -1,4 +1,4 @@
-// The extension's design tokens (the redesign's design, §2.1): one source for every surface — the reader, the popup,
+// The extension's design tokens (docs/UI.md §5): one source for every surface — the reader, the popup,
 // the settings page, and the shadow roots the content script puts on arXiv's pages. Here, with the controls that draw
 // in them; src/shared/tokens.ts hands them to src/core (the floating button, the failure widget, the figure viewer),
 // which imports no UI (hard rule 8). A surface names a role; nothing else in the tree writes a colour.
@@ -26,7 +26,7 @@ export const RAMP = {
   'n-10': { light: 'oklch(0.235 0.012 255)', dark: 'oklch(0.935 0.005 255)' },
 } as const satisfies Record<string, Themed>
 
-/** The roles, by what they are for (the redesign's design, §2.1). The reader's come first, with its values */
+/** The roles, by what they are for (docs/UI.md §5). The reader's come first, with its values */
 export const ROLES = {
   canvas: '$n-3',
   chrome: '$n-0',
@@ -36,7 +36,7 @@ export const ROLES = {
   'ink-3': '$n-7',
   /** an edge that marks a choice, a step lighter than the focus's ink so that the two read apart */
   'line-strong': '$n-7',
-  /** dark: the well sunk below the chrome and the thumb raised above it, and a stronger fill (Part 6 of the reader) */
+  /** dark: the well sunk below the chrome and the thumb raised above it, and a stronger fill */
   well: { light: '$n-3', dark: '$n-2' },
   lift: { light: '$n-0', dark: '$n-5' },
   fill: { light: '$n-3', dark: '$n-4' },
@@ -60,7 +60,7 @@ export const ROLES = {
   page: '$n-1',
   /** the popup's grouped rows and its notes */
   group: '$n-2',
-  /** a hovered or open row in the popup's group (§5.1; the controller's ruling 9): a step under the group, both themes */
+  /** a hovered or open row in the popup's group: a step under the group, both themes */
   'group-hover': '$n-3',
   button: { light: '$n-2', dark: '$n-4' },
   /** the small button asking to confirm a destructive action: its words in danger read 4.83:1 and 5.01:1 on it */
@@ -72,13 +72,13 @@ export const ROLES = {
   'card-shadow': { light: '0 0 0 0.5px $n-4, 0 1px 2px oklch(0 0 0 / 0.03)', dark: '0 0 0 0.5px oklch(1 0 0 / 0.06)' },
   /** the one primary action's fill, and a switch that is on (the popup's, the settings page's): arXiv's red to the eye,
    *  another value — #B31925, ΔE OK 0.0097 from arXiv's #B31B1B, turned 3° towards the logo's red; #CB3438 in dark
-   *  (the maintainer, 2026-09-28, round 8). The logo keeps its own red, #AA142D */
+   *  (UI.md §5). The logo keeps its own red, #AA142D */
   brand: { light: 'oklch(0.493 0.186 24.5)', dark: 'oklch(0.559 0.188 24.5)' },
   'on-brand': 'oklch(1 0 0)',
   /** words on the brand told apart from its words by a lighter white and their weight (P0's paper id, §5.4): 85 % white
    *  in light (5.25:1), white in dark, where 85 % read 4.11:1 */
   'on-brand-2': { light: 'oklch(1 0 0 / 0.85)', dark: 'oklch(1 0 0)' },
-  /** a shortcut label on the brand (the maintainer, 2026-09-26: round 2's light label) */
+  /** a shortcut label on the brand, a light chip (UI.md §5) */
   'brand-chip': { light: 'oklch(1 0 0 / 0.18)', dark: 'oklch(1 0 0 / 0.08)' },
   success: { light: 'oklch(0.62 0.14 150)', dark: 'oklch(0.72 0.14 150)' },
   /** a search hit, behind the words */
@@ -87,8 +87,8 @@ export const ROLES = {
   'tip-bg': 'oklch(0.22 0.01 255)',
   'tip-ink': 'oklch(0.96 0 0)',
   'tip-ink-2': 'oklch(0.74 0.01 255)',
-  /** the tooltip's shadow, one in both themes as its ground is (Part 3, Task 21; the floating button's tooltips take it
-   *  from the shadow root's sheet in Part 6) */
+  /** the tooltip's shadow, one in both themes as its ground is (UI.md §5; the floating button's tooltips take it
+   *  from the shadow root's sheet) */
   'tip-shadow': '0 4px 12px oklch(0 0 0 / 0.2)',
 } as const satisfies Record<string, Value>
 

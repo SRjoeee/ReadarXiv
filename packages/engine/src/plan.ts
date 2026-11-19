@@ -120,7 +120,7 @@ interface Plan {
   decorated?: Kept
   /** the text each macro sets where the document uses it, TeX stating every glyph as itself (MarkedOptions.told): absent, none */
   told?: Kept
-  /** the marked compile left the optional classes of points out (design-performance Q2), so a prepare from the stored objects
+  /** the marked compile left the optional classes of points out (Q2, DESIGN §16), so a prepare from the stored objects
    *  states it as the compile's did */
   reduced?: true
   /** the .bbl's bytes as base64 */

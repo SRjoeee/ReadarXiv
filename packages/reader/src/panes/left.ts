@@ -1,6 +1,6 @@
-// The left pane while it is PDF.js's viewer (design §4.5: the stack goes under the left only if it matches today's left; until
-// then, and if it does not, the left keeps PDFViewer). What the website measured PDFViewer needs, carried from its
-// own PDF.js set-up into the reader so that both hosts run it: `quietRoot` (PDF.js's write of its container's height on the root
+// The left pane while it is PDF.js's viewer (the stack goes under the left only where it matches what PDFViewer draws;
+// where it does not, the left keeps PDFViewer). What the website measured PDFViewer needs, set up in the reader so that
+// both hosts run it: `quietRoot` (PDF.js's write of its container's height on the root
 // restyled every element of the page, 41 to 54 ms in one task), `eagerPages` (with autoFetch off PDF.js lays every undrawn page at
 // page 1's size: a landscape page in a letter box) and `aheadHeld`, whose hold is now the reader's own (it was a module
 // variable). Each patches a class or the document's root, idempotent, holding no reader's state.

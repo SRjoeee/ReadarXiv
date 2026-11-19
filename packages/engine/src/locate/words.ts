@@ -1,12 +1,11 @@
 // Placed.words (format's; docs/PDF-READER.md §17.2): where on arXiv's page a sentence of a unit may begin, each word of the
 // unit's source projection at its first glyph on A. A row's sentence starts are its translator's own (Microsoft's sentence
 // lengths; the shared cutter's for Google, an LLM, Chrome's), offsets in the unit's projection the prepare cannot know before
-// it is translated, so every word is placed, as today's left part carried every word's page token for its starts
-// (anchors.mjs startRuns, sentenceStarts): over the corpus's stored Microsoft rows 82 % of the starts are among the shared
-// cutter's cuts and 83 % among Unicode's sentence boundaries (40,409 starts, 2026-11-08), and no closed set of what precedes
-// them covers the rest ("." 73 %, an element 16 %, ";" 6 %, "(" 1 %, a comma, a letter).
+// it is translated, so every word is placed: over the corpus's stored Microsoft rows 82 % of the starts are among the shared
+// cutter's cuts and 83 % among Unicode's sentence boundaries (40,409 starts, measured 2026-11-08), and no closed set of what
+// precedes them covers the rest ("." 73 %, an element 16 %, ";" 6 %, "(" 1 %, a comma, a letter).
 //
-// A word is a run of letters and digits of the projection, a CJK character one of its own (today's anchors.mjs tokens). The
+// A word is a run of letters and digits of the projection, a CJK character one of its own. The
 // unit's text glyphs on A, in stream order, are its text as TeX set it: the projection's letters and the glyphs' letters are
 // matched in order (the longest common subsequence, Myers', the align's own), each side's words kept apart by a break where its
 // text has one (a space, a mark, an element; a glyph apart from the one before, PDF.js's space, or on another line, but where
@@ -14,16 +13,16 @@
 // lower case: a ligature is its letters, an accent TeX sets as a glyph of its own is none). A word is placed where every
 // letter of it is matched and its glyphs' letters follow one another with no break between: its first glyph's line (the
 // index in the member's lines) and x0, from the opening brackets and quotes set against it (Unicode's Ps, Pi: the page's text
-// runs them in one token with the word, today's left start, so that "(See" begins at its "("). One that is not (a word TeX never set, a word a macro's own text stands across) is
+// runs them in one token with the word, so that "(See" begins at its "("). One that is not (a word TeX never set, a word a macro's own text stands across) is
 // stated at line -1: a row's start there is found at its sentence's next word placed (lay/lit.ts startsOnA, LATE).
-import type { Piece } from '@readarxiv/format'
+import type { KnownKind, Piece } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
 import type { DocGlyph } from '../doc.ts'
 import { apart, fold, lineChange, lineEnd } from './facts.ts'
 
-/** the unit kinds lit whole, never by sentence (today's view/highlight.mjs NOT_RUNNING): a heading, a table's cell, a figure's
+/** the unit kinds lit whole, never by sentence: a heading, a table's cell, a figure's
  *  text, a figure's ink text (what lies among their words is their float's or their table's); and a babel name, a word */
-const WHOLE = new Set(['heading', 'cell', 'figure', 'inkfigures', 'name'])
+const WHOLE = new Set<string>(['heading', 'cell', 'figure', 'inkfigures', 'name'] satisfies readonly KnownKind[])
 /** whether a unit of `kind` lights by sentence: the prepare marks it (Unit.sentences), so that a translator cuts it, and places
  *  its words (Placed.words) */
 export const bySentence = (kind: string, figure = false): boolean => !figure && !WHOLE.has(kind)
@@ -170,7 +169,7 @@ export function wordsOn(
     let ok = matched[from]! >= 0
     for (let i = from + 1; ok && i < to; i++) ok = matched[i]! === matched[i - 1]! + 1
     let q = ok ? gOf[matched[from]!]! : -1
-    // (from the opening brackets and quotes set against it: the page's text runs them in one token with it, today's start)
+    // (from the opening brackets and quotes set against it: the page's text runs them in one token with it)
     while (q > 0 && opensBefore(glyphs[q - 1]!, glyphs[q]!)) q--
     const line = q >= 0 ? lineOf(q) : -1
     firsts?.push(line >= 0 ? q : -1)

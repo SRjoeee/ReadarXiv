@@ -1,15 +1,14 @@
-// A laid page's text layer (design §4.5 "Text and links"; design-a §1.4 "hiding and text by the same groups"; docs/PDF-READER.md
-// §11.11): arXiv's text content of the page in content-stream order, the items under a group that is off dropped and the member's
+// A laid page's text layer (docs/PDF-READER.md §11.11; what is hidden and what is text read by the same groups): arXiv's
+// text content of the page in content-stream order, the items under a group that is off dropped and the member's
 // laid items put at its first dropped item, so that selection, the browser's find and a screen reader meet one copy of the text,
-// in reading order (I8). Built by PDF.js's own TextLayerBuilder (its handling of a drag and of a copy), carried from today's
-// layer text (layer-proto/textlayer.mjs, view/text-layer.mjs at baf2083e0):
+// in reading order (I8). Built by PDF.js's own TextLayerBuilder (its handling of a drag and of a copy):
 //
 // - a crop's text is the original's text under its source, moved to where the crop is drawn (a formula's text where its ink is
 //   drawn); a crop with none under it carries its own plain text. A crop cut between two glyphs (a URL the typesetter broke
 //   over lines) takes, in each part, the characters under that part's source, whatever items PDF.js gave the URL as: its text
 //   read once, whole, in order;
 // - a run laid along a direction (a figure text the original sets turned) is placed turned, its matrix its direction, where it
-//   is drawn (the original's own turned text stays out of the layer, as today's);
+//   is drawn (the original's own turned text stays out of the layer: the left's layer has it);
 // - a kept item the stream sets between two of one member's dropped items (a display the unit keeps, a float set inside its
 //   run) goes inside the member's block, before the first of its lines below it or on its line to its right;
 // - between two sources a copy breaks the line where they stand on two lines and gets a space where they stand apart on one;
@@ -49,7 +48,7 @@ const EPS = 0.5
  *  line's neighbours are merged (PDF-READER §11.11); a ruling, unmeasured */
 export const TEXT_ITEMS_MAX = 2000
 /** the paper's language, on the text layer (docs/PDF-READER.md §13) */
-export const SOURCE_LANG = 'en'
+const SOURCE_LANG = 'en'
 /** how far past a crop's source the middle of a text item of its may stand, PDF units (an item's box is its font's, not its
  *  ink's) */
 const PAD = 0.6
@@ -144,8 +143,8 @@ function groupOf(run: TextItem[], at: (x: number, y: number) => [number, number]
  * The items of a crop's source among the dropped items of its member (each item's middle inside the source's ink), moved by
  * the crop's map to where it is drawn: x from the crop's place, the source's baseline on the line's. A part of a crop cut
  * between two glyphs (`cut`: 1 its left edge, 2 its right; a URL the typesetter broke over lines) takes each item's characters
- * whose place stands in it, each at the middle of its share of the item's advance (equal advance across the item, as today's
- * layer places a character: links.mjs pointsOf), with no margin at a cut edge: PDF.js may give the whole URL as one item, whose
+ * whose place stands in it, each at the middle of its share of the item's advance (equal advance across the item: a text item
+ * states its advance whole, not its characters'), with no margin at a cut edge: PDF.js may give the whole URL as one item, whose
  * middle stands in one part alone, and every character is then one part's, in order
  */
 function movedOf(dropped: TextItem[], src: Ink, k: number, x: number, y: number, cut = 0): TextItem[] {
@@ -216,7 +215,7 @@ export function laidText(
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i] as Entry
     // (rotated and vertical text, an axis label turned a quarter, is left out of the layer: the left's layer has it,
-    // textlayer.mjs itemsOf, "Not in v1")
+    // PDF-READER §11.11, "Not in v1")
     if (isText(e) && !upright(e, content)) continue
     if (isText(e) || e.type !== 'beginMarkedContentProps' || e.tag !== 'OC') {
       stream.push({ kind: 'kept', e })
@@ -425,8 +424,8 @@ function withStr(
 }
 /** between two sources (the original's and a translation's), a line's end where they stand on two lines, a space where they
  *  stand apart on one; within a source its own (PDF.js's hasEOL; a translated paragraph's lines joined as one). Read in the
- *  first's own direction (a turned figure word's: Codex on #632, two quarter-turned labels whose origins share a page y read
- *  as one line, no space between): the second across it off its baseline is another line, along it past its advance (its
+ *  first's own direction (a turned figure word's: else two quarter-turned labels whose origins share a page y read as one
+ *  line, no space between): the second across it off its baseline is another line, along it past its advance (its
  *  `width`, along its direction) apart on one; two of different directions stand on two lines */
 function breaks(entries: Entry[], translated: Set<TextItem>, src: Map<TextItem, number>): Entry[] {
   const out = entries.slice()

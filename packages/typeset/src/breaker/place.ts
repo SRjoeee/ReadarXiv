@@ -1,6 +1,5 @@
-// B.place (design-b §1.5, G1): each line's items placed (justified within the caps, ragged, centred, flush), and a fit's
-// breaking made a layout (laidOut). Today's code (layer2.mjs L2:3976-4038, L2:4136-4157), moved by
-// lab/typeset/move-fit.mjs.
+// B.place: each line's items placed (justified within the caps, ragged, centred, flush), and a fit's
+// breaking made a layout (laidOut).
 import { gapsOf, hangOf, inWord, latinishOf, lineExtent, squeezable, tabOf } from './break.ts'
 import { inFlow, slotsAt } from './slots.ts'
 import { toLastLines } from '../fit/last-lines.ts'
@@ -42,7 +41,7 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams, scale: number): 
       perGap = 0
     line.mode = line.centred ? 'centred' : line === last || line.ends ? 'last' : 'just'
     // (a line of a unit TeX set flush left is ragged at its natural spacing, every line of one set flush right stands at the
-    // right edge, its last too: \raggedleft sets no \parfillskip past it; lane B's B2, run.mjs)
+    // right edge, its last too: \raggedleft sets no \parfillskip past it)
     if (line.flush === 'left' && line.mode === 'just') line.mode = 'ragged'
     else if (line.flush === 'right') line.mode = 'right'
     // a line squeezed to take its last group (breakLines' squeezeTakes): its marks' blank halves first, as many as it needs,
@@ -155,7 +154,7 @@ function laidOut(
       if (a.baseline - lineExtent(a, f, st.scale, P.measure).d < b.baseline + lineExtent(b, f, st.scale, P.measure).a)
         unopened++
     }
-  // (`fitTrack`: the tracking the fit set the unit at, which a state made from this one keeps (run.mjs fillPage's): a line
+  // (`fitTrack`: the tracking the fit set the unit at, which a state made from this one keeps (fillPage's): a line
   // squeezes at no tracking above it, breakLines' squeezes)
   const state = st.fitTrack === undefined ? { ...st, fitTrack: st.track } : st
   return {

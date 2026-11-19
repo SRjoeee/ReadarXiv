@@ -1,17 +1,14 @@
-// U.params (design-b §1.5, E6, E7, E23, E24): the size a unit is laid at, and the parameters its fit reads
-// beside the target's rules: its leading relative to the original's own pitch (leadOf: the script's of a solid-set
-// original, never closer than the original's), the CJK runs' starting tracking (a face's size correction given back), TeX's
-// \lineskip, its edges (whether its first and last lines stand alone on their baselines, the room under its last), whether a
-// heading stands on its original's last lines, and a CJK cell's bands between the rules near its lines (cellBands) with the
-// size every band holds. Ported from engine 065c1d973: RUN:2088 (s), unitSizeOf L2:796-803 (CJK_CAPS_SIZE
-// L2:792, the ruling of 2026-10-24), RUN:2244-2251 (P, clear, capScale, fillable), leadOf L2:3073-3079 (SOLID L2:3065),
-// cjkAdvance RUN:1822-1826, edgesOf's use of the label RUN:1670, clearanceOf RUN:1675, cellBands L2:352-380.
+// U.params: the size a unit is laid at, and the parameters its fit reads beside the target's rules: its leading relative to
+// the original's own pitch (leadOf: the script's of a solid-set original, never closer than the original's), the CJK runs'
+// starting tracking (a face's size correction given back), TeX's \lineskip, its edges (whether its first and last lines stand
+// alone on their baselines, the room under its last), whether a heading stands on its original's last lines, and a CJK
+// cell's bands between the rules near its lines (cellBands) with the size every band holds.
 //
-// Its inputs, and the field each comes from once lane L1 states it:
+// Its inputs, and the field each comes from:
 // - the reading's `orig` (the original's size and style, its faked small capitals aside ← Placed.style) and `measured`
 //   (its glyphs' base style ← TeX's font state); `rects` (where no glyph was read: its lines' heights ← Line)
 // - `edges`: whether the first and the last line share their baseline with nothing of the page beside them in their frame,
-//   and the room down to the next line of its column (edgesOf RUN:1638, the page's characters) ← Room.next, Line PINNED
+//   and the room down to the next line of its column (the page's characters) ← Room.next, Line PINNED
 //   (F.edges); `rules`: each page's rules near the unit's lines (hiding.rules: the manifest's) ← the part's rules
 // - `cjkSize`: the size correction of the target's CJK body face (B.faces); `lineskip`: TeX's \lineskip and its limit
 //   (the run's LINESKIP, TeX's log); `heading`, `numbered`: U.decor's
@@ -19,12 +16,12 @@ import { median, type Rect } from '../util.ts'
 import { baseOf, type TokensInput, type TStyle } from '../breaker/tokens.ts'
 import type { Block } from './blocks.ts'
 
-/** a CJK target's small capitals at this share of the original's size (L2:792 CJK_CAPS_SIZE, the ruling of 2026-10-24) */
+/** a CJK target's small capitals at this share of the original's size (a CJK target has no case: docs/PDF-READER.md §18.1) */
 export const CJK_CAPS_SIZE = 1
-/** a solid-set original's pitch, × its size (L2:3065 SOLID) */
+/** a solid-set original's pitch, × its size */
 const SOLID = 1.25
-/** the units of the page's head and foot (today's ink units of the heads and the notes): one of a single line, a running head,
- *  a page number, keeps the original's size (the owner's ruling of 2026-11-08): its fit's floor is its size */
+/** the units of the page's head and foot (the ink units of the heads and the notes): one of a single line, a running head,
+ *  a page number, keeps the original's size (docs/PDF-READER.md §18.11): its fit's floor is its size */
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
 /**
@@ -33,12 +30,12 @@ const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
  * rhythm binds it: the page fill never spreads it (lay/page.ts, shared/fill-pass.ts), and its fit takes the leading before the
  * room down to the least (floatOrder). A class of the unit's own kind, read where a unit's kind is read: the rule file is by
  * script. A note is none: a run of sibling blocks in a column (body paragraphs, notes, list items, references) shares its page's
- * rhythm, each filling its frame within the page's band (the coordinator's ruling of 2026-11-17 on the owner's choice)
+ * rhythm, each filling its frame within the page's band (docs/PDF-READER.md §18.90)
  */
 export const floatMember = (kind: string): boolean => kind === 'caption'
 /**
- * The order of the fit's knobs for a float's member (docs/PDF-READER.md §18.90; the owner's review of 2026-11-13: the
- * leading gives way before the separation does, for the class, and the size last): the script's order, its room knob two knobs,
+ * The order of the fit's knobs for a float's member (docs/PDF-READER.md §18.90: the leading gives way before the
+ * separation does, for the class, and the size last): the script's order, its room knob two knobs,
  * the gap's free part (`free`: the shrink TeX's glue states under it, Room.gap) where the script's order has the room, the rest
  * of the room down to the least (`borrow`) directly before the size (`shrink`), at the end of an order with no size step. The
  * class's order is by kind and the rule file's by script, so it is stated here, once, from the script's: a script whose order
@@ -74,7 +71,7 @@ export type Original = {
 }
 
 /** the size a unit is laid at: the original's, × CJK_CAPS_SIZE in a CJK target where its base is in small capitals;
- *  undefined where no glyph of it was read (L2:796 unitSizeOf) */
+ *  undefined where no glyph of it was read */
 export function unitSizeOf(prep: Original, P: Pick<ParamsRules, 'cjk'>, unit: TokensInput['unit'] | null = null) {
   const size = prep?.orig?.size
   if (!(size! > 0)) return undefined
@@ -84,7 +81,7 @@ export function unitSizeOf(prep: Original, P: Pick<ParamsRules, 'cjk'>, unit: To
     : !!prep.orig!.st?.caps && (!unit?.pieces || baseOf(unit, prep.orig!.st!).caps)
   return caps ? size! * CJK_CAPS_SIZE : size
 }
-/** the size the unit is laid at, its lines' median height where no glyph was read (RUN:2088) */
+/** the size the unit is laid at, its lines' median height where no glyph was read */
 export const sizeOf = (
   prep: Original,
   P: Pick<ParamsRules, 'cjk'>,
@@ -95,7 +92,7 @@ export const sizeOf = (
 /** the pitch the lay takes for a block that states none of its own (B.slots and the walk: `pitch0 ?? 1.2 * s`), × its size */
 const UNPITCHED = 1.2
 
-/** the unit's leading relative to the original's own pitch (L2:3073 leadOf): the script's spread of a solid-set original's pitch
+/** the unit's leading relative to the original's own pitch: the script's spread of a solid-set original's pitch
  *  (`leadBase`: ctex's 1.3 for Chinese, xetexko's 1.38889 for Korean), never wider than that spread on the original's own pitch;
  *  or, where the script's class states its pitch in ems of the block's own size (`leadEm`: jlreq's 1.7 for Japanese,
  *  docs/PDF-READER.md §18.89), that pitch over the original's (over the pitch the lay takes, where the block states none). Never
@@ -120,7 +117,7 @@ export function leadOf(
   return Math.min(P.leadBase, Math.max(1, Math.round((1000 * P.leadBase * SOLID * s) / p0) / 1000))
 }
 
-/** the CJK runs' tracking a fit starts from: the em a face's size correction takes, given back (RUN:1822 cjkAdvance) */
+/** the CJK runs' tracking a fit starts from: the em a face's size correction takes, given back */
 export const cjkAdvance = (cjk: boolean | undefined, cjkSize: number | undefined): number => {
   if (!cjk) return 0
   const c = cjkSize ?? 1
@@ -129,7 +126,7 @@ export const cjkAdvance = (cjk: boolean | undefined, cjkSize: number | undefined
 
 /** a line's band between the rules over and under it (cellBands) */
 export type Band = { B: number; lo: number; hi: number }
-/** a CJK cell's bands by block, and the largest size every band holds its em box at (L2:352 cellBands) */
+/** a CJK cell's bands by block, and the largest size every band holds its em box at */
 export function cellBands(
   blocks: readonly Pick<Block, 'page' | 'B' | 'rects' | 'x0' | 'x1'>[],
   rulesOf: (page: number) => readonly number[] | null | undefined,
@@ -199,7 +196,7 @@ type Params = {
   fillable: boolean
 }
 
-/** U.params: the fit's parameters of the unit (RUN:2244-2251) */
+/** U.params: the fit's parameters of the unit */
 export function params(i: ParamsInput): Params {
   const halfLead =
     i.kind === 'cell' || !i.blocks.length || !i.edges

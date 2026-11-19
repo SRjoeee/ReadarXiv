@@ -1,5 +1,5 @@
 // What both wires do to text: the escaping the free endpoints need, the entities read back, the code points no reader
-// sees. Restated from the measured facts (translation dossier §16): Microsoft's and Google's free endpoints run an HTML
+// sees. Restated from the measured facts (DESIGN §8.3): Microsoft's and Google's free endpoints run an HTML
 // aligner on every request, so a bare `<` or `&` fuses (`a < b and c > d` came back `<B和C> d`), and replies stay
 // HTML-encoded; Google sets zero width spaces inside words; a numeric entity past U+10FFFF must not throw.
 import type { Piece } from '../contract.ts'
@@ -30,7 +30,7 @@ export const ENTITY = '&(?:#[xX][0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos|nbsp);'
 export const SAYS = /[\p{L}\p{N}]/u
 export const LETTER = /\p{L}/u
 
-/** what an element reads as to the sentence splitter, by its kind (mt.mjs splitContextOf, now typed): a note's mark belongs
+/** what an element reads as to the sentence splitter, by its kind: a note's mark belongs
  *  to the sentence before it; a citation too where it is set against it, else it opens the next (`… expensive. \citet{x}
  *  proposes …`: the splitter reads where it stands, @readarxiv/text `citation`); a reference is a number, a formula a word, a
  *  break a space */
@@ -121,7 +121,7 @@ const OWN_MARKS = '.,;:。．，、；：।۔،؛'
 export const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 
 /** the stop a display that states none of its own ends its sentence with, where TeX set it at that sentence's end */
-export const DISPLAY_END = '.'
+const DISPLAY_END = '.'
 /** a text that begins a sentence: its first letter upper case (Unicode Lu, Lt) */
 const BEGINS = /^\s*[\p{Lu}\p{Lt}]/u
 /**
@@ -132,9 +132,9 @@ const BEGINS = /^\s*[\p{Lu}\p{Lt}]/u
  * `silent`, one that reads as white space: a space, a break); an element that sets something, or the unit's end, gives none.
  * Each wire writes it after the display as the display's own stop, which reading takes back (the original sets none there),
  * and the tags wire's cutter reads it: a translator is asked for the sentence TeX ended (Microsoft cuts at neither a marker nor
- * a colon: 0 of 444 without a display's stop, 1,357 of 1,357 with it). Over the corpus's 88 papers (2026-11-09): 3,937 displays
- * state their stop; of the rest, 328 go on in lower case, 52 end their unit, 95 on 22 papers are followed by an upper-case
- * word, the commonest all a sentence's first (The 17, In 9, We 7, For 5, Here 5, Then 4, This 4)
+ * a colon: 0 of 444 without a display's stop, 1,357 of 1,357 with it). Over the corpus's 88 papers (measured 2026-11-09):
+ * 3,937 displays state their stop; of the rest, 328 go on in lower case, 52 end their unit, 95 on 22 papers are followed by
+ * an upper-case word, the commonest all a sentence's first (The 17, In 9, We 7, For 5, Here 5, Then 4, This 4)
  */
 export function displayEnds(content: readonly Piece[]): readonly Piece[] {
   const ends = new Set<Piece>()

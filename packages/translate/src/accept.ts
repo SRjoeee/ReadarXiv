@@ -1,4 +1,4 @@
-// The acceptance rule, the chain's one (the translate decision; design-a §1.3, design-b §1.1): applied to every
+// The acceptance rule, the chain's one (DESIGN §8): applied to every
 // reading of every reply, stored or fresh. A reading the rule refuses goes to the next translator for that unit alone.
 import type { OutPiece, Piece, Sentences, UnitIn } from './contract.ts'
 
@@ -18,9 +18,9 @@ export type Refusal =
   | 'unread'
 
 /** The one measured length floor (the LLM probe: both cut units under 0.2, p05 0.29), for every target */
-export const LENGTH_FLOOR = 0.2
+const LENGTH_FLOOR = 0.2
 /** … for units of this many plain characters or more */
-export const FLOOR_FROM = 200
+const FLOOR_FROM = 200
 
 const OBJ = '￼'
 /** whether a text holds a C0 or C1 control but tab and newline */
@@ -36,7 +36,7 @@ const LETTER = /\p{L}/u
 const SAYS = /[\p{L}\p{N}]/u
 const SOLID = /\S/
 
-/** The plain projection of a piece list (design-a §1.4): text joined, each element one U+FFFC, spans transparent. The
+/** The plain projection of a piece list: text joined, each element one U+FFFC, spans transparent. The
  *  coordinates of `Sentences` */
 export function projectionOf(content: readonly (Piece | OutPiece)[]): string {
   let out = ''
@@ -134,14 +134,14 @@ export function accept(unit: UnitIn, out: readonly OutPiece[]): { ok: true } | {
     const n = seenSpans.get(id) ?? 0
     if (n > 1 || (s.must && n !== 1) || (s.must && s.text && !spanText.get(id))) return { ok: false, why: 'spans' }
   }
-  // (a digit is a translation of words: "two" is 2, mt.mjs SAYS, the review of #404)
+  // (a digit is a translation of words: "two" is 2)
   if (LETTER.test(textOf(unit.content)) && !SAYS.test(textOf(out))) return { ok: false, why: 'empty' }
   const from = plainLength(unit.content)
   if (from >= FLOOR_FROM && plainLength(out) < LENGTH_FLOOR * from) return { ok: false, why: 'short' }
   return { ok: true }
 }
 
-/** Whether a reading's sentences reconstruct (design-a §1.4): as many starts on each side, each side strictly
+/** Whether a reading's sentences reconstruct: as many starts on each side, each side strictly
  *  increasing and strictly inside its projection. Sentences that do not are dropped; the translation stays */
 export function validSentences(unit: UnitIn, out: readonly OutPiece[], s: Sentences): boolean {
   const inside = (xs: readonly number[], length: number) =>

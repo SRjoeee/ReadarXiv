@@ -1,9 +1,9 @@
-// The faces a reader paints translations in (no state outside a reader, design §4.5): each a FontFace of its own family name,
+// The faces a reader paints translations in (no state outside a reader): each a FontFace of its own family name,
 // made from bytes read through the reader's fetch (a font is fetched as data, never imported: Chromium keeps a failed import()
 // failed for the page's life, as the website found), added to the document while the reader lives and taken out with it, and a class
 // a run is drawn with. A face the table names a local family for (a test's, a system's) is that family.
 //
-// Loaded in waves (layer-side.mjs warmPages, docs/PDF-READER.md §11.8): the faces asked together are read in the order asked
+// Loaded in waves (docs/PDF-READER.md §11.8): the faces asked together are read in the order asked
 // (the page in the middle of the view first), WAVE_SLOTS at a time, so that a wave does not hold the original's reads behind
 // it; each asked once. A face whose answer is a 4xx other than 408 and 429 is never asked again (the website's rule); any other
 // failure (the network, a 5xx, a 408 or 429) is forgotten, and asked again by the next wave that wants it.
@@ -21,7 +21,7 @@ export interface FaceEntry {
   fallback?: string
 }
 export type FaceTable = Readonly<Record<FaceId, FaceEntry>>
-/** how many faces a wave reads at a time (layer-side.mjs WAVE_SLOTS) */
+/** how many faces a wave reads at a time */
 export const WAVE_SLOTS = 4
 
 export interface Faces {

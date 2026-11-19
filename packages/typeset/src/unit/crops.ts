@@ -1,6 +1,5 @@
 // An element's ink as crops, one a line of TeX's: box arithmetic over its segments (stride 6: page, x0, baseline, x1, top,
-// bottom), ported from engine 065c1d973 layer2.mjs cropOfBox L2:1805-1807, cropPartsOfSegments L2:1819-1852, cropFields
-// L2:1868. Its segments are the layout file's today; A's El.ink (one box per TeX line, its baseline) once lane L1 states it.
+// bottom). Its segments are A's El.ink (one box per TeX line, its baseline) in the layout file's form (lay/read.ts segsOf).
 
 /** a segment's box: its extent, top, bottom and the baseline of the line TeX set it on; `lines` its segments' count */
 type SegBox = { x0: number; x1: number; top: number; bottom: number; baseline: number; lines?: number }

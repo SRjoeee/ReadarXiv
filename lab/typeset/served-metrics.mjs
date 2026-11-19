@@ -140,7 +140,8 @@ export function servedMetrics() {
     let a = Number.NEGATIVE_INFINITY
     let d = Number.NEGATIVE_INFINITY
     let right = Number.NEGATIVE_INFINITY
-    if (!runs.length) a = d = right = 0
+    let left = Number.POSITIVE_INFINITY
+    if (!runs.length) a = d = right = left = 0
     for (const r of runs) {
       // (measured at 100 px and scaled to the string's: Skia's canvas parses no size of many decimals, the Korean face's
       // 95.89999999999999 px, and a glyph's advance scales with its size, unhinted)
@@ -151,9 +152,10 @@ export function servedMetrics() {
       a = Math.max(a, t.actualBoundingBoxAscent * k)
       d = Math.max(d, t.actualBoundingBoxDescent * k)
       right = Math.max(right, w + t.actualBoundingBoxRight * k)
+      left = Math.min(left, w - t.actualBoundingBoxLeft * k)
       w += t.width * k
     }
-    m = [w, a, d, right]
+    m = [w, a, d, right, left]
     measured.set(key, m)
     return m
   }
@@ -170,6 +172,12 @@ export function servedMetrics() {
       const m = measure(face, text)
       const px = runsOf(face, text).px
       return [at(m[1], px, size), at(m[2], px, size), at(m[3], px, size)]
+    },
+    // (where its ink starts, right of the text's start (a glyph's left bearing; negative where its ink stands before its
+    // origin): no field of Metrics, the lab's own reading of a drawn run's ink, the reader gate's I3 by ink, ink-gate.ts)
+    inkLeft: (face, size, text) => {
+      const m = measure(face, text)
+      return at(m[4], runsOf(face, text).px, size)
     },
   }
 }

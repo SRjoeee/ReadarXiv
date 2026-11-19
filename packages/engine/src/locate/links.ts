@@ -11,15 +11,15 @@ import { assign, type Located, type LocateOptions, type Member, type Work } from
 export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
   const { inkA, m, pageA } = w.ix
   const { members } = w
-  // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (today's links.mjs ownersOf: the
-  // unit whose rectangles hold more than half of its glyph points; by exact ownership, the member that owns more than half of
-  // them), and within it by the element that owns more than half of them, else its text; where its label's glyphs are more than
+  // ---- links: A's annotations, each owned by the member that owns most of the glyphs under it (by exact ownership, the member
+  // that owns more than half of its glyph points), and within it by the element that owns more than half of them, else its
+  // text; where its label's glyphs are more than
   // half of them, its text's stated as the label's (`label`: the add-on wraps the label in a group of its own, which stays on
-  // where the label is not drawn anew, as its link may: today's freeze keeps a link no match took whose glyphs no operation of
+  // where the label is not drawn anew, as its link may: the typesetter keeps a link no match took whose glyphs no operation of
   // the page erased). A glyph point is a glyph's advance centre on its baseline strictly inside the annotation's rectangle or one
-  // of its quads (PDF.js's overlaidText rule, today's pointsOf). A link over no glyph: the member one of whose lines or elements
+  // of its quads (PDF.js's overlaidText rule, pointsOf). A link over no glyph: the member one of whose lines or elements
   // holds its rectangle's centre. The annotations of one target a member owns on a page that hold, together, every glyph of its
-  // text's and its elements' there are stated so (`whole`: today's whole tier, links.mjs:426, every own character of the unit's
+  // text's and its elements' there are stated so (`whole`: every own character of the unit's
   // the drawing replaces under them, by glyph point; a line's ink is no measure of it, its last glyph's ink past the link's box)
   const links: Located['links'] = new Map()
   ;(o.annotations ?? []).forEach((list, p) => {
@@ -68,9 +68,9 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
           }
         }
       }
-      // (the characters of the glyphs under it, its glyph points' in their order: today's annotation's own (links.mjs g2.ch, which
-      // its placeText finds among a piece's drawn characters where PDF.js's overlaidText is not read: the server's reading
-      // skips it, pdf-lite.mjs's text guard)
+      // (the characters of the glyphs under it, its glyph points' in their order: the annotation's own (Link.text, which the
+      // typesetter's placeText finds among a piece's drawn characters where PDF.js's overlaidText is not read: the server reading
+      // skips it, compile/pdf-lite.ts's text guard)
       const text = pts.map((a) => pg.glyphs[a - off]!.u).join('')
       const border = borderOf(an)
       out.push({
@@ -105,8 +105,8 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
 
 /** a link annotation's border as PDF.js's annotation layer draws it (the original's pane): its width where above 0 (its /BS /W,
  *  else its /Border's, as PDF.js reads them: none where neither is), its colour (PDF.js's borderColor: a link's /C, null for /C
- *  [], black where it has none), its style (PDF.js's AnnotationBorderStyleType: 2 dashed, 5 underline, any other solid, today's
- *  layer-proto/links.mjs annotsOf). None where the width or the colour is none: PDF.js draws none */
+ *  [], black where it has none), its style (PDF.js's AnnotationBorderStyleType: 2 dashed, 5 underline, any other solid).
+ *  None where the width or the colour is none: PDF.js draws none */
 function borderOf(an: {
   borderStyle?: { width?: number; style?: number }
   borderColor?: ArrayLike<number> | null

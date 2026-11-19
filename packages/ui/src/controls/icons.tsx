@@ -1,4 +1,4 @@
-// The display switch's own three icons on a 24 × 18 pane, the maintainer's round 11 (2026-09-25): its frame 1 px too,
+// The display switch's own three icons on a 24 × 18 pane: its frame 1 px too,
 // as Lucide's beside it (@/ui/controls/Icon), its edges on the pixel grid, the split drawn crisp; the letters filled (§6.2)
 /** the reader's three displays, as its icons draw them */
 type Display = 'original' | 'bilingual' | 'translation'

@@ -2,7 +2,7 @@
 // language than the interface's (a language's own name, #313), and what follows. The capsule draws each part in a cell
 // of its own, so that a count changes in place (capsule-motion.ts), and tells a screen reader the words whole. Nothing
 // here knows a language: a sentence is split where its count or its part stands in it, whatever its length or script
-// (the maintainer plans more interface languages after launch)
+// (so that an interface language added later needs nothing here)
 
 export interface CapsuleWords {
   prefix: string

@@ -1,7 +1,7 @@
-// S.onLeadRetry (design-b §1.5, E25): a unit laid on from the line before over a shared row (its first line a pitch under that
+// S.onLeadRetry: a unit laid on from the line before over a shared row (its first line a pitch under that
 // line, `onLead`, S.rowStart's) whose first line then stands lower than laid from TeX's row as before: laid again from the row
 // as before, and kept so where its last line stands lower laid on, or where only laid as before does it set a line on the
-// row's page. Ported from engine 065c1d973 run.mjs RUN:2263-2269 (lowerThan RUN:2263).
+// row's page.
 //
 // Its inputs: the unit's layout at F2 and the tokens and blocks it was laid from, its size and parameters; where it was laid
 // on from (`onLeadOf`: the row start S.rowStart set before, F1's); the fit (layoutCut, X.cut).

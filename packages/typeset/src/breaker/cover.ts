@@ -1,13 +1,12 @@
-// B.cover (design-b §1.5, T3): whether the faces a unit's tokens are set in are there before any width is taken. Ported from
-// engine 065c1d973 run.mjs RUN:2199-2207 (FS.check over runsOfTokens fonts.mjs:314-325) over Metrics.ready (design-a §1.2):
-// a face not loaded yet is waited for (the page is not committed: Page.wait.faces); a character no served slice holds leaves
-// the unit the original's, `served`, with the characters missing (today's 'face', a slice that failed to load, is a host's
-// failure Metrics answers as not ready).
+// B.cover: whether the faces a unit's tokens are set in are there before any width is taken, each face's runs
+// (runsOfTokens) asked of Metrics.ready: a face not loaded yet is waited for (the page is not committed: Page.wait.faces);
+// a character no served slice holds leaves the unit the original's, `served`, with the characters missing (a slice that
+// failed to load is a host's failure, which Metrics answers as not ready).
 import type { FaceId, Metrics } from '../types.ts'
 import { fontString } from './measure.ts'
 import type { Face, Token } from './tokens.ts'
 
-/** the faces a unit's runs are set in, each with the characters it sets (fonts.mjs:314 runsOfTokens): a role face's (one
+/** the faces a unit's runs are set in, each with the characters it sets: a role face's (one
  *  with served ids) text and spaces, and a hyphen where a word may be cut */
 export function runsOfTokens(tokens: readonly Token[]): { face: Face; font: FaceId; text: string }[] {
   const by = new Map<FaceId, { face: Face; chars: Set<string> }>()
