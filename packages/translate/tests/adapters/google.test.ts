@@ -11,6 +11,7 @@ import { translatorSuite } from '../../src/testing/suite.ts'
 import { el, quiet, span, t, unit } from '../pieces.ts'
 import {
   DISPLAY_ENDS,
+  FORMULA_BEFORE_BREAK,
   GOOGLE_REPLIES,
   HEAD_STOP,
   LABEL_AFTER_BREAK,
@@ -992,18 +993,65 @@ describe('google: a stop TeX sets at a group’s end', () => {
   })
 })
 
-// (a line end an element states is the markers wire's, where Microsoft cuts its sentence: the tags wire, whose sentences our
-// cutter reads, writes the unit as it did before the source reader stated it, and reads no mark after it as the element's)
+// (a line end an element states ends its sentence before the stretch of elements it stands in, as a stop of the text ends one
+// before the elements set right after it: the stretch leads the next sentence (wire/text.ts leadsNext). Our cutter ends the
+// sentence at the line end, the boundary marker stands before the stretch's first element, and the stretch is read back as the
+// next sentence's lead; the wire writes no line end of its own, its white space being none. 1810.04805v2 p8 on staging: with the
+// break inside one sentence of our cutter's, Google's Japanese set it mid-sentence, before the macro, as Microsoft's set it
+// when its marker ended the sentence before; the second break, after "task." and so the next
+// sentence's lead, stood before its label in every reply)
 describe('google: a stop that is a line end', () => {
-  it('is written by neither the wire nor the cutter: the unit goes as it did with no stop stated', () => {
+  it('ends its sentence before the stretch it stands in: the boundary marker before the stretch, no line end written', () => {
     const t = google({ fetch: scriptedFetch(googleEcho).fetch })
-    const strip = (ps: readonly Piece[]): Piece[] =>
-      ps.map((p) =>
-        p.t === 'el' ? { t: 'el', id: p.id, kind: p.kind } : p.t === 'span' ? { ...p, content: strip(p.content) } : p,
-      )
     expect(t.write(LABEL_AFTER_BREAK, 'zh-Hans')).toBe(
-      t.write({ ...LABEL_AFTER_BREAK, content: strip(LABEL_AFTER_BREAK.content) }, 'zh-Hans'),
+      'We compare two settings as follows: <x id="8"/><b translate=no>x1</b> <b translate=no>x2</b> <b translate=no>x3</b><span id="4">No XYZ</span>: A model trained without the XYZ task. <x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">Only XYZ</span>: A model trained with it alone.',
     )
+  })
+  it('a formula right before the break stays in the sentence before: the boundary marker between it and the break', () => {
+    const t = google({ fetch: scriptedFetch(googleEcho).fetch })
+    expect(t.write(FORMULA_BEFORE_BREAK, 'zh-Hans')).toBe(
+      'The input is a grid and two constants <b translate=no>x1</b> <x id="4"/><b translate=no>x2</b><span id="3">Output</span>: A binary string. <x id="5"/>Then we stop.',
+    )
+  })
+  it('reads the break before the label, the sentence the label begins after the stretch it leads', () => {
+    const r = readTagged(
+      LABEL_AFTER_BREAK,
+      '我们比较以下两种设置：<x id="8"/><b translate=no>x1</b> <b translate=no>x2</b> <b translate=no>x3</b><span id="4">无 XYZ</span>：一个未经 XYZ 任务训练的模型。<x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">仅 XYZ</span>：一个仅用它训练的模型。',
+    )
+    expect(r?.content.slice(0, 6)).toEqual([
+      { t: 'text', s: '我们比较以下两种设置：' },
+      { t: 'el', id: 'v' },
+      { t: 'text', s: ' ' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: ' ' },
+      { t: 'el', id: 'n' },
+    ])
+    expect(r?.content[6]).toEqual({ t: 'span', id: 'h', content: [{ t: 'text', s: '无 XYZ' }] })
+    expect(accept(LABEL_AFTER_BREAK, r?.content ?? [])).toEqual({ ok: true })
+    expect(r?.sentences?.src[0]).toBe('We compare two settings as follows:\n￼\n￼\n'.length)
+  })
+  it('a stretch the reply carried into the next sentence’s words goes back right after its marker, as a stop’s glued elements do', () => {
+    const r = readTagged(
+      LABEL_AFTER_BREAK,
+      '我们比较以下两种设置：<x id="8"/><span id="4">无 XYZ</span><b translate=no>x1</b> <b translate=no>x2</b> <b translate=no>x3</b>：一个未经 XYZ 任务训练的模型。<x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">仅 XYZ</span>：一个仅用它训练的模型。',
+    )
+    expect(r?.content.slice(0, 4)).toEqual([
+      { t: 'text', s: '我们比较以下两种设置：' },
+      { t: 'el', id: 'v' },
+      { t: 'el', id: 'b' },
+      { t: 'span', id: 'h', content: [{ t: 'text', s: '无 XYZ' }] },
+    ])
+  })
+  it('a stretch the reply set inside the sentence before stays where the reply set it: the translator’s order, shown', () => {
+    const r = readTagged(
+      LABEL_AFTER_BREAK,
+      '我们<b translate=no>x1</b> <b translate=no>x2</b>比较以下两种设置：<x id="8"/><b translate=no>x3</b><span id="4">无 XYZ</span>：一个未经 XYZ 任务训练的模型。<x id="9"/><b translate=no>x5</b> <b translate=no>x6</b><span id="7">仅 XYZ</span>：一个仅用它训练的模型。',
+    )
+    expect(r?.content.slice(0, 2)).toEqual([
+      { t: 'text', s: '我们' },
+      { t: 'el', id: 'v' },
+    ])
+    expect(accept(LABEL_AFTER_BREAK, r?.content ?? [])).toEqual({ ok: true })
   })
 })
 

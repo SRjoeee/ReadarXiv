@@ -10,6 +10,7 @@ import {
   BERT_STRATEGIES,
   BERT_STRATEGIES_REPLY,
   DISPLAY_ENDS,
+  FORMULA_BEFORE_BREAK,
   HEAD_STOP,
   INSIDE_WORDS,
   LABEL_AFTER_BREAK,
@@ -112,7 +113,7 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       // (a display then a reference in a head: each its own marker, the display's own stop after its, as on the base's wire)
       'We have @a#. @b# Then we go on.',
       // (a run-in label after a forced break that ends no sentence: the line end the break states, after its stretch's marker)
-      'We compare two settings as follows: @a#\n@b# No XYZ @c#: A model trained without the XYZ task. @d#@e# Only XYZ @f#: A model trained with it alone.',
+      'We compare two settings as follows:\n@a#@b# No XYZ @c#: A model trained without the XYZ task. @d#@e# Only XYZ @f#: A model trained with it alone.',
       // (an element between two letters is the word's: no space of ours beside it; a tie, TeX's space, keeps them)
       'The column str@a#s holds Ni@b#B, by Jane @c# Doe.',
       // (elements that set nothing: on no wire, the word a discretionary hyphen stands in whole; one beside a citation in its
@@ -126,6 +127,9 @@ describe('microsoft: the wire, byte for byte (golden)', () => {
       'Each part is formalized as: @a#. The next field is a list of effects, formalized as a tuple: @b# where kind is its kind.',
       // (an element right after a display, nothing between: glued to it, no space of ours between two markers, which touch no word)
       'We have @a#@b# that holds.',
+      // (a formula right before a forced break that states its line end: the sentence's before, its own marker, the line end
+      // between it and the break's, text.ts leadsNext)
+      'The input is a grid and two constants @a#\n@b#@c# Output @d#: A binary string. Then we stop.',
     ])
   })
   it('asks the endpoint as it is measured to answer: zh-Hans, a bare array, JSON', async () => {
@@ -361,16 +365,27 @@ describe("microsoft: a head's last element found through its groups (a display i
   })
 })
 
-// 1810.04805v2 p8 on staging (2026-11-09): "\\ \noindent \textbf{No NSP}: A bidirectional model ..." came back 「无：」, the term
-// lost. Microsoft's sentence ran on from "... as BERT_BASE:" across the forced break's marker (its own lengths: one sentence of
-// 348 characters through the label and its body), so the label's words stood between two hard boundaries inside another
-// sentence. With a line break after the break's marker Microsoft cut its sentence there and gave 「无 NSP」 (lane must-term)
+// 1810.04805v2 p8 on staging: "\\ \noindent \textbf{No NSP}: A bidirectional model ..." came back 「无：」, the term lost.
+// Microsoft's sentence ran on from "... as BERT_BASE:" across the forced break's marker (its own lengths: one sentence of 348
+// characters through the label and its body), so the label's words stood between two hard boundaries inside another sentence.
+// With a line end after the break's marker Microsoft cut its sentence there and gave 「无 NSP」; but the marker then ended the
+// sentence before, and Microsoft's word order set it inside that sentence in Japanese, Korean and Chinese, after the sentence's
+// first words with the macro beside it, the line broken there and the label run on, in every one of six replies, where the second
+// break, after "task." and so the next sentence's first thing, stood before its label in every one. Written before the
+// stretch's marker, the line end still cuts Microsoft's sentence before the label, and the break leads the label's sentence,
+// as a break after a full stop does (wire/text.ts leadsNext)
 describe('microsoft: a run-in label after a forced break begins its sentence', () => {
-  it("writes the line end the break states after its stretch's marker, and takes it back on reading", () => {
+  it("writes the line end the break states before its stretch's marker: the stretch leads the next sentence", () => {
+    const wire = microsoft({ fetch: scriptedFetch(microsoftEcho).fetch }).write(LABEL_AFTER_BREAK, 'zh-Hans')
+    expect(wire).toBe(
+      'We compare two settings as follows:\n@a#@b# No XYZ @c#: A model trained without the XYZ task. @d#@e# Only XYZ @f#: A model trained with it alone.',
+    )
+  })
+  it('takes the line end back before the marker on reading, the break read before the label', () => {
     const r = readMicrosoft(
       LABEL_AFTER_BREAK,
       JSON.stringify({
-        text: '我们比较以下两种设置：@a#\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
+        text: '我们比较以下两种设置：\n@a#@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
       }),
     )
     expect(r?.content).toEqual([
@@ -402,19 +417,46 @@ describe('microsoft: a run-in label after a forced break begins its sentence', (
       { t: 'span', id: 'h', content: [{ t: 'text', s: '无 XYZ' }] },
     ])
   })
-  it("the endpoint's sentences begin at the label, in both projections", () => {
+  it("the endpoint's sentences begin at the stretch the line end leads, in both projections", () => {
     const u = LABEL_AFTER_BREAK
     const wire = microsoft({ fetch: scriptedFetch(microsoftEcho).fetch }).write(u, 'zh-Hans')
     const text =
-      '我们比较以下两种设置：@a#\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。'
+      '我们比较以下两种设置：\n@a#@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。'
     const at = (s: string, x: string) => s.indexOf(x)
-    const src = [at(wire, '@b#'), at(wire, '@d#') - at(wire, '@b#'), wire.length - at(wire, '@d#')]
-    const tr = [at(text, '@b#'), at(text, '@d#') - at(text, '@b#'), text.length - at(text, '@d#')]
+    // (Microsoft's own lengths cut right after the line end, as it cuts its sentences at one)
+    const src = [at(wire, '@a#'), at(wire, '@d#') - at(wire, '@a#'), wire.length - at(wire, '@d#')]
+    const tr = [at(text, '@a#'), at(text, '@d#') - at(text, '@a#'), text.length - at(text, '@d#')]
     const r = readMicrosoft(u, JSON.stringify({ text, src, tr }))
-    // (each at the label's first word: the source's "No XYZ", the translation's 「无 XYZ」 right after its marker, our space
-    // before it taken back: the source set the label's words glued to the element before them)
-    expect(r?.sentences?.src[0]).toBe('We compare two settings as follows:\n￼\n￼\n￼'.length)
-    expect(r?.sentences?.tr[0]).toBe('我们比较以下两种设置：￼\n￼\n￼'.length)
+    // (each at the stretch's first element, the vertical space before the break: the sentence the label begins holds the
+    // stretch, as a sentence after a full stop holds the break that follows the stop; our line end before it taken back)
+    expect(r?.sentences?.src[0]).toBe('We compare two settings as follows:\n'.length)
+    expect(r?.sentences?.tr[0]).toBe('我们比较以下两种设置：'.length)
+  })
+  it('a formula right before the break stays in the sentence before: the line end between its marker and the break’s', () => {
+    const r = readMicrosoft(
+      FORMULA_BEFORE_BREAK,
+      JSON.stringify({ text: '输入是一个网格和两个常数 @a#\n@b#@c# 输出 @d#：一个二进制串。然后我们停止。' }),
+    )
+    expect(r?.content.slice(0, 4)).toEqual([
+      { t: 'text', s: '输入是一个网格和两个常数 ' },
+      { t: 'el', id: 'c' },
+      { t: 'el', id: 'b' },
+      { t: 'text', s: '\n' },
+    ])
+  })
+  it('a reply that carried the stretch into the sentence before reads as it came: the translator’s order, shown', () => {
+    const r = readMicrosoft(
+      LABEL_AFTER_BREAK,
+      JSON.stringify({
+        text: '我们@a#比较以下两种设置：\n@b# 无 XYZ @c#：一个未经 XYZ 任务训练的模型。@d#@e# 仅 XYZ @f#：一个仅用它训练的模型。',
+      }),
+    )
+    expect(r?.content.slice(0, 3)).toEqual([
+      { t: 'text', s: '我们' },
+      { t: 'el', id: 'v' },
+      { t: 'text', s: '\n' },
+    ])
+    expect(accept(LABEL_AFTER_BREAK, r?.content ?? [])).toEqual({ ok: true })
   })
 })
 

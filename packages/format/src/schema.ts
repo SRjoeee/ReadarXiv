@@ -148,9 +148,10 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       kind: ElKind,
       src: z.string(),
       keys: z.array(z.string()).optional(),
-      // the punctuation the element sets at its own end that is its sentence's (a display's `x = y.`),
-      // or a line end where it ends its sentence and sets none (a forced break a run-in label follows: marks/run-ins.ts): a
-      // translator may write it after the element so that the sentence ends there
+      // the punctuation the element sets at its own end that is its sentence's (a display's `x = y.`): a translator may write
+      // it after the element so that the sentence ends there; or a line end where it ends its sentence and sets none (a forced
+      // break a run-in label follows: marks/run-ins.ts): the sentence ends before the break, which the translator is sent as
+      // the next sentence's first thing
       stop: z.string().optional(),
       // the element sets nothing where it stands: no character and no space. By TeX's tables alone (instrument/mt.ts isInkless:
       // a declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,

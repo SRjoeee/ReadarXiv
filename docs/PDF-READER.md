@@ -8823,6 +8823,49 @@ formula's ink onto the next paragraph's first glyph. Production keeps that line 
   (2608.25210v2 p5 from 0.064 of the page to 0.074, p8 0.085 to 0.089) and down on the three whose last line had been laid under
   TeX's (2608.25210v2 p9, 2610.21106v1 p4, p7).
 
+### 18.101 A forced break that ends its sentence leads the next one, on both wires (the coordinator's ruling of 2026-11-19)
+
+1810.04805v2 p8 in Japanese on staging (the owner's report): `… hyperparameters as \bertbase:` `\vspace{0.3cm}` `\\`
+`\noindent\textbf{No NSP}: …` was drawn with its line broken after the sentence's first words, the label "No NSP:" run on at the
+end of the paragraph's line. The source reader states that break's `stop` a line end (§18.44's run-in rule: the text before it
+ends with no stop, so the break ends its sentence). The markers wire wrote the line end AFTER the break's marker: the marker was
+the last thing of the sentence it ends, Microsoft cut its sentence there, and its word order carried the marker, with the macro
+beside it, into the middle of that sentence, in Japanese, Korean and Chinese alike (6 replies of 6, each target asked twice, the
+same bytes). The tags wire read no sentence's end there, and Google's Japanese set the break mid-sentence too (its reply refused
+for a token it left as text, so Microsoft's was drawn). In the same paragraph the second break follows "task.", a full stop:
+sent as the NEXT sentence's first thing on both wires, it stood before its label in all ten replies. One thing, stated twice in
+our wire; the second statement differed from the released engine's shape, where the break's marker is glued to the label's.
+
+- **The rule** (`packages/translate` `wire/text.ts` `leadsNext`): a stretch of elements, white space alone between them, leads
+  the next sentence where the sentence before ended right before it: by a stop of its text set right before its first element
+  (the tags wire's rule for elements glued after a stop, §18.70), or by the line end one of its elements states, the stretch then
+  the elements around the break that set no word (`setsNoWord`: its skip before it, its `\noindent` after it), past one that sets
+  a word (a formula, an address), which is the sentence's before. Each wire sends such a stretch as the next sentence's first
+  thing: the markers wire writes the line end before the stretch's marker, a stretch that held a word-setting element before it
+  split there (`wire/markers.ts` itemsOf, planMarkers), and takes it back on reading; the tags wire's cutter reads the line end as
+  the sentence's end (`wire/tags.ts` standIn), sets its boundary marker before the stretch's first element and reads the stretch
+  back as that sentence's lead (`glued`, `leads`, `leadsBack`, as for elements glued after a stop). Nothing new reads a reply:
+  one that sets the stretch inside the sentence before keeps it there, the translator's order.
+- **Reach** (the 245 papers' units, every wire the chain sends serialised before and after): 8 such breaks in 7 units of 7
+  papers; exactly those units' wires move, Microsoft's 7 and Google's 6 (one unit is not lit by sentence), of 171,878 wires.
+- **Measured** (keyless, the product's adapters, ja, ko and zh-Hans; a break held where no anchor crosses it, its place among the
+  reply's own sentences is the source's, and what the source sets right after it still is):
+
+  | | before: Microsoft | before: Google | after: Microsoft | after: Google |
+  |---|---|---|---|---|
+  | 1810.04805v2's paragraph, 3 targets | moved 3 of 3 | held 2, refused 1 (ja) | held 3 of 3 | held 3 of 3 |
+  | the other 6 units, 3 targets | not asked | 2307.16209v1 zh: moved (stored) | held 18 of 18 | held 18 of 18 |
+  | replies accepted | 3 of 3 | 2 of 3 | 21 of 21 | 21 of 21 |
+
+  The chain answers by Google in all 21 after, every break held; asked again, 1810.04805v2's Japanese on both adapters and its
+  Chinese on Microsoft came back byte for byte. The case the line end was written for keeps its label whole: Microsoft's
+  Chinese on the new wire gives the label's term back. The released engine's wire (no line end, the break's marker glued to the
+  label's) in Japanese and Korean keeps the label right after the break, and carries the break into the sentence before with the
+  macro, the sentence's other words after both.
+- **Versions**: no unit, id or `PIPELINE` moves. The behaviour digests of Microsoft's, Google's and the built-in translator's
+  adapters move (the tags wire's with them), the acceptance rule's and the chain's do not: every row is judged again from its
+  stored reply at a paper's next open, and the class's 13 wires are asked once.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

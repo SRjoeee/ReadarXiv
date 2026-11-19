@@ -16,9 +16,9 @@
 // staging, 1810.04805v2 p8's "as \bertbase: \\ \noindent \textbf{No NSP}: A bidirectional model ... (NSP) task." went out
 // as one sentence of Microsoft's, the label's words a fragment between two markers inside it, and came back as the word for
 // "no" alone, the term lost. So the break such a label follows, where no stop ends the text before it, states the line it
-// ends: its `stop` a line end, which a wire writes after the element so that the endpoint's sentence ends there (begun on its
-// own line, the label came back with its term). A break no label follows states nothing: a title or an affiliation broken
-// over lines is one phrase. A label with only elements between the break and itself (a list's mark set as a formula:
+// ends: its `stop` a line end, the end of the endpoint's sentence before the break, which every wire sends as the next
+// sentence's first thing (begun on its own line, the label came back with its term). A break no label follows states nothing:
+// a title or an affiliation broken over lines is one phrase. A label with only elements between the break and itself (a list's mark set as a formula:
 // 2602.23285v2's "\\ $(ii)$ \textit{Accurate trajectory modeling.}", upright on staging while its "(i)" at the unit's head
 // kept its italic) begins its line as one right after the break does, as a group before the unit's first word begins the unit.
 //
