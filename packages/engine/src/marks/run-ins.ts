@@ -34,31 +34,31 @@ import { INVISIBLE, STRUCTURE } from './tex.ts'
 type Span = Extract<Piece, { t: 'span' }>
 type El = Extract<Piece, { t: 'el' }>
 
-/** an open that sets a style and nothing else (mt.mjs STYLE_OPEN: the front end's inline text commands, \textcolor, \mbox, a
- *  bare group): latex.ltx's \textbf, \textit, \emph, \textsl, \textsc, \underline, \textup, \textrm, \textsf, \textmd,
+/** an open that sets a style and nothing else (the front end's inline text commands, \textcolor, \mbox, a bare group):
+ *  latex.ltx's \textbf, \textit, \emph, \textsl, \textsc, \underline, \textup, \textrm, \textsf, \textmd,
  *  \textnormal and \mbox, ulem.sty's \uline, color.sty's \textcolor */
 const STYLE_OPEN =
   /^(?:\{|\\(?:textbf|textit|emph|textsl|textsc|underline|textup|textrm|textsf|textmd|textnormal|uline|mbox)\s*\{|\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{)$/
-/** a link's open (mt.mjs LINK): `must` already, a kept group's edges */
+/** a link's open: `must` already, a kept group's edges */
 const LINK = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
-/** what breaks the text besides a forced break (mt.mjs FORCED_BREAK's other forms): \\linebreak, a list's item */
+/** what breaks the text besides a forced break (instrument/mt.ts FORCED_BREAK's other forms): \\linebreak, a list's item */
 const LINE_BREAK = /^\\(?:linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?\s*$/
-/** a text that ends where a sentence ends (mt.mjs SENTENCE_END), never after an abbreviation (ABBR) */
+/** a text that ends where a sentence ends, never after an abbreviation (ABBR) */
 const SENTENCE_END = /[.!?\u3002\uff01\uff1f]["'\u201d\u2019)\]]*$/
 const SENTENCE_LEAD = /^[.!?\u3002\uff01\uff1f]/
-/** a colon or a semicolon: a run-in label's end at the unit's head, a clause's anywhere else (mt.mjs CLAUSE_END) */
+/** a colon or a semicolon: a run-in label's end at the unit's head, a clause's anywhere else */
 const CLAUSE_END = /[:;\uff1a\uff1b]["'\u201d\u2019)\]]*$/
 const CLAUSE_LEAD = /^[:;\uff1a\uff1b]/
-/** a run-in label's colon where a sentence begins past the unit's head (mt.mjs LABEL_END) */
+/** a run-in label's colon where a sentence begins past the unit's head */
 const LABEL_END = /[:\uff1a]["'\u201d\u2019)\]]*$/
 const LABEL_LEAD = /^[:\uff1a]/
 const CAPITAL_LEAD = /^\p{Lu}/u
 /** the faces a bare group's first switch sets, which the instrument states as the group's style and command, no element of its
- *  text (pipeline/instrument.mjs switchesOf): such a group is one a switch opens */
+ *  text (instrument/instrument.ts switchesOf): such a group is one a switch opens */
 const FACED = new Set<string>(['italic', 'bold', 'sc'] satisfies readonly KnownSpanKind[])
 const SOLID = /\S/
 const SPACE = /\s/
-/** a sentence's end is read in the last characters before a place, its start in the first after it (mt.mjs WINDOW) */
+/** a sentence's end is read in the last characters before a place, its start in the first after it */
 const WINDOW = 200
 /** an element on the flat text: one character, no white space */
 const OBJ = '\ufffc'
@@ -71,7 +71,7 @@ const endsSentence = (s: string): boolean => {
  *  §18.75), a \\linebreak or an item */
 const breaks = (p: El): boolean => p.kind === 'display' || p.kind === 'break' || LINE_BREAK.test(p.src)
 const inkless = (p: El): boolean => INVISIBLE.test(p.src) || STRUCTURE.test(p.src)
-/** whether a group opens with a switch (an element that sets no ink before its first text: mt.mjs headOf), `{\bf Remark:}` */
+/** whether a group opens with a switch (an element that sets no ink before its first text), `{\bf Remark:}` */
 const switched = (ps: readonly Piece[]): boolean => {
   for (const p of ps) {
     if (p.t === 'text' && !SOLID.test(p.s)) continue
@@ -108,7 +108,7 @@ export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()):
       else stack.push({ span: p, list: p.content, k: 0, text: false, ink: false })
     }
   }
-  // ---- the flat text, each group's range in it, in the order the groups open, and where it breaks (mt.mjs flatOf)
+  // ---- the flat text, each group's range in it, in the order the groups open, and where it breaks
   const parts: string[] = []
   const ranges = new Map<Span, [number, number]>()
   /** where the text breaks, and the element that breaks it there */
@@ -174,8 +174,8 @@ export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()):
   }
   const breakAt = (i: number) => i >= 0 && broken.has(i)
 
-  // ---- each style group by the sentence rule (mt.mjs classOf): kept where it begins where a sentence begins and ends where one
-  // ends, a run-in label's colon ending it too
+  // ---- each style group by the sentence rule: kept where it begins where a sentence begins and ends where one ends, a run-in
+  // label's colon ending it too
   type Seen = { a: number; b: number; starts: boolean; ends: boolean }
   const seen = new Map<Span, Seen>()
   const kept = new Set<Span>()
@@ -224,7 +224,7 @@ export function runIns(content: Piece[], faced: ReadonlySet<Piece> = new Set()):
     if (label && brk && brk.kind !== 'display' && !endsSentence(flat.slice(Math.max(0, at - WINDOW), at)))
       brk.stop = '\n'
   }
-  // ---- the boundary rule (mt.mjs classOf's last): a group whose two ends both stand where the wire is cut anyway (a forced
+  // ---- the boundary rule: a group whose two ends both stand where the wire is cut anyway (a forced
   // break, an item or a display beside it, a kept or enclosing group's edge with white space alone between) is kept too; the
   // edges read by the sentence rule alone, so that one group's keeping makes no other's
   edges.sort((x, y) => x - y)

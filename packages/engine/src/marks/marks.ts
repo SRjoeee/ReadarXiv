@@ -1,6 +1,6 @@
 // The layout marks of the marked original: where on the page TeX
 // sets each placeholder of a unit, each footnote call, each table cell and each heading, as named destinations beside
-// the unit marks MARK_DEF already writes; and the marks file, what the layout maker reads from the marked original (its
+// the unit marks MARK_DEF already writes; and the marks file, what the instrument reads from the marked original (its
 // marks, its line counts, its words), kept so that a new layout is made from it with no compile.
 //
 // The marks are TeX put into every paper's original, and a mark that moves a line moves the readings the typesetting
@@ -132,7 +132,7 @@ const INVISIBLE_WORDS = [
   'normalsize',
 ]
 /** a placeholder whose rendering is never ink: matched on its leading control sequence — a tie, a forced break `\\`, one of
- *  TeX's and LaTeX's own that set no ink and read nothing after them (rules/tex-kernel.mjs: a space or kern, an italic
+ *  TeX's and LaTeX's own that set no ink and read nothing after them (source/tex-kernel.ts: a space or kern, an italic
  *  correction, a discretionary hyphen, `\@`, a penalty, `\relax`…; none gets a mark, which would move a line), or a control
  *  word of the lists, followed by no letter */
 export const INVISIBLE = new RegExp(
@@ -147,12 +147,12 @@ const EQREF = /^\\eqref(?![A-Za-z@])/
 const REF = /^\\(?:ref|autoref|[cC]ref|pageref|nameref)(?![A-Za-z@])/
 const CODE = /^\\(?:texttt|verb|lstinline)(?![A-Za-z@])/
 const URL = /^\\(?:url|href)(?![A-Za-z@])/
-/** a number a bibliography entry keeps as the original's ink (latex-front.mjs keepNumbers): text of a digit and no letter, or
+/** a number a bibliography entry keeps as the original's ink (source/latex-front.ts keepNumbers): text of a digit and no letter, or
  *  a DOI written out, letters and all; none of TeX's special characters — no command, so it reads nothing after it and both its
  *  marks go */
 const NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/[^\s\\{}$%#&^_~]+)$/u
-/** an identifier the front end keeps (latex-front.mjs identifierSource: `llm\_equal\_human`, `\{root\_question\}`): TeX sets its
- *  characters as written, as a code mark's, its class `code`, both its marks. As a paper's macro (`macro`) it had its opening
+/** an identifier the front end keeps (source/latex-front.ts identifierSource: `llm\_equal\_human`, `\{root\_question\}`): TeX sets
+ *  its characters as written, as a code mark's, its class `code`, both its marks. As a paper's macro (`macro`) it had its opening
  *  mark alone, its end told by the text after it, and where a forced break or another element followed it (2608.25210v2 p3's
  *  and 2610.22195v1's prompts) its glyphs were read as the unit's text, the unit left unlocated */
 const identifierPiece = identifierSource
@@ -160,8 +160,8 @@ const identifierPiece = identifierSource
  *  number, a link) — a call all the same, which the layer places by its mark */
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
 
-/** whether a piece is the list backref sets after a bibliography entry (latex-front.mjs BACKREF_LIST): no source of its own, its
- *  marks LAYOUT_TEX's around the list (layoutMarking's `\\axtbrname`), never a sample of the probe's */
+/** whether a piece is the list backref sets after a bibliography entry (source/latex-front.ts BACKREF_LIST): no source of its own,
+ *  its marks LAYOUT_TEX's around the list (layoutMarking's `\\axtbrname`), never a sample of the probe's */
 export const backrefPiece = (p: PieceLike | null | undefined): boolean => p?.t === 'ph' && p.src === BACKREF_LIST
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 /** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
@@ -174,7 +174,7 @@ export function classOf(piece: PieceLike | null | undefined): MarkClass | null {
   // paper's row-ending macro inside a grid cell, §18.75), among what INVISIBLE reads)
   if (forcedBreak(piece) || INVISIBLE.test(src) || STRUCTURE.test(src)) return null
   // a placeholder that can set no letters is no text rendering: never ink, never LOST — one of the commands the role
-  // table proves so (arg-roles.mjs textless: rules, space, a length's or a counter's setting, a definition, a register's
+  // table proves so (source/arg-roles.ts textless: rules, space, a length's or a counter's setting, a definition, a register's
   // assignment; a strut's \\rule{0pt}{2.2ex}, \\specialrule{1pt}{-1pt}{0pt}, \\addlinespace[2pt]), its arguments all there.
   // Not \\centerline, \\uppercase, \\noalign{\\hbox{…}} or a number printer. Read with no paper, by the kernel's forms and
   // those written out: a table's rule stays the page's own vector ink. Not \\rule either, which a box holds and TeX is
@@ -224,7 +224,7 @@ const COMPLETE_SRC_MAX = 200
 /** the pairs of a paper's macro and the placeholder right after it the probe asks about at most, a paper (aheadSamples): a
  *  count of pairs (PDF-READER §19.7); unmeasured */
 export const AHEAD_PROBE_MAX = 128
-/** the classes of a placeholder after a paper's macro the probe asks about (aheadSamples): those the maker cannot find
+/** the classes of a placeholder after a paper's macro the probe asks about (aheadSamples): those the ownership cannot find
  *  with no mark of their own (a paper's macro is found by the text TeX sets for it, a display is set in no box of a line) */
 const AHEAD_FOLLOWS: ReadonlySet<string | null> = new Set([
   'math',
@@ -246,7 +246,7 @@ export const aheadKey = (src: string, gap: string, follows: string): string => `
 const completeMap = (c: CompleteGiven | null | undefined): ReadonlyMap<string, number> =>
   c instanceof Map ? c : new Map(Array.isArray(c) ? c : Object.entries(c ?? {}))
 /** a piece's leading command: \cite of \cite[p.~3]{a}, \footnote of a call; null for none */
-/** the units in the order the probe's samples are taken: a bibliography's entries (latex-front.mjs bibliography: kinds
+/** the units in the order the probe's samples are taken: a bibliography's entries (source/latex-front.ts bibliography: kinds
  *  `reference` and `refnames`) after every other unit, wherever they stand, so that the body's samples are the ones they were
  *  before entries were units, and an entry's takes what room the caps leave. A macro a .bbl defines (\\providecommand{\\doi}),
  *  unknown to the probe's preamble, is no answer there (an error), never a wrong one */
@@ -263,7 +263,7 @@ export const commandOf = (p: PieceLike | null | undefined): string | null =>
  * The mark probe's samples: each command of the asked classes the paper writes, once, by the first piece of it TeX can
  * set in a box (no comment or parameter sign, no \verb): a placeholder's own source (a citation of the keys the paper
  * cites), or a call with a note of its own words; and each of the paper's macros that read nothing past their arguments
- * (`complete`: latex-front.mjs completeMacros), by its first call that holds them (completeCall), at most COMPLETE_PROBE_MAX:
+ * (`complete`: source/latex-front.ts completeMacros), by its first call that holds them (completeCall), at most COMPLETE_PROBE_MAX:
  * what follows such a call may still be looked at by what its body sets (a citation under cite's superscripts, a footnote
  * under fnpct, a kern after its last letter), and only TeX's answer says a closing mark there moves nothing. The asked
  * classes' first, then the paper's own (`own`), which markProbeTex asks about last
@@ -345,7 +345,7 @@ export function aheadSamples(units: readonly Unit[]): AheadSample[] {
 /** the paper's macro the placeholder at `q` of a unit's pieces follows right after it, or past one text piece of white space
  *  alone (gapOf), and that white space: [the macro's piece, ' ' or '', its index], or null — none for a text symbol (READS_NOTHING), a
  *  prefix (\protect: it is the next piece's), a macro after a prefix (whose marks stand before the prefix), a source the probe
- *  cannot set in a box, or one the marks file would not hold as a pair's key (AHEAD_KEY: a control sequence first) */
+ *  cannot set in a box, or one the marks file would not hold as a pair's key (a control sequence first, within COMPLETE_SRC_MAX) */
 function pairOf(pieces: readonly Piece[], q: number): [m: PhPiece, gap: '' | ' ', at: number] | null {
   const p = pieces[q]
   if (p?.t !== 'ph') return null
@@ -399,8 +399,8 @@ export function readProbe(log: string | null | undefined): ProbeRow[] {
  * then its ink's first glyph, followsOf `moved`); before each box a row
  * `punct-at <i> <j> <box>`, so that an error TeX logs is that box's (readMarkProbe). Each
  * box is set into a register voided first, and says whether it closed where it was meant to (\ifinner at its last
- * statement): a box an error ended early is never the box before it, still in the register (the re-review's I-new:
- * REVTeX's citeautoscript was answered every mark before `!`, `?` and a word). Every box starts from the
+ * statement): a box an error ended early is never the box before it, still in the register (else REVTeX's
+ * citeautoscript would be answered every mark before `!`, `?` and a word). Every box starts from the
  * same state: the footnote counter as it was (a call's number of two digits is wider than one of one: 2608.27728), and
  * biblatex's citation trackers reset (a second citation of a key may be set short). Every box ends at a space,
  * where each package's lookahead stops (REVTeX's swap takes any token after the citation in a \csname); an empty
@@ -502,8 +502,8 @@ export const INK_BUDGET = 65536
  * The ink section's samples: the source of each of the paper's macros (classOf 'macro'), once, that TeX can set in a box of its
  * own (no comment or parameter sign, no \verb, its braces balanced, no environment, no paragraph's end): the body's in the
  * order the paper writes them, then a bibliography's entries' — first their leads, whose ink only their own text finds
- * (make.mjs besideMarks), then each further call, in order —, while their code units fit INK_BUDGET. A call past it is no
- * sample: no answer of another call is carried to it (the reviews of #495 — no ink and a box begun apart may hang on its
+ * (instrument/instrument.ts glyphPiecesOf), then each further call, in order —, while their code units fit INK_BUDGET. A call
+ * past it is no sample: no answer of another call is carried to it (no ink and a box begun apart may hang on its
  * argument's value, and a text carried may be a prefix of what it sets, which a split or a lead read from one side would take as
  * its end). A symbol the layout draws as text (TEXT_SYMBOLS) is not asked
  */
@@ -535,7 +535,7 @@ export function inkSamples(units: readonly Unit[]): string[] {
 /** the ink section's answers from the probe's log, as the layout takes them: the macros TeX said set no ink (readInkProbe), the
  *  texts it showed they and the leads set (readInkTexts), and those it showed set beside a decoration of their own
  *  (readInkDecorated), those whose box it began apart (readInkApart), each the asked source's own. The one reader every caller
- *  takes them by: layout/paper.mjs, the lab's */
+ *  takes them by: compile/paper.ts, the lab's */
 export function readInkAnswers(log: string | null | undefined, units: readonly Unit[]): InkAnswers {
   const ink = inkSamples(units),
     leads = leadSamples(units, ink)
@@ -578,9 +578,9 @@ const boxable = (src: string | undefined): boolean =>
  * The leads' samples: the placeholders at a unit's head, before its start mark (headEnd), where no mark goes, that inkSamples
  * does not ask about — inline code (classOf 'code': a cell's \\texttt{max\\_tokens}, 2610.21098v1 p13u138) and a paper's macro
  * past INK_BUDGET —, once, in the paper's order, each a source TeX can set in a box of its own, while the code units of the
- * ink section's samples and theirs fit INK_BUDGET. What TeX sets for one is its text (readInkTexts), by which the layout finds a
- * lead's ink beside its unit's start (make.mjs besideMarks) and the erasure a cell's (own.mjs, MR 5b): with no text, the unit is
- * the original's. Asked last (markProbeTex)
+ * ink section's samples and theirs fit INK_BUDGET. What TeX sets for one is its text (readInkTexts), by which the instrument
+ * parts a lead's ink beside its unit's start (instrument/instrument.ts glyphPiecesOf) and the erasure finds a cell's (own/own.ts,
+ * a cell's lead macro): with no text, the unit is the original's. Asked last (markProbeTex)
  */
 export function leadSamples(units: readonly Unit[], asked: readonly string[] = inkSamples(units)): string[] {
   const seen = new Set<string | undefined>(asked),
@@ -622,7 +622,7 @@ export function inkSection(samples: readonly string[], from = 0): string {
   return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
 /**
- * The ink probe's asks where the document uses a macro (the compile move's F15, PDF-READER §18.80): the TeX the loop's first
+ * The ink probe's asks where the document uses a macro (PDF-READER §18.80): the TeX the loop's first
  * pass (compile/paper.ts markedOfPaper with `asks`) writes in its main file's head, and `\axtask{<i>}{<the piece's source>}` right
  * before a sample's first use (compile/live.ts askPlan, originalFiles `asks`). An ask is the ink section's own test of one sample
  * (inkSection: its rows, its box, \showbox, the group levels it unwinds), its source tokenized where the document uses it and set
@@ -724,7 +724,7 @@ const WRITTEN_ASK = /\\axtask(?![A-Za-z]) ?\{(0|[1-9][0-9]{0,8})\}(?=\{)/y
  * piece after it: elsarticle's \\emailauthor writes the author's name and its `\\corref` to the .aux, the ask before `\\corref`
  * with it (2610.38269v1, 2608.05881v1: `\\axtask {0}{\\corref {cor1}}\\corref {cor1}`), and the pass that reads that file back,
  * which defines no \\axtask (ASK_TEX is pass 1's alone), stops at it and sets its index and its sample: a stray "0" and a second
- * \\corref mark in the e-mail footnote, and a file written again without it, one pass more (lane cm-fix). The wrapper is taken
+ * \\corref mark in the e-mail footnote, and a file written again without it, one pass more. The wrapper is taken
  * by its own grammar (WRITTEN_ASK) and its sample's tokens alone: the index of an ask of `asked`, then one group in braces whose
  * tokens (texTokens) are that ask's sample's. One that reads otherwise is left as it stands, and counted (`left`). Latin-1 text
  * (the bytes of a file, one character a byte, as the loop reads them)
@@ -992,8 +992,9 @@ const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
  *   prints as `;`) — INK_ANY, one glyph whatever its text: 2610.21176v1's \\dprime{} = $d'$, "d" and INK_ANY.
  * A text that spells no character (a formula's symbols alone, $\\checkmark$) is no answer: nothing of it tells its ink from
  * another's; nor is anything else (a rule, an image, a text font's character of no such kind, a character of no text font
- * outside a formula, an error): what it sets is not known as text. The layout finds such a placeholder, set at a unit's head
- * where no mark goes, by its text (make.mjs besideMarks), and the erasure a cell's (own.mjs, MR 5b), each glyph by leadStep
+ * outside a formula, an error): what it sets is not known as text. The instrument parts such a placeholder, set at a unit's head
+ * where no mark goes, by its text (instrument/instrument.ts glyphPiecesOf), and the erasure a cell's (own/own.ts), each glyph by
+ * leadStep
  */
 export function readInkTexts(
   log: string | null | undefined,
@@ -1015,9 +1016,9 @@ const ZERO_BOX = /^(\.+)\\[hv]box\([-\d.]+\+[-\d.]+\)x-?0(?:\.0+)?(?:,|$)/
  * (2111.09276v1's `\\hlyellow{high}`, 2610.40576v1's `\\hlg{All good.}`). Only a sample with such a rule is given. A character
  * inside a box of no width or under leaders (\\rlap{x}, a dotted fill) is no answer. A log line TeX broke at max_print_line
  * (PRINT_LINE) goes on on the next line, which is passed over. readInkTexts refuses a listing of a rule: a text it gives is all of
- * its sample's ink, by which a lead or a cell's piece is claimed glyph by glyph (own.mjs MR 5b, make.mjs besideMarks), which would
- * leave the rule behind; the reading that takes this text takes the boxes its glyphs were painted with too (instrument.mjs
- * unmarkedInkOf)
+ * its sample's ink, by which a lead or a cell's piece is claimed glyph by glyph (own/own.ts, instrument/instrument.ts
+ * glyphPiecesOf), which would leave the rule behind; the reading that takes this text takes the boxes its glyphs were painted
+ * with too (instrument/instrument.ts unmarkedInkOf)
  */
 export function readInkDecorated(
   log: string | null | undefined,
@@ -1058,9 +1059,9 @@ const QUOTE_LIG: Readonly<Record<string, string>> = Object.freeze({ "''": '\u201
  *  UTF-8 bytes read one character a byte */
 const TU_QUOTE = /\xe2\x80([\x98\x99\x9c\x9d])/g
 /** readInkTexts' reading, and with `decorated` readInkDecorated's: the decoration TeX painted with the characters passed over, and
- *  only a sample that has one given; with `quotes` (the compile move's F16, the back half's reading of the probe's own log),
+ *  only a sample that has one given; with `quotes` (PDF-READER §18.78, the back half's reading of the probe's own log),
  *  TeX's quotation marks read as the glyphs a text font sets for them, which without it are no answer: `it's` read as “it’s”,
- *  ``quality'' as “quality” (2610.21376v1's \new{…}, 2610.40576v1's highlighted cells, 7 answers in 4 papers of B15's probes) */
+ *  ``quality'' as “quality” (2610.21376v1's \new{…}, 2610.40576v1's highlighted cells, 7 answers in 4 of the 89 papers' probes) */
 function inkTextsOf(
   log: string | null | undefined,
   samples: readonly string[],
@@ -1215,11 +1216,11 @@ function inkTextsOf(
   return out
 }
 /**
- * One glyph of a lead's ink read against its text from the end, nearest the unit's start first (make.mjs besideMarks,
- * own.mjs's cell lead): `want` the text up to `end` (exclusive), `t` the glyph's text, both as the reader normalises them,
- * white space taken out. An INK_ANY is one glyph of any text but none (a blank glyph is no formula's: the lead is not read
- * past it); every other character is spelled by the glyphs' own, a blank glyph passed over between them. Returns the end
- * past the glyph, or -1 where it is not the lead's
+ * One glyph of a lead's ink read against its text from the end, nearest the unit's start first (instrument/instrument.ts
+ * glyphPiecesOf, own/own.ts's cell lead): `want` the text up to `end` (exclusive), `t` the glyph's text, both as the reader
+ * normalises them, white space taken out. An INK_ANY is one glyph of any text but none (a blank glyph is no formula's: the lead
+ * is not read past it); every other character is spelled by the glyphs' own, a blank glyph passed over between them. Returns
+ * the end past the glyph, or -1 where it is not the lead's
  */
 export function leadStep(want: string, end: number, t: string): number {
   if (end <= 0) return -1
@@ -1290,13 +1291,13 @@ export function readInkApart(log: string | null | undefined, samples: readonly s
  *  a fil, fill or filll, which pushes what follows it to its line's end */
 const FIL_GLUE = /^\.\\glue(?:\(\\[A-Za-z@]+\))? -?[\d.]+ plus [\d.]*[1-9][\d.]*fil{1,3}(?: |$)/
 /**
- * The samples TeX ends with ink a glue of infinite stretch pushed (the compile move's F14), from the probe's own log
+ * The samples TeX ends with ink a glue of infinite stretch pushed (PDF-READER §18.78), from the probe's own log
  * (inkSection): each sample whose box TeX listed in full with no error between its rows, its outer list holding a fil, fill or
  * filll glue (FIL_GLUE) before its last ink, a node of that list that sets some: a character, a rule both wide and high (or
  * running), a box holding one. amsthm's \qed (`\hfill\quad` and the box of its square's rules), an author's own (`\hfill` and a
  * symbol), LLNCS's (a fil, a penalty, a skip, a fil again and its square): set at a paragraph's end, TeX pushes it to its
  * line's end, the unit's end mark (El.end). A fill after the last ink, or one inside a box only, pushes none; a listing not read
- * whole is no answer. 27 of the 33 end marks the probes of B15 hold (lane probes-facts' record, F14)
+ * whole is no answer. 27 of the 33 end marks the 89 papers' probes hold
  */
 export function readInkEnds(log: string | null | undefined, samples: readonly string[]): string[] {
   const out: string[] = []
@@ -1371,7 +1372,7 @@ export function readInkEnds(log: string | null | undefined, samples: readonly st
 /** a source that is a glue of infinite stretch, TeX's own: \hfil, \hfill, LaTeX's \hspace{\fill} (its \fill, 0pt plus 1fill) */
 const FILL_SOURCE = /^\\(?:hfill?(?![A-Za-z@])|hspace\*?\s*\{\s*\\fill\s*\})\s*$/
 /**
- * The pieces a unit ends with that TeX sets as its end mark (the compile move's F14, El.end on the piece's element), by their
+ * The pieces a unit ends with that TeX sets as its end mark (PDF-READER §18.78, El.end on the piece's element), by their
  * index in the unit's pieces: its last piece that sets ink (white space, groups' edges and placeholders that set none after it),
  * a placeholder, where the probe says TeX ends its own box with ink a fill pushed (readInkEnds: amsthm's or an author's \qed
  * written in the text), or where the source pushes it with a fill right before it, white space and groups' edges between
@@ -1391,10 +1392,10 @@ export function endPiecesOf(pieces: readonly PieceLike[], ends: ReadonlySet<stri
   return before?.t === 'ph' && FILL_SOURCE.test(before.src ?? '') ? [k] : []
 }
 /**
- * What the back half reads of the mark probe's own log (the compile move's B3, by the brief's ruling 6: the log the box stores
- * beside the instrument, no field of the stored plan): the texts the ink section showed the samples and leads set, and those set
- * beside a decoration, TeX's quotation marks read (F16: readInkTexts' and readInkDecorated's `quotes`); the samples TeX ends
- * with ink a fill pushed (F14: readInkEnds). The samples are readInkAnswers' own, the units' (inkSamples, leadSamples)
+ * What the back half reads of the mark probe's own log (PDF-READER §18.78: the log the box stores beside the instrument, no field
+ * of the stored plan): the texts the ink section showed the samples and leads set, and those set beside a decoration, TeX's
+ * quotation marks read (readInkTexts' and readInkDecorated's `quotes`); the samples TeX ends with ink a fill pushed (readInkEnds).
+ * The samples are readInkAnswers' own, the units' (inkSamples, leadSamples)
  */
 export function probeFactsOf(
   log: string | null | undefined,
@@ -1421,8 +1422,8 @@ export function useAnswersOf(log: string | null | undefined, asked: readonly str
   const texts = readAskTexts(log, asked).filter(([s]) => ink.has(s))
   return { inkless, inked, ...(texts.length ? { texts } : {}) }
 }
-/** the marking's inkless with the use's answers (F15): a source TeX answered where the document uses it takes that answer, set no
- *  ink or set some; one it did not answer there keeps the probe's. In the probe's order, the use's added after */
+/** the marking's inkless with the use's answers (§18.80): a source TeX answered where the document uses it takes that answer,
+ *  set no ink or set some; one it did not answer there keeps the probe's. In the probe's order, the use's added after */
 export function mergeUses(inkless: readonly string[], uses: UseAnswers | null | undefined): string[] {
   if (!uses) return [...inkless]
   const inked = new Set(uses.inked),
@@ -1431,7 +1432,7 @@ export function mergeUses(inkless: readonly string[], uses: UseAnswers | null | 
 }
 
 // ---- babel's names: what each one's own text is, TeX asked
-/** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well; the key's macro as
+/** each name's macro, by key (names.ts NAME_KEYS): babel's [captions], which a class defines as well; the key's macro as
  *  babel.sty's \bbl@ini@captions@aux names it, the key then `name`, held by the release check's babel-names
  *  (lab/marks/babel-names.mjs) */
 export const NAME_MACROS: Readonly<Record<NameKey, string>> = Object.freeze({
@@ -1452,8 +1453,8 @@ export const NAME_MACROS: Readonly<Record<NameKey, string>> = Object.freeze({
 /**
  * The name section of the probe (`name`): for each name the wrapper wrapped as the document began (NAMES_TEX keeps the
  * macro as it was, \axt@nmt@<key>), a row `name <key> <0 or 1>`: 1 where its own text, as a \protected@edef expands it,
- * holds a letter \uppercase changes, 0 where it holds none (a class's capitals, or no cased letter). The layout maker
- * takes a name's glyphs set in capitals as a case change only where its own text is not (NAME_FLAG.CAPITALS). Writes
+ * holds a letter \uppercase changes, 0 where it holds none (a class's capitals, or no cased letter): a name's glyphs set
+ * in capitals are a case change only where its own text is not in capitals (MarkedOptions.names). Writes
  * nothing, ships out nothing (readNameProbe)
  */
 export function nameSection(): string {
@@ -1486,7 +1487,7 @@ const BP_PER_PT = 72 / 72.27
  * The skip section of the probe (`lineskip`): one row `lineskip <\lineskip> <\lineskiplimit>`, the glue's natural size
  * and the dimension, as \the writes them, at the document's start in its body size, where the paper's own settings stand
  * (LaTeX's 1pt and 0pt where it sets none): what TeX sets two lines apart by where the one's depth and the other's height
- * come nearer than the limit. The layer opens a line by it (layer2.mjs breakLines). (TeX eats the space after \relax:
+ * come nearer than the limit. The typesetter opens a line by it (breaker/break.ts breakLines). (TeX eats the space after \relax:
  * the second field's own \space parts the two.) Writes nothing, ships out nothing (readSkipProbe). One pair a paper: the
  * probe's body follows the paper's preamble and none of its body, so a value the body sets, or a scope sets for its own
  * lines (an environment, a group: cvpr.sty's \lineskip .5em in its title's author block, 1512.03385), is not read, and the
@@ -1737,7 +1738,7 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   set at the mark): `{\centering text}` and a blank line is set justified, the group closed before the paragraph ended.
  *   The paragraph is the next to end at the mark's group level or below, or one ending deeper inside ordinary groups (a
  *   list's \par, a font's group) whose groups close back to it in vertical mode, each followed by \aftergroup, as the
- *   lines probe's (latex-front.mjs PARA_END_TEX): one ending inside a box, a note or a cell is one inside the unit, and the
+ *   lines probe's (source/latex-front.ts PARA_END_TEX): one ending inside a box, a note or a cell is one inside the unit, and the
  *   hook waits for the next. A paragraph a box's close ends (a \vbox, \vtop, \insert or \vcenter closed in horizontal mode)
  *   TeX ends itself, with no \par where LaTeX sets no \partokencontext (TeX Live 2023's LaTeX: elsarticle's abstract,
  *   `\global\setbox\absbox=\vbox\bgroup … \egroup`), so no para/after hook runs for it: that box is watched where it closes
@@ -1793,7 +1794,7 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   writer, nearer TeX's place). The marking names it among the ends of its cell's pieces (followsOf), and the stream's reading
  *   stops there (stream.ts ownedOf). A cell no template of LaTeX's sets (tblr, a plain \halign) states none, nor a p column of
  *   LaTeX's own tabular with array.sty not loaded, whose template latex.ltx's \@classv builds where \axt@mkw wraps \@classz
- *   alone (no AXT-CELL there either): those are read as before. No pending mark is flushed there (\axt@dest, not \axt@mark)
+ *   alone (no AXT-CELL there either): those are read to the next mark. No pending mark is flushed there (\axt@dest, not \axt@mark)
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
  *   MARK_DEF's own \axtmark is gated too, so a caption's start mark is set where its float is and not first in the list
@@ -1824,7 +1825,7 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   list too. The formula's math-on node follows the mark at once, so the paragraph TeX resumes after a display is no
  *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
  *   native case (lab/pdf/spikes/layout-marks-cases.mjs, 'an inline formula first after a display') holds every item in
- *   place. A display after a display keeps \axtpma's rule: it has no point, and stream.mjs gives its group's ink to the
+ *   place. A display after a display keeps \axtpma's rule: it has no point, and own/stream.ts ownedOf gives its group's ink to the
  *   display before it.
  * - **\axtpm{name}, after one; \axthmark{name}, a heading's.** Set in horizontal mode only; \axtpm after the placeholder's
  *   last ink, its trailing glue, penalties and kerns put back after it, and on an empty list nothing: after a display,
@@ -1868,14 +1869,14 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   in each engine's literal (pdfTeX's and LuaTeX's `direct`, xdvipdfmx's `pdf:code`), which PDF.js keeps in the operator
  *   list in its place among the glyphs (it drops DP and MP, and splits its text items at a BMC: tokens moved by up to
  *   14 pt) and its text layer passes over. So the content stream gives each piece's own ink between its points
- *   (layout/stream.mjs). And around each column's body (\@cclv in \@makecol, repacked to its own height and depth: a
+ *   (own/stream.ts ownedOf). And around each column's body (\@cclv in \@makecol, repacked to its own height and depth: a
  *   whatsit adds no height, and one last keeps the box's depth; the opening one with a \penalty10000 after it, for a
  *   whatsit before the body's first glue makes it a place to break, and \vsplit — balance.sty's last page — then takes
  *   an empty column; the closing one after the body's last box, its glue, kerns and penalties taken off and put back
  *   after it, so that no place to break is made or lost, and LaTeX's \@outputbox@removebskip still finds a \vfil
  *   last);
  *   and where a page is shipped with no column's body bracketed since the last (a class whose output routine makes its
- *   columns without \@makecol: revtex4-2's ltxgrid, its \@makecolumn; 24 units of 5 papers of the release-route sweep), around
+ *   columns without \@makecol: revtex4-2's ltxgrid, its \@makecolumn; 24 units of 5 papers of the corpus), around
  *   its text block at LaTeX's \@outputpage, which every LaTeX output routine ships its page by (\@outputbox: the columns with
  *   their footnotes, a vertical box or two columns side by side in a horizontal one, repacked to its own size as the body is),
  *   so that every class's page has its body bracketed; its footnotes are inside that bracket (the debt of #299)
@@ -1892,12 +1893,12 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  */
 /**
  * The classes of the points (POINTS, and the cell's end LAYOUT_TEX sets through \\axt@dest), each by the names its points
- * are given, and whether it is `optional` (design-performance Q2, the compile move's B0): a class that states a fact of TeX's
+ * are given, and whether it is `optional` (PDF-READER §19.7): a class that states a fact of TeX's
  * typesetting the instrument can also read, less exactly, from the page, and from which no unit's ownership or text is read.
  * A marked compile that dies only with more of our points in its node lists (2610.30769v1 under pdfTeX 1.40.28) is asked
  * again without the optional classes' TeX; every other class stays, so what is owned and what is read as text is read as
  * ever. The paragraph ends are optional: what they state, the alignment TeX broke a paragraph by and where it ended, the
- * page's lines state too; so are the forced breaks' points (the compile move's F35, STATEMENTS_TEX's): where TeX ended a line,
+ * page's lines state too; so are the forced breaks' points (PDF-READER §18.77, STATEMENTS_TEX's): where TeX ended a line,
  * which the page's lines state less exactly. A cell's end (§18.74's `t<i>x`) is not: ownership reads where a cell's piece ends
  * from it. A class added later says which it is
  */
@@ -1939,8 +1940,8 @@ export const pointClassOf = (name: string): PointClass =>
  *  definition and the bodies' and floats' count): `\\axt@point{name}` in each engine, beside each destination; around each column's
  *  body and each float's box; inside each pgf picture's own box (a TikZ or pgfplots picture: `zs` after pgf's
  *  \\pgfsys@beginpicture, `ze` before its \\pgfsys@endpicture, so that nothing outside the box moves), the figure's text between
- *  them (layout/figure-text.mjs); at each paragraph's start (`q<n>`, inside its indentation box) and at its end with TeX's
- *  alignment of it (`qe<n><code>`, layout/ink.mjs PARA_END) */
+ *  them (locate/figure-text.ts); at each paragraph's start (`q<n>`, inside its indentation box) and at its end with TeX's
+ *  alignment of it (`qe<n><code>`, ink.ts PARA_END) */
 export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   [
     null,
@@ -2006,7 +2007,7 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   // \\@typeset@protect: nothing in a moving argument or a file); in vertical mode it waits for the paragraph the label begins
   // (LaTeX's para/begin, once), so that no node is put on a vertical list; never while the gate is off (a list of figures, the
   // output routine). A measured copy's point goes with its box: the label TeX ships carries one. The label is what TeX set from
-  // the point to the caption's start mark, whatever line it stands on (own.mjs MR 5, PDF-READER §18.34))
+  // the point to the caption's start mark, whatever line it stands on (own/own.ts, PDF-READER §18.34))
   [
     'caption',
     '\\gdef\\axt@kn{0}\\newif\\ifaxt@kwait\\def\\axt@kpt{\\xdef\\axt@kn{\\the\\numexpr\\axt@kn+1\\relax}\\axt@point{ka\\axt@kn}}\\def\\axt@klate{\\ifaxt@kwait\\global\\axt@kwaitfalse\\ifaxt@off\\else\\ifhmode\\axt@kpt\\fi\\fi\\fi}',
@@ -2028,7 +2029,7 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
     '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
   ],
   // (where TeX begins a front matter environment after the author block, `fm<n>`: the abstract, the keywords, IEEEtran's index
-  // terms, the role table's environments of the front matter that are no author's (rules/arg-roles.mjs FRONT_ROLES
+  // terms, the role table's environments of the front matter that are no author's (source/arg-roles.ts FRONT_ROLES
   // env:abstract, env:keywords, env:IEEEkeywords). A class may set the element's heading from a literal of its own, no babel name
   // (spconf's "ABSTRACT", jmlr's "Abstract"), which the stream alone cannot tell from the author block's own last lines: the
   // point is the block's end TeX states (packages/engine/src/locate/author-block.ts). Armed at the environment's before hook
@@ -2046,7 +2047,7 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   // (each biblatex entry's start, `bi<n>` where \\printbibliography sets it: biblatex's per-entry hook, run after the list's \\item,
   // the entry's paragraph begun there first, so that a numeric style's label, which the \\item sets, stands before the point, a count
   // kept in a macro. The printed bibliography is biber's data and no text of the source: the ledger cuts it one entry a unit by
-  // these (layout/ledger.mjs), whose class the references' toggle governs; 2610.35877v1's was orphan text, always translated.
+  // these (locate/ledger.ts), whose class the references' toggle governs; 2610.35877v1's was orphan text, always translated.
   // And each bibliography's end, `bz<n>` after its last entry n (biblatex's \\blx@endbibliography, before the list's end, where
   // \\endtrivlist's \\unskip and the paragraph's end would take the entry's last glues: taken before the point instead, as many),
   // so that the next bibliography's heading of a title of its own is no entry's)
@@ -2056,7 +2057,7 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   ],
   // (each paragraph's start, q<n> at LaTeX's para/begin, inside its indentation box: \\IndentBox, not yet put back, wrapped
   // whole with the point before it, of its size; never a node of the paragraph's own, which would make a paragraph whose
-  // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ no longer empty, a line
+  // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ not empty, a line
   // of its own: 2609.26457 p8 on TeX Live 2023. A paragraph with no indent (\\noindent, an \\item's, the first
   // after a heading whose class takes it) carries none and reads as the one before; the ledger's blocks, orphan-text.md §4)
   [
@@ -2080,14 +2081,13 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   // §18.66; lab/pdf/spikes/para-end-cases.mjs, with microtype, moves no glyph). A list that ends in a box (an \hbox, a \vbox)
   // states none still, for a debt and not a rule: with points after boxes as well as after whatsits, pdfTeX 1.40.28 segfaults on
   // 2610.30769v1 (a link of the paper's own that ends in another nesting level than it starts, which its own compile warns of;
-  // the crash follows the node list's memory, no one point causes it), and a paper production serves is not refused. Its cost: an
+  // the crash follows the node list's memory, no one point causes it), and a paper the reader serves is not refused. Its cost: an
   // end after a box tells the alignment of a unit TeX set in it (marks/channels.ts boxedAlignOf), right where read: five members
-  // of two papers keep B14's "justified" where the page centres them (2610.21313v1's affiliation 7, 2610.42112v1's author 1 and
-  // affiliations 486 to 488). The exclusion goes when the marked compile is robust to such a paper (the rebuild's later work).
-  // Every paragraph TeX
+  // of two papers are read "justified" where the page centres them (2610.21313v1's affiliation 7, 2610.42112v1's author 1 and
+  // affiliations 486 to 488). The exclusion goes when the marked compile is robust to such a paper. Every paragraph TeX
   // ends, a unit's or none's, but while the gate is off (a contents list, the output routine, where points made 2610.30769v1's
   // hyperref links unstable and pdfTeX crash), as no mark is: an ink unit's alignment where no unit's end mark tells it
-  // (ink-units.mjs alignOf))
+  // (locate/ink-units.ts alignOf))
   [
     'para-end',
     '\\def\\axt@pos#1{\\ifnum\\gluestretchorder#1>\\z@ 1\\else\\ifdim\\gluestretch#1>\\z@ 1\\else0\\fi\\fi}',
@@ -2109,7 +2109,7 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
     '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifaxt@off\\else\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\let\\axt@peg\\@empty\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\fi\\axt@pepop\\edef\\axt@pet{\\axt@peat}\\if1\\axt@pet\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi\\fi}\\fi\\fi',
   ],
   // (each display TeX sets, wherever it stands and whatever opened it, an environment's or \\[ … \\]'s: its ink between `dps<n>`
-  // and `dpe<n>` (layout/ink.mjs REGION_POINT, the region `display`), n the display's number in the pass, so that every reader
+  // and `dpe<n>` (ink.ts REGION_POINT, the region `display`), n the display's number in the pass, so that every reader
   // keeps that ink as the paper's whatever its face and wherever it stands (2608.08481v1 p7: displays (7) and (8) in REVTeX's
   // widetext, under the footnote rule, no source unit's, set in a text face by \\mathrm, cut into ink units of the page's foot
   // and translated). TeX enters display math for each, and \\everydisplay is the one place every display passes: appended once
@@ -2197,7 +2197,7 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
 /** the points' TeX, every class's (LAYOUT_TEX's last part) */
 export const POINTS_TEX = POINTS.map(([, tex]) => tex).join('')
 /** the points' TeX of every class that is not optional (POINT_CLASSES), the shared parts with it: a reduced marked compile's
- *  (design-performance Q2; live.ts originalFiles `reduced`) */
+ *  (PDF-READER §19.7; live.ts originalFiles `reduced`) */
 export const POINTS_TEX_REDUCED = POINTS.filter(([c]) => c === null || !POINT_CLASSES[c].optional)
   .map(([, tex]) => tex)
   .join('')
@@ -2213,9 +2213,9 @@ export const POINTS_TEX_REDUCED = POINTS.filter(([c]) => c === null || !POINT_CL
  *   chapter's title, `\Huge\bfseries #1`, which the name's first letter begins) waits for the paragraph that begins next
  *   (LaTeX's para/begin hook, once), unless the name's end comes first (an empty name). The hook runs before LaTeX puts
  *   the paragraph's indentation box back (ltpara: para/begin, then the indent), so the point lies a \parindent left of
- *   the name's first glyph: the maker's row is the glyphs' between the carried marks, which the indent holds none of.
- *   A figure's or a table's name only outside a float (\@captype undefined): a caption's label is the label path's
- *   (run.mjs labelInTarget); longtable's captions define no \@captype, and the maker leaves out a name leading a caption.
+ *   the name's first glyph: its ink is the glyphs between its two points (own/own.ts), which the indent holds none of.
+ *   A figure's or a table's name only outside a float (\@captype undefined): a caption's label is the typesetter's
+ *   (unit/label.ts labelInTarget); longtable's captions define no \@captype.
  * - **Written through.** Written to a file or into a mark (\protect not \@typeset@protect) they write themselves, so that
  *   a name copied into the contents or a running head is still a name there (the lists' and the heads' occurrences, a
  *   later step's); a case change leaves their keys (l3text's exclusion list: \MakeUppercase\refname); in a PDF string,
@@ -2289,7 +2289,7 @@ export const withoutNameMarks = (text: string): string => text.replace(NAME_MARK
 
 /** \axt@unmark<tl>: the regex that takes a mark and its argument out of a token list, behind a memory and a prefilter.
  *  The regex costs ~4 ms a run over a list that holds a mark (~50 µs a token) and ~3 ms over one that holds none, and the
- *  nameref and gettitlestring hooks call it ~450 times a pass on the thesis (M1: 4.36 s of its layout compile).
+ *  nameref and gettitlestring hooks call it ~450 times a pass on the thesis (4.36 s of its layout compile).
  *  - The prefilter looks for each name in the list as text: a control sequence prints as `\name` and a space (the escape
  *    character set to `\` for it, so that a paper's own change of \escapechar hides nothing), a delimited match in
  *    microseconds; the regex runs only on a hit. A miss holds none of UNMARK_CS, which the regex's `\c{...}` alternation
@@ -2336,10 +2336,10 @@ const BACKREF_TEX = [
 
 /**
  * The regions' points (the layout compile's, after LAYOUT_TEX, for a paper that uses a code environment alone: every other paper's
- * files are byte for byte as before): each line TeX sets as code between two points, `cds<n>` and `cde<n>` (layout/ink.mjs
+ * files are byte for byte as before): each line TeX sets as code between two points, `cds<n>` and `cde<n>` (ink.ts
  * REGION_POINT), so that every reader knows that text as code by what TeX was told, never by its face, and keeps it as the paper
  * has it wherever it stands (2610.19159v1's transcripts, in mdframed boxes TikZ draws: a picture's text, cut into figure units
- * word by word and translated). `codeEnvs`, the code environments the paper uses (latex-front.mjs codeEnvsOf, the listing
+ * word by word and translated). `codeEnvs`, the code environments the paper uses (source/latex-front.ts codeEnvsOf, the listing
  * packages' own); `bodies`, those of them whose own body is the code (verbatim, alltt, one of the paper's own that sets
  * typewriter type with its lines obeyed), whose begin hook sets a flag its group ends. The others' lines a listing package sets
  * itself: listings sets the flag at its own start (its Init hook: a listing, tcolorbox's over listings, never the box's title, set
@@ -2454,8 +2454,8 @@ export const LAYOUT_TEX = [
 export const LAYOUT_TEX_REDUCED = LAYOUT_TEX.split(POINTS_TEX).join(POINTS_TEX_REDUCED)
 
 /**
- * The separations the rebuilt prepare's marked compile states (the compile move's B1: the display design's F12, 2d's glues, F40's
- * form 1): messages to the log alone, by macros that set nothing, so that every glyph, box and point stays where it was (the TeX
+ * The separations the prepare's marked compile states (PDF-READER §18.76: a heading's skips, each gap's glue, a run-in title's
+ * skip): messages to the log alone, by macros that set nothing, so that every glyph, box and point stays where it was (the TeX
  * gate's cases, lab/pdf/spikes/gap-cases.mjs). After LAYOUT_TEX, whose heading mark and float bracket it reads, and only where
  * its option asks (STATEMENTS_TEX): without it, the marked TeX is LAYOUT_TEX alone. Read by marks/channels.ts readHeads and
  * readGlues; \parskip's shrink needs no TeX (LINES_TEX prints \parskip whole: readSkips).
@@ -2489,7 +2489,7 @@ export const GAPS_TEX = [
   String.raw`\makeatother`,
 ].join('')
 /**
- * Each paragraph's measure as TeX breaks it into lines (the compile move's B2: the display design's F13), at its end:
+ * Each paragraph's measure as TeX breaks it into lines (PDF-READER §18.77), at its end:
  * `AXT-MEASURE <n> <\hsize> <\hangindent> <\hangafter> <\leftskip> <\rightskip> <\parshape> [<indent> <length>]…`, n the end's
  * serial (POINTS' para/end, `qe<n><code>`, whose hook runs first: the same paragraphs, the gate on, a list of nodes), each
  * dimension as TeX prints it, the two skips' natural sizes, the shape's lines through e-TeX's \parshapeindent and
@@ -2506,7 +2506,7 @@ export const MEASURE_TEX = [
   String.raw`\makeatother`,
 ].join('')
 /**
- * Where TeX ends a line at a forced break (the compile move's B2: the display design's F35): LaTeX's \@gnewline, every `\\`'s and
+ * Where TeX ends a line at a forced break (PDF-READER §18.77): LaTeX's \@gnewline, every `\\`'s and
  * \newline's way in a paragraph (`\unskip`, then `\nobreak\hfil\break`), once the document begins, sets a point `kb<n>` after the
  * \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue taken, as
  * before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to break made
@@ -2610,22 +2610,22 @@ export function refsTex(keys: readonly string[]): string {
   ].join('')
 }
 
-/** POINTS_TEX's point under `latex` (latex-front.mjs dviEngine), where pdfTeX writes no PDF itself and its \\pdfliteral sets
+/** POINTS_TEX's point under `latex` (source/latex-front.ts dviEngine), where pdfTeX writes no PDF itself and its \\pdfliteral sets
  *  nothing: xdvipdfmx's, as POINTS_TEX sets it under XeTeX, a `pdf:code` special, the same rendering intent in the content
  *  stream; pdfTeX's where it writes the PDF. DVI_LAYOUT_TEX's last part */
 export const DVI_POINTS_TEX =
   '\\let\\axt@pdfpoint\\axt@point\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\axt@pdfpoint{#1}\\else\\special{pdf:code /axt-#1 ri}\\fi}'
 /**
- * LAYOUT_TEX under `latex` (latex-front.mjs dviEngine: arXiv's DVI compiler, the DVI made a PDF by dvipdfmx): where pdfTeX
+ * LAYOUT_TEX under `latex` (source/latex-front.ts dviEngine: arXiv's DVI compiler, the DVI made a PDF by dvipdfmx): where pdfTeX
  * writes no PDF itself, its destination and its points are xdvipdfmx's, as LAYOUT_TEX sets them under XeTeX — MARK_DEF's
  * XYZ `pdf:dest` (DVI_MARK_DEF's \\axt@dvidest, which goes before LAYOUT_TEX) and a `pdf:code` point (DVI_POINTS_TEX) —, and
  * where it does, LAYOUT_TEX's own (its FitR). Each kind of node TeX sets is the one it sets under XeTeX, a whatsit, so the
  * marks set nothing else (the native cases, lab/pdf/spikes/layout-marks-cases.mjs ONLY=dvi, hold every text item in place).
- * After LAYOUT_TEX, for such a paper alone (live.mjs originalFiles, probeFiles): every other engine's files are byte for byte
- * as before. One line, no comment
+ * After LAYOUT_TEX, for such a paper alone (compile/live.ts originalFiles, probeFiles): every other engine's files are byte for
+ * byte as before. One line, no comment
  */
 /**
- * \axtcall{i}, before an author's call (latex-front.mjs CALLED_AT, layoutMarking: the command of an author block right after
+ * \axtcall{i}, before an author's call (source/latex-front.ts CALLED_AT, layoutMarking: the command of an author block right after
  * another's, an \and inside one): the point `<i>c`, unit i the first after it, where TeX is in horizontal mode alone, set as a
  * closing mark is (\axt@set: every glue, kern and penalty that ends the list taken off, the point set against what came before,
  * each put back), never on an empty list. Measured on the 31 papers that state a call (2026-11-10), where it first set an end
@@ -2636,8 +2636,8 @@ export const DVI_POINTS_TEX =
  * second line of names). So it is expandable where LaTeX typesets (\protect its \@typeset@protect, as \axtpma's), to nothing
  * outside horizontal mode — between two rows of an alignment, in vertical mode, in the preamble —, and kept as it is where LaTeX
  * stores text robustly; gobbled in a PDF string (hyperref's pdfauthor from \@author). In the marked compile's head only where the
- * source states a call (live.mjs originalFiles): every other paper's bytes as before. After LAYOUT_TEX, whose \axt@set it uses.
- * One line
+ * source states a call (compile/live.ts originalFiles): every other paper's bytes as before. After LAYOUT_TEX, whose \axt@set it
+ * uses. One line
  */
 export const CALL_TEX =
   '\\makeatletter\\def\\axtcall{\\ifx\\protect\\@typeset@protect\\expandafter\\axt@call\\else\\noexpand\\axtcall\\fi}\\def\\axt@call#1{\\ifhmode\\ifnum\\lastnodetype=-1 \\else\\axt@set{#1c}\\fi\\fi}\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtcall\\@gobble}\\fi}\\makeatother'
@@ -2649,7 +2649,7 @@ const COLOUR_LINE = /^AXT-COLOUR c(\d{1,9})\.(\d{1,9}) (.*)$/
 const PRINT_LINE = 79
 /**
  * Each colour piece's fill as TeX set its run, from the marked original's log (LAYOUT_TEX's AXT-COLOUR at the piece, the
- * last pass's: lastTexLog): [[unit, k, 0xRRGGBB]], rising by unit and k, the driver's colour string read by colour.mjs
+ * last pass's: lastTexLog): [[unit, k, 0xRRGGBB]], rising by unit and k, the driver's colour string read by colour.ts
  * fillOfColour. A piece TeX set twice in two colours (a moving argument typeset in two places) has no entry, nor has one
  * whose string is of no form known (a dvips named colour): its colour is not known. A line TeX wrapped at its 79 characters is
  * joined back
@@ -2699,7 +2699,7 @@ export const colourPieceOf = (p: PieceLike | null | undefined): boolean =>
 const WORD_END = /[\p{L}\p{N}]$/u
 /**
  * Whether a placeholder is a call of one of the paper's macros that reads nothing past its own arguments (`complete`, name →
- * arity: latex-front.mjs completeMacros, from the macro's definition) with those arguments all in it: the command, then as
+ * arity: source/latex-front.ts completeMacros, from the macro's definition) with those arguments all in it: the command, then as
  * many arguments as it takes, each a brace group or one token (TeX skips the spaces before each), and nothing after them
  * but white space, or an empty group for a macro of none (`\method{}`, as the front end keeps it)
  */
@@ -2768,10 +2768,10 @@ const LOOKS_AHEAD = (p: PieceLike | null | undefined): boolean => {
       ))
   )
 }
-/** a placeholder that reads nothing after it, whatever else it is: a LaTeX text symbol (text-symbols.mjs: `\S`, `\%`, `\_`, each
- *  one character by the kernel's own definition, no argument and no look ahead), where LOOKS_AHEAD's class of a macro
+/** a placeholder that reads nothing after it, whatever else it is: a LaTeX text symbol (source/text-symbols.ts: `\S`, `\%`, `\_`,
+ *  each one character by the kernel's own definition, no argument and no look ahead), where LOOKS_AHEAD's class of a macro
  *  takes it for a paper's macro. The piece right after it keeps its marks ("\S\ref{sec:a}"); its ink is read as any macro's
- *  is, by the probe and its own rows. The ink-free ones (rules/tex-kernel.mjs) never come here: INVISIBLE has no class for them */
+ *  is, by the probe and its own rows. The ink-free ones (source/tex-kernel.ts) never come here: INVISIBLE has no class for them */
 const READS_NOTHING = (p: PieceLike | null | undefined): boolean => p?.t === 'ph' && symbolText(p.src) !== null
 
 /** a group's opening by a command that reads that argument verbatim, as characters, whatever definition the front end
@@ -2800,7 +2800,7 @@ export function headEnd(pieces: readonly Piece[], from = 0): number {
     }
     if (p.t === 'open') continue
     // (a placeholder the start mark takes for the head's first word, the source reader's own reading (latex-front.ts
-    // firstWordPiece): an inline formula or citation, an identifier, a number an entry keeps (F29: an entry's year))
+    // firstWordPiece): an inline formula or citation, an identifier, a number an entry keeps (PDF-READER §18.81: an entry's year))
     if (p.t === 'ph') {
       if (firstWordPiece(p.src)) return k
       continue
@@ -2902,7 +2902,7 @@ export function layoutMarking(
   const parted: ReadonlySet<string | undefined> = new Set(apart ?? [])
   /** what TeX answered for a piece's command before what follows it: a code of readMarkProbe's ('x' no answer: no mark
    *  as '2'); with `switches` and no answer for an asked class's command, '2' too — no mark where TeX did not say one
-   *  is safe (the re-review's m4); with no `switches` at all (the probe not run), undefined: the marks as before */
+   *  is safe; with no `switches` at all (the probe not run), undefined: the marks as before */
   const answer = (p: Piece, next: Piece | undefined): string | undefined => {
     if (!switches) return undefined
     const codes = switches[commandOf(p) ?? '']
@@ -2944,10 +2944,10 @@ export function layoutMarking(
     // measures and never ships, in its running head and in the PDF's title —: a heading's marks set nothing in the output
     // routine's heads, are gobbled in a PDF string and written to no file (the gate, LAYOUT_TEX), set no destination in a box
     // never shipped, and a title's end mark alone is set where TeX sets the title, its first occurrence the unit's where the
-    // class sets it again (own.mjs MR 3). Left with no mark, the title's ink had no group: 2610.22195v1 p1u0 stayed English)
+    // class sets it again (own/own.ts ownOf). Left with no mark, the title's ink had no group: 2610.22195v1 p1u0 stayed English)
     if (u.kind === 'heading') return { start: `\\axthmark{h${i}s}`, end: `\\axthmark{h${i}e}` }
     // (the front matter's units: their unit marks, no line probe, which would act on the class's own paragraph)
-    // (and an author's call the source states before it, latex-front.mjs CALLED_AT: its point `<i>c`, CALL_TEX)
+    // (and an author's call the source states before it, source/latex-front.ts CALLED_AT: its point `<i>c`, CALL_TEX)
     const f = front(u)
     if (f) {
       const at = calledAt(u)
@@ -3204,7 +3204,7 @@ export function layoutMarking(
 }
 /** the paper's macros a marking takes for reading nothing past their arguments, at most: a count of macros; unmeasured */
 export const COMPLETE_MAX = 4096
-/** of the paper's complete macros (latex-front.mjs completeMacros, [name, arity]), those its units call as placeholders,
+/** of the paper's complete macros (source/latex-front.ts completeMacros, [name, arity]), those its units call as placeholders,
  *  as the marking records them: an object by name, at most COMPLETE_MAX, the first by name; null for none given */
 export function completeCalled(
   units: readonly { pieces: readonly PieceLike[] }[],
@@ -3263,10 +3263,10 @@ const endsOf = (i: number): string[] => [`${i}e`, `t${i}e`, `h${i}e`]
  *  last mark; none of a unit that is no cell's */
 const cellEndOf = (u: Unit | undefined, i: number): string[] => (u?.kind === 'cell' ? [`t${i}x`] : [])
 /**
- * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
+ * What the marking says of each piece with an opening mark, for its own ink (own/stream.ts Follow): by its opening
  * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
  * characters of the text after it in its unit up to the next visible piece (and, `rest`, the whole of it as the spell check
- * reads one: stream.mjs spellOf), its unit's next marks (a cell's end point among them: where TeX ends what a piece of a cell
+ * reads one: own/stream.ts spellOf), its unit's next marks (a cell's end point among them: where TeX ends what a piece of a cell
  * stands in, LAYOUT_TEX's template end, so that a cell's piece with its opening mark alone ends there), and whether a visible
  * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
  * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
@@ -3274,18 +3274,18 @@ const cellEndOf = (u: Unit | undefined, i: number): string[] => (u?.kind === 'ce
  * the group's last one's. With `texts` (the probe's: readInkTexts' pairs, flat, or a Map), a paper's macro whose next piece has
  * no mark of its own and is the only visible one before its unit's next marked piece, white space alone between
  * (`through`), or followed by text up to a piece of its unit's ends, is `split`: that piece's opening mark's name, which no point
- * sets, the text TeX sets for the macro (a letter or a digit in it), by which the maker's reading parts the two's ink,
+ * sets, the text TeX sets for the macro (a letter or a digit in it), by which ownedOf without `erasure` parts the two's ink,
  * character for character, and the text after that piece as an opening's (`want`, `rest`, `ends`), where its ink ends
- * (stream.mjs ownedOf): 2609.20976's `\lgnrm \footnote{…}`, before which \xspace sets no space and would before a mark
+ * (own/stream.ts ownedOf): 2609.20976's `\lgnrm \footnote{…}`, before which \xspace sets no space and would before a mark
  * (aheadSamples' answer 2), and an elsarticle .bbl's `\DOIprefix\doi{…}.` at an entry's end.
  * The text after a piece is what TeX sets after it (`shownAt`): a paper's macro TeX said sets no ink (`inkless`, readInkProbe) is
- * nothing, which the maker writes EMPTY; and a text symbol with no mark of its own right after the piece, white space alone
- * between, is its character, which the maker draws it as (make.mjs `symbols`) — past text, a symbol ends the text after it as a
- * visible piece does, as before, since its glyph need not be its character (OT1's `\_` a rule: 2610.19159v1's
- * `\textbar{}…g\_…`). Neither blocks a reading: read as visible pieces with no mark, they left the piece before them LOST ('open,
- * an unmarked piece follows'): 2608.28692v1's `\MainRel\%`, a number before its per cent sign, in five paragraphs; 2608.25210v2's
- * `\code{…} \papertext{…}below.`, a macro of no ink between the code and its text. The erasure's `through` and `split` read past
- * the pieces after it as before
+ * nothing, which the instrument states empty; and a text symbol with no mark of its own right after the piece, white space alone
+ * between, is its character, as the layer draws it (source/text-symbols.ts symbolText) — past text, a symbol ends the text
+ * after it as a visible piece does, since its glyph need not be its character (OT1's `\_` a rule: 2610.19159v1's
+ * `\textbar{}…g\_…`). Neither blocks a reading: read as visible pieces with no mark, they would leave the piece before
+ * them LOST ('open, an unmarked piece follows'): 2608.28692v1's `\MainRel\%`, a number before its per cent sign, in five
+ * paragraphs; 2608.25210v2's `\code{…} \papertext{…}below.`, a macro of no ink between the code and its text. The erasure's
+ * `through` and `split` read past the pieces after it
  */
 export function followsOf(
   units: readonly Unit[],
@@ -3369,7 +3369,7 @@ export function followsOf(
         others++
       }
     }
-    // (`split`: the macro's text, where the one unmarked piece after it is a placeholder the maker cannot find with no mark
+    // (`split`: the macro's text, where the one unmarked piece after it is a placeholder the ownership cannot find with no mark
     // (AHEAD_FOLLOWS, or a paper's macro that is no text symbol: a .bbl's `\\DOIprefix\\doi{…}`), the next marked piece right after
     // that piece (`through`), or text after it, then a piece of its unit's ends (`want`, `rest`, `ends`, as an opening's): its ink
     // ends where that text begins)
@@ -3401,7 +3401,7 @@ export function followsOf(
     // (`moved`: the punctuation mark that opens the text after a piece of a command the probe asks about, which that command may
     // set before its own ink — cite.sty's superscripts, natmove, fnpct: `\\cite{a}.` set ".¹" — and where TeX answered so, the
     // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first,
-    // where none stands after them (stream.mjs ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
+    // where none stands after them (own/stream.ts ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
     const moved = ASKED.has(classOf(u.pieces[k])) && MOVED.has(after[0]) ? after[0] : null
     return {
       closing: names.has(`${name.slice(0, -1)}b`),
@@ -3423,7 +3423,7 @@ export function followsOf(
  * one in vertical mode would begin a paragraph of its own), by the unit's start mark's name (MARK_DEF's, `<i>s`): the opening mark's
  * name the display would have had, and those of the displays right after it with nothing visible between (its group), none of
  * them a destination set (`names`); null for any other name, a unit whose first visible piece is not such a display, or one the
- * marking marked. TeX ships it right before the start mark: stream.mjs ownedOf reads its ink between the point before that mark
+ * marking marked. TeX ships it right before the start mark: own/stream.ts ownedOf reads its ink between the point before that mark
  * and the mark (headInk), where it was LOST, OUTSIDE its unit's lines, and its light no block's (2501.14787v1 p24u193)
  */
 export function headsOf(

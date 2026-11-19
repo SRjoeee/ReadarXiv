@@ -1,7 +1,7 @@
 // The names babel gives a document's generated headings (its [captions]: \abstractname, \refname, …), by key: what the
-// layout marks wrap (marks.mjs NAMES_TEX), the layout file locates (file.mjs `names`) and the layout rules name in each
-// target's words (rules/layout-rules.json `labels`). One list, read by the server's modules and the readers': imports
-// nothing.
+// layout marks wrap (marks.ts NAMES_TEX), locate places on A (locate/members.ts) and the typesetter names in each target's
+// words (its rule set's `labels`: shared/names.ts nameInTarget). One list, read by the server's modules and the readers':
+// imports nothing.
 
 /** the keys, babel's own (its ini files' [captions]): each a key of its English locale's [captions]
  *  (tex/generic/babel/locale/en/babel-en.ini) in every pinned compile image's TeX Live, as the release check's babel-names
@@ -25,9 +25,7 @@ export const NAME_KEYS = Object.freeze([
 /** a babel name's key */
 export type NameKey = (typeof NAME_KEYS)[number]
 /** each name's English value, babel's en [captions] (the layout rules' pinned locale files; babel-en.ini's, held by the
- *  release check's babel-names): what a style that writes a
- *  name literally writes (marks.mjs literalNames), and a head the layer never draws as a theorem's (layer2.mjs
- *  headLabelInTarget: a babel name is the names' own, nameInTarget) */
+ *  release check's babel-names): what a style that writes a name literally writes (marks.ts literalNames) */
 export const NAME_ENGLISH: Readonly<Record<NameKey, string>> = Object.freeze({
   abstract: 'Abstract',
   ref: 'References',
@@ -49,7 +47,8 @@ export const NAME_ENGLISH: Readonly<Record<NameKey, string>> = Object.freeze({
 const COUNTER_FORM = /^(?:[a-z](?=\d))?(?:\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\-–](?:\d{1,4}|[a-z]))*[.:]?$/u
 /** how far after a name its counter may begin, of the name's size: TeX's \nobreakspace is a third of an em, a \quad one */
 const COUNTER_GAP = 1.1
-/** a word's space, of the glyphs' size: two glyphs further apart are two words (a fifth of an em, as layer2.mjs spacedText reads) */
+/** a word's space, of the glyphs' size: two glyphs further apart are two words (a fifth of an em, as the typesetter's
+ *  unit/label.ts spacedText reads) */
 const WORD_SPACE = 0.2
 /** a glyph as the counters read it, on a name's line in reading order: its characters, where it starts and ends, its size */
 export interface LineGlyph {
@@ -63,9 +62,9 @@ export interface LineGlyph {
  * `\appendixname\nobreakspace\thesection`: IEEEtran's "APPENDIX A" over its title, its contents list's "Appendix A: …"): of
  * `next`, the glyphs that stand after the name on its line in reading order ({ u, x0, x1, size }), the first that begins
  * within COUNTER_GAP of `size` after the name's end `x1`, and those after it that follow within a word's space, read as a
- * counter's form and then a word's space or the line's end. The same rule for the wrap, which gives those glyphs the name's
- * group (own.mjs), and the maker, which gives them its row (make.mjs): the layer then sets the counter after the name's
- * word, where it was left at its own place, a gap the width of the original's word less the target's after the word.
+ * counter's form and then a word's space or the line's end. The rule of the wrap, which gives those glyphs the name's group
+ * (own/own.ts ownOf), read by locate as the name's counter (locate/members.ts `counterA`): the layer then sets the counter
+ * after the name's word, else left at its own place, a gap the width of the original's word less the target's after the word.
  * Returns how many of `next` the counter is: 0 for none
  */
 export function counterAfter(x1: number, size: number, next: readonly LineGlyph[]) {
@@ -92,7 +91,7 @@ export function counterAfter(x1: number, size: number, next: readonly LineGlyph[
  * ({ u, x0, x1, size }), all of them, one word (each within a word's space of the next), its last ending within COUNTER_GAP of
  * `size` before the name's start `x0`, a counter's form with a digit in it (a section's number as LaTeX prints it: "9", "9.",
  * "2.3", "A.1"; a letter or a roman numeral alone is no number here). The rule counterAfter's mirror, and narrower: nothing
- * else on the line before it. The wrap gives those glyphs the name's label group (own.mjs MR 6c), so that the line is laid
+ * else on the line before it. The wrap gives those glyphs the name's label group (own/own.ts, `n<occ>.l`), so that the line is laid
  * whole: the name's word after its number, centred as TeX centred the two. Returns how many of `before` the number is: 0 for
  * none
  */

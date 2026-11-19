@@ -124,7 +124,7 @@ export function groupFacts(
   }
   // (an element's text with letters none of which is matched: its ink is its own after all, no glyph of `glyphs` (a text macro
   // the ownership gave its marks, 2608.25210v2's `\sys`), white space to the stop's reading; one matched, or of no letter (a text
-  // symbol, whose glyph is the text's: own.mjs), the source's characters)
+  // symbol, whose glyph is the text's: own/own.ts), the source's characters)
   const found = new Uint8Array(els)
   const lettered = new Uint8Array(els)
   for (let i = 0; i < group.length; i++) {
