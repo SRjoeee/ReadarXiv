@@ -203,6 +203,24 @@ describe('I3 by ink on the page as the reader draws it: a laid unit’s ink agai
     const off = inkOverlaps(page([laid(1, [run(100, 'x'.repeat(20))], 3), left(2)]), p, metrics).overlaps
     expect(off).toEqual([])
   })
+  it('says each element a laid run meets, by its id: two kept elements of one member are two entries', () => {
+    // (a laid run over two of its own elements kept where they stand: read as one entry a member, member and kind, the first
+    // element met stood for both, and the second was said only once the first left)
+    const k = (x0: number): [number, number, number, number, number, number] => [1, x0, 699, x0 + 10, 707, 700]
+    const p = part([
+      placed(1, [line(100, 200)], {
+        els: [
+          ['e1', { kind: 'other', keep: 1, ink: [k(120)] }],
+          ['e2', { kind: 'other', keep: 1, ink: [k(170)] }],
+        ],
+      }),
+    ])
+    const got = inkOverlaps(page([laid(1, [run(100, 'x'.repeat(20))], 3)]), p, metrics).overlaps
+    expect(got.map((o) => [o.ord, o.with, o.kind, o.piece])).toEqual([
+      [1, 1, 'element', 'e1'],
+      [1, 1, 'element', 'e2'],
+    ])
+  })
   it('a crop is never held against the ink it is cut from, and is held against another’s', () => {
     const el = {
       kind: 'other',

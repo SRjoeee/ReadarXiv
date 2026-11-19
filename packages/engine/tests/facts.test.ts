@@ -738,6 +738,62 @@ describe('locate states the facts on arXiv’s page', () => {
     ])
     expect(M.elements.find(([id]) => id === '1')?.[1].keep).toBeUndefined()
   })
+  it('keeps no element whose ink box meets a held line over the text line TeX set it on', () => {
+    // (a formula taller than its text line: its ink reaches half a point into the box of the held line over it. Its line is the
+    // one its ink states, the text line under the held one: it is the unit's text, drawn with the translation, its group erased)
+    const pages: PageSpec[] = [
+      { lines: ['first line of it', 'a held line here', 'last line', { text: 'X', x: 130, y: 676, size: 15 }] },
+    ]
+    const B = docOf(pages)
+    const content: Piece[] = [text('first line of it last line '), { t: 'el', id: '1', kind: 'other', src: '$X$' }]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, n) =>
+      n === 1 ? [-1, 0, -1] : n === 3 ? [0, ROLE.element, 1] : [0, ROLE.text, -1],
+    )
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.lines.map((l) => [l[4], l[9] & 1])).toEqual([
+      [700, 0],
+      [688, 1],
+      [676, 0],
+    ])
+    const el = new Map(M.elements).get('1')!
+    expect(el.ink).toHaveLength(1)
+    const [, x0, , x1, top, base] = el.ink[0]!
+    const held = M.lines[1]!
+    expect(top).toBeGreaterThan(held[6])
+    expect(Math.min(x1, held[3])).toBeGreaterThan(Math.max(x0, held[2]))
+    expect(base).toBe(676)
+    expect(el.keep).toBeUndefined()
+    expect(el.after).toBeUndefined()
+  })
+  it('keeps an element TeX set on a held line, its ink on that line’s baseline, with the line’s next mark after it', () => {
+    // (an image set inside a line no unit owns, its bottom on that line's baseline: it stands on no line of the unit's, the
+    // line it is set on is the held one, and it stays with it)
+    const pages: PageSpec[] = [
+      { lines: ['first line of it', 'a held line here', 'last line of it'], boxes: [[23, -3, 108.5, 688, 113.5, 694]] },
+    ]
+    const B = docOf(pages)
+    const content: Piece[] = [
+      text('first line of it '),
+      { t: 'el', id: '1', kind: 'other', src: '\\includegraphics{a}' },
+      text(' last line of it'),
+    ]
+    const u: InstrumentUnit = { id: unitId('para', content), kind: 'para', content }
+    const ins = instrument(B, [u], (_, n) => (n === 1 ? [-1, 0, -1] : [0, ROLE.text, -1]))
+    ins.boxes[0]!.unit[0] = 0
+    ins.boxes[0]!.role[0] = ROLE.element
+    ins.boxes[0]!.piece[0] = 1
+    const M = locate(ins, B, align(B, B)).members[0]!
+    expect(M.lines.map((l) => [l[4], l[9] & 1])).toEqual([
+      [700, 0],
+      [688, 1],
+      [676, 0],
+    ])
+    const el = new Map(M.elements).get('1')!
+    expect(el.ink).toEqual([[1, 108.5, 688, 113.5, 694, 688]])
+    expect(el.keep).toBe(1)
+    expect(el.after).toBe('l')
+  })
   it('states a forced break’s line from its point on B, and the class’s tail', () => {
     const pages: PageSpec[] = [
       {

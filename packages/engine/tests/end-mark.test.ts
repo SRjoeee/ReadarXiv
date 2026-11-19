@@ -407,3 +407,70 @@ describe('an end mark the source writes, a piece of the unit’s (the compile mo
     expect(endOf(false)).toBeUndefined()
   })
 })
+
+describe('a line shares its baseline with ink that stays (PINNED), never with its own end mark alone', () => {
+  // (the end mark moves with the unit's translation, drawn at its end (El.end): on its last line's band it is no ink that stays,
+  // and the floor that keeps a last line a leading over the next paragraph holds)
+  const lines = (more: PageSpec['lines']): PageSpec['lines'] => [
+    { text: L40, y: 700 },
+    { text: 'yyyy.', y: 688 },
+    { text: 'QED', x: 312 - 18, y: 688 },
+    ...more,
+    { text: 'Next', y: 664 },
+  ]
+  it('does not pin a last line whose only ink beside it is the unit’s own end mark', () => {
+    const B = docWith({ lines: lines([]) }, [
+      ['0e', 45, 0],
+      ['h1s', 48, 0],
+    ])
+    const L = locate(
+      ownedBy(
+        B,
+        [proof, next],
+        [
+          [0, T, -1],
+          [0, T, -1],
+          [-1, T, -1],
+          [1, T, -1],
+        ],
+      ),
+      B,
+      align(B, B),
+    )
+    const p = L.members[0]!
+    expect(p.elements.map(([id, el]) => [id, el.end, el.copy])).toEqual([[END, 1, 'QED']])
+    expect(p.lines.map((l) => [l[4], l[9] & 2])).toEqual([
+      [700, 0],
+      [688, 0],
+    ])
+  })
+  it('pins a last line beside which another unit’s ink stands too, its own end mark aside', () => {
+    // (a third unit's glyph on the band between the text's end and the mark, shipped after the mark: the mark is still the
+    // unit's, and the other unit's ink pins the line as before)
+    const B = docWith({ lines: lines([{ text: 'm', x: 200, y: 688 }]) }, [
+      ['0e', 45, 0],
+      ['h1s', 49, 0],
+    ])
+    const L = locate(
+      ownedBy(
+        B,
+        [proof, next, unitOf('para', [text('m')])],
+        [
+          [0, T, -1],
+          [0, T, -1],
+          [-1, T, -1],
+          [2, T, -1],
+          [1, T, -1],
+        ],
+      ),
+      B,
+      align(B, B),
+    )
+    const p = L.members[0]!
+    expect(p.elements.map(([id, el]) => [id, el.end, el.copy])).toEqual([[END, 1, 'QED']])
+    expect(p.lines.map((l) => [l[4], l[9] & 2])).toEqual([
+      [700, 0],
+      [688, 2],
+    ])
+  })
+})

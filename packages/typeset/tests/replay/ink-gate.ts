@@ -304,7 +304,7 @@ export function keptInk(part: Part, page_: Page): Kept[] {
  * (keptInk), its own kept ink too (a translation laid over its own kept element or label is drawn over it all the same); a crop
  * is never held against the ink it is cut from (its own element's or label's, which it is). A run whose rectangle meets other ink
  * is read glyph by glyph (and the other's too where it is a run). Each overlap once a page by the laid member, the member whose
- * ink it meets and what that ink is, with the first two inks that meet
+ * ink it meets, what that ink is and which element or label, with the first two inks that meet
  */
 export function inkOverlaps(
   page_: Page,
@@ -334,10 +334,10 @@ export function inkOverlaps(
     return null
   }
   const seen = new Map<string, InkOverlap>()
-  // (one a page by the laid member, the member it meets and what that ink is: one its own original did not meet before any that it
-  // did)
+  // (one a page by the laid member, the member it meets, what that ink is and which piece, an element by its id: two elements of
+  // one member are two entries, neither standing for the other; one its own original did not meet before any that it did)
   const add = (x: InkOverlap) => {
-    const k = `${x.ord}|${x.with}|${x.kind}`
+    const k = `${x.ord}|${x.with}|${x.kind}|${x.piece ?? ''}`
     const had = seen.get(k)
     if (!had || (had.own && !x.own)) seen.set(k, x)
   }

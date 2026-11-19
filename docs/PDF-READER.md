@@ -8624,7 +8624,10 @@ rows, 23,180 by the runner). And the release check read each run whole by its ex
   ink) to its ink's right; a turned run in its own frame; a crop as the reader draws it, its rectangle cut by its own ink (its
   piece's, as the part states it). A line on A is its ink across and its fonts' box up and down (the part states no ink height of
   a line). An overlap with ink the unit's own original met already, by the same measure, is the page's own setting (a figure's
-  label TeX set over its image), counted apart. Not seen: a figure's drawing that stands on no member's text line.
+  label TeX set over its image), counted apart. Each overlap is said once a page by the laid member, the member whose ink it
+  meets, what that ink is and which element: two kept elements of one member are two entries (read as one, the first element
+  met stood for every other, and a second was said only once the first left: 2610.21765v1 p9, §18.99). Not seen: a figure's
+  drawing that stands on no member's text line.
 - **I5 as said**: a line past its slot by its ink beyond the breaker's own tolerance (0.01 pt, `breaker/break.ts:638`), whatever
   its class (the runner's restated form left out an overfull line and a closing mark's blank half by its advance); an end mark
   (El.end) drawn where TeX set it held to TeX's own ink of it, which TeX may set past its measure (2610.20285v1: amsthm's box
@@ -8754,6 +8757,71 @@ by ink reads what the part states, so the covered word, no member, is no ink the
   on 1810.04805v2 p5 and 2610.21313v1 p3-p4 the same values under renumbered members); over the changed pairs' pages,
   2610.40394v1-zh p4 worse by 11 differences, by 2 now (a size off before as now, and the count of figure texts drawn, which
   counted the five hidden words).
+
+### 18.99 An element stays with a held line only where TeX set it on that line (2026-11-19)
+
+An element of a unit's text is kept as ink where it stands (`El.keep`: in no group, never erased, the line's own next mark after
+it `El.after`) where TeX set it on a line the unit keeps (KEPT): a display's row, or a held line, ink inside the unit that no unit
+owns. Which line an element stands on is what its ink states: each box of its ink carries the baseline of the line TeX set it on,
+the unit's line its glyphs were cut into, else the line a box of it stands on (`locate/geometry.ts`). The facts pass keeps it with
+a KEPT line only where that line is the member's line on that baseline that holds the box across, one of the unit's own lines
+taken first where one is there (`locate/facts-pass.ts` readElements). It had taken the first of the member's lines whose fonts'
+box met the element's ink box: a formula taller than its text line, under a display row whose fonts' box reaches down into it,
+was kept with the row (2610.21765v1 p9 ord 143: its `max(·)`, `min(·)` and `var(·)`, their ink's top 620.07 against the row's
+box's bottom 620.04, 0.03 pt; their `El.after` the row's next glyphs). The lay read them two ways: ink kept, never erased (an
+element `El.keep`'s group stays on, `lay/entry.ts`), and a crop laid on its text line, which is not held: each formula drawn
+twice, 5.64 pt apart. Production drew the line once. No tolerance decides it: an ink box meeting a line's box is no fact of where
+TeX set the element.
+
+- **Kept as before:** an element whose ink's baseline is a KEPT line's, across it, and no line of the unit's own there (an image
+  set inside a held line, its bottom on that line's baseline), with the line's next mark after it.
+- **The class** (the base's chain over the 245 papers): 26 elements stated kept that are no display, 11 by locate's geometry
+  (outside the unit's lines, or its own rows), 7 by a KEPT line their ink box met while their baseline is the unit's own line:
+  2610.21765v1 p9 ord 143's three, and 2608.29181v2 ord 135's four on p28 (a theorem over pp27-29, each page's part stating
+  them), on three text lines under a display row whose box reaches 54 pt below its baseline. None stands on a KEPT line's
+  baseline.
+- **Measured** (2026-11-19, the prepare over the 245 papers from their stored compiles, before and after; every compile found by
+  its key): the 7 elements' 15 statements change, their `keep` and the `El.after` it took, their ink the same; no element is
+  newly kept. With them their two papers' wrap: their glyphs join their unit's group in the add-on (2610.21765v1 18 glyphs,
+  2608.29181v2 10), and their prepare dump's `KEPT` flag goes. Nothing else of any bundle, prepare dump or ownership moves, and
+  no unit, so no wire and no row. The reader gate (the 90 pairs and the added two, both stores): the formula drawn twice leaves
+  I3 by ink, and the sentence cover reads three pieces fewer on each store (the three formulas' kept ink beside their crops), 0
+  faults. 2610.21765v1 p9 ord 143 stays held for its own CJK glyph's top (620.97) 0.93 pt into the display row's fonts' box
+  (620.04), as production draws it, against the row as a line and as the display's element (§18.96: an element's overlap is
+  said by the element). Read by the element, the base's lists held all three formulas, door 21 to 17, Google 24 to 20, none
+  joining. The display gate: none of its pairs holds such an element, and no page of either mode moves for it.
+
+### 18.100 A line is pinned by ink that stays, never by its own end mark (2026-11-19)
+
+A line is PINNED (`Line` flag 2) where it shares its baseline with ink that stays: a glyph of the page on its band, across its
+block's span and off its own extent (`locate/facts.ts` pinnedOf), its own label's and its lead's aside. Its unit's own end mark
+(`El.end`, §18.52) is aside too (`locate/facts-pass.ts` readLineFlags): the typesetter erases it with the unit's elements and
+lays it at the end of the translation's last line, wherever that falls, so it stays nowhere on the band. Taken for ink that stays,
+a glyph mark (`$\square$`, a font's `∎`) pinned the last line it stands on (a mark of rules, amsthm's `\openbox`, never did: the
+band reads glyphs alone). A pinned last line has no floor under it (U.params' `halfLead.foot`, `unit/slots.ts` footFloorAt: the
+floor that keeps a paragraph's last line a leading of its own over the next paragraph, §18.11), and the walk borrowed the room
+under the run: 2610.21884v1 p25 ord 199, a proof whose last line ends in its square, laid 5.98 pt under TeX's baseline, its
+formula's ink onto the next paragraph's first glyph. Production keeps that line on TeX's baseline.
+
+- **Pinned as before:** a line beside which other ink stays on its band, its own end mark aside (another unit's ink, a stay of no
+  unit's).
+- **Such a paragraph is laid as every other.** Unpinned, its last line has the floor every unpinned paragraph has (§18.11): where
+  the walk borrows the room TeX leaves under the run, the floor is measured from the borrow's foot, and ord 199's last line is
+  laid at 155.00, 3.47 pt under TeX's 158.47 (the borrow's foot 152.48 plus (L - 1) p0 at the lead 1.16 the walk took, 2.23),
+  16.47 pt over the next paragraph's first line; where its translation needs fewer lines than the original, at a leading wider
+  than TeX's, it ends higher, the slack under it, as every such paragraph does. A last line farther from TeX's than before is
+  no fault of an unpinned paragraph: its translation has other lines than the original, and its fill is judged on the whole
+  page (the coordinator's ruling of 2026-11-19).
+- **Measured** (2026-11-19, the prepare over the 245 papers from their stored compiles, before and after): of the 725 lines that
+  hold their unit's own end mark, 149 were pinned, every one a last line, in 20 papers, none by other ink besides; none is now.
+  Nothing else of any bundle moves. The reader gate (the 90 pairs and the added two): of the 62 members on its pairs, 13 last
+  lines laid under TeX's line move up toward it on the door's rows (16 on Google's), 15 laid on or over it move up by 0.6 to
+  4.4 pt (the same 15 on both), the others stay; ord 199 leaves I3 by ink, no overlap joins; the page fill moves 3 neighbours
+  (6 on Google's) by under a point; I6's pages laid twice and across pages as before (11 by the head pass, the same members).
+  The display gate (its 22 pairs and the added, both modes): no page worse, none newly worse; the five pages of its pairs that
+  hold such a member keep their verdicts, their pixels' difference from production's up on the two whose last line rises
+  (2608.25210v2 p5 from 0.064 of the page to 0.074, p8 0.085 to 0.089) and down on the three whose last line had been laid under
+  TeX's (2608.25210v2 p9, 2610.21106v1 p4, p7).
 
 ## 19. The engine's contract
 

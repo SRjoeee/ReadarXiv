@@ -515,14 +515,18 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
     }
     if (el.ink.length && !el.keep) {
       // (its ink on a held line (KEPT): kept with it, and the line's own next mark after it; one outside the unit's
-      // lines is kept by locate (geometry.ts). Its line the one its ink stands on, across and along: a line of the other
-      // column at its height is none of its, 2610.20595v1 p9 ord 55's formulas beside a display row KEPT in the left column)
-      const on = el.ink.map((k) =>
-        mem.lines.findIndex(
-          (l) =>
-            l[0] === k[0] && Math.min(k[4], l[5]) > Math.max(k[2], l[6]) && Math.min(k[3], l[3]) > Math.max(k[1], l[2]),
-        ),
-      )
+      // lines is kept by locate (geometry.ts). Its line the one TeX set it on: the member's line on the baseline its ink box
+      // states (geometry.ts: the unit's line its glyphs were cut into, else the line it stands on), across it, one of the unit's
+      // own lines where one is there; a line of the other column on that baseline is none of its. A line whose box its ink only
+      // meets is none of its either: a display row KEPT over the text line a formula taller than its text stands on, the row's
+      // fonts' box reaching down into the formula's (2610.21765v1 p9 ord 143, by 0.03 pt): read as its line, the formula's
+      // ink stays and its crop is laid on its text line, drawn twice. PDF-READER §18.99)
+      const on = el.ink.map((k) => {
+        const at = (l: Line) =>
+          l[0] === k[0] && Math.abs(l[4] - k[5]) < ON_BASE && Math.min(k[3], l[3]) > Math.max(k[1], l[2])
+        const own = mem.lines.findIndex((l) => at(l) && !(l[9] & 1))
+        return own >= 0 ? own : mem.lines.findIndex(at)
+      })
       {
         const j = on.find((x) => x >= 0) ?? -1
         if (j >= 0 && (mem.lines[j] as Line)[9] & 1) {
@@ -1031,10 +1035,14 @@ function readLineFlags(fx: FactsIndex, r: MemberReading): void {
   // (PINNED: any glyph of the page on its baseline's band within its
   // block's span and off its own extent, its own label's aside (whether a label kept stands before it is U.params' to say);
   // its block, its run of lines on one page and column, each under the one before; the band by the line's size)
-  const label = new Set(mem.label)
+  const aside = new Set(mem.label)
   // (and the glyphs of the name that leads it: its lead's, drawn with it (Placed.bound), its line starting at the name)
   const leader = mem.leader !== undefined ? members[mem.leader] : undefined
-  for (const a of leader?.text ?? []) label.add(a)
+  for (const a of leader?.text ?? []) aside.add(a)
+  // (and its own end mark's (El.end): drawn at its translation's end, it moves with it, no ink that stays on its last line's
+  // band. Taken for one, it takes off the floor that keeps that line a leading over the next paragraph, and the walk lays the
+  // line lower, onto that paragraph (2610.21884v1 p25 ord 199, its proof's square). PDF-READER §18.100)
+  for (const [id, el] of mem.elements) if (el.end) for (const a of mem.els.get(id) ?? []) aside.add(a)
   // (its block: the run of its lines on one page and column, each under the one before, which the line before and the line
   // after share with it pairwise: the runs cut once, each run's span read once, one pass over the lines)
   const spans: [number, number][] = []
@@ -1056,7 +1064,7 @@ function readLineFlags(fx: FactsIndex, r: MemberReading): void {
   const spanOf = (q: number): [number, number] => spans[q]!
   own.forEach(([l, j], q) => {
     const size = l[10] ?? sizeOf(j)
-    const ink = bandOn(l[0], l[4] - 0.4 * size, l[4] + 0.4 * size).filter((g) => !label.has(g.a))
+    const ink = bandOn(l[0], l[4] - 0.4 * size, l[4] + 0.4 * size).filter((g) => !aside.has(g.a))
     if (pinnedOf(l, size, ink, spanOf(q))) l[9] |= 2
   })
   const displays = mem.elements.filter(([, el]) => el.kind === 'display').flatMap(([, el]) => el.ink)
