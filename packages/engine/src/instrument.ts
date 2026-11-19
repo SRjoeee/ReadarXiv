@@ -1,7 +1,7 @@
 // The seam between the prepare's front half and its back half (design §4.3, stage 1a): what a marked compile yields, the
 // INSTRUMENT. B (our marked compile) is never shown: it is read for who owns each glyph and box, and its ownership is carried
-// onto arXiv's page by align and locate. Today's front end makes it through its adapter (src/pdf-reader/engine/pipeline/
-// instrument.mjs); the back half reads nothing else of the source, the marks or the compile.
+// onto arXiv's page by align and locate. The front half makes it through its adapter (instrument/instrument.ts, DESIGN §16);
+// the back half reads nothing else of the source, the marks or the compile.
 import type { Piece, Style } from '@readarxiv/format'
 import type { Doc } from './doc.ts'
 import type { Recovered } from './read.ts'
@@ -45,15 +45,15 @@ export interface InstrumentUnit {
   /** a figure text the engine cannot draw as it was set, a script or an accent set apart from its base, kept as the original
    *  (F3's `script`, figure-lines.ts setApart): the lab's dump and parity tell it by it; the bundle does not carry it */
   script?: true
-  /** a figure text or a table cell held whole as the original for a decorated word (PDF-READER §18.61, the owner's ruling of
-   *  2026-11-12): `token`, one that holds the word, a figure text a word of which a decoration holds (figure-lines.ts, its element
+  /** a figure text or a table cell held whole as the original for a decorated word (PDF-READER §18.61):
+   *  `token`, one that holds the word, a figure text a word of which a decoration holds (figure-lines.ts, its element
    *  `cite`) or a cell holding a piece TeX set beside a decoration of its own with a letter in its text (the probe's `decorated`,
    *  pipeline/instrument.mjs decoratedCellsOf); `label`, a figure text of the same label or printed line as such a text, by the
    *  paragraph reading's pairing (figure-lines.ts figureLinesOf). `fixed`, never `kept`: its text could be translated and is
    *  held for its drawing alone. The lab's dump and parity tell it by it; the bundle does not carry it */
   decorated?: 'token' | 'label'
   /** a kept block of e-mail addresses and their separators alone (today/ink-units.mjs addressesAlone): the lab's dump and parity
-   *  tell such a block by it (the coordinator's ruling of 2026-11-10); the bundle does not carry it */
+   *  tell such a block by it (PDF-READER §19.13, §18.62); the bundle does not carry it */
   address?: true
   /** a kept block of any other text no unit owns (today/ink-units.mjs keptUnitsOf, rule 10: a code listing, a URL alone, a page
    *  number, a bibliography not cut into entries): the lab's dump tells it by it; the bundle does not carry it */
@@ -63,7 +63,7 @@ export interface InstrumentUnit {
    *  text line rule's, which cut display (4) of 2111.09276v1 p5 after its number's "(" (§17.9); the bundle does not carry it */
   display?: true
   /** a line of an algorithm float's body, kept as the original as code is (the front end's `pseudocode`, pipeline/instrument.mjs
-   *  unitFactsOf; the owner's ruling of 2026-11-08): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
+   *  unitFactsOf; PDF-READER §18.62): the lab's dump tells it by it; the bundle does not carry it (`kept` alone) */
   pseudocode?: true
   /** a table's cell or a figure's text that holds no ordinary word, kept as written (R1, PDF-READER §18.72: language.ts): the lab's
    *  dump tells it by it; the bundle does not carry it (`kept` alone) */
@@ -119,10 +119,10 @@ export interface InstrumentUnit {
   align?: 'j' | 'l' | 'c' | 'r'
   /** a babel name's key (a unit of kind `name`: its occurrences are owned with ROLE.name) */
   name?: string
-  /** a figure text's set (the units the reader fits at one size), its direction where it is not along x; and what today's figure
-   *  reading tells of where a translation of it may stand (layout/figure-text.mjs, S.figures' FitFigure): its first glyph's origin
-   *  along its run (`x`, `y`), its box's length along it, its anchor, its room before and after its box, the depth under its
-   *  baseline of the nearest stroke under its text (absent: none) */
+  /** a figure text's set (the units the reader fits at one size), its direction where it is not along x; and what the figure
+   *  reading tells of where a translation of it may stand (locate/figure-text.ts, the typesetter's FitFigure): its first glyph's
+   *  origin along its run (`x`, `y`), its box's length along it, its anchor, its room before and after its box, the depth under
+   *  its baseline of the nearest stroke under its text (absent: none) */
   figure?: {
     set: number
     dir?: [number, number]
@@ -159,14 +159,14 @@ export interface SpanClass {
   to?: { url: string } | { dest: string }
   style?: Style
 }
-/** an element's class as its source reads it (today's layer2.mjs phClass2, texToText2 and the symbol's drawing) */
+/** an element's class as its source reads it (the adapter's classesOf: phClassProven, texToText2 and the symbol's drawing) */
 export interface PieceClass {
   cls: string
   unknown?: true
   copy?: string
   sym?: [text: string, up?: true]
   mark?: true
-  /** a text piece: TeX sets its characters as written (a code or URL mark, a plain-text source: today's textPieceOf) */
+  /** a text piece: TeX sets its characters as written (a code or URL mark, a plain-text source: text-piece.ts textPieceOf) */
   literal?: true
   /** it sets a URL as url.sty's \url does, whatever its own command: a control sequence \urldef defined as one earlier in the
    *  unit, which the piece sets (ACM's `\urldef\tempurl\url{…}` then `\showDOI{\tempurl}`); its copy text and break points
@@ -174,18 +174,18 @@ export interface PieceClass {
   url?: true
   // what the other rules read of its source (the reading's own reads of `src`: tokensOf2's glue, style commands and links,
   // U.breaks' forced breaks, U.rename's notes, U.elements' macros):
-  /** its glue as TeX sets it (today's glueOf): a length in the font's em or in PDF units, and whether a line may break at it */
+  /** its glue as TeX sets it (glueOf): a length in the font's em or in PDF units, and whether a line may break at it */
   glue?: [length: number, unit: 'em' | 'bp', brk?: 1]
   /** the command its source begins with (its name and star); `bare`: its source is that command alone (a declaration) */
   cmd?: string
   bare?: true
-  /** a forced break (today's FORCED_BREAK) */
+  /** a forced break, as stated on the piece (the adapter's statedBreak: the source reader's forcedBreak) */
   brk?: true
-  /** a citation's note: its last optional argument as today's renameRefs reads it */
+  /** a citation's note: its last optional argument, where it holds a letter (the adapter's noteOf) */
   note?: string
   /** an earlier piece of the unit whose source is the same: its id (the source's identity, by which a macro is learnt) */
   same?: string
-  /** the fill TeX set its run in (a colour piece's: the marked compile's log, today's readColours) */
+  /** the fill TeX set its run in (a colour piece's: the marked compile's log, marks.ts readColours) */
   colour?: number
   /** a nested unit's mark (a footnote set inside the unit), not a placeholder */
   nested?: true
@@ -218,7 +218,7 @@ export interface Instrument {
    *  there. Both places of a piece stated, no glyph of B between them: TeX set none for it */
   places?: { unit: number; piece: string; page: number; glyph: number; end: boolean }[]
   /** the pieces TeX said set no ink (the probe's answers, where the marking gives them no point), those the marking never marks,
-   *  their rendering never ink by its own reading (a text macro of today's marks.mjs classOf null: a .bbl's \newblock; the
+   *  their rendering never ink by its own reading (a text macro of marks.ts classOf null: a .bbl's \newblock; the
    *  adapter's inklessPieces), and those TeX's points prove set nothing of their own: a piece with no point of its own whose two
    *  nearest points around it in its unit's source order (a piece's, the unit's start and end, else the stream's) hold no glyph
    *  and no painted box between them, nor text of the unit's (the adapter's boundedEmpty): their span stated empty, by

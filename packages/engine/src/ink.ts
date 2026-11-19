@@ -1,4 +1,4 @@
-// arXiv's ink, for the layout maker (Plan 8b, Task 5; the layout research of 2026-10-06): every glyph of a page of
+// arXiv's ink, for the layout maker: every glyph of a page of
 // arXiv's PDF placed as PDF.js's canvas places it, and the page's graphics as boxes, read from the page's operator list
 // (page.getOperatorList(): fnArray, argsArray). The text layer gives a run's box only, its characters an even share of
 // its width; the canvas places each glyph by its own width, which is where the layer erases and what a placeholder's
@@ -14,7 +14,7 @@
 // page), a reader that asks keeps no more than GLYPHS_PAGE glyphs and BOXES_PAGE boxes
 // one by one (the boxes past it merged, below), a matrix or a number that is not one places
 // nothing, and nothing here throws on a malformed list. Each bound is an abuse guard, twenty times or more above the
-// corpus's heaviest page (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus, read by the pinned
+// corpus's heaviest page (measured 2026-10-16: the 2,793 pages of the 124 papers of data/corpus, read by the pinned
 // PDF.js on the lite worker), and every one of those pages is read under them exactly as under none: no real page meets one.
 // Imports only its readers of PDF.js's values (ink-args.ts) and the engine's shared reads (bounded-reads.ts, a leaf): the maker
 // runs it in a Worker or in Node alike.
@@ -292,7 +292,7 @@ export const BOXES_CAP: number = 1_000_000
 /** the graphics state's levels that hold a copy of it at most (a save, a form, a group, an annotation each push one; a copy
  *  some 177 bytes: 3,000,000 saves unrestored held 530 MB). Past it a level holds none: its save changes nothing, and the
  *  walk goes on exactly; its restore cannot give back the state of its save, and ink placed before a restore reaches a level
- *  that holds a copy caps the page (pageInk's `lost`), so a page is read exactly or not at all. The census of 2026-10-17 (the
+ *  that holds a copy caps the page (pageInk's `lost`), so a page is read exactly or not at all. Measured 2026-10-17 (the
  *  127 papers of data/corpus and the gate's pack, 2,836 pages, by the pinned PDF.js): the deepest 27 (2608.04183 page 15),
  *  then 26 and 19, the median paper's deepest 6; and no page leaves a save open at its list's end. This is 37 times that */
 export const STACK_MAX: number = 1_000
@@ -2144,7 +2144,7 @@ export const GLYPH_COLUMNS = Object.freeze([
  * Glyph holds it, but `ix0` and `ix1`, its ink across with its advance (the lesser and the greater of the two: an
  * italic's overhang past its advance); `font` the id `fontIds` gives its font's name, -1 where none is asked; `most` the
  * largest size. A Glyph is an object of ten fields, some 290 bytes in Node; its ten columns 76, the four the marks read
- * keeps 32 (the prepare memory note of 2026-10-15). The layout maker keeps arXiv's ink so, every column (make.mjs
+ * keeps 32 (measured 2026-10-15). The layout maker keeps arXiv's ink so, every column (make.mjs
  * glyphsOf); the marks read the marked compile's, the columns ownedOf reads (marks.mjs layoutMarksOf, stream.mjs)
  */
 export function packGlyphs(glyphs: readonly Glyph[], o?: PackOptions & { columns?: undefined }): PackedGlyphs

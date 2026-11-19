@@ -1,5 +1,5 @@
 // A PDF's ink read once through PDF.js, page by page, by pageInk with the wrap's options (indices, every painted glyph,
-// GLYPHS_PAGE and BOXES_PAGE): the pages exactly as the wrap and today's ownership read them (`raw`, pageInk's own results,
+// GLYPHS_PAGE and BOXES_PAGE): the pages exactly as the wrap and the ownership read them (`raw`, pageInk's own results,
 // for the modules that take them as they are), and the same pages as the back half's Doc (each glyph with the character code
 // and font PDF.js read it by). The one place the back half touches PDF.js; PDF.js itself is handed in, as the engine is
 // handed its PDF libraries everywhere.
@@ -9,7 +9,7 @@
 // Unicode of txexs's big parentheses), and the two are split again after it. pageInk reads a glyph's Unicode for one thing
 // alone, whether it is blank, which is read again from the Unicode split off (the same test).
 //
-// With `mapped` (A17, today's pageChars2 `nu`), each font's own map is read once (PDF.js's toUnicode, which the document gives
+// With `mapped`, each font's own map is read once (PDF.js's toUnicode, which the document gives
 // only opened with fontExtraProperties) and a glyph whose Unicode no character of that map gives, or one no Unicode stands for
 // (private use, a replacement character, a control), is `nu`: its text is no reading of its glyph (2307.16209v1's newtx sum
 // sign, which PDF.js reads by its code as "Í"). The glyph's state rides through pageInk on the same tag.
@@ -72,10 +72,10 @@ interface ReadOptions<X> {
   rawGlyphs?: boolean
 }
 
-/** a character no Unicode stands for: private use, a replacement character, a control (today's draw.mjs NO_UNICODE) */
+/** a character no Unicode stands for: private use, a replacement character, a control */
 const NO_UNICODE = /[\p{Co}\p{Cc}\uFFFD]/u
 /** the characters a font's own map gives its glyphs, each value as written and as PDF.js's text layer normalises it (NFKC: a
- *  ligature read as its letters), or null where it has no map to read (an identity map, a Type 3 font): today's mappedOf */
+ *  ligature read as its letters), or null where it has no map to read (an identity map, a Type 3 font) */
 export function mappedOf(font: unknown): Set<string> | null {
   const map = (font as { toUnicode?: { _map?: unknown } } | null)?.toUnicode?._map
   if (!Array.isArray(map)) return null
@@ -85,7 +85,7 @@ export function mappedOf(font: unknown): Set<string> | null {
   return out
 }
 /** whether a glyph's Unicode is no reading of it: a character no Unicode stands for, or one its font's map (`mapped`) gives none
- *  of its glyphs (today's draw.mjs unmapped) */
+ *  of its glyphs */
 export const unmapped = (u: string, mapped: Set<string> | null): boolean =>
   [...u].some((ch) => /\S/.test(ch) && (NO_UNICODE.test(ch) || (mapped !== null && !mapped.has(ch))))
 

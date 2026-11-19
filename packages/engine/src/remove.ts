@@ -2,13 +2,12 @@
 // each page walked with its text state followed, each string split into its character codes by its font, and the walk aligned
 // with PDF.js's own reading (alignOf: the n-th text-showing operation of the list is the n-th of the walk, its k-th glyph the k-th
 // code, the character codes compared; the m-th painted path the m-th painting operator). A page that does not align is refused
-// whole. What is left of the text-removed PDF's remover (Plan 8b, 2026-10-06/07): the add-on it wrote, its page sets and its
-// tails are gone with the erasure by optional content (§4.2); its reading of a page stays, the wrap's.
+// whole.
 //
 // An original module (no port statement). It imports none of PDF.js: a page is aligned by its facts (alignOf) or a list given,
 // and the PDF object layer (@cantoo/pdf-lib, MIT) and a tolerant inflate are given.
 //
-// Isolation, the caller's contract (the coordinator's ruling of 2026-10-07): arXiv's PDF, and ours made from its source, are
+// Isolation, the caller's contract: arXiv's PDF, and ours made from its source, are
 // untrusted, and the hard bound on what reading them may cost is the process it runs in, not this module. Its budgets (WALK_MAX,
 // HELD_MAX, BYTES_MAX, FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js and the object layer may
 // still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
@@ -325,8 +324,8 @@ const td = new TextDecoder('latin1')
 /**
  * The heap a lexed token, and an event the walk records, is held in, in bytes, by its kind: each at least what 1 million
  * of it hold after a full collection (measured with this lexer: an operator 98, a number 10, a name 50 and its length, a
- * string 250 and a hex string 282 with their bytes, an array 42, a dictionary 81, a keyword in an array 74; the
- * re-review's round 2 measured the old lexer's strings at 271 with their bytes in JS arrays). An array or a dictionary is
+ * string 250 and a hex string 282 with their bytes, an array 42, a dictionary 81, a keyword in an array 74).
+ * An array or a dictionary is
  * counted as it opens, so that one never closed counts too. What the walk holds is these summed (lex's `bytes`, the
  * walk's `held`), never what it visits.
  */
@@ -601,7 +600,7 @@ export function lex(b: Uint8Array, limit: number = Infinity, keep: ReadonlySet<s
     if (t === 'BI') {
       // an inline image: its parameters to ID, its data to EI (white space either side, then an operator or the end)
       const s = start < 0 ? s0 : start
-      // (each pass advances or throws: a comment skipped as anywhere else, 2026-10-07, where a `%` there held the loop on
+      // (each pass advances or throws: a comment skipped as anywhere else, where a `%` there would hold the loop on
       // its byte for ever; a delimiter no parameter starts with refused)
       while (i < n) {
         while (i < n && WS[b[i]!]) i++
@@ -1037,7 +1036,7 @@ export async function openRemover(
       const fd = get(dict, 'FontDescriptor')
       const missing = num(get(fd, 'MissingWidth')) ?? 0
       // a Type 3 glyph's advance as PDF.js draws it (canvas showType3Text): its width through the font matrix, [w 0]
-      // transformed, its x: w * a + e, the matrix's translation in it (2026-10-07: w * a alone moved the glyphs after a
+      // transformed, its x: w * a + e, the matrix's translation in it (w * a alone moves the glyphs after a
       // removed one by e * size). A matrix of other than six numbers gives no width: an edit in the font is refused
       let fm: number[] | null = [0.001, 0, 0, 0.001, 0, 0]
       // (six numbers: v.every(Number.isFinite) has just held each a number, which the lib does not state as a guard)
@@ -1173,7 +1172,7 @@ export async function openRemover(
       return got
     }
     // (each event the walk records counts in what it holds: an event per visit of a painting operator, a show or a
-    // form, which the re-review's round 2 fanned out to 20 million fontless shows of a 980 B page)
+    // form, which a 980 B page can fan out to 20 million fontless shows)
     const record = (cost: number) => {
       // biome-ignore lint/suspicious/noAssignInExpressions: counted where it is tested, as written (its typing changed no code)
       if ((held += cost) <= heldMax) return true

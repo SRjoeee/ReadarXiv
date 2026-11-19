@@ -31,9 +31,7 @@
 // own /Properties kept and ours beside them, every group listed and ON.
 //
 // An original module (no port statement). It imports the remover's lexer and page walk (remove.ts), the section writer
-// and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given. Moved into the engine package with wrapOf and planOf
-// alone (the rebuild's stage 1a): wrapFinal, which owns our final pass's ink before it wraps it, stays today's
-// (src/pdf-reader/engine/layout/wrap-final.mjs) and calls these through the package's entry.
+// and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given.
 import { at } from './bounded-reads.ts'
 import { isMemoryError } from './memory.ts'
 import { DELTA_OBJECTS_MAX, deltaSection, UNHIDDEN_MAX } from './delta-wire.ts'
@@ -68,9 +66,9 @@ export interface WrapPlan {
   shows: Map<number, (string | null | undefined)[]>
   paths: Map<number, string>
   images?: Map<number, string>
-  /** the plan's naming where it is not today's: which groups are figure texts' (their runs in a form are wrapped in the form;
-   *  true of a group's name alone, never of a glyph of no group), and the text group an element's or a label's folds into on a
-   *  page past its bounds */
+  /** the plan's naming where it is not the default (isFigure, textOf): which groups are figure texts' (their runs in a form
+   *  are wrapped in the form; true of a group's name alone, never of a glyph of no group), and the text group an element's or
+   *  a label's folds into on a page past its bounds */
   isFigure?(group: string | null | undefined): boolean
   textOf?(group: string): string
   /** the figure groups its shows hold, read once (figureGroupsOf) */
@@ -734,8 +732,8 @@ function lexWithin(bytes: Uint8Array, budget: Budget): LexOps | null {
 }
 
 /** a figure's group (layout/figure-text.mjs figureGroup): `f<k>`; and the text's group a placeholder's or a label's folds into
- *  on a page past its bounds (`u<id>.p`, `u<id>.l` -> `u<id>`). Today's naming: a plan that names its groups otherwise states
- *  both (`isFigure`, `textOf`: the back half's `<ord>.<page>.<t|e|l>`, packages/engine/src/wrap/wrap.ts) */
+ *  on a page past its bounds (`u<id>.p`, `u<id>.l` -> `u<id>`). The default naming: a plan that names its groups otherwise
+ *  states both (`isFigure`, `textOf`: the back half's `<ord>.<page>.<t|e|l>`, packages/engine/src/wrap/wrap.ts) */
 const isFigure = (g: string | null | undefined) => typeof g === 'string' && g.startsWith('f')
 const isFigureToday = isFigure
 const textOf = (g: string) => g.replace(/\.[pl]$/, '')

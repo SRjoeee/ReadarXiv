@@ -139,8 +139,8 @@ export async function compiledOf(input: CompiledInput): Promise<CompiledResult> 
   } else {
     input.stage('compiling')
     const day = f.day
-    // (the marked compile as the pass loop, Q1: its first settled pass B and the log, one TeX pass fewer than today's compile and
-    // its final pass; the files it carries held to the host's bound)
+    // (the marked compile as the pass loop, Q1: its first settled pass B and the log, one TeX pass fewer than a `rerun` request
+    // and its final pass; the files it carries held to the host's bound)
     const m = await markedOfPaper(paper, {
       compile: input.compile,
       converge: true,

@@ -1,4 +1,4 @@
-// B, the marked compile's PDF, stored without the pixels of its images (the performance design's Q3, 2026-11-13). The
+// B, the marked compile's PDF, stored without the pixels of its images (the performance design's Q3). The
 // instrument keeps B so that a later prepare need not run TeX again, and every reading of B is PDF.js's worker guarded so that
 // no image's pixels are decoded (src/pdf-reader/engine/layout/pdf-lite.mjs; the box's own): an image XObject gives the operator
 // list its paint operator, its id, width and height, from its dictionary alone, and its data is read only by the decode the

@@ -1,5 +1,5 @@
 // A page's operator list read in the pieces PDF.js's worker sends it, none of them held once read: the one place the engine
-// reaches inside PDF.js (lane op-stream, 2026-11-10).
+// reaches inside PDF.js.
 //
 // WHY. PDF.js's getOperatorList answers a page's list as one object, every operation of the page in it at once. A page of paths
 // holds hundreds of thousands (2610.40394v1 page 23: 510,506 operations): its list was 93 MiB held, the heap at 372-381 MiB inside
