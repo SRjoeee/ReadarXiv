@@ -1440,7 +1440,9 @@ only how it meets the rest of the extension.
   (S-R-13); our server out of reach or at its limit, the original stays readable and a capsule says the bilingual version
   cannot be had now, with a retry and the HTML version (S-R-24, draft): passing, not remembered, never a v0-only fallback
   (the layer-only plan's "Offline, drafted"; decision 7).
-- **Versions**: `PIPELINE_VERSION` (`versions.mjs`) for what a unit is and `TRANSLATE_VERSION` (`translate/version.mjs`)
-  for what is sent for it and how the reply is read back (PDF-READER §18); the layer's own are in its CTAG and VTAG.
+- **Versions**: none is raised by hand for what a unit is or for what is sent for it. A unit is named by its content
+  (`unitId`, `packages/format/src/ids.ts`), a bundle's shape by `FORMAT` (`packages/format/src/schema.ts`), and a row's key
+  holds the digest of the wire a translator is sent (§9); today's engine's `PIPELINE_VERSION` and
+  `TRANSLATE_VERSION` (PDF-READER §18) went with it at the cut-over.
 - **Browsers**: PDF.js's modern build needs built-ins newer than the extension's floor. Where they are missing
   (`src/pdf-reader/support.ts`) the reader is not offered, and the browser's viewer keeps the PDF.
