@@ -8715,6 +8715,15 @@ TeX set the element.
   2610.21765v1 p9 ord 143's three, and 2608.29181v2 ord 135's four on p28 (a theorem over pp27-29, each page's part stating
   them), on three text lines under a display row whose box reaches 54 pt below its baseline. None stands on a KEPT line's
   baseline.
+- **Measured** (2026-11-19, the prepare over the 245 papers from their stored compiles, before and after; every compile found by
+  its key): the 7 elements' 15 statements change, their `keep` and the `El.after` it took, their ink the same; no element is
+  newly kept. With them their two papers' wrap: their glyphs join their unit's group in the add-on (2610.21765v1 18 glyphs,
+  2608.29181v2 10), and their prepare dump's `KEPT` flag goes. Nothing else of any bundle, prepare dump or ownership moves, and
+  no unit, so no wire and no row. The reader gate (the 90 pairs and the added two, both stores): the formula drawn twice leaves
+  I3 by ink, and the sentence cover reads three pieces fewer on each store (the three formulas' kept ink beside their crops), 0
+  faults. 2610.21765v1 p9 ord 143 stays held for its own CJK glyph's top (620.97) 0.93 pt into the display row's fonts' box
+  (620.04), as production draws it, against the row as a line and as the display's element (§18.96: an element's overlap is
+  said by the element).
 
 ### 18.99 A line is pinned by ink that stays, never by its own end mark (2026-11-19)
 
@@ -8730,6 +8739,19 @@ formula's ink onto the next paragraph's first glyph. Production keeps that line 
 
 - **Pinned as before:** a line beside which other ink stays on its band, its own end mark aside (another unit's ink, a stay of no
   unit's).
+- **Such a paragraph is laid as every other.** Unpinned, its last line has the floor every unpinned paragraph has (§18.11): where
+  the walk borrows the room TeX leaves under the run, the floor is measured from the borrow's foot, and ord 199's last line is
+  laid at 155.00, 3.47 pt under TeX's 158.47 (the borrow's foot 152.48 plus (L - 1) p0 at the lead 1.16 the walk took, 2.23),
+  16.47 pt over the next paragraph's first line; where its translation needs fewer lines than the original, at a leading wider
+  than TeX's, it ends higher, the slack under it, as every such paragraph does. A last line farther from TeX's than before is
+  no fault of an unpinned paragraph: its translation has other lines than the original, and its fill is judged on the whole
+  page (the coordinator's ruling of 2026-11-19).
+- **Measured** (2026-11-19, the prepare over the 245 papers from their stored compiles, before and after): of the 725 lines that
+  hold their unit's own end mark, 149 were pinned, every one a last line, in 20 papers, none by other ink besides; none is now.
+  Nothing else of any bundle moves. The reader gate (the 90 pairs and the added two): of the 62 members on its pairs, 13 last
+  lines laid under TeX's line move up toward it on the door's rows (16 on Google's), 15 laid on or over it move up by 0.6 to
+  4.4 pt (the same 15 on both), the others stay; ord 199 leaves I3 by ink, no overlap joins; the page fill moves 3 neighbours
+  (6 on Google's) by under a point; I6's pages laid twice and across pages as before (11 by the head pass, the same members).
 
 ## 19. The engine's contract
 
