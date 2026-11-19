@@ -40,6 +40,7 @@
 //   the wire holds no `#` of its own; a marker without its `#` not at all for a unit stated `strict` (contract.ts).
 import { asOut, headLength, holdsEl, textOf } from '../accept.ts'
 import type { OutPiece, Piece, UnitIn } from '../contract.ts'
+import { fromAlpha, toAlpha } from './alpha.ts'
 import {
   type Beside as GlueBeside,
   DISPLAY,
@@ -127,23 +128,6 @@ export interface MarkersPlan {
   hashAfter: ReadonlySet<number>
   /** for each wire offset (and its end), the offset in the unit's projection it came from */
   plainAt: readonly number[]
-}
-
-/** bijective base-26: 1 → a, 26 → z, 27 → aa */
-function toAlpha(id: number): string {
-  let n = id
-  let out = ''
-  while (n > 0) {
-    const r = (n - 1) % 26
-    out = String.fromCharCode(97 + r) + out
-    n = (n - 1 - r) / 26
-  }
-  return out
-}
-function fromAlpha(s: string): number {
-  let n = 0
-  for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 96)
-  return n
 }
 
 const SOLID = /\S/
