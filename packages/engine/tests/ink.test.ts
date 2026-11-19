@@ -1122,10 +1122,12 @@ describe('locate: the units no source unit is, made on A by today’s rule', () 
     })
 
     it('makes no unit of the same figure’s numbers on a page our compile sets: nothing is born there', () => {
-      // (the figure on a page our compile sets, its glyphs printed by both and no source unit's: the figure reading's title,
-      // nothing of the numbers, none born)
+      // (the figure on a page our compile sets, its title printed by both and no source unit's, its numbers arXiv's page alone
+      // prints: the figure reading's title, nothing of the numbers (arXiv's ink, §18.27), none born)
       const A = docOf([{ lines: [lines[0]!, ...figure(640), { text: lines[1]!, y: 560 }] }])
-      const { B, ins } = finalOf(A, para())
+      const B = docOf([{ lines: [lines[0]!, ...figure(640).slice(4), { text: lines[1]!, y: 560 }] }])
+      expect(B.pages[0]!.glyphs.some((g) => g.size === 8)).toBe(false)
+      const ins = instrumentOf(B, para(), [[0, -1, -1, -1, 0]])
       const L = locate(ins, A, align(B, A), { pages: rawOf(A) })
       expect(L.born.size).toBe(0)
       expect(L.members.filter((m) => m.figure).map((m) => L.units[m.unit]!.content[0])).toEqual([text('grain size ')])

@@ -8888,10 +8888,14 @@ The released reader leaves all of it as the original draws it.
 - **The rule** (`born.ts`): no unit is born of a glyph shown inside a form XObject, on any page. Text drawn in a figure has one
   maker, the figure reading; what it makes a unit of is a unit, what it refuses is the original's ink, nobody's to translate or
   to draw, on a page our compile sets or not. It is stated once, in the born maker's filter, because the born maker is the one
-  taker of a glyph B never printed (a trail and an end mark walk B's glyphs; phase 4's ink makers are the figure reading's own
-  run); a state of the ownership ("figure ink, the original's") would have stated the same fact again with a writer and a
-  reader of its own. Every unit born is `inkorphan`; the kind `inkfigures` is the figure reading's (`ink.ts`), as on a page our
-  compile sets. The block rule's test that two lines gathered be both of a form or both not goes: no glyph of a form reaches it.
+  taker of what phase 4 leaves of the glyphs B never printed (a trail and an end mark walk B's glyphs; phase 4's ink makers
+  leave the figure reading a ledger line most of whose glyphs a form shows, its class `figures`, `ledger.ts`, and the figure
+  reading frees what it refuses); a state of the ownership ("figure ink, the original's") would have stated the same fact
+  again with a writer and a reader of its own. Every unit born is `inkorphan`; the kind `inkfigures` is the figure reading's
+  (`ink.ts`), as on a page our compile sets. The block rule's test that two lines gathered be both of a form or both not goes:
+  no glyph of a form reaches it, and the line rule reads the glyphs on either side of a form's stretch of the stream as
+  neighbours. Not stated by this rule: a glyph a form shows inside a ledger line of text (an icon's letter set in a sentence,
+  the line's form share under `figures`) is that line's ink unit's, as before, on any page.
   A figure text's element whose glyphs no unit takes now has its own element group, and the title is laid with its symbol's
   crop.
 - **Over the 245 papers** (the chain from the stored compiles, every object against the line's): 244 papers' objects byte for
