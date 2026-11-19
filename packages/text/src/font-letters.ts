@@ -5,8 +5,8 @@
 // HOLDS and SMCP mirror the face files: an alphabet is held where the file's cmap table (its best Unicode subtable) maps every
 // letter of it, the letters as font-faces.ts LETTER_SETS states them; a face sets small capitals where its file's GSUB table
 // has the `smcp` feature. Held to the files by the release check's `face-files` gate (lab/typeset/face-tables.py reads
-// them, lab/typeset/face-files.mjs judges), whose own reference, lab/typeset/face-files.json, holds each face's file, each
-// alphabet's letters and each file's binding SHA-256.
+// them, face-files.mjs judges), whose own reference, lab/typeset/face-files.json, holds each face's file, each alphabet's
+// letters and each file's binding SHA-256.
 
 /** each face's alphabets whose every letter it holds (font-faces.ts LETTER_SETS: a language's own, and a script's bare letters):
  *  its file's cmap, the OpenType character map (its best Unicode subtable), as the coverage table holds it */
