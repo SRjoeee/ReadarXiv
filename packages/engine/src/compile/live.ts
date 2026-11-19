@@ -147,8 +147,17 @@ function withAsks(u: SourceUnit, asks: readonly { src: string; nth: number; ask:
   }
   return { ...u, pieces }
 }
-/** what originalFiles writes into `spans`: the main file's head of ours (`skip`) and each unit's lines and bytes, when asked */
-export type Spans = { skip?: number; lines?: () => UnitLines<SourceUnit>[] }
+/** what originalFiles writes into `spans`: the main file's head of ours (`skip`), the TeX in that head that defines the marks
+ *  (`marks`, marksTex), and each unit's lines and bytes, when asked */
+export type Spans = { skip?: number; marks?: string; lines?: () => UnitLines<SourceUnit>[] }
+/**
+ * The TeX that defines every mark the marking writes, as the marked original's head holds it and the mark probe over the marked
+ * preamble takes it: MARK_DEF's unit marks, LAYOUT_TEX (`layout`, its full or reduced form) and the head's parts after it
+ * (`then`: the statements, the asks), each followed by its DVI form under `latex` (`dvi`), and CALL_TEX where a unit states an
+ * author's call (`called`), after LAYOUT_TEX whose \axt@set it uses
+ */
+const marksTex = (dvi: boolean, layout: string, called: boolean, then = ''): string =>
+  MARK_DEF + (dvi ? DVI_MARK_DEF : '') + layout + then + (dvi ? DVI_LAYOUT_TEX : '') + (called ? CALL_TEX : '')
 /** originalFiles' options */
 export type OriginalOptions = {
   lines?: boolean
@@ -420,24 +429,15 @@ const uncommentedTex = (t: string): string => t.replace(/(?<!\\)((?:\\\\)*)%[^\n
  *  followed by its DVI marks (DVI_MARK_DEF, marks/marks.ts DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
 export function probeFiles(
-  { fsys, project, meta }: Paper,
-  { marks = false, preamble = null }: { marks?: boolean; preamble?: string | null } = {},
+  paper: Paper,
+  { marks = false, preamble = null }: { marks?: boolean; preamble?: { text: string; marks: string } | null } = {},
 ): Map<string, Uint8Array> {
+  const { fsys, project } = paper
   // (the main file as the front end reads it, its line ends TeX's: read raw, a lone-CR preamble's first comment hid its
   // \begin{document}, and the probe was the whole document and a second one)
   const text = texText(fsys.read(project.main)!)
   const at = beginDocument(text)
-  const dvi = dviEngine(meta?.compiler)
-  // (with the marked preamble, its line probes inert: \axtlines is LINES_TEX's, which the probe does not load, and the preamble
-  // only stores the text it marks)
-  const head = marks
-      ? MARK_DEF +
-        (dvi ? DVI_MARK_DEF : '') +
-        LAYOUT_TEX +
-        (dvi ? DVI_LAYOUT_TEX : '') +
-        classNamesTex(texsOf(fsys)) +
-        (preamble === null ? '' : PREAMBLE_LINES)
-      : '',
+  const head = marks ? probeHead(paper, preamble) : '',
     probe = marks
       ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}`
       : ''
@@ -445,11 +445,18 @@ export function probeFiles(
     [
       project.main,
       latin1Bytes(
-        `${head}${END_TEX}${marks && preamble !== null ? preamble : text.slice(0, at)}${FONT_PROBE}\\begin{document}${probe}\\end{document}\n`,
+        `${head}${END_TEX}${marks && preamble !== null ? preamble.text : text.slice(0, at)}${FONT_PROBE}\\begin{document}${probe}\\end{document}\n`,
       ),
     ],
   ])
 }
+/** the mark probe's head: the TeX that defines the marks (marksTex), the class names' wraps; over the marked preamble
+ *  (`preamble`), the marked original's own marksTex, so that every mark that preamble carries is defined as the marked compile
+ *  defines it, and its line probes inert (PREAMBLE_LINES): the preamble only stores the text it marks */
+const probeHead = ({ fsys, meta }: Paper, preamble: { marks: string } | null): string =>
+  (preamble ? preamble.marks : marksTex(dviEngine(meta?.compiler), LAYOUT_TEX, false)) +
+  classNamesTex(texsOf(fsys)) +
+  (preamble ? PREAMBLE_LINES : '')
 /** the text of each of the paper's TeX files (a class's own name it calls: marks/marks.ts classNamesTex) */
 const texsOf = (fsys: Fsys): string[] =>
   fsys
@@ -464,15 +471,17 @@ const PREAMBLE_LINES = '\\protected\\def\\axtlines#1{}'
  * answer takes one off, `complete` as the marked original's, no babel name wrapped, a unit whose writing changes its file's brace
  * balance written as the paper's own (guard.ts unbalancedUnits) — so that TeX reads the units the preamble holds, marked,
  * where the marked compile will, before it: a class's command that reads its argument as data raises its errors at our marks
- * there (2610.37668v1's myarxiv `\author`, a name's initials taken through a `\csname`). With the line of the probe's main file it
- * begins on (`first`: the probe's head before it) and its last (`last`). Null where no unit of the main file stands in its preamble:
- * the probe is the paper's own preamble's, byte for byte as before
+ * there (2610.37668v1's myarxiv `\author`, a name's initials taken through a `\csname`). With the TeX of the marked original's
+ * head that defines the marks (`marks`: originalFiles' marksTex, which the probe takes for its own, so that every mark the
+ * preamble carries is defined as in the marked compile, an author's call's CALL_TEX among them), the line of the probe's main
+ * file it begins on (`first`: the probe's head before it) and its last (`last`). Null where no unit of the main file stands in
+ * its preamble: the probe is the paper's own preamble's, byte for byte as before
  */
 export function markedPreamble(
   paper: Paper,
   { complete = null }: { complete?: CompleteGiven | null } = {},
-): { text: string; first: number; last: number } | null {
-  const { project, meta } = paper
+): { text: string; marks: string; first: number; last: number } | null {
+  const { project } = paper
   // (no unit of the main file before its \begin{document} as the front end read it: nothing to write)
   const own = project.files?.get(project.main)
   if (typeof own === 'string') {
@@ -501,16 +510,9 @@ export function markedPreamble(
     at = beginDocument(body)
   if (!sp.lines!().some((x) => x.file === project.main && x.from !== undefined && x.from - sp.skip! < at)) return null
   const preamble = body.slice(0, at),
-    dvi = dviEngine(meta?.compiler)
-  const first = (
-    MARK_DEF +
-    (dvi ? DVI_MARK_DEF : '') +
-    LAYOUT_TEX +
-    (dvi ? DVI_LAYOUT_TEX : '') +
-    PREAMBLE_LINES +
-    END_TEX
-  ).split('\n').length
-  return { text: preamble, first, last: first + preamble.replace(/\n$/, '').split('\n').length - 1 }
+    marks = sp.marks!
+  const first = (probeHead(paper, { marks }) + END_TEX).split('\n').length
+  return { text: preamble, marks, first, last: first + preamble.replace(/\n$/, '').split('\n').length - 1 }
 }
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
@@ -630,27 +632,30 @@ export function originalFiles(
   const dvi = dviEngine(meta?.compiler)
   // (with `layout`, each reference's item and its name asked of TeX at the document's end: marks.ts refsTex, none for a paper with
   // no reference, whose bytes stay as they were)
+  const marks = layout
+    ? marksTex(
+        dvi,
+        reduced ? LAYOUT_TEX_REDUCED : LAYOUT_TEX,
+        called,
+        (statements && !reduced ? STATEMENTS_TEX : '') + (asks?.asked.length ? ASK_TEX : ''),
+      )
+    : MARK_DEF + (dvi ? DVI_MARK_DEF : '')
   const head =
     DRAFT +
-    MARK_DEF +
-    (dvi ? DVI_MARK_DEF : '') +
+    marks +
     (layout
-      ? (reduced ? LAYOUT_TEX_REDUCED : LAYOUT_TEX) +
-        (statements && !reduced ? STATEMENTS_TEX : '') +
-        (asks?.asked.length ? ASK_TEX : '') +
-        (dvi ? DVI_LAYOUT_TEX : '') +
-        (called ? CALL_TEX : '') +
-        (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) +
+      ? (names ? classNamesTex(texsOf(fsys)) : NAMES_OFF) +
         regionsTex(project.codeEnvs, project.codeBodies) +
         refsTex(refKeysOf(project.units))
       : '') +
     END_TEX +
     (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main)!)))
-  // (`skip`: the main file's head of ours, before the paper's first byte)
+  // (`skip`: the main file's head of ours, before the paper's first byte; `marks`, the TeX in it that defines the marks)
   if (spans) {
     let found: UnitLines<SourceUnit>[] | null = null
     spans.skip = head.length
+    spans.marks = marks
     spans.lines = () => (found ??= unitLines(raw!, patched!, out, project.main, head.length))
   }
   return out

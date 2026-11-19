@@ -524,7 +524,7 @@ export async function markedOfPaper(
         engine,
         rerun: false,
         bibtex: false,
-        overrides: probeFiles(paper, { marks: true, ...(pre ? { preamble: pre.text } : {}) }),
+        overrides: probeFiles(paper, { marks: true, ...(pre ? { preamble: pre } : {}) }),
       })
     let c: Compiled | null = await ask(preamble),
       blamed = new Set<number>()

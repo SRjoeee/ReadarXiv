@@ -8873,14 +8873,22 @@ own), each part carrying its pages' cell rules (`rules`).
   `\axttg`, `\axthmark`, `\axtcolour`, an author's call `\axtcall` and backref's list `\axtbrname`;
   `packages/engine/tests/mirrors.test.ts` holds it to the marked original's TeX, every macro of ours that TeX defines either in
   it or naming no unit (the babel names' marks, read apart; the first pass's asks, which no pass the guard reads carries), and
-  `packages/engine/tests/guard-marks.test.ts` every reader to every name. A name the list lacks is a mark the guard does not see: a paper's own error beside it keys apart
-  from the unmarked original's and is read as ours, and one written by name into a file, or a copy cut inside one, goes
-  unseen. Each check holds for any paper:
+  `packages/engine/tests/guard-marks.test.ts` every reader to every name. A name the list lacks is a mark the guard does not
+  see: a paper's own error beside it keys apart from the unmarked original's and is read as ours, and one written by name into
+  a file, or a copy cut inside one, goes unseen. An error is compared with the unmarked original's with every mark of ours
+  taken out, the babel names' among them, and what is written right before one as part of it: a start mark's `\leavevmode`, a
+  front unit's mark's `\protect` (and the one TeX writes before a name's mark it writes through a file), only right before a
+  mark, a paper's own anywhere else kept (`marks.ts` `withoutOurMarks`; the marking's writers read the same two leads, and
+  `packages/engine/tests/mirrors.test.ts` holds that the marked original, our marks taken out so, is the paper's own source). Each check holds for
+  any paper:
   - *Before the compile, in the mark probe* (PIPELINE 43): where a unit of the main file stands in its preamble, the probe sets
     the preamble as the marked original writes it (`live.mjs` `markedPreamble`: the layout marks and their line probes, every
     class, no babel name wrapped, a unit whose writing unbalances its braces as the paper's own; `probeFiles` `preamble`, and
     `\axtlines` a protected macro that sets nothing there), so that TeX reads our marks in the preamble where the marked compile
-    will, a compile before it. An error TeX raises on a line of that preamble names the units of the marks of ours it stands
+    will, a compile before it. The probe's TeX that defines the marks is the marked original's own (`live.ts` `marksTex`, handed
+    over by `markedPreamble`): a preamble can hold a unit of any kind, a macro's definition that holds text among them, and an
+    author's call `\axtcall` with it, which CALL_TEX defines where the marked compile loads it; without it in the probe, a class
+    that expands `\author`'s argument in the preamble met an undefined control sequence the marked compile never meets. An error TeX raises on a line of that preamble names the units of the marks of ours it stands
     among (`guard.mjs` `preambleUnits`, `marksAtError`): on the line as the log shows it, those of the brace group TeX closed just
     before the error's place (a command that read its argument whole), else of the group open at it — never another unit's on
     the same line, a title set on the author's line, and none where the place is in no group (the marked compile's guard judges
