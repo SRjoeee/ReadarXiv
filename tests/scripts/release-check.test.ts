@@ -171,6 +171,25 @@ describe("a gate's output, read as the gate states it", () => {
     const line = (o: object) => JSON.stringify({ id: 'p', canvas: 'gpu', pages: 4, splitShows: 1, outsidePages: [], shareMax: 0, maxDelta: 0, ...o })
     expect(canvasOf([line({}), line({ id: 'q', shareMax: 0.0037, maxDelta: 81 }), line({ id: 'r', outsidePages: [[97, 53]] })].join('\n')).over).toEqual(['q: outside [], share 0.0037, Δ 81', 'r: outside [[97,53]], share 0, Δ 0'])
   })
+
+  it("runs the canvas on the software renderer, every call rasterised as it is made, and fails a run the GPU drew or that names no renderer", () => {
+    const g = GATES.find(x => x.id === 'canvas')!
+    const step = (exit: number, text: string) => ({ exit, text, cmd: [], ms: 0, waited: 0, log: '' })
+    const ctx2: Ctx = { root: '/repo', labData: '/lab', refactor: mkdtempSync(join(tmpdir(), 'canvas-')), work: '/work', online: false, minFree: 12 }
+    const line = JSON.stringify({ id: 'p', renderer: 'software', canvas: 'gpu', flush: true, pages: 4, splitShows: 1, outsidePages: [], shareMax: 0, maxDelta: 0 })
+    const soft = JSON.stringify({ renderer: 'software', canvas2d: 'unavailable_software', gl: 'x', browser: '153' })
+    const gpu = JSON.stringify({ renderer: 'gpu', canvas2d: 'enabled', gl: 'y', browser: '153' })
+    expect(canvasOf(`${soft}\n${line}`).renderer).toMatchObject({ renderer: 'software', canvas2d: 'unavailable_software' })
+    expect(canvasOf(line).renderer).toBeNull()
+    mkdirSync(join(ctx2.refactor, 'lanes'), { recursive: true })
+    writeFileSync(join(ctx2.refactor, 'lanes/L1-canvas.jsonl'), `${JSON.stringify({ id: 'p' })}\n`)
+    expect(g.steps!(ctx2)[0]?.cmd).toEqual(expect.arrayContaining(['--renderer=software', '--flush', 'p']))
+    expect(g.steps!(ctx2)[0]?.cmd).not.toContain('--normalize')
+    expect(g.judge!(ctx2, [step(0, `${soft}\n${line}\n`)])).toMatchObject({ pass: true })
+    expect(g.judge!(ctx2, [step(0, `${gpu}\n${line}\n`)])).toMatchObject({ pass: false, note: expect.stringMatching(/^not the software canvas/) })
+    expect(g.judge!(ctx2, [step(0, `${line}\n`)])).toMatchObject({ pass: false })
+    rmSync(ctx2.refactor, { recursive: true, force: true })
+  })
 })
 
 describe("the prepare's corpus, as the round's stage 1a runs it", () => {

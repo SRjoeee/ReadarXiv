@@ -502,14 +502,17 @@ export function drawnOf(dir, within = null) {
 
 /** canvas.mjs's line a paper, held to the bound its header names (the erasure's E4: at most 0.1 % of the split glyphs'
  *  pixels, max channel Δ 16; no pixel outside them); a paper it refused (`{ id, refused }`: no add-on) or did not report at
- *  all, of the `ids` asked, is over, by name */
+ *  all, of the `ids` asked, is over, by name. `renderer`: its first line, the browser's own word on the canvas it drew on
+ *  (`{ renderer, canvas2d, gl, browser }`), null where it printed none */
 export function canvasOf(text, ids = []) {
   const rows = text.split('\n').filter(l => l.startsWith('{"id"') && (l.includes('"splitShows"') || l.includes('"refused"'))).map(l => JSON.parse(l))
   const over = rows.filter(r => r.refused || r.outsidePages?.length || r.shareMax > 0.001 || r.maxDelta > 16)
   const seen = new Set(rows.map(r => r.id))
+  const head = text.split('\n').find(l => l.startsWith('{"renderer"'))
   return {
     papers: rows.length,
     pages: rows.reduce((n, r) => n + (r.pages ?? 0), 0),
+    renderer: head ? JSON.parse(head) : null,
     over: [...over.map(r => `${r.id}: ${r.refused ? r.refused : `outside ${JSON.stringify(r.outsidePages)}, share ${r.shareMax}, Δ ${r.maxDelta}`}`), ...ids.filter(id => !seen.has(id)).map(id => `${id}: no line (the canvas did not report it)`)],
   }
 }
@@ -1061,16 +1064,22 @@ export const GATES = [
   },
   {
     id: 'canvas',
-    title: "all groups on in the reader's canvas: arXiv's page against the composed document in Chromium, on spike S1c's papers (lab/pdf/prepare-back/canvas.mjs, the bound its header names)",
+    title: "all groups on in the reader's canvas: arXiv's page against the composed document in Chromium's software 2D canvas (the renderer a runner with no GPU has; no stand-in for an unbuilt reader change), every draw call rasterised as it is made in both, on spike S1c's papers (lab/pdf/prepare-back/canvas.mjs, the bound its header names)",
     tier: 'release',
     stage: 'corpus',
     holds: ['I1'],
     after: ['prepare'],
     needs: ctx => [exists("spike S1c's papers (lane L1's canvas runs)", lab(ctx, 'lanes/L1-canvas.jsonl')), exists('the 88 papers', lab(ctx, PAPERS))],
-    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), ...canvasIds(ctx)], slot: 'e2e' }],
+    // (--flush: Chromium rasterises a 2D canvas's recorded calls in batches whose ends fall where the page's task yields, and the
+    // same calls give other pixels for other batch ends (arXiv's page against itself so too): unflushed, two runs of the gate on
+    // one machine gave other pixels outside the split glyphs on three papers (2026-11-19). Flushed after every call in A's render
+    // and W's alike, the same calls give the same pixels, and what is left is what W's calls change)
+    steps: ctx => [{ cmd: ['node', '--import', 'tsx', 'lab/pdf/prepare-back/canvas.mjs', join(ctx.work, 'prepare'), lab(ctx, PAPERS), '--renderer=software', '--flush', ...canvasIds(ctx)], slot: 'e2e' }],
     judge: (ctx, steps) => {
       const c = canvasOf(steps[0].text, canvasIds(ctx))
-      return { pass: steps[0].exit === 0 && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: c.over.slice(0, 4).join('; ') }
+      const soft = c.renderer?.renderer === 'software' && c.renderer?.canvas2d === 'unavailable_software'
+      const notes = [...(soft ? [] : [`not the software canvas: ${JSON.stringify(c.renderer)}`]), ...c.over.slice(0, 4)]
+      return { pass: steps[0].exit === 0 && soft && c.papers > 0 && !c.over.length, numbers: { papers: c.papers, pages: c.pages, over: c.over.length }, note: notes.join('; ') }
     },
   },
   {
