@@ -101,6 +101,21 @@ describe('locate', () => {
     expect([...L.born.values()].map((b) => b.content)).toEqual([[text('a supplement page of its own')]])
     expect(L.members.at(-1)).toMatchObject({ kind: 'inkorphan', located: true, unit: -1 })
   })
+  it('parts two lines B never printed into two units born on A where the second stands farther below the first than a block holds', () => {
+    // (born.ts BLOCK_DY: the same two lines, the second 100 pt under the first, far past 1.75 of their size)
+    const A = docOf([
+      pages[0]!,
+      pages[1]!,
+      {
+        lines: [
+          { text: 'a supplement page', x: 80, y: 700 },
+          { text: 'of its own', x: 80, y: 600 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A))
+    expect([...L.born.values()].map((b) => b.content)).toEqual([[text('a supplement page')], [text('of its own')]])
+  })
   it('makes no unit born of a glyph shown inside a form: a figure’s text is the figure reading’s alone, the rest born as before', () => {
     // (a page B never printed: a row of a figure's axis numbers in its form, 40 pt apart, and a line of text outside it under
     // them; the ink makers not run (no pages given), so that the born maker is all that could take either)
