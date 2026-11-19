@@ -8620,7 +8620,10 @@ rows, 23,180 by the runner). And the release check read each run whole by its ex
   ink) to its ink's right; a turned run in its own frame; a crop as the reader draws it, its rectangle cut by its own ink (its
   piece's, as the part states it). A line on A is its ink across and its fonts' box up and down (the part states no ink height of
   a line). An overlap with ink the unit's own original met already, by the same measure, is the page's own setting (a figure's
-  label TeX set over its image), counted apart. Not seen: a figure's drawing that stands on no member's text line.
+  label TeX set over its image), counted apart. Each overlap is said once a page by the laid member, the member whose ink it
+  meets, what that ink is and which element: two kept elements of one member are two entries (read as one, the first element
+  met stood for every other, and a second was said only once the first left: 2610.21765v1 p9, §18.98). Not seen: a figure's
+  drawing that stands on no member's text line.
 - **I5 as said**: a line past its slot by its ink beyond the breaker's own tolerance (0.01 pt, `breaker/break.ts:638`), whatever
   its class (the runner's restated form left out an overfull line and a closing mark's blank half by its advance); an end mark
   (El.end) drawn where TeX set it held to TeX's own ink of it, which TeX may set past its measure (2610.20285v1: amsthm's box
