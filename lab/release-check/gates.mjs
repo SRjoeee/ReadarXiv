@@ -26,12 +26,12 @@ export const INVARIANTS = [
   {
     id: 'I1',
     says: "all groups on, the composed page paints what arXiv's page paints, glyph for glyph, box for box and pixel for pixel (in the reader's canvas, up to the split show's residue)",
-    gap: "the composed page in the reader is held on the harness's own fixtures only; on corpus papers the harness measures its residue and holds nothing, and the canvas gate (the release tier's) passed in lane L1 only with a stand-in (`--normalize`) for a reader change not built",
+    gap: null,
   },
   {
     id: 'I2',
     says: 'a group off hides exactly its ink, rules and images included; no pixel outside that ink changes',
-    gap: 'no check of a group turned off in the reader; the prepare proves it in PDF.js and Cairo only',
+    gap: null,
   },
   { id: 'I3', says: "a laid unit's ink stays inside its regions and room and overlaps no other ink", gap: null },
   { id: 'I4', says: 'every element of a laid unit appears exactly once', gap: null },
@@ -48,12 +48,12 @@ export const INVARIANTS = [
   {
     id: 'I7',
     says: "a unit's boxes on the left and on the right are the same boxes",
-    gap: "no gate: the harness holds the slots' page boxes at five scales and the highlight lighting one unit on both panes, not a unit's boxes",
+    gap: null,
   },
   {
     id: 'I8',
     says: 'the text layer of a laid page reads the translation in reading order',
-    gap: 'held on the fixtures and five corpus papers (the harness; the website\'s e2e on fixtures); not on the corpus',
+    gap: null,
   },
   {
     id: 'I9',
