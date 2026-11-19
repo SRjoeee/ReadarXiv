@@ -44,17 +44,17 @@ const CJK_BLOCKS: readonly (readonly [number, number])[] = [
 /** a class's body of code point ranges */
 const rangesOf = (rs: readonly (readonly [number, number])[]): string =>
   rs.map(([a, b]) => (a === b ? `\\u{${a.toString(16)}}` : `\\u{${a.toString(16)}}-\\u{${b.toString(16)}}`)).join('')
-/** a CJK character: a code point of Unicode's CJK blocks. What a token of a CJK script is (layer2.mjs tokensOf2: set by CJK rules,
- *  drawn in the CJK face), a babel name's box (textlayer.mjs) and the checker's runs (check.mjs) read */
+/** a CJK character: a code point of Unicode's CJK blocks, what makes a token one of a CJK script (set by CJK rules, drawn in
+ *  the CJK face) */
 export const CJK = new RegExp(`[${rangesOf(CJK_BLOCKS)}]`, 'u')
 /** CJK, and the characters of `extra` (code points): the class a script's rules widen (layout-rules.json cjkQuotes) */
 export const cjkClassWith = (extra: readonly number[]): RegExp =>
   new RegExp(`[${rangesOf([...CJK_BLOCKS, ...extra.map((c): [number, number] => [c, c])])}]`, 'u')
-/** a letter of a CJK script, by its Script property: Han, Hiragana, Katakana, Hangul (warm.mjs counts them) */
+/** a letter of a CJK script, by its Script property: Han, Hiragana, Katakana, Hangul */
 export const CJK_LETTER = /[\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang}]/u
 /** a character a script that sets no spaces between its words (Chinese, Japanese) sets none beside: a CJK character but a
  *  Hangul one (Korean spaces its words), a full-width Latin letter (its Script Latin) or a digit of no script of its own (the
- *  full-width digits; U+3007 and the Suzhou numerals are Han's) (layer2.mjs tokensOf2) */
+ *  full-width digits; U+3007 and the Suzhou numerals are Han's) */
 export const SPACELESS = new RegExp(
   `(?![\\p{sc=Hang}\\p{sc=Latn}])(?!(?=\\p{sc=Zyyy})\\p{N})[${rangesOf(CJK_BLOCKS)}]`,
   'u',

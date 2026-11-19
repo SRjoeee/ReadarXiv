@@ -3,7 +3,7 @@
 // from (the typesetter's breaker/hyph.ts hyphenationOf). The website builds the patterns it serves with these
 // (/hyph/<lang>.json).
 
-/** hyph-utf8's languages the engine hyphenates with: French, Spanish and Portuguese (#121-4: those three were hyphenated with
+/** hyph-utf8's languages the engine hyphenates with: French, Spanish and Portuguese (their own patterns, TeX's, not
  *  English's patterns), and the further languages PDF-READER §11.10 lists */
 const HYPH_UTF8: readonly Exclude<PatternLanguage, 'en' | 'de'>[] = [
   'fr',
@@ -50,7 +50,7 @@ export const TEX_PATTERN_ENCODINGS = Object.freeze({
 }) as Readonly<Record<PatternLanguage, 'latin1' | 'utf8'>>
 
 /**
- * A TeX pattern file as { patterns, exceptions } (serve.mjs's reading): `text` is the file decoded as its `encoding`
+ * A TeX pattern file as { patterns, exceptions }: `text` is the file decoded as its `encoding`
  * (TEX_PATTERN_ENCODINGS). Comments go first (dehyphn.tex names \patterns{...} in one before its own); a block runs to its
  * matching brace. A Latin-1 file is TeX's 8-bit form: \n{…"a…} is an umlaut (T1), \3 and 0xFF are ß, and the
  * ß patterns repeated for OT1 as \c{…} are left out; a UTF-8 file (hyph-utf8's) holds its letters as they are, a
