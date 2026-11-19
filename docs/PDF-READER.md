@@ -8560,6 +8560,24 @@ the door's rows: the heading's one line to x 205 over its paragraph's original t
 production had its row and laid it after the heading). Laid with the stop, the heading stays on
 its first row and the paragraph's text keeps its place.
 
+- **A row no member is laid from keeps no share for one.** The member's share of the row is then `kept` (S.share), as where ink
+  stays between: the page fill may track its line within the stop, where it had held the row's end for a follower that is never
+  laid.
+- **A single line meets the stop before its own widening.** A one-line member's room on its row had been widened to half its
+  size before the follower's first glyph (U.decor's `widen`, Room.side); the stop now ends it at TeX's own end, and a translation
+  wider than the original there is set smaller, as on any row where ink stays after it.
+- **Not covered:** a follower refused by its own lay after the member before it was laid with the row open (`unfit`): S.relay
+  lays a member again only where it took the follower's row by S.overFollower.
+- **Measured** (2026-11-19, the 90 pairs' entry lay of every page, the reader gate's rows): rows of a laid member whose follower
+  is not laid: 158 on the door's rows (148 with no row, 10 kept by the paper), 1 drawn over the follower's text (the heading
+  above), 16 nearer it than TeX's separation, 139 within their own end; 13 on Google's (10 kept, 2 unproven, 1 refused by its
+  own lay with no line of its member on the row), none over. Moved by the stop: 151 member-pages on 39 pairs on the door's rows
+  and 12 on 2 pairs on Google's, every one such a member: the heading above back on its first row; 11 lines that ran past their
+  own end now ending at it, some set smaller (2610.19159v1-ja's run-in heads 8.97 to 8.72 and 8.72 to 8.22); 140 tracked wider
+  within the stop by the page fill, by up to 14 pt; one paragraph's second line 2.7 pt lower by the fill. The reader gate's I3 by
+  ink: 20 to 18 on the door's rows (the heading's two overlaps leave, none joins), 21 on Google's as before; I4, I5, the floors,
+  I6, I10, I11 as before.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
