@@ -35,7 +35,8 @@ type Span = Extract<Piece, { t: 'span' }>
 type El = Extract<Piece, { t: 'el' }>
 
 /** an open that sets a style and nothing else (mt.mjs STYLE_OPEN: the front end's inline text commands, \textcolor, \mbox, a
- *  bare group) */
+ *  bare group): latex.ltx's \textbf, \textit, \emph, \textsl, \textsc, \underline, \textup, \textrm, \textsf, \textmd,
+ *  \textnormal and \mbox, ulem.sty's \uline, color.sty's \textcolor */
 const STYLE_OPEN =
   /^(?:\{|\\(?:textbf|textit|emph|textsl|textsc|underline|textup|textrm|textsf|textmd|textnormal|uline|mbox)\s*\{|\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{)$/
 /** a link's open (mt.mjs LINK): `must` already, a kept group's edges */

@@ -233,7 +233,8 @@ const fmt = (x: number) => {
 }
 const td = new TextDecoder('latin1')
 
-/** the operators that set state alone: a run of one group goes on over them */
+/** the operators that set state alone: a run of one group goes on over them. ISO 32000-1's text state operators (§9.3) and
+ *  text-positioning operators (§9.4.2), its graphics state operators (§8.4.4) and colour operators (§8.6.8) */
 const NEUTRAL = new Set([
   'Tf',
   'Td',
@@ -268,8 +269,10 @@ const NEUTRAL = new Set([
   'ri',
   'i',
 ])
-/** a path's construction, and its clip, before its painting operator */
+/** a path's construction, and its clip, before its painting operator: ISO 32000-1's path construction operators (§8.5.2) and
+ *  clipping path operators (§8.5.4) */
 const PATH = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'W', 'W*'])
+/** the text-showing operators (ISO 32000-1 §9.4.3): Tj, TJ, ' and " */
 const SHOWS = new Set(['Tj', 'TJ', "'", '"'])
 
 /** pageInk's kind of an image's box (layout/ink.mjs: -3) */
@@ -518,6 +521,7 @@ export async function wrapOf(
         const fEntries = fres instanceof PDFDict ? fres.entries().filter(([k]) => k.toString() !== '/Properties') : []
         const fprops = fown instanceof PDFDict ? fown.entries().map(([k, v]) => ` ${k.toString()} ${lit(v)}`) : []
         for (const g of [...f.groups].sort()) fprops.push(` /${propName(g)} ${docGroups.get(g)} 0 R`)
+        // (but the stream's own entries, ISO 32000-1 §7.3.8.2, and the form's /Resources, §8.10.2)
         const dEnts = dict
           .entries()
           .filter(([k]) => !['/Length', '/Filter', '/DecodeParms', '/Resources'].includes(k.toString()))
@@ -1227,6 +1231,7 @@ function graphWhy(
     const a = F.lookup(ref),
       b = X.lookup(ref)
     if (!(a instanceof PDFRawStream) || !(b instanceof PDFRawStream)) return `the form ${text(ref)} is not a stream`
+    // (the stream's own entries, ISO 32000-1 §7.3.8.2: /Length, /Filter, /DecodeParms; and the form's /Resources, §8.10.2)
     if (!sameBut(b.dict, a.dict, ['/Length', '/Filter', '/DecodeParms', '/Resources']))
       return `the form ${text(ref)}'s dict is not ours but for its stream and resources`
     const ra = look(F, a.dict.get(PDFName.of('Resources'))),

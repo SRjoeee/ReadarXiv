@@ -79,7 +79,8 @@ const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
 /** the targets whose names do not inflect (tex-names.mjs:17) */
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
-/** the counter types babel names that neither cleveref nor ctex does (tex-names.mjs:20) */
+/** the counter types babel names that neither cleveref nor ctex does (tex-names.mjs:20): article.cls's \figurename,
+ *  \tablename and \appendixname, as babel's captions */
 const BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
 /** a number a reference prints (tex-names.mjs:23 NUMBER) */
 const NUMBER =

@@ -78,6 +78,7 @@ export function rolesFor(target: string, family: string, cjkFaces: CjkFaces): Ro
     const { group } = cjkFaces
     cjk = { body: `${group}-regular`, bold: `${group}-bold` }
     if (script === 'Hant')
+      // (the face table's weights of Source Han Serif, each the font's own file: SourceHanSerifTC-Regular.otf, -Medium, -Bold)
       for (const w of ['regular', 'medium', 'bold'] as const) fallbacks[`shs-tc-${w}`] = Object.freeze([`shs-sc-${w}`])
   } else if (!ALPHABETS.has(script ?? '')) throw new Error(`no font roles for ${target} (script ${script}) yet`)
   return Object.freeze({ target, family, cjk: cjk && Object.freeze(cjk), fallbacks: Object.freeze(fallbacks) })

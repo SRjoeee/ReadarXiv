@@ -65,6 +65,7 @@ export { classifyFont }
  */
 export function familyKeysOf(name: string): readonly [string, string] {
   const n = bare(name)
+  // (PDF.js's style words: pdf.worker's Font reads /bold/i, /oblique|italic/i and /Black/ off a name)
   const styled = n
     .replace(/bold|oblique|italic/giu, '')
     .replace(/Black/gu, '')
@@ -592,6 +593,9 @@ export function markKind(ch: string): string {
   return ch
 }
 const TEX_TOKEN = /\\[A-Za-z@]+\*?|\\[\s\S]|---|--|''|``|[\s\S]/gu
+/** the tokens that set no ink: latex.ltx's \\@ (a space factor), \\, \\; \\: \\! (spaces) and ~ (the tie, \\nobreakspace); TeX's
+ *  primitives \\/ (an italic correction), \\  (a control space) and \\- (a discretionary hyphen); and { }, TeX's grouping
+ *  characters (catcodes 1 and 2) */
 const NO_INK = new Set(['\\@', '\\,', '\\;', '\\:', '\\!', '\\/', '\\ ', '\\-', '~', '{', '}'])
 const TEX_LIGATURE: Record<string, string> = {
   '---': '—',

@@ -1206,7 +1206,7 @@ function spaceOf(f: Frame, gs: readonly StreamGlyph[], size: number): number | n
 }
 
 /** the edges a column may share, in the order a tie between them is broken (a column is read from its start) */
-const EDGES = Object.freeze(['start', 'end', 'centre'] as const)
+const EDGES = Object.freeze(['start', 'end', 'centre'] as const satisfies readonly Anchor[])
 /** the lines a column's edges lie on: across the runs' direction (`along`: one place along it), upright (`x`), level (`y`) */
 const AXES = Object.freeze(['along', 'x', 'y'] as const)
 /** a line a column's edges lie on (AXES) */

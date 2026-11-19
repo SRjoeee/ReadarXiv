@@ -198,7 +198,10 @@ const UNKNOWN = -1
 const LINK_OPEN = /^\\(?:href|hyperref|hyperlink|url)(?![A-Za-z])/
 
 type Designs = TokensInput['designs']
-/** the style commands, each with what it sets (L2:2107 STYLE_CMDS) */
+/** the style commands, each with what it sets (L2:2107 STYLE_CMDS): latex.ltx's \textbf, \bfseries, \textmd, \mdseries, \emph,
+ *  \em, \textit, \itshape, \textsl, \slshape, \textup, \upshape, \textsc, \scshape, \texttt, \ttfamily, \textsf, \sffamily,
+ *  \textrm, \rmfamily; article.cls's \bf, \it, \sl, \sc, \tt, \sf, \rm; fontmath.ltx's \mathbf and \mathit; amsbsy.sty's
+ *  \boldsymbol; url.sty's \url and \path; listings.sty's \lstinline; and \code, a paper's own (its cases the rule ledger's) */
 const STYLE_CMDS: [RegExp, (s: TStyle, d: Designs) => TStyle][] = [
   [/^\\(?:textbf|bf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true })],
   [/^\\(?:textmd|mdseries)\b/, (s) => ({ ...s, bold: false })],
@@ -274,7 +277,8 @@ function nonSpace(s: string): number {
   }
   return n
 }
-/** what a declaration sets, as a group's bits: an italic, bold or small capitals switch (\em, \itshape, \bfseries, \sc, …) */
+/** what a declaration sets, as a group's bits: an italic, bold or small capitals switch (\em, \itshape, \bfseries, \sc, …):
+ *  latex.ltx's \em, \itshape, \slshape, \bfseries, \scshape, article.cls's \it, \sl, \bf, \sc */
 const declared = (src: string | undefined): number =>
   (/^\\(?:em|it|itshape|sl|slshape)$/.test(src ?? '') ? GROUP_ITALIC : 0) |
   (/^\\(?:bf|bfseries)$/.test(src ?? '') ? GROUP_BOLD : 0) |
@@ -297,7 +301,8 @@ export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
     if (p.t === 'open') {
       const src = p.src as string
       // (a bare group a face switch opens is stated with that switch as its command, `\em{` (SpanAt.cmd: the instrument's
-      // switchesOf), and sets its group's face as the switch inside it did, declared's)
+      // switchesOf), and sets its group's face as the switch inside it did, declared's: latex.ltx's \textit, \emph, \itshape,
+      // \textsl, \textbf, \bfseries, \textsc, \scshape)
       const bits =
         (/^\\(?:textit|emph|itshape|textsl)\b/.test(src) ? GROUP_ITALIC : 0) |
         (/^\\(?:textbf|bfseries)\b/.test(src) ? GROUP_BOLD : 0) |

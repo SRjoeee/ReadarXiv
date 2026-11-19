@@ -66,15 +66,20 @@ export type LinkOwner =
  *  as a space) and it draws no link group */
 type DrawnWhole = { m: Placed; off: number; drawn: readonly Page['links'][number][0][] }
 
-/** a link group's command, as the breaker tags its tokens (LINK_OPEN): \url's with \href's */
+/** a link group's command, as the breaker tags its tokens (LINK_OPEN): \url's with \href's (hyperref.sty's \href, \hyperref,
+ *  \hyperlink and \url) */
 const LINK_CMD = /^(?:href|hyperref|hyperlink|url)$/
 /** an element's command that sets a reference to a destination in the paper, or a group's (links.mjs REF_SRC, by the command
- *  the part states, El.cmd) */
+ *  the part states, El.cmd): latex.ltx's \ref and \pageref; amsmath.sty's \eqref; hyperref.sty's \autoref, \hyperref,
+ *  \hyperlink and thmtools' \Autoref (thm-autoref.sty); cleveref.sty's \cref, \Cref, \crefrange, \Crefrange, \cpageref,
+ *  \Cpageref, \labelcref; nameref.sty's \nameref, \Nameref; varioref.sty's \vref, \Vref; subcaption.sty's \subref */
 const REF_CMD =
   /^(?:ref|eqref|autoref|Autoref|cref|Cref|crefrange|Crefrange|cpageref|Cpageref|pageref|nameref|Nameref|vref|Vref|labelcref|subref|hyperref|hyperlink)\*?$/
+/** the kinds of a link's target kindOf tells apart */
+type LinkKind = 'cite' | 'note' | 'internal' | 'url'
 /** the kind of piece a link of a target goes with, as today's order tier tells them apart (links.mjs kindOfAnnot): a citation's
  *  (cite.<key>), a footnote's mark's (Hfootnote.<n>), any other destination's, an address's */
-const kindOf = (to: Link['to']): 'cite' | 'note' | 'internal' | 'url' => {
+const kindOf = (to: Link['to']): LinkKind => {
   if ('url' in to) return 'url'
   let d: unknown = to.dest
   try {
@@ -310,7 +315,7 @@ export function linksOf(
     // order alone is never laid over the whole piece where its characters are not found, placeText)
     const tierOf = new Map<number, string>()
     const tier = (i: number) => tierOf.get(i) ?? 'geometry'
-    for (const kind of ['note', 'internal', 'cite'] as const) {
+    for (const kind of ['note', 'internal', 'cite'] as const satisfies readonly LinkKind[]) {
       const as = text.filter((i) => kindOf(list[i]!.to) === kind && !named.has(key(list[i]!.to)))
       if (!as.length) continue
       const pieces = [

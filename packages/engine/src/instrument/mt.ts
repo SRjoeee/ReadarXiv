@@ -33,7 +33,8 @@ export const utf8 = (s: string): string => (ASCII.test(s) ? s : DECODER.decode(l
 
 // ---------------------------------------------------------------- what breaks the text, and a display
 /** a displayed formula's source: the layer draws it as one crop (layout/marks.mjs classOf, which reads it here), and the wire's one
- *  reading of a display (its own stop, the text it breaks) */
+ *  reading of a display (its own stop, the text it breaks). As layer1.ts DISPLAY: latex.ltx's, amsmath.sty's, breqn.sty's
+ *  and IEEEtran.cls's display environments */
 export const DISPLAY =
   /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
 /** a forced line break, a list's item: `\\` (starred, with its room), \newline, \linebreak (its priority after it), \item */
@@ -79,7 +80,8 @@ const DISPLAY_TAIL = new RegExp(
   String.raw`(?:[ \t\n\f\r]+|(?<!\\)%[^\n]*|\\\]|\$\$|\\end\s*\{${MATH_INNER}\}|\\(?:label|tag\*?)\s*\{[^{}]*\}|\\(?:nonumber|notag|qedhere|displaybreak|allowbreak|hfill)(?![A-Za-z@])(?:\[[^\]]*\])?|\\\\\*?(?:\[[^\]]*\])?|${spaceSource({ math: true })}|\{\}|\\l?eqno(?![A-Za-z@])[\s\S]*)$`,
 )
 /** the punctuation at that end: a stop, a comma, a semicolon or a colon, bare or alone in a group that sets it (`\text{.}`,
- *  never a phantom's); never an empty delimiter (`\right.`) or an escaped character (`\;` is a space) */
+ *  never a phantom's); never an empty delimiter (`\right.`) or an escaped character (`\;` is a space). The groups: amstext.sty's
+ *  \text, latex.ltx's \mbox, \textrm and \textnormal, fontmath.ltx's \mathrm, TeX's \hbox */
 const DISPLAY_STOP =
   /\\(?:text|mbox|textrm|textnormal|mathrm|hbox)\s*\{\s*([.,;:])\s*\}$|(?<!\\(?:right|middle|left|[bB]igg?[lrm]?)\s*)(?<!\\)([.,;:])$/
 /** the punctuation a display's source sets at its end, which is its sentence's (`x = y.\label{e}\end{equation}`), or null;

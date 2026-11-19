@@ -28,6 +28,8 @@ const refsFor = (target: Lang): RefNames =>
     target,
   )
 
+/** CLDR's (ISO 15924's) codes of the scripts written with Han: Hans and Hant (Simplified and Traditional Han), Jpan (Japanese:
+ *  Han, Hiragana, Katakana) and Kore (Korean: Hangul, Han) */
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 /** the script fields in the set's order (rules/layout.mjs SCRIPT_FIELDS): our own vocabulary, ScriptRules' keys */
 const SCRIPT_KEYS = [

@@ -234,7 +234,8 @@ type OwnCompile = {
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2
 
-/** the compilers of arXiv's routes a host may name for a paper (guard.mjs compilerOfPdf) */
+/** the compilers of arXiv's routes a host may name for a paper (guard.mjs compilerOfPdf): TeX Live's LaTeX formats on pdfTeX
+ *  (latex, pdflatex), XeTeX (xelatex) and LuaTeX (lualatex), as its fmtutil.cnf names them */
 const COMPILERS: ReadonlySet<string | null> = new Set(['latex', 'pdflatex', 'xelatex', 'lualatex'])
 /** a package that names no compiler has one guessed from its files (paper-meta.mjs); arXiv's PDF says how it was made —
  *  compilerOfPdf, the host's `compilerOf` —, and that is the compiler of every compile and of the marks the probe is written

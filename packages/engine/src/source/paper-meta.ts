@@ -99,8 +99,11 @@ export function analyze(fsys: Fsys): PaperMeta {
     // package holds it under (\subfile{./chapters/ch1}: chapters/ch1.tex, a subfile's own \documentclass and all)
     for (const f of tex)
       for (const m of bodies[f]!.matchAll(
-        /\\(input|include|subfile|(?:sub)?(?:import|inputfrom|includefrom))\s*\*?\s*\{([^}]+)\}(?:\s*\{([^}]+)\})?/g,
+        // (latex.ltx's \input and \include, subfiles.sty's \subfile; import.sty's \import, \subimport, \inputfrom, \includefrom,
+        // \subinputfrom and \subincludefrom)
+        /\\(input|include|subfile|(?:sub)?(?:import|inputfrom|includefrom))\s*\*?\s*\{([^}]+)\}(?:\s*\{([^}]+)\})?/g, // latex.ltx, subfiles.sty, import.sty
       )) {
+        // (the three that name the file alone, latex.ltx's and subfiles.sty's; import.sty's name its directory first)
         const n = normalizePath(
           /^(input|include|subfile)$/.test(m[1]!) || m[3] === undefined
             ? m[2]!.trim()
@@ -156,9 +159,14 @@ export function analyze(fsys: Fsys): PaperMeta {
   meta.biblatex = /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\bbiblatex\b/.test(all)
   const exts = files.map((f) => extname(f).toLowerCase())
   meta.eps = exts.filter((e) => e === '.eps' || e === '.ps').length
+  // (the graphics pdfTeX reads and DVI's drivers do not: pdftex.def's \Gin@extensions .pdf, .png, .jpg, .jpeg)
   meta.rasterOrPdf = exts.filter((e) => ['.pdf', '.png', '.jpg', '.jpeg'].includes(e)).length
+  // (the packages that stop TeX but under XeTeX or LuaTeX: fontspec.sty, unicode-math.sty and polyglossia.sty raise an error
+  // on another engine, xeCJK.sty requires XeTeX, luatexja.sty calls LuaTeX's \directlua)
   meta.unicodeEngineOnly =
     /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\b(fontspec|xeCJK|unicode-math|polyglossia|luatexja)\b/.test(all)
+  // (the packages whose output a program run beside TeX makes: minted.sty's and svg.sty's \ShellEscape, shellesc.sty's
+  // \ShellEscape itself, pythontex.sty's \jobname.pytxcode its own script reads between passes)
   meta.shellEscape =
     /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\b(minted|svg|pythontex|shellesc)\b/.test(all) || /\\write18/.test(all)
   meta.tikz = /\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\b(tikz|pgfplots)\b/.test(all)

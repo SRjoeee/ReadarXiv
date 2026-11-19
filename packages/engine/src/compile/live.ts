@@ -396,6 +396,7 @@ const COMMAND =
 const CONDITIONAL =
   /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\ifx\s*\\(?:undefined|@undefined)\s*\\(?:[A-Za-z@]+|.)|\\if(?:defined|csname)(?![A-Za-z@])/y
 /** the next primitive conditional ([1] `if…`) or \\fi ([1] `fi`), or any other control sequence passed over ([2] its word) */
+// (the conditionals: TeX's seventeen and e-TeX's three, \ifdefined, \ifcsname and \iffontchar, every one a primitive)
 // biome-ignore format: its flags as the module writes them (the formatter would sort them, another literal)
 const IF_FI =
   /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|([A-Za-z@]+)|.)/ys
@@ -607,6 +608,7 @@ export function originalFiles(
     // of any file gains or loses a line
     if (names)
       for (const path of fsys.list()) {
+        // (a file TeX reads as source, as guard.ts reads one: latex.ltx's .tex, cls, sty and its own .ltx)
         if (!/\.(?:sty|cls|tex|ltx)$/i.test(path)) continue
         const bytes = out.get(path) ?? fsys.read(path)
         if (!bytes) continue

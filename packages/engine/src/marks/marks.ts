@@ -960,14 +960,16 @@ const CHAR_NODE = /^\.+\\([A-Za-z0-9]+)\/\S+ (\S|\^\^[0-9a-f]{2}|\^\^.)(?: \(lig
  *  TeX prints them, where pdfTeX and LuaTeX list a character a node (2611.03178v1's \\textsc{CoworkOS}: `\\TU/XCharter(0)/m/sc/10.5
  *  CoworkOS`) */
 const WORD_NODE = /^\.+\\TU\/\S+ (\S{2,})$/
-/** the text encodings, whose letters and digits are ASCII's */
+/** the text encodings, whose letters and digits are ASCII's: LaTeX's OT1, T1, LY1 and TU (ot1enc.def, t1enc.def, ly1enc.def,
+ *  tuenc.def) */
 const TEXT_ENCODING: ReadonlySet<string | undefined> = new Set(['OT1', 'T1', 'LY1', 'TU'])
 /** the punctuation each text encoding sets as ASCII's character and TeX prints as it: every one's, and T1's and TU's more
  *  (OT1 sets ¡ ¿ ” “ ˙ – — at < > " \\ _ { |, and its italic £ at $; LY1 is taken at the first alone). Not `?`: the probe has
  *  no aux, and a macro's \\ref sets "??" there (2610.21098v1's \\figref{…}), never in the paper */
 const PUNCT_ALL = '!#%&()*+,-./:;=@[]'
 const PUNCT_WIDE = `${PUNCT_ALL}"$<>\\^_{|}~`
-/** a node between a macro's characters that sets no ink: glue, a kern, a penalty, a math switch, a box's head */
+/** a node between a macro's characters that sets no ink: glue, a kern, a penalty, a math switch, a box's head, as TeX's
+ *  \showbox lists them (\glue, \kern, \penalty, \mathon, \mathoff, \hbox(, \vbox() */
 const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
 /**
  * The text each sample sets, from the probe's log (inkSection): each sample whose box TeX listed in full with no error
@@ -1515,7 +1517,12 @@ const DEFINITION = new RegExp(
   'g',
 )
 /** the commands whose arguments a literal there is no text set on the page in: a label, a reference, a message, a
- *  destination's name, a counter, an environment's name, a test; and \csname to its \endcsname */
+ *  destination's name, a counter, an environment's name, a test; and \csname to its \endcsname. Their definitions: latex.ltx's
+ *  \label, \ref, \pageref, \cite, \nocite, \typeout, \wlog, \@namedef, \@nameuse, \@ifundefined, \@ifpackageloaded,
+ *  \@ifclassloaded, \setcounter, \addtocounter, \newcounter, \usecounter, \refstepcounter, \stepcounter, \begin, \end and the
+ *  \Package…, \Class… and \Generic… messages; TeX's \message, \write and \csname; amsmath.sty's \eqref; nameref.sty's \nameref;
+ *  hyperref.sty's \autoref, \hypertarget, \hyperdef, \hyperlink, \pdfbookmark; ifthen.sty's \ifthenelse; natbib.sty's and
+ *  biblatex's \cite… */
 const NOT_TEXT =
   /\\(?:label|ref|pageref|eqref|nameref|autoref|cite[A-Za-z]*|nocite|typeout|message|wlog|write|hypertarget|hyperdef|hyperlink|pdfbookmark|@namedef|@nameuse|@ifundefined|@ifpackageloaded|@ifclassloaded|ifthenelse|setcounter|addtocounter|newcounter|usecounter|refstepcounter|stepcounter|begin|end|(?:Package|Class|Generic)(?:Warning|WarningNoLine|Info|Error))(?![A-Za-z@])|\\csname(?![A-Za-z@])/g
 /** past white space and comments from i */
@@ -2258,7 +2265,8 @@ export function classNamesTex(texts: readonly string[]): string {
 
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
  *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
- *  alternation and the prefilter from it, so the two cannot drift */
+ *  alternation and the prefilter from it, so the two cannot drift. Each a macro our TeX defines: \axtpma, \axtpmm, \axtpm,
+ *  \axthpk, \axttg and \axthmark LAYOUT_TEX's, \axtnma and \axtnmb NAMES_TEX's */
 export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb'] as const
 
 /** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`
@@ -2266,7 +2274,9 @@ export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthm
  *  a mark in text the paper writes itself and reads back (an .xmpdata that pdfx reads, a .tex it \input s) has an effect in
  *  the next pass, so a pass that differs there is not at latexmk's fixed point */
 const NAME_MARKS = /(?:\\protect\s*)?\\axtnm[ab]\s*\{[^{}]*\}/g
-/** the files a babel name's marks are written to: the aux and the lists (.toc .lof .lot and the common .loa .lol .lop) */
+/** the files a babel name's marks are written to: the aux and the lists (.toc .lof .lot and the common .loa .lol .lop): latex.ltx's
+ *  \jobname.aux, article.cls's \@starttoc{toc}, {lof} and {lot}, algorithm.sty's loa, listings.sty's lol (\ext@lstlisting),
+ *  photo.sty's and hgb.sty's lop */
 export const NAME_MARK_FILE = /\.(?:aux|toc|lof|lot|loa|lol|lop)$/
 /** a file's text with its babel name marks, each with its own argument, taken out */
 export const withoutNameMarks = (text: string): string => text.replace(NAME_MARKS, '')
@@ -2741,6 +2751,8 @@ const ENDS_IN_CS = /\\(?:[A-Za-z@]+\*?|[^A-Za-z@)])$/
  *  the piece right after it no mark at all, which its macro would see in that piece's place */
 const LOOKS_AHEAD = (p: PieceLike | null | undefined): boolean => {
   const cls = classOf(p)
+  // (the prefixes: xspace.sty's \xspace, latex.ltx's \protect, TeX's primitives \noexpand, \expandafter, \string, \global, \long,
+  // \outer, \immediate and e-TeX's \unexpanded, \detokenize, \protected)
   return (
     cls === 'macro' ||
     cls === 'footnote' ||

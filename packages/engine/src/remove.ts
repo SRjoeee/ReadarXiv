@@ -213,7 +213,7 @@ function numberAt(b: Uint8Array, i: number, j: number): number | undefined {
   const v = frac ? m / POW10[frac]! : m
   return neg ? -v : v
 }
-/** the operators of a content stream, all 73 (PDF 32000-1:2008 Annex A, Table A.1), each at most three bytes long: held to
+/** the operators of a content stream, all 73 (ISO 32000-1:2008 Annex A, Table A.1), each at most three bytes long: held to
  *  @cantoo/pdf-lib's PDFOperatorNames, which lists them, by packages/engine/tests/mirrors.test.ts */
 export const OPERATORS = Object.freeze([
   'b',
@@ -341,7 +341,7 @@ export const COST = Object.freeze({
   event: 160,
   code: 64,
 })
-/** the operators the walk reads: every other one is lexed and let go with its operands */
+/** the operators the walk reads, each one of ISO 32000-1's (Annex A): every other one is lexed and let go with its operands */
 const WALK_OPS = new Set([
   'q',
   'Q',
@@ -690,6 +690,7 @@ export function readAtMost(stream: PdfDecodeStream, limit: number): Uint8Array {
   return out.byteOffset === 0 && out.byteLength === out.buffer.byteLength ? out : out.slice()
 }
 
+/** the path-painting operators (ISO 32000-1 §8.5.3): S, s, f, F, f*, B, B*, b, b*, n */
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 /** an operand's `v`, told by its kind before it is read: a name's text, a dictionary's items, a keyword's word; undefined for a
  *  number, a boolean, null, a string, an array, or no operand (what `?.v` read of each) */
@@ -1073,7 +1074,7 @@ export async function openRemover(
       const n = nameOf(en)
       return typeof n === 'string' && !/^Identity-[HV]$/.test(n)
     }
-    if (en instanceof PDFName) return /^(?:WinAnsi|MacRoman|MacExpert|Standard)Encoding$/.test(nameOf(en) ?? '')
+    if (en instanceof PDFName) return /^(?:WinAnsi|MacRoman|MacExpert|Standard)Encoding$/.test(nameOf(en) ?? '') // ISO 32000-1 Annex D's encodings
     if (en instanceof PDFDict) {
       const d = look(en.get(PDFName.of('Differences')))
       const names =
