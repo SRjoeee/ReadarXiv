@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { cachesOf, canvasOf, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, harnessLabJudge, INVARIANTS, PARAS_HELD, productionRowsOf, RECORDED, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
+import { cachesOf, canvasJudge, canvasOf, canvasRecord, checksOf, corpusLogOf, type Ctx, diffOf, drawnOf, GATES, type Gate, GROUP_PAGES, harnessLabJudge, INVARIANTS, PARAS_HELD, productionRowsOf, RECORDED, RETIRED, readerPartsJudge, readerPartsRecord, rowsOf, sentenceCoverJudge, type Stage, type StepRun, STAGES, TARGETS, TIERS, type Tier, textOrderJudge, textOrderOf, textOrderRecord, typesetOf, vitestOf } from '../../lab/release-check/gates.mjs'
 import { papersOf } from '../../lab/release-check/papers.mjs'
 import { ADDED, ADDED_HEADING } from '../../lab/typeset/added.mjs'
 import { isProduction, type Row, rowsAgainst } from '../../lab/typeset/parity/production-rows.mjs'
@@ -170,6 +170,81 @@ describe("a gate's output, read as the gate states it", () => {
   it("holds the canvas's papers to the bound its header names", () => {
     const line = (o: object) => JSON.stringify({ id: 'p', canvas: 'gpu', pages: 4, splitShows: 1, outsidePages: [], shareMax: 0, maxDelta: 0, ...o })
     expect(canvasOf([line({}), line({ id: 'q', shareMax: 0.0037, maxDelta: 81 }), line({ id: 'r', outsidePages: [[97, 53]] })].join('\n')).over).toEqual(['q: outside [], share 0.0037, Δ 81', 'r: outside [[97,53]], share 0, Δ 0'])
+  })
+
+  it("runs the canvas on the software renderer, every call rasterised as it is made, and fails a run the GPU drew or that names no renderer", () => {
+    const g = GATES.find(x => x.id === 'canvas')!
+    const step = (exit: number, text: string) => ({ exit, text, cmd: [], ms: 0, waited: 0, log: '' })
+    const ctx2: Ctx = { root: join(import.meta.dirname, '../..'), labData: '/lab', refactor: mkdtempSync(join(tmpdir(), 'canvas-')), work: '/work', online: false, minFree: 12 }
+    const line = JSON.stringify({ id: '1007.0072v1', renderer: 'software', canvas: 'gpu', flush: true, pages: 4, splitShows: 1, outsidePages: [], differingPages: [], shareMax: 0, maxDelta: 0 })
+    const soft = JSON.stringify({ renderer: 'software', canvas2d: 'unavailable_software', gl: 'x', browser: '153' })
+    const gpu = JSON.stringify({ renderer: 'gpu', canvas2d: 'enabled', gl: 'y', browser: '153' })
+    expect(canvasOf(`${soft}\n${line}`).renderer).toMatchObject({ renderer: 'software', canvas2d: 'unavailable_software' })
+    expect(canvasOf(line).renderer).toBeNull()
+    mkdirSync(join(ctx2.refactor, 'lanes'), { recursive: true })
+    writeFileSync(join(ctx2.refactor, 'lanes/L1-canvas.jsonl'), `${JSON.stringify({ id: '1007.0072v1' })}\n`)
+    expect(g.steps!(ctx2)[0]?.cmd).toEqual(expect.arrayContaining(['--renderer=software', '--flush', '1007.0072v1']))
+    expect(g.steps!(ctx2)[0]?.cmd).not.toContain('--normalize')
+    expect(g.judge!(ctx2, [step(0, `${soft}\n${line}\n`)])).toMatchObject({ pass: true })
+    expect(g.judge!(ctx2, [step(0, `${gpu}\n${line}\n`)])).toMatchObject({ pass: false, note: expect.stringMatching(/^not the software canvas/) })
+    expect(g.judge!(ctx2, [step(0, `${line}\n`)])).toMatchObject({ pass: false })
+    rmSync(ctx2.refactor, { recursive: true, force: true })
+  })
+
+  it("reads text-order's totals and every member it lists, and fails a member missing or out of order the record does not name", () => {
+    const t = "1512.03385v1-zh: 12 of 12 pages laid, 349 members read; missing 0; out of order 0\nI8 over the run's bundles: 92 pairs, 2101 laid pages of 2354, 22000 members (150000 runs) read; missing 0, out of order 1; 600000 ms\n  out of order 2610.1v1-zh p3 ord 7\n"
+    expect(textOrderOf(t)).toEqual({ pairs: 92, laidPages: 2101, pages: 2354, members: 22000, runs: 150000, missing: 0, outOfOrder: 1, ms: 600000, first: 'out of order 2610.1v1-zh p3 ord 7', missingListed: [], outOfOrderListed: ['2610.1v1-zh p3 ord 7'] })
+    const run = (exit: number, text: string) => ({ exit, text, cmd: [], ms: 0, waited: 0, log: '' })
+    const g = GATES.find(x => x.id === 'text-order')!
+    const ctx: Ctx = { root: join(import.meta.dirname, '../..'), labData: '/lab', refactor: '/lab/refactor-2026-11', work: '/work', online: false, minFree: 12 }
+    expect(g.holds).toEqual(['I8'])
+    // (this repository's record does not name 2610.1v1-zh's member: a new one; the exit codes are never read)
+    expect(g.judge!(ctx, [run(0, ''), run(1, t)])).toMatchObject({ pass: false, note: expect.stringMatching(/out of order and not in the record: 2610\.1v1-zh p3 ord 7/) })
+    const none = t.replace('out of order 1', 'out of order 0').split('\n  ')[0] ?? ''
+    expect(g.judge!(ctx, [run(0, ''), run(1, none)])).toMatchObject({ pass: true, note: expect.stringMatching(/^in order now, the record to lower/) })
+    expect(g.judge!(ctx, [run(0, ''), run(0, none.replace('missing 0,', 'missing 1,'))])).toMatchObject({ pass: false })
+    expect(g.judge!(ctx, [run(0, ''), run(0, '')])).toMatchObject({ pass: false, note: 'no pair read' })
+  })
+
+  it('holds the members text-order reads out of order to their record: a recorded one passes, a new one fails, one read in order is said', () => {
+    const record = textOrderRecord(join(import.meta.dirname, '../..'))
+    expect(record.format).toBe('readarxiv/text-order 1')
+    const listed = Object.entries(record.outOfOrder as Record<string, string[]>).flatMap(([pair, ms]) => ms.map(m => `  out of order ${pair} ${m}`))
+    const text = (lines: string[]) => `I8 over the run's bundles: 92 pairs, 2482 laid pages of 2595, 34777 members (280234 runs) read; missing 0, out of order ${lines.length}; 199134 ms\n${lines.join('\n')}\n`
+    expect(textOrderJudge(text(listed), record)).toMatchObject({ pass: true, numbers: { outOfOrder: listed.length, recorded: listed.length, fresh: 0, fell: 0 } })
+    // (the seeded red: one member more out of order, on a recorded page and on another)
+    expect(textOrderJudge(text([...listed, '  out of order 2610.40394v1-zh p4 ord 949']), record)).toMatchObject({ pass: false, numbers: { fresh: 1 }, note: expect.stringMatching(/not in the record: 2610\.40394v1-zh p4 ord 949/) })
+    expect(textOrderJudge(text([...listed, '  out of order 1706.03762v7-zh p2 ord 9']), record)).toMatchObject({ pass: false, numbers: { fresh: 1 } })
+    // (a list shorter than the totals' count is no reading of every member)
+    expect(textOrderJudge(text(listed).replace(`out of order ${listed.length};`, `out of order ${listed.length + 1};`), record)).toMatchObject({ pass: false })
+    expect(textOrderJudge(text(listed.slice(1)), record)).toMatchObject({ pass: true, numbers: { fell: 1 }, note: expect.stringMatching(/the record to lower/) })
+  })
+
+  it("holds each canvas paper's residue to its record by page: one step worse fails, a page outside its pages fails, a better reading is said", () => {
+    const record = canvasRecord(join(import.meta.dirname, '../..'))
+    expect(record.format).toBe('readarxiv/canvas 1')
+    const papers = record.papers as Record<string, { pages: Record<string, number>; share: number; delta: number }>
+    const ids = Object.keys(papers)
+    const soft = JSON.stringify({ renderer: 'software', canvas2d: 'unavailable_software', gl: 'x', browser: '153' })
+    const lineOf = (id: string, o: object = {}) => {
+      const p = papers[id]!
+      return JSON.stringify({ id, renderer: 'software', canvas: 'gpu', flush: true, pages: 20, splitShows: 9, outsidePages: [], differingPages: Object.entries(p.pages).map(([k, n]) => [Number(k), n]), shareMax: p.share, maxDelta: p.delta, ...o })
+    }
+    const text = (o: Record<string, object> = {}) => [soft, ...ids.map(id => lineOf(id, o[id] ?? {}))].join('\n')
+    expect(canvasJudge(text(), ids, record)).toMatchObject({ pass: true, numbers: { papers: ids.length, worse: 0, fell: 0 } })
+    // (the seeded reds: a paper one step worse than its record, by a pixel, by its delta, by its share; a page outside its pages)
+    expect(canvasJudge(text({ '1706.03762v7': { differingPages: [[2, 51]] } }), ids, record)).toMatchObject({ pass: false, note: expect.stringMatching(/above the record \(9fe1c29e4\): 1706\.03762v7 p2: 50 -> 51 px/) })
+    expect(canvasJudge(text({ '1706.03762v7': { maxDelta: 82 } }), ids, record)).toMatchObject({ pass: false, note: expect.stringMatching(/1706\.03762v7: Δ 81 -> 82/) })
+    expect(canvasJudge(text({ '2610.20030v1': { shareMax: 0.001 } }), ids, record)).toMatchObject({ pass: false, numbers: { worse: 1 } })
+    expect(canvasJudge(text({ '1706.03762v7': { differingPages: [[2, 50], [3, 1]] } }), ids, record)).toMatchObject({ pass: false, note: expect.stringMatching(/1706\.03762v7 p3: 1 px on a page outside its record/) })
+    expect(canvasJudge(text({ '1007.0072v1': { differingPages: [[1, 1]], shareMax: 0.0001, maxDelta: 3 } }), ids, record)).toMatchObject({ pass: false, numbers: { worse: 3 } })
+    // (a pixel outside the split glyphs is I1 itself, never recorded; a paper the record lacks, one with no line, the GPU's canvas)
+    expect(canvasJudge(text({ '2307.16209v1': { outsidePages: [[60, 1]] } }), ids, record)).toMatchObject({ pass: false, note: expect.stringMatching(/2307\.16209v1: outside the split glyphs/) })
+    expect(canvasJudge(`${text()}\n${JSON.stringify({ id: '9999.0001v1', pages: 1, splitShows: 1, outsidePages: [], differingPages: [], shareMax: 0, maxDelta: 0 })}`, [...ids, '9999.0001v1'], record)).toMatchObject({ pass: false, note: expect.stringMatching(/no record for 9999\.0001v1/) })
+    expect(canvasJudge(text(), [...ids, '9999.0002v1'], record)).toMatchObject({ pass: false, note: expect.stringMatching(/no line .*9999\.0002v1/) })
+    expect(canvasJudge(text().replace('unavailable_software', 'enabled'), ids, record)).toMatchObject({ pass: false, note: expect.stringMatching(/^not the software canvas/) })
+    // (a better reading passes, and says the record is to be lowered)
+    expect(canvasJudge(text({ '2610.20030v1': { differingPages: [], shareMax: 0, maxDelta: 0 } }), ids, record)).toMatchObject({ pass: true, numbers: { fell: 3 }, note: expect.stringMatching(/below the record \(9fe1c29e4\), the record to lower: 2610\.20030v1 p5: 102 -> 0 px/) })
   })
 })
 
@@ -605,6 +680,19 @@ describe("today's rows, the way back and the head's own builds", () => {
     expect(harnessLabJudge(run(1, `${ours}${missing}`))).toMatchObject({ pass: false, note: 'no rows of this run for 2609.26457v1: expected /r/2609.26457v1-zh.json' })
     const refused = 'FAIL fixtures: 2609.26457v1: rows do not belong to these bundles: 25 of 321 units without a row (rows /r, bundles /b)\n'
     expect(harnessLabJudge(run(1, refused))).toMatchObject({ pass: false, note: expect.stringMatching(/^2609\.26457v1: rows do not belong to these bundles: 25 of 321 units without a row/) })
+    // (I7 and the typesetter's pages' I8 hold nothing where the served faces are not there: a line that says so fails the gate)
+    const skipped = 'ok   I7: a laid unit\'s boxes … every page laid (1512.03385v1, the reader\'s own typesetter) {"skipped":"no served faces: AXT_FACE_TABLES and AXT_FACE_SLICES unset"}\n'
+    expect(harnessLabJudge(run(0, `${ours}${skipped}121 of 121 checks passed\n`))).toMatchObject({ pass: false, note: expect.stringMatching(/^held nothing: I7 \(1512\.03385v1, the reader's own typesetter\): no served faces/) })
+  })
+
+  it("turns each group off on twelve corpus pages of both trees, by its rule's list, and lays I7 on the served faces", () => {
+    const h = gate('harness-lab')
+    expect(h.holds).toEqual(['I2', 'I7', 'I8'])
+    expect(GROUP_PAGES).toHaveLength(12)
+    expect(GROUP_PAGES.every(p => /^\d{4}\.\d{4,5}v\d+:\d+$/.test(p))).toBe(true)
+    expect(new Set(GROUP_PAGES).size).toBe(12)
+    expect(h.steps!(ctx)[0]?.env?.AXT_GROUP_PAGES).toBe(GROUP_PAGES.join(','))
+    expect(h.needs!(ctx).some(n => /AXT_FACE_TABLES/.test(n.what))).toBe(true)
   })
 })
 
