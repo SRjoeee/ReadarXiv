@@ -8544,6 +8544,22 @@ rows, 23,180 by the runner). And the release check read each run whole by its ex
   release check's own rows step at this head finds no reply in the lab's Google store to 239 units its chain asks, at the base
   as here: its Google numbers are read over the round's rows.
 
+### 18.97 What is not laid stays where TeX set it, and nothing laid runs over it on a row they share (2026-11-19)
+
+A member whose last line is a row TeX shares with the next member of its flow (`Placed.join`: a run-in heading and its
+paragraph, a theorem's note and its text) may lay its translation over that row to its end only where the next member is laid
+after it, from where it ends (S.rowStart). Where the next member is not laid — no row by the rows' end, a row every translator
+refused, a reading left `unproven`, a kind the reader's option leaves, a unit the paper keeps — its text stays on the row where
+TeX set it, and nothing laid may be drawn over it. The member's room on the row then ends where TeX ended its text there (its
+last line's end on A), so that TeX's own separation stands before the text that stays: the stop a row already took where the
+next member's join states ink kept between the two (U.decor's `keptAfter`, the block's `stop`, B.slots), now taken from the next
+member's not being laid too (`lay/adapt.ts`, `afterOpen`). Only the row's room was cut at a follower not laid before, and only
+where a head took the follower's row by S.overFollower: a heading of several lines, justified, has its measure on its last
+row, and X.lastLines moved a one-line translation onto that row and drew it over the paragraph's text (2608.06701v1-zh p6 on
+the door's rows: the heading's one line to x 205 over its paragraph's original text from x 93, the paragraph without a row;
+production had its row and laid it after the heading). Laid with the stop, the heading stays on
+its first row and the paragraph's text keeps its place.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

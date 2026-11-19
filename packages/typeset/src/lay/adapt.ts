@@ -540,14 +540,21 @@ export function adapt(i: AdaptInput): Adapted {
   const s =
     (fromText ? unitSizeOf({ orig: { size: m.style.size, st: { caps } } }, R) : undefined) ??
     (heights[heights.length >> 1] as number) / 0.894
-  // (the row kept after it: the next member's join says ink stays between the two on their shared line)
+  // (the row kept after it, its room there ending where TeX ended its text on it: the next member's join says ink stays between
+  // the two on their shared line, or the next member is not laid (`afterOpen` false: no row, a row refused, unproven, left by
+  // the reader's option, kept by the paper), and its own text stays on the row where TeX set it, TeX's separation before it
+  // (docs/PDF-READER.md §18.97). Its room run on to the row's end there, a run-in head's translation was moved onto the row and
+  // drawn over its paragraph's original text, which had no row (2608.06701v1-zh p6 on the door's rows))
   const last = lines.at(-1)!
   const after = i.after
   // (a shared row's size, here and below: its line's, today's rowLeadOf row (need.mjs:37, the file line's size field), which
-  // keptAfter and S.share read as the row's band)
+  // keptAfter and S.share read as the row's band. Where the next member is not laid, no label of it goes with a member laid
+  // from this one's end: what stays is the page's, `byLabel` false)
   const kept: KeptRow | null = after?.join?.[1]
     ? { page: last[0], baseline: last[4], x1: last[3], size: sizeOf(last, m), byLabel: !!after.label }
-    : null
+    : after?.join && !i.afterOpen
+      ? { page: last[0], baseline: last[4], x1: last[3], size: sizeOf(last, m), byLabel: false }
+      : null
   // (the displays set with the short skip: under each SHORTSKIP line, the member's display element there)
   const displays = (m.els ?? []).filter(([, e]) => e.kind === 'display').flatMap(([, e]) => e.ink)
   const shortSkips: ShortSkip[] = []
