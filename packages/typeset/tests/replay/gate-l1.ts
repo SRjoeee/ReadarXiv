@@ -165,6 +165,19 @@ export const LINE_TOLERANCE = 0.01
  *  field and number as it is written (a number's last digit apart is a page laid otherwise) */
 export const samePage = (a: Page, b: Page): boolean => JSON.stringify(a) === JSON.stringify(b)
 
+/** the right of the ink on A of the end mark (El.end) a line's last crop is cut from (its ink box inside the crop's rectangle on
+ *  its page, as pastInk finds it), or null where that crop is no end mark's */
+export function endMarkRight(end: unknown, ends: readonly (readonly number[])[] | undefined): number | null {
+  const c = (end as { t?: { crop?: { page?: number; crop?: number[] } } } | undefined)?.t?.crop
+  if (!c?.crop || !ends?.length) return null
+  const [x0, y0, x1, y1] = c.crop as [number, number, number, number]
+  let right: number | null = null
+  for (const k of ends)
+    if (k[0] === c.page && k[1]! >= x0 - 0.01 && k[3]! <= x1 + 0.01 && k[2]! >= y0 - 0.01 && k[4]! <= y1 + 0.01)
+      right = right === null ? k[3]! : Math.max(right, k[3]!)
+  return right
+}
+
 export function invariantsOf(
   page: number,
   members: readonly PageMember[],
@@ -174,11 +187,13 @@ export function invariantsOf(
   /** the measure I3 reads a run's ink right from where the lay's own has none: the served faces' (the reader's canvas always
    *  gives one; the tap's table lacks the right of a run today never asked it of) */
   served?: FitMeasure | null,
-  /** I5 as the invariant says it, on the entry's lay (G1): a line past its slot by its ink (its last ink's right, a crop's own ink
-   *  inside its antialiased margin) beyond the breaker's stated tolerance (LINE_TOLERANCE), whatever its class; a member under
-   *  its own size floor (its P.floorMin, U.params: the rule file's floorMin, 1 for a line of the page's head or foot); I3 read
-   *  apart, by ink against all that stays (ink-gate.ts) */
-  byInk = false,
+  /** I5 as the invariant says it, on the entry's lay: a line past its slot by its ink (its last ink's right, a crop's own ink
+   *  inside its antialiased margin) beyond the breaker's stated tolerance (LINE_TOLERANCE), whatever its class; but an end mark
+   *  (El.end, `endsOf`: each member's end marks' ink on A) drawn where TeX set it, whose ink TeX set past its measure (amsthm's
+   *  box pushed to the line's end: 2610.20285v1's 0.30 pt past \linewidth), is held to that ink's right; a member under its own
+   *  size floor (its P.floorMin, U.params: the rule file's floorMin, 1 for a line of the page's head or foot). I3 is read apart,
+   *  by ink against all that stays (ink-gate.ts) */
+  byInk: false | { endsOf?: (ord: number) => readonly (readonly number[])[] | undefined } = false,
 ) {
   const floor = Math.min(Number((R as Raw).floor ?? 1), Number((R as Raw).floorMin ?? 1))
   const boxes: { ord: number; x0: number; x1: number; y0: number; y1: number }[] = []
@@ -208,7 +223,8 @@ export function invariantsOf(
           over = 0
         } else {
           const lastInk = l.items.findLast((q) => q.t.crop || (q.t.s && !q.t.space && q.t.face))
-          over = end - (lastInk?.t.crop ? pastInk(lastInk, inksOf?.(pm.ord)) : 0) - l.x1
+          const mark = lastInk?.t.crop ? endMarkRight(lastInk, byInk.endsOf?.(pm.ord)) : null
+          over = end - (lastInk?.t.crop ? pastInk(lastInk, inksOf?.(pm.ord)) : 0) - Math.max(l.x1, mark ?? l.x1)
         }
       }
       if (over > (byInk ? LINE_TOLERANCE + 1e-9 : 1e-6)) {
@@ -1309,7 +1325,14 @@ export function gateL1Pair(
                 ],
               ]),
           )
-          invariantsOf(pg, prepared.members, R, theirs.inv, (ord) => inksOfPart.get(ord), servedMeasure, true)
+          const endsOfPart = new Map(
+            (part as Part).flows
+              .flat()
+              .map((m) => [m.ord, (m.els ?? []).flatMap(([, e]) => (e.end ? (e.ink as number[][]) : []))]),
+          )
+          invariantsOf(pg, prepared.members, R, theirs.inv, (ord) => inksOfPart.get(ord), servedMeasure, {
+            endsOf: (ord) => endsOfPart.get(ord),
+          })
           const k = inkOverlaps(page, part as Part, metrics, o.served)
           for (const x of k.overlaps) out.entry.ink!.overlaps.push({ ...x, page: pg })
           out.entry.ink!.turned += k.turned

@@ -62,10 +62,10 @@ describe('I5 on the entry’s lay: a line past its slot by its ink beyond the br
   it('counts a line whose ink passes its slot by more than 0.01 pt, whatever its class; none within it', () => {
     expect(LINE_TOLERANCE).toBe(0.01)
     const over = fresh()
-    invariantsOf(1, [member({ inkPast: 0.3 })], R, over, undefined, null, true)
+    invariantsOf(1, [member({ inkPast: 0.3 })], R, over, undefined, null, {})
     expect(over.I5).toEqual(['ord 7: a line 0.30 pt past its slot (overfull: no space to shrink, not squeezed)'])
     const within = fresh()
-    invariantsOf(1, [member({ inkPast: 0.01 })], R, within, undefined, null, true)
+    invariantsOf(1, [member({ inkPast: 0.01 })], R, within, undefined, null, {})
     expect(within.I5).toEqual([])
     // (the restated form leaves the overfull line out, the invariant as said counts it)
     const restated = fresh()
@@ -74,18 +74,63 @@ describe('I5 on the entry’s lay: a line past its slot by its ink beyond the br
   })
   it('reads a closing mark’s blank half by its ink: its advance past the slot, its ink inside it, no line past', () => {
     const inv = fresh()
-    invariantsOf(1, [member({ inkPast: 0, advancePast: 5, punct: 'close' })], R, inv, undefined, null, true)
+    invariantsOf(1, [member({ inkPast: 0, advancePast: 5, punct: 'close' })], R, inv, undefined, null, {})
     expect(inv.I5).toEqual([])
+  })
+  it('holds an end mark drawn where TeX set it to its own ink on A, which TeX may set past its measure; drawn further, past', () => {
+    // (2610.20285v1 p32, part ord 258: amsthm's end mark, its ink on A 416.63-421.86, TeX's measure ending at 421.56; laid at the
+    // translation's last line where TeX set it, its crop 0.4 pt of margin a side)
+    const ink = [32, 416.63, 389.45, 421.86, 396.22, 389.45]
+    const crop = [416.23, 389.15, 422.26, 396.52]
+    const at = (x: number) =>
+      ({
+        ord: 258,
+        state: 'laid',
+        lines: [],
+        slots: [],
+        lay: {
+          P: { measure: { w100: () => 100, ink100: () => ({ a: 70, d: 20 }), inkRight100: () => 100 } },
+          tokens: [],
+          layout: {
+            f: 10,
+            scale: 1,
+            state: { track: 0, trackLatin: 0 },
+            lines: [
+              {
+                page: 32,
+                x0: 70.56,
+                x1: 421.56,
+                baseline: 401.41,
+                used: x + 6.03 - 70.56,
+                items: [
+                  { t: { s: 'text', face, cls: 'cjk' }, x: 70.56, w: 300 },
+                  { t: { crop: { page: 32, crop, baseline: 389.45 } }, x, w: 6.03 },
+                ],
+              },
+            ],
+          },
+        },
+      }) as unknown as PageMember
+    const where = fresh()
+    invariantsOf(32, [at(416.23)], R, where, () => [ink], null, { endsOf: () => [ink] })
+    expect(where.I5).toEqual([])
+    const further = fresh()
+    invariantsOf(32, [at(416.53)], R, further, () => [ink], null, { endsOf: () => [ink] })
+    expect(further.I5).toEqual(['ord 258: a line 0.30 pt past its slot (overfull: no space to shrink, not squeezed)'])
+    // (held to its slot as any crop where the part states no end mark: 0.30 pt past, TeX's own)
+    const plain = fresh()
+    invariantsOf(32, [at(416.23)], R, plain, () => [ink], null, {})
+    expect(plain.I5).toEqual(['ord 258: a line 0.30 pt past its slot (overfull: no space to shrink, not squeezed)'])
   })
   it('counts a member set under its own floor: the rule file’s, or 1 where U.params holds a head or foot line at its size', () => {
     const under = fresh()
-    invariantsOf(1, [member({ inkPast: 0, scale: 0.55 })], R, under, undefined, null, true)
+    invariantsOf(1, [member({ inkPast: 0, scale: 0.55 })], R, under, undefined, null, {})
     expect(under.I5floor).toEqual(['ord 7: set at 0.55 under its floor 0.6'])
     const head = fresh()
-    invariantsOf(1, [member({ inkPast: 0, scale: 0.9, P: { floorMin: 1 } })], R, head, undefined, null, true)
+    invariantsOf(1, [member({ inkPast: 0, scale: 0.9, P: { floorMin: 1 } })], R, head, undefined, null, {})
     expect(head.I5floor).toEqual(['ord 7: set at 0.9 under its floor 1'])
     const at = fresh()
-    invariantsOf(1, [member({ inkPast: 0, scale: 0.6 })], R, at, undefined, null, true)
+    invariantsOf(1, [member({ inkPast: 0, scale: 0.6 })], R, at, undefined, null, {})
     expect(at.I5floor).toEqual([])
   })
 })
