@@ -106,8 +106,9 @@ const manifestText = (await import('node:fs')).readFileSync(`${BUILD}/manifest.j
 const API_HOSTS = ['https://readarxiv.com', ...['https://app-staging.readarxiv.org'].filter(host => manifestText.includes(host))]
 // (a copy of the build with the loopback and our server's hosts granted, which Chrome would ask the reader for in a prompt)
 copyWithGrants(BUILD, EXT, { hostPermissions: ['http://127.0.0.1/*', ...API_HOSTS.map(host => `${host}/*`)] })
-// (the back-forward cache on, as a reader's Chrome has it: the page's end is checked on it)
-const { context, worker, id, readerUrl } = await launchWithReader({ profile: 'reader-v2-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 }, args: [RESOLVER_WALL], backForwardCache: true })
+// (the back-forward cache on, as a reader's Chrome has it: the page's end is checked on it; the interface in Chinese, whatever the
+// machine's: the checks find the settings page's sections, the reader's cards and the settings' count by their Chinese words)
+const { context, worker, id, readerUrl } = await launchWithReader({ profile: 'reader-v2-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 }, args: [RESOLVER_WALL], backForwardCache: true, language: 'zh-CN' })
 const api = v2Api({ fixtures: [fixture], base: API_HOSTS[0], extension: `chrome-extension://${id}` })
 const guard = await routeTable(context, [
   ['https://arxiv.org', arxiv],

@@ -81,7 +81,10 @@ as their own line of its report. The census of this tree alone (`--no-today`): i
 (21 at `2ed857426`) and skips, with their reason, the 27 that read the website's tree or today's engine.
 
 **`reader` and `extension`**: Playwright's Chromium at the lockfile's Playwright version, with the system libraries it needs
-(`--with-deps`, apt on the runner); headless, Playwright's `chromium` channel, which loads an extension. `ubuntu-24.04` is
+(`--with-deps`, apt on the runner). The runner's browser speaks English and the maintainer's machine's Chinese: a suite that finds
+the extension's controls and sentences by their Chinese words (`e2e:reader`, `e2e:a11y`) states Chinese where it launches
+(`tests/e2e/lib/chromium.mjs`, `language`: Playwright's locale for every page and frame, and Chromium's `--lang`), so that its
+verdict is not the machine's language's (run 44432025091 failed two of `e2e:reader`'s checks and `e2e:a11y`'s first look there); headless, Playwright's `chromium` channel, which loads an extension. `ubuntu-24.04` is
 pinned: the browsers draw with its libraries and fonts. Each check step runs whatever the one before it gave, so that one
 failure hides no other. The harness's checks that lay with the website's served faces (licensed files the repository may not
 hold: `AXT_FACE_TABLES`, `AXT_FACE_SLICES`, `AXT_HYPH`) hold nothing there: 12 of its 93 at `2ed857426`, run as a hosted runner

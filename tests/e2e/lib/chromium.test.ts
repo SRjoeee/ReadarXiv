@@ -34,6 +34,30 @@ describe('the launch options', () => {
   it('refuse a --disable-features of the launch\'s own: it would replace the list', () => {
     expect(() => chromiumOptions({ args: ['--disable-features=Translate'] })).toThrow(/one list/)
   })
+  it('state an interface language where asked, as Playwright\'s locale for every page and frame and as Chromium\'s own --lang, and nothing where not', () => {
+    const o = chromiumOptions({ channel: 'chromium', args: ['--load-extension=x'] }, { partitioned: true, language: 'zh-CN' })
+    expect(o.locale).toBe('zh-CN')
+    expect(o.args.filter(a => a.startsWith('--lang'))).toEqual(['--lang=zh-CN'])
+    expect(o.args.at(-1)).toBe('--load-extension=x')
+    const none = chromiumOptions({ channel: 'chromium', args: [] as string[] })
+    expect('locale' in none).toBe(false)
+    expect(none.args.some(a => a.startsWith('--lang'))).toBe(false)
+    // (one place states it: a launch's own locale or --lang beside it would contradict it)
+    expect(() => chromiumOptions({ locale: 'en-US' }, { language: 'zh-CN' })).toThrow(/chromium\.mjs's to state/)
+    expect(() => chromiumOptions({ args: ['--lang=en-US'] }, { language: 'zh-CN' })).toThrow(/chromium\.mjs's to state/)
+  })
+})
+
+describe('the suites that find the extension by its Chinese words', () => {
+  // (GitHub's runner's browser speaks English and this machine's Chinese: run 44432025091 failed e2e:reader's key card and its
+  // count of papers kept, and e2e:a11y's first look for the settings page's sections, on the runner alone)
+  it('state Chinese where they launch: e2e:reader through launchWithReader, e2e:a11y both its contexts', () => {
+    expect(readFileSync(join(ROOT, 'tests/e2e/reader-v2.mjs'), 'utf8')).toMatch(/await launchWithReader\(\{[^\n]*language: 'zh-CN' \}\)/)
+    const a11y = readFileSync(join(ROOT, 'tests/e2e/a11y.mjs'), 'utf8')
+    expect(a11y).toContain("const LANGUAGE = { language: 'zh-CN' }")
+    expect(a11y.match(/launchPersistentContext\((BASE_PROFILE|PROFILE), chromiumOptions\(/g)).toHaveLength(2)
+    expect(a11y.match(/chromiumOptions\(LAUNCH, LANGUAGE\)|\}, LANGUAGE\)\)/g)).toHaveLength(2)
+  })
 })
 
 describe('the launches', () => {

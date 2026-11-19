@@ -22,7 +22,8 @@
 // and the audit must report it as introduced by the extension. A difference that is empty is only worth something while an audit that finds a defect would not be.
 //
 // Usage: pnpm build && pnpm e2e:a11y   (first time: npx playwright install chromium; `pnpm fixtures:fetch` for a paper that is not in the repository)
-// Environment: AXT_PAPER picks the paper (a fixture of tests/fixtures/arxiv); AXT_HEADED=1 watches it run.
+// Environment: AXT_PAPER picks the paper (a fixture of tests/fixtures/arxiv); AXT_HEADED=1 watches it run; AXT_CHROME runs another Chrome, as the
+// other suites take it.
 // Changing the paper is worth a run: 2401.00596 (references with links + unlabelled <object>) is what caught the mirror missing inert in the first place.
 import { mkdirSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -43,7 +44,10 @@ const SHOTS = `${HERE}.shots`
 /** The one §7.4b measured by hand back then: 1 h6, 1 h5, 0 main, 8 of 12 tables without th */
 const PAPER = process.env.AXT_PAPER ?? '2410.00260'
 const IDLE = /session idle: (\d+)\/(\d+) requested of (\d+), (\d+) failed, (\d+) cached/
-const LAUNCH = { channel: 'chromium', headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 } }
+/** the interface in Chinese, whatever the machine's: the settings page's sections, its switches and its status are found by their
+ *  Chinese words; the baseline launched alike, so that the two audits differ by the extension alone */
+const LANGUAGE = { language: 'zh-CN' }
+const LAUNCH = { ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 } }
 /** What the echo endpoint puts before a translation: it is ASCII, so the page's text keeps its language while the translation is told from the original */
 const MARK = '[echo] '
 /** The switch of the settings page that puts the free services behind the chosen one; found by the name a reader sees */
@@ -269,7 +273,7 @@ const PAPER_URL = `${site.origin}/html/${PAPER}`
 console.log(`${PAPER_URL} and the echo endpoint at ${endpoint.baseURL}: nothing leaves this machine`)
 
 // ── The baseline: the same paper, no extension ────────────────────────────────
-const baseContext = await chromium.launchPersistentContext(BASE_PROFILE, chromiumOptions(LAUNCH))
+const baseContext = await chromium.launchPersistentContext(BASE_PROFILE, chromiumOptions(LAUNCH, LANGUAGE))
 await keepOffline(baseContext, refused)
 const basePage = await baseContext.newPage()
 await basePage.goto(PAPER_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
@@ -295,7 +299,7 @@ copyWithGrants(SRC, EXT, { hostPermissions: ['http://127.0.0.1/*'], contentMatch
 const context = await chromium.launchPersistentContext(PROFILE, chromiumOptions({
   ...LAUNCH,
   args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
-}))
+}, LANGUAGE))
 await keepOffline(context, refused)
 context.setDefaultNavigationTimeout(90_000)
 let [worker] = context.serviceWorkers()

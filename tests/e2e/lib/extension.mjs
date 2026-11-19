@@ -27,7 +27,8 @@ const PARTITIONED = { partitioned: true }
  *
  * `topLevel` (true unless said otherwise): a copy whose manifest lets the reader's address open as a page of its own, as a
  * release build's does not (above). `AXT_CHROME` in the environment runs another Chrome binary instead of Playwright's
- * (the extension's floor, Chrome 131).
+ * (the extension's floor, Chrome 131). `language`: the interface language the extension is read in, whatever the machine's
+ * (chromium.mjs's `language`), for a suite that finds its controls and sentences by their words in one language.
  *
  * `backForwardCache`: the browser's back-forward cache on, as a reader's Chrome has it (Playwright launches Chromium with
  * `--disable-back-forward-cache`, so that a page left is never restored from it).
@@ -36,7 +37,7 @@ const PARTITIONED = { partitioned: true }
  * filled the disk (25 GiB). `context.close()` removes them once the browser has exited; a context that closes on its
  * own (the browser crashing, a headed window shut) removes them from its `close` event
  */
-export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, topLevel = true, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null, backForwardCache = false } = {}) {
+export async function launchWithReader({ profile = 'reader', extension = BUILD, demos = false, topLevel = true, headless = true, viewport = { width: 1600, height: 1000 }, deviceScaleFactor, args = [], languages = null, backForwardCache = false, language = null } = {}) {
   if (!existsSync(join(extension, 'pdf-reader.html'))) throw new Error(`no reader in ${extension}: \`pnpm build\` at the repository root`)
   const temporary = []
   const removeTemporary = () => {
@@ -69,7 +70,7 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   let context
   try {
     // (AXT_CHROME: another Chrome, the floor's for one, as the other suites take it)
-    context = await chromium.launchPersistentContext(profileDir, chromiumOptions({ ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), ...(backForwardCache ? { ignoreDefaultArgs: ['--disable-back-forward-cache'] } : {}), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] }, PARTITIONED))
+    context = await chromium.launchPersistentContext(profileDir, chromiumOptions({ ...(process.env.AXT_CHROME ? { executablePath: process.env.AXT_CHROME } : { channel: 'chromium' }), ...(backForwardCache ? { ignoreDefaultArgs: ['--disable-back-forward-cache'] } : {}), headless, viewport, ...(deviceScaleFactor ? { deviceScaleFactor } : {}), args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, ...args] }, { ...PARTITIONED, language }))
   } catch (e) {
     removeTemporary()
     throw e
