@@ -4698,8 +4698,9 @@ production's stored rows, never showed it (no row, the original's).
   glyphs, level or turned, has a partner on B, a glyph our compile never printed is arXiv's ink, no text the paper's TeX set:
   never a figure glyph (the figure reading's input gives it the owner `a`), never a unit (none is born of it), so never sent,
   erased or lit; both panes show it where arXiv drew it. "A page our compile sets" is that binary fact of the mapping, never a
-  share of its glyphs. A page our compile sets none of tells nothing of who set its ink and is read as before: 2610.20030v1's
-  pages 9 to 12, a second top-level file of its source (`supplemental_prl.tex`, its `00README.json`) that arXiv compiles and
+  share of its glyphs. A page our compile sets none of tells nothing of who set its ink and is read as before, the text inside
+  its figures by the figure reading alone, what that reading refuses the original's ink and no unit born of it (§18.102):
+  2610.20030v1's pages 9 to 12, a second top-level file of its source (`supplemental_prl.tex`, its `00README.json`) that arXiv compiles and
   joins to the first, our compile the first's alone. Read on A glyph by glyph against B, the stamp's rule would have taken
   that supplement's 62 figure texts with it, real axis titles ("target area", "cell motility", "mean shape index"): the
   evidence of absence is a page our compile sets. The ledger is untouched: it reads no turned glyph, so the stamp is in none
@@ -8865,6 +8866,40 @@ our wire; the second statement differed from the released engine's shape, where 
 - **Versions**: no unit, id or `PIPELINE` moves. The behaviour digests of Microsoft's, Google's and the built-in translator's
   adapters move (the tags wire's with them), the acceptance rule's and the chain's do not: every row is judged again from its
   stored reply at a paper's next open, and the class's 13 wires are asked once.
+
+### 18.102 Text inside a figure has one maker, the figure reading: what it refuses stays the original's ink, on every page (the coordinator's ruling of 2026-11-20)
+
+2610.20030v1's pages 9 to 11 (its supplement, a second top-level file our compile does not set, §18.27) on staging: each row
+of an axis's tick labels ("5.0 5.2 … 6.0", 22 pt apart) drawn as one short paragraph from the row's left end, the axis title's
+subscripted symbol joined to its end ("… 6.0 s0") and gone from under the title, a colour bar's exponents set on its baseline,
+its label `D_s` sent as a word; the title itself ("target area s₀") left the original's though its row held a translation.
+The released reader leaves all of it as the original draws it.
+
+- **Why.** The figure reading (`figure-text.ts`) makes a unit only of a run that spells a word: "a number, a tick's label, a
+  letter alone, a formula's, stays the original's ink". That refusal was stated nowhere the next phase reads: on a page our
+  compile does not set, the born maker (`born.ts`) took every free glyph with no partner on B, the ones the figure reading had
+  refused among them, and the glyphs of a figure text's own element too (listed by it, owned by none: the carried fault of
+  `ownership.ts` `takeAsStated`), and cut them by the rule of a unit's own lines (`lines.ts`), under which labels on one
+  baseline are one line however far apart they stand. The figure text whose element's glyphs the born unit took was left the
+  original's by the reader: the wrap wrote those glyphs in the born unit's text group, the add-on held no element group of the
+  title's, and the reader leaves a laid member whose groups the composed document does not hold the original's (`composer.ts`
+  `held`).
+- **The rule** (`born.ts`): no unit is born of a glyph shown inside a form XObject, on any page. Text drawn in a figure has one
+  maker, the figure reading; what it makes a unit of is a unit, what it refuses is the original's ink, nobody's to translate or
+  to draw, on a page our compile sets or not. It is stated once, in the born maker's filter, because the born maker is the one
+  taker of a glyph B never printed (a trail and an end mark walk B's glyphs; phase 4's ink makers are the figure reading's own
+  run); a state of the ownership ("figure ink, the original's") would have stated the same fact again with a writer and a
+  reader of its own. Every unit born is `inkorphan`; the kind `inkfigures` is the figure reading's (`ink.ts`), as on a page our
+  compile sets. The block rule's test that two lines gathered be both of a form or both not goes: no glyph of a form reaches it.
+  A figure text's element whose glyphs no unit takes now has its own element group, and the title is laid with its symbol's
+  crop.
+- **Over the 245 papers** (the chain from the stored compiles, every object against the line's): the units of one paper
+  move, 2610.20030v1's: 176 units born of figure glyphs leave (p9 28, p10 73, p11 75: tick rows, panel titles, single numbers,
+  the colour bars' exponents, `D_s`), and the 30 figure texts that list an element whose glyphs those units took (3 on p9, 9 on
+  p10, 18 on p11) keep that element in a group of their own. No unit born outside a form moves: the supplement's titles,
+  authors and captions are the ink makers' units, as before.
+- **Versions**: PIPELINE 108 (which units there are). TRANSLATE stays (no wire is serialised or read otherwise: units leave),
+  LAYOUT stays (no mark moves, the marks digest with it), the rule file stays (the typesetter reads nothing new).
 
 ## 19. The engine's contract
 
