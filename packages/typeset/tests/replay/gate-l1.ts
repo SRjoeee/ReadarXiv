@@ -36,6 +36,7 @@ import { rulesFor } from '../../src/rules-for.ts'
 import { paraPieces, type V0Piece } from '../../src/unit/breaks.ts'
 import { type DoorRow, doorRows, doorSentences } from './rows.ts'
 import { layPagePrepared, type PageMember, type UnitLay } from '../../src/lay/page.ts'
+import { type InkOverlap, inkOverlaps } from './ink-gate.ts'
 import { type CrossLay, crossLayOf } from './cross-lay.ts'
 import { type FitMeasure, fitMeasure } from '../../src/breaker/measure.ts'
 import type { Face } from '../../src/breaker/tokens.ts'
@@ -81,6 +82,10 @@ export type GateL1 = {
     /** members set under the fit's floor (R.floor), by today's ord: X.further's `shrink` (the checkpoint's (6): a correction
      *  never drives a unit there, so the runner lists them, its run with today's members (--subst=all) beside) */
     below: number[]
+    /** read on the entry's lay (`ink`): the members set under the size floor, their own P.floorMin; the lines whose ink right no
+     *  measure holds (read by none) */
+    I5floor?: string[]
+    unread?: number
   }
   /** the spacing rule's four lines over every laid member (spacing-gate.ts, docs/PDF-READER.md §18.90) */
   spacing: SpacingGate
@@ -119,6 +124,15 @@ export type GateL1 = {
     /** the reads gate (o.leave), by reading option: the pages laid under it, the row ids their lays read, those the page's wait
      *  set does not hold and on how many pages, examples */
     reads?: Map<string, { pages: number; reads: number; outside: number; outsidePages: number; ex: string[] }>
+    /** I3, I4 and I5 read on the entry's own lay of each page (o.entryLaid): `inv` as invariantsOf reads it by ink, each member by
+     *  its part ord; `pages` the pages the entry laid, `read` those whose lay was handed back (none unread: the gate judges the
+     *  lay the product makes or says it did not) */
+    laid?: { pages: number; read: number; inv: GateL1['inv'] }
+    /** I3 by ink on each page the entry laid (ink-gate.ts): every overlap with its page, the runs turned and unmeasured (not read) */
+    ink?: { overlaps: (InkOverlap & { page: number })[]; turned: number; unmeasured: number }
+    /** I6's purity (o.twice): each page the entry laid laid again over the same inputs, the pages whose two Pages differ, the second
+     *  lays' time, ms */
+    purity?: { pages: number; differ: string[]; ms: number }
   }
 }
 
@@ -143,6 +157,14 @@ export function pastInk(end: unknown, inks: readonly (readonly number[])[] | und
   return ((x1 - ink) * (it?.w ?? x1 - x0)) / (x1 - x0)
 }
 
+/** the breaker's own stated tolerance for a line's fit: it takes a line whose width is within its room or cap and 0.01 more
+ *  (breaker/break.ts:638 `<= cap + 0.01`, and :126, :724, :842, :1050 `<= room + 0.01`): I5's "the stated tolerance" */
+export const LINE_TOLERANCE = 0.01
+
+/** I6's purity on one page: the entry's two lays of it over the same inputs give the same display list, the Page whole, every
+ *  field and number as it is written (a number's last digit apart is a page laid otherwise) */
+export const samePage = (a: Page, b: Page): boolean => JSON.stringify(a) === JSON.stringify(b)
+
 export function invariantsOf(
   page: number,
   members: readonly PageMember[],
@@ -152,6 +174,11 @@ export function invariantsOf(
   /** the measure I3 reads a run's ink right from where the lay's own has none: the served faces' (the reader's canvas always
    *  gives one; the tap's table lacks the right of a run today never asked it of) */
   served?: FitMeasure | null,
+  /** I5 as the invariant says it, on the entry's lay (G1): a line past its slot by its ink (its last ink's right, a crop's own ink
+   *  inside its antialiased margin) beyond the breaker's stated tolerance (LINE_TOLERANCE), whatever its class; a member under
+   *  its own size floor (its P.floorMin, U.params: the rule file's floorMin, 1 for a line of the page's head or foot); I3 read
+   *  apart, by ink against all that stays (ink-gate.ts) */
+  byInk = false,
 ) {
   const floor = Math.min(Number((R as Raw).floor ?? 1), Number((R as Raw).floorMin ?? 1))
   const boxes: { ord: number; x0: number; x1: number; y0: number; y1: number }[] = []
@@ -170,9 +197,21 @@ export function invariantsOf(
       // past its slot classed by which, its largest excess beside its count. What is drawn past the slot: a crop that ends the
       // line is read by its ink, the box the part states for it (pastInk), not by the box it is cut with, whose antialiased
       // margin stands past its ink (round B13, the coordinator's ruling (b): an end mark TeX set flush to the measure's end is
-      // drawn there, PDF-READER §18.52; its crop's margin, 0.4 pt, is no ink past the slot)
-      const over = used - (l.x1 - l.x0) - pastInk(l.items.at(-1), inksOf?.(pm.ord))
-      if (over > 1e-6) {
+      // drawn there, PDF-READER §18.52; its crop's margin, 0.4 pt, is no ink past the slot). By ink (`byInk`): its last ink's right,
+      // the product's inkEndOf, a crop's own ink inside its margin, against the slot's end; a line no measure holds the ink of is
+      // counted unread)
+      let over = used - (l.x1 - l.x0) - pastInk(l.items.at(-1), inksOf?.(pm.ord))
+      if (byInk) {
+        const end = inkEnd(l, L, (pm.lay!.P as { measure?: FitMeasure }).measure, served)
+        if (end === null) {
+          inv.unread = (inv.unread ?? 0) + 1
+          over = 0
+        } else {
+          const lastInk = l.items.findLast((q) => q.t.crop || (q.t.s && !q.t.space && q.t.face))
+          over = end - (lastInk?.t.crop ? pastInk(lastInk, inksOf?.(pm.ord)) : 0) - l.x1
+        }
+      }
+      if (over > (byInk ? LINE_TOLERANCE + 1e-9 : 1e-6)) {
         const end = l.items.at(-1) as { t?: { punct?: string }; cut?: boolean } | undefined
         const hang =
           end?.t?.punct === 'close' && !end.cut && Number((pm.lay!.P as Raw | undefined)?._compress ?? 0) < 2
@@ -195,9 +234,10 @@ export function invariantsOf(
         const b = inv.I5by.get(cls) ?? inv.I5by.set(cls, { n: 0, max: 0 }).get(cls)!
         b.n++
         b.max = Math.max(b.max, over)
-        if (cls.startsWith('past') || cls.startsWith('squeezed'))
+        if (byInk || cls.startsWith('past') || cls.startsWith('squeezed'))
           inv.I5.push(`ord ${pm.ord}: a line ${over.toFixed(2)} pt past its slot (${cls})`)
       }
+      if (byInk) continue
       // (I3 reads ink, design §4.9: the line from its first item to its last glyph's ink, not its measure nor its advance, so that
       // a CJK mark's blank half (a run-in head's ideographic full stop, its follower set after its ink and the original's
       // separation, today's shareOf `ink`) overlaps nothing, and a line set flush right or centred starts where its text does,
@@ -221,7 +261,14 @@ export function invariantsOf(
         y1: l.baseline + 0.683 * size,
       })
     }
-    if (L.scale < floor - 1e-9) inv.I5.push(`ord ${pm.ord}: set at ${L.scale} under the floor ${floor}`)
+    if (byInk) {
+      // (the member's own floor, as U.params set it: P.floorMin, the rule file's where it sets none)
+      const own = Number((pm.lay!.P as Raw).floorMin ?? (R as Raw).floorMin ?? 1)
+      if (L.scale < own - 1e-9 && l0Page(L) === page) {
+        inv.I5floor ??= []
+        inv.I5floor.push(`ord ${pm.ord}: set at ${L.scale} under its floor ${own}`)
+      }
+    } else if (L.scale < floor - 1e-9) inv.I5.push(`ord ${pm.ord}: set at ${L.scale} under the floor ${floor}`)
     if (L.scale < Number((R as Raw).floor ?? 0) - 1e-9 && l0Page(L) === page) inv.below.push(pm.ord)
     // (each element's crop token drawn once over its lines, every page's; a URL cut where TeX's url package breaks it, the
     // breaker's urlCut, is drawn once where its parts tile its crop: each part `of` it, from its left edge to its right)
@@ -610,6 +657,21 @@ export function gateL1Pair(
     laid?: (page: number, laid: Page) => void
     /** where given, each member the spacing lines read, a line of its facts (spacing-gate.ts), for a lab tool's record */
     spacing?: (line: string) => void
+    /** with `entry`, the lay the product makes judged (the reader gate's I3, I4, I5): `entryLaid()` hands back the PreparedPage
+     *  the entry's layPage laid last and forgets it (lab/typeset/entry-laid.mjs routes the entry's layPagePrepared through a sink
+     *  the lab tool reads; this package does not import the lab), null where it laid none. Each page's members as the entry laid
+     *  them are held to I4 and I5 (invariantsOf by ink), and the Page it drew to I3 by ink against all that stays (ink-gate.ts),
+     *  measured by `metricsOf`'s Metrics and `served`'s */
+    entryLaid?: () => ReturnType<typeof layPagePrepared> | null
+    /** with `entry`, each page laid a second time by the entry over the same part, rows, rules and metrics, the two Pages compared
+     *  whole (I6: the same inputs give the same display list) */
+    twice?: boolean
+    /** with the reading from the part, a rows store's Results of the pair by unit id (the translation package's rows, as a store
+     *  the lab made holds them: lab-data's Google rows through this tree's chain), laid in place of today's door rows: the runner's
+     *  reading and the entry's rows each member's unit's Result as the product's rows carry it, its content and its sentences (a
+     *  paragraph point cut where a sentence start of its row pairs with it, as the entry's paraPieces), no row of today's said in
+     *  it (no joined or kept door row); a member whose unit has no ok Result stops, "no door row" */
+    results?: ReadonlyMap<string, Row> | null
   } = {},
 ): GateL1 {
   const measure = o.metricsOf ? fitMeasure(o.metricsOf(pair)) : null
@@ -647,6 +709,27 @@ export function gateL1Pair(
             cover: newCover(),
             paras: newParasGate(),
             ...(o.leave ? { reads: new Map() } : {}),
+            ...(o.entryLaid
+              ? {
+                  laid: {
+                    pages: 0,
+                    read: 0,
+                    inv: {
+                      laid: 0,
+                      lines: 0,
+                      I3: [],
+                      I4: [],
+                      I5: [],
+                      I5by: new Map(),
+                      below: [],
+                      I5floor: [],
+                      unread: 0,
+                    },
+                  },
+                  ink: { overlaps: [], turned: 0, unmeasured: 0 },
+                }
+              : {}),
+            ...(o.twice ? { purity: { pages: 0, differ: [], ms: 0 } } : {}),
           },
         }
       : {}),
@@ -669,7 +752,9 @@ export function gateL1Pair(
   const views = viewsOf(paper)
   // (the reading from the part: the door's rows, the paper's designs and roles from its part's fonts, the label's names)
   const part0 = bundle.parts.values().next().value
-  const doors = o.reading === 'part' ? doorRows(pair) : null
+  // (the rows: a store's Results where the caller gives them, else today's door rows)
+  const results = o.reading === 'part' ? (o.results ?? null) : null
+  const doors = o.reading === 'part' && !results ? doorRows(pair) : null
   const doorById = new Map<string, NonNullable<ReturnType<typeof doorRows>> extends Map<number, infer R> ? R : never>()
   if (doors)
     for (const u of L.units) if (u.id && doors.has(u.ord) && !doorById.has(u.id)) doorById.set(u.id, doors.get(u.ord)!)
@@ -828,6 +913,8 @@ export function gateL1Pair(
       const content = outOfDoor(row[1], sourcePieces(src.content))
       if (content) nameRows.set(id, { id, ok: true, by: String(row[3]), content })
     }
+  // (a store's Results: every ok one, the paper's names' among them)
+  if (results) for (const [id, r] of results) if (r.ok) nameRows.set(id, r)
   const ownNames = ownNamesOf(part0?.paper.names, nameRows)
   const adapted = new Map<number, FlowMember>()
   let patternsSeen: Record<string, unknown> | undefined
@@ -889,9 +976,14 @@ export function gateL1Pair(
     if (o.reading === 'part') {
       // (a row by the unit's id: rows are keyed by content (design-a §1.5), and a unit the paper repeats (a running head on
       // every page) has one row, which today's door holds under its first ord)
-      const row = doors?.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)
+      const result = results?.get(x.m.text)
+      const row = results
+        ? result?.ok
+          ? ([u.ord, [], 'whole', result.by, null] as DoorRow)
+          : undefined
+        : (doors?.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined))
       const src = bundle.units.get(x.m.text)
-      const jr = joinedOf.has(ord) ? joinedRow(ord) : undefined
+      const jr = !results && joinedOf.has(ord) ? joinedRow(ord) : undefined
       if (jr === null) {
         stop('the reading: a joined unit with a piece of today’s with no row')
         continue
@@ -912,11 +1004,15 @@ export function gateL1Pair(
       // sentence start of the row the entry is given (rowOf's sentences; a joined member's none) pairs with them, as the entry's
       // (entry.ts paraPieces); AXT_GATE_SOURCE=1 the unit's own pieces as before, to hold the two equal); a unit whose kept runs
       // v2 holds as elements, today's row said in v2's unit
-      const content = jr
-        ? jr.content
-        : keptOf.has(ord)
-          ? (rowOf(ord, row!, src)?.content ?? null)
-          : outOfDoor(row![1], source)
+      const content = results
+        ? result?.ok
+          ? result.content
+          : null
+        : jr
+          ? jr.content
+          : keptOf.has(ord)
+            ? (rowOf(ord, row!, src)?.content ?? null)
+            : outOfDoor(row![1], source)
       if (!content) {
         stop('the reading: a row piece no source piece is')
         continue
@@ -926,7 +1022,11 @@ export function gateL1Pair(
           ? (row[1].map((q) =>
               typeof q === 'string' ? ({ t: 'text', tr: true, s: q } as V0Piece) : source[q],
             ) as V0Piece[])
-          : paraPieces(mm, rowPieces(mm, content), jr ? undefined : rowOf(ord, row!, src)?.sentences).pieces
+          : paraPieces(
+              mm,
+              rowPieces(mm, content),
+              results ? (result?.ok ? result.sentences : undefined) : jr ? undefined : rowOf(ord, row!, src)?.sentences,
+            ).pieces
       const tr = performance.now()
       let rd: ReturnType<typeof readMember>
       try {
@@ -1075,10 +1175,11 @@ export function gateL1Pair(
   // is today's row of other units said in v2's (several of today's joined, kept runs held as elements, a figure text flattened),
   // which no translator gave v2's unit: lab/typeset/parity/fresh.mjs freshNeeds)
   let entryRows: (Rows & { said(id: string): boolean }) | null = null
-  if (out.entry && doors) {
+  if (out.entry && (doors || results)) {
     const byId = new Map<string, Row>(nameRows)
     const said = new Set<string>()
-    for (const [ord, x] of byOrd) {
+    // (a store's Results are the rows: every ok one, by its id, none of today's said in v2's unit)
+    for (const [ord, x] of results ? [] : byOrd) {
       // (a member holding several of today's: theirs in its order, joinedRow)
       if (joinedOf.has(ord) && typeof x.m.text === 'string' && !byId.has(x.m.text)) {
         const jr = joinedRow(ord)
@@ -1089,7 +1190,7 @@ export function gateL1Pair(
         continue
       }
       const u = unitOf.get(ord)
-      const row = u ? (doors.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)) : undefined
+      const row = u ? (doors?.get(u.ord) ?? (u.id ? doorById.get(u.id) : undefined)) : undefined
       const src = typeof x.m.text === 'string' ? bundle.units.get(x.m.text) : undefined
       if (!row || !src || typeof x.m.text !== 'string' || byId.has(x.m.text)) continue
       if (!(row[2] === 'whole' || row[2] === 'partial')) continue
@@ -1177,6 +1278,8 @@ export function gateL1Pair(
         o.spacing,
       )
     if (got && out.entry && entryRows && metrics) {
+      // (the entry's lay handed back by the sink is this call's alone: whatever an earlier call laid is forgotten first)
+      o.entryLaid?.()
       const t1 = performance.now()
       const linkFates: LinkFate[] = []
       const lays: UnitLay[] = []
@@ -1188,6 +1291,45 @@ export function gateL1Pair(
         { linkFates, lays },
       )
       out.entry.ms.push(performance.now() - t1)
+      // (I3, I4 and I5 on the lay the product made of the page: its members as the entry laid them, the Page as it drew them)
+      const theirs = out.entry.laid
+      if (theirs && !page.wait.rows.length && !page.wait.faces.length) {
+        theirs.pages++
+        const prepared = o.entryLaid?.() ?? null
+        if (prepared) {
+          theirs.read++
+          const inksOfPart = new Map(
+            (part as Part).flows
+              .flat()
+              .map((m) => [
+                m.ord,
+                [
+                  ...(m.els ?? []).flatMap(([, e]) => e.ink as number[][]),
+                  ...(m.label?.ink ? [m.label.ink as number[]] : []),
+                ],
+              ]),
+          )
+          invariantsOf(pg, prepared.members, R, theirs.inv, (ord) => inksOfPart.get(ord), servedMeasure, true)
+          const k = inkOverlaps(page, part as Part, metrics, o.served)
+          for (const x of k.overlaps) out.entry.ink!.overlaps.push({ ...x, page: pg })
+          out.entry.ink!.turned += k.turned
+          out.entry.ink!.unmeasured += k.unmeasured
+        }
+      }
+      // (I6's purity: the page laid again over the same inputs, its Page the same whole)
+      if (out.entry.purity) {
+        const t2 = performance.now()
+        const again = layPage(
+          part as Part,
+          entryRows,
+          { ...rulesFor(L.target as never), set: R, hyph: patternsSeen ?? {} },
+          metrics,
+          { linkFates: [], lays: [] },
+        )
+        out.entry.purity.ms += performance.now() - t2
+        out.entry.purity.pages++
+        if (!samePage(page, again)) out.entry.purity.differ.push(`p${pg}`)
+      }
       o.laid?.(pg, page)
       for (const x of lays) {
         const by = laysOf.get(x.ord) ?? new Map<number, UnitLay>()
