@@ -1,16 +1,15 @@
-// D.display (design-b §1.6 E1, design-a §1.2 Laid.lines): a laid unit's lines on a page as it is drawn, each line's runs of one
-// face and its crops, in the line's order. Ported from engine 065c1d973 layer2.mjs lineRuns L2:4633-4688 (the runs a line is
-// drawn in, COPY_SPACE_EM L2:4632), runEdge L2:4695-4709, svgOfUnit L2:4579-4619 (what each run draws: its size, its raise, its
-// fill, its slant; a crop's copy text over it) and hideOps L2:4452-4469 (where a crop is laid: its ink's top on the line, its
-// width the item's, scaled by the line's scale). The SVG markup and the device pixels are the painter's (lane L4's); this is
-// what they draw, in PDF units on A.
+// D.display (Laid.lines): a laid unit's lines on a page as it is drawn, each line's runs of one face and its crops, in the
+// line's order: the runs a line is drawn in (lineRuns), where a run draws its text (runEdge), what each run draws (its size,
+// its raise, its fill, its slant; a crop's copy text over it) and where a crop is laid (its ink's top on the line, its width
+// the item's, scaled by the line's scale). The SVG markup and the device pixels are the painter's; this is what they draw,
+// in PDF units on A.
 import type { Face, Token } from '../breaker/tokens.ts'
 import { fontString } from '../breaker/measure.ts'
 import { charsOf, clustersOf } from '../breaker/script.ts'
 import type { FitState, LaidItem, LaidLine, Layout } from '../fit/types.ts'
 import type { FaceId, Item } from '../types.ts'
 
-/** the least kern after a word that copies as a space, em of the line's size (L2:4632 COPY_SPACE_EM) */
+/** the least kern after a word that copies as a space, em of the line's size */
 const COPY_SPACE_EM = 0.25
 
 /** a line's own fit where the unit's runs were laid apart (X.runs: `seg`), else the unit's */
@@ -32,7 +31,7 @@ export type TextRun = {
 }
 export type LineRun = TextRun | { crop: number }
 
-/** a face as the drawing tells two apart (L2:4627 faceKey) */
+/** a face as the drawing tells two apart */
 const faceKey = (face: Face) => `${face.family}|${face.weight}|${face.style}|${face.caps ? 1 : 0}`
 type T = Token & { hyphenated?: boolean }
 /** a CJK token of one grapheme cluster of several code points (B.tokens cuts a CJK run between clusters): drawn as a run of its
@@ -41,7 +40,7 @@ const clusterToken = (t: Token): boolean =>
   t.cls === 'cjk' && !t.sup && typeof t.s === 'string' && t.s.length > 1 && [...t.s].length > 1 && charsOf(t.s) === 1
 
 /**
- * A laid line's runs in order (L2:4633 lineRuns): single CJK characters of one face share a run, each at its own place; a word
+ * A laid line's runs in order: single CJK characters of one face share a run, each at its own place; a word
  * flows in its face from its own place with the words glued to it; a space is copied with the text before it; the line's last
  * Latin word, and a word explicit glue of a space's width or more follows, copy a space after them; a crop is a run of its own
  */
@@ -136,7 +135,7 @@ export function lineRuns(line: LaidLine, L: Layout): LineRun[] {
 }
 
 /**
- * Where a run draws its text (L2:4695 runEdge): the x of the edge before its UTF-16 offset `at`, from its start, the width of
+ * Where a run draws its text: the x of the edge before its UTF-16 offset `at`, from its start, the width of
  * the text before it in its face at the size it is drawn (`w100`, a run's width at 100 px) and its tracking after each
  * character; a run of single characters has each at its own place, after its last the item's slot's end
  */
@@ -162,26 +161,26 @@ export function runEdge(
   return run.xs[0]! + (w100(before, run.face) * f) / 100 + (run.track ? run.track * LF * charsOf(before) : 0)
 }
 
-/** a run of text as it is drawn: design-a's Item, with what the drawing sets beside it (its raise, tracking, slant) */
+/** a run of text as it is drawn: an Item, with what the drawing sets beside it (its raise, tracking, slant) */
 export type TextItem = Extract<Item, { face: FaceId }> & {
-  /** a superscript's raise over the baseline (svgOfUnit: 0.36 of the line's size) */
+  /** a superscript's raise over the baseline (0.36 of the line's size) */
   rise?: number
   /** an oblique face's slant, degrees (its points skewed about the baseline) */
   slant?: number
 }
-/** a crop as it is drawn: design-a's Item, with its width on the line (the item's) */
+/** a crop as it is drawn: an Item, with its width on the line (the item's) */
 type CropItem = Extract<Item, { src: unknown }> & { w: number }
 type DisplayItem = TextItem | CropItem
 export type DisplayLine = [y: number, x0: number, x1: number, items: DisplayItem[]]
 
 /** a run's own fill as the drawing writes it (svgOfUnit fillAttr: a fill as it is); a colour that is no fill names none, so the run
- *  takes the layer's ink: the reader's sheet's, the PDF's own black (the owner's ruling of 2026-11-08), or CJK_INK for a CJK run */
+ *  takes the layer's ink: the reader's sheet's, the PDF's own black (docs/PDF-READER.md §11.8), or CJK_INK for a CJK run */
 const fillOf = (c: string | undefined) =>
   c !== undefined && /^#[0-9a-f]{6}$/.test(c) ? Number.parseInt(c.slice(1), 16) : undefined
 
-/** the ink of a CJK run that names no fill of its own: today's layer ink (layer-proto/run.mjs SVG_RULES), 92 % of black at full
- *  coverage. The owner's exception of 2026-11-08 to the PDF's black: the translation's CJK text at today's weight, its Latin,
- *  digits and formulas in the PDF's black (lane cjk-weight's record: the one difference between today's CJK and v2's was this ink) */
+/** the ink of a CJK run that names no fill of its own: the approved prototype's ink, 92 % of black at full coverage. The one
+ *  exception to the PDF's black (docs/PDF-READER.md §11.8): the translation's CJK text at that weight, its Latin, digits and
+ *  formulas in the PDF's black */
 export const CJK_INK = 0x141414
 
 /**
@@ -221,8 +220,8 @@ export function inkLines<L extends readonly [number, number, number, readonly It
 }
 
 /**
- * D.display: the unit's laid lines on page `page`, in its layout's order: each line's baseline, its extent (x0 to x0 + used, as
- * today's record reads it) and its items. A text run's `size` is the size its face is measured at (Metrics: the FaceId is the
+ * D.display: the unit's laid lines on page `page`, in its layout's order: each line's baseline, its extent (x0 to x0 + used)
+ * and its items. A text run's `size` is the size its face is measured at (Metrics: the FaceId is the
  * face at 100 px with its size correction), a superscript's 0.62 of the line's and small capitals' their share; a crop's
  * `src` its ink on its page with its baseline, `k` the line's scale, `piece` its element (`label` for a label's)
  */

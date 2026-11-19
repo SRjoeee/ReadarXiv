@@ -109,7 +109,7 @@ export function unitsObjects(units: Unit[]): Uint8Array[] {
   return out
 }
 
-/** the paper's source units and its names as the instrument makes them (instrument.mjs instrumentOf's first two loops: the
+/** the paper's source units and its names as the instrument makes them (instrumentOf's first two loops: the
  *  same content, the same id, kept by its own unitFactsOf), each once, before any compile of the marks: what a translator
  *  reads first. Each states what the bundle's unit will state of it and the source tells already, so that what is asked of a
  *  translator on these is what is asked on the bundle's units: an element's kind (elementKindOf: a tie a space, a forced break
@@ -147,7 +147,7 @@ export function sourceUnitsOf(paper: Paper): Unit[] {
       ...(kept ? { kept: true as const } : {}),
       // (a bibliography's entry, cut at its blocks on the tags wire, as the instrument states its twin: entryOf)
       ...(entryOf(u) ? { entry: true as const } : {}),
-      // (the block its source ties a note to, as the bundle's unit states it: latex-front.mjs tieNotes)
+      // (the block its source ties a note to, as the bundle's unit states it: source/latex-front.ts tieNotes)
       ...(u.of ? { of: u.of } : {}),
     })
   })

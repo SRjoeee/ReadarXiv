@@ -1,7 +1,6 @@
-// B.break (design-b §1.5, T22): a unit's tokens broken into the slots of a state, TeX's \lineskip rule settled between
-// lines, a word cut or hyphenated where it must be, a CJK line squeezed to take its group. Today's code (layer2.mjs
-// L2:3283-3893, graphemesOf L2:316-317, headOfCut L2:2431-2436), moved by lab/typeset/move-fit.mjs. Its measures are the
-// call's (`P.measure`, `m`), its patterns `P.patterns`.
+// B.break: a unit's tokens broken into the slots of a state, TeX's \lineskip rule settled between
+// lines, a word cut or hyphenated where it must be, a CJK line squeezed to take its group. Its measures are the call's
+// (`P.measure`, `m`), its patterns `P.patterns`.
 import { textless } from './cuts.ts'
 import { breakPoints } from './hyph.ts'
 import { charsOf, graphemesOf, keptPair, kinsokuOf, noStart } from './script.ts'
@@ -63,9 +62,6 @@ type EndMark = NonNullable<Token['endMark']>
 /** a URL's crop cut at a break point, its head and its tail (urlCut's) */
 type UrlCut = NonNullable<ReturnType<typeof urlCut>>
 
-/**
- * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
- * kind the file's crops exempt (tex.mjs cropsOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's
 /** a token cut in two by the breaker, its head: no kern of its own (the kern stays after the word's tail) */
 const headOfCut = <E extends object>(t: BreakToken, extra: E): BreakToken & E => {
   if (!t.kernW) return { ...t, ...extra }
@@ -148,10 +144,10 @@ const urlCut = (t: BreakToken, room: number, scale: number, least: boolean) => {
     tail: { ...t, crop: tail, cw: rect[2] - at[0], glue: false, asp: false, of },
   }
 }
-/** the explicit glue after a token at size f (tokensOf2 kernOn's `kernW`, at 100 px), an advance its laid item holds apart from
+/** the explicit glue after a token at size f (B.tokens' kernOn's `kernW`, at 100 px), an advance its laid item holds apart from
  *  its width (`kern`) */
 const kernOf = (t: Pick<Token, 'kernW'>, f: number): number => ((t.kernW ?? 0) * f) / 100
-/** a token's own width at size f: no kern after it (tokensOf2 kernOn's `kernW`), which its item holds apart (kernOf) */
+/** a token's own width at size f: no kern after it (B.tokens' kernOn's `kernW`), which its item holds apart (kernOf) */
 /** what tokW reads of a token: the breaker's and the walk's (fit/walk.ts fitLays' bound) */
 type Measured = Pick<Token, 'cw' | 'space' | 'w100' | 'cls' | 's'> & { crop?: unknown }
 const tokW = (t: Measured, f: number, st: FitState, scale: number): number => {
@@ -167,8 +163,8 @@ const tokW = (t: Measured, f: number, st: FitState, scale: number): number => {
 /**
  * The most a CJK line closes each gap between its items to take one more group (breakLines' squeeze), in em: TeX's CJKglue
  * between two CJK characters has no shrink at all, so the squeeze is kept to the least that takes a group a line misses by a
- * little. 0.02 em is the study's (2026-10-23, the (j) rows of the release route's sweep): it took 264 of the sweep's 378
- * letter-spaced lines, with half of all justified CJK lines already within 0.02 em of their natural spacing
+ * little. 0.02 em is the study's (measured 2026-10-23, the (j) rows of the release route's sweep): it took 264 of the
+ * sweep's 378 letter-spaced lines, with half of all justified CJK lines already within 0.02 em of their natural spacing
  */
 const SQUEEZE = 0.02
 /**
@@ -177,11 +173,11 @@ const SQUEEZE = 0.02
  * spacing), and the line is set as before; the squeeze is for the lines a group left letter-spaced
  */
 const STRETCH_MIN = 0.05
-/** whether an item continues the word of the item before it (tokensOf2's pushText: a piece after a break point inside a word,
+/** whether an item continues the word of the item before it (B.tokens' pushText: a piece after a break point inside a word,
  *  `brk` — a URL's after its `/`, `.`, `-`, a compound's after its hyphen —, or a run of one case of a word, `cont`): the gap
  *  before it is a break point with no glue, as TeX's url package sets one (\Urlmuskip 0mu: a penalty) and as TeX sets every
  *  word, so no CJK line's slack or squeeze goes into it (placeItems, squeezeTakes). 2608.25210v2 p17: a URL whose line ends
- *  are joins (lane url-join), cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/". And an
+ *  are joins, cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/". And an
  *  element set right after the one before it, nothing between in the source or the row (`tight`, tokens.ts): one word as TeX set it
  *  (2111.09276v1 p1, two highlights of one word drawn apart by the line's slack) */
 const inWord = (it: ItemOf): boolean => !!(it.t.brk || it.t.cont || it.t.tight)
@@ -227,8 +223,8 @@ const squeezable = <I extends ItemOf>(
  * room by its ink: every line the breaker sets, justified, centred or flush (groupOf, stretchOf, placeItems), and a figure
  * text on its anchor (S.figures)
  */
-/** whether a character is a mark no line opens with: UAX 14's (no-start.mjs, the one table the layer gate's lineStartPunct reads
- *  too) or the target's rules' (P.noStart: CJK's small kana and prolonged sound mark, its closing quotes, the per cent sign) */
+/** whether a character is a mark no line opens with: UAX 14's (script.ts noStart) or the target's rules' (P.noStart: CJK's
+ *  small kana and prolonged sound mark, its closing quotes, the per cent sign) */
 const noLineStart = (P: Pick<FitParams, 'noStart' | 'noEnd'>): ((ch: string) => boolean) => {
   const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
   return (ch) => noStart(ch) || kinsoku.starts(ch)
@@ -242,7 +238,7 @@ const hangOf = (it: EdgeMark, compress: number): number =>
  * No line the breaker opens starts with a mark UAX 14 or the target's rules keep from a line's start (`barred`): such a
  * mark stays with the group before it, across a space too, unless that group with it is longer than a line by itself
  * (the break the glue alone allows), or a token cut by its characters would leave one at the head of its tail (the cut
- * moves back before it). A line TeX's own break opens (`newline`, `blockTo`) is tokensOf2's: its `dropped`.
+ * moves back before it). A line TeX's own break opens (`newline`, `blockTo`) is B.tokens': its `dropped`.
  */
 function breakLines(
   tokensIn: readonly Token[],
@@ -266,20 +262,19 @@ function breakLines(
   let li = 0,
     i = 0
   const half = 0.5 * f
-  // (the marks no line opens with: a character UAX 14 keeps from a line's start, no-start.mjs, the one table the layer
-  // gate's lineStartPunct reads too, or one the target's rules do, P.noStart: CJK's small kana and prolonged sound mark,
-  // its closing quotes, the per cent sign; `barred`, a token that opens with one)
+  // (the marks no line opens with: a character UAX 14 keeps from a line's start, or one the target's rules do, P.noStart:
+  // CJK's small kana and prolonged sound mark, its closing quotes, the per cent sign; `barred`, a token that opens with one)
   const barredChar = noLineStart(P)
   const barred = (t: BreakToken) => !t.space && typeof t.s === 'string' && t.s !== '' && barredChar(t.s)
   // (a word wider than its line cut by its characters, each a grapheme, what a reader sees as one character: a letter and the
   // marks over it, a flag's two regional indicators; never before a mark no line opens with, nor inside a pair UAX 14 keeps)
   const cutBarred = (chars: readonly string[], k: number) => barredChar(chars[k]!) || keptPair(chars[k - 1], chars[k])
-  // (a merged table cell the lay fills (P.words; docs/PDF-READER.md §18.75, the owner's decision of 2026-11-15): a line of it
+  // (a merged table cell the lay fills (P.words; docs/PDF-READER.md §18.75): a line of it
   // ends only where the breaker lets it end AND a word of the target's text ends there, by the platform's segmentation
   // (breaker/words.ts). A token whose start stands inside a word (`midWord`), a space too, is held to the one before it as a
   // glued one is; a cut of a word longer than its line, or at a hyphenation point, is taken only where a word ends inside it
   // (`wordEnds`): none, and the state fails. Where no state of a size sets the cell so, the walk lays those states as before
-  // (`st.split`, fit/walk.ts triesOf: the size never gives way to whole words, the owner's answer of 2026-11-16) before it
+  // (`st.split`, fit/walk.ts triesOf: the size never gives way to whole words, §18.75) before it
   // steps the size down. An element's text and a label state no words: cut as before)
   const words = !!P.words && !st.split
   /** a token held to the one before it in a group: glued (a space never), and in such a fill any whose start stands inside a
@@ -300,7 +295,7 @@ function breakLines(
   // (the line in hand: null until the first open(); every read is inside a closure that runs after it, `settle` reading it with `?.`)
   let line = null as unknown as Line
   // (`past`: how many of the unit's kept regions the text has passed before the line's first item, the walk's own count
-  // (`consumed`, below): where the page's word table writes a region's kept lines, words.mjs, in the text's order whatever
+  // (`consumed`, below): where the page's word table writes a region's kept lines, in the text's order whatever
   // slot the text after a display stands on)
   // (`slotOf`: each line's slot, which a line laid again from its first token opens on again: the page breaks' fallback, strand)
   const slotOf = new Map<Line, Slot>()
@@ -675,7 +670,7 @@ function breakLines(
   // (`squeezed`). The gaps close no further than the tracking floor, trackMin: the squeeze and the unit's tracking together
   // never set two characters nearer than the fit's tightest state does. Never a centred line, nor one placeItems sets as
   // Latin text; nor at a tracking above the one the fit set the unit at (`fitTrack`, laidOut's), which only the page fill
-  // sets (run.mjs fillPage: a unit short of its frame letter-spaced to fill it), whose lines the squeeze would take back
+  // sets (fillPage: a unit short of its frame letter-spaced to fill it), whose lines the squeeze would take back
   const squeezes = !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)
   const gapSqueeze = Math.max(0, Math.min(SQUEEZE, st.track - (P.trackMin ?? 0))) * f
   /** the stretch a gap the line in hand is justified by if it is closed here: its trailing spaces and its last kern dropped
@@ -707,7 +702,7 @@ function breakLines(
   }
   /**
    * Whether an address that does not fit the line in hand (`t`, a URL's crop with its url package's break points) goes whole to
-   * the next line, the break before it (the coordinator's ruling of 2026-11-12, PDF-READER §18.50: an address is one thing to
+   * the next line, the break before it (PDF-READER §18.50: an address is one thing to
    * a reader): it fits the next line whole, and the line in hand closed here would not be placed justified and visibly
    * stretched. Visibly stretched is the breaker's own two bounds: placed justified, its stretch a gap within the script's
    * cjkJust (placeItems: past it the line is set ragged, unstretched), and above STRETCH_MIN (under it the stretch does not
@@ -730,7 +725,7 @@ function breakLines(
   // and the walk goes on from the line it lays again)
   for (;;) {
     while (i < tokens.length && li < slots.length && !stop) {
-      // a forced break of TeX's inside a frame (tokensOf2's `newline`): the laid line ends there (a line it finds empty, the
+      // a forced break of TeX's inside a frame (B.tokens' `newline`): the laid line ends there (a line it finds empty, the
       // text before it having filled the last, is no line of its own, as TeX's break at a full line's end sets none), and
       // TeX's room after it, in pitches (`room`), is left before the next line, the later slots of the ended line's flow
       // pushed down by it as TeX's rule pushes them (pushDown): the room is wherever the translation sets the break, and
@@ -768,7 +763,7 @@ function breakLines(
       // a frame break of the paragraph's (withPageBreaks, pageCutsOf: a page's or a column's, `frame` the unit's block the frame
       // begins with): reached in an earlier frame, the line that holds it ends where the breaker ends it, and the text goes on on
       // the frame's first slot (`held`, advance): a paragraph over a page break leaves no short line before it, as TeX never does
-      // (the owner, 2026-10-30: 1706.03762's Chinese §3.2.2 ended page 4 half a line short, the word for "output" split over
+      // (PDF-READER §18.9: 1706.03762's Chinese §3.2.2 ended page 4 half a line short, the word for "output" split over
       // pages 4 and 5); reached at a line's start (or one `immediate`, strand's fallback), there. Where the run's text ends on
       // the line that holds it, so that its frame would get none, strand lays that line there whole. Reached in that frame or
       // later (the earlier one already full), or where that frame's first slot lies after a display the text has not passed
@@ -1003,7 +998,7 @@ function breakLines(
           line.x += cut.head.cw * scale
           setToken(i, cut.tail)
         } else if (t0.ownLabel && lines.length === 1 && li + 1 < slots.length) {
-          // (a unit's own label carried to its first line's start (run.mjs ownLabelOnRow), on a shared line that holds it and not
+          // (a unit's own label carried to its first line's start, on a shared line that holds it and not
           // its first word: never alone at the line's end (2610.21098v1 p2's "(2)", the end of the line before its item's text).
           // The line is left as a sliver is (slotsAt), and the unit opens on its next)
         } else {
@@ -1068,13 +1063,13 @@ function breakLines(
       }
       // a URL TeX set whole, broken where its url package lets TeX break it (El.breaks): the most of it that fits, its crop cut
       // between two of its glyphs there, as a word is hyphenated; the rest opens the next line (2303.11366v4 p1's abstract: the
-      // URL whole on the next line left the line before it letter-spaced to its measure, the maintainer's of 2026-11-08). Only on
+      // URL whole on the next line left the line before it letter-spaced to its measure, PDF-READER §18.50). Only on
       // a line set justified: where TeX set the unit flush left or right or centred (placeItems: at its natural spacing), no line
       // is stretched, and TeX, whose \rightskip stretch there costs a short line nothing, breaks before the URL rather than inside
       // it at its url package's penalty: whole on the next line, as the original sets it (2608.25210v2 p1's VLDB footnote,
       // \raggedright, its URL cut after "https://"). And on a justified line only where the line, the address whole on the next,
       // would be placed justified and visibly stretched (keepsWhole): one placement would set ragged, or nearly full, keeps it
-      // whole, as the original and today's do (2610.21880v1 p1's footnote: "sohani@mail." cut where its line before would be set
+      // whole, as the original does (2610.21880v1 p1's footnote: "sohani@mail." cut where its line before would be set
       // ragged at 0.27-0.32 em a gap)
       if (t0.crop?.breaks?.length && !line.centred && !line.flush && !keepsWhole(t0, cap)) {
         const asp = items[0]!.asp ?? 0

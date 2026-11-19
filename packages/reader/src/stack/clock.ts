@@ -1,5 +1,5 @@
 // Every timer and frame a reader asks for, through one clock it owns, so that a reader let go leaves none behind (no state
-// outside a reader, design §4.5) and a test can run time by hand.
+// outside a reader) and a test can run time by hand.
 
 export interface Clock {
   now(): number

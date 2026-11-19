@@ -1,4 +1,4 @@
-// The reader's build plugin (the host design A §1.1: "PDF.js's data files through the reader's build plugin"): PDF.js's
+// The reader's build plugin: PDF.js's
 // cMaps, standard fonts and wasm, its worker, and its viewer's sheet with the images it names, served at `pdfjs/<version>/` of the build, where the reader's kit reads them
 // (kit.ts `base`). In a build they are emitted as assets; on the dev server they are answered from pdfjs-dist itself.
 // `legacy: true` adds the legacy build's worker at `pdfjs/<version>/legacy/` (the website's older browsers); the extension

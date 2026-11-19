@@ -1,9 +1,9 @@
-// S.relay (design-b §1.6 F9): a run-in head laid over its follower's first row (S.overFollower) is laid again in its row alone,
-// as before the ruling of 2026-11-03, where the follower is left the original's, is not laid from the head's end (`ledBy`), or
-// is laid from it only below its own floor (`below-floor`); and the follower, laid or refused while the head held part of its
-// row, is then laid again from where the head now ends. Each relay settles in turn the unit before the one it lays, so a row
-// three units share comes back whole: layFlow walks the decision back along its members. Ported from engine 065c1d973
-// run.mjs settleLeadOf RUN:2550-2558 (the decision) and relay RUN:2565-2602 (the lay again, with `noOver`: layFlow's).
+// S.relay: a run-in head laid over its follower's first row (S.overFollower) is laid again in its row alone,
+// giving up the rest of its line (docs/PDF-READER.md §19.10), where the follower is left the original's, is
+// not laid from the head's end (`ledBy`), or is laid from it only below its own floor (`below-floor`); and the follower, laid
+// or refused while the head held part of its row, is then laid again from where the head now ends. Each relay settles in turn
+// the unit before the one it lays, so a row three units share comes back whole: layFlow walks the decision back along its
+// members; the lay again is layFlow's, with `noOver`.
 // Never taken on the corpus (the tap: no relay round): held by synthetic tests.
 
 /** the head before the follower on their shared line, as its lay left it */
@@ -28,6 +28,6 @@ export function relay(
   if (!lead?.over || lead.refused) return { lead: false, follower: false }
   const led = !f.refused && f.ledBy === lead.id
   if (led && f.knob !== 'below-floor') return { lead: false, follower: false }
-  // (the follower again only where its lay began with its rectangles kept: `kept`, today's rects0)
+  // (the follower again only where its lay began with its rectangles kept: `kept`)
   return { lead: true, follower: laid && (f.refused || led) && f.kept }
 }

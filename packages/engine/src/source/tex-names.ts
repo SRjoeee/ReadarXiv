@@ -1,4 +1,3 @@
-// src/pdf-reader/engine/rules/tex-names.mjs
 // The names TeX's packages give a theorem-like head and a generated reference in a target (PDF-READER §19.11), read from
 // tex-names.json, which lab/pdf/spikes/tex-names-make.mjs writes from TeX Live's own files: translator's theorem dictionaries
 // (ctex's for Chinese), cleveref's and hyperref's language definitions, ctex's names. No name is written here: a word no
@@ -18,7 +17,7 @@ interface Target {
 
 /** the commands whose text TeX's cross-referencing packages generate, a counter type's name before the number: cleveref's
  *  \cref and \Cref and their range, page and name forms (cleveref.sty), hyperref's \autoref (hyperref.sty), and thmtools'
- *  \Autoref (thm-autoref.sty). The layer renames their text (layer2.mjs
+ *  \Autoref (thm-autoref.sty). The typesetter renames their text (unit/rename.ts
  *  GENERATED_REF), and a paper that calls any of them sends the names no package gives some target (source/paper-names.ts) */
 export const GENERATED_COMMANDS = Object.freeze([
   'cref',
@@ -83,7 +82,7 @@ const unspaced = (s: string) =>
  *  its singular's name unit (refName). So a name is answered where the target's heads hold it: one its references alone hold may
  *  still be a head's (a paper's own `\newtheorem{algorithm}{Algorithm}`, whose head zh's cleveref does not name and ctex has no
  *  word for: PDF-READER §19.14), and is sent. A name answered so is never read in that target, so it is never sent
- *  (layer-proto/rows.mjs toTranslate). A babel name the layout rules give (`labels`) is not counted either */
+ *  to the translator. A babel name the layout rules give (`labels`) is not counted either */
 export function nameAnswered(english: unknown, to: string) {
   const t = (NAMES.targets as Readonly<Record<string, Target>>)[to]
   if (!t || typeof english !== 'string') return false

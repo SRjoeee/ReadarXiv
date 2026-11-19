@@ -7,9 +7,8 @@ import type { Piece, UnitIn } from './contract.ts'
 import { sha256Hex } from './sha256.ts'
 
 /** the element a nested unit (a footnote set inside a paragraph) travels as in its parent: its mark, read as a note's mark
- *  (wire/text.ts standInOf: an annotation of the sentence before it, never part of a word), as today's wire reads a nested
- *  unit (src/pdf-reader/engine/translate/mt.mjs splitContextOf: a `nested` piece is an annotation) and the engine's
- *  locate types its mark (locate.ts). Its text is a unit of its own, with its own row */
+ *  (wire/text.ts standInOf: an annotation of the sentence before it, never part of a word), as the engine's locate types its
+ *  mark (locate.ts). Its text is a unit of its own, with its own row */
 export const NESTED_KIND = 'note-mark'
 
 /**

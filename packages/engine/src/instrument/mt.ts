@@ -1,5 +1,5 @@
-// Moved into the engine package from src/pdf-reader/engine/translate/mt.mjs: the part of that module the moved front half calls, as it is; the rest
-// stays there and imports this part back through its transition path.
+// A unit's source as the engine reads it for the wire and the page: its text as UTF-8, a display and its own stop, the
+// placeholders that break the text or set no ink, and a unit's plain text in its translation as the compiled PDF shows it.
 import {
   AUX_WORDS,
   BREAK_HINTS,
@@ -32,7 +32,7 @@ const ASCII = /^[\t\n\r -~]*$/
 export const utf8 = (s: string): string => (ASCII.test(s) ? s : DECODER.decode(latin1Bytes(s)))
 
 // ---------------------------------------------------------------- what breaks the text, and a display
-/** a displayed formula's source: the layer draws it as one crop (layout/marks.mjs classOf, which reads it here), and the wire's one
+/** a displayed formula's source: the layer draws it as one crop (marks/marks.ts classOf, which reads it here), and the wire's one
  *  reading of a display (its own stop, the text it breaks). As layer1.ts DISPLAY: latex.ltx's, amsmath.sty's, breqn.sty's
  *  and IEEEtran.cls's display environments */
 export const DISPLAY =
@@ -41,12 +41,12 @@ export const DISPLAY =
 const FORCED_BREAK = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?)\s*$/
 /** the placeholders that break the text where they stand: a forced line break, an item, a display (DISPLAY). An inline formula
  *  does not: the translator moves it with the words as one of them (`We fix the $\theta$ \textcolor{red}{matrix …}` kept would
- *  cut its noun phrase in two; the review of #415, 100 of the 109 units its clause changed over the sweep's papers) */
+ *  cut its noun phrase in two: 100 of the 109 units its clause changed, over the papers it was read on) */
 const breaks = (src: unknown): boolean => typeof src === 'string' && (FORCED_BREAK.test(src) || DISPLAY.test(src))
 
 // ---------------------------------------------------------------- a unit's styling on the wire
 /**
- * A placeholder that sets no ink and that no translator needs, read from TeX's own tables (rules/tex-kernel.mjs): one of the
+ * A placeholder that sets no ink and that no translator needs, read from TeX's own tables (source/tex-kernel.ts): one of the
  * kernel's that set no ink and read nothing, but a space and a break (`\@`, `\/`, `\-`, \relax, \nobreak, \allowbreak,
  * \noindent, \protect, \nolinebreak…); LaTeX's declarations of a font, a size or a paragraph's shape (`\bfseries`, `\small`,
  * `\centering`, a strut) and `\color{red}`; a key written to an auxiliary file (`\label{…}`, `\index{…}`); a penalty; the
@@ -55,7 +55,7 @@ const breaks = (src: unknown): boolean => typeof src === 'string' && (FORCED_BRE
  * every word of its coloured runs) went out as 13,000 markers. It goes on no wire: it is put back after the open of its
  * innermost group that went out (the unit's front, a kept pair's open) where it stood before that group's first word, else
  * before its close, in the source's order; next to a placeholder that goes as a marker, it rides in that marker, in its place
- * (planOf). A space (a tie, `\quad`, SPACING's), a forced break, a fill or a skip is not one of them: each sets where the words
+ * (planOf). A space (a tie, `\quad`, `\,`), a forced break, a fill or a skip is not one of them: each sets where the words
  * around it fall (a fill taken to the end set 2608.10322's flush-right end of proof after its words), and goes as a marker where
  * it stands
  */
@@ -103,7 +103,7 @@ export function displayStop(src: unknown, display = typeof src === 'string' && D
 }
 
 /** a text piece as the compiled PDF shows it: a translation's TeX escapes undone, the source's bytes as UTF-8.
- *  layer/pieces.mjs writes it again (the reader's layer may not import this module); a test holds the two equal */
+ *  The typesetter's breaker/text.ts writes it again (the typesetter may not import the engine: packages/README.md) */
 export const shown = (p: { s: string; tr?: boolean }): string =>
   p.tr
     ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1')

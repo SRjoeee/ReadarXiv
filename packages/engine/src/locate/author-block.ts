@@ -1,11 +1,10 @@
-// The author block under the title: the one stretch of a paper the names toggle governs, whole, and nothing else (the owner's
-// ruling of 2026-11-09: the toggle governs the whole block under the title and affects nothing else, docs/PDF-READER.md
-// §19.13). Read off TeX's stream on arXiv's page
+// The author block under the title: the one stretch of a paper the names toggle governs, whole, and nothing else
+// (docs/PDF-READER.md §19.13). Read off TeX's stream on arXiv's page
 // (A's glyphs in their content stream's order, which is the order TeX shipped them in), by the source units that own its
 // glyphs: after the title, the block opens at its first name or place (a unit of the author block, or a line no unit is whose
 // letters are an author's names: the ink units' rule 8) and runs through the names, the places and what TeX sets between and
 // after them until it sets something of another kind — a unit (the abstract, its babel name, a date, a keyword list, the body),
-// less that unit's run-in label (the glyphs before it on its first line, as own.mjs MR 5 reads a label: JCAP's "Abstract."); and
+// less that unit's run-in label (the glyphs before it on its first line, as own/own.ts MR 5 reads a label: JCAP's "Abstract."); and
 // where a graphic no unit owns (an image, a rule, a form's or a picture's text) stands between the block's last name or place
 // and that unit, the block ends at the graphic (egpubl's teaser and its caption under the names, elsarticle's \hrule over its
 // abstract's heading), one followed by more of the block being the block's (an icon before a link of its places); and where TeX
@@ -34,7 +33,7 @@ export interface BlockPage {
   pid: (j: number) => number | undefined
   /** whether a glyph is shown inside a form XObject (an included figure) */
   form: (j: number) => boolean
-  /** whether glyph j stands on glyph k's baseline (own.mjs MR 5's test for a label: within half the larger size across it) */
+  /** whether glyph j stands on glyph k's baseline (own/own.ts MR 5's test for a label: within half the larger size across it) */
   onLine: (j: number, k: number) => boolean
   /** whether a graphic no unit owns (an image, a path: a rule) stands in the stream right before a glyph */
   graphicBefore?: (j: number) => boolean
@@ -59,7 +58,7 @@ export interface AuthorBlock {
   within: (j: number) => boolean
 }
 
-/** the kinds of the author block's units (latex-front.mjs AUTHOR_KINDS: its names and its places) */
+/** the kinds of the author block's units (source/latex-front.ts AUTHOR_KINDS: its names and its places) */
 const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 
 /** the author block under the title, or null where no title is located on A */

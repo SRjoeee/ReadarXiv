@@ -41,7 +41,7 @@ export interface PrepareDeps {
   classesOf?: LocateOptions['classesOf']
   /** keep what is read (the lab's proofs and reviews): A's pages in the tally's `pagesA`, and the instrument's ink. Not kept (the
    *  box), each is let go once located: A's raw pages as locate's ink step reads them, A's Doc and B's (the instrument's `ink`,
-   *  its pages emptied, and its owners) once locate has ended, so that the wrap and the bundle run without them (lane mem-back) */
+   *  its pages emptied, and its owners) once locate has ended, so that the wrap and the bundle run without them */
   keep?: boolean
 }
 
@@ -77,7 +77,7 @@ export function readArxiv(
     shapesAll: true,
     extra: (OPS) => alignReader(OPS),
     annotations: true,
-    // (each font's own map: a glyph it gives no Unicode of is no reading of its text, A17)
+    // (each font's own map: a glyph it gives no Unicode of is no reading of its text)
     mapped: true,
   })
 }
@@ -90,7 +90,7 @@ export async function* prepareBack(
   const now = deps.now ?? (() => 0)
   const t0 = now()
   // (read, align and locate in a function of their own, whose frame ends with them: what they read is let go there, unless kept,
-  // and nothing of the wrap's or the bundle's holds it. Nulled inside one running function, it stayed reachable: lane L9)
+  // and nothing of the wrap's or the bundle's holds it. Nulled inside one running function, it would stay reachable)
   const p = await placedOf(ins, original, deps, now)
   const { located, mapping, times } = p
   const addOn = await wrap(original, located, p.wrapPages, deps)
@@ -356,7 +356,7 @@ async function frontOf(
 }
 
 /** the back half as it is, every object handed out as it is made; given the front half's own reading of an ink unit's pieces
- *  (instrument.mjs classesOf: each element's class) */
+ *  (instrument/instrument.ts classesOf: each element's class) */
 async function backOf(
   ins: Instrument,
   original: Uint8Array,

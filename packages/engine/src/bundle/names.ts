@@ -1,11 +1,11 @@
-// One person, one translation per paper (the owner's ruling of 2026-11-10, docs/PDF-READER.md §19.15): where the names toggle
+// One person, one translation per paper (docs/PDF-READER.md §19.15): where the names toggle
 // shows the author block under the title, a block name a unit holds elsewhere (an ACM reference format, a correspondence line,
 // an acknowledgement, a self-citation) is drawn with the block's translation of that name; with the toggle off that unit is
 // ordinary text, translated and drawn as before. What the bundle states for it, made here from the units and the block's members:
 //
 // - A **stretch** of a unit: its text between two pieces that set something (an element that is no tie, states no glue, is no
 //   forced break and is not silent, or a nested unit's mark) or its edges; a group's edges no cut (Microsoft sends back a group
-//   that travelled on no wire hollow, its words outside it: 70 of 293 names of today's stored replies cut at them came back so,
+//   that travelled on no wire hollow, its words outside it: 70 of 293 names of the stored replies cut at them came back so,
 //   0 of 242 cut at the elements alone), a tie a space, what sets nothing nothing.
 // - A **name**: a stretch of a unit of kind `author` (the source's author declaration, TeX's \author data), trimmed of Unicode
 //   punctuation, white space, symbols and controls at both ends, of two words or more: a given name and a surname as the block

@@ -1,7 +1,7 @@
 // The longest common subsequence of two integer sequences by Myers' O(ND) difference algorithm in linear space: the
 // middle-snake bisection as Neil Fraser's diff-match-patch writes it (diff_bisect_, diff_bisectSplit_, Apache-2.0),
-// transcribed for Int32Arrays and index ranges (spike S1's tools/myers.mjs, held there against the dynamic programme's
-// LCS length on 3,000 random cases; here by the same test). Deterministic; no threshold decides a match. `work` bounds the
+// transcribed for Int32Arrays and index ranges, held against the dynamic programme's LCS length on 2,000 random cases
+// (tests/align.test.ts). Deterministic; no threshold decides a match. `work` bounds the
 // steps a call may take: a resource bound, reported, never a decision about content; past it the call stops and says so.
 
 interface Lcs {

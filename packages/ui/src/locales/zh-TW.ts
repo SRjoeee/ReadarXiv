@@ -1,6 +1,6 @@
 // Traditional Chinese, as Taiwan writes it: Taiwan's own words for an interface (設定, 預設, 連結, 載入, 搜尋, 支援, 快取,
 // 匯入, 復原, 視窗, 分頁, 擴充功能…), never a character conversion of the Simplified pack, which would keep the mainland's
-// words in Traditional characters (the glossary of 2026-11-04, §K; tests/ui/locales.test.ts holds it).
+// words in Traditional characters (UI.md §1; tests/ui/locales.test.ts holds it).
 // Same register as the Simplified pack: a state is a noun, a button a verb, and an error says what happened and what to
 // do; full-width punctuation, 「」 for quotes, a space between Chinese and Latin text or digits (UI.md §1).
 // Typed against the Chinese pack: a key missing here does not compile. Copy ids are in docs/UI.md §3.
@@ -174,8 +174,9 @@ const O: Locale['O'] = {
   saveFailed: '儲存失敗，請再試一次',
   appearance: {
     theme: '外觀',
-    // the theme switch's three equal segments hold 274 px at a 320 px window (ui-shots.mjs): the platform's longer
-    // "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese and English are
+    // the theme switch's three equal segments hold 274 px at a 320 px window (tests/e2e/probes/ui-shots.mjs): the
+    // platform's longer "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese
+    // and English are
     themes: { system: '跟隨系統', light: '淺色', dark: '深色' },
     dim: '深色模式下調暗 PDF 頁面',
     dimHint: '深色外觀下調暗 PDF 頁面；標示與圖中譯文保持原色',

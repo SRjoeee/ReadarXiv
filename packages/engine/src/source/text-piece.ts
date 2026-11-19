@@ -1,9 +1,6 @@
-// src/pdf-reader/engine/rules/text-piece.mjs
 // A text piece: a placeholder whose plain text is its whole rendering, TeX setting its characters as they are written. One
-// rule for both of its readers: the layer draws one as page text, never as a formula's crops (layer-proto/layer2.mjs formulaOf),
-// and the layout maker finds one the matcher missed,
-// set over two lines in one PDF and on one in the other, by its characters on the unit's own lines (layout/make.mjs, the
-// tolerant match). Imports nothing.
+// rule for its readers: the instrument states one as page text, never a formula's crops (instrument/instrument.ts
+// `literal`), and reads a verbatim one's `_` and `^` as written (copyOf). Imports nothing.
 
 /** the commands whose one argument TeX sets in the typewriter face as its own characters: \texttt; and verbatim, \url
  *  and \path (url.sty's, a character at a time), \lstinline in braces */
@@ -20,7 +17,7 @@ const NOT_LITERAL = /[\\{}$~]/,
 const NOT_ITSELF = /--|``|''|[<>"|]/
 
 /**
- * A text piece (the soundness round of 2026-10-19): a placeholder whose plain text is its whole rendering, TeX setting its
+ * A text piece: a placeholder whose plain text is its whole rendering, TeX setting its
  * characters as they are written. A code or URL mark (\texttt, \verb, \lstinline, \url, \path) or a plain-text source (no
  * command), its argument literal: no command, group, math or tie (nor, but verbatim, a script mark, a comment, an
  * alignment tab or a parameter); outside the typewriter face (a plain-text source) no dash or quote ligature and none of

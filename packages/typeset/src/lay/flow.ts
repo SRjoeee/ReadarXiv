@@ -1,12 +1,11 @@
-// layFlow's composition over prepared members (design-b §1.6 L8: F1-F9 for each member in order): a member that continues the
-// one before it on a shared line starts where that one's translation ends on the row (S.rowStart, F1, over the member
-// before's share and blocks), then is laid (layMember: F2-F8, L9); where the member before was laid over this one's first row
-// (S.overFollower) and this one is left the original's, not laid from its end, or laid from it only below its floor, the
-// member before is laid again in its row alone and this one again from where it now ends (S.relay, F9: never taken on the
-// corpus; a row of three is settled back one pair at a time). A line of TeX's several members share whole, which TeX set
-// centred or flush right (RowLine), is laid as one run: its members run on as on any shared row, the run then placed as TeX
-// placed the line (layLine). A member is prepared from its part (L5-L7: the unit's rules, the tokens) by the adapter; the
-// composition reads nothing else.
+// layFlow's composition over prepared members, each member in order: a member that continues the one before it on a shared
+// line starts where that one's translation ends on the row (S.rowStart, F1, over the member before's share and blocks), then
+// is laid (layMember: F2-F8, L9); where the member before was laid over this one's first row (S.overFollower) and this one is
+// left the original's, not laid from its end, or laid from it only below its floor, the member before is laid again in its
+// row alone and this one again from where it now ends (S.relay: never taken on the corpus; a row of three is settled back
+// one pair at a time). A line of TeX's several members share whole, which TeX set centred or flush right (RowLine), is laid
+// as one run: its members run on as on any shared row, the run then placed as TeX placed the line (layLine). A member is
+// prepared from its part (the unit's rules, the tokens) by the adapter; the composition reads nothing else.
 import { hangOf, noLineStart } from '../breaker/break.ts'
 import type { FitBlock } from '../fit/types.ts'
 import type { FillLaid } from '../shared/fill-page.ts'
@@ -31,8 +30,8 @@ export type FlowMember = Prepared & {
     /** where its text's first glyph stands on the row (its first line's start, the original's), its label before it */
     x: number
     /** where the tokens are the member's own (the adapter's, lay/read.ts): its label's crop, set on the row's baseline as its first
-     *  line's start where its label on the row goes with it (RUN:2215-2224), and its first line's head edge then (the label
-     *  drawn: U.params' halfLead.head). Today's tokens handed in hold the crop already */
+     *  line's start where its label on the row goes with it, and its first line's head edge then (the label
+     *  drawn: U.params' halfLead.head). Recorded tokens handed in hold the crop already */
     label?: { crop: (baseline: number) => Prepared['tokens'][number]; head: boolean }
   }
   /** the line of TeX's it shares whole with the members beside it, where TeX set that line centred or flush right */
@@ -40,7 +39,7 @@ export type FlowMember = Prepared & {
 }
 export type FlowLay = { ord: number; lay: MemberLay; ledBy?: number; slots: LedgerSlot[] }
 
-/** each member of the flow laid in order (design-b §1.6 F1-F9) */
+/** each member of the flow laid in order */
 export function layFlowPrepared(members: readonly FlowMember[], R: RuleParams, trace = false): FlowLay[] {
   const out: FlowLay[] = []
   const layOne = (m: FlowMember, before: FlowLay | undefined, noOver: boolean): FlowLay => {
@@ -62,7 +61,7 @@ export function layFlowPrepared(members: readonly FlowMember[], R: RuleParams, t
       ledBy = rs.ledBy
       p = { ...p, blocks: b0 ? [b0, ...m.blocks.slice(1)] : m.blocks, onLeadOf: rs.onLeadOf }
       // (its label on the row goes with it: its ink's crop before its first token, which no line ends after alone (its first
-      // word glued to it), on the row's baseline; the label so drawn, its first line's head is the line's own: RUN:2215-2224)
+      // word glued to it), on the row's baseline; the label so drawn, its first line's head is the line's own)
       const lab = m.rowStart.label
       if (rs.rowLabel && lab) {
         const toks = [...p.tokens]
@@ -115,9 +114,9 @@ function lineAt(members: readonly FlowMember[], i: number): number {
 }
 
 /**
- * A paragraph of TeX's its members fill whole, set centred or flush right, laid as one run (the owner's: a translated author
- * line reflows as one line, its names, marks and separators run together, set as TeX set that line). Each member laid by
- * itself, a name stood centred on its own original's middle: the translations, shorter, left a hole before each (2610.21106v1
+ * A paragraph of TeX's its members fill whole, set centred or flush right, laid as one run (docs/PDF-READER.md §18.16: a
+ * translated author line reflows as one line, its names, marks and separators run together, set as TeX set that line). Each
+ * member laid by itself, a name stood centred on its own original's middle: the translations, shorter, left a hole before each (2610.21106v1
  * p1, amsart's "NI XIANG AND YUNI XIONG", 36 pt where TeX set 3.3; 2611.00342v1 p1, IJCAI's eleven names over three lines, a
  * hole before each comma, a name broken over two lines, a name's marks alone on a third). TeX set the paragraph as a whole:
  * its lines broken, each an hbox of its content at its natural width, then placed. So here: the members laid one after the
@@ -149,8 +148,8 @@ function layLine(
   // line-start marks), IJCAI's \and's comma: TeX set it after the name before, the line's break after it. It goes at the end of
   // the member before, glued to its last token (its crop from that one's ink end on A to its own, TeX's separation before it
   // held), so that the breaker keeps it with the group before it, as it keeps such a mark inside one text: where the line no
-  // longer holds that group with it, both go on to the next, and no line opens with the mark. 2611.00342v1 on staging (round 8
-  // B3): the tenth name's comma opened the paragraph's second line, the ninth ending the first at the room's end. The member is
+  // longer holds that group with it, both go on to the next, and no line opens with the mark. 2611.00342v1 on staging: the
+  // tenth name's comma opened the paragraph's second line, the ninth ending the first at the room's end. The member is
   // then laid from TeX's separation after the mark, its own label no longer before it. The crop names its owner (`of`): the
   // label stays the owner's, its group off on its page as where the owner draws it (entry.ts), so the comma is drawn once)
   const marks = row.map((m, k) => {
@@ -267,7 +266,7 @@ function layLine(
       const r = k === 0 ? 0 : ys.length - 1
       const y = ys[r]
       const tokens = tokensOf(m, k)
-      // (the label drawn so, its first line's head is the line's own: RUN:2215-2224, as layOne sets it)
+      // (the label drawn so, its first line's head is the line's own, as layOne sets it)
       const lab = rowLabelOf(m, k)
       const P0 = lab && m.P.halfLead ? { ...m.P, halfLead: { ...m.P.halfLead, head: lab.head } } : m.P
       const layFrom = (from: number, start: number, startY: number | undefined) =>
@@ -345,10 +344,9 @@ function layLine(
   return run.o
 }
 
-/** F9 S.relay (settleLeadOf RUN:2550-2558, relay RUN:2565): where the member before member j was laid over j's row and j is
- *  not laid from its end, the one before is laid again in its row alone, which settles in turn the pair before it (today's
- *  relay ends a lay, and the lay's end settles its own lead: a row three members share comes back whole), and j again from
- *  where it now ends, alone too */
+/** F9 S.relay: where the member before member j was laid over j's row and j is not laid from its end, the one before is
+ *  laid again in its row alone, which settles in turn the pair before it (the relay ends a lay, and the lay's end settles
+ *  its own lead: a row three members share comes back whole), and j again from where it now ends, alone too */
 export function settleBack(
   out: FlowLay[],
   members: readonly FlowMember[],
@@ -371,6 +369,6 @@ export function settleBack(
   if (!r.lead) return
   out[j - 1] = layOne(members[j - 1]!, out[j - 2], true)
   settleBack(out, members, j - 1, layOne)
-  // (laid again as today's relay lays a unit: never over the row after it, noOver)
+  // (laid again as the relay lays a unit: never over the row after it, noOver)
   if (r.follower) out[j] = layOne(members[j]!, out[j - 1], true)
 }

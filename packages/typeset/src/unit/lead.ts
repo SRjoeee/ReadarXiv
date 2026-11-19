@@ -1,7 +1,5 @@
-// A run's style from its characters, as S.names sets a name in it (shared/names.ts). The one part of U.lead's port that is read:
-// the lay leads a unit by the name its part binds to it (lay/lead.ts ledBy), not by a run's lead (RUN:2047-2072 and its unlead,
-// RUN:1841-1847), which this module does not port. Ported from engine 065c1d973: styleOfChars L2:2912,
-// colourOfStyle L2:2909.
+// A run's style from its characters, as S.names sets a name in it (shared/names.ts). It is all of U.lead this module holds:
+// the lay leads a unit by the name its part binds to it (lay/lead.ts ledBy), never by a run's lead read off the page.
 
 /** a character of the page as the lead reads it */
 export type LeadChar = {
@@ -15,7 +13,7 @@ export type LeadChar = {
 const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 const colourOfStyle = (st: LeadChar['st']) =>
   Number.isInteger(st?.fill) && st!.fill! >= 0 ? { color: st!.fill! > 0 ? hexOf(st!.fill!) : undefined } : {}
-/** a run's style from its characters, the first not a formula's (L2:2912 styleOfChars) */
+/** a run's style from its characters, the first not a formula's */
 export function styleOfChars(cs: readonly LeadChar[], serif: string): Record<string, unknown> {
   const s0 = cs.find((c) => c.st?.fam !== 'math')?.st ?? cs[0]?.st ?? {}
   return {

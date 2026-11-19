@@ -1,6 +1,6 @@
 // The fill colour TeX set a run in, from the colour its driver paints with (LaTeX's \current@color, which the marked original
-// writes at each colour piece: marks.mjs AXT-COLOUR), as the reader draws it: 0xRRGGBB, the way PDF.js turns the PDF's fill to
-// RGB. Imports nothing.
+// writes at each colour piece: marks.ts LAYOUT_TEX's AXT-COLOUR), as the reader draws it: 0xRRGGBB, the way PDF.js turns the
+// PDF's fill to RGB. Imports nothing.
 //
 // The CMYK conversion (cmykToRgb) is ported from pdfjs-dist 6.3.289 (Mozilla, Apache-2.0), src/core/colorspace.js, DeviceCmykCS
 // #toRgb, 2026-10-19, modified: one colour at a time into a clamped array, no buffer. PDF.js uses it where it has no ICC profile

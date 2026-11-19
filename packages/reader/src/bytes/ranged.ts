@@ -1,4 +1,4 @@
-// A PDF.js document over a ByteSource (carried from the website's own ranged document): the first chunk read here and given
+// A PDF.js document over a ByteSource: the first chunk read here and given
 // as the transport's initial data, the document's last chunks asked as soon as its length is known (PDF.js reads a file's
 // startxref and cross-reference right after its first chunk), and every range PDF.js asks for read chunk by chunk through the
 // source (the store shares and joins them) and given whole once its chunks are in. The source is not the document's:

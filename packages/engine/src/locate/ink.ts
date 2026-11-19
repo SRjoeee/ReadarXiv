@@ -1,13 +1,13 @@
-// The units no source unit is, made on arXiv's page (design §4.3; the coordinator's decision of 2026-11-07): the running heads
+// The units no source unit is, made on arXiv's page (PDF-READER §19.10): the running heads
 // and feet, contents and lists, notes and orphan text, a biblatex entry's lines (ink units), the kept blocks, and the text inside a
-// figure (figure texts), cut and kinded by today's rule — today's ledger, inkUnitsOf, keptUnitsOf and figureUnitsOf (copied as
-// they are under ./today, held equal to today's by tests/pdf-reader/locate-ink-today.test.ts) — run over A's page in place of
+// figure (figure texts), cut and kinded by the ink makers — ledgerOf, inkUnitsOf, keptUnitsOf and figureUnitsOf (ledger.ts,
+// ink-units.ts, figure-text.ts) — run over A's page in place of
 // B's: A's glyphs, each owned where a source unit owns it (its partner's owner on B, or locate's claim: a located member's, a held
 // glyph), every other free, those B never printed among them (a page our compile never makes, a second top-level file's; on a
 // page it sets, a glyph it never printed is arXiv's ink, which the figure reading takes none of: `ARXIV_INK`); and B's marks
 // (its points, paragraphs and their ends, regions, pictures) carried onto A's stream through the mapping. What the
-// instrument states is source units alone: these are made here, each a unit of today's shape (its id format's unitId over its
-// kind and content, today's id; an ink unit's echo, its alignment as TeX set its paragraph, a figure text's set and direction,
+// instrument states is source units alone: these are made here, each a unit of the instrument's shape (its id format's unitId
+// over its kind and content; an ink unit's echo, its alignment as TeX set its paragraph, a figure text's set and direction,
 // a kept block fixed) with its ink on A.
 import { type KnownKind, type Piece, type Style, unitId } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
@@ -74,7 +74,7 @@ export interface InkInput {
   ins: Instrument
   inkA: Doc
   /** A's pages as pageInk read them (read.ts `raw`), null for a page not read; with `take`, the ink step's own: each let go
-   *  (the array's entry null) once today's pages are made of it, and each page's shapes once its figure texts are read */
+   *  (the array's entry null) once its TodayPage is made of it, and each page's shapes once its figure texts are read */
   raws: (PageInk | null)[]
   take?: boolean
   m: Mapping
@@ -83,7 +83,7 @@ export interface InkInput {
   owned: (a: number) => boolean
   /** the pages of A our compile sets (align.ts setPagesOf): on one, a glyph with no partner on B is arXiv's ink */
   setA: readonly boolean[]
-  /** what the front half reads of an ink unit's pieces (today's classesOf, the instrument adapter's), where it is given */
+  /** what the front half reads of an ink unit's pieces (the instrument adapter's classesOf), where it is given */
   classesOf?: ((pieces: TodayPiece[]) => [string, PieceClass][]) | undefined
   /** whether glyphs (A's, global; a figure text's turned ones by [page, index]) are an artefact: set wholly in a face of one
    *  pitch where the paper's body face is not one (locate.ts, Rule 1, PDF-READER §18.22); a figure text so set is kept */
@@ -95,15 +95,15 @@ export interface InkInput {
    *  as one that owns no glyph of A has none (the ink units' rule 8, inkUnitsOf `unplaced`) */
   released?: ReadonlySet<number> | undefined
   /** the faces the document sets at one pitch (facts.ts fixedFacesOf), where Rule 1 keeps such text: a figure's run goes into
-   *  or out of none of them (figure-text.mjs figureUnitsOf `fixed`, PDF-READER §18.22) */
+   *  or out of none of them (figure-text.ts figureUnitsOf `fixed`, PDF-READER §18.22) */
   fixed?: ReadonlySet<string> | null | undefined
   /** each A page's annotations as PDF.js gives them (LocateOptions.annotations): a link over part of an ink unit's text is a
-   *  group of it (inkUnitsOf `links`, F32) */
+   *  group of it (inkUnitsOf `links`, PDF-READER §19.10) */
   annotations?: readonly (readonly unknown[] | null)[] | undefined
 }
 
 /**
- * Each page's link annotations as the ink units read them (InkLink, F32): the open of a group whose source names the
+ * Each page's link annotations as the ink units read them (InkLink, PDF-READER §19.10): the open of a group whose source names the
  * annotation's target, `\href{<its address, TeX's specials escaped>}{` or `\hyperlink{<its destination's name>}{`, and the glyphs
  * of the page (`pages`, the ink units' own) it holds by glyph point. Only where the part reads that source back as the
  * annotation's target (linkTargetOf, compared as the typesetter compares two: an address in the WHATWG parser's form), so that the
@@ -116,7 +116,7 @@ function inkLinksOf(
 ): (InkLink[] | null)[] | null {
   if (!annotations?.length) return null
   return annotations.map((list, i) => {
-    // (today's page, its glyphs the ink units' own: InkPage's)
+    // (the ink makers' page (TodayPage), its glyphs the ink units' own: InkPage's)
     const G = pages[i]?.glyphs as readonly { u: string; x0: number; x1: number; y: number }[] | undefined
     if (!list?.length || !G) return null
     const out: InkLink[] = []
@@ -171,14 +171,14 @@ export interface InkStats {
   }
 }
 
-/** the units made on A, in today's bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
- *  `ins.units.length` on (an echo's index, of a source unit or of an ink unit before it, in that one list) */
 /** a line on A the engine reads as a display's formula (a ledger line of the class math at least half of whose glyphs TeX set in a
  *  display, not in its text mode): [page, x0, bottom, x1, top, baseline, display] — what the lab's stage reads a display's ink
  *  by; `display` the display's number on its page (its region's index among the page's displays as carried onto A), so
  *  that the lab tells a display's lines apart from another's (lab/pdf/prepare-back/display-pieces.mjs) */
 export type DisplayLine = [number, number, number, number, number, number, number]
 
+/** the units made on A, in the bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
+ *  `ins.units.length` on (an echo's index, of a source unit or of an ink unit before it, in that one list) */
 export function inkOf(o: InkInput): {
   made: Made[]
   stats: InkStats
@@ -190,7 +190,7 @@ export function inkOf(o: InkInput): {
   const { ins, inkA, m } = o
   const base = ins.units.length
   const carried = carry(ins.ink, inkA, m, o.pageA)
-  // ---- each A page as today's makers read one, its glyphs' and boxes' owners
+  // ---- each A page as the ink makers read one (TodayPage), its glyphs' and boxes' owners
   const turnedOwned = inkA.pages.map((pg) => new Array<string | null>(pg.turned?.length ?? 0).fill(null))
   // (a turned glyph's partner on B: whether TeX showed it in an included figure)
   const turnedForm = inkA.pages.map((pg) => new Array<boolean | null>(pg.turned?.length ?? 0).fill(null))
@@ -226,12 +226,12 @@ export function inkOf(o: InkInput): {
     const g = B.pages[p]!.glyphs[b - (m.offB[p] as number)]!
     return { form: g.form, fid: g.fid }
   }
-  // (each page's glyphs A's Doc's, its raw page for the rest: the back half reads A with its raw glyphs let go, lane mem-front)
+  // (each page's glyphs A's Doc's, its raw page for the rest: the back half reads A with its raw glyphs let go)
   const pages: TodayPage[] = inkA.pages.map((pg, i) =>
     pageOf(pg.view, o.raws[i] ?? null, pg.glyphs, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
   )
-  // (taken: a raw page is held from here by its today's page alone, which this step lets go at its end; and each page's shapes,
-  // which only its figure texts read, once they are: the rest of locate, the wrap and the bundle run without them, lane mem-back)
+  // (taken: a raw page is held from here by its TodayPage alone, which this step lets go at its end; and each page's shapes,
+  // which only its figure texts read, once they are: the rest of locate, the wrap and the bundle run without them)
   if (o.take) o.raws.fill(null)
   const shapesRead = o.take
     ? (p: number) => {
@@ -312,10 +312,10 @@ export function inkOf(o: InkInput): {
       : null
   const framed = blockOf(null)
 
-  // ---- today's sequence (pipeline/instrument.mjs, wrapFinal's): the figure texts of what no unit owns, the ledger with them
+  // ---- in this order: the figure texts of what no unit owns, the ledger with them
   // owned, the ink units, their claims, then the kept blocks of what is left
   // (the block's ink is no figure's text, though TeX drew it in the picture its title is in: a framed title box. Nor is arXiv's
-  // ink, a level glyph with no partner on B on a page our compile sets; the ledger reads it as before, free: inside a unit our
+  // ink, a level glyph with no partner on B on a page our compile sets; the ledger reads it free: inside a unit our
   // compile set it makes that unit a content difference (locate.ts), and a line of it alone in a form is the class `figures`)
   const figOwn = own.glyphs.map((row, i) => {
     const block = framed?.page === i
@@ -327,7 +327,7 @@ export function inkOf(o: InkInput): {
   })
   const fig = figureUnitsOf(pages, { glyphs: figOwn }, { done: shapesRead, fixed: o.fixed ?? null })
   // (the figure texts its printed lines make anew, F0's, and those the relation reading judges anew: figure-lines.ts, PDF-READER
-  // §18.26. A run of none stays as today's reading made it)
+  // §18.26. A run of none stays as figureUnitsOf made it)
   // (F1: the faces the source units set their text in, a letter of theirs: no formula's own upright face)
   const textFaces = new Set<string>()
   own.glyphs.forEach((row, i) => {
@@ -386,7 +386,7 @@ export function inkOf(o: InkInput): {
   if (block) nameBlock(ink, ledger, (p, g) => block.page === p - 1 && block.has(g))
   const boxesBefore = own.boxes.map((row) => [...row])
   claimInk(own, ink, pages)
-  // (the orphan letters no unit owns once the ink units own theirs: today's invariant (o), wrapFinal's inkLeft; a statement)
+  // (the orphan letters no unit owns once the ink units own theirs: invariant (o), ledger.ts inkLeft; a statement)
   const orphanLetters = inkLeft(ledger, own, pages).orphanLetters
   const kept = keptUnitsOf(
     pages,
@@ -395,7 +395,7 @@ export function inkOf(o: InkInput): {
     { from: base + ink.length },
   )
 
-  // ---- the units, as the instrument adapter stated today's (pipeline/instrument.mjs:322-340 at abe884b5e)
+  // ---- the units, in the instrument's shape (InstrumentUnit)
   const made: Made[] = []
   const global = (p: number, g: number) => (m.offA[p - 1] as number) + g
   for (const u of ink) {
@@ -429,7 +429,7 @@ export function inkOf(o: InkInput): {
       ...(align ? { align } : {}),
     }
     // (its text and placeholders' glyphs as its claim set them; a placeholder's its first element's, there being no points to tell
-    // them apart: the adapter's rule, pipeline/instrument.mjs:375-379)
+    // them apart)
     const first = firstEl(content)
     const x: Made = { unit, text: [], ph: [], phId: first, turned: [], textBoxes: [], elBoxes: [] }
     // (its label's glyphs, which its claim gave its text's group: a source unit's label is a role of its own, its group `.l`,
@@ -444,8 +444,8 @@ export function inkOf(o: InkInput): {
       if (w === `u${u.id}.p`) (first !== null ? x.ph : x.text).push(global(p, g))
       else if (w === `u${u.id}`) x.text.push(global(p, g))
     }
-    // (each element its own kept run's glyphs, the maker's: today's file draws each placeholder by its own segments, rows.ph;
-    // given the first, every run was drawn at its place and none at the others')
+    // (each element its own kept run's glyphs, the maker's, so that each placeholder is drawn by its own run: were the first
+    // given them all, every run would be drawn at its place and none at the others')
     if (first !== null) {
       x.els = new Map()
       for (const [k, gs] of u.glyphs.runs ?? []) {
@@ -512,17 +512,17 @@ export function inkOf(o: InkInput): {
     for (const [p, g] of u.glyphs.text) if (own.glyphs[p - 1]?.[g] == null) x.text.push(global(p, g))
     made.push(x)
   }
-  // (the figure texts in today's bundle's order: those it draws first, in their order, then those whose ink stays)
+  // (the figure texts in the bundle's order: those drawn first, in their order, then those whose ink stays)
   const whyOf = (k: number) => {
     const t = textAt.get(k)
     return t ? (t.why === 'crowded' ? 1 : 0) : fig.units[k]!.why ? 1 : 0
   }
   const figOrder = [...fig.units.keys()].filter((k) => !taken.has(k)).sort((a, b) => whyOf(a) - whyOf(b) || a - b)
-  // (each figure text's set, its size tie (the owner's rule of 2026-10-29: the labels of one group at one size): the set today's
-  // figure reading gave its line (setsOf: its column, its baseline); a text the paragraph path lays (figureTextOf: lines joined,
-  // an element, a label) stands among the labels of its lines' sets, which it joins into one: one member, drawn at one size. One
-  // kept as the original's (its why: a formula, code, a script, a double, a decorated word) is laid by no path and keeps a set
-  // of its own)
+  // (each figure text's set, the part's size tie, which the typesetter reads for no size: each figure text is sized by its own
+  // width (PDF-READER §19.12, §18.54). It is the set figure-text.ts gave its line (setsOf: its column, its baseline); a text the
+  // paragraph path lays (figureTextOf: lines joined, an element, a label) stands among the labels of its lines' sets, which it
+  // joins into one, itself one member of it. One kept as the original's (its why: a formula, code, a script, a double, a
+  // decorated word) is laid by no path and keeps a set of its own)
   const setRoot = new Map<number, number>()
   const setOf = (k: number): number => {
     let s = fig.units[k]!.set ?? k
@@ -536,7 +536,7 @@ export function inkOf(o: InkInput): {
     const root = Math.min(...sets)
     for (const s of sets) if (s !== root) setRoot.set(s, root)
   }
-  // (each figure text's glyphs: its level ones (global, stream order) and its turned ones ([page, index]), in today's reading's
+  // (each figure text's glyphs: its level ones (global, stream order) and its turned ones ([page, index]), in figureUnitsOf's
   // order of them)
   const figText = new Map<number, number[]>()
   const figTurned = new Map<number, [number, number][]>()
@@ -582,7 +582,7 @@ export function inkOf(o: InkInput): {
     // `str_replace`, `w/o sol_pool_freq`), is the original's, whatever its face: a figure text is drawn whole, its text and no element, so the
     // identifier cannot be kept apart from the words around it, and sent, its words came back translated inside it, as
     // 2608.25210v2's `llm_equal_human` in a unit came back with its last part in Chinese; an ink unit keeps one as an element instead)
-    // (where a translation of it may stand, as today's figure reading tells it: S.figures reads these from the part)
+    // (where a translation of it may stand, as figureUnitsOf tells it: S.figures reads these from the part)
     const room = {
       ...(Number.isFinite(f.x) ? { x: f.x } : {}),
       ...(Number.isFinite(f.y) ? { y: f.y } : {}),
@@ -681,7 +681,7 @@ export function inkOf(o: InkInput): {
   }
 }
 
-/** a judged text's room beside today's: the stroke under its text where the relation reading freed it, a container's edges */
+/** a judged text's room beside its run's: the stroke under its text where the relation reading freed it, a container's edges */
 function roomOfText(t: FigureText): { under?: number; over?: number } {
   const under = Math.min(t.under ?? Infinity, t.container?.under ?? Infinity)
   return {
@@ -698,7 +698,7 @@ function roomOfText(t: FigureText): { under?: number; over?: number } {
  * from its ink (its class `other`, a code one `literal`, its glyphs' text its copy), its glyphs and its boxes (a ground's, a
  * decoration's) its own. Laid by the paragraph path (it states no own text, locate): its room the line's, from its first run's
  * room before to its last run's after; in `set`, the set of the labels its lines stand among, whose size tie holds it with the
- * labels S.figures sets (one size a group); one kept as the original's, a set of its own
+ * labels S.figures sets (a tie no size reads: PDF-READER §19.12); one kept as the original's, a set of its own
  */
 function figureTextOf(
   t: FigureText,
@@ -791,7 +791,7 @@ function figureTextOf(
   const x1 = Math.max(...all.map((g) => G[g]!.x1))
   const x0 = G[all[0]!]!.x0
   // (a paragraph, F3: laid in its lines as a body paragraph is, its room the facts pass's (its lines' sides, below it): none of
-  // a line's free line along its run; a line alone, as before. One the container step made of a path's rows has the path's
+  // a line's free line along its run; a line alone has it. One the container step made of a path's rows has the path's
   // inside across as its room beside its lines (§18.36), stated as a line's free line is, from its rows' extent: the facts pass
   // takes it as Room.side, never the column's)
   const across = t.para && t.container?.side
@@ -860,16 +860,16 @@ function figureTextOf(
   }
 }
 
-/** the kinds of the ink units the author block takes: today's ledger's notes and orphans, and its names (rule 8) */
+/** the kinds of the ink units the author block takes: the ledger's notes and orphans, and its names (rule 8) */
 const BLOCK_TAKES = new Set<string>(['inknotes', 'inkorphan', 'inknames'] satisfies readonly KnownKind[])
 /**
- * The ink units of the author block under the title its names, and none elsewhere (the owner's ruling of 2026-11-09: the names
+ * The ink units of the author block under the title its names, and none elsewhere (PDF-READER §19.13: the names
  * toggle governs the block under the title, whole, and nothing else). Inside it, an ink unit all of whose glyphs are the
- * block's ink is of the names (`inknames`), a note's or an orphan's of today's ledger as much as one rule 8 named; outside it, one
+ * block's ink is of the names (`inknames`), a note's or an orphan's of the ledger as much as one rule 8 named; outside it, one
  * rule 8 named for the letters of an author unit with no place of its own, or an echo of one (acmart's reference format, a
  * running line printed from the same data), is its ledger line's class again, the text it is; but one that holds an author
  * command's stored argument whole (`stored`: ICML's footnote of the places \icmlaffiliation stores) stays the names' where it
- * stands, the text the source ties to the block (the owner's ruling of 2026-11-13)
+ * stands, the text the source ties to the block (PDF-READER §18.71)
  */
 function nameBlock(
   ink: TodayInkUnit[],
@@ -901,9 +901,9 @@ function nameBlock(
 }
 
 // ---------------------------------------------------------------- a figure text's style runs
-/** a figure text's glyph in its run's order: what today's figure reading read its text off (its Unicode, blank), and its style */
+/** a figure text's glyph in its run's order: what figureUnitsOf read its text off (its Unicode, blank), and its style */
 type FigureGlyph = { u: string; blank: boolean; style: StyleGlyph }
-/** a figure text's glyphs, level and turned, in the order today's figure reading strings its text (figure-text.mjs streamOf: by
+/** a figure text's glyphs, level and turned, in the order figureUnitsOf strings its text (figure-text.ts streamOf: by
  *  show and place in it), each as it read it (the page it was given) with its style as locate reads one (A's glyph: its font's
  *  base name, size and fill); and its own glyphs as locate's style reads them, its level ones then its turned ones */
 function streamOfFigure(
@@ -933,22 +933,22 @@ function streamOfFigure(
 }
 
 /**
- * A figure text's content, its text (today's figure reading's: its glyphs' Unicode in its run's order, NFKC, a space where
+ * A figure text's content, its text (figureUnitsOf's: its glyphs' Unicode in its run's order, NFKC, a space where
  * they stand apart, white space collapsed) in the runs its glyphs set in another face than its own: each a group of its own,
  * the style its glyphs state on A, by its piece id. Its own style is locate's (facts.ts styleOf over its glyphs: the face of most of
  * them, the first to the most where two tie); the text outside its groups is in it. Each character is its glyph's, the k-th
  * that is no white space the k-th of its glyphs' text; a space between two characters of one run is that run's, any other its
  * own. A group is named for what its face changes (LaTeX's names: `bold` or `medium`, `italic` or `upright`, the role), has no
- * source (neither `open` nor `close`), and is a label (`must`) where the run-in rule makes one (runIns): today's figure reading
+ * source (neither `open` nor `close`), and is a label (`must`) where the run-in rule makes one (runIns): figureUnitsOf
  * names one face for a run of one family's faces, its first glyph's (2608.25210v2 p2: "Data Extraction Task" in
  * HelveticaNeue-Bold, ": Extract all …" in HelveticaNeue, all drawn bold), and one style read off all of them is the face of
- * most of them (all drawn regular). One face: one text, today's unit
+ * most of them (all drawn regular). One face: one text piece, no group
  */
 function figureRuns(
   s: string,
   { stream, own }: { stream: readonly FigureGlyph[]; own: readonly StyleGlyph[] },
 ): { content: Piece[]; styles: [string, Style][] } {
-  // (a run's key its face and its fill: TeX's line in a picture goes on over another colour (figure-text.mjs texLine: the link's
+  // (a run's key its face and its fill: TeX's line in a picture goes on over another colour (figure-text.ts texLine: the link's
   // colour of an address after its label), whose group states its fill where it is not the text's, black included; a figure text
   // a plotting program sets is of one fill, as its run was)
   const fillKey = (f: number | undefined) => (f !== undefined && f > 0 ? f : 0)
@@ -957,7 +957,7 @@ function figureRuns(
   const base = `${styleKeyOf(ownStyle)}|${baseFill}`
   const chars = [...s]
   const SPACE = /\s/u
-  // (each character's glyph: its glyphs' text, white space aside, as today's textOf strings it)
+  // (each character's glyph: its glyphs' text, white space aside, as figure-text.ts textOf strings it)
   const glyphOf: (number | null)[] = []
   let q = 0
   let left = 0
@@ -1163,7 +1163,7 @@ export function carry(B: Doc, inkA: Doc, m: Mapping, pageA: Int32Array): Carried
   return out
 }
 
-/** an A page as today's makers read one: pageInk's result for it, B's marks carried onto it, its glyphs' pictures (`pid`, a
+/** an A page as the ink makers read one: pageInk's result for it, B's marks carried onto it, its glyphs' pictures (`pid`, a
  *  turned glyph's `pt` and `pid`) read again from those marks as pageInk reads them from its own (ink.mjs: a picture's id, its
  *  page's count of pictures opened, the innermost open) */
 function pageOf(
@@ -1249,18 +1249,17 @@ function pageOf(
   }
 }
 
-// ---------------------------------------------------------------- today's pieces and the format's
+// ---------------------------------------------------------------- the makers' flat pieces and the format's
 const ENCODER = new TextEncoder()
 const UTF8 = new TextDecoder('utf-8')
-/** a text as today's front end holds a source's: its UTF-8 bytes read latin1 (ink-units.mjs sourceView) */
+/** a text as the front end holds a source's: its UTF-8 bytes read latin1 (as ink-units.ts sourceView) */
 export function latin1View(s: string): string {
   const b = ENCODER.encode(s)
   let out = ''
   for (let i = 0; i < b.length; i += 0x8000) out += String.fromCharCode(...b.subarray(i, i + 0x8000))
   return out
 }
-/** a string as today's engine holds it (UTF-8 bytes read latin1) as Unicode; one already wide as it is (pipeline/instrument.mjs:28
- *  unicodeOf, ported) */
+/** a string held as UTF-8 bytes read latin1 (the makers' flat pieces) as Unicode; one already wide as it is */
 export function unicodeOf(s: unknown): string {
   if (typeof s !== 'string') return ''
   let ascii = true
@@ -1274,7 +1273,7 @@ export function unicodeOf(s: unknown): string {
   for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i)
   return UTF8.decode(b)
 }
-/** a unit's content as today's flat pieces (the makers read a source unit so): an element with the kind the instrument states */
+/** a unit's content as flat pieces (TodayPiece, the makers' reading of a unit): an element with the kind the instrument states */
 function flatOf(content: readonly Piece[], out: TodayPiece[] = []): TodayPiece[] {
   for (const p of content) {
     if (p.t === 'text') out.push({ t: 'text', s: latin1View(p.s) })
@@ -1288,7 +1287,7 @@ function flatOf(content: readonly Piece[], out: TodayPiece[] = []): TodayPiece[]
   }
   return out
 }
-/** the first element of a content, depth first (today's first `ph` piece) */
+/** the first element of a content, depth first (the first `ph` piece of its flat pieces) */
 function firstEl(content: readonly Piece[]): string | null {
   for (const p of content) {
     if (p.t === 'el') return p.id
@@ -1314,8 +1313,8 @@ const SPAN_STYLES: [RegExp, string][] = [
 ]
 export const groupStyleOf = (src: string) =>
   SPAN_STYLES.find(([re]) => re.test((src ?? '').trimStart()))?.[1] ?? 'other'
-/** today's flat pieces ([open … close] pairs) as the format's nested ones (pipeline/instrument.mjs:56-82 contentOf, ported; an ink
- *  unit's pieces hold no nested unit): an element's kind today's classOf's, `other` for none; its run-in labels `must` */
+/** the makers' flat pieces ([open … close] pairs) as the format's nested ones (an ink unit's pieces hold no nested unit): an
+ *  element's kind its stated class (ink-units.ts statedClassOf), `other` for none; its run-in labels `must` */
 export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
   let level: Piece[] = []
   const stack: { outer: Piece[]; span: Extract<Piece, { t: 'span' }> }[] = []
@@ -1358,11 +1357,11 @@ export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
   // (its run-in labels `must`, as the source units': marks/run-ins.ts)
   return runIns(stack.length ? stack[0]!.outer : level)
 }
-/** an ink unit's colour group's open as its rule writes it (today/ink-units.mjs groupsOf: the fill its glyphs hold), in xcolor's
+/** an ink unit's colour group's open as its rule writes it (ink-units.ts groupsOf: the fill its glyphs hold), in xcolor's
  *  HTML model, which names a colour by its red, green and blue, two hexadecimal digits each */
 const HTML_COLOUR = /^\\textcolor\[HTML\]\{([0-9A-Fa-f]{6})\}\{$/
-/** each group's command, the fill its colour group's run is set in, and a link group's target, by its open piece's id
- *  (pipeline/instrument.mjs:187-219 commandOf, spansOf, ported). A source unit's colour group states the fill TeX set its run in,
+/** each group's command, the fill its colour group's run is set in, and a link group's target, by its open piece's id.
+ *  A source unit's colour group states the fill TeX set its run in,
  *  read off the marked compile's log; an ink unit has no log, and its colour group's source names that fill itself, the one its
  *  glyphs hold on A: stated so, as a source unit's (2609.36054v2 p1's grey e-mails, drawn in their note's black with none) */
 export function spansOf(pieces: readonly TodayPiece[]): [string, SpanClass][] {
@@ -1382,13 +1381,13 @@ export function spansOf(pieces: readonly TodayPiece[]): [string, SpanClass][] {
   return out
 }
 /**
- * The target a link group's source names (SpanClass.to, the part's SpanAt.to), by today's reading of it (layer-proto/links.mjs
- * linkKindOf and urlOf, the match's url and name tiers): an \href's address, its first argument with TeX's escapes undone (`\#`,
- * `\%`, `\_`, `\&`, `\~`, `\$`), or a \url's, its text as written, each in the WHATWG URL parser's form; a \hyperlink's
+ * The target a link group's source names (SpanClass.to, the part's SpanAt.to): an \href's address, its first argument with
+ * TeX's escapes undone (`\#`, `\%`, `\_`, `\&`, `\~`, `\$`), or a \url's, its text as written, each in the WHATWG URL
+ * parser's form; a \hyperlink's
  * destination, its name, as the part states a named destination (PDF.js's dest as JSON, Link.to). None for any other group, a
  * \hyperref (its destination is its label's anchor, which TeX names), an address that is no absolute URL, and one the source
- * writes with a command or a group (only TeX expands it). `pieces` a unit's flat pieces (today's, strings as today's engine holds
- * them), `k` the group's open.
+ * writes with a command or a group (only TeX expands it). `pieces` a unit's flat pieces (TodayPiece, strings as UTF-8 bytes read
+ * latin1), `k` the group's open.
  */
 export function linkTargetOf(
   pieces: readonly { t: string; s?: string; src?: string }[],

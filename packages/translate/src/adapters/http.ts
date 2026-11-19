@@ -1,6 +1,6 @@
-// What a keyless HTTP endpoint's failure is, as a remedy (design-b §1.2): only the adapter knows whether a 403 is a key
-// refused or a free endpoint's passing refusal (ext-providers-config §6: a keyless engine's 403 was wrongly treated as
-// permanent). Measured amplifications avoided (§16): a 4xx is never retried on the backoff (a 400 bound to fail, retried
+// What a keyless HTTP endpoint's failure is, as a remedy: only the adapter knows whether a 403 is a key refused or a free
+// endpoint's passing refusal (a keyless engine's 403 taken as permanent would drop the engine). Measured amplifications
+// avoided (DESIGN §8.3): a 4xx is never retried on the backoff (a 400 bound to fail, retried
 // and split, made dozens of requests); a malformed reply is the endpoint's, asked once more and never split (4 → 40); a 400
 // that names no size is never split either (#636: 100 units were 199 requests).
 import { Fault, type FetchReply, type Signal } from '../contract.ts'

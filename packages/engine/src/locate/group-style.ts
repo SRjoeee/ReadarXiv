@@ -5,13 +5,12 @@
 // the fill of a colour piece alone (`\textcolor`'s, `\color`'s: SpanAt.colour, El.colour). And a member's style read over all
 // of its glyphs is its groups' where they hold most of its letters: p10's Hendrycks entry, its title link holding most, drawn
 // blue whole; 2609.20976v1 p13's references, their \emph titles and journals holding most, drawn italic whole, where the
-// translators' replies move an \emph's markers to the end, empty. Today's reader read both off the glyphs (layer2.mjs
-// measuredStyle: each piece that may set an attribute, the value its own glyphs hold; the unit's, the value of its glyphs
-// outside them).
+// translators' replies move an \emph's markers to the end, empty. Both are read off the glyphs: each piece that may set an
+// attribute, the value its own glyphs hold; the unit's, the value of its glyphs outside them.
 //
 // The source's letters and the glyphs' letters are matched in order (the longest common subsequence, Myers', as words.ts
 // places a unit's words on A and marks/faces.ts reads a group's face on B), compared folded (compatibility decomposition,
-// marks off, lower case, its letters and digits alone, as today's measuredStyle read them); a text macro's text (the marking
+// marks off, lower case, its letters and digits alone); a text macro's text (the marking
 // probe's, its glyphs the unit's text) is the source's there, an element whose ink is its own has no glyph among them. Its
 // punctuation is no reading of its own: TeX sets the commas between an author line's `\textbf` names regular, and a unit
 // read off them was drawn regular where a translation drops the names' groups (2602.23285v2's author line).

@@ -1,7 +1,7 @@
-// Page.links (design-a §1.2: the page's links as drawn, moved with their pieces, else at A's boxes; D.links, design-b §1.6 E1):
+// Page.links (the page's links as drawn, moved with their pieces, else at A's boxes; D.links):
 // A's annotations on the page (Part.links), each with the member and the piece that holds it as the prepare states them
 // (locate's ownership: the member that owns more than half of the glyphs under it, within it the element that does, else its
-// text), placed as today's linkUnit and freezeLinks place them (RUN:1044-1128, links.mjs placeUnit, freezeLinks):
+// text), placed so (emit/links.ts placeUnit):
 // - one whose ink stays, at A's box: no owner, its owner not laid on the page (the original's, waiting, a table held), or its
 //   piece's ink kept where it stands, whether or not the translation draws it too (a display, an element the part keeps, one
 //   the reading keeps in place, the member's elements' group on the annotation's own page: none moved there, or one the add-on
@@ -21,23 +21,23 @@
 //   where one target's annotations hold every own glyph of it on the page (matchUnit's whole tier, its every own character
 //   under them: as the part states it, Link.whole, by glyph point; a part made before, where each line's ink is inside one of
 //   their boxes, its baseline between their edges). A link the part gives to an element
-//   that holds on A another of the element's, of another target (a group's link left open round it), is the text's: today's
+//   that holds on A another of the element's, of another target (a group's link left open round it), is the text's: the
 //   geometry tier gives a piece only a link every character of which is the piece's;
 // - one over a member the entry draws whole on lines of its own, no layout of it made (a figure text, a babel name: DrawnWhole),
 //   over its whole drawing where one target's annotations hold all of its text (the whole tier, as above): its text's ink is
 //   hidden, and at A's box the link would stand over that and miss the translation's ends wherever the translation is longer;
 // - any other is dropped (its ink is turned off and nothing of it is drawn on the page: a link left at A's box would open from
-//   the translation's text over it, today's freezeLinks drops it alike).
+//   the translation's text over it).
 // An annotation of a member's other page (Link.page: the part holds those of its members on every page they have lines on) is
 // drawn here only over what of its piece the page draws (a translation sets a member's text on whichever of its pages it falls),
 // never at its box, which is its own page's (`away`); a member's link groups are paired with its annotations of all its pages,
 // so that each of its pages pairs them alike: an annotation is drawn on the page its group is set on, and on no other.
 // A member's annotations are taken in their order on A (inReading), which is the order TeX set them in, never in the part's
-// list's, which is the PDF's annotation array's (two groups listed right to left opened each other's address, #626's review).
+// list's, which is the PDF's annotation array's (there two groups listed right to left would open each other's address).
 // Each link drawn names the member that owns it (its third field), so that a reader leaving that member the original's puts its
 // links back at A's boxes (composer.ts held()), and carries its own annotation's border on A (its fourth, Link.border: a moved
 // link keeps it whatever box it is drawn over; the annotations one record is drawn for share it, placeUnit joining or pairing
-// only those of one border, today's sameBorder), which the reader draws as it is stated.
+// only those of one border, sameBorder), which the reader draws as it is stated.
 import { LINE_FLAG, type Line, type Link, type LinkBorder, type Part, type Placed } from '@readarxiv/format'
 import type { Face } from '../breaker/tokens.ts'
 import { lineRuns, runEdge, type TextRun } from '../emit/display.ts'
@@ -69,15 +69,15 @@ type DrawnWhole = { m: Placed; off: number; drawn: readonly Page['links'][number
 /** a link group's command, as the breaker tags its tokens (LINK_OPEN): \url's with \href's (hyperref.sty's \href, \hyperref,
  *  \hyperlink and \url) */
 const LINK_CMD = /^(?:href|hyperref|hyperlink|url)$/
-/** an element's command that sets a reference to a destination in the paper, or a group's (links.mjs REF_SRC, by the command
- *  the part states, El.cmd): latex.ltx's \ref and \pageref; amsmath.sty's \eqref; hyperref.sty's \autoref, \hyperref,
+/** an element's command that sets a reference to a destination in the paper, or a group's (by the command the part states,
+ *  El.cmd): latex.ltx's \ref and \pageref; amsmath.sty's \eqref; hyperref.sty's \autoref, \hyperref,
  *  \hyperlink and thmtools' \Autoref (thm-autoref.sty); cleveref.sty's \cref, \Cref, \crefrange, \Crefrange, \cpageref,
  *  \Cpageref, \labelcref; nameref.sty's \nameref, \Nameref; varioref.sty's \vref, \Vref; subcaption.sty's \subref */
 const REF_CMD =
   /^(?:ref|eqref|autoref|Autoref|cref|Cref|crefrange|Crefrange|cpageref|Cpageref|pageref|nameref|Nameref|vref|Vref|labelcref|subref|hyperref|hyperlink)\*?$/
 /** the kinds of a link's target kindOf tells apart */
 type LinkKind = 'cite' | 'note' | 'internal' | 'url'
-/** the kind of piece a link of a target goes with, as today's order tier tells them apart (links.mjs kindOfAnnot): a citation's
+/** the kind of piece a link of a target goes with, as the order tier tells them apart (emit/links.ts kindOfAnnot): a citation's
  *  (cite.<key>), a footnote's mark's (Hfootnote.<n>), any other destination's, an address's */
 const kindOf = (to: Link['to']): LinkKind => {
   if ('url' in to) return 'url'
@@ -92,9 +92,9 @@ const kindOf = (to: Link['to']): LinkKind => {
   return 'internal'
 }
 /** an element's command that sets a citation, by the command the part states (El.cmd): natbib's and biblatex's citation
- *  commands are named so, \nocite sets nothing (today's links.mjs CITE_SRC, by the source) */
+ *  commands are named so, \nocite sets nothing */
 const CITE_CMD = /^(?![Nn]ocite)[A-Za-z]*[Cc]ite[A-Za-z]*\*?$/
-/** the kind an element's link is of by its source (links.mjs linkKindOf, by the command and the nested mark the part states): a
+/** the kind an element's link is of by its source (by the command and the nested mark the part states): a
  *  footnote's mark, a reference, a citation (hyperref names its destination cite.<key>; the part states no key, so a citation is
  *  told by its command and paired by the order tier, as a reference is); null for any other */
 const elKindOf = (e: { cmd?: string; nested?: 1 }): 'note' | 'internal' | 'cite' | null =>
@@ -119,7 +119,7 @@ type Tok = {
   ph?: unknown
   st?: { link?: unknown }
 }
-/** a target as two are compared: an address in the WHATWG URL parser's form (today's urlOf; as written where it parses as none),
+/** a target as two are compared: an address in the WHATWG URL parser's form (as written where it parses as none),
  *  a destination as stated */
 const key = (to: Link['to']): string => {
   if (!('url' in to)) return `d${to.dest}`
@@ -137,7 +137,7 @@ const drawnOf = (
   owner: number | undefined,
   border: LinkBorder | undefined,
 ): Page['links'][number] => (border ? [box, to, owner, border] : owner === undefined ? [box, to] : [box, to, owner])
-/** a border as placeUnit compares two (today's record's: its width, its colour's components, its style) */
+/** a border as placeUnit compares two (its width, its colour's components, its style) */
 const borderOf = (b: LinkBorder | undefined): Annot['border'] =>
   b && { width: b[0], rgb: [(b[1] >> 16) & 255, (b[1] >> 8) & 255, b[1] & 255], style: b[2] ?? 'solid' }
 
@@ -273,7 +273,7 @@ export function linksOf(
     }
     const pageOf = (i: number) => list[i]!.page ?? page
     // (a link round others of its element on A, of another target: hyperref's link of a group left open over the element, its
-    // characters past the element's (today's geometry tier gives a piece only a link every character of which is the piece's),
+    // characters past the element's (the geometry tier gives a piece only a link every character of which is the piece's),
     // is no link of the element's own, and the text's; searched first among the element's, it took the whole drawing and left
     // the element's own unplaced, 2610.10069v1-zh p10)
     for (const [id, is] of byEl) {
@@ -288,8 +288,8 @@ export function linksOf(
       text.push(...round)
     }
     // (one over the member's label (Link.label): its ink stays where the label is not drawn anew, on the annotation's page, and the
-    // link with it, as today's freeze keeps one no tier took whose glyphs are not erased; over the label carried as a crop, moved
-    // with the crop; drawn anew, dropped)
+    // link with it, its glyphs not erased: no tier takes it; over the label carried as a crop, moved with the crop; drawn
+    // anew, dropped)
     for (const i of text.filter((i) => list[i]!.label)) {
       if (!(offOn(pageOf(i)) & 4)) atBox(i, 'kept')
       else if (labelOn.has(page)) groups.push({ to: { draw: 'crop' }, annots: [{ ...annot(i), tier: 'geometry' }] })
@@ -303,9 +303,9 @@ export function linksOf(
       .map(([id, s]) => [Number(id), s.to ? key(s.to) : null, s.cmd ?? ''] as const)
       .sort((a, b) => a[0] - b[0])
     const named = new Set(groupsOf.flatMap(([, x]) => (x === null ? [] : [x])))
-    // (today's order tier, by kind: the annotations of the member's text no group's target decides, a footnote's mark's with the
+    // (the order tier, by kind: the annotations of the member's text no group's target decides, a footnote's mark's with the
     // member's marks, any other destination's with its references and its \hyperref groups, each piece that holds none of its
-    // kind, over the member, in their orders (links.mjs:420): hyperref's link round a reference's number takes in the comma after
+    // kind, over the member, in their orders: hyperref's link round a reference's number takes in the comma after
     // it by the link's margin, and the part gives it to the text, the element owning one of its two glyphs, 2608.25210v2-zh;
     // a citation's with its citations alike, the closing bracket taken in after a number of one digit, 2610.37818v1-zh p8's
     // "[24, 4]". Paired as the order rule below pairs (each, each run of one target, or all to one piece), else left to it)
@@ -354,7 +354,7 @@ export function linksOf(
       const e = els.get(id)
       // (its ink stays where it stands, however it is drawn: a display, kept by the part or in place by the reading, or the
       // member's elements' group on (none moved, or a group the add-on could not part, Placed.fixed) on the annotation's own page,
-      // which the translation may set the element off: the original's anchor stays with it, #626's review)
+      // which the translation may set the element off: the original's anchor stays with it)
       const stays = (i: number) => !e || !!e.keep || e.kind === 'display' || kept.has(id) || !(offOn(pageOf(i)) & 2)
       for (const i of owns.filter(stays)) atBox(i, 'kept')
       const is = owns.filter((i) => !stays(i))
@@ -366,12 +366,12 @@ export function linksOf(
         else for (const i of is) fate(i, 'away')
       } else if (k !== undefined) {
         // (over the characters it is drawn as: each annotation over its own characters among them where the part states them
-        // (Link.text, PDF.js's overlaidText: today's placeText), the piece's annotations in one group, so that one search, moving
+        // (Link.text, PDF.js's overlaidText: placeText), the piece's annotations in one group, so that one search, moving
         // forward only, takes them in their order on A whatever their targets (the same text twice, two works: each its own
-        // occurrence, #631's review); where it does not (a part made before), the annotations of one target over their whole,
+        // occurrence); where it does not (a part made before), the annotations of one target over their whole,
         // those of two or more targets none, not told apart)
         // (a mark TeX set as written that the part reads as one word, its copy holding no white space (a URL, a DOI: the engine
-        // joins its lines, lane url-join), whose annotations name one target: TeX's line break split one link into an annotation
+        // joins its lines), whose annotations name one target: TeX's line break split one link into an annotation
         // a line, and the translation draws the word whole: one link over its whole drawing, `word`)
         const word =
           !!e?.literal && !!e.copy && !/\s/u.test(e.copy) && new Set(is.map((i) => key(list[i]!.to))).size === 1
@@ -399,7 +399,7 @@ export function linksOf(
       const oneTarget = (rs: number[][]) =>
         rs.length > 0 && rs.every((r) => key(list[r[0]!]!.to) === key(list[rs[0]![0]!]!.to))
       // (annotations with groups in their orders: each annotation an occurrence where they are as many as the groups (two links
-      // to one address one after the other are one run of one target, #626's review), else each run of one target a group (a
+      // to one address one after the other are one run of one target), else each run of one target a group (a
       // link TeX broke over lines is one run), else one group takes all of one target; placed where the group is drawn, on
       // whichever page of the member that is)
       const inOrder = (as: number[], gs: readonly number[], tier: string): boolean => {
@@ -410,7 +410,7 @@ export function linksOf(
         else return false
         return true
       }
-      // (by target first, as today's url and name tiers pair them (matchUnit): the annotations of each target a group names
+      // (by target first, as the url and name tiers pair them (matchUnit): the annotations of each target a group names
       // with the groups that name it, whatever the member's other links and wherever each falls, so that every page of the
       // member pairs them alike; where they are not told apart so, none of them)
       const addr = (i: number) => key(list[i]!.to)
@@ -462,8 +462,8 @@ export function linksOf(
       tokenBand(t as never, (line.seg as { f: number } | undefined) ?? L, line.baseline)
     // (a piece drawn as text is searched over the member's laid lines on all its pages, its annotations of all its pages in
     // their order on A, one search moving forward only: each takes its own occurrence wherever the translation sets it, and
-    // every page of the member finds the same; searched among what one page draws alone, a page's occurrence took the
-    // annotation of an occurrence another page draws, #631's review. A crop, a pair and a whole drawing are placed over what
+    // every page of the member finds the same; searched among what one page draws alone, a page's occurrence would take the
+    // annotation of an occurrence another page draws. A crop, a pair and a whole drawing are placed over what
     // the page draws of them. The records of this page are kept, in the groups' order)
     const asText = groups.filter((g) => g.to.draw === 'text')
     const placed = [
@@ -513,9 +513,9 @@ export function linksOf(
  * on (of those on its own page, Link.page or the part's, one its box overlaps across where any does, the one whose baseline is
  * nearest its box's middle), then at its box's start along that line in the line's writing direction: its left edge, its right
  * edge on a line the part states set right to left (LINE_FLAG.RTL, the unit's paragraph direction), whose first link is its
- * rightmost (Codex on #634: sorted left to right, an Arabic or Hebrew line's two links of one address paired with its groups the
- * other way round); the PDF's annotation array, whose order the part's list keeps, need not be TeX's (#626's review: two \href
- * groups listed right to left). An annotation of no line of the member (none on its page) comes after those that have one, by its
+ * rightmost (sorted left to right, an Arabic or Hebrew line's two links of one address would pair with its groups the other
+ * way round); the PDF's annotation array, whose order the part's list keeps, need not be TeX's (two \href groups listed right
+ * to left). An annotation of no line of the member (none on its page) comes after those that have one, by its
  * page, then its place in the list.
  */
 function inReading(ids: readonly number[], list: readonly Link[], lines: readonly Line[], page: number): number[] {
@@ -544,7 +544,7 @@ function inReading(ids: readonly number[], list: readonly Link[], lines: readonl
 }
 
 /** matchUnit's whole tier: of annotations `ids` of member `m`'s text, those of the one target that hold every own glyph of it on
- *  page `page`: as the part states it (Link.whole, by glyph point, as today's), else (a part made before) where each of its lines'
+ *  page `page`: as the part states it (Link.whole, by glyph point), else (a part made before) where each of its lines'
  *  ink is inside one of their boxes, its baseline between their edges; null where no target or more than one does */
 function wholeOf(ids: readonly number[], list: readonly Link[], m: Placed, page: number): number[] | null {
   const mine = m.lines.filter((l) => l[0] === page && !(l[9] & LINE_FLAG.KEPT))

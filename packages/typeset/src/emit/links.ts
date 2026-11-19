@@ -1,22 +1,21 @@
-// D.links (design-b §1.6 E1, T36, G13; design-a §1.2 Page.links): a laid member's links moved with the pieces they are over.
-// Ported from engine 065c1d973 links.mjs: matchUnit L369-446 (an annotation matched to the member's pieces, tier by tier:
-// geometry, a citation's key or a destination's name, a url, the order of a kind, the whole text), placeUnit L485-497 with
-// placeText, placeCrop, placePair, keptOf, rangeRecord, spanOf, tooDeep, normed (a matched annotation's record over what is
-// drawn of its piece: the drawn characters of a rendering, a crop's own map, a pair's tokens), and the annotations' kinds and
-// urls (kindOfAnnot, urlOf). Lane L1 states each annotation's owner (Part.links' `owner`, today's
-// ownedIn run once by the prepare): a member's candidates are the annotations it owns, matched among its pieces as today.
-// A link no member's drawing takes stays at A's boxes (design-a §1.2: Page.links), the reader's.
+// D.links (Page.links): a laid member's links moved with the pieces they are over: matchUnit (an annotation matched to the
+// member's pieces, tier by tier: geometry, a citation's key or a destination's name, a url, the order of a kind, the whole
+// text), placeUnit with placeText, placeCrop, placePair, keptOf, rangeRecord, spanOf, tooDeep, normed (a matched annotation's
+// record over what is drawn of its piece: the drawn characters of a rendering, a crop's own map, a pair's tokens), and the
+// annotations' kinds and urls (kindOfAnnot, urlOf). The prepare states each annotation's owner (Part.links' `owner`): a
+// member's candidates are the annotations it owns, matched among its pieces.
+// A link no member's drawing takes stays at A's boxes (Page.links), the reader's.
 import type { LaidLine } from '../fit/types.ts'
 import type { LineRun, TextRun } from './display.ts'
 
-/** the most work a member's links may spend, a count of point-against-box tests (links.mjs WORK_MAX); unmeasured */
+/** the most work a member's links may spend, a count of point-against-box tests; unmeasured */
 const WORK_MAX = 2e7
 /** how far a browser's advances may part from the layout's measure, a share of the distance from a run's start (DRIFT_BOUND) */
 const DRIFT_BOUND = 0.06
 
 /** an annotation as the match reads it: its target, its glyph points under it (g2), its boxes, its text, its border; `at` its
  *  place in its member's annotations' order on A where the caller states it (lay/links.ts inReading: the PDF's annotation
- *  array need not be in TeX's order); where it does not, its order is its index `i` on its page (today's: page, then PDF
+ *  array need not be in TeX's order); where it does not, its order is its index `i` on its page (by page, then the PDF's
  *  order) */
 export type Annot = {
   i: number
@@ -58,7 +57,7 @@ const sound4 = sound
 const within = (x: number, y: number, s: readonly number[]) =>
   x >= s[1]! - 0.5 && x <= s[3]! + 0.5 && y >= s[5]! - 0.5 && y <= s[4]! + 0.5
 
-/** what an annotation points to: a citation, a footnote's mark, another destination, a url (links.mjs kindOfAnnot) */
+/** what an annotation points to: a citation, a footnote's mark, another destination, a url */
 export function kindOfAnnot(a: { url?: string; dest?: unknown }): 'url' | 'cite' | 'note' | 'internal' {
   if (a.url !== undefined) return 'url'
   if (typeof a.dest === 'string' && a.dest.startsWith('cite.')) return 'cite'
@@ -83,7 +82,7 @@ const sameBorder = (a: Annot, b: Annot) =>
       a.border.style === b.border.style &&
       a.border.rgb.every((v, i) => v === b.border!.rgb[i])
 
-/** a member's annotations matched to its pieces, tier by tier (links.mjs matchUnit) */
+/** a member's annotations matched to its pieces, tier by tier */
 export function matchUnit({
   cands,
   targets,
@@ -651,7 +650,7 @@ function placePair(
 }
 
 /**
- * D.links: the records a member's matched annotations make over what is drawn of their pieces (links.mjs placeUnit): one box a
+ * D.links: the records a member's matched annotations make over what is drawn of their pieces: one box a
  * drawn line, in PDF units; `lines` the member's laid lines with their runs (D.display's lineRuns), `edge` a run's edge
  * (D.display's runEdge), `band` a token's band (D.sentences' tokenBand), `scale` the layout's
  */

@@ -1,6 +1,5 @@
 // The rule set's scripts: each script's fields, which a language's own fields replace, and the hyphenation minimums (what
-// each field mirrors: types.ts). The source, edited here; taken at engine 065c1d973 from today's rules/layout-rules.json
-// (schema 10, version 10).
+// each field mirrors: types.ts). The source, edited here.
 
 import type { FitKnob, LanguageRules, ScriptRules } from './types.ts'
 
@@ -89,7 +88,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     leadBase: 1,
     leadFloor: 1,
     // (jlreq's line pitch, 1.7 zw at the body's size: jlreq.cls:411 `baselineskip={17zw/10}`, TeX Live 2025; one rule at every
-    // size, the block's own: the owner's choice of 2026-11-15, docs/PDF-READER.md §18.89)
+    // size, the block's own: docs/PDF-READER.md §18.89)
     leadEm: 1.7,
     trackMin: -0.03,
     compressMax: 2,
@@ -128,7 +127,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
   Kore: {
     order: ['track', 'borrow', 'lead', 'shrink'] satisfies readonly FitKnob[],
     // (xetexko's \linespread{1.38889} under its `hangul` option on the class's own pitch: xetexko.sty:2596-2601, luatexko.sty:
-    // 992-997, TeX Live 2025; the owner's choice of 2026-11-15, docs/PDF-READER.md §18.89)
+    // 992-997, TeX Live 2025; docs/PDF-READER.md §18.89)
     leadBase: 1.38889,
     leadFloor: 1,
     leadEm: null,
@@ -153,8 +152,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     fillLeadRel: null,
     // (a line may break between two Hangul syllables, as xetexko's default breaks it: \XeTeXlinebreaklocale "ko", xetexko.sty:1849,
     // on at :1851, ICU's break opportunities between syllables, under \typesetmodern :322-332; a line so broken justified by the
-    // breaker's rule for the scripts that break between characters, `cjkJust`. The owner's choice of 2026-11-16,
-    // docs/PDF-READER.md §18.91)
+    // breaker's rule for the scripts that break between characters, `cjkJust`: docs/PDF-READER.md §18.91)
     keepAll: false,
     // (Korean writes a space between its words: nothing added after a title set in the line, §18.85; and xetexko sets glue
     // after a formula before a Hangul syllable, never before one after a syllable (its boundary tokens, xetexko.sty:1006-1033,

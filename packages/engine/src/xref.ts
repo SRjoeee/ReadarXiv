@@ -1,4 +1,4 @@
-// A PDF's objects as PDF.js reads them (layout/delta.mjs, the delta's builder and its proof): by the cross-reference sections,
+// A PDF's objects as PDF.js reads them (the wrap's proof, wrap.ts, and sparse.ts): by the cross-reference sections,
 // newest first along /Prev (a classic table or a cross-reference stream, its PNG predictors undone), each object parsed where
 // its entry says it is (an uncompressed one at its offset, its `n g obj` exactly there; one in an object stream by its index
 // there) and a stream's data the bytes its RESOLVED /Length names from the line after `stream` (an indirect /Length followed),
@@ -55,7 +55,7 @@ interface ObjectStream {
   members: number[]
 }
 
-/** the refusal of a document this reader will not read: `code` the delta's why (delta.mjs DELTA_WHYS) */
+/** the refusal of a document this reader will not read: `code` the delta's why (delta-wire.ts DELTA_WHYS) */
 export class XrefRefusal extends Error {
   declare code: DeltaWhy
   constructor(code: DeltaWhy, why: string) {
