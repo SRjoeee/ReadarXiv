@@ -1615,13 +1615,13 @@ describe("a group whose members stand on no line of a page today draws one of it
   })
   it("today's t31 translated there: a translation missing, as before", () => {
     const v2 = v2Of()
-    const p = measurePage('p-zh', v2, rec({ today: { units: [{ id: 31, lines: [drawnLine(92.47, 192.21, 646.6, '博wang@sutd.edu.sg ', 9.96)] }] } }), ctx(prep('bo wang@sutd.edu.sg')))
+    const p = measurePage('p-zh', v2, rec({ today: { units: [{ id: 31, lines: [drawnLine(92.47, 192.21, 646.6, 'xbo wang@sutd.edu.sg ', 9.96)] }] } }), ctx(prep('bo wang@sutd.edu.sg')))
     expect(shown(p)).toEqual([['t30 inknotes', true]])
   })
   it("the original's lines there are t31's: on a line v2 draws translated as a member of its own, no translation missing", () => {
     // (v2's member 50, joined to today's t60, stands on t31's original line on page N and is drawn there)
     const v2 = v2Of({ members: [{ ord: 50, state: 'laid', lines: [] }], facts: [{ ord: 50, kind: 'para', align: 'j', style: { size: 9.96 }, lines: [factLine(92.47, 192.23, 646.6, 9.96)] }], today: { 50: { today: 60 } } })
-    const r = rec({ today: { units: [{ id: 31, lines: [drawnLine(92.47, 192.21, 646.6, '翻译的文字', 9.96)] }] }, v2: { units: [{ id: 50, lines: [drawnLine(92.47, 192.21, 646.6, '翻译的文字', 9.96)] }] } })
+    const r = rec({ today: { units: [{ id: 31, lines: [drawnLine(92.47, 192.21, 646.6, 'une ligne traduite', 9.96)] }] }, v2: { units: [{ id: 50, lines: [drawnLine(92.47, 192.21, 646.6, 'une ligne traduite', 9.96)] }] } })
     const p = measurePage('p-zh', v2, r, ctx(prep('a translated line')))
     expect(shown(p)).toEqual([])
     expect(p.measures.within).toEqual(['t30 inknotes'])
