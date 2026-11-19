@@ -1,4 +1,4 @@
-// The bundle's objects, FORMAT 1 (the page design A §1.1, decided in the page decision): one zod schema
+// The bundle's objects, FORMAT 1: one zod schema
 // per kind, the types inferred from them. Coordinates are arXiv's page (the original PDF's user space), PDF units, y up, pages
 // 1-based, written on a 1/100 grid by the prepare. An object's reader ignores a field it does not know (zod strips it), so a
 // new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread.
@@ -11,7 +11,7 @@ const int = z.number().int()
 const page = z.number().int().min(1)
 const flag = z.literal(1)
 
-/** a unit's id: the content hash of its kind and pieces (ids.ts unitId; the baseline's dump spec §2) */
+/** a unit's id: the content hash of its kind and pieces (ids.ts unitId) */
 export const Id = z.string().regex(/^[0-9a-f]{64}$/)
 /** an object's digest: the lowercase hexadecimal SHA-256 of its bytes */
 export const Digest = z.string().regex(/^[0-9a-f]{64}$/)
@@ -23,7 +23,7 @@ export const Ink = z.tuple([page, num, num, num, num, num])
 export const PrepWhy = z.enum(['unlocated', 'unwrapped', 'page'])
 
 // ---------------------------------------------------------------- what a translator reads
-/** a unit's kind: an open string, of the set the dump spec documents (§2): para heading caption footnote cell abstract theorem
+/** a unit's kind: an open string, of this set: para heading caption footnote cell abstract theorem
  *  figure author affiliation reference; name (babel's names); inkheads inkcontents inknotes inkorphan inknames inkreferences
  *  (text our compile set that no source unit owns); inkfigures (text inside a figure); named (a unit's form with the author
  *  block's names it holds sent as elements, Part.paper.named: no member's) */
@@ -466,7 +466,7 @@ export const Word = z.object({
   caps: flag.optional(),
 })
 
-/** one placement on A: a unit's, a babel name's, a figure text's (design-a §1.1) */
+/** one placement on A: a unit's, a babel name's, a figure text's */
 export const Placed = z.object({
   ord: int.min(0),
   kind: Kind,
@@ -506,7 +506,7 @@ export const Placed = z.object({
   // index in `lines` of the line its first glyph stands on, that glyph's x0]; a word whose letters are not the page's in order
   // [offset, -1, 0]. Stated for a unit lit by sentence (Unit.sentences); a row's start is found at its sentence's first word
   // placed, its second or third where the first is not (docs/PDF-READER.md §17.2). Every word, not the shared cutter's starts:
-  // 82 % of Microsoft's starts are among them (40,409 in the corpus's stored rows, measured 2026-11-08), under design-a's 90 %
+  // 82 % of Microsoft's starts are among them (40,409 in the corpus's stored rows, measured 2026-11-08), under the 90 % required
   words: z.array(z.tuple([int, int, num])).optional(),
   // the paragraphs TeX opened inside its text, each by its first word: [that word's offset in the source projection (an entry of
   // `words`, where Row.sentences.src counts), the index in `lines` of the line TeX opened it on (that entry's line)], ascending.
@@ -530,7 +530,7 @@ export const Placed = z.object({
   // a figure text's direction where it is not along x (the page's y up), and, where it is so turned, its run: its first glyph's
   // origin, its box's length along `dir` and its room before and after its box along it (its lines are its box on the page,
   // which tells none of them). A field of its own, the fields a typesetter of before reads keeping their meaning: that one
-  // leaves a turned figure text the original's or reads it as it did, and FORMAT stays (design-a §1.6, "a changed meaning")
+  // leaves a turned figure text the original's or reads it as it did, and FORMAT stays (ARCHITECTURE.md §5: an optional field is free)
   dir: z.tuple([num, num]).optional(),
   run: z.tuple([num, num, num, num, num]).optional(),
   // the paper's title, a unit of its front matter (the source's: what a section heading's rules leave aside)
@@ -540,7 +540,7 @@ export const Placed = z.object({
   // (\multicolumn), and 1 where it is a header's (the rows above the table's first full rule), else 0. The cells of one table
   // are its `cells` tie's; what a reader decides of them together (a header, a column) is read from these
   cell: z.tuple([int, int, int, z.union([z.literal(0), z.literal(1)])]).optional(),
-  // the facts it carries as read on A, not stated by TeX (stage 1b states them): 'style' (TeX's font
+  // the facts it carries as read on A, not stated by TeX: 'style' (TeX's font
   // state), 'lead' (\baselineskip), 'measure' (the lines' m0..m1), 'align' (where TeX did not tell), 'shortskip' (the flags), 'breaks' (a break's line read by its short end)
   read: z.array(z.string()).optional(),
 })
@@ -619,7 +619,7 @@ export const Part = z.object({
 
 // ---------------------------------------------------------------- what opens a paper
 /** the original (A): its length, its digest, and the digest of each CHUNK bytes of it, so that a reader checks every range
- *  it reads (the host decision): `chunks` the base64url of the first 16 bytes of each chunk's SHA-256, joined */
+ *  it reads: `chunks` the base64url of the first 16 bytes of each chunk's SHA-256, joined */
 export const ORIGINAL_CHUNK = 65536
 export const Original = z.object({
   bytes: int.min(0),
@@ -641,7 +641,7 @@ export const Head = z.object({
   // [document, site, count, its first reason] (the engine's warnings.ts RECOVER_SITES): the page or the font read as PDF.js
   // answered it. None where nothing was (the corpus's every paper)
   recovered: z.array(z.tuple([z.enum(['A', 'B']), z.string().max(32), int.min(1), z.string().max(200)])).optional(),
-  // the prepare's marked compile left the optional classes of points out (the engine's POINT_CLASSES; design-performance Q2): a
+  // the prepare's marked compile left the optional classes of points out (the engine's POINT_CLASSES; docs/PDF-READER.md §19.7): a
   // marked request died where TeX said no error, and every one from it on was asked without them, so that the paragraph ends
   // and alignment those points state were read off the page. Absent: every class (the corpus's every paper but such a one)
   reduced: z.literal(true).optional(),
