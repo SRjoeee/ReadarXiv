@@ -8656,6 +8656,40 @@ rows, 23,180 by the runner). And the release check read each run whole by its ex
   release check's own rows step at this head finds no reply in the lab's Google store to 239 units its chain asks, at the base
   as here: its Google numbers are read over the round's rows.
 
+### 18.97 What is not laid stays where TeX set it, and nothing laid runs over it on a row they share (2026-11-19)
+
+A member whose last line is a row TeX shares with the next member of its flow (`Placed.join`: a run-in heading and its
+paragraph, a theorem's note and its text) may lay its translation over that row to its end only where the next member is laid
+after it, from where it ends (S.rowStart). Where the next member is not laid — no row by the rows' end, a row every translator
+refused, a reading left `unproven`, a kind the reader's option leaves, a unit the paper keeps — its text stays on the row where
+TeX set it, and nothing laid may be drawn over it. The member's room on the row then ends where TeX ended its text there (its
+last line's end on A), so that TeX's own separation stands before the text that stays: the stop a row already took where the
+next member's join states ink kept between the two (U.decor's `keptAfter`, the block's `stop`, B.slots), now taken from the next
+member's not being laid too (`lay/adapt.ts`, `afterOpen`). Only the row's room was cut at a follower not laid before, and only
+where a head took the follower's row by S.overFollower: a heading of several lines, justified, has its measure on its last
+row, and X.lastLines moved a one-line translation onto that row and drew it over the paragraph's text (2608.06701v1-zh p6 on
+the door's rows: the heading's one line to x 205 over its paragraph's original text from x 93, the paragraph without a row;
+production had its row and laid it after the heading). Laid with the stop, the heading stays on
+its first row and the paragraph's text keeps its place.
+
+- **A row no member is laid from keeps no share for one.** The member's share of the row is then `kept` (S.share), as where ink
+  stays between: the page fill may track its line within the stop, where it had held the row's end for a follower that is never
+  laid.
+- **A single line meets the stop before its own widening.** A one-line member's room on its row had been widened to half its
+  size before the follower's first glyph (U.decor's `widen`, Room.side); the stop now ends it at TeX's own end, and a translation
+  wider than the original there is set smaller, as on any row where ink stays after it.
+- **Not covered:** a follower refused by its own lay after the member before it was laid with the row open (`unfit`): S.relay
+  lays a member again only where it took the follower's row by S.overFollower.
+- **Measured** (2026-11-19, the 90 pairs' entry lay of every page, the reader gate's rows): rows of a laid member whose follower
+  is not laid: 158 on the door's rows (148 with no row, 10 kept by the paper), 1 drawn over the follower's text (the heading
+  above), 16 nearer it than TeX's separation, 139 within their own end; 13 on Google's (10 kept, 2 unproven, 1 refused by its
+  own lay with no line of its member on the row), none over. Moved by the stop: 151 member-pages on 39 pairs on the door's rows
+  and 12 on 2 pairs on Google's, every one such a member: the heading above back on its first row; 11 lines that ran past their
+  own end now ending at it, some set smaller (2610.19159v1-ja's run-in heads 8.97 to 8.72 and 8.72 to 8.22); 140 tracked wider
+  within the stop by the page fill, by up to 14 pt; one paragraph's second line 2.7 pt lower by the fill. The reader gate's I3 by
+  ink: 20 to 18 on the door's rows (the heading's two overlaps leave, none joins), 21 on Google's as before; I4, I5, the floors,
+  I6, I10, I11 as before.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
