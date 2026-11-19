@@ -610,8 +610,9 @@ export function planTags(unit: UnitIn, as: TagSpelling = 'void'): TagsPlan {
     // (on the wire a sentence ends at its stop: where the source glues an element after it, a note's mark, a footnote's call,
     // a forced break, the boundary marker stands right after the stop, before it; the cutter's sentence ends alone, an
     // abbreviation's dot none. A forced break that states the line end that ends its sentence leads the next one the same
-    // way, the boundary marker before the stretch it stands in, `glued` (text.ts leadsNext); a tie is read only after a stop. Google kept no stop before an element written as a word at a sentence's end, 0 of 80 such
-    // places, and 77 with the marker so, measured over the lab's Google store. The sentence stays the source's, the stop and
+    // way, the boundary marker before the stretch it stands in, `glued` (text.ts leadsNext); a tie is read only after a stop.
+    // Google kept no stop before an element written as a word at a sentence's end, 0 of 80 such places, and 77 with the marker
+    // so, measured over the lab's Google store. The sentence stays the source's, the stop and
     // the element with it: a reading sets the boundary after the element, `leads`. Where the source ties a word or a number to
     // the stop, `tied`, the cutter's end there is none: no marker, no cut. No word list, no language's case: the tie is TeX's
     // own statement; over the lab's Google store at RB1, 533 such ends, every one after an initial or an abbreviation ("M.~Casals",
