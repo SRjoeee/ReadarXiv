@@ -8788,7 +8788,8 @@ TeX set the element.
   I3 by ink, and the sentence cover reads three pieces fewer on each store (the three formulas' kept ink beside their crops), 0
   faults. 2610.21765v1 p9 ord 143 stays held for its own CJK glyph's top (620.97) 0.93 pt into the display row's fonts' box
   (620.04), as production draws it, against the row as a line and as the display's element (§18.96: an element's overlap is
-  said by the element).
+  said by the element). Read by the element, the base's lists held all three formulas, door 21 to 17, Google 24 to 20, none
+  joining. The display gate: none of its pairs holds such an element, and no page of either mode moves for it.
 
 ### 18.100 A line is pinned by ink that stays, never by its own end mark (2026-11-19)
 
@@ -8817,6 +8818,10 @@ formula's ink onto the next paragraph's first glyph. Production keeps that line 
   lines laid under TeX's line move up toward it on the door's rows (16 on Google's), 15 laid on or over it move up by 0.6 to
   4.4 pt (the same 15 on both), the others stay; ord 199 leaves I3 by ink, no overlap joins; the page fill moves 3 neighbours
   (6 on Google's) by under a point; I6's pages laid twice and across pages as before (11 by the head pass, the same members).
+  The display gate (its 22 pairs and the added, both modes): no page worse, none newly worse; the five pages of its pairs that
+  hold such a member keep their verdicts, their pixels' difference from production's up on the two whose last line rises
+  (2608.25210v2 p5 from 0.064 of the page to 0.074, p8 0.085 to 0.089) and down on the three whose last line had been laid under
+  TeX's (2608.25210v2 p9, 2610.21106v1 p4, p7).
 
 ## 19. The engine's contract
 
