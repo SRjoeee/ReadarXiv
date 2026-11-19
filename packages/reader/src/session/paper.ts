@@ -1,19 +1,18 @@
-// What the reader knows of its paper beside the layer (today's R engine/view/reader-view.mjs reportPaper, session/paper.ts,
-// core/pdf/entry.ts htmlVersionOf): its title, the PDF's own (its Info Title, arXiv's margin stamp dropped) else the one
-// arXiv's abstract page gives; and where arXiv has an HTML version of it, for a reader whose bilingual PDF cannot be had. Both
-// are asked through the host's fetch (the host design A §1.7: the extension's fallbacks, with no member of the host);
-// a host that does not serve arXiv's origin refuses them at once, and the reader then has no title of the page and offers the
-// HTML version, as a failed ask does.
+// What the reader knows of its paper beside the layer: its title, the PDF's own (its Info Title, arXiv's margin stamp dropped)
+// else the one arXiv's abstract page gives; and where arXiv has an HTML version of it, for a reader whose bilingual PDF cannot
+// be had. Both are asked through the host's fetch (the extension's fallbacks, with no member of the
+// host); a host that does not serve arXiv's origin refuses them at once, and the reader then has no title of the page and
+// offers the HTML version, as a failed ask does.
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
 import { bodyWithin } from './client.ts'
 
 /** arXiv's margin stamp, which its dvips and Ghostscript PDFs carry as their Info Title: `arXiv:1007.0072v1  [quant-ph]  1 Jul 2010` */
-export const ARXIV_STAMP = /^arXiv:\S+\s+\[[^\]]+\]\s+\d{1,2}\s+\w{3}\s+\d{4}$/
+const ARXIV_STAMP = /^arXiv:\S+\s+\[[^\]]+\]\s+\d{1,2}\s+\w{3}\s+\d{4}$/
 /** how long the abstract page may take, ms, its answer and its body together (R session/paper.ts ABSTRACT_MS): an id with
  *  no version waits on it before the layer is asked; unmeasured */
 export const ABSTRACT_MS = 15_000
 /** the abstract page's bytes at most (arXiv's are some tens of kilobytes); unmeasured */
-export const ABSTRACT_CAP = 2 * 1024 * 1024
+const ABSTRACT_CAP = 2 * 1024 * 1024
 /** how long the HEAD on the HTML version may take, ms: an answer not back by then says nothing, and the version is offered
  *  (R core/pdf/entry.ts ENTRY_CHECK_MS); unmeasured */
 export const HTML_CHECK_MS = 3000

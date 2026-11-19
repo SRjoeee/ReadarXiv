@@ -1,8 +1,8 @@
-// Moved into the engine package from src/pdf-reader/engine/layer-proto/units.mjs: the part of that module the moved front half calls, as it is; the rest
-// stays there and imports this part back through its transition path.
+// The source's units as the bundle holds them (bundleUnitsOf): a unit's flags, its table cell, its display edges and its
+// pieces, each piece's tag a number.
 
-/** a unit's flags: the paper's title, the front matter, written back in the source's brackets, kept as it is (a name,
- *  live.mjs openPaper's `kept`) */
+/** a unit's flags: the paper's title, the front matter, written back in the source's brackets, kept as it is (in the
+ *  caller's `kept`: bundleUnitsOf) */
 export const UNIT_FLAG_BITS = Object.freeze({ TITLE: 1, FRONT: 2, BRACKETED: 4, KEPT: 8 })
 /** a piece's tag: a text, a placeholder, a group's open and close, a nested unit */
 const TEXT = 0,
@@ -11,14 +11,14 @@ const TEXT = 0,
   CLOSE = 3,
   NESTED = 4
 /** an open's fourth value, what its pair sets over what it holds where the front end read it from the command's definition
- *  (latex-front.mjs identityPair, the piece's `sets`): 0, nothing — the command sets its argument alone (revtex's `\bibinfo`).
+ *  (latex-front.ts identityPair, the piece's `sets`): 0, nothing — the command sets its argument alone (revtex's `\bibinfo`).
  *  An open of three values says nothing of it */
 export const SETS_NOTHING = 0
-/** a string as the engine's text holds it: its UTF-8 bytes read latin1 (mt.mjs plainSource decodes it), as a source unit's
+/** a string as the engine's text holds it: its UTF-8 bytes read latin1 (mt.ts utf8 decodes it), as a source unit's
  *  text piece is */
 const engineText = (s: string) => (/^[\t\n\r -~]*$/.test(s) ? s : String.fromCharCode(...new TextEncoder().encode(s)))
-/** the display edges a unit may have (mt.mjs displayEdges), in their order */
-export const EDGES = Object.freeze(['lead', 'trail', 'inner'] as const)
+/** the display edges a unit may have (source/latex-front.ts displayOutside), in their order */
+export const EDGES = Object.freeze(['lead', 'trail', 'inner'] as const satisfies readonly (keyof UnitIn)[])
 /** a structural name's unit (bundleUnitsOf): no page's ink, a word of the target's for the layer */
 export const NAME_KIND = 'name'
 /** a table cell as a unit states it and the bundle copies it: its table, row and column, its span, whether it is a head */
@@ -29,7 +29,7 @@ export interface BundleCell {
   span: number
   head: boolean
 }
-/** a unit as bundleUnitsOf reads it (openPaper's, latex-front.mjs's): its kind, its flags, depth, cell and display edges where
+/** a unit as bundleUnitsOf reads it (openPaper's, latex-front.ts's): its kind, its flags, depth, cell and display edges where
  *  the front end set them, its pieces */
 export interface UnitIn {
   kind: string
@@ -63,7 +63,7 @@ export type BundleUnit = [
   edges: { lead?: string; trail?: string; inner?: string } | null,
   pieces: BundlePiece[],
 ]
-/** a piece as the front end makes it (latex-front.mjs), the fields pieceOf reads: a text, a placeholder, a group's open and
+/** a piece as the front end makes it (source/latex-front.ts), the fields pieceOf reads: a text, a placeholder, a group's open and
  *  close, a nested unit */
 export type FrontPiece =
   | { t: 'text'; s: string; src?: string }
@@ -97,11 +97,9 @@ function pieceOf(p: FrontPiece, idOf: ReadonlyMap<UnitIn, number>): BundlePiece 
 /**
  * The bundle's units from openPaper's paper: each unit [kind, flags, depth or null, its table cell or null, its display
  * edges or null, its pieces], by its index. Its flags TITLE, FRONT and BRACKETED as the front end set them, KEPT where
- * `kept` (a caller's set of the paper's units) holds it: none in the rebuilt engine, which keeps no unit by its words (the
- * old reader's openPaper passes its name rule's, src/pdf-reader/engine/layer-proto/units.mjs); its edges displayEdges'
- * (mt.mjs), restated here so that the reader's parse
- * loads no front end (a test holds the two equal). Language-independent and deterministic: every object written in one
- * order. Throws on a piece the front end does not make.
+ * `kept` (a caller's set of the paper's units) holds it: the engine's callers pass none, the instrument stating the units it
+ * keeps (unitFactsOf); its display edges those the front end set (EDGES). Language-independent and deterministic: every
+ * object written in one order. Throws on a piece the front end does not make.
  * After the source's units, the paper's structural names (openPaper's `names`: source/paper-names.ts), each a unit of kind
  * `name` of one text piece, its name: translated with the paper's units and cached by its text as any unit, never laid (it is
  * no page's ink), read by the layer as the target's word for that name (PDF-READER §19.14). The source's units keep their ids

@@ -2,8 +2,7 @@
 // (Room.sep): read from what the marked compile states (Instrument.tex: each heading's \@startsection skips, the paper's float,
 // caption and footnote separations, each paragraph's \parskip; marks/channels.ts) and from what stands under the member on A
 // (the next member's line under its last one, and the float each is of by B's brackets). Phase 10 (rooms), read-only: it reads
-// the members' lines, measures and columns (phases 6, 8) and B's points. The compile move's B1 (the display design's F12, 2c's
-// F-last and F-sep, 2d's rule 2 facts, F40's form 1).
+// the members' lines, measures and columns (phases 6, 8) and B's points (PDF-READER §18.76).
 import type { Line, Room } from '@readarxiv/format'
 import type { GlueName, Instrument } from '../instrument.ts'
 import { r2 } from './lines.ts'
@@ -31,7 +30,7 @@ type Placed = 'here' | 'out'
  *  shipped on it (its last `bs<n>`; 0 none); and each float's place, by its opening bracket among the bodies' in B's stream, on a
  *  page that states a column's body. A page bracketed whole (`whole`, Instrument.tex.whole: no \@makecol ran for it, a class's own
  *  output routine or a page of floats) states no place for its floats and no glyph of it stands in a column's body: where TeX
- *  placed a float there no bracket says (the coordinator's ruling of 2026-11-16: no gap class there, no geometric guess); a page
+ *  placed a float there no bracket says (PDF-READER §18.76: no gap class there, no geometric guess); a page
  *  of no body bracket, a compile made before the brackets, states none either */
 export function bracketsOf(
   B: { pages: readonly { glyphs: { length: number }; points: readonly { name: string; glyph: number }[] }[] },
@@ -145,8 +144,8 @@ function inForce(glues: NonNullable<Instrument['tex']['glues']>, serial: number)
  *   over both columns stands in none, and states no float's separation (2611.03953v2 p1: ICML's title and authors over a top
  *   float, which TeX set \textfloatsep under);
  * - on a page whose output routine was a class's own, or a page of floats (its body bracket the whole page's, Instrument.tex.whole,
- *   floats inside), or one stating no body, where TeX placed a float no bracket says: none of these (the coordinator's ruling of
- *   2026-11-16: no geometric guess);
+ *   floats inside), or one stating no body, where TeX placed a float no bracket says: none of these (PDF-READER §18.76: no
+ *   geometric guess);
  * - inside a float, over its caption `abovecaptionskip`, the caption over what follows `belowcaptionskip`;
  * - over a heading the compile states the skips of `beforeskip`, its before-skip as TeX adds it (a negative one negated whole);
  * - body text over a footnote `footins` (the rule between is TeX's own), a footnote over a footnote `footnotesep` (a strut: no
@@ -332,7 +331,7 @@ export function gapsOf(w: Work, under: InkUnder): Map<Member, { gap?: Gap; sep?:
       if (s) gap = glue(inForce(glues, fm), s)
       // (two floats set here one over the other: TeX set \intextsep under the first and \intextsep again over the second, the two
       // glues between the members whole (float.sty's \float@endH, LaTeX's \@addtocurcol: `\vskip\intextsep \box \vskip
-      // \intextsep`; the coordinator's ruling of 2026-11-16, 2608.04322v1 p9's [H] Figures 7 and 8), each float's value at its
+      // \intextsep`; PDF-READER §18.76, 2608.04322v1 p9's [H] Figures 7 and 8), each float's value at its
       // serial, natural sizes and shrinks added: the room TeX itself could close there)
       const pl = s === 'intextsep' ? placeOf(fm, page) : null
       const below = pl?.next ?? null

@@ -1,7 +1,6 @@
-// X.numbered (design-b §1.5, E17): a numbered heading set in fewer lines than the original's, laid again on the original's
-// last lines with its number as its first line's start (its ink copied there, a crop: its face, its colour, the space its
-// class set after it) and erased where it was; kept where it fits and moves down. Ported from engine 065c1d973 run.mjs
-// RUN:2275-2286.
+// X.numbered: a numbered heading set in fewer lines than the original's, laid again on the original's last lines with its
+// number as its first line's start (its ink copied there, a crop: its face, its colour, the space its class set after it)
+// and erased where it was; kept where it fits and moves down.
 //
 // Its inputs: the unit's layout, tokens, blocks, size and parameters as laid; whether U.decor took it as numbered; its
 // label's characters (the number TeX set before its first line ← Placed.label), read into the number's crop.
@@ -19,7 +18,7 @@ export type NumberCrop = {
   text: string
 }
 
-/** the number's crop: its glyphs' box, the space its class set after it to the line's start (RUN:2276-2278) */
+/** the number's crop: its glyphs' box, the space its class set after it to the line's start */
 export function numberCrop(
   chars: readonly { x0: number; x1: number; yb: number; size: number }[],
   text: string,

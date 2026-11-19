@@ -5,6 +5,7 @@
 // `eventsOf`), and the chrome's commands are the reader's.
 import type { Host, Prefs, PrefStore, PrefsPatch, ReaderState, Session as ChromeSession, SessionEvent, SessionHost as ChromeHost } from '@readarxiv/reader'
 import type { PaperStore } from '@/cache/paper-store'
+import { readerProviderOf } from '@/config/services'
 import type { SurfaceConfig } from '@/shared/surface-config'
 import type { TranslationTransport } from '@/providers/transport'
 import { prefsOf, withPrefs } from './prefs'
@@ -94,7 +95,7 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
   }
 }
 
-export function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string; store?: PaperStore | null }): Host {
+function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string; store?: PaperStore | null }): Host {
   return { fetch: storedFetch({ fetch: hostFetch(o), store: o.store ?? null, api: o.api }), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }) }
 }
 
@@ -146,6 +147,8 @@ export function surfaceStore(surface: Pick<SurfaceConfig, 'state' | 'subscribe' 
     },
     subscribe: (l: () => void) => surface.subscribe(l),
     patch: (change: Parameters<SurfaceConfig['patch']>[0]) => void surface.patch(change),
+    // this reader's calls are the PDF reader's (translate.ts readerTransport), whose chain asks the PDF reader's translator first
+    askedFirst: readerProviderOf,
   }
 }
 

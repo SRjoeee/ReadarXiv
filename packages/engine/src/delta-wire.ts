@@ -1,8 +1,8 @@
-// Our base as an incremental update over arXiv's PDF (the delta; layout/delta.mjs builds and proves it): what the head says of
+// Our base as an incremental update over arXiv's PDF (the delta, docs/route/delta.md): what the head says of
 // it and what any holder of its bytes checks without a PDF object layer. The composed document is arXiv's bytes (O of them),
 // the delta (D) and the remover's tails; the delta is ONE incremental-update section of the original's kind (section.ts)
-// whose /Prev is the original's startxref and whose offsets are the composed document's. Its head (layer-proto/format.mjs:
-// `base.kind` 'delta') names the pages it replaces as page ranges and counts what it reused and wrote. Imports the tail's
+// whose /Prev is the original's startxref and whose offsets are the composed document's. Its head (`base.kind`
+// 'delta') names the pages it replaces as page ranges and counts what it reused and wrote. Imports the tail's
 // largest object number and its latin-1 reading alone: the head's reader (a browser's), the page pass and the box read it alike.
 import { latin1 } from './bounded-reads.ts'
 import { OBJECT_MAX } from './tail.ts'
@@ -24,7 +24,7 @@ export const REPLACED_MAX: number = 4096
  *  (hybrid, an entry not at its object, a section that does not parse), `stream` a stream whose /Length does not end at
  *  `endstream`, `pages` our pages more than arXiv's or a replaced page past ours, `boxes` a replaced page of ours whose box, rotation or user unit is not arXiv's page's (the delta keeps the original's page dict but its contents and resources), `bound` a bound of the builder's or of the
  *  delta (DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, the held and decoded bytes), `empty` no page replaced, `proof`
- *  the structural proof failed, `shape` a delta the page pass was given that does not check (layer-proto's head reader would
+ *  the structural proof failed, `shape` a delta the page pass was given that does not check (a head's reader would
  *  refuse it) */
 export const DELTA_WHYS = Object.freeze([
   'delta-parse',
@@ -54,7 +54,7 @@ export const WRAP_STATS = Object.freeze([
   'split',
   'groups',
   'labelKept',
-] as const)
+] as const satisfies readonly (keyof WrapStats)[])
 /** a head's counts of our pages' wrap (in `base.stats`) */
 export interface WrapStats {
   wrapped: number
@@ -85,7 +85,7 @@ export interface DeltaSection {
  * Why a wrap's head fields (`stats` WRAP_STATS', `unhidden` [[unit id, UNHIDDEN code], …] by rising id, `labelKept` rising ids,
  * no id in both) do not read, null where they do: the lists within UNHIDDEN_MAX, `stats.unhidden` counting every unit (the
  * lists hold those with a group in the document alone, so at least as many by each code: that every unit with a group and no
- * entry is hideable is the producer's word, layout/wrap-final.mjs wrapFinal's, which no reader of a head can check), `stats.labelKept`
+ * entry is hideable is the producer's word, which no reader of a head can check), `stats.labelKept`
  * the list's count
  */
 export function wrapWhy(stats: unknown, unhidden: unknown, labelKept: unknown): string | null {

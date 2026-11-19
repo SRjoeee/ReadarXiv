@@ -1,5 +1,5 @@
-// Google Translate's web app endpoint (translateHtml), written from its measured behaviour (translation dossier §16,
-// ext-providers-config §16) as the owner's own code. The body is `[[items, from, to], 'wt_lib']` with the web app's
+// Google Translate's web app endpoint (translateHtml), written from its measured behaviour (DESIGN §8.3)
+// as our own code. The body is `[[items, from, to], 'wt_lib']` with the web app's
 // public client key (a third party's public constant, not a secret: CLAUDE.md rule 5); 150 items in 556 ms, 63 ms
 // median; tags kept 100 %. Its concurrency is 2, and a rate must never be the binding constraint (a token bucket of 2/s
 // once made a 216-block paper take 29.6 s).
@@ -28,7 +28,7 @@ const googleTarget = (target: Lang): string => REWRITE[target] ?? target
 
 const GOOGLE_LIMITS: Limits = { chars: 8_000, units: 100, inFlight: 2, callMs: 10_000, reask: 0 }
 /** the behaviour digest of write and read over tests/adapters/fixtures.ts */
-export const GOOGLE_DIGEST = '28c520f5ff7da8189c760346211f9553b86bf05ebbb243c46fdfcb025830452c'
+export const GOOGLE_DIGEST = '6130b5aa9cf5920d940c950b9b40767d33f3c0c5715f681bd88281a2de7654fc'
 
 const startOf = (text: string, at: number): number => {
   let i = at
@@ -57,7 +57,7 @@ export function readTagged(unit: UnitIn, raw: string): { content: OutPiece[]; se
 }
 
 /** the behaviour digest of the tags wire with its elements as voids (Chrome's codec, chrome.ts CHROME_DIGEST) */
-export const TAGS_DIGEST = '5cdc828d02ca666cb3a9e5e4237db0103e5eadb9bbd3ea13886be078981bcd18'
+export const TAGS_DIGEST = '23e35ad981859d4ea3ec78d6ad5c034035e75dd3493590f947ab07df6ddde2f1'
 
 /** The tags wire as a host's own translator that keeps tags writes and reads it (the extension's LLM services): Chrome's
  *  codec, its elements voids (what the prompt tells a model a void tag is), so its behaviour digest is Chrome's; Google

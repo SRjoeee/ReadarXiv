@@ -35,6 +35,12 @@ export const chosenService = (config: Pick<Config, 'services' | 'provider'>): Se
 export const isLlmChosen = (config: Pick<Config, 'services' | 'provider'>): boolean => chosenService(config) !== undefined
 
 /**
+ * The PDF reader's translator: the one its chain asks first (providers/translators.ts readerTranslatorsOf, DESIGN §8.5) and its
+ * service menu names and checks (UI.md S-P-46). The reader's pick (`providerChosen`), else the website's first, Google's
+ */
+export const readerProviderOf = (config: Pick<Config, 'provider' | 'providerChosen'>): string => (config.providerChosen ? config.provider : 'google-web')
+
+/**
  * A local endpoint (Ollama, LM Studio): it needs no key, and the SDK sends no Authorization header when the key is
  * empty; any other endpoint without a key must not be asked (Codex on #6). The one test the engine, the popup's
  * “can this run” and the drawer's hint all read

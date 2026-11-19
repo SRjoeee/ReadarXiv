@@ -1,4 +1,4 @@
-// The bundle's objects, FORMAT 1 (the page design A §1.1, decided in the page decision): one zod schema
+// The bundle's objects, FORMAT 1: one zod schema
 // per kind, the types inferred from them. Coordinates are arXiv's page (the original PDF's user space), PDF units, y up, pages
 // 1-based, written on a 1/100 grid by the prepare. An object's reader ignores a field it does not know (zod strips it), so a
 // new optional field does not raise FORMAT; FORMAT rises only when an old reader would misread.
@@ -11,7 +11,7 @@ const int = z.number().int()
 const page = z.number().int().min(1)
 const flag = z.literal(1)
 
-/** a unit's id: the content hash of its kind and pieces (ids.ts unitId; the baseline's dump spec §2) */
+/** a unit's id: the content hash of its kind and pieces (ids.ts unitId) */
 export const Id = z.string().regex(/^[0-9a-f]{64}$/)
 /** an object's digest: the lowercase hexadecimal SHA-256 of its bytes */
 export const Digest = z.string().regex(/^[0-9a-f]{64}$/)
@@ -23,16 +23,84 @@ export const Ink = z.tuple([page, num, num, num, num, num])
 export const PrepWhy = z.enum(['unlocated', 'unwrapped', 'page'])
 
 // ---------------------------------------------------------------- what a translator reads
-/** a unit's kind: an open string, today's documented set (the dump spec §2): para heading caption footnote cell abstract theorem
+/** a unit's kind: an open string, of this set: para heading caption footnote cell abstract theorem
  *  figure author affiliation reference; name (babel's names); inkheads inkcontents inknotes inkorphan inknames inkreferences
  *  (text our compile set that no source unit owns); inkfigures (text inside a figure); named (a unit's form with the author
  *  block's names it holds sent as elements, Part.paper.named: no member's) */
 export const Kind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
 /** an element's kind, as the source reader typed it: an open string (math display cite ref eqref footnote macro url code
- *  number other, today's; break, symbol; person, a block name in a `named` unit, its `src` the name's text) */
+ *  number other; break, symbol; person, a block name in a `named` unit, its `src` the name's text) */
 export const ElKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
 /** a span's style: an open string (bold italic mono sc link colour other …) */
 export const SpanKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
+
+// The values the engine makes of each open string above, named: Kind, ElKind and SpanKind stay open (a reader takes a
+// value it does not know: a part made by an engine before or after this one may hold another), and a list of the code that
+// reads some of them is declared of these (`satisfies`), so that TypeScript holds every member to a value the code makes.
+/** the unit kinds the engine makes (Kind): the source reader's (source/latex-front.ts: para, heading, caption, footnote, cell,
+ *  abstract, theorem, figure, author, affiliation, reference), the ink units' (locate/ink-units.ts INK_KIND, locate/ink.ts's
+ *  inkfigures), a babel name's (instrument/units.ts NAME_KIND) and the author block's named form (bundle/names.ts NAMED_KIND) */
+export type KnownKind =
+  | 'para'
+  | 'heading'
+  | 'caption'
+  | 'footnote'
+  | 'cell'
+  | 'abstract'
+  | 'theorem'
+  | 'figure'
+  | 'author'
+  | 'affiliation'
+  | 'reference'
+  | 'inkheads'
+  | 'inkcontents'
+  | 'inknotes'
+  | 'inkorphan'
+  | 'inknames'
+  | 'inkreferences'
+  | 'inkfigures'
+  | 'name'
+  | 'named'
+/** the element kinds the engine makes (ElKind, a unit's piece): instrument/instrument.ts elementKindOf's (a tie `space`, a
+ *  forced break `break`, marks/marks.ts MARK_CLASSES', `other`), a figure text's (locate/figure-lines.ts: code, math, cite, ref,
+ *  symbol), a block name's (bundle/names.ts PERSON_KIND), and a nested unit's mark as locate/geometry.ts reads it (`note-mark`) */
+export type KnownElKind =
+  | 'space'
+  | 'break'
+  | 'math'
+  | 'display'
+  | 'cite'
+  | 'ref'
+  | 'eqref'
+  | 'code'
+  | 'url'
+  | 'footnote'
+  | 'macro'
+  | 'number'
+  | 'other'
+  | 'symbol'
+  | 'person'
+  | 'note-mark'
+/** the classes the engine draws an element by (El.kind on A, ElKind: instrument/layer1.ts phClass's and instrument/instrument.ts
+ *  phClass2's: a paper's own text macro `umacro`) */
+export type KnownElClass = 'cite' | 'num' | 'display' | 'other' | 'symbol' | 'macro' | 'umacro' | 'space' | 'zero'
+/** a face's change as the engine reads it of a paper's macro or a figure text's run (locate/facts.ts changeOf): its role, its
+ *  weight and its slant where each differs from the face around it, joined by `-` */
+type FaceRole = 'serif' | 'sans' | 'mono'
+type FaceWeight = 'bold' | 'medium'
+type FaceSlant = 'italic' | 'upright'
+type FaceChange =
+  | FaceRole
+  | FaceWeight
+  | FaceSlant
+  | `${FaceRole}-${FaceWeight}`
+  | `${FaceRole}-${FaceSlant}`
+  | `${FaceWeight}-${FaceSlant}`
+  | `${FaceRole}-${FaceWeight}-${FaceSlant}`
+/** the span styles the engine makes (SpanKind): a group's command's (instrument/instrument.ts SPAN_STYLES, locate/ink.ts
+ *  groupStyleOf: bold, italic, mono, sc, link, colour, underline; `other` for any other group) and a figure text's run's face
+ *  change (locate/ink.ts, `colour` where none) */
+export type KnownSpanKind = 'bold' | 'italic' | 'mono' | 'sc' | 'link' | 'colour' | 'underline' | 'other' | FaceChange
 
 export type Piece =
   | { t: 'text'; s: string }
@@ -80,9 +148,10 @@ export const Piece: z.ZodType<Piece> = z.lazy(() =>
       kind: ElKind,
       src: z.string(),
       keys: z.array(z.string()).optional(),
-      // the punctuation the element sets at its own end that is its sentence's (a display's `x = y.`; today's displayStop),
-      // or a line end where it ends its sentence and sets none (a forced break a run-in label follows: marks/run-ins.ts): a
-      // translator may write it after the element so that the sentence ends there
+      // the punctuation the element sets at its own end that is its sentence's (a display's `x = y.`): a translator may write
+      // it after the element so that the sentence ends there; or a line end where it ends its sentence and sets none (a forced
+      // break a run-in label follows: marks/run-ins.ts): the sentence ends before the break, which the translator is sent as
+      // the next sentence's first thing
       stop: z.string().optional(),
       // the element sets nothing where it stands: no character and no space. By TeX's tables alone (instrument/mt.ts isInkless:
       // a declaration of a font, a size, a colour or a paragraph's shape, a key written to a file, a penalty, `\noindent`, `\-`,
@@ -150,7 +219,7 @@ export const Unit = z.object({
   entry: z.literal(true).optional(),
   // the kind of the block the paper's source ties it to, whose reading option it follows: `author`, a note the source writes
   // inside an author command's argument or attaches to an author (a \thanks in \author{…}, acmart's \authornote), which the
-  // names option shows translated or leaves the original's with the block (the owner's ruling of 2026-11-13). An open string,
+  // names option shows translated or leaves the original's with the block (docs/PDF-READER.md §18.71). An open string,
   // so that a reader of before reads a new value as none; not in the id, which stays its kind's and pieces'
   of: Kind.optional(),
 })
@@ -165,7 +234,7 @@ export const Units = z.object({ format, units: z.array(Unit) })
 // ---------------------------------------------------------------- what laying a page reads
 /** TeX's font state, the fill read from A: role, size, bold, slant (1 italic, 2 slanted), faked small capitals' size share
  *  (an element's: its own glyphs set some, its text El.text in TeX's case, each small capital its lowercase letter), set in
- *  small capitals (a placement's: most of its letters that can tell are faked small capitals, today's vote; a face of real small
+ *  small capitals (a placement's: most of its letters that can tell are faked small capitals; a face of real small
  *  capitals is its design's), upper case, fill 0xRRGGBB (a placement's: its text's outside the groups whose fill is another,
  *  SpanAt.colour, where it has such groups), the design where it is not the paper's */
 export const Style = z.object({
@@ -184,12 +253,12 @@ export const Style = z.object({
  *  flags (1 KEPT: its ink stays; 2 PINNED: shares its baseline with ink that stays; 4 SHORTSKIP; 8 RTL: its characters run right
  *  to left, its unit's paragraph direction (UAX #9 P2-P3); unknown bits ignored), and
  *  its size (the median of its main glyphs' sizes, the glyphs within 0.85 of its largest where they set a quarter of its
- *  characters: today's line size, MAKE:382-401, by which the typesetter draws the line's band; absent: the member's size) */
+ *  characters), by which the typesetter draws the line's band; absent: the member's size */
 export const Line = z.tuple([page, int, num, num, num, num, num, num, num, int, num.optional()])
 export const LINE_FLAG = Object.freeze({ KEPT: 1, PINNED: 2, SHORTSKIP: 4, RTL: 8 })
 
-/** an element on A. `kind` the class it is drawn by (today's placeholder class, layer2.mjs placeholdersOf's phClassProven,
- *  stated so that no rule of the typesetter reads a source: cite, num, display, other, symbol, macro, umacro, space, zero),
+/** an element on A. `kind` the class it is drawn by (stated so that no rule of the typesetter reads a source: cite, num,
+ *  display, other, symbol, macro, umacro, space, zero),
  *  `unknown` a paper's own macro no table renders, `copy` its source's plain text (a crop's copy text, its drawing from the
  *  source where no ink is found; a URL's, its glyphs' text on A where it has one, El.text), `sym` a symbol's drawn text and
  *  whether it is drawn raised where the source reads as a symbol (phClass2's: the tokens' class; a formula of symbols alone is
@@ -309,7 +378,7 @@ export const Label = z.object({
   unheld: int.positive().optional(),
 })
 /** the room about a placement: below its last line, to the next ink under it, beside its lines (a level figure text's: the free
- *  line along its run today's figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
+ *  line along its run the figure reading gives it; a turned one's room is its run's, Placed.run), a cell's clear band; `under`
  *  a figure text's depth under its baseline of the nearest stroke under its text (S.figures: a translation that reaches it is
  *  crowded). `runs`: the room under each run of its text lines (to its last line on a page or in a column, over a kept row of
  *  its own, over another's ink TeX set between two of its lines), each [that line's index, the depth under its baseline of the
@@ -318,8 +387,8 @@ export const Label = z.object({
  *  states that foot; `sep` TeX's normal paragraph separation where its paragraph ends, \baselineskip and \parskip, natural (a
  *  heading's, under its title set on lines of its own: its \@startsection after-skip and the \baselineskip and \parskip around
  *  it, natural, TeX's normal separation from its last baseline to the next paragraph's first): what a translation may borrow
- *  under a run, never past that bottom nor nearer the next ink than `sep` (the owner's ruling of 2026-11-08). A part made
- *  before 2026-11-08 may state the room under each run otherwise (`ends`, which nothing reads) */
+ *  under a run, never past that bottom nor nearer the next ink than `sep` (docs/PDF-READER.md §18.11). A part made before
+ *  PIPELINE 80 may state the room under each run otherwise (`ends`, which nothing reads) */
 export const Room = z.object({
   below: num,
   next: num.optional(),
@@ -329,8 +398,8 @@ export const Room = z.object({
   // bottom or top there, as a part made before does, which a typesetter of before reads as a rule)
   bandOpen: z.union([z.literal(1), z.literal(2)]).optional(),
   // (a table cell's sides of `side` that stop at a painted box, its column's rule or a neighbour's fill, not at a glyph: 1 the
-  // left, 2 the right. A cell widened past its own ink keeps a quarter of its size off a wall and goes half way to a glyph,
-  // today's paperTo; a part made before states none, every side a glyph's)
+  // left, 2 the right. A cell widened past its own ink keeps a quarter of its size off a wall and goes half way to a glyph;
+  // a part made before states none, every side a glyph's)
   wall: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   // (a table cell's room in its column: its column's box (the left and right edge of what TeX set in its column of its tabular,
   // every entry's, its unit cells' and the entries no unit is (a number, a formula alone), stated where they line up as the
@@ -340,12 +409,12 @@ export const Room = z.object({
   // (the column's own share of TeX's blank between columns), never past the cell's own `side`. Absent where the box is not
   // established: a p, m, b or X column, a cell of a \parbox or of no LaTeX template, a column a \multicolumn widened, one whose
   // entries do not line up, one of one entry. A single-line cell is laid in it, in its column's alignment, at the largest size
-  // not over the original's that fits it (the owner's decisions of 2026-11-13 and 2026-11-14, docs/PDF-READER.md §18.13); a
-  // typesetter of before reads none and lays it in its own room. A part made before 2026-11-14 states the box itself)
+  // not over the original's that fits it (docs/PDF-READER.md §18.13); a typesetter of before reads none and lays it in its own
+  // room. A part made before PIPELINE 102 states the box itself)
   column: z.tuple([num, num]).optional(),
   under: num.optional(),
   // (a figure text's container's edge over its baseline, PDF units up from it: a closed shape round all of its glyphs, inside
-  // which its translation is laid (the owner's reformulation of 2026-11-10); S.figures keeps a translation's band under it as it
+  // which its translation is laid (docs/PDF-READER.md §18.26); S.figures keeps a translation's band under it as it
   // keeps its depth over `under`. A typesetter of before reads none and lays the band as before)
   over: num.optional(),
   runs: z.array(z.tuple([int, num, num])).optional(),
@@ -398,7 +467,7 @@ export const Word = z.object({
   caps: flag.optional(),
 })
 
-/** one placement on A: a unit's, a babel name's, a figure text's (design-a §1.1) */
+/** one placement on A: a unit's, a babel name's, a figure text's */
 export const Placed = z.object({
   ord: int.min(0),
   kind: Kind,
@@ -438,7 +507,7 @@ export const Placed = z.object({
   // index in `lines` of the line its first glyph stands on, that glyph's x0]; a word whose letters are not the page's in order
   // [offset, -1, 0]. Stated for a unit lit by sentence (Unit.sentences); a row's start is found at its sentence's first word
   // placed, its second or third where the first is not (docs/PDF-READER.md §17.2). Every word, not the shared cutter's starts:
-  // 82 % of Microsoft's starts are among those (40,409 over the corpus's stored rows, 2026-11-08), under design-a's 90 %
+  // 82 % of Microsoft's starts are among them (40,409 in the corpus's stored rows, measured 2026-11-08), under the 90 % required
   words: z.array(z.tuple([int, int, num])).optional(),
   // the paragraphs TeX opened inside its text, each by its first word: [that word's offset in the source projection (an entry of
   // `words`, where Row.sentences.src counts), the index in `lines` of the line TeX opened it on (that entry's line)], ascending.
@@ -462,7 +531,7 @@ export const Placed = z.object({
   // a figure text's direction where it is not along x (the page's y up), and, where it is so turned, its run: its first glyph's
   // origin, its box's length along `dir` and its room before and after its box along it (its lines are its box on the page,
   // which tells none of them). A field of its own, the fields a typesetter of before reads keeping their meaning: that one
-  // leaves a turned figure text the original's or reads it as it did, and FORMAT stays (design-a §1.6, "a changed meaning")
+  // leaves a turned figure text the original's or reads it as it did, and FORMAT stays (ARCHITECTURE.md §5: an optional field is free)
   dir: z.tuple([num, num]).optional(),
   run: z.tuple([num, num, num, num, num]).optional(),
   // the paper's title, a unit of its front matter (the source's: what a section heading's rules leave aside)
@@ -472,7 +541,7 @@ export const Placed = z.object({
   // (\multicolumn), and 1 where it is a header's (the rows above the table's first full rule), else 0. The cells of one table
   // are its `cells` tie's; what a reader decides of them together (a header, a column) is read from these
   cell: z.tuple([int, int, int, z.union([z.literal(0), z.literal(1)])]).optional(),
-  // the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them): 'style' (TeX's font
+  // the facts it carries as read on A, not stated by TeX: 'style' (TeX's font
   // state), 'lead' (\baselineskip), 'measure' (the lines' m0..m1), 'align' (where TeX did not tell), 'shortskip' (the flags), 'breaks' (a break's line read by its short end)
   read: z.array(z.string()).optional(),
 })
@@ -487,13 +556,13 @@ export const Tie = z.discriminatedUnion('rule', [
 ])
 /** a link annotation's border as PDF.js draws it on A (its annotation layer, the original's pane): its width (its /BS /W, else
  *  its /Border's third number, as PDF.js reads them: CSS px as it draws it), its colour 0xRRGGBB (its /C, PDF.js's borderColor),
- *  its style where it is not solid (/S /D or a /Border dash array, dashed; /S /U, underline; beveled and inset drawn solid, as
- *  today's reader draws them). Stated where the width is above 0 and the colour is one: an annotation with none draws none */
+ *  its style where it is not solid (/S /D or a /Border dash array, dashed; /S /U, underline; beveled and inset drawn
+ *  solid). Stated where the width is above 0 and the colour is one: an annotation with none draws none */
 export const LinkBorder = z.union([z.tuple([num, int]), z.tuple([num, int, z.enum(['dashed', 'underline'])])])
 /** one of A's link annotations: its rectangle, where it goes, the member and the piece that hold it (an element's id, '' its
  *  text), the characters of the glyphs under it (their glyph points', PDF.js's rule, in their order, white space aside: what
- *  today's link match finds among the characters a piece is drawn as; absent where it holds none), whether those of its text's
- *  are its label's (more than half of its glyphs: the label's group, which stays on where the label is not drawn anew), whether
+ *  the typesetter's link match finds among the characters a piece is drawn as; absent where it holds none), whether those
+ *  of its text's are its label's (more than half of its glyphs: the label's group, which stays on where the label is not drawn anew), whether
  *  its owner's annotations of its target on its page hold, together, every glyph of its owner's text and elements there (by
  *  glyph point: a link round the member's whole text, a contents entry's), and its page where it is not the part's (an
  *  annotation of a member of the page on another of its pages, which a translation may draw on this one), and its border on A
@@ -538,7 +607,7 @@ export const Part = z.object({
     faces: Faces,
     lineskip: z.tuple([num, num]).optional(),
     names: z.array(z.tuple([z.string(), Id])).optional(),
-    // (one person, one translation per paper: the owner's ruling of 2026-11-10, docs/PDF-READER.md §19.15. Where the names
+    // (one person, one translation per paper: docs/PDF-READER.md §19.15. Where the names
     // toggle shows the block, a block name the page's text holds elsewhere is drawn with the block's translation of it)
     named: z.array(Named).optional(),
     persons: z.array(Person).optional(),
@@ -551,7 +620,7 @@ export const Part = z.object({
 
 // ---------------------------------------------------------------- what opens a paper
 /** the original (A): its length, its digest, and the digest of each CHUNK bytes of it, so that a reader checks every range
- *  it reads (the host decision): `chunks` the base64url of the first 16 bytes of each chunk's SHA-256, joined */
+ *  it reads: `chunks` the base64url of the first 16 bytes of each chunk's SHA-256, joined */
 export const ORIGINAL_CHUNK = 65536
 export const Original = z.object({
   bytes: int.min(0),
@@ -573,7 +642,7 @@ export const Head = z.object({
   // [document, site, count, its first reason] (the engine's warnings.ts RECOVER_SITES): the page or the font read as PDF.js
   // answered it. None where nothing was (the corpus's every paper)
   recovered: z.array(z.tuple([z.enum(['A', 'B']), z.string().max(32), int.min(1), z.string().max(200)])).optional(),
-  // the prepare's marked compile left the optional classes of points out (the engine's POINT_CLASSES; design-performance Q2): a
+  // the prepare's marked compile left the optional classes of points out (the engine's POINT_CLASSES; docs/PDF-READER.md §19.7): a
   // marked request died where TeX said no error, and every one from it on was asked without them, so that the paragraph ends
   // and alignment those points state were read off the page. Absent: every class (the corpus's every paper but such a one)
   reduced: z.literal(true).optional(),

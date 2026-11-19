@@ -1,4 +1,4 @@
-// design-a's entry (§1.2): layPage(part, rows, rules, metrics) → Page, pure, called in every state. A part is the page's whole
+// The typesetter's entry: layPage(part, rows, rules, metrics) → Page, pure, called in every state. A part is the page's whole
 // problem: every flow its page reads, each member's facts on arXiv's page (Placed), the paper's faces and \lineskip; the rows are
 // the translation package's Results by unit id. Composed over what the gate's runner proves member by member: the wait check
 // (waitOf: rows not in while more may come, before any work), each member's reading and tokens (read.ts readMember over the row's
@@ -14,11 +14,11 @@
 // A's boxes). A figure text is set by S.figures over the part (lay/figures.ts: one laid line of its translation where it
 // fits, a turned one's along its run, its items' `dir`), one of a part that states no text of its own (Placed.plain: a part
 // made before) read as before. A CJK cell's bands are read over the rules its own Room.band states. A member's groups are turned
-// off on a page only where it has them there (groupsOn: the add-on wraps each page's ink apart), as today's hide.mjs hides
-// each page's own: a member laid across a page break turns off on the other page none of the groups of this one. A
+// off on a page only where it has them there (groupsOn: the add-on wraps each page's ink apart), each page its own: a
+// member laid across a page break turns off on the other page none of the groups of this one. A
 // theorem-like head is drawn in the target's word (U.label's headLabelInTarget): the rules' (Rules.heads), else the paper's own
-// name unit's row (ownNamesOf over Part.paper.names), as today's headOf; a reference cleveref or \autoref generates, and a
-// citation's note, with its names in the target's (U.rename: Rules.refs, babel's names, the paper's own), as today's renameRefs.
+// name unit's row (ownNamesOf over Part.paper.names); a reference cleveref or \autoref generates, and a citation's note,
+// with its names in the target's (U.rename: Rules.refs, babel's names, the paper's own).
 import { type Box, type Ink, LINE_FLAG, type OutPiece, type Part, type Placed, toggleKind } from '@readarxiv/format'
 import { cover } from '../breaker/cover.ts'
 import { faceOf, ownSmallCaps } from '../breaker/faces.ts'
@@ -60,9 +60,8 @@ const LABEL_KEPT = 4
  * The groups member `m` has on page `page`, as the add-on wraps them (format's groupName `axt:<ord>.<page>.<t|e|l>`, one of each
  * a page): its text where a line of it stands, its elements where one's ink is, its label where its box is. A Page turns off
  * nothing else there: a group the document does not hold leaves the whole member the original's (the reader's held()), and a
- * member laid across a page break turned off on one page the groups of the other (triage-1 B: 2608.16117v1-de p4's t11, its
- * p3 element drawn on p4; 2608.25210v2-zh p10's t196, its label on p9). Today's hide.mjs: a placeholder's group hidden where
- * one with segments on the page moved, the label where its box is on the page
+ * member laid across a page break turned off on one page the groups of the other (2608.16117v1-de p4's t11, its
+ * p3 element drawn on p4; 2608.25210v2-zh p10's t196, its label on p9)
  */
 function groupsOn(m: Placed, page: number): number {
   return (
@@ -89,14 +88,13 @@ function cutsOf(L: Layout | undefined): { page: number; el: boolean; of?: number
  * A CJK cell's rules as U.params' cellBands reads them, [x0, y0, x1, y1] each, on the page of its first line: the rule over its
  * lines and the rule under them, which its own Room.band states (the clear band between them), across its lines. Its own alone:
  * a cell's single line widened into its row (U.decor's widen) spans its neighbours, whose bands' edges stand over and under no
- * line of its (triage-1 S1: 1706.03762v7 p8's t94 capped at 0.897 by its row's other cells, 2602.23285v2 p7's t58 at 0.615).
+ * line of its (1706.03762v7 p8's t94 capped at 0.897 by its row's other cells, 2602.23285v2 p7's t58 at 0.615).
  * A band edge is no rule of its where no rule stands on that side (Room.bandOpen: 1 under, 2 over; the band states the line's
  * own bottom or top there) or where the rule reaches into its line's own glyphs: the edge over its first line under their top,
  * the edge under its last line over their bottom, both as the part states them (Line's top and bottom: the PDF's ink, as the
- * rule's edges are). Today's rule: cell-rules.mjs pageRules took a rule through a line's own glyphs' band for none of its
- * own (the same top and bottom: 2610.21880v1 p2's tightly set table, its \hline 0.01 under t15's glyphs' top, cap 1 where the
- * band read as its rules gave 0.817; t22's under its glyphs' bottom, 0.897 where the band gave 0.827). Today's cellBands
- * (L2:352) then read those rules over the cell's own rectangle, never widened (RUN:2116)
+ * rule's edges are): a rule through a line's own glyphs' band is none of its own (the same top and bottom: 2610.21880v1 p2's
+ * tightly set table, its \hline 0.01 under t15's glyphs' top, cap 1 where the band read as its rules gave 0.817; t22's under
+ * its glyphs' bottom, 0.897 where the band gave 0.827). cellBands reads those rules over the cell's own rectangle, never widened
  */
 function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
   const band = m.room.band
@@ -117,10 +115,9 @@ function bandRulesOf(m: Placed): (page: number) => number[] | undefined {
  * Whether a member of a table's group, not set before its lay, holds its group the original's: only one that spans columns or
  * rows (its box is the others' too). A cell that cannot be set — unlocated, the wrap cannot hide it, its row failed (a Row not
  * ok: refused, unavailable, …), unproven, a face it lacks, an error — is the original's by itself, as a paragraph is, the rest
- * of its group laid (the coordinator's ruling (c) of 2026-11-13, under the owner's of the same day, a table's cell is text like
- * any other; the ruling of 2026-10-24 had so left a cell the wrap cannot hide; today's contract, RUN:1223 and settleGroup
- * RUN:2411, kept the whole group). One never to be translated holds nothing either: no text of its own, a kind the reader
- * leaves, or no row with every row in (`none`)
+ * of its group laid (docs/PDF-READER.md §18.72: a cell is judged as body text is, and a group drawn whole or not at all
+ * would let one unfit reply take back a whole table). One never to be translated holds nothing either: no text of its own,
+ * a kind the reader leaves, or no row with every row in (`none`)
  */
 const holdsTable = (spanning: boolean) => spanning
 
@@ -141,8 +138,8 @@ function contentOf(m: Placed, rows: Rows): OutPiece[] | Unlaid {
 /**
  * S.table.groups over the part: each table's cells by group (the tie's cells by their stated grid places, Placed.cell; a table
  * that states none one group), for the hold and the settle (holdsTable, settleTies). No group is decided by what its cells say:
- * which cells are language is the engine's (Unit.kept, PDF-READER §18.72); engine 065c1d973's column rule, groups.mjs
- * decideGroups' `names`, is not ported
+ * which cells are language is the engine's (Unit.kept, PDF-READER §18.72), and no column is kept whole by how many of its
+ * cells a translator gave back as they went
  */
 function tableGroupsOf(part: Part): Map<NonNullable<Part['ties']>[number], TableGroup[] | null> {
   const byOrd = new Map(part.flows.flat().map((m) => [m.ord, m]))
@@ -157,7 +154,7 @@ function tableGroupsOf(part: Part): Map<NonNullable<Part['ties']>[number], Table
 }
 
 /**
- * S.names over the part (RUN:1355 paintNames): a babel name drawn on its own, in the target's word, at its size, weight and
+ * S.names over the part: a babel name drawn on its own, in the target's word, at its size, weight and
  * slant, its left edge kept or, centred, its centre, shrunk into the room on its line to the last floor at most. Its facts are
  * the part's: its Word, its own text (Placed.plain), Style (its case: the text's capitals, Style.upper, never faked small
  * capitals), its line, its column (the line's measure) and Room.side, the next ink either side (a glyph's edge a quarter of its
@@ -204,7 +201,7 @@ export function nameOf(
   }
   const color = m.style.fill ? `#${m.style.fill.toString(16).padStart(6, '0')}` : undefined
   const st = { ...tstyleOf(m.style, paper.designs), ...(m.style.sc ? { caps: true } : {}), ...(color ? { color } : {}) }
-  // (its label: the number TeX set right before it on its line (own.mjs MR 6c, 2610.20967v1's "9. REFERENCES"), drawn as its crop
+  // (its label: the number TeX set right before it on its line (the wrap's `n<occ>.l`, 2610.20967v1's "9. REFERENCES"), drawn as its crop
   // before the word, the original's distance between their starts kept: where the name is centred the line is laid whole, as TeX
   // centred it; kept at its left edge, the number where it stood. Drawn either way, its group off with the text's: a page whose
   // labels the add-on folded into the text's group hides it with the word)
@@ -282,11 +279,11 @@ function labelRowOf(
   return { line: [lb.ink[5], x0, x, items] }
 }
 
-/** layPage (design-a §1.2): page `part.page` laid from its part and the target's rows */
+/** layPage: page `part.page` laid from its part and the target's rows */
 export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics, o: EntryOptions = {}): Page {
   const page = part.page
   const members = part.flows.flat()
-  // (the kinds the reader leaves the original's: its "what to translate", design-a's Choices.leave)
+  // (the kinds the reader leaves the original's: its "what to translate", Rules.leave)
   const leave = new Set(rules.leave)
   // (a unit naming a person of the author block elsewhere laid with the block's translation of the name where the names
   // toggle shows the block: one person, one translation, docs/PDF-READER.md §19.15, named.ts)
@@ -318,7 +315,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   const rowLines = rowLinesOf(part.flows, { left: true })
   const lineskip = (part.paper.lineskip as [number, number] | undefined) ?? null
   // (a theorem-like head's word where the target's packages name none: the paper's own name unit's translation, PDF-READER
-  // §19.14, today's ownNames; read when a member that can draw it asks, its page waiting for its paper's names, wait.ts)
+  // §19.14; read when a member that can draw it asks, its page waiting for its paper's names, wait.ts)
   const ownNames = ownNamesOf(part.paper.names, rows)
   // (each table's groups, for the hold and the settle below)
   const tableGroupsOfPart = tableGroupsOf(part)
@@ -335,7 +332,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   // (the elements each member's reading keeps where they stand (U.elements' kept, in place): their ink and their links stay)
   const keptIn = new Map<number, Set<string>>()
   // (each member read, its faces asked and only then measured: the reading takes no width, B.cover asks Metrics' readiness
-  // first, so that a face not loaded is waited for and never measured, PR #620's re-review)
+  // first, so that a face not loaded is waited for and never measured)
   const read = new Map<
     number,
     { rd: ReturnType<typeof readMember>; pieces: readonly V0Piece[]; tokens: Tokens; paras?: ParasStated }
@@ -351,8 +348,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   // (each member as it is set: one led by a name with the name and the joint its label, one after a name kept pinned by it)
   const setAs = new Map<number, Placed>()
   // (the figure texts: set by S.figures, never read as paragraphs. One of a part made before the prepare stated its own text
-  // (Placed.plain) is read as before (converge-4's entry, ec6715946: a paragraph's reading): S.figures, its source unknown,
-  // would redraw a label its translation leaves as it was, #631's review)
+  // (Placed.plain) is read as a paragraph is: S.figures, its source unknown, would redraw a label its translation leaves as
+  // it was)
   const figs: Placed[] = []
   for (const flow of part.flows)
     for (let k = 0; k < flow.length; k++) {
@@ -361,7 +358,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
         state.set(m.ord, 'left')
         unmeant.add(m.ord)
         // (a name left the original's before the member the part binds it to: that member set after it, pinned by it, as after
-        // any name kept (keptBefore; Devin on #624: its follower could widen over the name))
+        // any name kept (keptBefore: its follower could otherwise widen over the name))
         const next = m.kind === 'name' && m.bound ? flow[k + 1] : undefined
         if (next && next.kind !== 'name') leadFor.set(next.ord, { name: m, word: null })
         continue
@@ -484,8 +481,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   // (one state per call: a face not loaded leaves the whole page waiting, as a row not in does)
   if (faces.length) return waitAll(faces)
   // (each read member's setting, its flow taken from its end: a run-in head's follower is open only where the follower is set,
-  // so that no head runs over the row of a member left the original's (the reader's leave, a row failed, unproven), PR #620's
-  // re-review: the follower's row was in, the follower left, the head drawn over its original text)
+  // so that no head runs over the row of a member left the original's (the reader's leave, a row failed, unproven): the
+  // follower's row in and the follower left, the head would be drawn over its original text)
   // (a name in a flow is no row for the member beside it: the member it leads is set with it, or after it kept)
   const besideOf = (x: Placed | undefined) => (!x || x.kind === 'name' ? null : (setAs.get(x.ord) ?? x))
   const adaptAt = (flow: readonly Placed[], k: number, open: boolean): void => {
@@ -522,8 +519,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
       return
     }
     if (rd.labelDrawn !== null) relabelled.add(m.ord)
-    // (today's hide.mjs: its placeholders' group hidden on a page where one with ink there, no display, is not kept where it
-    // stands; an element kept in place by the part (El.keep) is in no group)
+    // (its elements' group hidden on a page where one with ink there, no display, is not kept where it stands; an element
+    // kept in place by the part (El.keep) is in no group)
     const els = new Map(m.els ?? [])
     const inPlace = new Set<string>()
     for (const [q, res] of rd.resolutions) {
@@ -596,8 +593,8 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   }
   // (a flow's size tie, one paragraph of TeX's at one scale. A figure's set, which the part states as a size tie too (the
   // figure reading's sets), is read for no size: each of its texts at what its own width needs, a label S.figures sets and one
-  // the paragraph path lays (an element, lines joined, a label) alike, the owner's ruling of 2026-11-13 on a figure's sets
-  // (docs/PDF-READER.md §19.12, §18.54). A size tie holding a figure text is a figure's set: no figure text joins a flow)
+  // the paragraph path lays (an element, lines joined, a label) alike (docs/PDF-READER.md §19.12, §18.54). A size tie
+  // holding a figure text is a figure's set: no figure text joins a flow)
   const figureOrds = new Set(members.filter((m) => m.kind === 'figure').map((m) => m.ord))
   const ties = [
     ...cellTies,
@@ -651,7 +648,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
   // (the members laid on the page with their layouts, and those drawn whole on lines of their own: the owners whose links are
   // drawn with them)
   const owners = new Map<number, LinkOwner>()
-  // (every laid line inked: a CJK run of no fill of its own in CJK_INK, the owner's exception of 2026-11-08; display.ts inkLines)
+  // (every laid line inked: a CJK run of no fill of its own in CJK_INK, docs/PDF-READER.md §11.8; display.ts inkLines)
   const cjkClass = cjkClassRe(!!(R as { cjkQuotes?: boolean }).cjkQuotes)
   const inked = (lines: Laid['lines']): Laid['lines'] => inkLines(lines, cjkClass)
   const out: Laid[] = members.map((m) => {
@@ -713,7 +710,7 @@ export function layPage(part: Part, given: Rows, rules: Rules, metrics: Metrics,
     ])
     // (its groups turned off, each only where it has it on a page (groupsOn): its text where laid, its elements where one with
     // ink there is drawn otherwise than kept where it stands (a crop cut from that page, on a line of either page, or text in the
-    // translation: today's hide.mjs), its label where it is drawn anew or carried as a crop; this page's its `off`, another's what
+    // translation), its label where it is drawn anew or carried as a crop; this page's its `off`, another's what
     // its links of that page read)
     const layout = x?.lay?.layout
     // (its own crops: another's label drawn at its end is that member's)

@@ -1,5 +1,5 @@
 // Chrome's built-in translator, over the `Translator` API object the host injects (the extension's background has it;
-// a test passes a fake). Written from its measured behaviour (ext-providers-config §16): `create()` needs a user gesture
+// a test passes a fake). Written from its measured behaviour (DESIGN §8.4): `create()` needs a user gesture
 // while the model is only `downloadable` (a chain's hand-over has none); the first download took 67 s with no progress,
 // `create()` 8.6 s with the model ready; `availability()` may never answer, so every probe is bounded; a shared session
 // takes no request's signal (one request's timeout would reject the session every other request waits on); the model
@@ -25,7 +25,7 @@ const CHROME_LIMITS: Limits = { chars: 4_000, units: 20, inFlight: 1, callMs: 60
 const CHROME_PROBE_MS = 2_000
 /** a session's making's bound, ms: past the 8.6 s measured for a `create()` with the model ready (DESIGN §8.4) */
 const CHROME_CREATE_MS = 60_000
-export const CHROME_DIGEST = '5cdc828d02ca666cb3a9e5e4237db0103e5eadb9bbd3ea13886be078981bcd18'
+export const CHROME_DIGEST = '23e35ad981859d4ea3ec78d6ad5c034035e75dd3493590f947ab07df6ddde2f1'
 
 /** a target as the API names it: its Chinese by script, bare for the simplified */
 const REWRITE: Record<string, string> = { 'zh-Hans': 'zh', 'zh-CN': 'zh', 'zh-TW': 'zh-Hant' }

@@ -1,4 +1,4 @@
-// A PDF.js document over a ByteSource (carried from the website's own ranged document): the first chunk read here and given
+// A PDF.js document over a ByteSource: the first chunk read here and given
 // as the transport's initial data, the document's last chunks asked as soon as its length is known (PDF.js reads a file's
 // startxref and cross-reference right after its first chunk), and every range PDF.js asks for read chunk by chunk through the
 // source (the store shares and joins them) and given whole once its chunks are in. The source is not the document's:
@@ -13,7 +13,7 @@ import { CHUNK } from './store.ts'
 
 /** the chunks at a document's end asked beside its first: its trailer and cross-reference (2602.23285v2: its last 2 chunks
  *  were 3.11 to 3.65 s of a cold visit, one after the other, once its worker had started; the website's measurement) */
-export const TAIL_CHUNKS = 2
+const TAIL_CHUNKS = 2
 
 /** what of PDF.js a ranged open needs */
 export interface RangedLib {

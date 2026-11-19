@@ -1,8 +1,7 @@
-// The byte store one reader holds (the host design A §1.5): whole chunks of the objects its sources read, shared by
+// The byte store one reader holds: whole chunks of the objects its sources read, shared by
 // every source of the same object (the left's document of arXiv's PDF and the composed document read the same chunks of it),
 // one ask a chunk at most in flight, a run of chunks asked at once kept to CHUNKS_IN_FLIGHT, the least recently read let go
-// past its bound. Carried from the website's own chunk store without the read gate,
-// the prefetch's budget and its release, which the rebuild drops (reader-hosts-data §16: the prefetch is not built).
+// past its bound. No read gate, and no prefetch's budget or release: the prefetch is not built.
 //
 // A chunk enters only from an answer its source checked, under the object's name the source gives (its address, entity-tag and
 // length): a source bound to another object never takes it. In memory, for the reader's life.

@@ -1,7 +1,7 @@
-// A title its author sets in the line at a paragraph's opening with no mark after it (the display design's F40, the owner's
-// ruling of 2026-11-13: one character's width after the title; docs/PDF-READER.md §18.85): `\noindent\textbf{Global Matching}
+// A title its author sets in the line at a paragraph's opening with no mark after it (docs/PDF-READER.md §18.85: one
+// character's width after the title): `\noindent\textbf{Global Matching}
 // We leverage …` (2111.09276v1 pp5-6). TeX keeps such a title apart from its sentence by its face and an interword space; a
-// translation into a script that writes no spaces between its words ran the two together. The engine states the fact on the
+// translation into a script that writes no spaces between its words runs the two together. The engine states the fact on the
 // group (the part's SpanAt.runin, bundle.ts placedOf) and the typesetter sets the script's separation after it (packages/typeset
 // breaker/tokens.ts); no translator is told it: the wire is the same, and a reply is read as before.
 //
@@ -15,7 +15,7 @@
 // (c) the source follows it with white space, alone or beside horizontal spacing of the paper's own: a text that begins with
 //     it, a tie (an element of kind `space`, TeX's interword glue), or an element the instrument states glue of (`\hspace`,
 //     `\quad`, a kern: PieceClass.glue, the part's El.glue), past any element that sets nothing (`silent`); the paper's own space
-//     counts toward the lay's separation (the coordinator's amendment of 2026-11-16: 2111.09276v1's "Object Replacement" +
+//     counts toward the lay's separation (PDF-READER §18.85: 2111.09276v1's "Object Replacement" +
 //     \hspace{0.2em} stood closer to its text than its siblings). A vertical skip (`\vspace`, no glue of a line's), a forced
 //     break or any other element there leaves it: the title is not set in the line of its text;
 // (d) what follows begins a sentence by the cutter's reading (@readarxiv/text opensAfter: a stop set at the group's close, what
@@ -25,21 +25,21 @@
 //     cutter reads as two sentences, is no title and its sentence);
 // and the group's text ends with no closing mark of its own (Unicode's Terminal_Punctuation or a dash, past closing brackets and
 // quotes) and states no `stop` (a macro's own `{\bf #1.}`): a title so ended, or followed by its colon, is separated already.
-import type { Piece } from '@readarxiv/format'
+import type { KnownElKind, KnownSpanKind, Piece } from '@readarxiv/format'
 import { opensAfter } from '@readarxiv/text'
 import { standInOf } from '../instrument/language.ts'
 
 /** an element in a projection the sentence cutter reads */
 const OBJECT = '\ufffc'
 /** the group styles that set no face (format's SpanKind) */
-const NO_FACE = new Set(['colour', 'link', 'underline', 'other'])
+const NO_FACE = new Set<string>(['colour', 'link', 'underline', 'other'] satisfies readonly KnownSpanKind[])
 /** a mark a text ends with that closes it: Unicode's Terminal_Punctuation (a full stop, a colon, a semicolon, a comma, …) or a
  *  dash, read past closing brackets and quotes */
 const CLOSING = /[\p{Terminal_Punctuation}\p{Pd}]$/u
 const CLOSERS = /[\p{Pe}\p{Pf}"']+$/u
 /** the elements that may stand between the title and its sentence's first word, none of them text: a tie, a citation, a note's
  *  mark (a nested unit is a note) */
-const BETWEEN = new Set(['space', 'cite', 'note-mark', 'footnote'])
+const BETWEEN = new Set<string>(['space', 'cite', 'note-mark', 'footnote'] satisfies readonly KnownElKind[])
 
 type Span = Extract<Piece, { t: 'span' }>
 /** the unit's pieces flat, in order, each at its offset in the unit's projection (its text, each element and nested unit one

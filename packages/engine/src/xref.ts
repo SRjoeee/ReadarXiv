@@ -1,4 +1,4 @@
-// A PDF's objects as PDF.js reads them (layout/delta.mjs, the delta's builder and its proof): by the cross-reference sections,
+// A PDF's objects as PDF.js reads them (the wrap's proof, wrap.ts, and sparse.ts): by the cross-reference sections,
 // newest first along /Prev (a classic table or a cross-reference stream, its PNG predictors undone), each object parsed where
 // its entry says it is (an uncompressed one at its offset, its `n g obj` exactly there; one in an object stream by its index
 // there) and a stream's data the bytes its RESOLVED /Length names from the line after `stream` (an indirect /Length followed),
@@ -55,7 +55,7 @@ interface ObjectStream {
   members: number[]
 }
 
-/** the refusal of a document this reader will not read: `code` the delta's why (delta.mjs DELTA_WHYS) */
+/** the refusal of a document this reader will not read: `code` the delta's why (delta-wire.ts DELTA_WHYS) */
 export class XrefRefusal extends Error {
   declare code: DeltaWhy
   constructor(code: DeltaWhy, why: string) {
@@ -244,7 +244,7 @@ export function openObjects(
     if (d.get(N('Encrypt')) !== undefined) throw new XrefRefusal('delta-encrypted', 'an encrypted document')
     if (d.get(N('XRefStm')) !== undefined) throw new XrefRefusal('delta-xref', 'a hybrid cross-reference (/XRefStm)')
     own ??= { root: d.get(N('Root')), info: d.get(N('Info')), id: d.get(N('ID')) }
-    for (const k of ['root', 'info', 'id'] as const) {
+    for (const k of ['root', 'info', 'id'] as const satisfies readonly (keyof TrailerRefs)[]) {
       const v = d.get(N(k === 'id' ? 'ID' : k[0]!.toUpperCase() + k.slice(1)))
       if (trailer[k] === undefined && v !== undefined) trailer[k] = v
     }
@@ -436,6 +436,7 @@ export function openObjects(
       visited = new Set<number>()
     const cat = look(trailer.root)
     const root = cat instanceof PDFDict ? cat.get(N('Pages')) : undefined
+    // (the page attributes a page inherits from its ancestors in the page tree: ISO 32000-1 §7.7.3.4)
     const INH = ['Resources', 'MediaBox', 'CropBox', 'Rotate'] as const
     const walk = (ref: PdfObject | undefined, inherited: PageInherited, depth: number): void => {
       if (!(ref instanceof PDFRef) || visited.has(ref.objectNumber) || depth > DEPTH_MAX)

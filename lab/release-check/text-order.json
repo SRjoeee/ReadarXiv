@@ -1,0 +1,8 @@
+{
+  "format": "readarxiv/text-order 1",
+  "says": "text-order's out-of-order members at the last integrated round, by pair, each `p<page> ord <ord>` (lab/release-check/gates.mjs textOrderJudge): a member the text layer reads out of the page's order, the fewest that, taken out, leave the rest in order (packages/reader/e2e/text-order.mjs orderOf). The gate fails where a member is out of order that is not named here, and where any member is missing; it says where a named one reads in order now, and the round that moves the list writes it here with its cause",
+  "commit": "7eb90fb47",
+  "round": "lane hidden-ink: text-order over the 92 pairs of the chain's bundles at 7eb90fb47 (the stored compiles, lane v2-harness's Google rows): none out of order",
+  "outOfOrder": {},
+  "why": {}
+}

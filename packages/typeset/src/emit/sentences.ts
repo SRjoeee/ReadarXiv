@@ -1,14 +1,13 @@
-// D.sentences (design-b §1.6 E1; design-a §1.2 Laid.lit, G8, G11): a laid member's tokens on a page in the order of its text, each
-// with its box and its place in the translation, from which both panes light a sentence (the row's sentences: its starts in
-// that text). Ported from engine 065c1d973 words.mjs addUnitWords L212-267 (with pushBox, onDisplay, addDisplayWords L272-296),
-// tokenBand L159-169, and layer2.mjs keptLines L4718-4747 (the original's lines a member keeps in place, set in its text's
-// order). The table's columns are float32, as today's: a box is compared as today's reads it. Grouping the tokens into each
-// sentence's runs and blocks is the reader's highlight (today's view/highlight.mjs, lane L4's), which reads this table.
+// D.sentences (Laid.lit): a laid member's tokens on a page in the order of its text, each with its box and its place in the
+// translation, from which both panes light a sentence (the row's sentences: its starts in that text): addUnitWords (with
+// pushBox, onDisplay, addDisplayWords), tokenBand, and keptLines (the original's lines a member keeps in place, set in its
+// text's order). The table's boxes are float32 values, the precision its readers compare them at. Grouping the tokens into each
+// sentence's runs and blocks is the reader's highlight (packages/reader compose/highlight.ts), which reads this table.
 import type { LaidLine, Layout } from '../fit/types.ts'
 import { type Rect, rectKey } from '../util.ts'
 import type { Shown } from './groups.ts'
 
-/** a Times-like face's ascent and descent in em, and a CJK face's em box (words.mjs ASC, DESC, CJK_ASC, CJK_DESC) */
+/** a Times-like face's ascent and descent in em, and a CJK face's em box */
 const ASC = 0.75,
   DESC = -0.22,
   CJK_ASC = 0.88,
@@ -17,7 +16,7 @@ const ASC = 0.75,
 /** a text token as its band reads it */
 type BandToken = { sup?: boolean; cls?: string; face?: { size?: number } }
 /**
- * A text token's band on a line whose baseline is `by` (words.mjs tokenBand): the baseline it is drawn on (a superscript's
+ * A text token's band on a line whose baseline is `by`: the baseline it is drawn on (a superscript's
  * raised), the size drawn, and the ascent and descent of a Times-like face, or of a CJK face's em box, over and under it
  */
 export function tokenBand(t: BandToken, L: { f: number }, by: number) {
@@ -27,7 +26,7 @@ export function tokenBand(t: BandToken, L: { f: number }, by: number) {
   return { y, h, top: y + (cjk ? CJK_ASC : ASC) * h, bottom: y + (cjk ? CJK_DESC : DESC) * h }
 }
 
-/** the page's table of tokens, one column a field (words.mjs newWords): float32 boxes, a token's word and its place */
+/** the page's table of tokens, one column a field: float32 boxes, a token's word and its place */
 type Words = {
   n: number
   l: number[]
@@ -106,7 +105,7 @@ type KeptInput = {
   blocks?: readonly { rects?: readonly Rect[] }[] | null
 }
 
-/** the original's lines a member keeps on `page`, each where its text passes it (L2:4718 keptLines) */
+/** the original's lines a member keeps on `page`, each where its text passes it */
 export function keptLines(i: KeptInput, page: number): KeptLine[] {
   const keep = i.keep.length ? new Set(i.keep) : null
   if (!keep) return []
@@ -222,7 +221,7 @@ export function carriedOf(it: LaidLine['items'][number]): number | undefined {
 }
 
 /** each of a laid member's lines on `page` as one box over its tokens' boxes ([x0, bottom, x1, top], tokenBox): what the right
- *  pane lights of it whole (design-a's Laid.lit); a line of no token none. `self`: the member's ord, whose lines then leave out
+ *  pane lights of it whole (Laid.lit); a line of no token none. `self`: the member's ord, whose lines then leave out
  *  another member's label carried to them (carriedOf), lit with its owner */
 export function lineBoxes(L: Layout, page: number, self?: number): [number, number, number, number][] {
   const out: [number, number, number, number][] = []
@@ -248,11 +247,11 @@ export function lineBoxes(L: Layout, page: number, self?: number): [number, numb
 }
 
 /**
- * D.sentences: the member's tokens on page `page` appended to the page's table, in the order of its text (words.mjs
- * addUnitWords): its kept lines before the line its text passes them at; each line's text tokens on their slots and bands, each
- * crop its drawn box; its label first, its kept pieces at their pieces' places, a kept character at its neighbour's; each
- * display a span of its own. `wordOf(at, end)`: a token's word in the translation; `pieceAt[k]`: piece k's place in it;
- * `drawnCrop(crop)`: whether a crop is drawn; `shown`: D.groups' own ink the page keeps
+ * D.sentences: the member's tokens on page `page` appended to the page's table, in the order of its text: its kept lines
+ * before the line its text passes them at; each line's text tokens on their slots and bands, each crop its drawn box; its
+ * label first, its kept pieces at their pieces' places, a kept character at its neighbour's; each display a span of its own.
+ * `wordOf(at, end)`: a token's word in the translation; `pieceAt[k]`: piece k's place in it; `drawnCrop(crop)`: whether a
+ * crop is drawn; `shown`: D.groups' own ink the page keeps
  */
 export function addUnitWords(
   W: Words,

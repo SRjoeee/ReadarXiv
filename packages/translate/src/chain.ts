@@ -1,8 +1,7 @@
-// The chain (the translate decision): one object a host makes once, `chainOf(ports)`, which owns the queue, the
-// pacing, the cooldowns and the breaker of every translator it is handed; no module state. Carried from the server's chain
-// (its engines' order, its pacing gate, its breaker shared by every isolate, its egress, its store of answers) as the
-// decision's table says, with the PDF engine's loop (mt.mjs translateUnits) merged in: write, key, store read, requests cut by limits and
-// equal wires sent once, send, read, accept, fall through per unit, the re-ask, the runs floor.
+// The chain (DESIGN §8): one object a host makes once, `chainOf(ports)`, which owns the queue, the pacing, the cooldowns
+// and the breaker of every translator it is handed; no module state. It holds the engines' order, a pacing gate, a breaker
+// shared by every isolate, the egress and the store of answers, and takes each unit through write, key, store read,
+// requests cut by limits and equal wires sent once, send, read, accept, fall through per unit, the re-ask, the runs floor.
 import { ACCEPT_DIGEST, accept, asOut, hasLetter, validSentences } from './accept.ts'
 import {
   type Chain,
@@ -31,20 +30,20 @@ import { runsOf } from './runs.ts'
 import { sha256Hex } from './sha256.ts'
 import { wholeWordsOf } from './words.ts'
 
-// ---------------------------------------------------------------- the fixed policy (design-a §1.5; the server's chain and breaker)
+// ---------------------------------------------------------------- the fixed policy (DESIGN §8: the chain's and the breaker's)
 
 /** tries of a request a transient failure is worth, the first included (chain.ts `attempts`) */
 export const ATTEMPTS = 3
 /** the n-th wait, ms: BACKOFF_MS × 3^(n−1) × (0.5 + random) (chain.ts backoffDelay). The policy carried over (DESIGN §8:
  *  three attempts with backoff), unmeasured */
-export const BACKOFF_MS = 500
+const BACKOFF_MS = 500
 /** a 429's cooldown at least, ms (chain.ts MIN_COOL_MS): the policy carried over (DESIGN §8), unmeasured */
 const MIN_COOL_MS = 1_000
 /** a 429's cooldown where it names none, ms: the request layer's base pause (`RATE_LIMIT_BASE_PAUSE_MS`,
  *  src/providers/request/retry-policy.ts; DESIGN §8.3), unmeasured */
-export const DEFAULT_COOL_MS = 5_000
+const DEFAULT_COOL_MS = 5_000
 /** how many times the chain's last translator waits a cooldown out before its unit is unavailable (chain.ts `waits < 2`) */
-export const LAST_WAITS = 2
+const LAST_WAITS = 2
 /** the longest the chain's last translator waits pauses out for one unit, in all (a 429's cooldown, a gate's refusal): what
  *  the chain already gives one request of it, ATTEMPTS tries of its `callMs` (the LLM's 105 s, a web translator's 30 s). A
  *  pause past it is no slower answer but the translator out for now: it is never slept, the translator is passed over as a
@@ -62,9 +61,9 @@ const STORE_READ_MS = 2_000
 const STORE_WRITE_MS = 5_000
 /** buffered store writes go out at this many entries, and at the end of a call */
 export const WRITE_EVERY = 200
-/** a stored value at most, in UTF-16 code units of the translator's raw reply (design-a §1.6). DESIGN §9 states the bound
+/** a stored value at most, in UTF-16 code units of the translator's raw reply. DESIGN §9 states the bound
  *  as 64 KiB; a ruling, unmeasured */
-export const VALUE_MAX = 64 * 1024
+const VALUE_MAX = 64 * 1024
 /** `supports` answers within this, ms, or the translator is passed over: the probes' deadline (DESIGN §8.5, `PROBE_MS`
  *  2 s); a ruling, unmeasured */
 const SUPPORTS_MS = 2_000
@@ -72,7 +71,7 @@ const SUPPORTS_MS = 2_000
  *  unmeasured */
 export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
-export const KEY_VERSION = 't1'
+const KEY_VERSION = 't1'
 /** The behaviour digest of the chain's own outcome rules: the SHA-256 of the chain's outcomes over the case table of
  *  tests/chain-cases.ts, held by tests/chain-digest.test.ts and written by `pnpm digests --write`. The rules, each with a
  *  case there that it alone decides: fall-through per unit; one re-ask where a translator asks it; the runs floor of stretches
@@ -163,7 +162,7 @@ const contextOfWire = (t: Translator, wire: string, context: PaperContext | unde
     return context
   }
 }
-/** the store key (design-a §1.6): `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->`, the context
+/** the store key: `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->`, the context
  *  as a reply to the wire depends on it */
 export const keyOf = (t: Translator, target: Lang, wire: string, context?: PaperContext): string =>
   `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(contextOfWire(t, wire, context)) : '-'}`
@@ -199,8 +198,8 @@ export function rowContextOf(
   )
 }
 
-/** What a row is keyed by besides unit id and target (DECISION: translators' identities and their behaviour digests plus
- *  the acceptance rule's digest, and the chain's own rules' digest): it moves only when an outcome could */
+/** What a row is keyed by besides unit id and target (translators' identities and their behaviour digests, the
+ *  acceptance rule's digest and the chain's own rules' digest: CLAUDE.md hard rule 4): it moves only when an outcome could */
 export async function identityOf(translators: readonly Translator[]): Promise<string> {
   const parts = translators.map((t) => [t.identity, t.digest, t.limits.reask])
   return sha256Hex(JSON.stringify([CHAIN_DIGEST, ACCEPT_DIGEST, parts])).slice(0, 32)
@@ -281,7 +280,7 @@ const refusedWhole = (f: Fault): boolean =>
 /**
  * A call's stages, one a translator of its chain: how many of the call's `n` units have no outcome yet from each, and the units
  * that fall from it held until none is left, so that they leave for the next translator together and its lane cuts them by its
- * own limits (design-performance-2026-11-13 Q6: the lab's fill sent 290 of Microsoft's 318 requests with one unit each, as the
+ * own limits (DESIGN §8: the lab's fill sent 290 of Microsoft's 318 requests with one unit each, as the
  * Google reply that refused it was read). No timer: a unit is held for its call's own earlier replies alone. A unit leaves a
  * stage once (`passed`), or every stage still before it when it has its result (`done`); an aborted call lets every held
  * unit go
@@ -630,7 +629,7 @@ export function chainOf(ports: Ports = {}): Chain {
         gone.signal.removeEventListener('abort', cut)
       }
       const rest = todo.filter((_, i) => !delivered.has(i))
-      // a request that ended with units unanswered: the reply was short of them, asked once more (design-a: `reply`)
+      // a request that ended with units unanswered: the reply was short of them, asked once more (`reply`)
       if (!fault && rest.length)
         fault = new Fault('again', 'malformed', `${t.identity}: ${rest.length} of ${todo.length} units unanswered`, {
           tries: 2,
@@ -741,8 +740,8 @@ export function chainOf(ports: Ports = {}): Chain {
     // everything the call starts that is still to settle: each of its requests, and what an answer no unit waits for is
     // written by (a phrase group's reference, asked in the unit's batch before its reply is known, which the reply may make
     // needless). The call owns them: when it ends, its signal cancels every request still asked for it, and they are all
-    // settled before its last store write, so that no request outlives the call and every answer it got is stored (the review
-    // of round B11: a reference outlived its call, out of the host's abort, and its answer was never stored)
+    // settled before its last store write, so that no request outlives the call and every answer it got is stored (DESIGN
+    // §16: else a reference outlives its call, out of the host's abort, and its answer is never stored)
     const started = new Set<Promise<unknown>>()
     const owned = <T>(p: Promise<T>): Promise<T> => {
       started.add(p)
@@ -1164,7 +1163,7 @@ function spanIdsOf(ps: readonly OutPiece[], out: string[] = []): string[] {
  *  groups hold them: the unit without them, which is what every translator is asked for, and what goes after its translation,
  *  each with the white space it states before it. Null for a unit with none. A translator never sees them: on the markers
  *  wire such a list was a marker Microsoft's Chinese read as a page number, writing the character for "page" before it
- *  (2610.37668v1, 5 of 41 entries; today's wire, mt.mjs listOf, TRANSLATE_VERSION 7) */
+ *  (2610.37668v1, 5 of 41 entries) */
 function tailOf(u: UnitIn): { unit: UnitIn; after: OutPiece[] } | null {
   const after: OutPiece[] = []
   const keep = (ps: readonly Piece[]): Piece[] =>

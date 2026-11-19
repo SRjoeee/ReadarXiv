@@ -10,7 +10,8 @@ import type { Home, RuleId, Step } from '../../packages/typeset/src/types.ts'
 /**
  * Where a rule stands in the port. `open`: not ported yet. `ported`: the same function, typed, inputs made explicit, its
  * replay equal to today's recorded output on every sampled case (`replay`: the tap's sample it is replayed from and the
- * cases). `void`: no counterpart, the inventory classes it as a guard of a re-derivation the stated fact makes void (`why`).
+ * cases). `void`: no counterpart in the typesetter, the inventory classes it as a guard of a re-derivation the stated fact
+ * makes void, or its port went unwired with a stated fact in its place (`why`: which, and where the product reads it).
  * `changed`: ported with a difference, listed with its cause (`why`). `elsewhere`: a fact the prepare states (lane L1's
  * `packages/engine`), registered here so that every row of the inventory has one home
  */
@@ -65,10 +66,12 @@ const SPECS: readonly RuleSpec[] = [
       'RUN:854 unanchoredOf',
       'RUN:3104 account',
     ],
-    how: 'ported',
+    how: 'replaced',
     reads: ['N (the last page shown)'],
-    file: 'unit/admit.ts',
-    state: { is: 'ported', replay: 'samples/U.admit.json.gz and lanes/L3/replay/U.admit.json.gz', cases: 27 },
+    state: {
+      is: 'void',
+      why: "the part states what U.admit derived: where a placement stays the original's whatever the rows (Placed.why: 'unlocated', the maker's reason, B19; 'unwrapped', the wrap cannot hide its ink, A9; 'page') and an element's placeholder the file cannot draw (El.unproven, T4), which the lay reads with the row's outcome and the reader's leave (lay/entry.ts contentOf and the members' states). Its port (unit/admit.ts, replayed on the tap's 27 sampled verdicts) was never wired into layPage and went as a dead module (2026-11-19)",
+    },
   },
   {
     id: 'U.elements',
@@ -610,11 +613,13 @@ const SPECS: readonly RuleSpec[] = [
     step: 'L2',
     owns: ['T7', 'A11', 'B28', '3.4:read'],
     ports: ['RUN:1235-1246 readGroup', 'RUN:2969-2985 the split', 'rows.mjs:265-292 layerRows'],
-    how: 'ported',
+    how: 'replaced',
     ruling: '2026-10-24 a table with one English cell beats an English table',
     reads: [],
-    file: 'shared/table-read.ts',
-    state: { is: 'ported', replay: 'every call of the corpus: ledgers/*.ledger.json.gz tables', cases: 2059 },
+    state: {
+      is: 'void',
+      why: "no group is read from its members' rows: which cells are language is the engine's Unit.kept, a cell that cannot be set is the original's by itself, its group held only where it spans (lay/entry.ts holdsTable, the coordinator's ruling (c) of 2026-11-13), and a group laid is settled by S.table.settle (lay/page.ts settleTies). Its port (shared/table-read.ts, readGroup replayed on 2,059 calls of the corpus) was never wired into layPage and went as a dead module (2026-11-19)",
+    },
   },
   {
     id: 'S.table.groups',
@@ -707,13 +712,11 @@ const SPECS: readonly RuleSpec[] = [
     step: 'F1',
     owns: ['E19'],
     ports: ['RUN:2184-2192'],
-    how: 'ported',
+    how: 'replaced',
     reads: [],
-    file: 'shared/name-led.ts',
     state: {
-      is: 'ported',
-      replay: 'its F1 slots of the corpus, 9 of 9, and no start on the 31,231 other laid rounds',
-      cases: 9,
+      is: 'void',
+      why: "the part states the pair as its flow (the name a member, the unit after it joined on the name's row, Placed.join), and the lay starts the unit's first line where the member before it ends, TeX's separation after it, as on any shared row (lay/adapt.ts rowStart, S.rowStart's); a name the part binds to the member after it is that member's lead (Placed.bound, lay/lead.ts). Its port (shared/name-led.ts, replayed on the corpus's 9 F1 slots) was never wired into layPage and went as a dead module (2026-11-19)",
     },
   },
   {
@@ -912,14 +915,11 @@ const SPECS: readonly RuleSpec[] = [
       'textlayer.mjs:151 nameSeg',
       'textlayer.mjs:241 textLayerOf (by marked content)',
     ],
-    how: 'ported',
+    how: 'replaced',
     reads: ['tex.copySpace'],
-    file: 'emit/text.ts',
     state: {
-      is: 'ported',
-      replay:
-        "segsOfUnit against today's on every laid unit's every page of the corpus (lab/typeset/replay-emit.mjs): 308,051 segments; textLayer against textLayerOf on hand-made pages, groups for hide operations",
-      cases: 308051,
+      is: 'void',
+      why: "the laid page's text layer is the reader's (packages/reader/src/compose/text.ts, carried from today's textlayer.mjs and text-layer.mjs at baf2083e0): A's text content, the items under a group that is off dropped and the member's laid items put in their place, the group told by the marked content the wrap names each group's ink with (design-a §1.4); the typesetter emits none. Its port (emit/text.ts, segsOfUnit replayed on 308,051 segments) was never wired into layPage and went as a dead module (2026-11-19)",
     },
   },
   {

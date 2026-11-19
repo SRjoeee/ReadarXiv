@@ -15,12 +15,12 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *  \\newcommand (as a \\providecommand), its conditionals on an undefined name whole, its \\@ifundefined, its own \\def and \\let
  *  set only where the name is undefined; '' where none */
 export declare function bblProvides(fsys: { list(): string[]; read(path: string): Uint8Array | null }, main: string): string
-/** the font probe; with `marks`, the layout marks' TeX and the mark probe; with `preamble` (markedPreamble's text), that
- *  preamble in place of the paper's own */
-export declare function probeFiles(paper: Paper, options?: { marks?: boolean; preamble?: string | null }): Map<string, Uint8Array>
-/** the main file's preamble as the marked original writes it, for the mark probe, with its first and last lines in the probe's
- *  main file; null where no unit of the main file stands in its preamble */
-export declare function markedPreamble(paper: Paper, options?: { complete?: Complete | null }): { text: string; first: number; last: number } | null
+/** the font probe; with `marks`, the layout marks' TeX and the mark probe; with `preamble` (markedPreamble's), its text in place
+ *  of the paper's own preamble and the marked original's TeX that defines the marks in place of the probe's own */
+export declare function probeFiles(paper: Paper, options?: { marks?: boolean; preamble?: { text: string; marks: string } | null }): Map<string, Uint8Array>
+/** the main file's preamble as the marked original writes it, for the mark probe, with the marked original's TeX that defines
+ *  the marks and its first and last lines in the probe's main file; null where no unit of the main file stands in its preamble */
+export declare function markedPreamble(paper: Paper, options?: { complete?: Complete | null }): { text: string; marks: string; first: number; last: number } | null
 /** the original with unit marks; with `lines`, each unit's lines in its log; `spans`, where
  *  given, gets `lines()`: each unit's lines and bytes in the files as written. `layout` null or absent: the bytes as at
  *  3cb5a733; else the units marked by layoutMarking (layout/marks.mjs) with those classes, and LAYOUT_TEX after MARK_DEF;

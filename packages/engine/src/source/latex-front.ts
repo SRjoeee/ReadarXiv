@@ -1,12 +1,13 @@
-// C1 front end, spike: a LaTeX project → prose units with byte ranges and placeholders → the same project with each unit's
+// The front end: a LaTeX project → prose units with byte ranges and placeholders → the same project with each unit's
 // range replaced by its translation, everything else byte for byte. The approach the evidence favours (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md §4 and the
 // second addendum): patch source ranges in place, mask math, citations, references and unknown commands, send whole
 // paragraphs. Not a parser: a scanner that knows which constructs carry prose and treats everything else as opaque.
-// Runs the same in Node (the spikes) and in the browser (the reader): a project's files come as a file system of two
-// operations (`inMemory` for an unpacked source; node-files.mjs `folder`, which only Node loads, for a directory), and bytes
+// Runs the same in Node and in a browser: a project's files come as a file system of two
+// operations, Fsys's `list` and `read` (`inMemory` over its files in memory, or a caller's own), and bytes
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
+import type { KnownKind } from '@readarxiv/format'
 import { edgeMark } from '@readarxiv/text'
 import { latin1 } from '../bounded-reads.ts'
 import { isMemoryError } from '../memory.ts'
@@ -33,7 +34,7 @@ import type { Arg as RoleArg, ArgPaper, KeySet, Params } from './arg-roles.ts'
 export type Fsys = { list(): string[]; read(path: string): Uint8Array | null }
 /** a unit's text: its bytes read latin1 (`s`; UTF-8 bytes where `tr`, a translation's), `src` the source's own where they
  *  differ (an accent's letter, a file transcoded); `bared`, where an indent TeX skips stood before it (patch); `opens`, the
- *  layout compile's opening mark before it (layout/marks.mjs) */
+ *  layout compile's opening mark before it (marks/marks.ts) */
 export type TextPiece = { t: 'text'; s: string; src?: string; tr?: boolean; bared?: boolean; opens?: boolean }
 /** what the unit keeps as the source writes it: a command, a formula, a group's edge. `brk`: a forced break of the unit's text,
  *  stated where the piece is made (phPiece) and read wherever a forced break is asked of it (forcedBreak); not enumerable, as an
@@ -49,8 +50,8 @@ export type PhPiece = {
   readonly brk?: true
   readonly closes?: number
 }
-/** a forced break's source: `\\\\`, its star, its optional argument; \\newline (today's FORCED_BREAK, tex.mjs:84); LaTeX's
- *  `\\break`, which ends the line it stands in in a paragraph (the coordinator's ruling 4 of 2026-11-16: the marked compile
+/** a forced break's source: `\\\\`, its star, its optional argument; \\newline; LaTeX's
+ *  `\\break`, which ends the line it stands in in a paragraph (PDF-READER §18.77: the marked compile
  *  states where, BREAKS_TEX's point; amsart's `\\hfill\\break\\indent` in 2608.03841v2's addresses) */
 export const BREAK_SOURCE = /^\\\\\*?(?:\[[^\]]*\])?$|^\\(?:newline|break)$/
 /** a placeholder of the source `src`, stating whether it is a forced break of its unit's text (`brk`, §18.75): where its source
@@ -309,7 +310,7 @@ type PercentScan = {
 export function inMemory(map: ReadonlyMap<string, Uint8Array>): Fsys {
   return { list: () => [...map.keys()], read: (p) => map.get(p) ?? null }
 }
-/** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
+/** a/./b/../c → a/c: a file as the package holds it (tar.ts untar names each so) and as TeX's file system has it,
  *  whatever spelling named it — one name for one file, so that a file written back replaces it rather than sitting
  *  beside it (2608.08350's \input{./sections/a.tex}: the compile set the English over the translation) */
 export const normalizePath = (p: string): string => {
@@ -334,8 +335,8 @@ export { latin1 }
  * blank lines were none, and 2610.10069v1's introduction (ten paragraphs) and a whole proof (sixteen) were one unit
  * each. A file the front end writes back (patch: its units' marks and translations) is written from this text, with LF,
  * which TeX reads the same. Every other file is copied as it is, a class or a package the front end read among them;
- * the passes live.mjs runs over such a copy (literalNames, stripPdftexOption, localizeNames) give the same text on its
- * own line ends as on this one (the 12 CR files of 180 papers, 2026-10-20). So do the guard's brace balance and the
+ * the passes live.ts runs over such a copy (literalNames, stripPdftexOption, localizeNames) give the same text on its
+ * own line ends as on this one (the 12 CR files of 180 papers, measured 2026-10-20). So do the guard's brace balance and the
  * probe of the main file, which read through this too
  */
 export const texText = (bytes: Uint8Array): string => latin1(bytes).replace(/\r\n?/g, '\n')
@@ -360,7 +361,7 @@ const isUtf8Text = (t: string) => {
   }
 }
 /**
- * A file's input encoding as its characters (S2 of 2026-10-24): a unit's text is UTF-8 bytes read latin1 (mt.mjs utf8
+ * A file's input encoding as its characters: a unit's text is UTF-8 bytes read latin1 (instrument/mt.ts utf8
  * decodes it), so a file that is not UTF-8 has each of its text pieces turned into UTF-8 by the encoding the main file's
  * \\usepackage[…]{inputenc} declares — latin1 its characters as they are, cp1252 (ansinew) Windows' — and by latin1, what
  * pdfTeX reads a byte as, where it declares none or one this table does not hold. Read as UTF-8, 2610.20581's latin1
@@ -391,6 +392,8 @@ const concat = (parts: readonly Uint8Array[]) => {
 }
 
 // ---------------------------------------------------------------- what carries prose
+/** the sectioning commands and the title: article.cls's \\part, \\section, \\subsection, \\subsubsection, \\paragraph and
+ *  \\subparagraph, book.cls's \\chapter, latex.ltx's \\title */
 const HEADINGS = new Set([
   'part',
   'chapter',
@@ -404,6 +407,9 @@ const HEADINGS = new Set([
 /** a sectioning command's depth, as LaTeX's article and book classes count it: the reader's contents rank it (outline.ts);
  *  a paragraph heading is not in the contents */
 const DEPTH: Readonly<Record<string, number>> = { part: -1, chapter: 0, section: 1, subsection: 2, subsubsection: 3 }
+/** the commands whose argument is a unit of its own: latex.ltx's \\caption, \\footnote, \\footnotetext and \\thanks,
+ *  subcaption.sty's \\subcaption and \\subcaptionbox, caption.sty's \\captionof, aastex701.cls's \\tablecaption (a
+ *  deluxetable's), revtex4-2.cls's \\abstract and \\keywords */
 const OWN_UNIT_ARG = new Set([
   'caption',
   'subcaption',
@@ -417,7 +423,8 @@ const OWN_UNIT_ARG = new Set([
   'keywords',
 ]) // the argument is a unit of its own
 /** a figure's or a table's caption: caption's \\captionof{figure}{…} outside a float, a deluxetable's \\tablecaption{…}
- *  (their text found by the role table, 2608.24961, 2608.12606) */
+ *  (their text found by the role table, 2608.24961, 2608.12606): latex.ltx's \\caption, subcaption.sty's \\subcaption and
+ *  \\subcaptionbox, caption.sty's \\captionof, aastex701.cls's \\tablecaption */
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption'])
 /** subfigure.sty's sub-floats, commands of \subfloat's form (\let\subtable\subfigure) */
 const SUBFIGURE_STY = new Set(['subfigure', 'subtable'])
@@ -425,8 +432,9 @@ const SUBFIGURE_STY = new Set(['subfigure', 'subtable'])
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
  *  places between them units of their own (frontBlock): the authors' names of kind 'author', the affiliations,
  *  institutions and addresses of kind 'affiliation', both the reader's "names" (the whole block one toggle:
- *  docs/route/orphan-text.md §5, the owner's ruling of 2026-10-30); the marks, e-mail and web addresses, ORCIDs and spacing
- *  stay */
+ *  docs/route/orphan-text.md §5, PDF-READER §19.13); the marks, e-mail and web addresses, ORCIDs and spacing
+ *  stay. The blocks: latex.ltx's \\author, authblk.sty's \\affil, revtex4-2.cls's and acmart.cls's \\affiliation, llncs.cls's
+ *  \\institute, amsart.cls's \\address */
 const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
 /** the author blocks whose text opens with the authors' names (frontBlock's `names`): LaTeX's \\author and its kin of the role
  *  table (FRONT_ROLES' `author`); every other such block — \\affil, \\affiliation, \\institute, \\address, ICML's
@@ -448,11 +456,11 @@ const AUTHOR_KINDS: KeySet<string> = new Set(['author', 'affiliation'])
 /** whether a unit is of an author block (AUTHOR_KINDS): what the TeX path sets and keeps as one block, names and places alike */
 export const inAuthorBlock = (u: { kind?: string } | null | undefined): boolean => AUTHOR_KINDS.has(u?.kind)
 /**
- * The author block a note is tied to by the source (the owner's ruling of 2026-11-13: text the paper's code ties to the author
+ * The author block a note is tied to by the source (PDF-READER §18.71: text the paper's code ties to the author
  * block follows the names option both ways; a region of its own is body text): a note's unit gets `of: 'author'` where (1) it
  * is written inside the argument of a command the role table names `author` (FRONT_ROLES, LaTeXML's bindings: \\author, \\affil,
  * \\icmlauthor …), at any depth, the innermost such command's argument being the walk's `within` (a \\thanks inside \\title's is
- * the title's: body); or (2) it is written on its own and the paper's bindings attach it to an author (arg-roles.mjs
+ * the title's: body); or (2) it is written on its own and the paper's bindings attach it to an author (arg-roles.ts
  * noteAttachOf: REVTeX's \\thanks after \\author{…}, acmart's \\authornote; elsarticle's \\cortext[key]{…} where an author
  * command's argument requests its label, \\corref{key}: resolved once the whole source is read, tieLabels). A note of the
  * document (the kernel's \\thanks, amsart's), or one LaTeXML attaches to nothing (a label no author requests), is body
@@ -483,7 +491,7 @@ function tieNotes(
  *  comment, in a branch TeX skips (\\iffalse … \\fi, \\iftrue's \\else, a \\newif set false) or in a definition's body is none;
  *  nor is one in a conditional whose branch the source cannot tell (\\ifdefined: `sure`), so that a note is the block's only
  *  where an author surely asks for it (an orphan is body, as LaTeXML drops it). Read in the raw text, \\author{A\\iffalse
- *  \\corref{x}\\fi} asked for `cor:x` (the review of #641) */
+ *  \\corref{x}\\fi} would ask for `cor:x` */
 function requestsIn(s: string, from: number, to: number, requested: Set<string>, ctx: Ctx) {
   const reqs = labelRequestsOf(paper?.bindings ?? null)
   if (!reqs.size) return
@@ -541,7 +549,8 @@ function inFront<T>(b: Builder, role: string | undefined, f: () => T): T {
  *  cells, of the tables' toggle, translated with the author block's off) */
 const blockKind = (b: Builder, kind: string | undefined) => (AUTHOR_KINDS.has(b.kind) ? b.kind : kind)
 /** commands inside an author block whose argument is a name or a place: IEEEtran's blocks, acmart's parts of an
- *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is */
+ *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is. IEEEtran.cls's
+ *  \\IEEEauthorblockN and \\IEEEauthorblockA; acmart.cls's \\institution, \\department, \\city, \\state, \\country */
 const FRONT_PROSE = new Set([
   'IEEEauthorblockN',
   'IEEEauthorblockA',
@@ -561,8 +570,8 @@ const FRONT_BOXES = new Set(['centerline'])
 /** plain TeX's line boxes (ltplain.dtx: \\line is \\hb@xt@\\hsize, \\centerline#1 \\line{\\hss#1\\hss}, \\leftline and \\rightline
  *  alike): their argument the box's content, walked as CONTENT_BOX's (PDF-READER §18.46). \\line is no \\leavevmode: met where no
  *  unit is open, TeX in vertical mode, the box is a line of its own and the text after it begins a paragraph. PIPELINE 29's
- *  walk (olderUnits' shadow, `boxesUnread`) read each as one placeholder, and reads them so still: else the units an author
- *  block's rows are cut into are no longer `later`, and every unit after the block is numbered again (2010.11929v2) */
+ *  walk (olderUnits' shadow, `boxesUnread`) read each as one placeholder, and the shadow reads them so: else the units an author
+ *  block's rows are cut into are not `later`, and every unit after the block is numbered again (2010.11929v2) */
 const LINE_BOXES = new Set(['centerline', 'leftline', 'rightline'])
 /** IEEEtran's blocks, each a group of lines the class sets on its own in a cell of a table: a unit each, so that a
  *  line of names is fitted to its box alone (AUTHOR_WIDE), apart from the places' block and its line breaks; the block of
@@ -580,6 +589,8 @@ const IMPORTS = new Map([
   ['subinputfrom', true],
   ['subincludefrom', true],
 ])
+/** the inline text commands: latex.ltx's \\textbf, \\textit, \\emph, \\textsl, \\textsc, \\underline, \\textup, \\textrm,
+ *  \\textsf, \\textmd and \\textnormal, ulem.sty's \\uline */
 const INLINE_TEXT = new Set([
   'textbf',
   'textit',
@@ -617,7 +628,14 @@ const CONTENT_BOX = new Map([
 ])
 /** declarations that take no argument: a brace group after one is a group of its own, never its argument. Taken for
  *  \\centering's argument, the {\\small …} a table sat in stayed untranslated whole (five of 2608.05876's eight
- *  tables). The rules take an optional width alone (\\toprule[1pt]) */
+ *  tables). The rules take an optional width alone (\\toprule[1pt]). Their definitions: latex.ltx's \\centering,
+ *  \\raggedright, \\raggedleft, \\normalfont, \\rmfamily, \\sffamily, \\ttfamily, \\bfseries, \\mdseries, \\itshape, \\upshape,
+ *  \\slshape, \\scshape, \\em, \\normalsize, \\selectfont, \\smallskip, \\medskip, \\bigskip, \\newline, \\clearpage, \\newpage,
+ *  \\cleardoublepage, \\hline, \\protect, \\leavevmode, \\strut, \\null, \\quad, \\qquad, \\enspace, \\thinspace, \\nobreak,
+ *  \\allowbreak, \\sloppy, \\fussy; size10.clo's \\small … \\Huge; article.cls's \\bf, \\it, \\rm, \\sf, \\tt, \\sc, \\sl,
+ *  \\newblock, \\maketitle, \\appendix; booktabs.sty's \\toprule, \\midrule, \\bottomrule; array.sty's \\arraybackslash;
+ *  IEEEtran.bst's \\BIBentryALTinterwordspacing and \\BIBentrySTDinterwordspacing; TeX's primitives \\noindent, \\indent,
+ *  \\hfill, \\vfill, \\hfil, \\vfil, \\relax, \\ignorespaces, \\unskip */
 const NO_ARGS = new Set([
   'centering',
   'raggedright',
@@ -690,9 +708,12 @@ const NO_ARGS = new Set([
   'ignorespaces',
   'unskip',
 ])
-/** NO_ARGS by its exported name: the layout marks take a placeholder of one for one that sets no ink (layout/marks.mjs) */
+/** NO_ARGS by its exported name: the layout marks take a placeholder of one for one that sets no ink (marks.ts INVISIBLE) */
 export const NO_ARG_COMMANDS = NO_ARGS
+/** booktabs.sty's rules, which take an optional width alone */
 const OPT_ONLY = new Set(['toprule', 'midrule', 'bottomrule'])
+/** the math environments: latex.ltx's equation, eqnarray, math and displaymath; amsmath.sty's align, alignat, gather,
+ *  multline, flalign, subequations; breqn.sty's dmath; IEEEtran.cls's IEEEeqnarray */
 const MATH_ENVS =
   /^(equation|align|alignat|gather|multline|flalign|eqnarray|math|displaymath|dmath|IEEEeqnarray|subequations)\*?$/
 /** environments whose body is no prose, kept as the paper has it: code, a bibliography's own form, and the drawings, whose body
@@ -721,10 +742,15 @@ const LINE_ENVS =
 const lineEnvsOf = (texts: readonly string[]) => {
   const text = texts.map(uncommented).join('\n'),
     out = new Set<string>()
+  // (comment.sty's \excludecomment, \includecomment, \specialcomment, \generalcomment, \processcomment; fancyvrb.sty's
+  // \CustomVerbatimEnvironment, \RecustomVerbatimEnvironment, \DefineVerbatimEnvironment; listings.sty's \lstnewenvironment;
+  // tcolorbox's \newtcblisting, \renewtcblisting, \…TCBListing, tcblistingscore.code.tex's)
   for (const m of text.matchAll(
     /\\(?:(?:exclude|include|special|general|process)comment|(?:Custom|Recustom|Define)VerbatimEnvironment|lstnewenvironment|(?:new|renew)tcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g,
   ))
     out.add(m[1]!.trim())
+  // (an environment that begins as comment.sty's comment, latex.ltx's verbatim, fancyvrb.sty's Verbatim, BVerbatim or
+  // LVerbatim, listings.sty's lstlisting or minted.sty's minted does: latex.ltx's \newenvironment, TeX's \let)
   for (const m of text.matchAll(
     /\\(?:re)?newenvironment\s*\*?\s*\{([^}]+)\}\s*(?:\[[^\]]*\]\s*)*\{\s*\\(?:comment|verbatim|Verbatim|BVerbatim|LVerbatim|lstlisting|minted)(?![A-Za-z])|\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:comment|verbatim|Verbatim)(?![A-Za-z])/g,
   ))
@@ -762,11 +788,15 @@ const setsDisplay = (begin: string, end: string) => {
 const displayEnvsOf = (defs: ReadonlyMap<string, EnvDef>) =>
   new Set([...defs].filter(([, d]) => d.begin !== undefined && setsDisplay(d.begin, d.end)).map(([name]) => name))
 /** a listing package's definers of an environment (listings', fancyvrb's, tcolorbox's), its name in group 1; then
- *  minted's \\newminted[name]{lexer}, and a command \\let to a verbatim (\\let\\x\\verbatim, not \\verbatim@font) */
+ *  minted's \\newminted[name]{lexer}, and a command \\let to a verbatim (\\let\\x\\verbatim, not \\verbatim@font). The definers:
+ *  listings.sty's \\lstnewenvironment, fancyvrb.sty's \\DefineVerbatimEnvironment, \\CustomVerbatimEnvironment and
+ *  \\RecustomVerbatimEnvironment, tcolorbox's \\newtcblisting, \\renewtcblisting and \\…TCBListing (tcblistingscore.code.tex) */
 const LISTING_DEFINERS =
   /\\(?:lstnewenvironment|(?:Define|Custom|Recustom)VerbatimEnvironment|(?:re)?newtcblisting|(?:Declare|New|Renew|Provide)TCBListing)\s*\*?\s*(?:\[[^\]]*\])?\s*\{([^}]+)\}/g
 const NEWMINTED = /\\newminted\s*(?:\[([^\]]+)\])?\s*\{([^}]+)\}/g
 const LET_VERBATIM = /\\let\s*\\([A-Za-z]+)\s*=?\s*\\(?:verbatim|Verbatim)(?![A-Za-z@])/g
+/** the definers of an environment: latex.ltx's \\newenvironment, \\renewenvironment and \\New…, \\Renew…, \\Provide…,
+ *  \\DeclareDocumentEnvironment; makecmds.sty's \\provideenvironment */
 const ENV_DEFINERS =
   /\\(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment)\s*\*?\s*\{([^}]+)\}/g
 /**
@@ -846,7 +876,8 @@ const LISTINGS = new Set([
 ])
 /** those whose lines a listing package sets itself, line by line (listings', fancyvrb's and minted's, tcolorbox's over listings):
  *  the layout compile marks their lines by the package's own line hooks, never by the environment's (a box's title or a listing's
- *  caption, set inside the environment, is prose; layout/marks.mjs regionsTex) */
+ *  caption, set inside the environment, is prose; marks/marks.ts regionsTex): fancyvrb.sty's Verbatim, BVerbatim and
+ *  LVerbatim, listings.sty's lstlisting, minted.sty's minted, tcolorbox's tcblisting (tcblistingscore.code.tex) */
 const PACKAGE_LINES = new Set(['Verbatim', 'BVerbatim', 'LVerbatim', 'lstlisting', 'minted', 'tcblisting'])
 /**
  * The environments a paper defines as code (envDefinitionsOf, by their last definition), whose body stays as the paper
@@ -909,6 +940,8 @@ const lineBound = (text: string, at: number, lineEnvs: ReadonlySet<string> | nul
     if (isLineEnv(m[1]!.trim(), lineEnvs) && !inComment(text, from + m.index)) return true
   return false
 }
+/** the text accents: ot1enc.def's and t1enc.def's \\DeclareTextAccent \\', \\`, \\", \\^, \\~, \\=, \\., \\u, \\v, \\H, \\r and
+ *  \\DeclareTextCommand \\c, \\d, \\b, t1enc.def's \\k, latex.ltx's \\DeclareTextCommandDefault \\t */
 const ACCENTS = new Set(["'", '`', '"', '^', '~', '=', '.', 'u', 'v', 'H', 'c', 'd', 'b', 't', 'r', 'k'])
 /** the text accents whose letter goes into its word (accentLetter), by the combining mark each puts on its letter */
 const ACCENT_MARKS: Readonly<Record<string, string>> = {
@@ -928,10 +961,10 @@ const ACCENT_MARKS: Readonly<Record<string, string>> = {
  * sets the source's accent: LaTeX's UTF-8 table declares each (utf8enc.dfu, the accent itself under pdfLaTeX, in OT1,
  * T1, T2A and inside CJKutf8's environment alike), and Latin Modern, TeX Gyre (Termes, Heros, Cursor, Pagella) and CMU
  * hold each in every face, upright, bold, italic, sans, mono and small capitals (XeLaTeX with fontspec and xeCJK; a
- * paper's own XeLaTeX font sets the same letter for the source's accent, its TU composite). Measured on TL 2026,
- * 2026-10-05: of the 221 letters the ten accents make, 167 are declared, and the fonts lack 22 of those (Ḃ Ḟ Ẏ Ḱ Ẑ Ǩ
+ * paper's own XeLaTeX font sets the same letter for the source's accent, its TU composite). On TL 2026,
+ * measured 2026-10-05: of the 221 letters the ten accents make, 167 are declared, and the fonts lack 22 of those (Ḃ Ḟ Ẏ Ḱ Ẑ Ǩ
  * in either case, and CMU but for its upright roman the cedilla's Ģ Ķ Ļ Ņ Ŗ): 145 letters. Any other accent or letter
- * keeps the accent a placeholder, as before
+ * keeps the accent a placeholder
  */
 const SETTABLE = new Set(
   'ÀÁÂÃÄÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝàáâãäçèéêëìíîïñòóôõöùúûüýÿĂăĆćĈĉĊċČčĎďĔĕĖėĚěĜĝĞğĠġĤĥĨĩĬĭİĴĵĹĺĽľŃńŇňŎŏŐőŔŕŘřŚśŜŝŞşŠšŢţŤťŨũŬŭŰűŴŵŶŷŸŹźŻżŽžǍǎǏǐǑǒǓǔǦǧǰǴǵṅỲỳ',
@@ -974,7 +1007,8 @@ function accentLetter(
   return letter && SETTABLE.has(letter) ? { letter, end: arg.end } : null
 }
 /** the kernel's letters of Latin scripts (TEXT_SYMBOLS: \\o, \\O, \\ss, \\ae, \\AE, \\oe, \\OE, \\aa, \\AA, \\l, \\L), each the one
- *  letter it sets; not the dotless \\i and \\j, which a paper makes its own as often as not (text-symbols.mjs) */
+ *  letter it sets; not the dotless \\i and \\j, which a paper makes its own as often as not (text-symbols.ts). Their
+ *  definitions: ot1enc.def's and t1enc.def's \\o, \\O, \\ss, \\ae, \\AE, \\oe, \\OE, \\l, \\L; latex.ltx's \\aa and \\AA */
 const LETTER_COMMANDS = new Map(
   ['o', 'O', 'ss', 'ae', 'AE', 'oe', 'OE', 'aa', 'AA', 'l', 'L'].map((n) => [n, TEXT_SYMBOLS[`\\${n}`]]),
 )
@@ -983,7 +1017,7 @@ const LETTER_COMMANDS = new Map(
  * word TeX skips, and an empty group ending it, with it — `\\L ukasz`, `\\L{}ukasz`, `Bj\\o rn`, `Stra\\ss e` are Łukasz, Bjørn,
  * Straße —; where the paper does not define the command itself (\\def\\o{\\omega}: ownLetters); with where its source ends, or
  * null.
- * A placeholder, it went out as a marker, and the marker a word touches gets a space of ours (mt.mjs serialize): 2010.11929v2's
+ * A placeholder would go out as a marker, and a marker a word touches gets a space of ours (planMarkers): 2010.11929v2's
  * `{\\L}ukasz Kaiser` came back as "Ł ukasz Kaiser"
  */
 function letterCommand(
@@ -1024,7 +1058,7 @@ const NOTE_MARKS: ReadonlySet<string> = new Set(
  * group ending it with it (`\\textless 5` is "<5"), a control symbol alone (`5\\% of` is "5% of": TeX skips no space after one),
  * an empty group right after it with it; where the paper does not define the command itself (ownLetters); with where its source
  * ends, or null. A placeholder, it went out as a marker, and Microsoft split the term there ("R&D" came back as "D", a verb, then "R&"); as
- * text the translator reads the term, and a percent comes back glued as the paper sets it (2026-11-11, Microsoft's Chinese and
+ * text the translator reads the term; a percent comes back glued as the paper sets it (measured 2026-11-11, Microsoft's Chinese and
  * Japanese on 110 units of the 88 papers, each sent both ways: none refused, 131 of 134 percents glued, every "R&D" one word;
  * over the 88, 1,520 such placeholders in 776 units of 65 papers, and 96 of the textcomp symbols)
  */
@@ -1047,6 +1081,8 @@ function textCharacter(
  *  \\def\\L{\\mathcal{L}}, \\renewcommand{\\textbar}{…}, a \\let): there the command is the paper's, and no letter is made of it */
 const ownLetters = (texts: readonly string[]) => {
   const out = new Set<string>()
+  // (latex.ltx's \newcommand, \renewcommand, \providecommand, \DeclareRobustCommand and \New…, \Renew…, \Provide…,
+  // \Declare…DocumentCommand; TeX's \def, \gdef, \edef, \xdef, \let)
   for (const m of texts
     .map(uncommented)
     .join('\n')
@@ -1060,6 +1096,8 @@ const ownLetters = (texts: readonly string[]) => {
  *  \\let\\'…): there the command is the paper's, and no letter is made of it */
 const ownAccents = (texts: readonly string[]) => {
   const out = new Set<string>()
+  // (latex.ltx's \newcommand, \renewcommand, \providecommand, \DeclareRobustCommand and \New…, \Renew…, \Provide…,
+  // \Declare…DocumentCommand; TeX's \def, \gdef, \edef, \xdef, \let)
   for (const m of texts
     .map(uncommented)
     .join('\n')
@@ -1078,6 +1116,8 @@ const ASSIGNMENT = new RegExp(
 )
 // \hrule height 0.9pt, \vrule width .4pt depth 2pt: a rule's own keywords and sizes
 const RULE_SPEC = new RegExp(String.raw`^(?:[ \t]*(?:height|depth|width)[ \t]*${DIMEN})+(?![A-Za-z])`)
+/** the tables: latex.ltx's tabular and tabular*, tabularx.sty's, longtable.sty's, tabu.sty's, tabulary.sty's,
+ *  supertabular.sty's, xtab.sty's xtabular */
 const TABLE_ENVS = /^(tabular|tabularx|tabular\*|longtable|tabu|tabulary|supertabular|xtabular)\*?$/
 /** the floats: what TeX sets away from where the source has it, so that a unit written inside one (`inFloat`, whatever holds
  *  it there: a minipage, a subfigure) is no neighbour in the text of the units around it. A longtable breaks across pages where
@@ -1099,11 +1139,14 @@ const CAPTYPES = new WeakMap<SourceUnit<WalkFile>, string>(),
  *  \\left before one stopped TeX (2608.29181: every way of setting it failed, biber's "bcf is malformed" all it said) */
 const TBLR_ENVS = ['tblr', 'longtblr', 'talltblr']
 /** a rule across the whole table (booktabs', array's, arydshln's, hhline's, makecell's) and a longtable's head ending,
- *  either of which ends the header; \\cline and \\cmidrule rule part of it, and do not */
+ *  either of which ends the header; \\cline and \\cmidrule rule part of it, and do not. Their definitions: latex.ltx's \\hline;
+ *  arydshln.sty's \\hdashline; array.sty's \\firsthline, \\lasthline; nicematrix.sty's \\Hline; booktabs.sty's \\toprule,
+ *  \\midrule, \\bottomrule, \\specialrule; makecell.sty's \\Xhline; paper.cls's \\thickhline; hhline.sty's \\hhline; tabu.sty's
+ *  \\tabucline; longtable.sty's \\endhead, \\endfirsthead */
 const FULL_RULE =
   /^(?:hline|hdashline|firsthline|lasthline|Hline|toprule|midrule|bottomrule|specialrule|Xhline|thickhline|hhline|tabucline|endhead|endfirsthead)$/
 /** a rule across the table that a class defines, read as a rule for a block's bounds (R4, tableGrid's `band`) and as before
- *  otherwise (a cell's content: the header, which today's reader reads too, is read off FULL_RULE alone): REVTeX's \\colrule
+ *  otherwise (a cell's content: the header is read off FULL_RULE alone): REVTeX's \\colrule
  *  (revtex4-2.cls), the one such rule of the corpus's tables (2610.20716v1) */
 const CLASS_RULE = /^colrule$/
 /** a rule under some columns of the table, its columns its argument's range {a-b} (TeX's \\cline, booktabs' \\cmidrule,
@@ -1112,7 +1155,7 @@ const PART_RULE = /^(?:cline|cmidrule|cdashline)$/
 /** the commands that stand in a cell without being its content — rules, spacing, colour, a strut — each with the
  *  arguments it takes: `o` an optional [..], `p` an optional (..), a digit that many required {..}. Read by their own
  *  arity, so that a cell's first group after them (\\hline {\\bf Parser}) stays the cell's; colortbl's \\rowcolor with its
- *  overhangs after its colour, as the role table reads it (arg-roles.mjs) */
+ *  overhangs after its colour, as the role table reads it (arg-roles.ts) */
 const NOT_CONTENT = new Map(
   Object.entries({
     hline: '',
@@ -1174,7 +1217,7 @@ function argsBySpec(s: string, i: number, spec: string) {
   return i
 }
 /**
- * A table's body as its cells lay it out (Problem 1 of the table-groups brief, 2026-10-07): each cell's stretch of the
+ * A table's body as its cells lay it out: each cell's stretch of the
  * source [start, end) between its separators — `&` and the row's end (`\\\\`, `\\tabularnewline`), outside braces, math,
  * comments and nested environments —, its row, its first column and the columns it spans (\\multicolumn{n}), and whether
  * its row is the header's. The header is the rows from the first that holds anything up to the first rule across the
@@ -1440,7 +1483,7 @@ function macroSetsText(name: string, b: Builder, ctx: Ctx, depth = 0): boolean {
 const TBLR_MATH = /\bmode\s*=\s*[id]?math\b/
 const uncommented = (text: string) => text.replace(/(^|[^\\])%.*$/gm, '$1')
 /** a text with its comments out as TeX takes them: a comment with its line's end, and the next line's leading spaces, which TeX
- *  skips there, so that a definition's replacement text is the tokens TeX reads (rules/tex-kernel.mjs selectsArgument) */
+ *  skips there, so that a definition's replacement text is the tokens TeX reads (tex-kernel.ts selectsArgument) */
 const texUncommented = (text: string) => text.replace(/(^|[^\\])%[^\n]*(?:\n[ \t]*)?/g, '$1')
 
 // ---------------------------------------------------------------- scanning primitives
@@ -1477,7 +1520,7 @@ function skipComment(s: string, i: number) {
  * bibliography's \\bibitem, the document's bounds) sees what TeX sees and every place stays where it is; the units take their
  * `%` back (restorePercents). A text that holds LITERAL_PERCENT already, or no `%`, is returned as it is. `scan`: the paper's
  * conditionals (`ifs`), its environments read by lines (`lineEnvs`) and its code environments the walk skips (`skipEnvs`), and the
- * commands it defines in any form (`defined`: arg-roles.mjs
+ * commands it defines in any form (`defined`: arg-roles.ts
  * paperOf's `own`, \\let and the xparse forms among them; a fallback a package the paper loads overrides is none)
  */
 export function urlPercents(text: string, file: string | null | undefined, scan: PercentScan = {}): string {
@@ -1792,7 +1835,7 @@ function argsOfForm(s: string, i: number, form: string): { args: GroupArg[]; end
  * A front matter command's call as its class reads it (FRONT_MATTER): its form's arguments (argsOfForm), and every optional
  * argument right after its text, which a class reads by looking past it (\\@ifnextchar[): the Elsevier classes' \\author[1]{Name}
  * [orcid=…]. Read short, the option was walked as the text after the call, a unit of its own "[orcid=0000-…]" whose start mark
- * stood between the call and its option: the class no longer saw it, set the bracket as text and the marked original ran a page
+ * stood between the call and its option: the class did not see it, set the bracket as text and the marked original ran a page
  * longer than the paper (2610.21084v1, cas-sc: 50 pages against 49, refused). `to` bounds the reading
  */
 function frontArgs(s: string, i: number, name: string, ctx: Ctx, to = s.length) {
@@ -1870,13 +1913,13 @@ function citationArgs(s: string, i: number, name: string): { args: GroupArg[]; e
   const rest = notes.length ? argsAfter(s, at) : null
   return rest?.args.some((a) => a.kind === 'req') ? { args: [...notes, ...rest.args], end: rest.end } : argsAfter(s, i)
 }
-/** the paper loadProject reads (arg-roles.mjs paperOf): its LaTeXML bindings and the commands its own files define,
+/** the paper loadProject reads (arg-roles.ts paperOf): its LaTeXML bindings and the commands its own files define,
  *  whose arguments the table cannot know (melba.cls's \\def\\firstname{…}, which LaTeXML's moderncv gives one). Set for
  *  the time a project is read — loadProject is synchronous —, else null: the kernel's forms and those written out */
 let paper: ArgPaper | null = null
 /**
  * A command's arguments: a citation's every adjacent one, its notes in angle brackets or parentheses with them
- * (citationArgs); one whose parameters the role table knows (arg-roles.mjs), exactly those as TeX takes them — a group
+ * (citationArgs); one whose parameters the role table knows (arg-roles.ts), exactly those as TeX takes them — a group
  * or a single token each, an optional one where it is given; a bracket after them is the text's (Assumption~\\ref{a}[(i)
  * and (iii)], 2608.10322), one before a required argument an optional one the table does not know of; else, a command
  * the table does not know, every adjacent one (some prose stays untranslated, nothing breaks). Taken as every adjacent group, \setlength\tabcolsep{1.0mm}'s {1.0mm} and the group of three tables after it
@@ -1898,7 +1941,7 @@ function commandArgs(s: string, i: number, name: string, to = s.length): CallArg
       // the command the token, which reads its own arguments where it stands, so the call ends past them
       // (\\raise2pt\\hbox{…}) — the walk never ends a placeholder between a command and its arguments, where a lead or a
       // mark would be written. Taken alone, a \\begin read as a box's content left its {center} a group of text, and the
-      // lead was written inside the environment's name (#407's review). The token's own groups of text and content come
+      // lead was written inside the environment's name. The token's own groups of text and content come
       // with it (`kind` 'inner', no `param`: no argument of this command's), so that the walk sets their words as it
       // would the token's call alone: its pair opens with `\\raise2pt\\hbox{`, and nothing goes between the two
       const last = args.at(-1),
@@ -2078,7 +2121,8 @@ function inRegister(use: ParamUse, reg: string, inner: ParamUse) {
 function throughBoxes(use: ParamUse): ParamUse {
   for (const { reg, inner } of use.boxes) {
     if (use.shown.has(reg)) {
-      for (const k of ['text', 'other', 'typeset', 'stored'] as const) for (const n of inner[k]) use[k].add(n)
+      for (const k of ['text', 'other', 'typeset', 'stored'] as const satisfies readonly (keyof ParamUse)[])
+        for (const n of inner[k]) use[k].add(n)
     } else for (const n of [...inner.text, ...inner.other]) use.other.add(n)
   }
   return use
@@ -2251,7 +2295,7 @@ function paperMacros(files: readonly { file: string; text: string }[]) {
       if (inComment(t, m.index) || inOwnCall(t, m.index, name)) continue
       // \\providecommand defines nothing a definition before it made (2608.16190's \\def\\cpanauthor{…} and its fallback)
       if (m[1] === 'providecommand' && out.has(name)) continue
-      // nor is a fallback a package the paper loads overrides (arg-roles.mjs overriddenFallback: llncs.cls'
+      // nor is a fallback a package the paper loads overrides (arg-roles.ts overriddenFallback: llncs.cls'
       // \\@ifundefined{url}{\\def\\url#1{#1}}{} under hyperref, read as \\url's own, made its argument a group, and hyperref's
       // \\url printed a mark in it)
       if (overriddenFallback(t, m.index, name, m[1] ?? 'def', paper?.packages)) continue
@@ -2500,8 +2544,12 @@ function ownAuthorsOf(own: readonly { text: string }[], macros: ReadonlyMap<stri
   }
   return out
 }
-/** every way a file defines a command, its name in group 1 (arg-roles.mjs OWN_COMMANDS' forms, \\let and the expanded
- *  definitions among them): a definition completeMacros does not read makes what the command does unknown */
+/** every way a file defines a command, its name in group 1 (arg-roles.ts OWN_COMMANDS' forms, \\let and the expanded
+ *  definitions among them): a definition completeMacros does not read makes what the command does unknown. The definers:
+ *  latex.ltx's \\newcommand, \\renewcommand, \\providecommand, \\DeclareRobustCommand, \\New…, \\Renew…, \\Provide…,
+ *  \\Declare…DocumentCommand and \\NewExpandableDocumentCommand, \\DeclareTextCommand, \\DeclareTextSymbol,
+ *  \\DeclareTextCommandDefault, \\newcounter, \\newlength, \\newif, \\newtoks; TeX's \\def, \\gdef, \\edef, \\xdef, \\let,
+ *  \\futurelet; amsopn.sty's \\DeclareMathOperator */
 const ANY_DEFINITION =
   /\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|futurelet|newtoks|DeclareMathOperator\*?|DeclareTextCommand|DeclareTextSymbol|DeclareTextCommandDefault|newcounter|newlength|newif)\s*\{?\s*\\([A-Za-z@]+)/g
 /** a body that may read on in a way readsOn does not see: it ends in an argument (`\\newcommand\\pair[2]{#1#2}`: the call's
@@ -2510,6 +2558,9 @@ const ANY_DEFINITION =
 const readsOnToo = (body: string, arity: number) => {
   const t = uncommented(body).trimEnd()
   if (/#\d$/.test(t)) return true
+  // (latex.ltx's \newcommand, \renewcommand, \providecommand, \DeclareRobustCommand, \…DocumentCommand, \newtoks,
+  // \newcounter, \newlength, \setlength, \addtolength, \setcounter, \addtocounter; TeX's \def, \gdef, \edef, \xdef,
+  // \let, \global, \futurelet; etoolbox.sty's \csdef and \csgdef)
   if (
     /\\(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand|[gex]?def|let|global|futurelet|csdef|csgdef|newtoks|newcounter|newlength|setlength|addtolength|setcounter|addtocounter)(?![A-Za-z@])/.test(
       t,
@@ -2519,7 +2570,7 @@ const readsOnToo = (body: string, arity: number) => {
   return [...t.matchAll(/#(\d)/g)].some((m) => Number(m[1]) > arity)
 }
 /** a body that sets more than a piece of a line: an environment, a paragraph's end, an alignment's row or cell, a list's item,
- *  a page's end. No mark stands beside a call of one in a line, and set in the mark probe's box (marks.mjs probeSamples) it is
+ *  a page's end. No mark stands beside a call of one in a line, and set in the mark probe's box (marks/marks.ts probeSamples) it is
  *  errors TeX may not get past (the kernel's \\and, `\\end{tabular}\\hskip1em\\begin{tabular}`, made a hundred in one paragraph
  *  and stopped a probe) */
 const STRUCTURAL =
@@ -2556,7 +2607,7 @@ export function definitionsNested(defs: readonly { at: number; k: number; e: num
  * mandatory arguments alone —, all of one arity, and none whose body reads on (readsOn: \\@ifnextchar, \\@ifstar, \\futurelet,
  * \\xspace or any command at its end that may take what follows; readsOnToo: an argument at its end, a definition in it), nor
  * one that sets more than a piece of a line (STRUCTURAL: an environment, a paragraph's end, an alignment's cell). A
- * call of such a macro that holds its arguments (layout/marks.mjs) reads nothing after it, so a layout mark after it is none
+ * call of such a macro that holds its arguments (marks/marks.ts) reads nothing after it, so a layout mark after it is none
  * of its arguments — what a mark does to the punctuation after it is TeX's to answer (the mark probe). A name defined in any
  * other way (\\let, a delimited \\def, \\DeclareMathOperator) is not one: what it reads is not known
  */
@@ -2678,7 +2729,10 @@ function operandAt(s: string, at: number) {
   const op = named && tokenBefore(named.at)
   return !!op?.name && SECOND_OPERAND_OF.has(op.name)
 }
-/** the commands whose operand is the token after them (tailOf): it is printed, compared or defined, not run */
+/** the commands whose operand is the token after them (tailOf): it is printed, compared or defined, not run: TeX's primitives
+ *  \\string, \\noexpand, \\meaning, \\show, \\let, \\futurelet, \\def, \\gdef, \\edef, \\xdef, \\ifx, \\chardef, \\mathchardef,
+ *  \\countdef, \\dimendef, \\skipdef, \\toksdef; latex.ltx's \\newcommand, \\renewcommand, \\providecommand,
+ *  \\DeclareRobustCommand */
 const OPERAND_OF: NameSet = new Set([
   'string',
   'noexpand',
@@ -2703,7 +2757,8 @@ const OPERAND_OF: NameSet = new Set([
   'toksdef',
 ])
 /** …and those whose operand is the second token after them, the first a name (\\let\\saved\\section, \\ifx\\a\\section,
- *  \\renewcommand\\saved\\section) */
+ *  \\renewcommand\\saved\\section): TeX's \\let and \\ifx, latex.ltx's \\newcommand, \\renewcommand, \\providecommand,
+ *  \\DeclareRobustCommand */
 const SECOND_OPERAND_OF: NameSet = new Set([
   'let',
   'ifx',
@@ -2716,6 +2771,8 @@ const SECOND_OPERAND_OF: NameSet = new Set([
  *  all give (by the role table), in one the table does not know, after a bracket (\\includegraphics[…]), or with a
  *  look ahead anywhere in it */
 function readsOn(body: string) {
+  // (latex.ltx's \@ifnextchar, \@ifstar, \kernel@ifnextchar, \@ifnch, \@testopt, \@protected@testopt, \@dblarg,
+  // \IfBooleanTF, \NewDocumentCommand; TeX's \futurelet, \afterassignment, \expandafter, \csname)
   if (
     /\\(?:@ifnextchar|@ifstar|kernel@ifnextchar|@ifnch|@testopt|@protected@testopt|@dblarg|futurelet|afterassignment|expandafter|csname|IfBooleanTF|NewDocumentCommand)(?![A-Za-z@])/.test(
       body,
@@ -2748,7 +2805,7 @@ function readsOn(body: string) {
  *  group or a single token; null when the call runs past `to` */
 /** the pieces the walk reads a macro's body as, with `args` in place of its parameters (none: each parameter empty), in a
  *  walk of its own that changes nothing of the paper's: null where the body ends or starts a unit */
-/** how many macro expansions may nest (S1): past it the call is one placeholder */
+/** how many macro expansions may nest: past it the call is one placeholder */
 const EXPANSION_DEPTH = 3
 function bodyPieces(macro: Macro, args: readonly string[] | null, file: WalkFile, ctx: Ctx) {
   // (each part in the engine's text by its own file's encoding: the body by the file that defines it, the arguments by the
@@ -2787,6 +2844,7 @@ function setsWords(macro: Macro) {
     // packages/engine/tests/front/source-bounds.test.ts)
     for (let n = 0; n < 20 && /\{[^{}]*\}/.test(t); n++) t = t.replace(/\{[^{}]*\}/g, ' ')
     // (an optional argument's brackets, a box's [c][14.5pt], and a dimension after a command, \\rowcolor{gray!8}[0pt], are no words)
+    // (a dimension in TeX's units of measure: pt, em, ex, cm, mm, in, bp, sp, pc, dd, cc, mu)
     t = t
       .replace(/\[[^\]]*\]/g, ' ')
       .replace(/[-+]?(?:\d+\.?\d*|\.\d+)\s*(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu)\b/g, ' ')
@@ -2855,7 +2913,8 @@ function displayArgEnd(
   }
   return null
 }
-/** what a paragraph cannot hold: a paragraph break, an item, a heading, a caption, or an environment other than math */
+/** what a paragraph cannot hold: a paragraph break, an item, a heading, a caption, or an environment other than math: TeX's
+ *  \\par, latex.ltx's \\item, \\caption and \\begin, article.cls's and book.cls's sectioning commands */
 const BLOCK =
   /\n[ \t]*\n|\\(?:par|item|part|chapter|(?:sub)*section|(?:sub)?paragraph|caption)(?![A-Za-z@])|\\begin\s*\{([^}]+)\}/g
 const holdsBlock = (text: string) => [...text.matchAll(BLOCK)].some((m) => !m[1] || !MATH_ENVS.test(m[1].trim()))
@@ -2898,11 +2957,11 @@ function proseInEnvironment(macro: Macro): boolean {
 
 // ---------------------------------------------------------------- units
 /** the kinds set in the running text, which a display standing alone after them belongs to */
-const IN_TEXT = new Set(['para', 'theorem', 'abstract'])
+const IN_TEXT = new Set<string>(['para', 'theorem', 'abstract'] satisfies readonly KnownKind[])
 /** a display environment: a math environment but the inline one */
 const displayEnv = (env: string) => MATH_ENVS.test(env) && !/^math\*?$/.test(env)
 /**
- * A display's letters as the page sets them, for telling its lines from a float's (anchors.mjs): the source's letters,
+ * A display's letters as the page sets them, for telling its lines from a float's: the source's letters,
  * the paper's own macros put in (`macros`, name → body: `\\rmx` is `\\mathbf{x}`, `\\E` is `\\mathbb{E}`) and the commands
  * left out, run together — a subscript runs on with its letter, `N_{\\text{out}}` → `nout` — then the commands' names,
  * which some set as words (`\\log`, `\\softmax`)
@@ -3020,8 +3079,8 @@ const joinSkips = <Q extends SourcePiece<WalkFile>>(a: TextPiece, b: TextPiece, 
  * is (startOf passes it over, its ink the original's: 2610.19159v1's 44 items of a hand-made list, `\\textbullet The …`); but a
  * note's mark (NOTE_MARKS) right after a word with no space (past the groups closed after it and the marks before it: a run of
  * marks), an element of the text as its call in a superscript is (`Beren Millidge\\textdagger`: as text the dagger was glued to
- * the name, the person no longer the one its references name; the coordinator's ruling of 2026-11-11). Elsewhere a note's sign is
- * text (`(\\S\\ref{…})`, `in \\S 3`). The coordinator's statement of 2026-11-16 (B): the characters a paper types as text are the
+ * the name, the person not the one its references name). Elsewhere a note's sign is
+ * text (`(\\S\\ref{…})`, `in \\S 3`). PDF-READER §18.83: the characters a paper types as text are the
  * text's in every position; only a sign set as a mark is the edge before the first word
  */
 export function textSymbolHere(char: string, before: readonly PieceLike[]): boolean {
@@ -3105,7 +3164,7 @@ class Builder<F extends WalkFile = WalkFile> {
    *  else stayed in the source after the unit's range and was set twice — a pgffor loop's `{{`, 2610.21377) */
   /** `identity`: the pair's command sets its argument and nothing else (identityPair), told to the wire on the piece (`sets`, 0:
    *  what it sets over what it holds; not enumerable, so that the unit's hash, its marks and its JSON are as before), which the
-   *  bundle writes (layer-proto/units.mjs) */
+   *  bundle writes (instrument/units.ts) */
   open(src: string, start: number, identity = false) {
     if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }
     const id = ++this.pairId,
@@ -3211,14 +3270,14 @@ const joinLetters = <F extends WalkFile>(pieces: readonly SourcePiece<F>[]) => {
 // an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, an ORCID written out
 // (0000-0002-1825-0097), and a group of local parts before their one domain
 /** an e-mail address as a text writes it: the source's (keepAddresses) and an ink unit's word (packages/engine's copy of
- *  ink-units.mjs, rule 4: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
+ *  ink-units, locate/ink-units.ts: addressed, its rule 4) */
 export const EMAIL_ADDRESS = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/
 /** several addresses at one domain written once, a group of their local parts before it (`{jyeoj251, bmw5779}@gmail.com`,
  *  2611.00342v1; `[first name]@distributed.inc`, 2610.21085v1): an opening brace, parenthesis or bracket with no local part's
  *  character right before it, EMAIL_ADDRESS's local parts separated by commas and/or white space, the matching closing one,
  *  and directly after it `@` and EMAIL_ADDRESS's domain. Its syntax alone, every character of it, as the paper sets it: the
  *  source's (keepGroups, its spaces and braces read as TeX sets them) and an ink unit's lines' (packages/engine's copy of
- *  ink-units.mjs, groupedAddresses: held equal to this by tests/pdf-reader/locate-ink-today.test.ts) */
+ *  ink-units, locate/ink-units.ts: groupedAddresses) */
 export const ADDRESS_GROUP =
   /(?<![\w.+-])(?:\{[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\}|\([\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\)|\[[\w.+-]+(?:(?:\s*,\s*|\s+)[\w.+-]+)*\])@[\w-]+(?:\.[\w-]+)+/
 const EMAIL = new RegExp(
@@ -3387,8 +3446,7 @@ const SNAKE = /[^\W_]_+[^\W_]/
  *  another opening or closing bracket at its edge too (Ps, Pe): @readarxiv/text edgeMark, the one statement of a token's edge
  *  punctuation, which the chain's flush number reads too (PDF-READER §18.47). Its syntax alone: no word list, no camelCase,
  *  nothing dotted without an underscore ("e.g." is prose). The source's (keepIdentifiers), an ink unit's word's (packages/engine's copy of
- *  ink-units.mjs, addressed) and a figure text's (locate's ink.ts): the copy held equal to this by
- *  tests/pdf-reader/locate-ink-today.test.ts */
+ *  ink-units, locate/ink-units.ts: addressed) and a figure text's (locate's ink.ts) */
 export function identifiersIn(s: string): [number, number][] {
   const out: [number, number][] = []
   // (the tokens: runs of characters that are no white space and no U+0000)
@@ -3415,7 +3473,7 @@ export function identifiersIn(s: string): [number, number][] {
 }
 /** whether a placeholder's source is an identifier keepIdentifiers keeps: no command, no address, read as TeX sets it (a text
  *  symbol its character, symbolText) one identifier whole. Text TeX sets as written: a unit's first word where it opens one
- *  (startOf, marks.mjs headEnd), a code mark with both its marks (marks.mjs classOf) */
+ *  (startOf, marks/marks.ts headEnd), a code mark with both its marks (marks/marks.ts classOf) */
 export const identifierSource = (src: unknown): boolean => {
   if (typeof src !== 'string' || /^\\[A-Za-z@]/.test(src) || /@|:\/\//.test(src)) return false
   // (TeX's math shift, a `$` no backslash escapes: a formula's subscript, `$s_i$`, is no identifier)
@@ -3463,10 +3521,12 @@ function keepAddresses<F extends WalkFile>(pieces: readonly SourcePiece<F>[]) {
  * (x, y) {text}, in TikZ's own syntax whatever the picture draws), a pgfplots legend entry (\\addlegendentry{text}) and
  * an axis label or title in braces (xlabel={text}, ylabel=, zlabel=, title=). TeX sets them, so a translation is set in
  * the translation's fonts and a node grows to fit it. Everything else in the picture stays byte for byte. The layer route
- * sends none of them (layer-proto/rows.mjs TIKZ_KIND): the layout compile marks none, and the picture's glyphs are the
- * figure ink units' (layout/figure-text.mjs), translated once; they stay units of the bundle at their ids.
+ * sends none of them: the layout compile marks none (markUnits), and the picture's glyphs are the
+ * figure ink units' (locate/figure-text.ts), translated once; they stay units of the bundle at their ids.
  */
 function tikzText(s: string, from: number, to: number, b: Builder, ctx: Ctx) {
+  // (in TikZ's TeX source: its \node and its path's `node` (tikz.code.tex); pgfplots' \addlegendentry and its keys
+  // /pgfplots/xlabel, ylabel, zlabel and title (pgfplots.code.tex))
   const re = /\\node\b|\bnode\b|\\addlegendentry\b|\b(?:xlabel|ylabel|zlabel|title)\s*=\s*(?=\{)/g
   const ws = (k: number) => {
     while (k < to && /\s/.test(s[k]!)) k++
@@ -3745,7 +3805,7 @@ function probeConditional(s: string, i: number, c: Omit<Branches, 'end'>, b: Bui
  * passage) and \\ifx of two characters; null for every other, which the paper's definitions or TeX's state decide (\\ifdefined,
  * \\ifcsname, a \\newif, \\ifx of commands, \\ifnum). Not asked of TeX, and not worked out from the paper's definitions:
  * the units are cut before any compile, the same on every reader, and following definitions through the files, their
- * groups and every \\let that clears one is TeX's own work (the review of #457 found a fault in each of three rounds of it)
+ * groups and every \\let that clears one is TeX's own work
  */
 function conditionalValue(name: string, s: string, end: number) {
   if (name === 'iftrue') return true
@@ -4104,7 +4164,7 @@ function frontBlock(
   unit(past, to)
   close(to)
   // (the block each unit was cut from, and its whole text: what a class compares, frontMarks; beside the unit, never in it, so
-  // that no unit's pieces, nor a unit that nests it, carry it: sourceHash)
+  // that no unit's pieces, nor a unit that nests it, carry it: the unit's hash)
   const block = { text: s.slice(from, to) }
   for (const u of made) BLOCK_OF.set(u, block)
   // (the calls the marked compile states, each on the first unit after it: the call's own command where another author's call
@@ -4126,12 +4186,12 @@ function frontBlock(
   }
 }
 /**
- * Where the marked compile states an author's call (layout/marks.mjs CALL_TEX's \\axtcall, the point `<i>c` TeX sets there in
+ * Where the marked compile states an author's call (marks/marks.ts CALL_TEX's \\axtcall, the point `<i>c` TeX sets there in
  * horizontal mode alone), by the first unit after it: an author block's command in the document (\\icmlauthor, an \\author of a
  * class that sets it where it stands) right after another's, white space and comments alone between — ICML's names, each a call
  * of its own in one paragraph, its marks set after its name —, and each \\and that opens an author's block inside one (LaTeX's
  * \\author, NeurIPS' \\And). Each a source offset, in the unit's file. What TeX sets between an author's end mark and the next
- * author's call is the author's (its trail: the engine's locate), what after it the next author's (its lead: own.mjs MR 5): no
+ * author's call is the author's (its trail: the engine's locate), what after it the next author's (its lead: own/own.ts): no
  * gap tells them apart, a thin space or a word space (2611.03953v2's names, 2610.10069v1's \\thanks mark before its \\and). A call
  * in the preamble states none (frontMatter: TeX sets nothing there, and a class stores what it sets later and whole, its
  * separators its own — 2604.14228v3's \\addtolist), the \\and inside its argument still
@@ -4157,7 +4217,7 @@ const topUnits = <F extends WalkFile>(list: readonly SourceUnit<F>[]) => {
 /** the pairs the walk counts over s[from, to) without the letters it makes of a letter command and of \\ifmmode (ctx.letters
  *  false: PIPELINE 30's reading), walked in a shadow of the walk's context and builder: what a span read as one letter now
  *  spends of the pairs' ids, as a group around an accent spends its own, so that every pair after it keeps its id (a copy's
- *  translations are found again by the units' pieces: cache.mjs sourceHash) */
+ *  translations are found again by the units' pieces: @readarxiv/translate askedOf) */
 function pairsOf(s: string, from: number, to: number, b: Builder, ctx: Ctx) {
   // (a dry run keeps no pair: probeBranch)
   if (to <= from || ctx.dry?.b === b) return 0
@@ -4209,8 +4269,8 @@ function olderUnits(s: string, from: number, to: number, b: Builder, ctx: Ctx): 
   sb.flush()
   return topUnits(out).map((u): [number, number] => [u.start, u.end])
 }
-/** a key of an affiliation's values whose value is no prose: a postcode */
-const CODE_KEY = /^(?:postcode|postalcode|zipcode|zip)$/i
+/** a key of an affiliation's values whose value is no prose: a postcode, elsarticle.cls's `postcode` (its \affiliation's keys) */
+const CODE_KEY = /^postcode$/i
 /** an affiliation written as keys and values (elsarticle's \\affiliation[a]{organization={Department of X}, city={Paris},
  *  country={France}}, which the class prints one value after another): each value with a word in it a unit of places of its
  *  own, its marks inside the value's braces, where the class keeps the value's tokens as they are; the keys, the separators,
@@ -4280,14 +4340,14 @@ function walkArgs(s: string, i: number, end: number, walked: readonly CallArg[],
 }
 /** the running heads' commands: their text, short and set on every page, is kept as it is — a mark in it would be set
  *  on every page (llncs' \\titlerunning, a token register, made a marked unit with its leading, and 2608.10091's zh final
- *  two pages longer) */
+ *  two pages longer): latex.ltx's \\markboth and \\markright, llncs.cls's \\titlerunning, \\authorrunning, \\toctitle, \\tocauthor */
 const RUNNING_HEADS = new Set(['markboth', 'markright', 'titlerunning', 'authorrunning', 'toctitle', 'tocauthor'])
 /** hyperref's \\texorpdfstring{TeX}{PDF}: the first argument the text typeset, the second the bookmark's string, kept with the
  *  command as it is. The role table leaves both untyped (LaTeXML's prototype), so the call was one placeholder, and a heading
  *  wholly one no unit: 13 of 2307.16209's 14 */
 const PDF_STRING = new Set(['texorpdfstring'])
 /** the conditionals TeX reads as a macro's arguments, no \\fi (etoolbox's, ifthen's \\ifthenelse; the role table's branches
- *  of content, arg-roles.mjs): read as TeX's own conditionals are (S4): undecided before the compile, a branch that alone
+ *  of content, arg-roles.ts): read as TeX's own conditionals are (§18.40): undecided before the compile, a branch that alone
  *  holds words walked as content, which the compile says TeX set or not (its marks set or never met); where both hold words,
  *  neither is the translator's — the call one placeholder, as a command the table does not know is, counted (`ifUnknown`);
  *  where neither does, one placeholder as before */
@@ -4313,7 +4373,7 @@ const BRACE_CONDITIONALS = new Set([
 const THEOREM_PARAMS = paramsOf('[t')
 /**
  * An environment's arguments after its \\begin{name}: those its definition takes — the paper's own (\\newenvironment's
- * count), a theorem's optional title, else the role table's (arg-roles.mjs environmentParams) — and any optional ones
+ * count), a theorem's optional title, else the role table's (arg-roles.ts environmentParams) — and any optional ones
  * after them, which a package may add (enumitem's keys after a list's \\begin); else, an environment nothing defines,
  * every adjacent group. Their end, and `title`, a theorem's: its optional argument, unless that is a list of keys
  * (thmtools' name=…, label=…)
@@ -4555,7 +4615,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       }
       // a group around an accent alone, El Ni{\~n}o: the letter, in its word (accentLetter). The pair's id is spent as
       // the group's would be, so that every pair after it keeps its id, and the units without such a letter their
-      // pieces (a copy's translations are found again by them: cache.mjs sourceHash)
+      // pieces (a copy's translations are found again by them: @readarxiv/translate askedOf)
       const k = skipSpaces(s, i + 1),
         accent = s[k] === '\\' ? commandAt(s, k) : null
       const letter = accent && accentLetter(s, accent.end, accent.name, e - 1, ctx.ownAccents)
@@ -4637,7 +4697,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
     }
-    // any other conditional TeX closes with a \\fi: one branch is what TeX sets (S4 of 2026-10-24: 2610.21098's
+    // any other conditional TeX closes with a \\fi: one branch is what TeX sets (2610.21098's
     // \\ifdefined\\BottleneckPreprint, both its branches' sentences one unit). Where its own text decides it
     // (conditionalValue: \\iftrue, \\if 0) the live branch is walked, the rest stays in the source; where it does not and
     // both branches hold words, neither branch is the translator's (`skipped.ifUnknown`): left English, never the branch
@@ -4857,7 +4917,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
           first = b.units.length,
           // biome-ignore lint/suspicious/noAssignInExpressions: as written
           table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1)
-        // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
+        // each cell unit's place in the table's grid (tableGrid), which the bundle carries (instrument/units.ts BundleCell):
         // a table nested in a cell gives its units the outer cell's place, set after its own
         const grid = tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter)
         b.kind = blockKind(b, 'cell')
@@ -4964,7 +5024,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       continue
     }
     // \\bibliography{…}: TeX reads the job's .bbl there, which the package holds (BibTeX's output, shipped, or the one BibTeX
-    // writes in the prepare's first pass: layout/paper.mjs madeBibliography), its thebibliography a paragraph's end (its
+    // writes in the prepare's first pass: compile/paper.ts madeBibliography), its thebibliography a paragraph's end (its
     // heading's); none read, it sets nothing, and the paragraph before it ends there all the same, so that the source's units
     // are the same with the .bbl and without it (`bibliography`, the names it reads: whether the paper has one to make)
     if (name === 'bibliography') {
@@ -5293,7 +5353,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // the running head and the PDF's title): a unit of what it is, with no mark, which would be set wherever the class
     // sets it (2608.07584 had no title). The text before it ends where the command begins (endText first): the
     // paragraph's unit must not run over the call, whose source no piece of it holds — written back, the call was gone
-    // (the re-review's N1, \note{…} mid-paragraph)
+    // (\note{…} mid-paragraph)
     if (call && !macro.prose && FRONT_ROLES[name]?.[1]) {
       endText()
       const e = frontCommand(s, i, end, name, to, b, ctx, { front: true })
@@ -5331,7 +5391,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // a macro whose body sets words of its own around its argument (\\newcommand{\\nb}[1]{Notebook~#1}) is no wrapper: its
       // call is its expansion, text whose source is the call (expandedText), or where the body is more than text, the
       // call one placeholder. As a pair around its argument, the translator was sent "(4--6)" for "(Notebook 4--Notebook
-      // 6)" (2610.21547's eleven units, S1 of 2026-10-24)
+      // 6)" (2610.21547's eleven units)
       if (arg && !macro.then && setsWords(macro)) {
         // (a macro inside its own expansion, or expansions nested past a few levels — a recursive call in a branch TeX never
         // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder; a failed
@@ -5540,7 +5600,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     // one branch that holds words is walked alone, the call's source and its other branch kept with its pair's open or close —
     // so no unit's start mark falls between two of its arguments, where an empty branch's pair would end the unit's head; where
     // both hold words neither is text, and where neither does none: the call read as one the table does not know, one
-    // placeholder, as before the table knew it)
+    // placeholder)
     let branch = null
     if (args?.known && BRACE_CONDITIONALS.has(name)) {
       const br = args.args.filter((a) => a.role === 'c' && s[a.start] === '{')
@@ -5611,7 +5671,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       : NO_ARGS.has(name)
         ? optsAfter(s, from, OPT_ONLY.has(name))
         : args!
-    // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is), as before the table
+    // an empty group after a command the table knows ends its name, and goes with it (\\LaTeX{} is)
     if (args?.known) {
       const k = skipSpaces(s, e)
       if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2
@@ -5702,7 +5762,7 @@ function endsParagraph(s: string, from: number, to: number) {
  *  the package's files and in any form, takes no parameter and has such a body — `\\newcommand{\\x}{…}`, \\renewcommand,
  *  \\providecommand, \\DeclareRobustCommand (starred or not, no `[n]` after the name), `\\def\\x{…}`, \\gdef, \\edef, \\xdef (no
  *  parameter text). A name also defined otherwise — with parameters (`\\renewcommand{\\x}[1]{…}`, `\\def\\x#1{…}`), by \\let, by
- *  xparse's commands, or with another body — is none (the review of #501's fix round: a row end later redefined with an argument
+ *  xparse's commands, or with another body — is none (a row end later redefined with an argument would
  *  split its cell) */
 /** a definition of a command in any form the walk reads: LaTeX's, TeX's, a \\let, a document command's (its name the first group set) */
 const DEFINITION =
@@ -5759,7 +5819,8 @@ function rowEndsAfterOf(texts: readonly string[]) {
   return out
 }
 /** a body's end that ends a table's row, as ROW_END reads a whole body: `\\\\` (starred, its space and option), \\tabularnewline
- *  or \\cr, the rules after it, not a `\\\\\\\\` that is a line end's own backslash */
+ *  or \\cr, the rules after it, not a `\\\\\\\\` that is a line end's own backslash: latex.ltx's \\tabularnewline, \\hline and
+ *  \\cline, TeX's \\cr, booktabs.sty's \\toprule, \\midrule, \\bottomrule, \\cmidrule and \\addlinespace */
 const ROW_END_TAIL =
   /(?:^|[^\\])(?:\\\\\*?\s*(?:\[[^\]]*\])?|\\tabularnewline|\\cr)\s*(?:\\(?:hline|midrule|toprule|bottomrule|cline\s*\{[^}]*\}|cmidrule\s*(?:\([^)]*\))?\s*\{[^}]*\}|addlinespace(?:\s*\[[^\]]*\])?)\s*)*$/
 /** a macro's body that ends a table's row and does nothing else but draw its rules: `\\\\` (starred, with its space), \\tabularnewline,
@@ -6006,7 +6067,7 @@ function endinputCut(cmds: readonly TexCommand[], s: string) {
 }
 /** the \\end{document}s of a file TeX surely acts on where they stand (its commands, texCommands), by where each starts:
  *  the walk stops at one of them, and at no other (one TeX never reaches: after an \\endinput, in a \\newif's false
- *  branch, the review's I4) */
+ *  branch) */
 function documentEnds(cmds: readonly TexCommand[]) {
   return new Set(cmds.filter((c) => c.name === 'end' && c.env === 'document' && c.sure && !c.inDef).map((c) => c.at))
 }
@@ -6049,17 +6110,17 @@ const BIB_KINDS: KeySet<string> = new Set(['reference'])
  * after the last of the rest, so that no other unit's number is what it was before they were units of their own (a translation
  * held by a unit's number, the gate pack's, is still that unit's: what was one unit of an author block keeps its number in the
  * first unit cut from it), and the units a host cuts before the job's .bbl is made keep their numbers when the entries come
- * after it (layout/paper.mjs madeBibliography). Nothing reads a place or an entry by its place among the units: their marks place
+ * after it (compile/paper.ts madeBibliography). Nothing reads a place or an entry by its place among the units: their marks place
  * them on the page, a place is searched on arXiv's page as a float is (it is set where the class sets it: amsart's addresses at
- * the paper's end; make.mjs FLOATING), the ledger's zone reads the entries' marks. But for the anchoring, which reads the text's
- * order: a unit without marks is searched between its marked neighbours in the order TeX sets the text (anchors.mjs matchUnits),
+ * the paper's end), the ledger's zone reads the entries' marks. But for the anchoring, which reads the text's
+ * order: a unit without marks is searched between its marked neighbours in the order TeX sets the text,
  * so the order the walk met the units in is given beside them. Returns it, the units' new indices in that order (`texOrder`),
  * or null where nothing moved: 1810.04805v2's appendix comes after its bibliography, whose entries, numbered last, were the
  * appendix's last paragraphs' next neighbour, on page 10, and those of its page 16 the marks did not bound were found nowhere
  */
 function entriesLast(units: SourceUnit<WalkFile>[]) {
   // (`last`: a block of the author block's no engine before cut a unit of (ownLater), after every other unit but the entries,
-  // which stay last: a bibliography BibTeX makes in the prepare's first pass is appended after the units (layout/paper.mjs
+  // which stay last: a bibliography BibTeX makes in the prepare's first pass is appended after the units (compile/paper.ts
   // madeBibliography, which holds those before it as they were))
   const last = units.filter((u) => u.last)
   const later = units.filter((u) => u.later && !u.last && !BIB_KINDS.has(u.kind)),
@@ -6075,7 +6136,7 @@ function entriesLast(units: SourceUnit<WalkFile>[]) {
 /** the commands of a bibliography that set their last argument as text, by how many arguments come before it: REVTeX's and
  *  acmart's fields (\\bibinfo{title}{…}, \\bibfield{author}{…}), REVTeX's name fonts, a quoted or shown title, IEEEtran's
  *  language, and REVTeX's link with no address (\\href@noop {} {…}, its head's `\\@secondoftwo`: a journal part with no DOI,
- *  a note; its content the text, with the groups it holds, nothing to link: the coordinator's step D of 2026-11-11, PDF-READER
+ *  a note; its content the text, with the groups it holds, nothing to link: PDF-READER
  *  §18.33). Any other command of a .bbl is what the walk makes of it elsewhere: \\newblock a placeholder, \\url and \\href
  *  theirs, \\emph a pair */
 const BIB_TEXT = new Map([
@@ -6089,12 +6150,14 @@ const BIB_TEXT = new Map([
   ['BIBforeignlanguage', 1],
   ['href@noop', 1],
 ])
-/** a \\bibinfo field that is no prose: kept as the paper has it, one placeholder */
+/** a \\bibinfo field that is no prose: kept as the paper has it, one placeholder. BibTeX's fields as the styles declare them:
+ *  apsrev4-2.bst's doi, url, eprint, isbn, issn, archive, archivePrefix, primaryClass, eid; ACM-Reference-Format.bst's lccn;
+ *  amsplain.bst's mrnumber; aomplain.bst's zbl */
 const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|primaryclass|eid|lccn|mrnumber|zbl)$/i
 /**
  * A bibliography (thebibliography's body, `from` after its \\begin, `to` its \\end): each \\bibitem's entry, from its key's
  * group to the next \\bibitem or the end, is one unit of kind `reference` (the reader's "References"), whole: the names it
- * opens with are the entry's, never a unit of their own nor of the "names" toggle (the owner's ruling of 2026-10-28: the
+ * opens with are the entry's, never a unit of their own nor of the "names" toggle (PDF-READER §19.13: the
  * references and the author block are each their own toggle's, decoupled — "names" is the author block under the title alone —,
  * and an entry is never set in two pieces styled apart). Its label (\\bibitem's optional argument, set in the list's label
  * box) and its key are no piece of it; what precedes the first \\bibitem (the style's \\providecommand's) is no unit, nor is
@@ -6185,7 +6248,7 @@ const texMarks = (t: string) =>
  * The characters a pair's command prints around its argument `arg`, by its definition (`macro`: paperMacros' or bibDefinitions'),
  * where its replacement text is that argument between marks and nothing else — no letter, no digit, no command, no group:
  * `{``#1''}`, 2610.10069v1's \\enquote and REVTeX's .bbl's — as { before, after }, TeX's ligatures read; null else. What a command
- * prints as characters is characters (the coordinator's ruling of 2026-11-11): the marks are text of the unit, its source with
+ * prints as characters is characters (PDF-READER §18.32): the marks are text of the unit, its source with
  * them, and what a translator does with quotation marks is the translator's
  */
 function wrapOf(macro: Macro | BibDef | undefined, arg: number) {
@@ -6284,7 +6347,7 @@ function quoteMarks(s: string, end: number, ctx: Ctx) {
   const [before, after] = ctx.quotes.levels![level % 2]!
   return { before, after, level: level + 1 }
 }
-/** the declarations a group scopes (tex-kernel.mjs DECLARATION_WORDS) */
+/** the declarations a group scopes (tex-kernel.ts DECLARATION_WORDS) */
 const DECLARATIONS = new Set(DECLARATION_WORDS)
 /** a call that prints its argument (s[from, to)) between marks: the opening mark text with the call's source up to its argument's
  *  open, the argument walked (at the next quotation level, for csquotes), the closing mark text with the rest of the call's source
@@ -6317,7 +6380,7 @@ function withMarks(
   b.letter(marks.after, s.slice(to, e), to, e, true)
   return e
 }
-/** a declaration a group scopes (rules/tex-kernel.mjs DECLARATION_WORDS: a face, a size, a family, an alignment; and \\color)
+/** a declaration a group scopes (tex-kernel.ts DECLARATION_WORDS: a face, a size, a family, an alignment; and \\color)
  *  at the top level of s[from, to) */
 function declares(s: string, from: number, to: number) {
   let depth = 0
@@ -6343,7 +6406,7 @@ function declares(s: string, from: number, to: number) {
 }
 /** whether a pair's command, by its definition (`def`: paperMacros' or bibDefinitions'), sets its argument `arg` (the one the
  *  walk makes the pair's content, from 1, the last it takes) and nothing else: such a pair sets nothing over what it holds, and
- *  goes on no wire (translate/mt.mjs classOf). No name is listed: a style that sets the field in small capitals, a paper's
+ *  goes on no wire. No name is listed: a style that sets the field in small capitals, a paper's
  *  `\newcommand\bibnamefont[1]{\textsc{#1}}`, is no identity and stays a pair */
 function identityPair(macro: Macro | BibDef | undefined, arg: number | undefined) {
   const sel = macro && selectsArgument(macro.params, typeof macro.def === 'string' ? texUncommented(macro.def) : null)
@@ -6355,9 +6418,9 @@ function identityPair(macro: Macro | BibDef | undefined, arg: number | undefined
  * redefined, `\BR@@bibitem#1#2\par`), sets it, then the list (\BR@backref, through \backrefalt or \backref), so the list is
  * TeX's, after the entry's text and its end mark, in none of its pieces: left on the page where the entry is drawn translated
  * over it (2610.37668v1's "2, 25"). The unit that ends the entry's first paragraph ends in this piece: no byte of the source
- * (patch writes none), its marks set by LAYOUT_TEX's hook around the list itself (layout/marks.mjs layoutMarking: `\axtbrname`),
+ * (patch writes none), its marks set by LAYOUT_TEX's hook around the list itself (marks/marks.ts layoutMarking: `\axtbrname`),
  * so that the list is its ink, which the layer draws after the entry's translation, its links with it; an entry TeX sets no list
- * for has none there (EMPTY: the maker)
+ * for has none there
  */
 export const BACKREF_LIST = '\\axtbackref'
 /** a paragraph's end in TeX's source: a blank line or \\par (the end of what backref's parscan reads of an entry) */
@@ -6388,7 +6451,8 @@ function backrefOf(texts: readonly string[]) {
   }
   return false
 }
-/** the commands that load a package or set its options (backrefOf) */
+/** the commands that load a package or set its options (backrefOf): latex.ltx's \\usepackage, \\RequirePackage,
+ *  \\PassOptionsToPackage, \\documentclass, \\LoadClass; hyperref.sty's \\hypersetup */
 const BACKREF_SETTERS =
   /\\(?:usepackage|RequirePackage|PassOptionsToPackage|documentclass|LoadClass|hypersetup)(?![A-Za-z@])/g
 /** backref's name, or hyperref's option that loads it, as a word of an argument, not set false */
@@ -6422,7 +6486,7 @@ const APART = (p: SourcePiece<WalkFile> | undefined) =>
       p.src ?? '',
     ))
 /**
- * An entry's numbers, each a placeholder: what the original's ink keeps (the owner, 2026-10-25: labels, numbers, years, DOIs,
+ * An entry's numbers, each a placeholder: what the original's ink keeps (PDF-READER §19.13: labels, numbers, years, DOIs,
  * web addresses and formulas stay the original's ink), each token of a text piece that holds a digit and no letter, with white
  * space or a piece that sets no letter on either side (APART), so that no mark of its goes inside a word or between two glyphs
  * TeX kerns. A piece whose source is other bytes than its text (an accent's letter joined into its word, a file transcoded:
@@ -6572,13 +6636,20 @@ const THEOREM_DEFINERS =
  *  own (\\spnewtheorem theorem and proof, \\spn@wtheorem corollary, definition, example, lemma, proposition, remark), proof
  *  amsthm.sty's too */
 const theoremsOf = (texts: readonly string[]) => {
+  // (llncs.cls's \spnewtheorem theorem and proof and \spn@wtheorem lemma, corollary, proposition, definition, remark,
+  // example; amsthm.sty's proof)
   const names = new Set(['proof', 'theorem', 'lemma', 'corollary', 'proposition', 'definition', 'remark', 'example'])
   for (const m of texts.map(uncommented).join('\n').matchAll(THEOREM_DEFINERS))
     for (const n of (m[1] ?? m[2])!.split(',')) if (n.trim()) names.add(n.trim())
   return names
 }
 /** every environment a paper's files define, by whatever package: none of them is the role table's environment of the
- *  same name */
+ *  same name. The definers: latex.ltx's \\newenvironment, \\renewenvironment, \\…DocumentEnvironment, \\newtheorem;
+ *  makecmds.sty's \\provideenvironment; tcolorbox.sty's \\newtcolorbox, \\renewtcolorbox, \\…TColorBox and
+ *  tcbtheorems.code.tex's \\newtcbtheorem; mdframed.sty's \\newmdenv and \\newmdtheoremenv; enumitem.sty's \\newlist;
+ *  newfloat.sty's \\DeclareFloatingEnvironment; float.sty's \\newfloat; listings.sty's \\lstnewenvironment; comment.sty's
+ *  \\…comment; thmtools' \\declaretheorem (thm-kv.sty); llncs.cls's \\spnewtheorem; fancyvrb.sty's
+ *  \\DefineVerbatimEnvironment; minted.sty's \\newminted; tabularray.sty's \\NewTblrEnviron */
 const OWN_ENVS =
   /\\(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|newtheorem|declaretheorem|spnewtheorem|newmdtheoremenv|DefineVerbatimEnvironment|newminted|NewTblrEnviron)\s*\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
 const ownEnvsOf = (texts: readonly string[]) =>
@@ -6632,6 +6703,8 @@ const envDefs = (texts: readonly string[]) => {
 /** a table environment begun or ended in TeX's two spellings: \begin{tabularx} and \tabularx, \end{tabularx} and \endtabularx */
 const TABLE_BEGIN =
   /\\begin\s*\{\s*((?:tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)\*?)\s*\}|\\(tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)(?![A-Za-z@*])/g
+/** the tables as TABLE_BEGIN names them (TABLE_ENVS': latex.ltx's, tabularx.sty's, longtable.sty's, tabu.sty's, tabulary.sty's,
+ *  supertabular.sty's, xtab.sty's) */
 const TABLE_END =
   /\\end\s*\{\s*((?:tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)\*?)\s*\}|\\end(tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)(?![A-Za-z@*])/g
 /**
@@ -6679,9 +6752,9 @@ const tableWrapsOf = (texts: readonly string[]) => {
  * of what holds it, and none TeX may skip) is set once, where TeX expands that call, with the call's own surroundings: marked
  * where it is defined, it is the unit TeX sets, its marks once on the page, as the same text written there is. An author
  * block's by frontMarks (2609.20976v1's \\affiliation[a]{\\CU}, \\CU a \\newcommand of the affiliation's text), any other
- * kind's by markUnits (2610.17024v1's `\\textbf{Keywords:} \\CILKEYWORDS` and the bibliography its \\CILBIBLIOGRAPHY sets: the
- * maker lays them where their text stands, PIPELINE 70, and unmarked the wrap gave their ink no group of theirs, the list left
- * in its call's placeholder, which the maker left EMPTY: English, its translation never drawn). One expanded more than once
+ * kind's by markUnits (2610.17024v1's `\\textbf{Keywords:} \\CILKEYWORDS` and the bibliography its \\CILBIBLIOGRAPHY sets:
+ * their ink is found where their text stands; unmarked, the wrap would give it no group of theirs, the list left
+ * in its call's placeholder: English, its translation never drawn). One expanded more than once
  * (called twice, or once inside a macro called twice), or a number of times not known, has no mark
  */
 function storedBodies(
@@ -6766,7 +6839,7 @@ function storedBodies(
   for (const [name, us] of made) if (timesOf(name, new Set()) === 1) for (const u of us) u.once = true
 }
 
-/** `fsys`: a file system (inMemory, or node-files.mjs folder under Node) */
+/** `fsys`: a file system (Fsys: inMemory over the files in memory, or a caller's own) */
 export function loadProject(fsys: Fsys, main: string, { tables = false } = {}) {
   // each file's text read once: the package's TeX (.tex, .sty, .cls) is read by several of the passes below
   const texts = new Map<string, string>(),
@@ -7012,6 +7085,7 @@ function readProject(
   restorePercents(units)
   const texOrder = entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
+  // (inputenc's encodings: latin1.def, latin9.def, ansinew.def, cp1252.def, cp1250.def, latin2.def, applemac.def, decmulti.def)
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)
     ?.options.split(',')
     .map((x) => x.trim())
@@ -7042,10 +7116,10 @@ function readProject(
         .filter((c) => c.name || c.units.length),
     )
     .filter((cells) => cells.length)
-  // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
+  // (the paper's macros that read nothing past their arguments: the layout marking's, marks/marks.ts layoutMarking `complete`)
   // (the bibliographies \\bibliography reads, by the names it gives, where the walk met it: what BibTeX writes the job's .bbl of)
   // (the code environments the paper uses, a listing package's or its own (codeEnvsOf), by name: the layout compile marks each line
-  // of their bodies as a code region (layout/marks.mjs regionsTex), so that every reader keeps its text as the paper has it)
+  // of their bodies as a code region (marks/marks.ts regionsTex), so that every reader keeps its text as the paper has it)
   const begun = new Set(
     ownTexts.flatMap((t) => [...uncommented(t).matchAll(/\\begin\s*\{\s*([^{}\s]+)\s*\}/g)].map((m) => m[1])),
   )
@@ -7107,8 +7181,8 @@ export function unitText(u: { pieces: readonly SourcePiece<WalkFile>[] }): strin
 // ---------------------------------------------------------------- pseudo-translation
 /**
  * Per target language, the length of a real translation in grapheme clusters per letter of the English it comes from,
- * and a sample text (one English sentence as Microsoft's free endpoint translates it). Measured over 48 prose units of
- * four papers of four document classes (parked/lab/spikes/lang-ratio.mjs, 2026-09-22; each language's quartiles lie within 10 %
+ * and a sample text (one English sentence as Microsoft's free endpoint translates it). Measured 2026-09-22 over 48 prose units of
+ * four papers of four document classes (parked/lab/spikes/lang-ratio.mjs; each language's quartiles lie within 10 %
  * of its ratio): a page count or a line break measured on the pseudo-translation stands for the real one's only if it
  * is as long and written like the language. The first ratios, guessed (zh 0.45, ja 0.55, de 1.15), were a third too
  * long for Chinese and a sixth too short for German.
@@ -7212,7 +7286,7 @@ export function pseudoTranslate<F extends WalkFile>(
 /**
  * Where a unit's start mark goes among its pieces, as patch writes it: [the piece, its cut] (a text piece's cut after its
  * leading white space; -1, before the piece), or [-1, 0], none (the unit's head passed over, below). The adapter reads it
- * too: a piece before it TeX set before the unit's start point (pipeline/instrument.mjs).
+ * too: a piece before it TeX set before the unit's start point (instrument/instrument.ts).
  * Before the first word, inside any font command's group (nothing precedes it there to kern with); before an inline
  * formula, a citation, an identifier or a number a bibliography entry keeps (KEPT_NUMBER: a year, an entry with no author's
  * first ink) that comes first; before the macro when the word is glued to one (\\name's: between the two the
@@ -7306,9 +7380,9 @@ function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number]
       break
     }
     // (a group of commands alone closed right before the first word — `\underline{\code{x}}: the…`, a cell's
-    // `\textcolor{red}{\texttt{…}}; …` —: the mark goes before that word, as after a command passed over, where marks.mjs
+    // `\textcolor{red}{\texttt{…}}; …` —: the mark goes before that word, as after a command passed over, where marks.ts
     // headEnd has the unit's head end; its ink is set by then, in the paragraph the command began, and the head's pieces are
-    // found beside the mark by their text, make.mjs besideMarks. With none, the unit's head pieces were LOST, the unit English:
+    // found beside the mark by their text (glyphPiecesOf). With none, the unit's head pieces were LOST, the unit English:
     // 2608.25210v2's seven prompts' paragraphs, 2610.21477v1's cell. A group followed by anything else before the word stays
     // as before: no start mark)
     if (p.t === 'close') {
@@ -7347,7 +7421,7 @@ function headStartOf(pieces: readonly SourcePiece<WalkFile>[]): [number, number]
  *  between the word and its comma, and a lost kern there respaces the whole line.
  *  `asSource`, a Set of units: each written as the paper's own bytes, its range as the file holds it (a top-level unit's
  *  range copied as the text around it is, a nested one's piece as its source between the outer unit's text), with no
- *  mark and no span: the layout guard's unit left unmarked (layout/guard.mjs), whose pieces or marks would not be the
+ *  mark and no span: the layout guard's unit left unmarked (compile/guard.ts), whose pieces or marks would not be the
  *  paper (2610.21377's pgffor loop header written back with its body's brace doubled). Empty or absent: as before */
 export function patch(
   project: PatchProject,
@@ -7392,7 +7466,7 @@ export function patch(
     }
     const m = mark?.(u)
     let [startAt, startCut] = m ? startOf(pieces, u.kind === 'cell') : [-1, 0]
-    // the marks that open the piece the start mark goes before (a layout opening mark, layout/marks.mjs layoutMarking's
+    // the marks that open the piece the start mark goes before (a layout opening mark, marks/marks.ts layoutMarking's
     // `opens`) come after the start mark, which sets its point where the unit begins, in horizontal mode, after everything
     // \leavevmode lets \everypar set first. Before it, in vertical mode, an opening mark waits for the next mark TeX sets,
     // and that may be one a run-in heading's own formula sets as the paragraph starts: 2610.21085v1 u44's point stood at
@@ -7564,7 +7638,7 @@ export function patch(
     ].sort((a, b) => a[0] - b[0])
     // the bytes written so far, where `spans` is asked for: each top-level unit's range in the file as written, and each
     // unit nested in one, inside its range, with the top-level unit it is written in (`outer`), which a compile's error
-    // is located by (tex-errors.mjs)
+    // is located by (compile/tex-errors.ts)
     let size = 0
     const add = (...bytes: Uint8Array[]) => {
       parts.push(...bytes)
@@ -7608,7 +7682,7 @@ export function patch(
 /** \\axtend{name}: a unit's end mark, which must not change where a line breaks. A mark after glue — the glue xeCJK sets
  *  after a full-width stop — makes that glue a place to break before it, and in a full last line TeX took it: the mark
  *  alone on a line of its own, one line more in the caption, and no word beside the mark to bound the unit with (the
- *  owner's Figure 1, 2026-09-23, in the browser's XeTeX). So the glue is taken off, the mark set against the last
+ *  caption of a Figure 1 in the browser's XeTeX). So the glue is taken off, the mark set against the last
  *  letter, and the same glue put back after it: where a paragraph ends \\par takes it off as before, and inside a line
  *  it breaks where it did. \\relax first: XeTeX sets a word, and xeCJK's glue after it, only when a command that does
  *  not expand comes, so a test before one would look at the list without them. On one line: a line end in the macro
@@ -7639,6 +7713,8 @@ export function localizeNames(text: string): string {
   return out
 }
 const FORCED_BREAK = /^\\(?:\\\*?(?:\s*\[[^\]]*\])?|newline|linebreak(?:\s*\[[^\]]*\])?)\s*$/
+/** a size or a vertical skip: size10.clo's \\tiny … \\Huge (latex.ltx's \\normalsize), latex.ltx's \\vspace, \\smallskip,
+ *  \\medskip, \\bigskip, TeX's \\vskip */
 const OWN_LINE_AFTER =
   /^\\(?:tiny|scriptsize|footnotesize|small|normalsize|large|Large|LARGE|huge|Huge|vspace|vskip|smallskip|medskip|bigskip)(?![A-Za-z])/
 const CJK_EDGE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef]/u
@@ -7788,12 +7864,12 @@ export const FIT_DEF = String.raw`\makeatletter\newsavebox\axt@fitbox\newsavebox
 /** \\axtmark{name}: a named destination axt-<name> where it stands (a unit's start and end, axt-<n>s and axt-<n>e). And on
  *  every page, axt-c<columns>-<k>: the columns its compile set it in, 1 or 2 — LaTeX's \\if@twocolumn (\\twocolumn,
  *  \\onecolumn), multicol's and the kernel's \\col@number, revtex's grid (ltxgrid's \\pagegrid@col: it keeps
- *  \\if@twocolumn false) — which places.mjs counts columns by, page by page (a two-column body and a one-column
+ *  \\if@twocolumn false) — which ink-units.ts columnsOf counts columns by, page by page (a two-column body and a one-column
  *  appendix, Chinese 2608.02163). The most columns in force at any mark made since the last page went out, or as the
  *  page goes out: ltxgrid closes its grid at \\end{document} before the last page goes out (\\close@column@grid), and
- *  read then alone every revtex and aastex paper's last page was one column (the review of 2026-10-01). And as
+ *  read then alone every revtex and aastex paper's last page was one column. And as
  *  \\end{document} begins, before the grid closes: a last page with no unit mark on it — the references alone — was
- *  read one column too (2608.20847's page 9, aastex 2608.12606's page 20; the re-review of 2026-10-02) */
+ *  read one column too (2608.20847's page 9, aastex 2608.12606's page 20) */
 export const MARK_DEF = `${[
   '\\makeatletter\\ifdefined\\XeTeXrevision\\def\\axt@dest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}',
   '\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\special{dvipdfmx:config C 0x0010}}\\fi',
@@ -7806,15 +7882,15 @@ export const MARK_DEF = `${[
   '\\ifdefined\\AddToHook\\AddToHook{shipout/background}{\\axt@colseen\\put(0,0){\\axt@dest{c\\axt@colmax-\\the\\ReadonlyShipoutCounter}}\\gdef\\axt@colmax{1}}\\AddToHook{enddocument}{\\axt@colseen}\\fi\\makeatother',
   ...END_MARK,
 ].join('\n')}\n`
-/** whether a compiler is arXiv's `latex` (its 00README's, or the one guessed for a package of EPS figures alone: paper-meta.mjs):
+/** whether a compiler is arXiv's `latex` (its 00README's, or the one guessed for a package of EPS figures alone: paper-meta.ts):
  *  pdfTeX in DVI mode, \\pdfoutput 0, whose DVI arXiv makes a PDF by dvips and ps2pdf, and a host by dvipdfmx
- *  (live.d.mts CompileRequest), which reads the marks' specials (DVI_MARK_DEF) */
+ *  (compile/live.ts CompileRequest's `engine`), which reads the marks' specials (DVI_MARK_DEF) */
 export const dviEngine = (engine: string | null | undefined): boolean => engine === 'latex'
 /** MARK_DEF's destination under `latex` (dviEngine), where pdfTeX writes no PDF itself and its \\pdfdest sets nothing: xdvipdfmx's,
  *  as MARK_DEF sets it under XeTeX, a `pdf:dest` special of an XYZ where it stands (\\axt@dvidest, LAYOUT_TEX's too:
  *  DVI_LAYOUT_TEX), and the config dvipdfmx is told at the first page, which keeps every destination nothing refers to
  *  (C 0x0010, "do not optimize PDF destinations": it drops them otherwise). A paper that sets \\pdfoutput 1 is set as pdfLaTeX
- *  sets it, MARK_DEF's. After MARK_DEF, for such a paper alone (live.mjs originalFiles, probeFiles), so that every other
+ *  sets it, MARK_DEF's. After MARK_DEF, for such a paper alone (compile/live.ts originalFiles, probeFiles), so that every other
  *  engine's files are byte for byte as before; one line, no comment, so that no line of the paper moves */
 export const DVI_MARK_DEF =
   '\\makeatletter\\def\\axt@dvidest#1{\\special{pdf:dest (axt-#1) [@thispage /XYZ @xpos @ypos null]}}\\let\\axt@pdfdest\\axt@dest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\axt@pdfdest{#1}\\else\\axt@dvidest{#1}\\fi}\\ifdefined\\AddToHook\\AddToHook{shipout/firstpage}{\\ifnum\\pdfoutput>0 \\else\\special{dvipdfmx:config C 0x0010}\\fi}\\fi\\makeatother'
@@ -7871,7 +7947,8 @@ export const unitLeadTex = (leading: string): string =>
 \AtBeginDocument{\everydisplay\expandafter{\the\everydisplay\axt@displaylead}}
 \makeatother
 `
-// pieces that are always set on the line: inline formulas and references
+// pieces that are always set on the line: inline formulas and references (latex.ltx's \ensuremath, \cite and \ref,
+// natbib.sty's \cite…, amsmath.sty's \eqref, hyperref.sty's \autoref, cleveref.sty's \cref and \Cref)
 const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]ref)(?![A-Za-z]))/
 /** marks for the units whose place a reader shows: not headings (their text is also typeset in running heads and
  *  tables of contents), not the author block's names, places and notes (typeset again in running heads and the
@@ -7896,8 +7973,11 @@ export const markUnits = (
           (u.stored && !u.once) ||
           inMath(u)
         ? null
-        : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }
+        : { start: `${START_LEAD}\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` }
 }
+/** what a unit's start mark is written after, right before it and part of it: the paragraph begun first (`\leavevmode\axtmark{…s}`),
+ *  so that the mark is set inside it whatever \everypar sets there (markUnits, frontMarks; a cell's, marks.ts layoutMarking) */
+export const START_LEAD = '\\leavevmode'
 /**
  * Whether a unit holds a subscript or a superscript of its own (a piece `_` or `^`, outside every formula the walker
  * knows): TeX reads it in math mode — a display of an environment the walker cannot tell, a key in an argument, lines
@@ -7920,6 +8000,8 @@ const sourceText = (u: SourceUnit<WalkFile>) =>
  *  (\\L, \\o, \\ss, \\ae, \\aa, \\i…), white space around it: a word's first letter in a group of its own (`{\\L}ukasz`) */
 const LETTER_GROUP = (inner: readonly SourcePiece<WalkFile>[]) => {
   const real = inner.filter((p) => !(p.t === 'text' && !/\S/.test(p.s)))
+  // (ot1enc.def's and t1enc.def's \L, \l, \O, \o, \ss, \ae, \AE, \oe, \OE, \i, \j; t1enc.def's \SS, \DH, \dh, \TH,
+  // \th, \NG, \ng, \DJ, \dj; latex.ltx's \aa and \AA)
   return (
     real.length === 1 &&
     real[0]!.t === 'ph' &&
@@ -7927,7 +8009,7 @@ const LETTER_GROUP = (inner: readonly SourcePiece<WalkFile>[]) => {
   )
 }
 /**
- * Marks for the front matter's units in the layout compile alone (the marked original, our base page: layout/marks.mjs
+ * Marks for the front matter's units in the layout compile alone (the marked original, our base page: marks/marks.ts
  * layoutMarking): the author block's names and places and the front matter's own units the role table knows (a \\thanks,
  * elsarticle's \\cortext, a \\date, a class's command whose text it hands elsewhere too), each a unit's start and end mark as
  * markUnits writes them, which the page's
@@ -7943,7 +8025,7 @@ const LETTER_GROUP = (inner: readonly SourcePiece<WalkFile>[]) => {
  * three times), two equal commands one. Not one a macro
  * of the paper's or its class's only stores (`held`: elsarticle's \\biboptions{semicolon}, read as prose, is natbib's options,
  * and a mark there one natbib does not know: 2608.16117 lost a page), an author block's own among them (ICML's stored
- * \\icmlaffiliation: its ink is read as an ink unit's, ink-units.mjs's stored rule). The \\date too: a class sets its front matter where it
+ * \\icmlaffiliation: its ink is read as an ink unit's, ink-units.ts's stored rule). The \\date too: a class sets its front matter where it
  * likes (amsart: the date in a note of the first page, the addresses at the paper's end), and an unmarked unit is searched
  * between its marked neighbours, so the addresses' marks alone took 2610.21037's date out of its search
  */
@@ -7979,7 +8061,7 @@ export function frontMarks(units: readonly SourceUnit<WalkFile>[]): (u: SourceUn
   }
   const marked = new Set(front.filter((u) => seen.get(keyOf(u))!.size === 1))
   return (u) =>
-    marked.has(u) ? { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` } : null
+    marked.has(u) ? { start: `${START_LEAD}\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` } : null
 }
 /** A translated line of names or places goes into \\axtwide (FIT_DEF), all of it — its marks, a \\IEEEauthorrefmark
  *  after the last name — inside the braces that hold it: in a box that does not wrap (a table's c column, where
@@ -7990,6 +8072,9 @@ export function frontMarks(units: readonly SourceUnit<WalkFile>[]): (u: SourceUn
  *  other row's end of a table's (authblk's \\authorcr: 2608.03994's authors, an \\author{\\authorcr …} in a box,
  *  stopped TeX at \\maketitle with a hundred "Missing } inserted") */
 const AUTHOR_WIDE: UnitMark = { start: '\\axtwide{', end: '}', whole: true }
+/** the breaks of a line or a row and the notes a wide unit cannot hold: latex.ltx's \\\\, \\newline, \\linebreak, \\thanks,
+ *  \\footnote, \\footnotemark, \\tabularnewline; TeX's \\par, \\cr, \\crcr; article.cls's \\and, authblk.sty's \\authorcr; the
+ *  conference styles' author separators \\And and \\AND (neurips_2026.sty's, iclr2026_conference.sty's, acl.sty's \\def) */
 const fitsWide = (u: SourceUnit<WalkFile>) =>
   !u.pieces.some(
     (p) =>
@@ -8007,13 +8092,14 @@ export const FONT_PROBE =
 /** The TeX log of a compile's last pass. The browser's compiler (parked/tex-page/poc-site/tex.js) joins each step's log with its terminal
  *  output — `$ <command>`, then `LOG:` … `==` `STDOUT:` — and the terminal output repeats the errors; the last TeX step's
  *  log is taken, as the one that made the PDF, whatever the earlier passes' logs hold (BusyTeX's pipeline empties them
- *  today). bibtex, biber, makeindex, xdvipdfmx and dvipdfmx (latex's driver) are no TeX passes. A native compile's .log is
- *  the last pass's already. Every reader of a compile's log lines takes it (live.mjs lostIn, typeset/tex.mjs readLines,
- *  readForced, typeset/density.mjs readWidthProbe, readSizeProbe): read whole, the echo invents a forced break before a
+ *  as it runs). bibtex, biber, makeindex, xdvipdfmx and dvipdfmx (latex's driver) are no TeX passes. A native compile's .log is
+ *  the last pass's already. Every reader of a compile's log lines takes it (compile/tex.ts readLines, the guard's, the
+ *  instrument's): read whole, the echo invents a forced break before a
  *  pass's first unit */
 export const lastTexLog = (log: string | null | undefined): string => {
   if (!(log ?? '').includes('\n==\nSTDOUT:')) return log ?? ''
   const steps = [...log!.matchAll(/^\$ (\S+)[^\n]*\n[\s\S]*?^LOG:\n([\s\S]*?)\n==\nSTDOUT:/gm)]
+  // (TeX Live's programs that are no TeX pass: bibtex, biber, makeindex, xdvipdfmx, dvipdfmx)
   return steps.filter((m) => !/^(?:bibtex|biber|makeindex|x?dvipdfmx)/.test(m[1]!)).at(-1)?.[2] ?? ''
 }
 /** the roles' families from a log written with FONT_PROBE, or null */
@@ -8063,12 +8149,12 @@ export const XETEX_SHIM = `${[
 ].join('\n')}\n`
 
 // ---------------------------------------------------------------- engine adaptation: rules for known incompatibilities
-/** R1, before \documentclass under XeTeX: what pdfTeX papers use that XeLaTeX lacks, and the engine guard of some templates */
+/** Before \documentclass under XeTeX: what pdfTeX papers use that XeLaTeX lacks, and the engine guard of some templates */
 export const XETEX_SHIM_R1 = `${[
   '\\providecommand\\DeclareUnicodeCharacter[2]{}', // inputenc's, not loaded under XeLaTeX
   '\\RequirePackage{iftex}\\let\\RequirePDFTeX\\relax', // a template's "pdfTeX only" guard (AAAI 2027)
 ].join('\n')}\n`
-/** R2, under XeTeX: a pdftex driver option names the wrong backend for hyperref, graphicx, color */
+/** Under XeTeX: a pdftex driver option names the wrong backend for hyperref, graphicx, color */
 export function stripPdftexOption(text: string): string {
   return text.replace(
     /\\(documentclass|usepackage|RequirePackage)\s*\[([^\]]*)\]/g,
@@ -8078,7 +8164,7 @@ export function stripPdftexOption(text: string): string {
     },
   )
 }
-/** R3, before \begin{document}, any engine: a template's "package X is forbidden" errors become warnings */
+/** Before \begin{document}, any engine: a template's "package X is forbidden" errors become warnings */
 export const FORBIDDEN_TO_WARNING = `${[
   '\\makeatletter',
   '\\let\\axt@PackageError\\PackageError',

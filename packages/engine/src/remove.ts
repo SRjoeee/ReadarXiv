@@ -2,16 +2,15 @@
 // each page walked with its text state followed, each string split into its character codes by its font, and the walk aligned
 // with PDF.js's own reading (alignOf: the n-th text-showing operation of the list is the n-th of the walk, its k-th glyph the k-th
 // code, the character codes compared; the m-th painted path the m-th painting operator). A page that does not align is refused
-// whole. What is left of the text-removed PDF's remover (Plan 8b, 2026-10-06/07): the add-on it wrote, its page sets and its
-// tails are gone with the erasure by optional content (§4.2); its reading of a page stays, the wrap's.
+// whole.
 //
 // An original module (no port statement). It imports none of PDF.js: a page is aligned by its facts (alignOf) or a list given,
 // and the PDF object layer (@cantoo/pdf-lib, MIT) and a tolerant inflate are given.
 //
-// Isolation, the caller's contract (the coordinator's ruling of 2026-10-07): arXiv's PDF, and ours made from its source, are
+// Isolation, the caller's contract (PDF-READER §19.9): arXiv's PDF, and ours made from its source, are
 // untrusted, and the hard bound on what reading them may cost is the process it runs in, not this module. Its budgets (WALK_MAX,
 // HELD_MAX, BYTES_MAX, FORM_DEPTH) refuse a page early and softly, the rest of the paper going on; PDF.js and the object layer may
-// still exceed any of them: run it in the maker child, under a hard memory limit and a wall clock, one paper at a time. A failed
+// still exceed any of them: run it in a child process, under a hard memory limit and a wall clock, one paper at a time. A failed
 // allocation under that limit refuses no page: it is the paper's, thrown as it came (memory.ts).
 import { at, latin1 } from './bounded-reads.ts'
 import { isMemoryError } from './memory.ts'
@@ -213,7 +212,7 @@ function numberAt(b: Uint8Array, i: number, j: number): number | undefined {
   const v = frac ? m / POW10[frac]! : m
   return neg ? -v : v
 }
-/** the operators of a content stream, all 73 (PDF 32000-1:2008 Annex A, Table A.1), each at most three bytes long: held to
+/** the operators of a content stream, all 73 (ISO 32000-1:2008 Annex A, Table A.1), each at most three bytes long: held to
  *  @cantoo/pdf-lib's PDFOperatorNames, which lists them, by packages/engine/tests/mirrors.test.ts */
 export const OPERATORS = Object.freeze([
   'b',
@@ -325,8 +324,8 @@ const td = new TextDecoder('latin1')
 /**
  * The heap a lexed token, and an event the walk records, is held in, in bytes, by its kind: each at least what 1 million
  * of it hold after a full collection (measured with this lexer: an operator 98, a number 10, a name 50 and its length, a
- * string 250 and a hex string 282 with their bytes, an array 42, a dictionary 81, a keyword in an array 74; the
- * re-review's round 2 measured the old lexer's strings at 271 with their bytes in JS arrays). An array or a dictionary is
+ * string 250 and a hex string 282 with their bytes, an array 42, a dictionary 81, a keyword in an array 74).
+ * An array or a dictionary is
  * counted as it opens, so that one never closed counts too. What the walk holds is these summed (lex's `bytes`, the
  * walk's `held`), never what it visits.
  */
@@ -341,7 +340,7 @@ export const COST = Object.freeze({
   event: 160,
   code: 64,
 })
-/** the operators the walk reads: every other one is lexed and let go with its operands */
+/** the operators the walk reads, each one of ISO 32000-1's (Annex A): every other one is lexed and let go with its operands */
 const WALK_OPS = new Set([
   'q',
   'Q',
@@ -601,7 +600,7 @@ export function lex(b: Uint8Array, limit: number = Infinity, keep: ReadonlySet<s
     if (t === 'BI') {
       // an inline image: its parameters to ID, its data to EI (white space either side, then an operator or the end)
       const s = start < 0 ? s0 : start
-      // (each pass advances or throws: a comment skipped as anywhere else, 2026-10-07, where a `%` there held the loop on
+      // (each pass advances or throws: a comment skipped as anywhere else, where a `%` there would hold the loop on
       // its byte for ever; a delimiter no parameter starts with refused)
       while (i < n) {
         while (i < n && WS[b[i]!]) i++
@@ -673,7 +672,7 @@ export class DecodeLimit extends Error {
 /** a decoding stream's bytes, read a chunk at a time and no further than `limit` past (DecodeLimit), as bytes of their own: the
  *  stream's buffer grows by CHUNK and doubles past it, and its view would hold it all (a form of 2 KB held 128 KB), which the
  *  decoded streams' cache, bounded by the bytes it holds, kept for every stream it held: 2610.21924's page 9, 3,128 forms of a
- *  plot's markers, held 960 MB in a wrap of our final pass, and the maker died of its memory */
+ *  plot's markers, held 960 MB in a wrap of our final pass, and its process died of its memory */
 const CHUNK = 1 << 16
 export function readAtMost(stream: PdfDecodeStream, limit: number): Uint8Array {
   let total = 0
@@ -690,6 +689,7 @@ export function readAtMost(stream: PdfDecodeStream, limit: number): Uint8Array {
   return out.byteOffset === 0 && out.byteLength === out.buffer.byteLength ? out : out.slice()
 }
 
+/** the path-painting operators (ISO 32000-1 §8.5.3): S, s, f, F, f*, B, B*, b, b*, n */
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 /** an operand's `v`, told by its kind before it is read: a name's text, a dictionary's items, a keyword's word; undefined for a
  *  number, a boolean, null, a string, an array, or no operand (what `?.v` read of each) */
@@ -867,7 +867,7 @@ export async function openRemover(
     ParseSpeeds,
   } = PL
   // (parsed in one go: the object layer's default, ParseSpeeds.Slow, waits for a timer every 100 objects, a yield that keeps a
-  // page's events going; the maker child that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one core)
+  // page's events going; a child process that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one core)
   const doc = await PDFDocument.load(bytes, {
     ignoreEncryption: true,
     updateMetadata: false,
@@ -902,7 +902,7 @@ export async function openRemover(
     }
     let out: Uint8Array
     // (a stream of no bytes is no bytes, whatever its filters, as PDF.js reads it: arXiv's rewrite (pikepdf) writes an empty
-    // form's stream with /FlateDecode, which the object layer's inflater and zlib refuse; spike S1c, 2610.21924v1 p10)
+    // form's stream with /FlateDecode, which the object layer's inflater and zlib refuse; 2610.21924v1 p10)
     if (st instanceof PDFRawStream && st.contents.length === 0) out = new Uint8Array(0)
     else if (st instanceof PDFRawStream) {
       try {
@@ -981,8 +981,8 @@ export async function openRemover(
         // ranges span; 20,000 ranges of every code took 22 s as a Map, code by code, against PDF.js's 1.5 s. Read as
         // PDF.js reads it (evaluator's /W): a first code not an integer, or a range's last, ends it; a width not a
         // number is passed over, the code keeping what it had. The array as wide as the codes /W names, as PDF.js's,
-        // and none for a font without /W: a fixed array of every code was 512 KB a font, outside the heap, kept for
-        // the document, the re-review's 3,000 fonts 1.5 GB)
+        // and none for a font without /W: a fixed array of every code would be 512 KB a font, outside the heap, kept for
+        // the document, 1.5 GB over 3,000 fonts)
         const entries: (
           | [first: number, widths: (number | undefined)[]]
           | [first: number, last: number, width: number]
@@ -1036,7 +1036,7 @@ export async function openRemover(
       const fd = get(dict, 'FontDescriptor')
       const missing = num(get(fd, 'MissingWidth')) ?? 0
       // a Type 3 glyph's advance as PDF.js draws it (canvas showType3Text): its width through the font matrix, [w 0]
-      // transformed, its x: w * a + e, the matrix's translation in it (2026-10-07: w * a alone moved the glyphs after a
+      // transformed, its x: w * a + e, the matrix's translation in it (w * a alone moves the glyphs after a
       // removed one by e * size). A matrix of other than six numbers gives no width: an edit in the font is refused
       let fm: number[] | null = [0.001, 0, 0, 0.001, 0, 0]
       // (six numbers: v.every(Number.isFinite) has just held each a number, which the lib does not state as a guard)
@@ -1060,7 +1060,7 @@ export async function openRemover(
     return info
   }
   /**
-   * Whether a font's codes have a Unicode a reader can trust (layout/figure-text.mjs: a figure's text in a font with none is
+   * Whether a font's codes have a Unicode a reader can trust (locate/figure-text.ts: a figure's text in a font with none is
    * left the original's, counted): a /ToUnicode; else a simple font whose encoding names its glyphs (a standard encoding, a
    * /Differences whose every name is a glyph's name, not a code's — `g12`, `cid12`, `glyph12`, `index12`, `c12` —, or a Type 1
    * font's own encoding, which names its glyphs); else a composite font of a CMap that is no identity. A symbolic TrueType or a
@@ -1073,7 +1073,7 @@ export async function openRemover(
       const n = nameOf(en)
       return typeof n === 'string' && !/^Identity-[HV]$/.test(n)
     }
-    if (en instanceof PDFName) return /^(?:WinAnsi|MacRoman|MacExpert|Standard)Encoding$/.test(nameOf(en) ?? '')
+    if (en instanceof PDFName) return /^(?:WinAnsi|MacRoman|MacExpert|Standard)Encoding$/.test(nameOf(en) ?? '') // ISO 32000-1 Annex D's encodings
     if (en instanceof PDFDict) {
       const d = look(en.get(PDFName.of('Differences')))
       const names =
@@ -1172,7 +1172,7 @@ export async function openRemover(
       return got
     }
     // (each event the walk records counts in what it holds: an event per visit of a painting operator, a show or a
-    // form, which the re-review's round 2 fanned out to 20 million fontless shows of a 980 B page)
+    // form, which a 980 B page can fan out to 20 million fontless shows)
     const record = (cost: number) => {
       // biome-ignore lint/suspicious/noAssignInExpressions: counted where it is tested, as written (its typing changed no code)
       if ((held += cost) <= heldMax) return true
@@ -1401,7 +1401,7 @@ export async function openRemover(
  * text-showing operation (showText, showSpacedText) outside an annotation's appearance, in order, its glyph objects'
  * character codes (`originalCharCode`; null for a glyph with none, which is not compared; -1 for one that is not a code,
  * which no code equals); `paths`, the number of constructPath operations outside an annotation and a soft mask's group; `images`,
- * the number of images painted there, each image of a repeat or a group PDF.js merged one (layout/ink.mjs pageInk's boxes of
+ * the number of images painted there, each image of a repeat or a group PDF.js merged one (ink.ts pageInk's boxes of
  * kind -3, one an image, as many). The facts are what a
  * remover with no PDF.js aligns a page by: the page is aligned by them exactly as by the list. Pure
  */
@@ -1412,7 +1412,7 @@ export function alignOf(OPS: Record<string, number>, opList: OpList): AlignFacts
 }
 
 /** alignOf as a reader of the list in pieces (`read(fnArray, argsArray)`, each after the one before, then `end()`: alignOf's facts),
- *  so that no reader holds a page's whole list (ink.mjs inkReader, opstream.ts readOps): its count and its state (an annotation's
+ *  so that no reader holds a page's whole list (ink.ts inkReader, opstream.ts readOps): its count and its state (an annotation's
  *  appearance, a soft mask's group) run on from one piece to the next */
 export function alignReader(OPS: Record<string, number>): OpsReader<AlignFacts> {
   const codes: (number | null)[][] = []

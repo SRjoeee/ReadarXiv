@@ -24,7 +24,7 @@ export function unitsMadeOnA(w: Work, claims: Claims, o: LocateOptions): void {
   const { ins, inkA, m, pageA, setA, fixedFaces, gA } = w.ix
   const { members, units, stats, jointPiece, displays, floatLines } = w
   const { artefacts, figureArtefact } = field(w, 'pitch')
-  // ---- the units no source unit is, made on A by today's rule (ink.ts): from A's glyphs no source unit owns after the transfer,
+  // ---- the units no source unit is, made on A by the ink makers (ink.ts): from A's glyphs no source unit owns after the transfer,
   // those B never printed among them but arXiv's ink (on a page our compile sets, a glyph it never printed: no figure glyph,
   // none born); each a member as an instrument's unit is, its ink A's own (`same`), its span on B its glyphs' partners' (a
   // paragraph end of TeX's between two of them tells their flows apart, as it tells a source unit's)
@@ -51,13 +51,13 @@ export function unitsMadeOnA(w: Work, claims: Claims, o: LocateOptions): void {
       released: new Set(members.filter((mem) => mem.cause === SET_AGAIN).map((mem) => mem.unit)),
       artefact: figureArtefact,
       fixed: artefacts ? fixedFaces : null,
-      // (A's link annotations: one over part of an ink unit's text a group of it, F32)
+      // (A's link annotations: one over part of an ink unit's text a group of it, PDF-READER §19.10)
       annotations: o.annotations,
     })
     displays.push(...dl)
     floatLines.push(...fl)
     // (a unit of the author block TeX sets away from the block under the title — acmart's reference format, amsart's addresses
-    // at the paper's end — is the text it is there, of no toggle: `textnames` (the owner's ruling of 2026-11-09). One set in the
+    // at the paper's end — is the text it is there, of no toggle: `textnames` (PDF-READER §19.13). One set in the
     // block keeps its kind; where no title is located, none is told apart)
     if (block)
       for (const mem of members) {
@@ -151,7 +151,7 @@ export function unitsBornOnA(w: Work, claims: Claims): void {
   for (const b of bornOf(inkA, m, claims, pageA, setA)) {
     const mem = empty(w, -1, b.kind, unitId(b.kind, b.content))
     mem.located = true
-    // (text inside an included figure, a form XObject: a figure's text, which the wrap writes in its form, as today's figure units)
+    // (text inside an included figure, a form XObject: a figure's text, which the wrap writes in its form, as a figure unit's)
     mem.figure = b.kind === 'inkfigures'
     claims.take(mem, { text: b.glyphs })
     born.set(mem.ord, { kind: b.kind, content: b.content })

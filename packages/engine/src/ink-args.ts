@@ -2,7 +2,7 @@
 // gave it; and the library's contract, the types PDF.js writes its values in, each stated once here with the line of pdfjs-dist
 // 6.3.289 that writes it and received as that type where it enters, with no check (a value PDF.js never writes is no input the
 // walk models). Lines: legacy/build/pdf.mjs (the display side: Node's, and the browser's build/pdf.mjs from the same source) and
-// legacy/build/pdf.worker.mjs. Pure, and imports only the engine's shared reads (bounded-reads.ts, a leaf): the maker runs the
+// legacy/build/pdf.worker.mjs. Pure, and imports only the engine's shared reads (bounded-reads.ts, a leaf): a host runs the
 // walk in a Worker or in Node alike, and the reader's view bundles it.
 
 import { at } from './bounded-reads.ts'

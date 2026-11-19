@@ -8,10 +8,11 @@ import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { type ChromeState, INITIAL, type ReaderController } from '@readarxiv/reader'
 import { R, S, setLocale } from '@readarxiv/ui'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
-import type { Service } from '@/config/services'
+import { readerProviderOf, type Service } from '@/config/services'
 import { POPUP_FIXTURES } from '@/entrypoints/popup/fixtures'
 import { prefsOf } from '@/pdf-reader/host/prefs'
 import { type ConfigStore, DownloadMenu, extensionSlots, ServiceMenu } from '@/pdf-reader/host/slots'
+import { surfaceStore } from '@/pdf-reader/host/v2'
 import { clearRejected, markRejected } from '@/shared/service-health'
 import { serviceName } from '@/ui/strings'
 import { mountElement } from '../ui/render-hook'
@@ -31,18 +32,21 @@ function fakeController(over: Partial<ChromeState> = {}) {
   return { controller: controller as unknown as ReaderController & { download: typeof controller.download }, set(next: Partial<ChromeState>) { state = { ...state, ...next }; for (const l of listeners) l() } }
 }
 /** the extension's configuration as the slots read it: what it holds (one snapshot, as host/today.ts configStore keeps it until
- *  told), and the changes a pick writes */
+ *  told), the translator the reader asks first (the rebuilt reader's, host/v2.ts surfaceStore), and the changes a pick writes */
 function fakeStore(config: Config | null = DEFAULT_CONFIG) {
   const changes: ((c: Config) => Config)[] = []
   const state = { config, pack: null }
-  const store: ConfigStore = { state: () => state, subscribe: () => () => {}, patch: change => { changes.push(change) } }
+  const store: ConfigStore = { state: () => state, subscribe: () => () => {}, patch: change => { changes.push(change) }, askedFirst: readerProviderOf }
   return { store, changes }
 }
 /** a control's accessible name, as far as these controls need: the elements it is labelled by, else its aria-label */
 const nameOf = (el: Element | null | undefined) => el?.getAttribute('aria-labelledby')?.split(' ').map(id => document.getElementById(id)?.textContent).join(' ') ?? el?.getAttribute('aria-label')
 const tipOf = (b: Element) => (b.nextElementSibling?.matches('.tip') ? b.nextElementSibling.textContent : null)
-/** the defaults' service as the bar names it, in the interface's language when asked */
-const microsoft = () => serviceName('microsoft')
+/** the service the bar names for a reader who never chose one, in the interface's language when asked: Google's, the one the
+ *  reader asks first (UI.md S-P-46) */
+const unchosen = () => serviceName('google-web')
+/** the service menu's checked rows, by their words */
+const checkedOf = (container: Element) => [...container.querySelectorAll('[role="option"][aria-selected="true"]')].map(o => o.firstChild?.textContent ?? o.textContent)
 
 async function openMenu(node: ReactNode) {
   const mounted = await mountElement(createElement('div', null, node))
@@ -55,7 +59,43 @@ describe('the service menu (the reader\'s design, §6.1, §6.7)', () => {
     const { controller } = fakeController()
     const { container } = await mountElement(createElement(ServiceMenu, { controller, store: fakeStore().store }))
     const button = container.querySelector<HTMLElement>('.menu-btn')!
-    expect([nameOf(button), button.hasAttribute('aria-label'), tipOf(button)]).toEqual([`${microsoft()} ${S.rows.service}`, false, `${S.rows.service}${microsoft()}`])
+    expect([nameOf(button), button.hasAttribute('aria-label'), tipOf(button)]).toEqual([`${unchosen()} ${S.rows.service}`, false, `${S.rows.service}${unchosen()}`])
+  })
+
+  it('names and checks the translator the reader asks first: Google\'s for a reader who never chose one, else the pick (UI.md S-P-46)', async () => {
+    const mine: Service = { id: 'svc-abcd1234', kind: 'openai-compat', name: 'My model', baseURL: 'https://openrouter.ai/api/v1', apiKey: 'test', model: 'vendor/model', thinking: 'disabled' }
+    const shown = async (config: Config) => {
+      const { controller } = fakeController()
+      const { container, unmount } = await openMenu(createElement(ServiceMenu, { controller, store: fakeStore(config).store }))
+      const got = { button: nameOf(container.querySelector('.menu-btn')), checked: checkedOf(container) }
+      await unmount()
+      return got
+    }
+    const named = (name: string) => ({ button: `${name} ${S.rows.service}`, checked: [name] })
+    // never chose: the stored provider is the install's Microsoft, the one asked first Google's
+    expect(await shown(DEFAULT_CONFIG)).toEqual(named(serviceName('google-web')))
+    expect(await shown({ ...DEFAULT_CONFIG, services: [mine] })).toEqual(named(serviceName('google-web')))
+    expect(await shown({ ...DEFAULT_CONFIG, provider: 'microsoft', providerChosen: true })).toEqual(named(serviceName('microsoft')))
+    expect(await shown({ ...DEFAULT_CONFIG, provider: 'google-web', providerChosen: true })).toEqual(named(serviceName('google-web')))
+    expect(await shown({ ...DEFAULT_CONFIG, services: [mine], provider: mine.id, providerChosen: true })).toEqual(named(mine.name))
+  })
+
+  it('over the rebuilt reader\'s store (host/v2.ts surfaceStore), whose calls the PDF reader\'s chain answers: the PDF reader\'s translator (today\'s reader\'s store: host-parts-today.test.ts)', async () => {
+    const surface = { state: () => ({ config: DEFAULT_CONFIG, revision: 'r1', fallbackReason: null, resetFailed: false, pack: null }), subscribe: () => () => {}, patch: async () => {} }
+    const store = surfaceStore(surface as never)
+    const { container } = await mountElement(createElement(ServiceMenu, { controller: fakeController().controller, store }))
+    expect([store.askedFirst, nameOf(container.querySelector('.menu-btn'))]).toEqual([readerProviderOf, `${serviceName('google-web')} ${S.rows.service}`])
+  })
+
+  it('a pick of the translator shown, Google\'s for a reader who never chose, is a pick: recorded, as any other', async () => {
+    const { controller } = fakeController()
+    const { store, changes } = fakeStore(DEFAULT_CONFIG)
+    const { container } = await openMenu(createElement(ServiceMenu, { controller, store }))
+    const option = (name: string) => [...container.querySelectorAll<HTMLElement>('[role="option"]')].find(o => o.textContent?.includes(name))!
+    option(serviceName('google-web')).click()
+    await act(async () => { container.querySelector<HTMLElement>('[popover="auto"]')!.showPopover() })
+    option(serviceName('microsoft')).click()
+    expect(changes.map(change => change(DEFAULT_CONFIG)).map(c => [c.provider, c.providerChosen])).toEqual([['google-web', true], ['microsoft', true]])
   })
 
   it('a service another tab has deleted meanwhile is not written, as the popup\'s choice is not (Codex on #301)', async () => {
@@ -101,7 +141,7 @@ describe('the service menu (the reader\'s design, §6.1, §6.7)', () => {
     const { controller, set } = fakeController({ prefs: null })
     const { container } = await mountElement(createElement(ServiceMenu, { controller, store: fakeStore(null).store }))
     const button = () => container.querySelector<HTMLElement>('.menu-btn')!
-    expect([button().getAttribute('aria-disabled'), button().hasAttribute('popovertarget'), tipOf(button())]).toEqual(['true', false, `${S.rows.service}${microsoft()}`])
+    expect([button().getAttribute('aria-disabled'), button().hasAttribute('popovertarget'), tipOf(button())]).toEqual(['true', false, `${S.rows.service}${unchosen()}`])
     await act(async () => set({ prefs: prefsOf(DEFAULT_CONFIG) }))
     expect([button().hasAttribute('aria-disabled'), button().hasAttribute('popovertarget')]).toEqual([false, true])
   })
@@ -163,13 +203,13 @@ describe('the slots of the extension\'s reader (extensionSlots)', () => {
 
   it('in the bar before the reading options: the service menu', async () => {
     const { container } = await mountElement(createElement('div', null, slots(false).beforeOptions('bar')))
-    expect(nameOf(container.querySelector('.menu-btn'))).toBe(`${microsoft()} ${S.rows.service}`)
+    expect(nameOf(container.querySelector('.menu-btn'))).toBe(`${unchosen()} ${S.rows.service}`)
   })
 
   it('as the reading options\' rows: the service under 900 px; the download, the settings and the way back under 500 px, then their separator (§5; the maintainer, 2026-09-26)', async () => {
     const service = await mountElement(createElement('div', null, slots(false).beforeOptions('options')))
     const row = service.container.querySelector('.narrow-only.row')!
-    expect([row.firstChild?.textContent, nameOf(row.querySelector('button'))]).toEqual([S.rows.service, `${microsoft()} ${S.rows.service}`])
+    expect([row.firstChild?.textContent, nameOf(row.querySelector('button'))]).toEqual([S.rows.service, `${unchosen()} ${S.rows.service}`])
     await service.unmount()
     const rows = async (embedded: boolean) => {
       const { container, unmount } = await mountElement(createElement('div', null, slots(embedded).afterOptions('options')))

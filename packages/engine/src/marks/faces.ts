@@ -1,9 +1,9 @@
 // What TeX set for a unit's groups that their source does not say, read off the unit's text glyphs (B's, in its stream: the
 // marked compile's own output, TeX's font state and the characters it set): the face a group's own text is set in, and the
-// punctuation TeX set at a group's end. A group's style was read off its command's name alone (the front end's tables:
-// `\textbf{`, `\emph{`, …), so a paper's macro set nothing: 2608.25210v2's run-in heads are its
+// punctuation TeX set at a group's end. A group's style read off its command's name alone (the front end's tables:
+// `\textbf{`, `\emph{`, …) sets nothing for a paper's macro: 2608.25210v2's run-in heads are its
 // `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}`, the argument bold and then a stop of the macro's own, neither in
-// the argument's source, and on staging (2026-11-09) they came back regular, their stop lost.
+// the argument's source, and on staging they came back regular, their stop lost.
 //
 // The source's letters and the glyphs' letters are matched in order (the longest common subsequence, Myers', as words.ts
 // places a unit's words on A), compared folded (compatibility decomposition, marks off, lower case); a text macro's text (the
@@ -124,7 +124,7 @@ export function groupFacts(
   }
   // (an element's text with letters none of which is matched: its ink is its own after all, no glyph of `glyphs` (a text macro
   // the ownership gave its marks, 2608.25210v2's `\sys`), white space to the stop's reading; one matched, or of no letter (a text
-  // symbol, whose glyph is the text's: own.mjs), the source's characters)
+  // symbol, whose glyph is the text's: own/own.ts), the source's characters)
   const found = new Uint8Array(els)
   const lettered = new Uint8Array(els)
   for (let i = 0; i < group.length; i++) {

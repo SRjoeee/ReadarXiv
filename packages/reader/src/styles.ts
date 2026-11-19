@@ -1,7 +1,6 @@
 // The reader's own sheet: the page stack's slots, the composed page's overlay, its text layer and links, the highlight's bands
-// and the translating marks. Carried from today's engine sheet (src/pdf-reader/engine/view/engine.css at baf2083e0, each rule's
-// reason there), scoped to a reader's root (`.axt-reader`, the element openReader is given) instead of <html>, so that two
-// readers on one page each style their own. A mark is read where its writer puts it (docs/PDF-READER.md §4.3): the reader's
+// and the translating marks. Scoped to a reader's root (`.axt-reader`, the element openReader is given), not <html>, so that
+// two readers on one page each style their own. A mark is read where its writer puts it (docs/PDF-READER.md §4.3): the reader's
 // own marks of its root (`data-axt-pdf-mode`, `data-axt-narrow`, `data-axt-swapped`: panes.ts; `data-axt-layer-text`: the
 // composer) on the root, the marks it writes inside (`data-axt-scaling` on a stack, `data-axt-turn`, …) under it, and the
 // appearance's, which the reader does not write, on the root or on any element above it (DIMMED): the chrome writes it on

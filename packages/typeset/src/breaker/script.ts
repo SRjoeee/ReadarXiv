@@ -1,8 +1,5 @@
 // What the breaker reads of a script: the CJK characters, the characters a script that sets no spaces between its words sets
-// none beside, the line-break marks (UAX 14's no-start class and the rule set's lists). Ported from engine 065c1d973:
-// rules/script.mjs (CJK_BLOCKS, CJK, cjkClassWith, SPACELESS), layer-proto/no-start.mjs (NO_START, noStart, keptPair),
-// layer-proto/layer1.mjs:197-219 (lastOf, kinsokuOf), layer-proto/layer2.mjs:2096-2104 (PUNCT_CLOSE, PUNCT_OPEN, cjkClassRe).
-// A mark's blank half is its face's measure (markOf, lane cjk-punct), no longer today's class by character. A character is a
+// none beside, the line-break marks (UAX 14's no-start class and the rule set's lists). A mark's blank half is its face's measure (markOf, docs/PDF-READER.md §18.48), not a class by character. A character is a
 // grapheme cluster (graphemesOf, clustersOf, charsOf; docs/PDF-READER.md §18.93), its class its first code point's (cjkLeadRe).
 import { MARK_INK } from '../data/marks.ts'
 
@@ -33,10 +30,10 @@ export const SPACELESS = new RegExp(
   'u',
 )
 
-/** the curly quotes, dashes, ellipsis and middle dot a CJK run takes where the rules set them as CJK's (L2:2101) */
+/** the curly quotes, dashes, ellipsis and middle dot a CJK run takes where the rules set them as CJK's */
 const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7]
 const CJK_CLASS = [CJK, cjkClassWith(CJK_QUOTES)] as const
-/** `quotes` (the rules' cjkQuotes): whether the curly quotes, dashes, ellipsis and middle dot are CJK's too (L2:2104) */
+/** `quotes` (the rules' cjkQuotes): whether the curly quotes, dashes, ellipsis and middle dot are CJK's too */
 export const cjkClassRe = (quotes: boolean) => CJK_CLASS[quotes ? 1 : 0]
 const CJK_LEAD = CJK_CLASS.map((re) => new RegExp(`^${re.source}`, 'u'))
 /** cjkClassRe held to a text's first code point: the class of a grapheme cluster, which is its first code point's */
@@ -100,14 +97,14 @@ export function charsOf(t: string): number {
 const PUNCT_CLOSE =
   /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
-/** a full-width mark's side by what it does in the text (L2:2096-2104): `close` for the marks that close or end something (the
+/** a full-width mark's side by what it does in the text: `close` for the marks that close or end something (the
  *  white a space after it would double is its), `open` for those that open something (the white before it); null for any other
  *  character. Where its face draws its ink is no part of it: that is markOf's. The space rule's alone (tokens.ts markBlankEdge) */
 export const punctOf = (s: string): 'open' | 'close' | null =>
   PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
 /** a mark's side where it is full-width: a mark of the CJK blocks (CJK: the full-width and wide forms, East Asian Width F or W)
  *  wherever it stands; a curly quote (East Asian Width A, ambiguous) only where the target sets it in its CJK face (`cjkFace`),
- *  an em wide, never where an alphabet's target sets it in its Latin face, proportional (lane cjk-space, B.tokens). None for any
+ *  an em wide, never where an alphabet's target sets it in its Latin face, proportional (B.tokens). None for any
  *  other character */
 export const fullWidthPunctOf = (s: string, cjkFace: boolean): 'open' | 'close' | null =>
   CJK.test(s) || cjkFace ? punctOf(s) : null
@@ -136,7 +133,7 @@ export function markOf(ch: string, ids: readonly string[] | undefined): 'open' |
   return !ink ? null : ink[1] <= 500 ? 'close' : ink[0] >= 500 ? 'open' : null
 }
 
-/** UAX 14's characters no line may start with (classes CL, CP, EX, IS, NS), Unicode 16 (no-start.mjs NO_START) */
+/** UAX 14's characters no line may start with (classes CL, CP, EX, IS, NS), Unicode 16 */
 const NO_START: [number, number][] = (
   '21 29 2c 2e 3a-3b 3f 5d 7d 37e 589 5c6 60c-60d 61b 61d-61f 6d4 7f8-7f9 f0d-f11 f14 f3b f3d 169c 17d6 1802-1803 ' +
   '1808-1809 1944-1945 203c-203d 2044 2046-2049 207e 208e 2309 230b 232a 2762-2763 2769 276b 276d 276f 2771 2773 2775 27c6 ' +
@@ -150,7 +147,7 @@ const NO_START: [number, number][] = (
   .split(' ')
   .map((r) => r.split('-').map((h) => Number.parseInt(h, 16)))
   .map(([a, b]) => [a!, b ?? a!])
-/** whether a character may not start a line (no-start.mjs noStart) */
+/** whether a character may not start a line */
 export const noStart = (ch: string | null | undefined): boolean => {
   const c = typeof ch === 'string' && ch ? ch.codePointAt(0)! : -1
   let lo = 0,
@@ -163,7 +160,7 @@ export const noStart = (ch: string | null | undefined): boolean => {
   }
   return false
 }
-/** UAX 14's pairs a line never breaks between: two B2 (em dashes), two IN (ellipses) (no-start.mjs keptPair) */
+/** UAX 14's pairs a line never breaks between: two B2 (em dashes), two IN (ellipses) */
 const B2 = [0x2014, 0x2e3a, 0x2e3b],
   IN = [0x2024, 0x2025, 0x2026, 0x22ef, 0xfe19, 0x10af6]
 export const keptPair = (a: string | undefined, b: string | undefined): boolean => {
@@ -174,7 +171,7 @@ export const keptPair = (a: string | undefined, b: string | undefined): boolean 
   return (B2.includes(x) && B2.includes(y)) || (IN.includes(x) && IN.includes(y))
 }
 
-/** the code point a string ends with, -1 for none (layer1.mjs lastOf) */
+/** the code point a string ends with, -1 for none */
 const lastOf = (s: string) => {
   const n = s.length
   if (n === 0) return -1
@@ -183,8 +180,8 @@ const lastOf = (s: string) => {
   return c >= 0xdc00 && c <= 0xdfff && hi >= 0xd800 && hi <= 0xdbff ? s.codePointAt(n - 2)! : c
 }
 type Kinsoku = { starts(s: string): boolean; ends(s: string): boolean }
-/** the rule set's line-break marks (layer1.mjs kinsokuOf): whether a token begins with a mark no line starts with, or ends with
- *  one no line ends with. Today's caches it by its lists; made again each call here, the typesetter holding no module state */
+/** the rule set's line-break marks: whether a token begins with a mark no line starts with, or ends with one no line ends
+ *  with; made again each call, the typesetter holding no module state */
 export function kinsokuOf(noStartList: string, noEndList: string): Kinsoku {
   const start = new Set([...noStartList].map((ch) => ch.codePointAt(0))),
     end = new Set([...noEndList].map((ch) => ch.codePointAt(0)))

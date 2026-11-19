@@ -1,4 +1,4 @@
-// The translator contract (the translate decision): what a host learns, what an adapter's author learns. Types and
+// The translator contract (DESIGN §8): what a host learns, what an adapter's author learns. Types and
 // the one error class; no I/O. The platform's own types (AbortSignal, fetch, Response) are not visible to a Node package
 // with no DOM library, so the few members the package uses are stated here, structurally: the hosts' real objects fit them.
 
@@ -22,8 +22,10 @@ export type SpanStyle = string
 /**
  * A unit's content, as the source reader types it. A piece's id is local to its unit. An `el` travels whole and is never
  * translated; `stop` is the punctuation the element itself sets at its end that is its sentence's (a display's `x = y.`),
- * or a line end (white space) where it ends its sentence and sets no punctuation (a forced break a run-in label follows),
- * stated by the source reader, which a wire may write after the element so that the sentence ends there. A `span` holds
+ * which a wire may write after the element so that the sentence ends there, or a line end (white space) where it ends its
+ * sentence and sets no punctuation (a forced break a run-in label follows), stated by the source reader: the sentence ends
+ * before the elements that set no word around the break, which every wire sends as the next sentence's first thing
+ * (wire/text.ts leadsNext). A `span` holds
  * pieces; `must` marks one that comes back exactly once or the reply is refused (a link, a run-in label); a span without it
  * may come back unstyled, its words outside it. Where a wire sends it on no wire (the markers wire, the runs floor), its
  * head still comes back inside it, in a copy that holds it alone (accept.ts headLength: the elements before its first word,
@@ -108,7 +110,7 @@ export interface UnitIn {
   /** a reply is taken only where each element's placeholder came back whole: one a reading would have to repair by
    *  guessing where the element stands (Microsoft's marker without its `#`) refuses it, to the next translator. The HTML
    *  page states it: over 87 live Microsoft replies taken only so, an element stood glued inside a word, jammed against
-   *  another with the words between them lost, or away from its `#` beside stray characters (lane L6, stage 4b). A
+   *  another with the words between them lost, or away from its `#` beside stray characters. A
    *  doubled `#` is no such repair: the marker stands where it stood */
   strict?: boolean | undefined
 }

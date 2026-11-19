@@ -1,5 +1,5 @@
 // @readarxiv/translate: the translator contract, its adapters and the chain that falls back between them
-// (the translate decision). A host makes one chain, `chainOf(ports)`, and translates through it; a row is keyed
+// (DESIGN §8). A host makes one chain, `chainOf(ports)`, and translates through it; a row is keyed
 // by `identityOf(translators)` besides unit id and target.
 
 /** What `@readarxiv/translate` is for: the translator contract, its adapters and the chain that falls back between them */

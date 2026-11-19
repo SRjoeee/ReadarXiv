@@ -23,6 +23,25 @@ describe('sentenceCuts over a projection', () => {
     const q = 'The data were collected in winter. 2020. A second set followed.'
     expect(sentenceCuts(q)).toEqual([q.indexOf('2020'), q.indexOf('A second')])
   })
+  // (MONTH is CLDR's English abbreviated months, Intl.DateTimeFormat's `short` months of en and en-GB (en-GB's Sept), but those
+  // whose abbreviation is the month's name itself (May): each keeps its sentence whole before a year that ends it, May. does not)
+  it("the months whose abbreviation keeps a sentence whole are CLDR's English abbreviated months", () => {
+    const months = (locale: string, month: 'short' | 'long') =>
+      Array.from({ length: 12 }, (_, m) =>
+        new Intl.DateTimeFormat(locale, { month, timeZone: 'UTC' }).format(new Date(Date.UTC(2020, m, 15))),
+      )
+    const abbreviated = new Set<string>()
+    const unabbreviated = new Set<string>()
+    for (const locale of ['en', 'en-GB']) {
+      const long = months(locale, 'long')
+      for (const [m, a] of months(locale, 'short').entries()) (a === long[m] ? unabbreviated : abbreviated).add(a)
+    }
+    expect(abbreviated.size).toBe(12)
+    const whole = (a: string) =>
+      sentenceCuts(`The data were collected in ${a}. 2020. A second set followed.`).length === 1
+    for (const a of abbreviated) expect(whole(a), a).toBe(true)
+    for (const a of unabbreviated) expect(whole(a), a).toBe(false)
+  })
   it('an annotation belongs to the sentence before it; a formula reads as a word', () => {
     const p = `It holds.${OBJ} We go on.`
     expect(sentenceCuts(p, (at) => (at === 9 ? 'annotation' : undefined))).toEqual([11])

@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import type { Config } from '@/config/schema'
+import { readerProviderOf } from '@/config/services'
 import { readerTranslatorsOf, translatorsOf } from '@/providers/translators'
 import { WIRE_FORMATS } from '@/providers/wire-formats'
 
@@ -68,5 +69,29 @@ describe("the PDF reader's translators of a configuration", () => {
     const site = readerTranslatorsOf(DEFAULT_CONFIG, deps)
     const page = translatorsOf(DEFAULT_CONFIG, deps)
     expect(site.translators.map(t => t.identity)).toEqual([...page.translators].reverse().map(t => t.identity))
+  })
+})
+
+// The PDF reader's translator (config/services.ts readerProviderOf, UI.md S-P-46): one statement of who its chain asks first,
+// which its service menu names and checks, so that the menu can never show one translator while the chain asks another
+describe("the PDF reader's translator, the one its chain asks first", () => {
+  const shapes: [string, Partial<Config>][] = [
+    ['never chosen', {}],
+    ['never chosen, the fallback off', { fallback: { enabled: false } }],
+    ["Microsoft's chosen", { provider: 'microsoft', providerChosen: true }],
+    ["Google's chosen", { provider: 'google-web', providerChosen: true }],
+    ["Chrome's chosen", { provider: 'chrome-builtin', providerChosen: true }],
+    ["a service of the reader's own chosen", { provider: SVC.id, services: [SVC], providerChosen: true }],
+  ]
+  it("never chosen: Google's; chosen: the pick, whichever it is", () => {
+    expect(shapes.map(([, c]) => readerProviderOf({ ...DEFAULT_CONFIG, ...c }))).toEqual(['google-web', 'google-web', 'microsoft', 'google-web', 'chrome-builtin', SVC.id])
+  })
+  it('is the first the chain asks, and the one it names as its own (primary)', () => {
+    for (const [name, c] of shapes) {
+      const config = { ...DEFAULT_CONFIG, ...c } as Config
+      const t = readerTranslatorsOf(config, deps)
+      const first = t.answerers.get(t.translators[0]!.identity)?.id
+      expect([first, t.primary.id], name).toEqual([readerProviderOf(config), readerProviderOf(config)])
+    }
   })
 })

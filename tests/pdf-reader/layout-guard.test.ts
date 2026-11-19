@@ -193,7 +193,7 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     expect(mp.text).toContain('\\author{\\leavevmode\\axtmark{1s}Ann Lee\\axtend{1e}}')
     expect(mp.text).not.toContain('\\begin{document}')
     // (the probe over it: the paper's own preamble in its place, the line probes inert, and its lines where `first` says)
-    const probe = new TextDecoder().decode(probeFiles(p, { marks: true, preamble: mp.text }).get('main.tex'))
+    const probe = new TextDecoder().decode(probeFiles(p, { marks: true, preamble: mp }).get('main.tex'))
     expect(probe).toContain(`${mp.text}`)
     expect(probe).toContain('\\protected\\def\\axtlines#1{}')
     expect(probe.split('\n')[mp.first - 1]).toBe('\\documentclass{article}')
@@ -203,7 +203,7 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } })
     const dvi = paperOf(FRONT, [['00README.json', readme]]), dmp = markedPreamble(dvi)
     if (!dmp) throw new Error('no marked preamble')
-    expect(new TextDecoder().decode(probeFiles(dvi, { marks: true, preamble: dmp.text }).get('main.tex')).split('\n')[dmp.first - 1]).toBe('\\documentclass{article}')
+    expect(new TextDecoder().decode(probeFiles(dvi, { marks: true, preamble: dmp }).get('main.tex')).split('\n')[dmp.first - 1]).toBe('\\documentclass{article}')
   })
 
   it('preambleUnits: an error on a line of the preamble whose text holds a mark of ours names its unit; no other', () => {

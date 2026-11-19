@@ -150,8 +150,9 @@ started by hand, not by a runner (Security, rule 1).
   name it, or every paper is "missing a compile" (exit 3); `lanes/L3/replay/`: the typesetter's derived inputs;
   `lanes/L6/capture.jsonl`: today's readers' replies, and `lanes/L6/capture-today.json`: today's typing of them, frozen
   (`lab/translate/today-typed.ts`); `lanes/cjk-punct/blast/pairs.txt`: the 90 pairs of the stored rows the rounds' reader gate
-  walks; `google-rows/ef6989debed1` and `lanes/converge-7/tools-b15/{google-rows.mts,rows-register.mjs}`: the lab's Google store
-  and the rounds' tools that read it through the tree's chain and lay the reader gate over it; `baseline/corpora/papers.json`:
+  walks; `google-rows/ef6989debed1` and `lanes/converge-7/tools-b15/google-rows.mts`: the lab's Google store and the rounds' tool
+  that reads it through the tree's chain (the reader gate lays the rows it writes itself, `AXT_GATE_ROWS`; a unit the store holds
+  no reply to is `unavailable`, which fails the gate: a round whose units move refills the store, keyless, before it runs); `baseline/corpora/papers.json`:
   the harness's corpus papers, opened from this run's bundles with this run's rows of them, `reader-parts`' Google rows);
   today's side of the display gates frozen (`AXT_TODAY_FROZEN`, in the lab's archive); the release sweep's cache and the
   reader's served faces, which the typeset runners read (`AXT_SWEEP_CACHE`, `AXT_FACE_TABLES`, `AXT_FACE_SLICES`); Playwright's
@@ -176,6 +177,7 @@ started by hand, not by a runner (Security, rule 1).
 | `typeset-data` (today's readings derived again, the lab's tests) | 7 s: pass |
 | `reader-parts` (this run's parts laid by the entry over each rows store; I3 by ink, I4, I5) | 641 s: pass at `6b91f86ff`, at its record (`reader-parts.json`) |
 | `harness-lab` (the harness with five corpus papers, this run's bundles and rows) | 559 s: pass over `46dd8fcdf`, 130 of 130 |
+| `text-order` (I8: every page this run lays read by the composer's text module in Node, in reading order; out-of-order members held to `text-order.json`, which names none) | after `reader-parts` (its Google rows); a `run` slot |
 | `build-today`, `e2e:reader-today`, `e2e:registration-today` (today's reader, the way back until the cut-over) | 6 s, 169 s, 54 s: pass at `6b91f86ff`, 159 of 159 and 84 of 84 |
 | `display` (display ≥ today, under the default options and with every switch on; **a cut-over blocker**) | 16 min at `a7a6e4097` |
 | `perf-batch` (NEW's prepare in the round's box and its reader built from this commit, against the last round recorded) | about 9 min and the waits for its slots |
@@ -213,7 +215,8 @@ window the coordinator gives.
   package; it goes with today's engine at the cut-over.
 - **Adds to full**: `display-wide` (the display gate over every pair of the stored rows, about 2.5 hours of browser slots,
   overnight, once per candidate; **a cut-over blocker**); the prepare's pixel proofs on every page (poppler); the reader's canvas
-  on spike S1c's papers; today's engine's speed check; `babel-names` and `csquotes-styles` (each pinned compile image's TeX
+  on spike S1c's papers (Chromium's software 2D canvas, every draw call rasterised as it is made, no stand-in for a reader
+  change; each paper's split residue held to its record, `canvas.json`); today's engine's speed check; `babel-names` and `csquotes-styles` (each pinned compile image's TeX
   Live, the docker slot, the images already local, never pulled); `face-files` (the lab's 83 face files, fontTools); the online
   scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`, `e2e:local-endpoint`,
   `e2e:image`) and the live placeholder run, each under the project's User-Agent and never against our production server
@@ -223,9 +226,12 @@ window the coordinator gives.
   release sweep. A result of theirs for the release candidate is written into the private gates' file (`--private`, `result:
   { status, commit, date, evidence }`, `commit` this repository's commit that run was made against); without it each stays
   NO-GO, and a result recorded at another commit is stale.
-- **I7 keeps the release NO-GO until it has a gate.** An invariant no gate holds is NO-GO by design.
-- **Minutes**: about 80 in all (the full tier's, the pixel proofs 25, the canvas 2, the speed check about 12, the online
-  scripts about 15), and `perf-release`'s 100 to 130.
+- **An invariant no gate holds, or one whose gap says what stands, keeps the release NO-GO** by design. I7 has had a gate
+  since 2026-11-19 (`harness-lab`'s check at the reader's seam); I1's gap says what stands, held to its record
+  (`canvas.json`) until the coordinator's ruling; I8 has none (`text-order` reads no member out of order, and `text-order.json`
+  names none).
+- **Minutes**: about 80 in all (the full tier's, the pixel proofs 25, the canvas 2 on the software canvas, its two runs' lines
+  equal, the speed check about 12, the online scripts about 15), and `perf-release`'s 100 to 130.
 - **Secret**: none for this repository's gates (the free engines need no key; an LLM service in the placeholder run would take
   its key from the browser's settings, never from CI).
 
