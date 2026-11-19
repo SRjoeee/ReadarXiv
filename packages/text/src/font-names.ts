@@ -26,18 +26,55 @@ export const bareFontName = (name: string): string => String(name ?? '').replace
 
 // A math face by its family's names: Euler's EUEX, EURM and EURB with their size, MathTime's MTMI, MTSY, MTEX and their bold,
 // and XITS's math face, XITSMath, not its text face XITS-Regular (the ledger's math lines, the ink units' kept runs and the
-// figure runs' words read it: LAYOUT 25 and PIPELINE 31)
+// figure runs' words read it: LAYOUT 25 and PIPELINE 31). Its names are TeX's font names of TeX Live's maps and font files:
+// amsfonts' cm.map (cmmi, cmsy, cmex, cmbsy), symbols.map (msam, msbm), euler.map (eufm, eufb, eusm, and eu with ex, rm or
+// rb: EUEX10, EURM10, EURB10) and latxfont.map (lasy, lcircle); MathTime's mt with mi or sy (the Fontname scheme's special.map
+// mtmi, belleek.map's mtsy); rsfs.map (rsfs), stmaryrd.map (stmary), wasy.map (wasy), esint.map (esint), bbold.map (bbold),
+// bbm's tfm (bbm), dstroke.map (dsrom); newtx.map's txsy, txex, txmi, ntxsy, newtxmi and newtxbmi (NewTXMI, NewTXBMI) and its
+// ntxmi, ntxexx and ntxbmi tfm; pxfonts.map's pxsy and pxex, newpx.map's pxmi, newpxmi (NewPXMI) and newpxbmi (NewPXBMI_gnu)
+// and its zplmi tfm; lm-math.map's lmmath (LMMathSymbols5-Bold) and latinmodern-math.otf (latinmodern-math); stix.map's
+// stixmath (STIXMath-Regular), stix2.map's stixtwomath (STIXTwoMath), xits's xitsmath (XITSMath-Bold.otf); mathdesign's
+// MathDesign-CH-Regular-MathItalic-10 (mathdesign) and its mdbch tfm; fourier's futs (futs8r) and futm (futmiib); MnSymbol.map
+// (mnsymbol), ESSTIX.map (esstix), Euler-Math.otf (euler); and the PostScript Symbol face (symbol: PDF.js's standard_fonts.js
+// getStdFontMap). The entries not named here are judged by recorded cases (the rule ledger's)
 const MATH_NAME =
   /^(cmmi|cmsy|cmex|msam|msbm|eufm|eufb|eusm|eu(ex|rm|rb)\d|mt(mi|sy|ex|mib|syb)|rsfs|cmbsy|cmmib|stmary|wasy|txsy|txex|txmi|pxsy|pxex|pxmi|lmmath|latinmodern-math|stixmath|stixtwomath|xitsmath|cambria-?math|esint|bbold|bbm|dsrom|ntxmi|ntxsy|ntxexx|ntxbmi|newtxmi|newtxbmi|newpxmi|newpxbmi|newtxsy|newpxsy|zxmi|zplmi|mathdesign|mdbch|symbol|euler|lasy|line10|lcircle|futs|futm|mnsymbol|esstix|txmia|pxmia)/i
 const MATH_WORD = /math|symbol/i
+// (a monospaced face by its names: the Fontname scheme's typeface.map (courier, typewriter: Typewriter, inconsolata, consol:
+// Consolas), TeX's font names of TeX Live's maps (cm, lm, ec and tc before tt: cm.map's cmtt8, cfr-lm's lmtt8ttl8, cm-super's
+// ectt0800 and tctt0800; sftt, cm-super's SFTT0800; txtt, txfonts.map's; pcr, the Fontname scheme's Adobe Courier; cmvtt,
+// cm.map's cmvtt10), PostScript names (mono: lm's LMMono10-Regular; sourcecode: SourceCodePro.map's; firamono: fira.map's;
+// nimbusmon: ucr.map's NimbusMonL-Bold); the entries not named here are judged by recorded cases (the rule ledger's))
 const MONO_NAME =
   /mono|courier|typewriter|inconsolata|consol|menlo|^(cm|lm|ec|tc)tt|^sftt|^txtt|^pcr|beramono|sourcecode|firamono|cmvtt|^zi4|nimbusmon|letter ?gothic/i
+// (a sans face by its names: the Fontname scheme's typeface.map (arial, verdana, calibri, avant, futura, frutiger, myriad,
+// tahoma, gillsans, optima), TeX's font names of TeX Live's maps (cm and lm before ss: cm.map's cmss8, cfr-lm's lmss8ttl8;
+// phv, the Fontname scheme's Adobe Helvetica: phvb8z; uhvr, uhv.map's uhvr8r; qhv, qx-base.map's qhvb), PostScript names of its
+// maps (sans: lm's LMSans8-Regular; helvetica: Helvetica; nimbussan: NimbusSanL-Bold; biolinum: LinBiolinumTBO; grotesk:
+// URWGroteskT-Bold; roboto, lato, opensans, sourcesans, firasans, cabin, raleway, montserrat, inter and arimo: their packages'
+// maps; heros: TeXGyreHeros-Regular; dejavusans: DejaVuSansCondensed), and segoe in PDF.js's standard_fonts.js
+// getNonStdFontMap (SegoeUISymbol, read as Helvetica); the entries not named here are judged by recorded cases (the rule
+// ledger's))
 const SANS_NAME =
   /sans|helvetica|arial|^(cm|lm)ss|^sfs[sxi]|^cmssbx|nimbussan|biolinum|grotesk|verdana|roboto|^lato|opensans|sourcesans|firasans|calibri|avant|futura|frutiger|myriad|segoe|tahoma|gillsans|optima|cabin|raleway|montserrat|^inter|heros|^phv|^uhvr|^qhv|arimo|dejavusans/i
+// (bold by its names: weights of the Fontname scheme's weight.map (bold, black, heavy, semibold, extrabold) and of PDF.js's
+// font_substitutions.js getFamilyName's style words (demibold, ultrabold), PostScript names (demi: uag.map's URWGothicL-Demi;
+// libertinetb: libertine.map's LinLibertineTB), TeX's font names of TeX Live's maps (cm, lm and ec before bx: cm.map's cmbx5,
+// cfr-lm's lmbx8ttl5, cm-super's ecbx0500; sfbx and sfsx, cm-super's; cmssbx, cmmib and cmbsy, cm.map's; ptmb and phvb, the
+// Fontname scheme's Adobe Times and Helvetica bold: ptmb8z, phvb8z); the entries not named here are judged by recorded cases
+// (the rule ledger's))
 const BOLD_NAME =
   /bold|black|heavy|semibold|demibold|demi\b|-medi(?:ital)?$|-medi\b|^(cm|lm|ec)bx|^cmb\d|^sfbx|^sfsx|^cmssbx|^cmbxti|^cmmib|^cmbsy|-bd\b|^ptmb|^phvb|^linlibertinet?b|linlibertinetbi?$|libertinetb|-bol$|extrabold|ultrabold|-sb$/i
+// (italic by its names: variants of the Fontname scheme's variant.map (italic, kursiv, oblique, and URW's ital: Ital),
+// PostScript names (slant: AlgolRevived-Slanted; linlibertineti, linlibertinetbi and linbiolinumti: libertine.map's
+// LinLibertineTI, LinLibertineTBI, LinBiolinumTI), TeX's font names of TeX Live's maps (cm before ti: cm.map's cmti7; cmsl,
+// cmbxti, cmbxsl, cmssi, cmitt and cmmi, cm.map's; sfti, sfsl, sfsi and sfbi, cm-super's); the entries not named here are
+// judged by recorded cases (the rule ledger's))
 const ITALIC_NAME =
   /italic|ital\b|ital$|oblique|slant|kursiv|inclined|^(cm|lm)ti|^cmsl|^sfti|^sfsl|^sfsi|^sfbi|^cmbxti|^cmbxsl|^cmssi|^cmitt|^cmsltt|^cmmi|-it$|-bi$|linlibertineti|linlibertinetbi|linbiolinumti|-ita?$|italicmt|obliquemt/i
+// (small capitals by their names: smallcap (the Fontname scheme's variant.map SmallCaps; kerkis.map's Kerkis-SmallCaps), caps
+// and lmromancaps (lm's LMRomanCaps10-Regular), TeX's font names of TeX Live's maps (cmcsc and cmtcsc: cm.map's cmcsc10,
+// cmtcsc10; sfcc and sfxc: cm-super's))
 const CAPS_NAME = /caps|^cmcsc|^sfcc|^sfxc|smallcap|-sc$|sc\d*$|^cmtcsc|^lmromancaps/i
 // (Computer Modern's sans serif, cmsc, is no small capitals)
 const NOT_CAPS = /^cmsc/i
@@ -58,18 +95,43 @@ export function readFontStyle(name: string): FontNameStyle {
   const low = n.toLowerCase()
   const { fam, bold, italic, caps } = classOfBare(n)
   let design = 'times'
-  if (fam === 'mono') design = /^(cm|lm|ec|tc)tt|^sftt|lmmono|cmvtt|cmitt|cmsltt/i.test(n) ? 'cmtt' : 'courier'
-  else if (fam === 'sans') design = /^(cm|lm)ss|^sfs[sxi]|^cmssbx|lmsans/i.test(n) ? 'cmss' : 'helvetica'
+  if (fam === 'mono')
+    // the cmtt design's names, TeX's font names of TeX Live's maps: cm, lm, ec and tc before tt (cm.map's cmtt8, cfr-lm's lmtt8ttl8,
+    // cm-super's ectt0800 and tctt0800), sftt (cm-super's SFTT0800), lmmono (lm's LMMono8-Regular), cmvtt, cmitt and cmsltt
+    // (cm.map's cmvtt10, cmitt10, cmsltt10)
+    design = /^(cm|lm|ec|tc)tt|^sftt|lmmono|cmvtt|cmitt|cmsltt/i.test(n) ? 'cmtt' : 'courier'
+  else if (fam === 'sans')
+    // the cmss design's names, TeX's font names of TeX Live's maps: cm and lm before ss (cm.map's cmss8, cfr-lm's
+    // lmss8ttl8), lmsans (lm's LMSans8-Regular); the entries not named here are judged by recorded cases (the rule ledger's)
+    design = /^(cm|lm)ss|^sfs[sxi]|^cmssbx|lmsans/i.test(n) ? 'cmss' : 'helvetica'
   else if (
-    /^(cm|lm|ec|tc)(r|bx|b|ti|sl|csc|u|dunh|fib|ff)\d|^cmbxti|^cmbxsl|^sf(rm|bx|ti|sl|cc|xc|bi)|lmroman|latinmodern|^cmmi|^cmsy|^cmex/i.test(
+    /* the cm design's names, TeX's font names of TeX Live's maps: cm, lm, ec and tc before a shape and a size (cm.map's cmb10, cmbx10,
+       cmti10, cmsl10, cmcsc10, cmdunh10, cmfib8, cmff10: bx, ti, sl, csc, dunh, fib, ff; cfr-lm's lmr8ttl5; cm-super's ecsl0500,
+       tcsl0500), cmbxti and cmbxsl (cm.map's cmbxti10, cmbxsl10), sf with rm, cc, xc or bi (cm-super's SFRM0500, SFCC0500,
+       SFXC0500, SFBI0500), lmroman (lm's LMRoman5-Regular), latinmodern (the Fontname scheme's typeface.map LatinModern), cmmi,
+       cmsy and cmex (cm.map's) */ /^(cm|lm|ec|tc)(r|bx|b|ti|sl|csc|u|dunh|fib|ff)\d|^cmbxti|^cmbxsl|^sf(rm|bx|ti|sl|cc|xc|bi)|lmroman|latinmodern|^cmmi|^cmsy|^cmex/i.test(
       n,
     )
   )
     design = 'cm'
-  else if (/palladio|palatino|pagella|^ppl|^pplx|^zpl/i.test(n)) design = 'palatino'
+  else if (
+    /* the palatino design's names: palatino and palladio (the Fontname scheme's typeface.map Palatino and URWPalladioL; PDF.js's
+       standard_fonts.js getSerifFonts Palatino), pagella (newpx's TeXGyrePagellaX), ppl (the Fontname scheme's Adobe
+       Palatino: pplbi8z) and zpl (newpx.map's zplx-regular); the entries not named here are judged by recorded cases (the
+       rule ledger's) */ /palladio|palatino|pagella|^ppl|^pplx|^zpl/i.test(n)
+  )
+    design = 'palatino'
   else if (/charter|^bch/i.test(n)) design = 'charter'
   else if (/libertin/i.test(n)) design = 'libertine'
-  else if (/times|nimbusrom|nimbusroman|termes|^ptm|^txr|^ntx|^tx(?!tt)|stixtwotext|stix-?regular|stixgeneral/i.test(n))
+  else if (
+    /* the times design's names: times and nimbusrom (the Fontname scheme's typeface.map Times and NimbusRomNo9L; PDF.js's
+       standard_fonts.js getStdFontMap Times-Roman), termes (newtx.map's TeXGyreTermesX-Regular), ptm (the Fontname scheme's
+       Adobe Times: ptmr8z), txr (pxtxalfa's txr-of), ntx (newtx.map's ntxexmods), stixtwotext (stix2.map's STIXTwoText),
+       stixgeneral (stix.map's STIXGeneral-Regular); the entries not named here are judged by recorded cases (the rule
+       ledger's) */ /times|nimbusrom|nimbusroman|termes|^ptm|^txr|^ntx|^tx(?!tt)|stixtwotext|stix-?regular|stixgeneral/i.test(
+      n,
+    )
+  )
     design = 'times'
   // a font with no recognisable name (a Type 3 bitmap font, a renamed subset): its class as PDF.js guesses it
   const known = /[a-z]{3}/i.test(n) && !/^(t3|type3)/i.test(low)

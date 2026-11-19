@@ -5,14 +5,27 @@
 // placeholders: what an element reads as is the caller's word (`standIn`), not a guess from TeX. The splitter cut a wire whose
 // white space was collapsed; a projection carries its source's own, which is read here as that source reads it (`running`).
 
-/** A period after one of these ends no sentence (the extension's list, extended 2026-10-01 over the corpus) */
+/** A period after one of these ends no sentence (the extension's list, extended 2026-10-01 over the corpus). Its abbreviations
+ *  as sources write them: Unicode CLDR's English sentence-break suppressions (common/segments/en.xml: Def, Rev, Phys, vs, Mr,
+ *  Mrs, Ms, Prof, Mt, pp, Ed, Rep, Dept); cleveref.sty's English names (Fig, Figs, Eq, Eqs); emisa.cls's \crefname Sec;
+ *  diagram.sty's Dr; amsrefs.sty's Vol; nrc1.cls's No; journal abbreviations of TeX Live's classes and packages (aastex701.cls's
+ *  Lett, Astrophys, Proc and Sci; mnras.cls's Astron, Conf and Inst; ptptex.cls's Nucl; agupp.sty's Mon and Not;
+ *  shortmathj.sty's Int, Univ and St; econ-jet.bst's Corp); biblatex's english.lbx (al, cf, ca); apacite.sty's Eds;
+ *  hgbabbrev.sty's etc; skrapport.cls's viz; akkgermanabbreviations.sty's Co. The entries not named here are judged by
+ *  recorded cases (the rule ledger's) */
 export const ABBR =
   /\b(?:[A-Z]|Fig|Figs|Eq|Eqs|Sec|Secs|Ref|Refs|Thm|Def|Lem|Prop|Cor|Rev|Phys|Lett|Nucl|Astron|Astrophys|Mon|Not|Proc|Conf|Int|J|vs|etc|cf|al|approx|resp|viz|ca|c|Dr|Mr|Mrs|Ms|Prof|St|Mt|Jr|No|Vol|pp|Ed|Eds|Sci|Rep|Univ|Dept|Inst|Inc|Ltd|Corp|Co|e\.g|i\.e|w\.r\.t|a\.k\.a|i\.i\.d|a\.e)\.$/
-/** abbreviations that may end a sentence, where what follows decides */
+/** abbreviations that may end a sentence, where what follows decides: etc (hgbabbrev.sty's), al and ca (biblatex's
+ *  english.lbx), Corp (econ-jet.bst's journal abbreviations), Co (akkgermanabbreviations.sty's); the entries not named here
+ *  are judged by recorded cases (the rule ledger's) */
 export const TERMINAL_ABBR = /\b(?:etc|al|a\.e|i\.i\.d|Inc|Ltd|Corp|Co|Jr|ca|c)\.$/
 /** a case's `v.` after a capitalised name (`Oregon v. Mitchell`) */
 const CASE_V = /\b[A-Z][\w'’-]*\s+v\.$/
-/** a numbered part's label before its number, a month before its day or year */
+/** a numbered part's label before its number, a month before its day or year. Its labels as sources write them: Sect
+ *  (cidarticle.cls's and lni.cls's \crefname of a section), Ch (elsarticle-num.bst's), Chap (jurabib's enjbbib.ldf
+ *  \Bibchaptername), Tab (fancyref.sty's \Freftabshortname), Ex (Unicode CLDR's English sentence-break suppressions;
+ *  exercise.sty's \ExerciseListName), Nos and Vols (apacite.sty's \BNUMS, \BVOLS); the entries not named here are judged by
+ *  recorded cases (the rule ledger's) */
 const NUMBERED_PART =
   /\b(?:Eqn|Eqns|Sect|Sects|Ch|Chap|Chaps|Tab|Tabs|App|Apps|Alg|Algs|Ex|Exs|Thms|Defs|Lems|Props|Cors|Rem|Rems|Conj|Obs|Prob|Probs|Nos|Vols)\.$/
 const ITS_NUMBER = /^\s*(?:\(?\d|[A-Z](?:\.?\d|(?!\w))|[IVX]+\b)/
