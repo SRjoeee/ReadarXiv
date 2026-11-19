@@ -70,7 +70,8 @@ export interface Glyph {
   blank?: boolean
   form?: boolean
   /** with `turned` (the figures' reading): not wholly inside the clip in force (`clipped`); nothing of it shown (`unseen`: wholly
-   *  outside the clip, or painted at an alpha of 0); its form's number and its innermost picture's (`fid`, `pid`) */
+   *  outside the clip, painted at an alpha of 0, or covered whole by an opaque fill painted after it); its form's number and its
+   *  innermost picture's (`fid`, `pid`) */
   clipped?: true
   unseen?: true
   fid?: number
@@ -145,7 +146,7 @@ export interface PageInkOptions {
  *  font's band in em, its own ink up and down from its baseline in em (`up`, `down`: its outline's, else its font's band), its
  *  box's index (-1 for none), the level glyphs and the pictures' points before it; `clipped` where its own ink (its outline,
  *  else its font's band, across its advance) is not wholly inside the clip in force; `unseen` where nothing of it is shown (that
- *  ink wholly outside the clip, or painted at an alpha of 0) */
+ *  ink wholly outside the clip, painted at an alpha of 0, or covered whole by an opaque fill painted after it) */
 export interface TurnedGlyph {
   u: string
   n: number
@@ -437,6 +438,206 @@ function rectPathOf(m: Matrix, path: unknown): boolean {
   const level = (i: number) => Math.abs(pts[i]![1] - pts[(i + 1) % 4]![1]) <= 0.01,
     upright = (i: number) => Math.abs(pts[i]![0] - pts[(i + 1) % 4]![0]) <= 0.01
   return (level(0) && upright(1) && level(2) && upright(3)) || (upright(0) && level(1) && upright(2) && level(3))
+}
+/** whether a segment on the page from (ax, ay) to (bx, by) passes inside a box (x0, y0, x1, y1), its edges not: the part of the
+ *  segment inside the box with its edges (Liang and Barsky's clip), whose middle is inside the box proper where any of it is, the
+ *  box being convex; a segment along an edge, or touching a corner, is not inside */
+function entersBox(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): boolean {
+  const dx = bx - ax,
+    dy = by - ay
+  // (the segment's parameter from 0 to 1 cut to the inner side of the box's left, right, bottom and top sides in turn)
+  const t: [number, number] = [0, 1]
+  if (!inside(t, -dx, ax - x0) || !inside(t, dx, x1 - ax) || !inside(t, -dy, ay - y0) || !inside(t, dy, y1 - ay))
+    return false
+  const mid = (t[0] + t[1]) / 2,
+    mx = ax + mid * dx,
+    my = ay + mid * dy
+  return mx > x0 && mx < x1 && my > y0 && my < y1
+}
+/** Liang and Barsky's step: a segment's parameter range `t` cut to one side's inner half plane, `p` the segment's motion across
+ *  the side and `q` its start's distance inside it; false where nothing of the range is left */
+function inside(t: [number, number], p: number, q: number): boolean {
+  if (p === 0) return q >= 0
+  const r = q / p
+  if (p < 0) {
+    if (r > t[1]) return false
+    if (r > t[0]) t[0] = r
+  } else {
+    if (r < t[0]) return false
+    if (r < t[1]) t[1] = r
+  }
+  return true
+}
+/** whether a fill's region holds a box on the page whole (x0, y0, x1, y1, of some area): the region a path PDF.js gives encloses
+ *  under matrix `m` (constructPath's data: 0 moveTo, 1 lineTo, 2 and 3 curves, 4 closePath; each subpath closed, as a fill
+ *  closes it), by the nonzero rule or the even-odd one. Held where no edge of the region passes inside the box and the box's middle
+ *  is inside the region: the region's edges then leave the box whole on one side of them. A straight edge is read exactly; a curve
+ *  by the box of its points and control points, which holds the curve (a Bézier curve lies in its control points' hull): a box a
+ *  curve's control box meets is not held, whether the curve passes clear of it or not, and one clear of every such box is
+ *  inside or outside alike by the curve or by its chord, which the middle's count reads. A path of no reading holds nothing */
+function holdsWhole(
+  m: Matrix,
+  path: unknown,
+  evenOdd: boolean,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+): boolean {
+  const data = pathOf(path)
+  if (!data || !(x1 > x0 && y1 > y0)) return false
+  const cx = (x0 + x1) / 2,
+    cy = (y0 + y1) / 2
+  // (the region's winding about the box's middle: each edge crossing the level line through it to its right, up +1, down -1)
+  let wind = 0
+  const cross = (ax: number, ay: number, bx: number, by: number): void => {
+    if ((ay <= cy && by > cy) || (by <= cy && ay > cy)) {
+      if (ax + ((cy - ay) / (by - ay)) * (bx - ax) > cx) wind += by > ay ? 1 : -1
+    }
+  }
+  const X = (px: number, py: number): number => m[0] * px + m[2] * py + m[4],
+    Y = (px: number, py: number): number => m[1] * px + m[3] * py + m[5]
+  let px = Number.NaN,
+    py = Number.NaN,
+    sx = Number.NaN,
+    sy = Number.NaN,
+    open = false
+  /** a straight edge: false where it passes inside the box */
+  const edge = (ax: number, ay: number, bx: number, by: number): boolean => {
+    if (entersBox(ax, ay, bx, by, x0, y0, x1, y1)) return false
+    cross(ax, ay, bx, by)
+    return true
+  }
+  const close = (): boolean => !open || (px === sx && py === sy) || edge(px, py, sx, sy)
+  for (let i = 0; i < data.length; ) {
+    const o = data.at(i++)
+    if (o === 0) {
+      if (!close()) return false
+      px = sx = X(data.at(i), data.at(i + 1))
+      py = sy = Y(data.at(i), data.at(i + 1))
+      if (!finite(px, py)) return false
+      open = true
+      i += 2
+    } else if (o === 1) {
+      const qx = X(data.at(i), data.at(i + 1)),
+        qy = Y(data.at(i), data.at(i + 1))
+      if (!open || !finite(qx, qy) || !edge(px, py, qx, qy)) return false
+      px = qx
+      py = qy
+      i += 2
+    } else if (o === 2 || o === 3) {
+      // (a cubic's two control points and end, a quadratic's one control point and end; the box of them and its start)
+      const n = o === 2 ? 6 : 4
+      let bx0 = px,
+        by0 = py,
+        bx1 = px,
+        by1 = py,
+        ex = px,
+        ey = py
+      for (let q = 0; q < n; q += 2) {
+        ex = X(data.at(i + q), data.at(i + q + 1))
+        ey = Y(data.at(i + q), data.at(i + q + 1))
+        if (!finite(ex, ey)) return false
+        bx0 = Math.min(bx0, ex)
+        by0 = Math.min(by0, ey)
+        bx1 = Math.max(bx1, ex)
+        by1 = Math.max(by1, ey)
+      }
+      if (!open || (bx0 < x1 && bx1 > x0 && by0 < y1 && by1 > y0)) return false
+      cross(px, py, ex, ey)
+      px = ex
+      py = ey
+      i += n
+    } else if (o === 4) {
+      if (!close()) return false
+      px = sx
+      py = sy
+    } else return false
+  }
+  if (!close()) return false
+  return evenOdd ? wind % 2 !== 0 : wind !== 0
+}
+/** a coordinate's cell of the grid (TILE points, TILES across and up; the outermost cells reaching on past it) */
+const cellOf = (v: number): number => Math.min(TILES - 1, Math.max(0, Math.floor(v / TILE)))
+/** a box of a glyph's text space ([a0, a1] across, [b0, b1] up) on the page under matrix `M`: its four corners' box */
+function textBoxOnPage(M: Matrix, a0: number, a1: number, b0: number, b1: number): Box4 {
+  let X0 = Infinity,
+    Y0 = Infinity,
+    X1 = -Infinity,
+    Y1 = -Infinity
+  for (const [x, y] of [
+    [a0, b0],
+    [a1, b0],
+    [a0, b1],
+    [a1, b1],
+  ] as const) {
+    const X = M[0] * x + M[2] * y + M[4],
+      Y = M[1] * x + M[3] * y + M[5]
+    if (X < X0) X0 = X
+    if (X > X1) X1 = X
+    if (Y < Y0) Y0 = Y
+    if (Y > Y1) Y1 = Y
+  }
+  return [X0, Y0, X1, Y1]
+}
+/**
+ * The figures' reading of what an opaque fill painted after a glyph covers whole (pageInk's `turned`). `add`: a glyph painted,
+ * level or turned, with its own ink's box on the page, kept by the cell of the grid its box's middle lies in. `cover`: an opaque
+ * fill painted now (under matrix `m`, its path's data, its rule, and `fb` its box on the page cut to the clip in force and the
+ * groups' bounds, where it shows): each glyph painted before it whose box lies inside `fb` and whose ink its region holds whole
+ * (holdsWhole) is `unseen`, a turned glyph's box with it (`boxes`, the walk's unseen boxes). A step of the walk's (`step`, which
+ * may stop it: `stopped`) each cell it meets, each glyph it tests and each of the path's numbers it reads for one
+ */
+function coverReading(boxes: Set<number>, step: (k: number) => void, stopped: () => boolean) {
+  const glyphs: (Glyph | TurnedGlyph)[] = [],
+    inks: Box4[] = []
+  let cells: (number[] | undefined)[] | null = null
+  return {
+    add(x: Glyph | TurnedGlyph, x0: number, y0: number, x1: number, y1: number): void {
+      if (!(x1 > x0 && y1 > y0) || !finite(x0, y0, x1, y1)) return
+      cells ??= new Array(TILES * TILES)
+      const c = cellOf((y0 + y1) / 2) * TILES + cellOf((x0 + x1) / 2)
+      let cell = cells[c]
+      if (!cell) {
+        cell = []
+        cells[c] = cell
+      }
+      cell.push(glyphs.length)
+      glyphs.push(x)
+      inks.push([x0, y0, x1, y1])
+    },
+    cover(m: Matrix, path: unknown, evenOdd: boolean, fb: Box4): void {
+      if (!cells) return
+      const cost = pathOf(path)?.length ?? 0
+      for (let cy = cellOf(fb[1]); cy <= cellOf(fb[3]); cy++)
+        for (let cx = cellOf(fb[0]); cx <= cellOf(fb[2]); cx++) {
+          step(1)
+          if (stopped()) return
+          for (const i of cells[cy * TILES + cx] ?? []) {
+            const x = glyphs[i],
+              b = inks[i]
+            if (!x || !b || x.unseen) continue
+            step(1)
+            if (stopped()) return
+            if (b[0] < fb[0] || b[1] < fb[1] || b[2] > fb[2] || b[3] > fb[3]) continue
+            step(cost)
+            if (stopped()) return
+            if (!holdsWhole(m, path, evenOdd, b[0], b[1], b[2], b[3])) continue
+            x.unseen = true
+            if ('box' in x && x.box >= 0) boxes.add(x.box)
+          }
+        }
+    },
+  }
 }
 /** an alpha constant as an ExtGState gives it, 0 to 1 (a value of no number: 1, PDF's default) */
 const alphaOf = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1)
@@ -793,11 +994,12 @@ export const FORCED_BREAK = /^kb\d+$/
  * this reading's outline boxes are added to, by outlineKey
  * `turned` (the figures' reading, locate/figure-text.ts; the wrap's alone): the glyphs set turned (`turned`), the figures' paths
  * as their lines (`shapes`), the pictures' points, each figure's extent (`figures`), and what the page does not show, which is no
- * ink a figure's label may be crowded by or stand on: a glyph's `clipped` where it is not wholly inside the clip in force and
- * `unseen` where nothing of it is shown (wholly outside the clip, or painted at an alpha of 0), and `unseen`, the boxes painted at
- * an alpha of 0 (a fill's, an image's or a shading's by the fill's alpha constant, a stroke's by the stroke's, a glyph's by its
- * rendering mode's, each times the alpha every transparency group open is painted with: PDF 11.6.6). Every box is kept, at its
- * index, as every other reading has it
+ * ink a figure's label may be crowded by or stand on, nor a label's own: a glyph's `clipped` where it is not wholly inside the
+ * clip in force and `unseen` where nothing of it is shown (wholly outside the clip, painted at an alpha of 0, or covered whole by
+ * an opaque fill painted after it: coverReading, holdsWhole), and `unseen`, the boxes painted at an alpha of 0 (a fill's, an image's or
+ * a shading's by the fill's alpha constant, a stroke's by the stroke's, a glyph's by its rendering mode's, each times the alpha
+ * every transparency group open is painted with: PDF 11.6.6), and a turned glyph's box where its glyph is covered so. Every box is
+ * kept, at its index, as every other reading has it
  * `glyphsOnly` (a reader's live fills): the glyphs alone, as a whole walk places them (their
  * text, place, size and fill: a fill's reader reads no more), with no box, path, image or outline read: `boxes` empty, a
  * glyph's outline its line's
@@ -908,7 +1110,6 @@ export function inkReader(
   // (the boxes past `boxesMax`: each cell's union, x0 y0 x1 y1, NaN until a part lands there; made at the first)
   const keep = typeof boxesMax === 'number' && boxesMax >= 0 ? Math.floor(boxesMax) : Infinity
   let tiles: Float64Array | null = null
-  const cellOf = (v: number): number => Math.min(TILES - 1, Math.max(0, Math.floor(v / TILE)))
   /** a box past the budget, its part in each cell it meets merged into that cell's union */
   const merge = (x0: number, y0: number, x1: number, y1: number): void => {
     tiles ??= new Float64Array(4 * TILES * TILES).fill(Number.NaN)
@@ -1124,6 +1325,10 @@ export function inkReader(
   /** the alpha a fill (or an image, a shading, a group) is painted with now, and a stroke: the alpha constant times the groups' */
   const fillAlpha = () => s.ga * s.ca,
     strokeAlpha = () => s.ga * s.CA
+  /** whether a fill painted now covers what was painted under it (`opaque`): a colour (no pattern, nor PDF.js's transparent) at
+   *  an alpha of 1, under no blend mode but Normal and no soft mask, its groups' alike, and every clip in force a rectangle on the
+   *  page's axes, so that `clip`, and the groups' bounds, are where it shows */
+  const opaqueNow = (): boolean => s.fill !== NO_FILL && fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend && s.rclip
   /** what a Type 3 glyph's procedure paints, once a font and glyph: `d0` where it begins with d0, and where it paints, by the
    *  alpha the text gives it (`fill`, `stroke`: a fill's paint, or a stroke's, under no alpha of its own) or at an alpha its own
    *  ExtGState set above 0 (`lit`), as PDF.js keeps a procedure's alpha entries; a fill's paint is a path filled, a bitmap's mask
@@ -1367,7 +1572,7 @@ export function inkReader(
     if (turned && outsideClip(glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)) glyph.clipped = true
     // (and one nothing of which is shown, `unseen`: its own ink (its outline, else its advance and its font's band) wholly outside
     // the clip, a cropped plot's title its form's box hides, or painted at an alpha of 0: no ink a figure's label may be crowded
-    // by, nor a label's own)
+    // by, nor a label's own. An opaque fill painted after it may yet cover it whole: coverReading)
     if (
       turned &&
       (!(textAlpha(g) > 0) || (glyph.clipped && hiddenByClip(glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)))
@@ -1385,6 +1590,7 @@ export function inkReader(
       }
       glyphs.push(glyph)
       boxAt.push(boxes.length / 4)
+      if (turned && !glyph.unseen) covers.add(glyph, glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)
     }
   }
 
@@ -1467,40 +1673,25 @@ export function inkReader(
     // baseline: a y-axis title or a colour bar's title set at its figure's edge, inside the form's box, would read as cut, no
     // unit (2610.35877v1 p8, 2610.22065v1 p3, PDF-READER §19.12: the final pass draws its figures with no group, whose
     // box PDF.js gives no form))
+    const ia = has ? xa + o[0] * s.size * hs : xa,
+      ib = has ? xa + o[2] * s.size * hs : xa
+    const b0 = ty + down * s.size,
+      b1 = ty + up * s.size
+    // (its own ink, its outline across (else its advance), the four corners of that box turned with it: not shown whole where it
+    // is not wholly inside the clip, as a level glyph's; nothing of it shown where it is wholly outside, or where an opaque fill
+    // painted after it covers it whole: coverReading)
+    const own = has
+      ? textBoxOnPage(M, Math.min(ia, ib), Math.max(ia, ib), b0, b1)
+      : textBoxOnPage(M, Math.min(xa, xb), Math.max(xa, xb), b0, b1)
     if (figureClip()) {
-      const ia = has ? xa + o[0] * s.size * hs : xa,
-        ib = has ? xa + o[2] * s.size * hs : xa
-      const b0 = ty + down * s.size,
-        b1 = ty + up * s.size
-      /** a box of text space [a0, a1] across, [b0, b1] up, on the page: its four corners turned with the glyph */
-      const onPage = (a0: number, a1: number): Box4 => {
-        let X0 = Infinity,
-          Y0 = Infinity,
-          X1 = -Infinity,
-          Y1 = -Infinity
-        for (const [x, y] of [
-          [a0, b0],
-          [a1, b0],
-          [a0, b1],
-          [a1, b1],
-        ] as const) {
-          const X = M[0] * x + M[2] * y + M[4],
-            Y = M[1] * x + M[3] * y + M[5]
-          if (X < X0) X0 = X
-          if (X > X1) X1 = X
-          if (Y < Y0) Y0 = Y
-          if (Y > Y1) Y1 = Y
-        }
-        return [X0, Y0, X1, Y1]
-      }
-      // (its own ink, its outline across (else its advance): not shown whole where it is not wholly inside the clip, as a level
-      // glyph's; nothing of it shown where it is wholly outside)
-      const own = has ? onPage(Math.min(ia, ib), Math.max(ia, ib)) : onPage(Math.min(xa, xb), Math.max(xa, xb))
       if (outsideClip(...own)) t.clipped = true
       if (t.clipped && hiddenByClip(...own)) t.unseen = true
     }
     if (!(textAlpha(g) > 0)) t.unseen = true
-    if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
+    if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) {
+      turnedOut.push(t)
+      if (!t.unseen) covers.add(t, ...own)
+    }
   }
   /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its
    *  segments on the page (a curve's CURVE_STEPS chords, a fill's subpaths closed), whether it strokes and fills, whether its fill
@@ -1509,10 +1700,12 @@ export function inkReader(
    *  is where it shows), and its half line width on the page, by its box's index; at most
    *  SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
   const shapes = new Map<number, Shape>()
-  /** the boxes painted at an alpha of 0 or past the bounds of their groups (`turned`), by index: nothing of them shows; and the
-   *  boxes those bounds cut, by index, as far as they show */
+  /** the boxes painted at an alpha of 0 or past the bounds of their groups (`turned`), and a turned glyph's whose glyph an opaque
+   *  fill painted after it covers whole (coverReading), by index: nothing of them shows; and the boxes those bounds cut, by index, as far
+   *  as they show */
   const unseen = new Set<number>(),
     cut = new Map<number, Box4>()
+  const covers = coverReading(unseen, step, () => stop)
   let picture = 0,
     shapeNumbers = 0
   /** each form painted and each TikZ picture its own number (`turned`: a figure's glyphs are of one figure, `fid` and `pid`, so
@@ -1606,7 +1799,7 @@ export function inkReader(
     if (!segs.every(Number.isFinite)) return
     shapeNumbers += segs.length
     // (`pattern`: a fill of a tiling pattern, whose cells (a hatching) paint what is not read)
-    const opaque = fill && s.fill !== NO_FILL && fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend && s.rclip
+    const opaque = fill && opaqueNow()
     shapes.set(box, {
       segs: Float32Array.from(segs),
       stroke,
@@ -1894,6 +2087,19 @@ export function inkReader(
               !inMask
             )
               shapeOf(had / 4, op, at(a[1], 0))
+            // (what an opaque fill covers whole of the glyphs painted before it is not shown: an annotation's appearance, which a
+            // viewer draws or not by its flags, and a soft mask's content, which paints no colour, cover nothing)
+            const fb =
+              turned && FILLS.has(op) && !inAnnotation && !inMask && known() && opaqueNow()
+                ? boxOf(s.ctm, ...mm, figureClip())
+                : null
+            if (fb)
+              covers.cover(
+                s.ctm,
+                at(a[1], 0),
+                op === OPS.eoFill || op === OPS.eoFillStroke || op === OPS.closeEOFillStroke,
+                fb,
+              )
           }
           // a clip takes effect after the path is painted (the canvas's pendingClip)
           if (s.pendingClip) {

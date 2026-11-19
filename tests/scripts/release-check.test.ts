@@ -200,8 +200,11 @@ describe("a gate's output, read as the gate states it", () => {
     expect(g.holds).toEqual(['I8'])
     // (this repository's record does not name 2610.1v1-zh's member: a new one; the exit codes are never read)
     expect(g.judge!(ctx, [run(0, ''), run(1, t)])).toMatchObject({ pass: false, note: expect.stringMatching(/out of order and not in the record: 2610\.1v1-zh p3 ord 7/) })
+    // (none out of order, against this repository's record, which names none: a pass with nothing to lower)
     const none = t.replace('out of order 1', 'out of order 0').split('\n  ')[0] ?? ''
-    expect(g.judge!(ctx, [run(0, ''), run(1, none)])).toMatchObject({ pass: true, note: expect.stringMatching(/^in order now, the record to lower/) })
+    const judged = g.judge!(ctx, [run(0, ''), run(1, none)])
+    expect(judged).toMatchObject({ pass: true, numbers: { outOfOrder: 0, recorded: 0, fresh: 0, fell: 0 } })
+    expect(judged.note ?? '').not.toMatch(/the record to lower/)
     expect(g.judge!(ctx, [run(0, ''), run(0, none.replace('missing 0,', 'missing 1,'))])).toMatchObject({ pass: false })
     expect(g.judge!(ctx, [run(0, ''), run(0, '')])).toMatchObject({ pass: false, note: 'no pair read' })
   })
@@ -217,7 +220,9 @@ describe("a gate's output, read as the gate states it", () => {
     expect(textOrderJudge(text([...listed, '  out of order 1706.03762v7-zh p2 ord 9']), record)).toMatchObject({ pass: false, numbers: { fresh: 1 } })
     // (a list shorter than the totals' count is no reading of every member)
     expect(textOrderJudge(text(listed).replace(`out of order ${listed.length};`, `out of order ${listed.length + 1};`), record)).toMatchObject({ pass: false })
-    expect(textOrderJudge(text(listed.slice(1)), record)).toMatchObject({ pass: true, numbers: { fell: 1 }, note: expect.stringMatching(/the record to lower/) })
+    // (a recorded member read in order now is said: a record of one member, read with none out of order)
+    const one = { ...record, outOfOrder: { '2610.40394v1-zh': ['p4 ord 950'] } }
+    expect(textOrderJudge(text([]), one)).toMatchObject({ pass: true, numbers: { recorded: 1, fell: 1 }, note: expect.stringMatching(/the record to lower/) })
   })
 
   it("holds each canvas paper's residue to its record by page: one step worse fails, a page outside its pages fails, a better reading is said", () => {

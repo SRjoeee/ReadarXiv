@@ -1,12 +1,8 @@
 {
   "format": "readarxiv/text-order 1",
   "says": "text-order's out-of-order members at the last integrated round, by pair, each `p<page> ord <ord>` (lab/release-check/gates.mjs textOrderJudge): a member the text layer reads out of the page's order, the fewest that, taken out, leave the rest in order (packages/reader/e2e/text-order.mjs orderOf). The gate fails where a member is out of order that is not named here, and where any member is missing; it says where a named one reads in order now, and the round that moves the list writes it here with its cause",
-  "commit": "9fe1c29e4",
-  "round": "lane v2-harness: text-order over the release run's 92 pairs (the prepare's bundles of 2026-11-19, reader-parts' Google rows)",
-  "outOfOrder": {
-    "2610.40394v1-zh": ["p4 ord 950", "p4 ord 952", "p4 ord 954", "p4 ord 956", "p4 ord 958"]
-  },
-  "why": {
-    "2610.40394v1-zh p4": "the figure's five labels (L1 to L5) are each two members over one another: the label's word (950 Completeness, 952 Accuracy, 954 LaTeX Formatting, 956 Self Containment, 958 Atomicity) and the word Proof (949, 951, 953, 955, 957), which arXiv's page paints and then covers with the label's box's opaque fill. The engine cuts the covered word as a run of its own (locate/figure-text.ts: a run is dropped only where a clip or an alpha of 0 hides it, never where a fill painted after it covers it) and translates it (locate/figure-lines.ts judge: another text's glyph keeps no figure text, the ruling of 2026-11-11), so both are laid, and the text layer reads the label's own translation at the page's end. Production kept the covered word as the original's (crowded) and drew one translation a label"
-  }
+  "commit": "7eb90fb47",
+  "round": "lane hidden-ink: text-order over the 92 pairs of the chain's bundles at 7eb90fb47 (the stored compiles, lane v2-harness's Google rows): none out of order",
+  "outOfOrder": {},
+  "why": {}
 }
