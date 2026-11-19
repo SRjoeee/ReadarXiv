@@ -166,14 +166,3 @@ export function unitClass(u: string | unknown[] | { readonly kind?: unknown } | 
   // (`!`: an own entry, Object.hasOwn's)
   return Object.hasOwn(UNIT_CLASS, kind) ? UNIT_CLASS[kind]! : 'body'
 }
-
-/** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads, tables and figures on; names (the
- *  whole author block since 2026-10-30) and references off. A direct open of the run given none (layer-proto/run.mjs openProto: the lab's gates, the tests') takes them
- *  too, and the lab's fixture maker sends no unit they hide (the gates hold no translation of it) */
-export const TOGGLE_DEFAULTS = Object.freeze({
-  heads: true,
-  tables: true,
-  figures: true,
-  references: false,
-  names: false,
-})

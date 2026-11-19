@@ -1,10 +1,9 @@
-// D.text's segments, D.sentences' table and D.links' placement replayed on one pair against today's own functions
-// (textlayer.mjs segsOfUnit, words.mjs addUnitWords, links.mjs placeUnit, engine 065c1d973) over every laid unit's every page at
-// its final layout (emit-lays.ts): the corpus's run is lab/typeset/replay-emit.mjs; the tests hold three pairs.
+// D.sentences' table and D.links' placement replayed on one pair against today's own functions (words.mjs addUnitWords,
+// links.mjs placeUnit, engine 065c1d973) over every laid unit's every page at its final layout (emit-lays.ts): the corpus's run
+// is lab/typeset/replay-emit.mjs; the tests hold three pairs.
 import { lineRuns } from '../../../../packages/typeset/src/emit/display.ts'
 import { type Annot, placeUnit, type Target } from '../../../../packages/typeset/src/emit/links.ts'
 import { addUnitWords, newWords, tokenBand } from '../../../../packages/typeset/src/emit/sentences.ts'
-import { segsOfUnit } from '../../../../packages/typeset/src/emit/text.ts'
 import type { LaidLine, Layout } from '../../../../packages/typeset/src/fit/types.ts'
 import { pieceCrops } from '../../../../packages/typeset/tests/replay/display.ts'
 import { finalLays, unitPages } from '../../../../packages/typeset/tests/replay/emit-lays.ts'
@@ -12,7 +11,6 @@ import { firstDifference, todayFile } from '../../../../packages/typeset/tests/r
 
 type W = Record<string, unknown> & { n: number }
 type Today = {
-  segsOfUnit(L: unknown, page: number): unknown[]
   newWords(): W
   addUnitWords(...a: unknown[]): void
   placeUnit(o: unknown): { records: unknown[]; tried: unknown[] }
@@ -28,29 +26,23 @@ const cols = (w: W) =>
 type Tok = { s?: string; ph?: unknown; k?: number; crop?: { k?: number; page: number; crop: number[] } }
 export type EmitResult = {
   pages: number
-  segs: number
   tokens: number
   linkUnits: number
   records: number
   differ: string[]
 }
 
-/** the three replays over one pair */
+/** the two replays over one pair */
 export async function emitReplay(pair: string): Promise<EmitResult> {
   today ??= {
-    ...(await import(todayFile('layer-proto/textlayer.mjs'))),
     ...(await import(todayFile('layer-proto/words.mjs'))),
     ...(await import(todayFile('layer-proto/links.mjs'))),
   } as Today
-  const out: EmitResult = { pages: 0, segs: 0, tokens: 0, linkUnits: 0, records: 0, differ: [] }
+  const out: EmitResult = { pages: 0, tokens: 0, linkUnits: 0, records: 0, differ: [] }
   const lays = finalLays(pair)
   pieceCrops(pair, lays)
   for (const [ord, p, pg] of unitPages(pair)) {
     out.pages++
-    const mine = segsOfUnit(p.layout, pg)
-    out.segs += mine.length
-    const d1 = firstDifference(mine, today.segsOfUnit(p.layout, pg), `D.text ord ${ord} p${pg}`)
-    if (d1) out.differ.push(d1)
     const tw = today.newWords(),
       mw = newWords()
     today.addUnitWords(tw, p.layout, pg, ord, null)

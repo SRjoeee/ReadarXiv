@@ -94,7 +94,7 @@ export function hostPrefs(surface: Pick<SurfaceConfig, 'state' | 'subscribe' | '
   }
 }
 
-export function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string; store?: PaperStore | null }): Host {
+function extensionHost(o: { api: string; loopback: boolean; pdf: (ref: string) => string; prefs: PrefStore; transport: TranslationTransport; paper: string; store?: PaperStore | null }): Host {
   return { fetch: storedFetch({ fetch: hostFetch(o), store: o.store ?? null, api: o.api }), original: o.pdf, prefs: o.prefs, translate: hostTranslate({ transport: o.transport, paper: o.paper }) }
 }
 

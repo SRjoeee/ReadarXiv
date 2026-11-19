@@ -91,7 +91,7 @@ export const alphabetOf = byTag((target: string): string => {
 })
 
 /** the face a run is drawn in (font-roles.mjs:432 faceFor) */
-export function faceFor(roles: Roles, run: Run): string | null {
+function faceFor(roles: Roles, run: Run): string | null {
   const c = roles.cjk
   if (run.script === 'cjk' && c) return run.bold ? c.bold : c.body
   if (run.cls === 'math') return 'lm-math'

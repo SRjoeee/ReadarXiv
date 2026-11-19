@@ -8,7 +8,7 @@ import type { DecorBlock } from '../unit/decor.ts'
 
 /** a block as the walk reads it: U.blocks' and U.decor's, with what the row's start (F1) and the borrow room set on it */
 export type FitBlock = DecorBlock & {
-  /** where the first line starts on a shared row or after a name (S.rowStart, S.nameLed) */
+  /** where the first line starts on a shared row, a name's row among them (S.rowStart over the part's join) */
   start?: number
   startY?: number
   onLead?: boolean

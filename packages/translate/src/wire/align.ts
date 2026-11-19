@@ -4,7 +4,7 @@
 // boundaries: 2 moved, both onto the end they missed, none that was right).
 import { ABBR, TERMINAL_ABBR } from '@readarxiv/text'
 
-export const SNAP_WINDOW = 3
+const SNAP_WINDOW = 3
 const SENTENCE_END = /[.!?。！？…]["'”」』）)\]]*$/
 const TERMINATOR = /[.!?。！？…”」』）)\]]/
 const CONTINUATION = /^[a-z0-9([]/

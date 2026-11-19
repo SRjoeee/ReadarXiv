@@ -49,17 +49,17 @@ export const dirOf = (catalog: Pick<Ref, 'path'>): string => catalog.path.slice(
  * the bundle's (the same units under the same ids, in another object: the contents listed every heading twice and the view
  * counted every unit twice, staging RB1, 2026-11-13)
  */
-export const layerUnitsOf = (catalog: Pick<Ref, 'path'>, head: Pick<Head, 'units'>): ObjectAt[] =>
+const layerUnitsOf = (catalog: Pick<Ref, 'path'>, head: Pick<Head, 'units'>): ObjectAt[] =>
   head.units.map((sha256) => ({ path: `${dirOf(catalog)}/${sha256}`, sha256 }))
 
 /** the policy's constants, the same in both hosts (design-b §4) */
-export const GATE_MS = 1500
-export const PREFS_MS = 1500
+const GATE_MS = 1500
+const PREFS_MS = 1500
 export const BACKOFF_MS = 1000
 export const BACKOFF_MAX_MS = 30_000
 /** a 429's wait where our server names none, and the soonest the session asks again by itself after a 429 whatever time it names
  *  (the time said stays our server's) */
-export const WAIT_MIN_MS = 1000
+const WAIT_MIN_MS = 1000
 /** the longest reconnection time a stream may name that a follow waits (client.ts): its polling's pace alone, never a time said */
 export const WAIT_MAX_MS = 600_000
 /** how many 429s in a row are waited out and asked again by the reader itself; the next stops the look, said as our server's
@@ -314,10 +314,10 @@ export interface Init {
 }
 
 /** the display chosen: the address's word, else the stored one */
-export const chosenOf = (s: State): Display => s.visit.display ?? s.prefs.value.display
+const chosenOf = (s: State): Display => s.visit.display ?? s.prefs.value.display
 export const targetOf = (s: State): string => s.visit.target ?? s.prefs.value.target
 /** whether the reader sets a target */
-export const supported = (s: State, target: string): boolean => !s.targets || s.targets.includes(target)
+const supported = (s: State, target: string): boolean => !s.targets || s.targets.includes(target)
 /**
  * Why the original is held for the visit, whatever display is chosen (R session/host.ts `held`, `heldFor`): the paper's own (a
  * lasting refusal: no language mends it), or the target language's (one the reader does not set, lifted by a language it sets);
@@ -946,7 +946,7 @@ function apply(s0: State, x: Input): { s: State; effects: Effect[] } {
 }
 
 /** the tickets now wanted minted, those no longer wanted cleared (see the head of this file) */
-export function settle(s0: State): State {
+function settle(s0: State): State {
   const s: State = { ...s0 }
   const take = (slot: string): Ticket => {
     const t = `${slot}#${s.next}`
