@@ -85,7 +85,8 @@ const LEAVE = new Map([
 ])
 const reads = new Map([...LEAVE.keys()].map((k) => [k, { pages: 0, reads: 0, outside: 0, outsidePages: 0, ex: [] }]))
 const entry = { paras: { stated: new Map(), anchor: new Map(), opened: 0, onTexLine: 0, off: [], offBy: new Map(), notLaid: new Map(), openedEx: [], noneEx: [] }, crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
-/** Whether the entry is given a door row: the product's acceptance rule judges it (gate-rows.mjs, rowJudge) */
+/** Whether a stored row is given, the runner's and the entry's alike, a door row or a store's Result: the product's acceptance rule
+ *  judges it, a row it refuses for any reason no row (gate-rows.mjs, rowJudge) */
 const judge = rowJudge()
 let judging = ''
 const accept = (unit, content) => judge.takes(judging, unit, content)
@@ -369,10 +370,10 @@ if (ENTRY) {
   console.log(`the entry's figure texts (S.figures over the part), by turn and state: ${[...entry.figures].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}`)
   console.log(`the entry's boxes (Laid.lit): ${entry.lit.laid} members laid with lines, ${entry.lit.lines} lines, ${entry.lit.boxes} boxes on the right; panes' entries apart ${entry.lit.apart}; nothing on the right ${entry.lit.empty}`)
   const C = entry.cover, faults = [...C.faults.values()].reduce((a, b) => a + b, 0)
-  const unsaid = judge.withheld().map((x) => `${x.pair} ${x.kind} ${x.id.slice(0, 8)}`)
-  const judged = new Map()
-  for (const x of judge.given()) judged.set(x.why, (judged.get(x.why) ?? 0) + 1)
-  console.log(`the entry's rows that say nothing (the chain's 'empty', accept.ts), given as no row: ${unsaid.length}${unsaid.length ? `: ${unsaid.join(' | ')}` : ''}; held to its other clauses, given as they are: ${[...judged].map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}`)
+  const withheld = judge.withheld()
+  const byWhy = new Map()
+  for (const x of withheld) byWhy.set(x.why, (byWhy.get(x.why) ?? 0) + 1)
+  console.log(`the rows the acceptance rule refuses (accept.ts), each withheld as the product's chain withholds it, its unit left the original's: ${withheld.length}${withheld.length ? ` (${[...byWhy].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}): ${withheld.map((x) => `${x.pair} ${x.kind} ${x.id.slice(0, 8)} ${x.why}`).join(' | ')}` : ''}`)
   console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)
