@@ -5,7 +5,9 @@
 // packages/engine/src/source/tex-names.json byte for byte): its types, conjunctions, singulars and targets' refs and conj,
 // held equal to that file by tests/typeset/tex-names.test.ts.
 
-/** the forms' types, the conjunctions and singulars, and each target's reference and conjunction words (U.rename) */
+/** the forms' types, the conjunctions and singulars, and each target's reference and conjunction words (U.rename). The
+ *  conjunctions are cleveref.sty's English (its \DeclareOption{english}: \crefpairconjunction, \crefrangeconjunction,
+ *  \crefmiddleconjunction, \creflastgroupconjunction), each \nobreakspace read as a space */
 export const REFS: {
   types: Readonly<Record<string, string>>
   conjunctions: readonly string[]

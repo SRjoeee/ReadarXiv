@@ -244,7 +244,7 @@ export function openObjects(
     if (d.get(N('Encrypt')) !== undefined) throw new XrefRefusal('delta-encrypted', 'an encrypted document')
     if (d.get(N('XRefStm')) !== undefined) throw new XrefRefusal('delta-xref', 'a hybrid cross-reference (/XRefStm)')
     own ??= { root: d.get(N('Root')), info: d.get(N('Info')), id: d.get(N('ID')) }
-    for (const k of ['root', 'info', 'id'] as const) {
+    for (const k of ['root', 'info', 'id'] as const satisfies readonly (keyof TrailerRefs)[]) {
       const v = d.get(N(k === 'id' ? 'ID' : k[0]!.toUpperCase() + k.slice(1)))
       if (trailer[k] === undefined && v !== undefined) trailer[k] = v
     }
@@ -436,6 +436,7 @@ export function openObjects(
       visited = new Set<number>()
     const cat = look(trailer.root)
     const root = cat instanceof PDFDict ? cat.get(N('Pages')) : undefined
+    // (the page attributes a page inherits from its ancestors in the page tree: ISO 32000-1 §7.7.3.4)
     const INH = ['Resources', 'MediaBox', 'CropBox', 'Rotate'] as const
     const walk = (ref: PdfObject | undefined, inherited: PageInherited, depth: number): void => {
       if (!(ref instanceof PDFRef) || visited.has(ref.objectNumber) || depth > DEPTH_MAX)

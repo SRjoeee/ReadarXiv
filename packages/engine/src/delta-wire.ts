@@ -54,7 +54,7 @@ export const WRAP_STATS = Object.freeze([
   'split',
   'groups',
   'labelKept',
-] as const)
+] as const satisfies readonly (keyof WrapStats)[])
 /** a head's counts of our pages' wrap (in `base.stats`) */
 export interface WrapStats {
   wrapped: number

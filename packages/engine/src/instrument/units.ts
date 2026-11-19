@@ -18,7 +18,7 @@ export const SETS_NOTHING = 0
  *  text piece is */
 const engineText = (s: string) => (/^[\t\n\r -~]*$/.test(s) ? s : String.fromCharCode(...new TextEncoder().encode(s)))
 /** the display edges a unit may have (mt.mjs displayEdges), in their order */
-export const EDGES = Object.freeze(['lead', 'trail', 'inner'] as const)
+export const EDGES = Object.freeze(['lead', 'trail', 'inner'] as const satisfies readonly (keyof UnitIn)[])
 /** a structural name's unit (bundleUnitsOf): no page's ink, a word of the target's for the layer */
 export const NAME_KIND = 'name'
 /** a table cell as a unit states it and the bundle copies it: its table, row and column, its span, whether it is a head */

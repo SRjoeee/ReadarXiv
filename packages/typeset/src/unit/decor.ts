@@ -21,6 +21,7 @@
 //   the page's characters) ← Placed.join kept
 // - `shortSkips`: the displays TeX set with its short skip (shortSkipsOf TEX:328) ← F.shortSkips
 // - `lineInfo`: the reading's per-line facts (each rectangle's line index in the file)
+import type { KnownKind } from '@readarxiv/format'
 import { median, type Rect, rectKey } from '../util.ts'
 import type { Block } from './blocks.ts'
 
@@ -32,7 +33,7 @@ export const INK_UNIT_KINDS: readonly string[] = Object.freeze([
   'inkorphan',
   'inknames',
   'inkreferences',
-])
+] satisfies readonly KnownKind[])
 const INK_UNITS = new Set(INK_UNIT_KINDS)
 
 /** a label's character as the rule reads it */

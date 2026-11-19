@@ -137,14 +137,22 @@ const RULE = /^\s*\\rule\b/
 const ZERO =
   /^(?:\\(?:begingroup|endgroup|bgroup|egroup|footnotesize|scriptsize|tiny|small|normalsize|large|Large|LARGE|huge|Huge|selectfont|hline|centering|raggedright|par|bf|it|rm|em|sf|tt|sc|bfseries|itshape|rmfamily|mdseries|upshape|protect|toprule|midrule|bottomrule|smallskip|medskip|bigskip|vfill|hfill|null|arraystretch|clearpage|newpage|thanks|xspace|noalign|cr|strut)\b\*?|\\(?:v|h)space\*?\{[^}]*\}|\\fontsize\{[^}]*\}\{[^}]*\}|\\label\{[^}]*\}|\\c?line\{[^}]*\}|\\(?:v|h)skip\s*[-\d.]+\s*[a-z]*|\\setlength\{[^}]*\}\{[^}]*\}|\\arraystretch\{[^}]*\}|\\renewcommand.*|\\addlinespace(?:\[[^\]]*\])?|\\specialrule\{[^}]*\}\{[^}]*\}\{[^}]*\}|\\cmidrule(?:\[[^\]]*\])?(?:\([^)]*\))?\{[^}]*\}|\\rule(?:\[[^\]]*\])?\{0(?:\.0*)?[a-z]*\}\{[^}]*\}|\\arrayrulecolor\{[^}]*\}|\\includegraphics\*?(?:\[[^\]]*\])?\{(?:[^{}]|\{[^{}]*\})*\})$/
 // (a control space is a backslash and any white space, a tab or a line's end as well as a space: rules/tex-kernel.mjs counts
-// all three, and \<newline> read as 'zero' drew nothing where the original has a space: "vs.\<newline>answer")
+// all three, and \<newline> read as 'zero' drew nothing where the original has a space: "vs.\<newline>answer"). The spaces:
+// TeX's control space and latex.ltx's ~, \,, \;, \:, \\, \quad, \qquad, \enspace, \thinspace; article.cls's \and; the
+// conference styles' author separators \And and \AND (neurips_2026.sty's, iclr2026_conference.sty's, acl.sty's \def)
 const SPACE = /^(?:~|\\,|\\;|\\:|\\\s|\\quad|\\qquad|\\\\(?:\[[^\]]*\])?|\\And|\\and|\\AND|\\enspace|\\thinspace)$/
+/** a citation: latex.ltx's \\cite, natbib.sty's \\citep, \\citet, \\citealp, \\citealt, \\citeauthor, \\citeyear, biblatex's
+ *  \\parencite and \\textcite (its styles' \\DeclareCiteCommand, numeric.cbx's) and \\autocite (biblatex.sty's) */
 export const CITE =
   /^\\(?:cite|citep|citet|citealp|citealt|citeauthor|citeyear|parencite|textcite|autocite)\*?(?:\[[^\]]*\])*\{/
+/** a number TeX sets for a reference: latex.ltx's \\ref, \\pageref and \\footnotemark, amsmath.sty's \\eqref, hyperref.sty's
+ *  \\autoref, cleveref.sty's \\cref and \\Cref */
 export const NUM = /^\\(?:ref|eqref|autoref|cref|Cref|pageref|footnotemark)\*?(?:\[[^\]]*\])?\{?/
 // (step 3: the engine's displayed environments, layout/marks.mjs DISPLAY's: v0 knew six, and read a subequations, an
 // alignat or a flalign display as an inline formula, drawn as its source's or its page's text in the line, too long for
-// any of the unit's lines and clipped: 2307.16209's units 74 and 240)
+// any of the unit's lines and clipped: 2307.16209's units 74 and 240). Their definitions: latex.ltx's equation, eqnarray,
+// displaymath and \[; amsmath.sty's align, alignat, gather, multline, flalign, subequations; breqn.sty's dmath; IEEEtran.cls's
+// IEEEeqnarray
 export const DISPLAY =
   /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
 export const MACROS: Readonly<Record<string, string>> = {
@@ -353,6 +361,10 @@ export function texToText(src: string): string {
   // TeX's spacing inside a source, a space or nothing: a control space, a thin, medium or thick space, a tie, a line
   // break (a source's "D=l^μ∂_μ,\ Δ" drew its "\": 2307.16209)
   s = s.replace(/\\\\(?:\[[^\]]*\])?|\\[ ,;:]|(?<!\\)~/g, ' ').replace(/\\!/g, '')
+  // a command that sets its argument's text: latex.ltx's \texttt, \textsf, \textrm, \textbf, \textit, \emph, \mbox; url.sty's
+  // \url; fontmath.ltx's \mathrm, \mathbf, \mathit, \mathsf, \mathtt, \mathcal and \vec; amsfonts.sty's \mathbb, \mathfrak;
+  // amsbsy.sty's \boldsymbol; bm.sty's \bm; amsopn.sty's \operatorname; amstext.sty's \text; TeX's \hbox; and \ve, a paper's
+  // own (no package's in this sense: its cases the rule ledger's)
   s = s.replace(
     /\\(?:url|texttt|textsf|textrm|textbf|textit|emph|mathrm|mathbf|mathit|mathsf|mathtt|mathcal|mathbb|mathfrak|boldsymbol|bm|ve|vec|operatorname|text|mbox|hbox)\s*\{([^{}]*)\}/g,
     '\u200b$1\u200b',
@@ -389,7 +401,9 @@ export function phClass(src: string) {
   if (CITE.test(src)) return 'cite'
   if (NUM.test(src)) return 'num'
   if (DISPLAY.test(src)) return 'display'
-  // math or a command whose rendering has no letter or digit: drawn from its source, never looked for on the page
+  // math or a command whose rendering has no letter or digit: drawn from its source, never looked for on the page. A letter's
+  // own command stands for the letter: fontmath.ltx's \mathcal, \mathbf, \mathrm and accents \vec, \hat, \tilde, \bar;
+  // amsfonts.sty's \mathbb; amsbsy.sty's \boldsymbol; bm.sty's \bm; \ve, a paper's own (its cases the rule ledger's)
   const bare = src
     .replace(/\\(?:mathcal|mathbf|mathrm|mathbb|ve|vec|boldsymbol|bm|hat|tilde|bar)\b/g, 'x')
     .replace(/\\[A-Za-z]+/g, '')

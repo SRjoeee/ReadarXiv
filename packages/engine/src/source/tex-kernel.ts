@@ -170,7 +170,8 @@ export function selectsArgument(params: number, body: string | null): { of: numb
 
 /** control symbols that are spaces: the tie `~` (an active character, \nobreakspace: a space no line breaks at), the control
  *  space `\ ` (a backslash and any white space: a space, a tab or a line's end), the math spaces `\,` (\thinspace), `\:`
- *  (\medspace), `\;` (\thickspace) and `\!` (\negthinspace, the one of negative width), each a kern or glue in text too */
+ *  (\medspace), `\;` (\thickspace) and `\!` (\negthinspace, the one of negative width), each a kern or glue in text too:
+ *  latex.ltx's active ~ and its \DeclareRobustCommand \, \: \; \!, and TeX's control space */
 export const SPACE_SYMBOLS = Object.freeze(['~', '\\ ', '\\,', '\\:', '\\;', '\\!'])
 /** control words with no argument that are spaces: LaTeX's \enspace, \quad, \qquad, \thinspace and \nobreakspace */
 export const SPACE_WORDS = Object.freeze(['enspace', 'quad', 'qquad', 'thinspace', 'nobreakspace'])

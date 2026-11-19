@@ -27,7 +27,7 @@
 // regular). So a group of a command the style tables name no style of, which TeX set in a face that is not the face around it
 // (read off its glyphs: marks/faces.ts, the caller's `faced`), is a style group too, by the same rules; and the stop TeX set
 // at a group's end that its source does not write (its `stop`, faces.ts) ends its text here as a stop the source wrote would.
-import type { Piece } from '@readarxiv/format'
+import type { KnownSpanKind, Piece } from '@readarxiv/format'
 import { ABBR } from '@readarxiv/text'
 import { INVISIBLE, STRUCTURE } from './tex.ts'
 
@@ -35,7 +35,8 @@ type Span = Extract<Piece, { t: 'span' }>
 type El = Extract<Piece, { t: 'el' }>
 
 /** an open that sets a style and nothing else (mt.mjs STYLE_OPEN: the front end's inline text commands, \textcolor, \mbox, a
- *  bare group) */
+ *  bare group): latex.ltx's \textbf, \textit, \emph, \textsl, \textsc, \underline, \textup, \textrm, \textsf, \textmd,
+ *  \textnormal and \mbox, ulem.sty's \uline, color.sty's \textcolor */
 const STYLE_OPEN =
   /^(?:\{|\\(?:textbf|textit|emph|textsl|textsc|underline|textup|textrm|textsf|textmd|textnormal|uline|mbox)\s*\{|\\textcolor\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}\s*\{)$/
 /** a link's open (mt.mjs LINK): `must` already, a kept group's edges */
@@ -54,7 +55,7 @@ const LABEL_LEAD = /^[:\uff1a]/
 const CAPITAL_LEAD = /^\p{Lu}/u
 /** the faces a bare group's first switch sets, which the instrument states as the group's style and command, no element of its
  *  text (pipeline/instrument.mjs switchesOf): such a group is one a switch opens */
-const FACED = new Set(['italic', 'bold', 'sc'])
+const FACED = new Set<string>(['italic', 'bold', 'sc'] satisfies readonly KnownSpanKind[])
 const SOLID = /\S/
 const SPACE = /\s/
 /** a sentence's end is read in the last characters before a place, its start in the first after it (mt.mjs WINDOW) */

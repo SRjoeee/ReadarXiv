@@ -105,7 +105,7 @@ export type OwnedHow = (typeof OWNED_HOW)[number]
 export const OWNED = 6
 /** the glyph columns ownedOf reads of a page (ink.mjs packGlyphs), and the owned rows after it (marks.mjs): a glyph's
  *  origin, baseline, size and character */
-export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'] as const)
+export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'] as const satisfies readonly (keyof StreamGlyphs)[])
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i])) as Readonly<Record<OwnedHow, number>>
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])(\d+)$/
@@ -117,7 +117,9 @@ export const READ_ALONE = /^(?:ka|fn)\d+$/
 /** where other text begins that no unit's mark opens: the start of a babel name that heads a block of its own ("References",
  *  "Abstract", "Proof", marks.mjs NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own text:
  *  `\[x=\text{\figurename}\,1\]`), its key in any case (a primitive \uppercase's capitals), and a biblatex entry's (marks.mjs
- *  POINTS_TEX `bi<n>`): a piece alone past its unit's end owns nothing past one on its page */
+ *  POINTS_TEX `bi<n>`): a piece alone past its unit's end owns nothing past one on its page. The keys are the caption names'
+ *  (article.cls's \abstractname, \refname, \contentsname, \listfigurename, \listtablename, \appendixname, \indexname;
+ *  book.cls's \bibname; amsthm.sty's \proofname; babel's english.ldf's \prefacename, \glossaryname) */
 const BEGINS =
   /^(?:n\d+\.(?:abstract|ref|bib|contents|listfigure|listtable|appendix|index|proof|preface|glossary)\.s|bi\d+)$/i
 /** a biblatex entry's point, and its bibliography's end: no piece's next mark either, its entry no unit of the source */

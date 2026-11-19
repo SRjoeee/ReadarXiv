@@ -71,6 +71,8 @@ interface AlignOptions {
   work?: number | undefined
 }
 
+/** the hyphens a Latin line may end with: Unicode's Hyphen property (PropList.txt) in the Basic Latin, Latin-1 Supplement
+ *  and General Punctuation blocks, U+002D HYPHEN-MINUS, U+2010 HYPHEN, U+00AD SOFT HYPHEN, U+2011 NON-BREAKING HYPHEN */
 const HYPHENS = new Set(['-', '‐', '­', '‑'])
 const FRAME_START = /^g(\d+)a$/
 const FRAME_END = /^g(\d+)b$/

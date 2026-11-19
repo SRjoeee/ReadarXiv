@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { scanTree } from '../../lab/release-check/census-lib.mjs'
 import { ENGINE_PROFILE } from '../../lab/release-check/census-profile.mjs'
 import { census } from '../../lab/release-check/census.mjs'
-import { citationsOf, exercisedBy, type Ledger, ledgerOf, recordedOf, trackedOf, trackedText } from '../../lab/rules/ledger.mjs'
+import { citationsOf, digestOf, exercisedBy, type Ledger, ledgerOf, recordedOf, trackedOf, trackedText } from '../../lab/rules/ledger.mjs'
 import type { Recording, SiteSums } from '../../lab/rules/merge.mjs'
 import { remapOf } from '../../lab/rules/record.mjs'
 import { reportOf } from '../../lab/rules/report.mjs'
@@ -264,6 +264,68 @@ describe("the census's reading of the ledger", () => {
     const read = await census({ today: null, now: scan(), rulesLedger })
     expect(read.trees.NOW.debt.rules).toMatchObject({ ledger: true, unexplained: 0, magnitudes: 1, notJudged: 0, budgets: 1 })
     expect(read.trees.NOW.debt.rules.list).toEqual([])
+  })
+})
+
+// (the owner's definition of the debt, 2026-11-12: a list with neither a citation nor recorded cases; the census reads both: a
+// list whose every entry the ledger's recording hit is defined by its recorded cases, counted apart from the cited ones)
+describe("a list defined by its recorded cases: every entry hit in the rule ledger's recording", () => {
+  let dir = ''
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'axt-rules-recorded-'))
+    const write = (p: string, t: string) => {
+      mkdirSync(dirname(join(dir, p)), { recursive: true })
+      writeFileSync(join(dir, p), t)
+    }
+    write('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    write(
+      'packages/engine/src/index.ts',
+      [
+        "export const KINDS = new Set(['para', 'head', 'cell'])",
+        "export const MORE = new Set(['one', 'two', 'six'])",
+        "export const CITED = new Set(['tabular', 'longtable', 'tabu']) // tabularx.sty's",
+        "export const main = (f: string) => /^(main|paper|manuscript|arxiv)\\.tex$/i.test(f)",
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: (p: string) => p.startsWith('packages/engine/src/') })]
+  const row = (entries: string[], hits: number[], extra = {}) => ({ kind: 'list', verdict: 'decides', size: entries.length, entriesDigest: digestOf(entries), hits, ...extra })
+  const classes = (c: Awaited<ReturnType<typeof census>>) =>
+    Object.fromEntries(c.trees.NOW.debt.lists.list.map((l: { name: string | null; class: string }) => [l.name, l.class]))
+  it('reads a list every entry of which the recording hit as defined by its recorded cases, apart from the cited ones', async () => {
+    const rulesLedger = {
+      recorded: { commit: 'c0ffee' },
+      rules: {
+        'packages/engine/src/index::(top)::KINDS#1': row(['para', 'head', 'cell'], [5, 1, 2]),
+        'packages/engine/src/index::(top)::MORE#1': row(['one', 'two', 'six'], [4, 0, 1]),
+        // (a pattern judged by its alternatives' words, one more than the census's entries: `arxiv` stands before `\.tex`)
+        'packages/engine/src/index::main::main#1': row(['main', 'paper', 'manuscript'], [9, 2, 1, 3], { judged: 4 }),
+      },
+    }
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    expect(classes(c)).toMatchObject({ KINDS: 'recorded', MORE: 'listed', CITED: 'defined' })
+    expect(c.trees.NOW.debt.lists.list.find((l: { form: string }) => l.form === 'regex')?.class).toBe('recorded')
+    expect(c.trees.NOW.debt.lists.headline).toEqual({ recorded: 2, listed: 1, defined: 1 })
+    expect(c.trees.NOW.debt.rules).toMatchObject({ unexplained: 0 })
+  })
+  it('reads no recorded cases where the row is not the list as it stands, or no hit of an entry is recorded', async () => {
+    const rulesLedger = {
+      recorded: { commit: 'c0ffee' },
+      rules: {
+        // (the list changed since the recording: another entry)
+        'packages/engine/src/index::(top)::KINDS#1': row(['para', 'head', 'list'], [5, 1, 2]),
+        // (no hits kept: a list not judged by entry)
+        'packages/engine/src/index::(top)::MORE#1': { kind: 'list', verdict: 'not judged', size: 3, entriesDigest: digestOf(['one', 'two', 'six']) },
+        // (a pattern whose words the hits do not number)
+        'packages/engine/src/index::main::main#1': row(['main', 'paper', 'manuscript'], [9, 2, 1], { judged: 4 }),
+      },
+    }
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    expect(classes(c)).toMatchObject({ KINDS: 'listed', MORE: 'listed' })
+    expect(c.trees.NOW.debt.lists.headline).toEqual({ listed: 3, defined: 1 })
+    expect((await census({ today: null, now: scan() })).trees.NOW.debt.lists.headline).toEqual({ listed: 3, defined: 1 })
   })
 })
 

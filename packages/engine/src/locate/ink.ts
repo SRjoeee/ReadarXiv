@@ -9,7 +9,7 @@
 // instrument states is source units alone: these are made here, each a unit of today's shape (its id format's unitId over its
 // kind and content, today's id; an ink unit's echo, its alignment as TeX set its paragraph, a figure text's set and direction,
 // a kept block fixed) with its ink on A.
-import { type Piece, type Style, unitId } from '@readarxiv/format'
+import { type KnownKind, type Piece, type Style, unitId } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph, DocPoint } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
@@ -861,7 +861,7 @@ function figureTextOf(
 }
 
 /** the kinds of the ink units the author block takes: today's ledger's notes and orphans, and its names (rule 8) */
-const BLOCK_TAKES = new Set(['inknotes', 'inkorphan', 'inknames'])
+const BLOCK_TAKES = new Set<string>(['inknotes', 'inkorphan', 'inknames'] satisfies readonly KnownKind[])
 /**
  * The ink units of the author block under the title its names, and none elsewhere (the owner's ruling of 2026-11-09: the names
  * toggle governs the block under the title, whole, and nothing else). Inside it, an ink unit all of whose glyphs are the

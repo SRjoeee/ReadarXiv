@@ -169,7 +169,11 @@ export { unicodeOf }
 const START_POINT = /^[ht]?(\d+)s$/
 const END_POINT = /^[ht]?(\d+)e$/
 
-/** a group's style, read off its command: what today's front end leaves to the reader's regex tables (transition) */
+/** a group's style, read off its command: what today's front end leaves to the reader's regex tables (transition). The
+ *  commands: latex.ltx's \textbf, \bfseries, \textit, \itshape, \emph, \em, \textsl, \slshape, \texttt, \ttfamily, \verb,
+ *  \textsc, \scshape, \underline; fontmath.ltx's \mathbf; article.cls's \bf, \it, \sl, \tt; amsbsy.sty's \boldsymbol;
+ *  listings.sty's \lstinline; hyperref.sty's \href, \hyperlink, \hyperref and url.sty's \url; color.sty's \textcolor,
+ *  \color, \colorbox; ulem.sty's \uline */
 const SPAN_STYLES: readonly (readonly [RegExp, string])[] = [
   [/^\\(?:textbf|bfseries|bf|mathbf|boldsymbol)\b/, 'bold'],
   [/^\\(?:textit|itshape|it|emph|em|textsl|slshape|sl)\b/, 'italic'],
@@ -747,7 +751,8 @@ function phClassProven(src: string): { cls: string; unknown?: true } {
 // glue, style commands and links L2:2406-2620, U.breaks' forced breaks TEX:84, U.rename's citation notes L2:1279, U.elements'
 // macros learnt by their source L2:1382), stated as facts so that the part carries them and no rule reads a source; glueOf
 // and the note's reading copied from today's as they are, held equal to them by tests/pdf-reader/instrument-classes.test.ts. A
-// forced break is the source reader's statement on its piece (forcedBreak, §18.75), not read here from its source
+// forced break is the source reader's statement on its piece (forcedBreak, §18.75), not read here from its source. A
+// dimension in TeX's units of measure: pt, bp, mm, cm, in, pc, dd, cc, sp, and the font's em
 const DIMEN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(pt|bp|mm|cm|in|pc|dd|cc|sp|em)$/
 const BP: Readonly<Record<string, number>> = {
   pt: 72 / 72.27,
@@ -983,7 +988,7 @@ export function classesOf(
       const u = unicodeOf(pieces[shown.get(k)!]!.src),
         uc = phClassProven(u),
         copy = copyOf(u) || ''
-      for (const f of ['unknown', 'text', 'sym'] as const) delete x[f]
+      for (const f of ['unknown', 'text', 'sym'] as const satisfies readonly (keyof PieceClass)[]) delete x[f]
       Object.assign(x, { cls: uc.cls, ...(copy ? { copy } : {}), literal: true, url: true })
     }
     out.push([String(k), x])
@@ -1631,6 +1636,8 @@ export function splitInkOf(
   units.forEach((unit, u) => {
     const P = unit?.pieces ?? []
     if (twice.has(u)) return
+    // (a piece's own points by the suffix our marked TeX writes them with: marks/marks.ts's `\axtpma{…a}`, `\axtpmm{…a}` and
+    // `\axthpk{…a}` an opening, `\axtpm{…b}` a closing, `\axttg{…g}` a trailing macro's group's end: OWN_POINT)
     const point = (k: number) => ['a', 'b', 'g'].some((x) => at.has(`p${u}.${k}${x}`) || at.has(`n${u}.${k}${x}`))
     // (glyphs the reading may take: no unit's, or the unit's own text, which own.mjs gives what stands between its points)
     const mine = (p: number, g: number) => {
@@ -2056,7 +2063,7 @@ export function stateDisplays(
     const c = classes?.get(p.id)
     if (!c) continue
     c.cls = 'display'
-    for (const f of ['unknown', 'sym', 'text', 'told'] as const) delete c[f]
+    for (const f of ['unknown', 'sym', 'text', 'told'] as const satisfies readonly (keyof PieceClass)[]) delete c[f]
   }
 }
 

@@ -44,7 +44,7 @@ export const GENERATED_COMMANDS = Object.freeze([
  *  name there */
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
 /** the babel names (the layout rules' labels, by key) a counter type reads in a target that neither cleveref nor ctex
- *  names: a float's, an appendix's */
+ *  names: a float's, an appendix's (article.cls's \figurename, \tablename, \appendixname, as babel's captions) */
 const BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
 /** a number a reference or a head prints: TeX's arabic, an appendix's or a supplement's letter before it, its parts after
  *  stops or dashes, a letter after it, a roman numeral in either case (a front matter's page), a letter alone (an appendix), any of these in brackets (an equation) */

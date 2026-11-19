@@ -1094,7 +1094,7 @@ interface Read {
  *  \roman's or \Roman's numeral, a bracket before it or not, then a full stop or a closing bracket ("1.", "c)", "(b)", "iv)");
  *  or itemize's bullet or dash, as other producers set them too. A list (`listed`) decides it is one */
 const MARKER = /^(?:[\p{Pd}•◦‣⁃∙▪▫●○*·∗]|\(?(?:\p{N}+|\p{L}|[ivxlcdm]+|[IVXLCDM]+)[.)])$/u
-/** a roman numeral as \roman prints one (lower case), and its value */
+/** a roman numeral as \roman prints one (lower case: latex.ltx's \@roman, TeX's \romannumeral), and its value */
 const ROMAN = /^m{0,4}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/
 const ROMAN_DIGIT: Record<string, number> = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 }
 const romanValue = (s: string) =>

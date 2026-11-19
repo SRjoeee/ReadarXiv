@@ -16,14 +16,14 @@
 // index in the member's lines) and x0, from the opening brackets and quotes set against it (Unicode's Ps, Pi: the page's text
 // runs them in one token with the word, today's left start, so that "(See" begins at its "("). One that is not (a word TeX never set, a word a macro's own text stands across) is
 // stated at line -1: a row's start there is found at its sentence's next word placed (lay/lit.ts startsOnA, LATE).
-import type { Piece } from '@readarxiv/format'
+import type { KnownKind, Piece } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
 import type { DocGlyph } from '../doc.ts'
 import { apart, fold, lineChange, lineEnd } from './facts.ts'
 
 /** the unit kinds lit whole, never by sentence (today's view/highlight.mjs NOT_RUNNING): a heading, a table's cell, a figure's
  *  text, a figure's ink text (what lies among their words is their float's or their table's); and a babel name, a word */
-const WHOLE = new Set(['heading', 'cell', 'figure', 'inkfigures', 'name'])
+const WHOLE = new Set<string>(['heading', 'cell', 'figure', 'inkfigures', 'name'] satisfies readonly KnownKind[])
 /** whether a unit of `kind` lights by sentence: the prepare marks it (Unit.sentences), so that a translator cuts it, and places
  *  its words (Placed.words) */
 export const bySentence = (kind: string, figure = false): boolean => !figure && !WHOLE.has(kind)

@@ -23,14 +23,23 @@
 //   its own (its own id and wire: nothing is keyed by the toggle); lit by sentence where its unit is, and a bibliography's entry
 //   where its unit is one (Unit.entry: a wire cuts it at its blocks as it cuts the entry). An original module (no port
 //   statement).
-import { type Named, type Person, type Piece, type Split, toggleKind, type Unit, unitId } from '@readarxiv/format'
+import {
+  type KnownKind,
+  type Named,
+  type Person,
+  type Piece,
+  type Split,
+  toggleKind,
+  type Unit,
+  unitId,
+} from '@readarxiv/format'
 import type { PieceClass } from '../instrument.ts'
 
 /** the kind of a unit's form with the block's names it holds as elements, and the kind of each such element */
 export const NAMED_KIND = 'named'
 export const PERSON_KIND = 'person'
 /** the member kinds of the author block under the title: the names toggle's (reader classes.ts, author-block.ts) */
-const BLOCK_KINDS: ReadonlySet<string> = new Set(['author', 'affiliation', 'inknames'])
+const BLOCK_KINDS: ReadonlySet<string> = new Set(['author', 'affiliation', 'inknames'] satisfies readonly KnownKind[])
 
 /** what an element is to a stretch: a cut, a space (a tie: TeX's interword space, no line break at it), or nothing */
 function roleOf(p: Piece, c: PieceClass | undefined): 'cut' | 'space' | 'none' {

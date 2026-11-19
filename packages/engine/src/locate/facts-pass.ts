@@ -2,7 +2,7 @@
 // state, fill, the original's mark after a display or on a held line, a forced break's line and room, a paragraph TeX opened
 // at an element; its label's parts; the class's tail; its lines' PINNED and SHORTSKIP flags; the room beside its lines and a
 // cell's band; its alignment where TeX did not state it. Each fact read rather than stated by TeX is named in `read`.
-import { type El, LINE_FLAG, type Line, type Piece } from '@readarxiv/format'
+import { type El, type KnownElClass, LINE_FLAG, type Line, type Piece } from '@readarxiv/format'
 import type { Mapping } from '../align/align.ts'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { isImage, isPath } from '../doc.ts'
@@ -41,7 +41,15 @@ import { spellOf } from '../own/stream.ts'
  *  read only where the marked compile set no point for the break */
 const SHORT = 0.5
 /** the element classes that set ink of their own (today's VISIBLE, tex.mjs:18): a piece of another class sets none */
-const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
+const VISIBLE = new Set<string>([
+  'cite',
+  'num',
+  'other',
+  'macro',
+  'umacro',
+  'display',
+  'symbol',
+] satisfies readonly KnownElClass[])
 /** the characters of a text an opening point is found by (today's stream.mjs WANT) */
 const WANT = 8
 /** the ink units of the page's head and foot (made on A, today's ink-units.mjs INK_KIND heads and notes): their lines TeX sets

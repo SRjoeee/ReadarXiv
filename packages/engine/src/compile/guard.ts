@@ -147,6 +147,8 @@ export function unbalancedUnits(
   let other = false
   for (const [path, bytes] of files) {
     const own = paper.fsys.read(path)
+    // (a file TeX reads as source: LaTeX's .tex (\IfFileExists's \@filef@und), \@clsextension and \@pkgextension (cls, sty)
+    // and its own .ltx (fonttext.ltx, hyphen.ltx), latex.ltx's)
     if (!own || !/\.(?:tex|ltx|sty|cls)$/i.test(path)) continue
     const written = latin1(bytes),
       from = path === project.main ? skip : 0
@@ -159,7 +161,9 @@ export function unbalancedUnits(
 }
 
 /** our marks that a file can hold: MARK_DEF's unit marks and LAYOUT_TEX's piece, heading and colour marks, each with its
- *  argument (a babel name's, \axtnma and \axtnmb, written through by design, is not one: NAME_MARK_FILE) */
+ *  argument (a babel name's, \axtnma and \axtnmb, written through by design, is not one: NAME_MARK_FILE). Each is a macro our
+ *  TeX defines: \axtmark and \axtend MARK_DEF's (source/latex-front.ts), \axtlines LINES_TEX's (compile/tex.ts), \axtpma,
+ *  \axtpmm, \axtpm, \axthmark and \axtcolour LAYOUT_TEX's (marks/marks.ts): held to them by tests/mirrors.test.ts */
 const MARK_CS: ReadonlySet<string> = new Set([
   'axtmark',
   'axtend',
@@ -516,7 +520,8 @@ export function firstError(log: string | null | undefined): string | null {
 }
 
 /** the marks of ours a log's context may show, taken out before an error is compared with the unmarked original's: each
- *  mark with its argument, and the \leavevmode a unit's start mark comes with */
+ *  mark with its argument, and the \leavevmode a unit's start mark comes with; the macros our TeX defines, as MARK_CS's (held to
+ *  them by tests/mirrors.test.ts) */
 const OUR_MARKS =
   /\\leavevmode\s*(?=\\axtmark\b)|\\(?:axtmark|axtend|axtlines|axtpma|axtpmm|axtpm|axthmark|axtcolour)\s*\{[^{}]*\}/g
 const CONTEXT = 12

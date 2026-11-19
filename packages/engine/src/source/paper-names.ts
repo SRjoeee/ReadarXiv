@@ -103,6 +103,9 @@ function namesOf(texts: Iterable<string>) {
   for (const raw of texts) {
     const s = uncommented(raw)
     if (CALLS.test(s)) calls = true
+    // (the definers of a theorem-like environment's or a counter type's name: latex.ltx's \newtheorem, llncs.cls's
+    // \spnewtheorem, mdframed.sty's \newmdtheoremenv, elsarticle.cls's \newproof, thmtools' \declaretheorem (thm-kv.sty),
+    // cleveref.sty's \crefname and \Crefname, hyperref.sty's \<type>autorefname)
     for (const m of s.matchAll(
       /\\(newtheorem\*?|spnewtheorem\*?|newmdtheoremenv|newproof|declaretheorem|crefname|Crefname|renewcommand\*?\s*\{?\\[A-Za-z]+autorefname\}?|def\s*\\[A-Za-z]+autorefname)(?![A-Za-z@])/g,
     )) {
