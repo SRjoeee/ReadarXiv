@@ -87,9 +87,9 @@ export type CellTie = { rule: 'cells'; cells: readonly number[]; spanning?: read
  * (its fit's states from that scale down, P.capScale) and the page laid again (the checkpoint's free-9: a paragraph's first
  * part at its size, its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even). By scale,
  * not by points: a run-in head TeX set smaller than its paragraph keeps the original's ratio to it, and neither shrinks the other
- * for being of another size (the coordinator's decision under that ruling, 2026-11-08: 2610.30034v1 p2's head at 8.97 capped its
- * paragraph at 8.97, 0.9 of its 9.96). The least a member is capped at is its tie-mates' begun on its own first page or before
- * (tieCaps, §18.64): a later page's pass never reaches back over the page break
+ * for being of another size (by points, 2610.30034v1 p2's head at 8.97 capped its paragraph at 8.97, 0.9 of its 9.96). The
+ * least a member is capped at is its tie-mates' begun on its own first page or before (tieCaps, §18.64): a later page's
+ * pass never reaches back over the page break
  */
 export function layPagePrepared(
   page: number,

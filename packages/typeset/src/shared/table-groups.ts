@@ -1,7 +1,6 @@
-// S.table.groups (the owner's ruling of 2026-11-08: a table's cells drawn by group, the way the production site draws them): the
-// cells a reader compares with one another, held together where the geometry needs it. Ported from engine 065c1d973
-// translate/groups.mjs (groupOf), over TeX's grid as the part states it (Placed.cell) in place of today's rows: the groups are the
-// entry's, before anything is set. A cell that cannot be drawn is the original's by itself, as a paragraph is (the coordinator's
+// S.table.groups (a table's cells drawn by group): the cells a reader compares with one another, held together where the
+// geometry needs it. The groups are read over TeX's grid as the part states it (Placed.cell), and are the entry's, before
+// anything is set. A cell that cannot be drawn is the original's by itself, as a paragraph is (the coordinator's
 // ruling (c)); its group is held where that cell spans (its box the others' too: lay/entry.ts holdsTable before the lay,
 // lay/page.ts settleTies after it). A group on two pages is laid like any other, each cell by itself (PDF-READER §18.72).
 //

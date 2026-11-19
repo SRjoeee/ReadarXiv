@@ -32,7 +32,7 @@ export type FlowMember = Prepared & {
     x: number
     /** where the tokens are the member's own (the adapter's, lay/read.ts): its label's crop, set on the row's baseline as its first
      *  line's start where its label on the row goes with it (RUN:2215-2224), and its first line's head edge then (the label
-     *  drawn: U.params' halfLead.head). Today's tokens handed in hold the crop already */
+     *  drawn: U.params' halfLead.head). Recorded tokens handed in hold the crop already */
     label?: { crop: (baseline: number) => Prepared['tokens'][number]; head: boolean }
   }
   /** the line of TeX's it shares whole with the members beside it, where TeX set that line centred or flush right */
@@ -149,8 +149,8 @@ function layLine(
   // line-start marks), IJCAI's \and's comma: TeX set it after the name before, the line's break after it. It goes at the end of
   // the member before, glued to its last token (its crop from that one's ink end on A to its own, TeX's separation before it
   // held), so that the breaker keeps it with the group before it, as it keeps such a mark inside one text: where the line no
-  // longer holds that group with it, both go on to the next, and no line opens with the mark. 2611.00342v1 on staging (round 8
-  // B3): the tenth name's comma opened the paragraph's second line, the ninth ending the first at the room's end. The member is
+  // longer holds that group with it, both go on to the next, and no line opens with the mark. 2611.00342v1 on staging: the
+  // tenth name's comma opened the paragraph's second line, the ninth ending the first at the room's end. The member is
   // then laid from TeX's separation after the mark, its own label no longer before it. The crop names its owner (`of`): the
   // label stays the owner's, its group off on its page as where the owner draws it (entry.ts), so the comma is drawn once)
   const marks = row.map((m, k) => {
@@ -345,10 +345,9 @@ function layLine(
   return run.o
 }
 
-/** F9 S.relay (settleLeadOf RUN:2550-2558, relay RUN:2565): where the member before member j was laid over j's row and j is
- *  not laid from its end, the one before is laid again in its row alone, which settles in turn the pair before it (today's
- *  relay ends a lay, and the lay's end settles its own lead: a row three members share comes back whole), and j again from
- *  where it now ends, alone too */
+/** F9 S.relay: where the member before member j was laid over j's row and j is not laid from its end, the one before is
+ *  laid again in its row alone, which settles in turn the pair before it (the relay ends a lay, and the lay's end settles
+ *  its own lead: a row three members share comes back whole), and j again from where it now ends, alone too */
 export function settleBack(
   out: FlowLay[],
   members: readonly FlowMember[],
@@ -371,6 +370,6 @@ export function settleBack(
   if (!r.lead) return
   out[j - 1] = layOne(members[j - 1]!, out[j - 2], true)
   settleBack(out, members, j - 1, layOne)
-  // (laid again as today's relay lays a unit: never over the row after it, noOver)
+  // (laid again as the relay lays a unit: never over the row after it, noOver)
   if (r.follower) out[j] = layOne(members[j]!, out[j - 1], true)
 }

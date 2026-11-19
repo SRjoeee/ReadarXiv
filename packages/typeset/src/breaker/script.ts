@@ -2,7 +2,7 @@
 // none beside, the line-break marks (UAX 14's no-start class and the rule set's lists). Ported from engine 065c1d973:
 // rules/script.mjs (CJK_BLOCKS, CJK, cjkClassWith, SPACELESS), layer-proto/no-start.mjs (NO_START, noStart, keptPair),
 // layer-proto/layer1.mjs:197-219 (lastOf, kinsokuOf), layer-proto/layer2.mjs:2096-2104 (PUNCT_CLOSE, PUNCT_OPEN, cjkClassRe).
-// A mark's blank half is its face's measure (markOf, lane cjk-punct), no longer today's class by character. A character is a
+// A mark's blank half is its face's measure (markOf, docs/PDF-READER.md §18.48), not a class by character. A character is a
 // grapheme cluster (graphemesOf, clustersOf, charsOf; docs/PDF-READER.md §18.93), its class its first code point's (cjkLeadRe).
 import { MARK_INK } from '../data/marks.ts'
 
@@ -183,8 +183,8 @@ const lastOf = (s: string) => {
   return c >= 0xdc00 && c <= 0xdfff && hi >= 0xd800 && hi <= 0xdbff ? s.codePointAt(n - 2)! : c
 }
 type Kinsoku = { starts(s: string): boolean; ends(s: string): boolean }
-/** the rule set's line-break marks (layer1.mjs kinsokuOf): whether a token begins with a mark no line starts with, or ends with
- *  one no line ends with. Today's caches it by its lists; made again each call here, the typesetter holding no module state */
+/** the rule set's line-break marks: whether a token begins with a mark no line starts with, or ends with one no line ends
+ *  with; made again each call, the typesetter holding no module state */
 export function kinsokuOf(noStartList: string, noEndList: string): Kinsoku {
   const start = new Set([...noStartList].map((ch) => ch.codePointAt(0))),
     end = new Set([...noEndList].map((ch) => ch.codePointAt(0)))

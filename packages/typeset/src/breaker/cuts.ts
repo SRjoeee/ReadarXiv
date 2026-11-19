@@ -1,6 +1,5 @@
-// B.cuts (design-b §1.5, T23): a unit over its frame breaks cut at its frames' shares (the ruling of 2026-10-30: frames fill
-// as TeX does), and the page-break tokens set before the cuts. Today's code (layer2.mjs L2:3881-3974, textless
-// L2:4161-4162), moved by lab/typeset/move-fit.mjs.
+// B.cuts (design-b §1.5, T23): a unit over its frame breaks cut at its frames' shares (docs/PDF-READER.md §18.9: frames
+// fill as TeX does), and the page-break tokens set before the cuts.
 import { kinsokuOf, noStart } from './script.ts'
 import { originalLines } from '../unit/decor.ts'
 import type { FitBlock, FitParams, LaidLine, Tokens } from '../fit/types.ts'
@@ -25,11 +24,11 @@ const textless = (t: Token): boolean =>
  * k = n × the source's lines before that frame over all of them (half up: the earlier frame the fuller, as TeX fills a
  * column), one line at least on each side. Only a line that opens at a token's start is a place to cut: one a long token's
  * cut opens (a URL cut by its characters, a hyphenated word's tail) begins inside the token the line before ends in. No
- * sentence, no word of the alignment (the owner, 2026-10-30: blocks keep their place, sentences need not, the frame changes at
+ * sentence, no word of the alignment (§18.9: blocks keep their place, sentences need not, the frame changes at
  * a natural line end). A run laid in one line is cut in it, at the share of its tokens, the one short line a break leaves.
  * Wherever the fit sets that line: in an earlier frame (its frame before holds more than its share) every lay keeps the cut;
  * in that one or later (its frame before holds less, at the fit's state) the cut is the share's (`share`), which a lay keeps
- * only at a state that holds the share (lab option (i)'s frame share, 2026-11-09: 2610.22065v1 p5's column a line short of
+ * only at a state that holds the share (§18.11's frame share: 2610.22065v1 p5's column a line short of
  * TeX's where the fit set seven of ten there and the share is eight; the page fill holds it where that costs no frame a
  * leading under its page's band, fillPage). Returns [{ page, frame, at, share? }], `frame` the unit's block the frame begins
  * with, `at` the token its text begins with, rising

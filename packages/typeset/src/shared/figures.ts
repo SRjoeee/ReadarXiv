@@ -4,11 +4,11 @@
 // each translation's line by its ink as the breaker sets every line (the blank halves of the marks at its edges, blanksOf);
 // else left the original's, why told: `no row`, `kept`, `untranslated`, `same` as its source, `unhidden` where the document
 // holds no group of it, a face's refusal (`served`), `unfit` (its width needs more than the floor). Width is the fit's only test
-// (figure-fit.ts, the owner's rule of 2026-11-13): a translation's height is not measured, nor what another text of its figure
+// (figure-fit.ts): a translation's height is not measured, nor what another text of its figure
 // needs (each at its own size, docs/PDF-READER.md §19.12). Ported from engine 065c1d973 run.mjs
 // paintFigures RUN:1441-1496 without its paint (the hidden box, the SVG, the text layer: the reader's and D.*'s), layer2.mjs
 // figureRuns, figureRunsWidth L2:4824-4836 and fonts.mjs classifyFont's family, weight and slant (fonts.mjs:42-52). A face not
-// loaded yet is waited for (B.cover: `waiting`, its faces in `wait`), where today's run awaited it.
+// loaded yet is waited for (B.cover: `waiting`, its faces in `wait`): no width is taken before its face is there.
 import { readFontName } from '@readarxiv/text'
 import { hangOf, leadOf } from '../breaker/break.ts'
 import { cover } from '../breaker/cover.ts'
@@ -36,7 +36,7 @@ export type FigureRow = FitFigure & {
   font: string
   /** its family, weight and slant where they are stated (a part's Style), else read off its font's name (`font`); its small
    *  capitals and its design where its style reads them (lay/read.ts tstyleOf: a face of small capitals, the design of its
-   *  family), so that its runs are drawn in its face as a body unit's are (Codex on #634, ec222ba69) */
+   *  family), so that its runs are drawn in its face as a body unit's are */
   cls?: {
     fam: 'serif' | 'sans' | 'mono' | 'math'
     bold: boolean
@@ -155,7 +155,7 @@ const figureRunsWidth = (runs: readonly FigureRun[], m: FitMeasure): number =>
 /** the blank halves at the edges of a figure text's line, before its ink and after it, em of its size: its line set as the
  *  breaker sets every line (B.break leadOf, hangOf) at its target's first state (firstCompress), its first and last characters
  *  marks as the tokens class them (script.ts markOf: a mark's blank half as its run's face draws it; none where its ink crosses
- *  its em's middle, nor for a curly quote in an alphabet's Latin face, Codex on #634) */
+ *  its em's middle, nor for a curly quote in an alphabet's Latin face) */
 function blanksOf(runs: readonly FigureRun[], rules: FiguresInput['rules']): [number, number] {
   const compress = firstCompress(rules)
   const edge = (r: FigureRun | undefined, ch: string | undefined) => ({

@@ -2,8 +2,8 @@
 // the unit centred as its cell or the file has it, and a label kept as the original's ink that the unit's text group hides
 // (`labelHides`), whose first rectangle then starts at the label where the unit is centred by the file's flag (E8, E9).
 // After: TeX's flush alignment kept (E12), a hidden label on a centred or flush-right first line carried with it (E9, its
-// crop token T30), a single line widened to its column's edge or the next glyph on its baseline (E13; a cell's never, today's
-// RUN:2116: its widening is X.further's), a line that stops
+// crop token T30), a single line widened to its column's edge or the next glyph on its baseline (E13; a cell's never: its
+// widening is X.further's), a line that stops
 // where a page's character stays on the shared row after it (E14), the short skips over a display (E15), the first line
 // indented after a label kept as the original's (E16), a heading and a numbered heading (E17). Ported from engine
 // 065c1d973: RUN:2101-2137, widen RUN:1576-1587 (its room: `Side`), keptAfter's use RUN:2118-2121, shortSkipsTo L2:3048-3056,
@@ -91,7 +91,7 @@ export function decorBefore(i: DecorBeforeInput): DecorBefore {
 
 /** a single line run on to its column's edge or the next glyph on its baseline; a centred one as far to either side
  *  (RUN:1576 widen, its room stated: `side`); one set flush right back to its left, its end kept (TeX's \hfil before it: the
- *  room a flush-right line has is before it; the owner's ruling of 2026-11-08, a page number keeps its size and its end) */
+ *  room a flush-right line has is before it; a page number keeps its size and its end) */
 export function widen(b: DecorBlock, side: Side | undefined): void {
   if (b.rects.length !== 1 || !side) return
   const r = b.rects[0]!
@@ -149,19 +149,20 @@ type DecorAfterInput = {
 }
 type DecorAfter = { carried: boolean; heading: boolean; numbered: boolean; indented: boolean }
 
-/** U.decor after U.blocks: each block's decorations set on it, in today's order (RUN:2112-2137) */
+/** U.decor after U.blocks: each block's decorations set on it, in an order where each reads what the steps before it set (the
+ *  flush before the carried label and the widening, which read it) */
 export function decorAfter(blocks: DecorBlock[], i: DecorAfterInput): DecorAfter {
-  // (a cell's too, which today's never kept (RUN:2112: no fact told a cell's then): its flush is the class LaTeX built its
-  // column's template from, TeX's own (docs/PDF-READER.md §18.12), so an r column's translation ends where its original ends)
+  // (a cell's too: its flush is the class LaTeX built its column's template from, TeX's own (docs/PDF-READER.md §18.12), so an
+  // r column's translation ends where its original ends)
   if (i.luFlush) for (const b of blocks) if (!b.centred) b.flush = i.luFlush
   const b0 = blocks[0]
   const carried = i.labelHides && !!b0 && b0.page === i.firstPage && (b0.centred || b0.flush === 'right')
   const sideOf = (b: DecorBlock, k: number) => (typeof i.side === 'function' ? i.side(b, k) : i.side.get(b))
-  // (but a cell's, as today's widened none (RUN:2116): a single-line cell whose column's box the part states is set in that box
-  // (the adapter's columnRoomOf; the owner's decision, PDF-READER §18.13); any other in its own ink's width at its own size, shrunk
-  // there to its fit's floor, and run on over the paper beside it only where it is clipped there, X.further's 'widen' (the
-  // adapter's `wide`), as today. Widened at once to its rules, a column's every cell was set at the original's size, the column
-  // crowded (2608.25210v2-zh p14), and a cell left room for the page's fill to spread (2610.20967v1-zh p4))
+  // (every block widened but a cell's: a single-line cell whose column's box the part states is set in that box (the adapter's
+  // columnRoomOf; PDF-READER §18.13); any other in its own ink's width at its own size, shrunk there to its fit's floor, and
+  // run on over the paper beside it only where it is clipped there, X.further's 'widen' (the adapter's `wide`). Widened at
+  // once to its rules, a column's every cell was set at the original's size, the column crowded (2608.25210v2-zh p14), and a
+  // cell left room for the page's fill to spread (2610.20967v1-zh p4))
   blocks.forEach((b, k) => {
     if (i.kind !== 'cell') widen(b, sideOf(b, k))
   })

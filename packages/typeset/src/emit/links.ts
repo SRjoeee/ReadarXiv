@@ -3,8 +3,8 @@
 // geometry, a citation's key or a destination's name, a url, the order of a kind, the whole text), placeUnit L485-497 with
 // placeText, placeCrop, placePair, keptOf, rangeRecord, spanOf, tooDeep, normed (a matched annotation's record over what is
 // drawn of its piece: the drawn characters of a rendering, a crop's own map, a pair's tokens), and the annotations' kinds and
-// urls (kindOfAnnot, urlOf). Lane L1 states each annotation's owner (Part.links' `owner`, today's
-// ownedIn run once by the prepare): a member's candidates are the annotations it owns, matched among its pieces as today.
+// urls (kindOfAnnot, urlOf). The prepare states each annotation's owner (Part.links' `owner`): a member's candidates are the
+// annotations it owns, matched among its pieces.
 // A link no member's drawing takes stays at A's boxes (design-a §1.2: Page.links), the reader's.
 import type { LaidLine } from '../fit/types.ts'
 import type { LineRun, TextRun } from './display.ts'
@@ -16,7 +16,7 @@ const DRIFT_BOUND = 0.06
 
 /** an annotation as the match reads it: its target, its glyph points under it (g2), its boxes, its text, its border; `at` its
  *  place in its member's annotations' order on A where the caller states it (lay/links.ts inReading: the PDF's annotation
- *  array need not be in TeX's order); where it does not, its order is its index `i` on its page (today's: page, then PDF
+ *  array need not be in TeX's order); where it does not, its order is its index `i` on its page (by page, then the PDF's
  *  order) */
 export type Annot = {
   i: number

@@ -1,12 +1,10 @@
 // U.breaks (design-b §1.5): where the unit's forced breaks and the paragraphs TeX set of a group end its lines, paired with
 // the row in the translation's order (T19, T20), and the maps the blocks and the tokens read of them, with the kept lines in
 // runs (T21's inputs: C12, C14-C18). Ported from engine 065c1d973: finishUnit's maps L2:1484-1525, break-room.mjs's pitch.
-// The port of today's re-derivation of the breaks from the page (forcedBreaks TEX:120-199, paragraphBreaks TEX:222-255, the
-// measure of a line TEX:515-531), which nothing called once TeX's points were stated, went with its replay.
 // What the part states is paired by `statedBreaks` (the layPage's reading): each break's line and room TeX's (El.ends), each
 // paragraph's line TeX's paragraph point (El.opens, SpanAt.opens, and a paragraph's first word, Placed.paras: `paraPieces` cuts
 // the row at the sentence start paired with it, else directly after the element it stands after, Placed.parasAfter); the
-// translation's order decides the rest, as today's.
+// translation's order decides the rest.
 import type { El, KnownElClass, Placed, SpanAt } from '@readarxiv/format'
 import { firstWordAt, projectionOf, type Sentences, startsInProjection, worded } from '../lay/lit.ts'
 import { type Rect, rectKey } from '../util.ts'
@@ -26,7 +24,7 @@ export type LayoutUnit = {
 /** the face TeX set a group's text in where its command names no style the rules know (the part's SpanAt.style: role, weight,
  *  slant) */
 type OpenFace = { role: 'serif' | 'sans' | 'mono'; bold?: 1 | undefined; slant?: 1 | 2 | undefined }
-/** a piece of a row as today's unit holds it (rows.mjs unitOf: the translation's pieces in its order, `k` the source's; a
+/** a piece of a row as the unit holds it (the translation's pieces in its order, `k` the source's; a
  *  group's open with the face TeX set it in, where its part states one, and `runin` where its part states the group a title set
  *  in the line, SpanAt.runin); `par` a piece of the typesetter's own, never in a Row
  *  nor on a wire: a paragraph TeX opened at its first word (Placed.paras), cut into the row where a sentence start pairs with
@@ -181,22 +179,22 @@ type StatedFacts = {
 
 /**
  * U.breaks' pairing over what TeX states (design-a §1.1: El.ends, El.opens, SpanAt.opens), in the translation's order (T19,
- * T20), as today's forcedBreaks and paragraphBreaks pair the lines they read (TEX:120-199, 222-255):
+ * T20):
  * - forced breaks: the row's breaks (the elements the part states forced breaks, El.brk: `\\`, \newline, LaTeX's \break, a grid
  *   cell's row-ending macro, as the engine reads them; no source is read) in groups (one after the other, nothing drawn between
  *   them), a group between two texts a break (one the translation sets at its start or its end, or next to a display, none);
  *   its line the one TeX ended at its first break (El.ends), the text after it on the next; its room TeX's (El.ends) where the
  *   next line is in the frame (the run of lines on one page and column) and the frame's pitch is known (the median of its own
- *   consecutive lines' gaps, a break's line and a kept line aside), else none (`room` null: the next line opens a block of its own, as today's break that opens
- *   another frame or whose frame has no pitch). Where TeX's points state each break's line, the guards of today's
- *   re-derivation are void (its SHORT test, the count of short lines, one column a page). Where the lines are read by their
- *   short ends (`read`: the marked compile set no point for them, the engine paired them in the source's order), today's
- *   check of that pairing holds: every element of the row with ink on the unit's lines stands on a line between the breaks
- *   its place in the row says, else no forced break is taken (TEX:161-181);
+ *   consecutive lines' gaps, a break's line and a kept line aside), else none (`room` null, a break that opens another frame
+ *   or whose frame has no pitch: the next line opens a block of its own). Where TeX's points state each break's line, nothing
+ *   is guessed from the page (no test of a short line, no count of short lines, no one column a page). Where the lines are
+ *   read by their short ends (`read`: the marked compile set no point for them, the engine paired them in the source's order),
+ *   that pairing is checked: every element of the row with ink on the unit's lines stands on a line between the breaks its
+ *   place in the row says, else no forced break is taken;
  * - paragraphs: a group's open piece or an element at which TeX opened a paragraph (SpanAt.opens, El.opens: its first line),
  *   where the row holds it between two texts of its own (T20) and that line and the one before are the unit's own text lines,
- *   no forced break's next line: the text from it starts on that line in a block of its own (`paragraph`). Today's SHORT and
- *   justified-unit tests read the paragraph's end off the page, which TeX's point states
+ *   no forced break's next line: the text from it starts on that line in a block of its own (`paragraph`). No test reads the
+ *   paragraph's end off the page (a short line, a justified unit): TeX's point states it
  */
 export function statedBreaks(
   f: StatedFacts,
@@ -315,7 +313,7 @@ export function factsOf(m: Placed): StatedFacts {
   }
 }
 
-/** each piece's class as the reading reads it (lay/read.ts readingsOf; today's phClass2): an element's El.kind, 'symbol' where
+/** each piece's class as the reading reads it (lay/read.ts readingsOf): an element's El.kind, 'symbol' where
  *  it states a drawn symbol, 'zero' where the part states nothing of it; null for every other piece */
 export const clsOf = (pieces: readonly V0Piece[], els: ReadonlyMap<string, El>): (string | null)[] =>
   pieces.map((p) => {

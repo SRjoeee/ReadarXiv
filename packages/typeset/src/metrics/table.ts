@@ -1,8 +1,8 @@
 // The table adapter of Metrics (design-b §4 `recordedMetrics`, design-a §4 `tableMetrics`): every measure answered from a
-// table of measures made at 100 px, as today's canvas made them (layer2.mjs w100, ink100, inkRight100 measure each run at
-// 100 px and scale). The tap writes one such table per (paper, target): every first measure of a (canvas font, text) of
-// today's run (the tap's spec §5, `metrics/<pair>.metrics.json.gz`), so that a port measures today's exact widths in
-// Node. A measure the table lacks is a failure of the replay, never a guess: it throws MissingMeasure.
+// table of measures made at 100 px, as a canvas makes them (each run measured at 100 px and scaled). The tap writes one
+// such table per (paper, target): every first measure of a (canvas font, text) of the run it records (the tap's spec §5,
+// `metrics/<pair>.metrics.json.gz`), so that a replay in Node measures the recorded run's exact widths. A measure the
+// table lacks is a failure of the replay, never a guess: it throws MissingMeasure.
 import type { FaceId, Metrics } from '../types.ts'
 
 /** a table of measures at 100 px: [face, text, width, ink ascent, ink descent], and [face, text, ink right] */
@@ -25,8 +25,8 @@ export class MissingMeasure extends Error {
   }
 }
 
-/** a measure at 100 px at another size: itself at 100 (so that a port asking at 100 reads the table's own number, as
- *  today's code reads w100), else scaled as a canvas scales a font's advance */
+/** a measure at 100 px at another size: itself at 100 (so that a measure asked at 100 reads the table's own number,
+ *  unscaled), else scaled as a canvas scales a font's advance */
 const at = (v100: number, size: number) => (size === 100 ? v100 : (v100 * size) / 100)
 
 /**

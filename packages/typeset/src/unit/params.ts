@@ -4,7 +4,7 @@
 // \lineskip, its edges (whether its first and last lines stand alone on their baselines, the room under its last), whether a
 // heading stands on its original's last lines, and a CJK cell's bands between the rules near its lines (cellBands) with the
 // size every band holds. Ported from engine 065c1d973: RUN:2088 (s), unitSizeOf L2:796-803 (CJK_CAPS_SIZE
-// L2:792, the ruling of 2026-10-24), RUN:2244-2251 (P, clear, capScale, fillable), leadOf L2:3073-3079 (SOLID L2:3065),
+// L2:792, docs/PDF-READER.md §18.1), RUN:2244-2251 (P, clear, capScale, fillable), leadOf L2:3073-3079 (SOLID L2:3065),
 // cjkAdvance RUN:1822-1826, edgesOf's use of the label RUN:1670, clearanceOf RUN:1675, cellBands L2:352-380.
 //
 // Its inputs, and the field each comes from once lane L1 states it:
@@ -19,12 +19,12 @@ import { median, type Rect } from '../util.ts'
 import { baseOf, type TokensInput, type TStyle } from '../breaker/tokens.ts'
 import type { Block } from './blocks.ts'
 
-/** a CJK target's small capitals at this share of the original's size (L2:792 CJK_CAPS_SIZE, the ruling of 2026-10-24) */
+/** a CJK target's small capitals at this share of the original's size (a CJK target has no case: docs/PDF-READER.md §18.1) */
 export const CJK_CAPS_SIZE = 1
 /** a solid-set original's pitch, × its size (L2:3065 SOLID) */
 const SOLID = 1.25
-/** the units of the page's head and foot (today's ink units of the heads and the notes): one of a single line, a running head,
- *  a page number, keeps the original's size (the owner's ruling of 2026-11-08): its fit's floor is its size */
+/** the units of the page's head and foot (the ink units of the heads and the notes): one of a single line, a running head,
+ *  a page number, keeps the original's size: its fit's floor is its size */
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
 /**
@@ -33,12 +33,12 @@ const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
  * rhythm binds it: the page fill never spreads it (lay/page.ts, shared/fill-pass.ts), and its fit takes the leading before the
  * room down to the least (floatOrder). A class of the unit's own kind, read where a unit's kind is read: the rule file is by
  * script. A note is none: a run of sibling blocks in a column (body paragraphs, notes, list items, references) shares its page's
- * rhythm, each filling its frame within the page's band (the coordinator's ruling of 2026-11-17 on the owner's choice)
+ * rhythm, each filling its frame within the page's band (docs/PDF-READER.md §18.90)
  */
 export const floatMember = (kind: string): boolean => kind === 'caption'
 /**
- * The order of the fit's knobs for a float's member (docs/PDF-READER.md §18.90; the owner's review of 2026-11-13: the
- * leading gives way before the separation does, for the class, and the size last): the script's order, its room knob two knobs,
+ * The order of the fit's knobs for a float's member (docs/PDF-READER.md §18.90: the leading gives way before the
+ * separation does, for the class, and the size last): the script's order, its room knob two knobs,
  * the gap's free part (`free`: the shrink TeX's glue states under it, Room.gap) where the script's order has the room, the rest
  * of the room down to the least (`borrow`) directly before the size (`shrink`), at the end of an order with no size step. The
  * class's order is by kind and the rule file's by script, so it is stated here, once, from the script's: a script whose order

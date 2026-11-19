@@ -2,8 +2,8 @@
 // with its box and its place in the translation, from which both panes light a sentence (the row's sentences: its starts in
 // that text). Ported from engine 065c1d973 words.mjs addUnitWords L212-267 (with pushBox, onDisplay, addDisplayWords L272-296),
 // tokenBand L159-169, and layer2.mjs keptLines L4718-4747 (the original's lines a member keeps in place, set in its text's
-// order). The table's columns are float32, as today's: a box is compared as today's reads it. Grouping the tokens into each
-// sentence's runs and blocks is the reader's highlight (today's view/highlight.mjs, lane L4's), which reads this table.
+// order). The table's boxes are float32 values, the precision its readers compare them at. Grouping the tokens into each
+// sentence's runs and blocks is the reader's highlight (packages/reader compose/highlight.ts), which reads this table.
 import type { LaidLine, Layout } from '../fit/types.ts'
 import { type Rect, rectKey } from '../util.ts'
 import type { Shown } from './groups.ts'

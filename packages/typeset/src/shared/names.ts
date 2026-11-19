@@ -42,7 +42,7 @@ export type NameRow = {
   cx0: number
   cx1: number
 }
-/** a character of a page as today's reading gives it (layer2.mjs pageChars2): its text, box, baseline, size, item, style */
+/** a character of a page as read off its text: its text, box, baseline, size, item, style */
 export type PageChar = {
   ch: string
   x0: number
@@ -200,7 +200,7 @@ export type NameInput = {
    *  centred name is centred whole, that width before its word; one kept at its left edge keeps the number where it stands */
   before?: number
 }
-/** what S.names decides of a name (today's record, RUN:1358): drawn or why not, its word, size, place and width */
+/** what S.names decides of a name: drawn or why not, its word, size, place and width */
 export type NameRecord = {
   occurrence: number
   key: string
@@ -224,11 +224,11 @@ export type SetName = {
   lead?: NameLeads
   /** a name drawn on its own: its runs, at `x` on its baseline at `size`, in its colour */
   drawn?: { runs: NameRun[]; face: Face; x: number; baseline: number; size: number; color: unknown }
-  /** the faces its word waits for (B.cover: not loaded yet); today's check awaited them */
+  /** the faces its word waits for (B.cover: not loaded yet): the name is set once they are in */
   wait?: [FaceId, string][]
 }
 
-/** what S.names reads of a name's own characters (today's, over the page's; the part states them: Placed.plain, Style): its
+/** what S.names reads of a name's own characters (the part states them: Placed.plain, Style; setName reads the page's): its
  *  text without the counter TeX set after it, the counter's, its size and whether it is set in faked small capitals, its
  *  style; `chars` its characters, a lead's joint (none from the part) */
 type NameRead = {
@@ -240,7 +240,8 @@ type NameRead = {
   chars: readonly PageChar[]
 }
 
-/** S.names: one name of a page set in the target (RUN:1357-1424), its readings today's over the page's characters */
+/** S.names: one name of a page set in the target, its readings taken over the page's characters (the lay hands setNameOf
+ *  the part's) */
 export function setName(i: NameInput): SetName {
   const { nm, mine } = i
   if (!mine.length) return setNameOf({ ...i, own: null })

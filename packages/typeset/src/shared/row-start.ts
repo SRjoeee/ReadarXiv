@@ -16,7 +16,7 @@ import type { Share } from './share.ts'
 export type Row = { id: number; page: number; baseline: number; x0: number; x1: number; size: number }
 type RowStartInput = {
   row: Row | null
-  /** the unit's first block, as U.decor left it (changed in place, as today's) */
+  /** the unit's first block, as U.decor left it (changed in place: its start, startY, onLead, flowX and indent) */
   b0: FitBlock | undefined
   carried: boolean
   /** the unit before: whether it is left the original's, and its share of the row */

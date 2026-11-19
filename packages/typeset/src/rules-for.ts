@@ -3,8 +3,8 @@
 // (layout.mjs:346-372) and rules/script.mjs scriptOf: the script's fields with the language's over them, field by field (an
 // object field replaced whole, never merged), `cjk` from the script, babel's hyphenation minimums; the patterns to read:
 // English's for every Latin word, the language's own where `latinPatterns` names one, a Cyrillic target's `cyrillicPatterns`;
-// the target's head names (data/rules/heads.ts, today's rules/tex-names.json heads that tex-names.mjs headName reads) and its
-// reference names (data/rules/refs.ts: the names cleveref and hyperref generate, that tex-names.mjs refInTarget reads).
+// the target's head names (data/rules/heads.ts: a theorem-like head's printed name) and its reference names
+// (data/rules/refs.ts: the names cleveref and hyperref generate).
 // Each call answers fresh objects: a caller may change its own.
 import { HEADS } from './data/rules/heads.ts'
 import { HYPHENATION, LANGUAGES, SCRIPTS } from './data/rules/index.ts'
@@ -78,7 +78,7 @@ export class NoRules extends Error {
 
 const copy = <T>(v: T): T => (v !== null && typeof v === 'object' ? structuredClone(v) : v)
 
-/** today's resolveRules(BUILTIN_RULES, target): the params, the labels, the patterns' languages, the CJK faces */
+/** the rule set resolved for one target: the params, the labels, the patterns' languages, the CJK faces */
 export function resolveRules(target: Lang) {
   if (!Object.hasOwn(LANGUAGES, target)) throw new NoRules(`the target ${JSON.stringify(target)}`)
   const script = scriptOf(target)
@@ -105,7 +105,7 @@ export function resolveRules(target: Lang) {
 
 /**
  * One target's Rules: the rule set resolved for it, the hyphenation patterns the host loaded (`hyph`, by language; data handed
- * in, never fetched here), the reader's choices (today's default: captions in the target, nothing left)
+ * in, never fetched here), the reader's choices (by default captions in the target, nothing left)
  */
 export function rulesFor(target: Lang, choices: Choices = {}, hyph: Readonly<Record<string, unknown>> = {}): Rules {
   const r = resolveRules(target)

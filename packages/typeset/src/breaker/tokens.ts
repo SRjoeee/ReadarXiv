@@ -28,7 +28,7 @@ import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
 import type { V0Piece } from '../unit/breaks.ts'
 
-/** a run's style as the tokens carry it: today's style object (family, weight, slant, small capitals, design, colour, link…) */
+/** a run's style as the tokens carry it: its family, weight, slant, small capitals, design, colour, link… */
 export type TStyle = {
   fam?: string
   bold?: boolean
@@ -42,7 +42,7 @@ export type TStyle = {
   fill?: number
   [more: string]: unknown
 }
-/** a face as today's faceOf gives it (fonts.mjs roleFaceOf) */
+/** a face as B.faces gives it (faces.ts faceOf, by the role table) */
 export type Face = {
   family: string
   weight: number
@@ -187,7 +187,7 @@ export type TokensInput = {
   /** each text token's range in the unit's plain text (the page's word table) */
   tagWords: boolean
 }
-/** the tokens, with the unit's base style (today's `tokens.base`) and U.marks' decisions taken while they were made */
+/** the tokens, with the unit's base style (`base`) and U.marks' decisions taken while they were made */
 type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
 
 const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
@@ -284,10 +284,10 @@ const declared = (src: string | undefined): number =>
   (/^\\(?:em|it|itshape|sl|slshape)$/.test(src ?? '') ? GROUP_ITALIC : 0) |
   (/^\\(?:bf|bfseries)$/.test(src ?? '') ? GROUP_BOLD : 0) |
   (/^\\(?:sc|scshape)$/.test(src ?? '') ? GROUP_CAPS : 0)
-/** the unit's base style without what its own groups set (L2:2253 baseOf), and its declarations: a declaration sets its group
- *  from where it stands, at the unit's top level the rest of it (today's \sc rule, for every switch: the part's style is the
- *  state of the unit's glyphs, its declarations' already, so that "{\em …}" read over an italic base toggled it upright where
- *  today's base, its glyphs' outside its styled pieces (measuredOf), was upright) */
+/** the unit's base style without what its own groups set, and its declarations: a declaration sets its group from where it
+ *  stands, at the unit's top level the rest of it (the \sc rule, for every switch: the part's style is the state of the unit's
+ *  glyphs, its declarations' already, so that "{\em …}" read over it would toggle an italic base upright where its glyphs
+ *  outside its styled pieces stand upright) */
 export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
   let total = 0,
     after = 0,
@@ -414,8 +414,8 @@ const markBlankEdge = (t: Token | null, end: boolean, cjkFace: (t: Token) => boo
  * mark carries its own blank half; the space before it is an engine's (Google sets one after an element before the text's own
  * full stop or comma in every such place of lane stray-stop's probe), never a CJK writer's. xeCJK and ctex keep this one case, a typed space between a
  * Latin letter or a formula and a full-width closing mark (xeCJK.sty 3.10.4 :3886 `\xeCJK_Boundary_and_FullRight:N`; measured
- * with ctexart 2.6.4: a CJK word, Q, a space and the ideographic full stop 46.84 pt against 43.33 without the space), where it is an author's keystroke; here it is not set, the
- * coordinator's ruling of 2026-11-12 (docs/PDF-READER.md §18.18). A half-width mark keeps the space before it in every target
+ * with ctexart 2.6.4: a CJK word, Q, a space and the ideographic full stop 46.84 pt against 43.33 without the space), where it is an author's keystroke; here it is not set
+ * (docs/PDF-READER.md §18.18). A half-width mark keeps the space before it in every target
  */
 const markBarredStart = (t: Token | null, cjkFace: (t: Token) => boolean, barred: (ch: string) => boolean) => {
   if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
@@ -741,7 +741,7 @@ export function tokens(i: TokensInput): Tokens {
   // where the title's drawn text ends with a closing mark or the text after it begins with one (a colon, a full stop, a dash:
   // the reply's own separation), nor where a break stands. A script that writes spaces has the reply's own, nothing added.
   // The paper's own horizontal space laid there (its El.glue, kernOn: `\hspace{0.2em}`, `\quad`) counts toward the em: the gap
-  // is what it leaves missing up to one em, never negative (after `\quad` nothing; the coordinator's amendment of 2026-11-16).
+  // is what it leaves missing up to one em, never negative (after `\quad` nothing).
   // Only where the title still opens a sentence in the row: nothing drawn before it, a break, or a sentence's end (a full stop,
   // past closing brackets and quotes: the paragraph before a group TeX opened one at); a translation that took the title into
   // its sentence (2111.09276v1's "\textbf{wikiHow} We treat wikiHow as …", one sentence in Chinese, the group its object) is laid

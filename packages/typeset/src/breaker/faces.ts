@@ -1,6 +1,6 @@
-// B.faces (design-b §1.5, G2, A4): the face a run of the translation is set in, by the role table (the maintainer's
-// ruling of 2026-10-06: faces are the role table's only): a CJK run in its target's CJK family by weight (its slant a shear,
-// CJK_SLANT_DEG, the owner's ruling of 2026-10-19); a Latin run in its design's group, math in the math face, small capitals
+// B.faces (design-b §1.5, G2, A4): the face a run of the translation is set in, by the role table (faces are the role
+// table's only): a CJK run in its target's CJK family by weight (its slant a shear, CJK_SLANT_DEG, docs/PDF-READER.md
+// §18.1); a Latin run in its design's group, math in the math face, small capitals
 // in Latin Modern's caps face where the design is Computer Modern's or none; the nearest style of the group that holds the
 // target's letters; with its fallbacks and its size correction. Ported from engine 065c1d973: rules/font-roles.mjs
 // rolesFor :340-356, faceFor :432-444, styled :403-414, alphabetOf :386-396, LATIN_GROUPS / OTHER_GROUPS / CM_TEXT :358-367,
@@ -10,10 +10,10 @@
 // readings over them that keep nothing (styled, capsLetters, ownSmallCaps) are @readarxiv/text's, held once for the engine's
 // role table and this (data/faces.ts gives the catalogue's four fields the typesetter reads).
 //
-// alphabetOf and scriptOf are cached by their argument, as today's are (pure functions of a language tag; computed each call
-// they were a third of the typesetter's main-thread time while a paper was scrolled: lane perf-check, 2026-11-12), each by a
-// cache of its own (TAGS_CACHED), so rolesFor and faceFor, which read them, stay here beside the engine's. Its inputs: the
-// target, the paper's English family (A3, read off page 1) and the target's CJK family (the rule set's `cjkFaces`) ←
+// alphabetOf and scriptOf are cached by their argument (pure functions of a language tag; computed each call they were a
+// third of the typesetter's main-thread time while a paper was scrolled, measured 2026-11-12), each by a cache of its own
+// (TAGS_CACHED), so rolesFor and faceFor, which read them, stay here beside the engine's. Its inputs: the target, the
+// paper's English family (A3, read off page 1) and the target's CJK family (the rule set's `cjkFaces`) ←
 // Rules.faces, built by rulesFor.
 import {
   ALPHABETS,
@@ -31,7 +31,7 @@ import type { Face, TStyle } from './tokens.ts'
 
 export { capsLetters, ownSmallCaps } from '@readarxiv/text'
 
-/** the slant of a CJK italic run, degrees (fonts.mjs:83, the owner's ruling of 2026-10-19) */
+/** the slant of a CJK italic run, degrees: the body's own face sheared (docs/PDF-READER.md §18.1) */
 export const CJK_SLANT_DEG = 13
 /** the roles a target draws in (font-roles.mjs rolesFor) */
 export type Roles = Readonly<{
@@ -66,7 +66,7 @@ function byTag<T>(f: (tag: string) => T): (tag: string) => T {
   }
 }
 
-/** the script a BCP 47 tag is written in: its likely script (rules/script.mjs:11 scriptOf), cached by the tag as today's is */
+/** the script a BCP 47 tag is written in: its likely script (Intl.Locale's maximize), cached by the tag */
 export const scriptOf = byTag((lang: string): string | undefined => new Intl.Locale(lang).maximize().script)
 
 /** what a target draws in, for a paper's English family and the target's CJK family (font-roles.mjs:340 rolesFor) */
@@ -84,8 +84,7 @@ export function rolesFor(target: string, family: string, cjkFaces: CjkFaces): Ro
   return Object.freeze({ target, family, cjk: cjk && Object.freeze(cjk), fallbacks: Object.freeze(fallbacks) })
 }
 
-/** the alphabet a target's letters are: its language's own, else its script's (font-roles.mjs:386 alphabetOf), cached by the
- *  target as today's is */
+/** the alphabet a target's letters are: its language's own, else its script's, cached by the target */
 export const alphabetOf = byTag((target: string): string => {
   const language = new Intl.Locale(target).language
   return Object.hasOwn(LETTERS, language) ? language : scriptOf(target) === 'Cyrl' ? 'Cyrl' : 'Latn'

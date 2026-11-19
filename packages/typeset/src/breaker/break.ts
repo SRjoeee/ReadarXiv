@@ -1,7 +1,6 @@
 // B.break (design-b §1.5, T22): a unit's tokens broken into the slots of a state, TeX's \lineskip rule settled between
-// lines, a word cut or hyphenated where it must be, a CJK line squeezed to take its group. Today's code (layer2.mjs
-// L2:3283-3893, graphemesOf L2:316-317, headOfCut L2:2431-2436), moved by lab/typeset/move-fit.mjs. Its measures are the
-// call's (`P.measure`, `m`), its patterns `P.patterns`.
+// lines, a word cut or hyphenated where it must be, a CJK line squeezed to take its group. Its measures are the call's
+// (`P.measure`, `m`), its patterns `P.patterns`.
 import { textless } from './cuts.ts'
 import { breakPoints } from './hyph.ts'
 import { charsOf, graphemesOf, keptPair, kinsokuOf, noStart } from './script.ts'
@@ -167,8 +166,8 @@ const tokW = (t: Measured, f: number, st: FitState, scale: number): number => {
 /**
  * The most a CJK line closes each gap between its items to take one more group (breakLines' squeeze), in em: TeX's CJKglue
  * between two CJK characters has no shrink at all, so the squeeze is kept to the least that takes a group a line misses by a
- * little. 0.02 em is the study's (2026-10-23, the (j) rows of the release route's sweep): it took 264 of the sweep's 378
- * letter-spaced lines, with half of all justified CJK lines already within 0.02 em of their natural spacing
+ * little. 0.02 em is the study's (measured 2026-10-23, the (j) rows of the release route's sweep): it took 264 of the
+ * sweep's 378 letter-spaced lines, with half of all justified CJK lines already within 0.02 em of their natural spacing
  */
 const SQUEEZE = 0.02
 /**
@@ -274,12 +273,12 @@ function breakLines(
   // (a word wider than its line cut by its characters, each a grapheme, what a reader sees as one character: a letter and the
   // marks over it, a flag's two regional indicators; never before a mark no line opens with, nor inside a pair UAX 14 keeps)
   const cutBarred = (chars: readonly string[], k: number) => barredChar(chars[k]!) || keptPair(chars[k - 1], chars[k])
-  // (a merged table cell the lay fills (P.words; docs/PDF-READER.md §18.75, the owner's decision of 2026-11-15): a line of it
+  // (a merged table cell the lay fills (P.words; docs/PDF-READER.md §18.75): a line of it
   // ends only where the breaker lets it end AND a word of the target's text ends there, by the platform's segmentation
   // (breaker/words.ts). A token whose start stands inside a word (`midWord`), a space too, is held to the one before it as a
   // glued one is; a cut of a word longer than its line, or at a hyphenation point, is taken only where a word ends inside it
   // (`wordEnds`): none, and the state fails. Where no state of a size sets the cell so, the walk lays those states as before
-  // (`st.split`, fit/walk.ts triesOf: the size never gives way to whole words, the owner's answer of 2026-11-16) before it
+  // (`st.split`, fit/walk.ts triesOf: the size never gives way to whole words, §18.75) before it
   // steps the size down. An element's text and a label state no words: cut as before)
   const words = !!P.words && !st.split
   /** a token held to the one before it in a group: glued (a space never), and in such a fill any whose start stands inside a
@@ -707,7 +706,7 @@ function breakLines(
   }
   /**
    * Whether an address that does not fit the line in hand (`t`, a URL's crop with its url package's break points) goes whole to
-   * the next line, the break before it (the coordinator's ruling of 2026-11-12, PDF-READER §18.50: an address is one thing to
+   * the next line, the break before it (PDF-READER §18.50: an address is one thing to
    * a reader): it fits the next line whole, and the line in hand closed here would not be placed justified and visibly
    * stretched. Visibly stretched is the breaker's own two bounds: placed justified, its stretch a gap within the script's
    * cjkJust (placeItems: past it the line is set ragged, unstretched), and above STRETCH_MIN (under it the stretch does not
@@ -768,7 +767,7 @@ function breakLines(
       // a frame break of the paragraph's (withPageBreaks, pageCutsOf: a page's or a column's, `frame` the unit's block the frame
       // begins with): reached in an earlier frame, the line that holds it ends where the breaker ends it, and the text goes on on
       // the frame's first slot (`held`, advance): a paragraph over a page break leaves no short line before it, as TeX never does
-      // (the owner, 2026-10-30: 1706.03762's Chinese §3.2.2 ended page 4 half a line short, the word for "output" split over
+      // (PDF-READER §18.9: 1706.03762's Chinese §3.2.2 ended page 4 half a line short, the word for "output" split over
       // pages 4 and 5); reached at a line's start (or one `immediate`, strand's fallback), there. Where the run's text ends on
       // the line that holds it, so that its frame would get none, strand lays that line there whole. Reached in that frame or
       // later (the earlier one already full), or where that frame's first slot lies after a display the text has not passed
@@ -1068,13 +1067,13 @@ function breakLines(
       }
       // a URL TeX set whole, broken where its url package lets TeX break it (El.breaks): the most of it that fits, its crop cut
       // between two of its glyphs there, as a word is hyphenated; the rest opens the next line (2303.11366v4 p1's abstract: the
-      // URL whole on the next line left the line before it letter-spaced to its measure, the maintainer's of 2026-11-08). Only on
+      // URL whole on the next line left the line before it letter-spaced to its measure, PDF-READER §18.50). Only on
       // a line set justified: where TeX set the unit flush left or right or centred (placeItems: at its natural spacing), no line
       // is stretched, and TeX, whose \rightskip stretch there costs a short line nothing, breaks before the URL rather than inside
       // it at its url package's penalty: whole on the next line, as the original sets it (2608.25210v2 p1's VLDB footnote,
       // \raggedright, its URL cut after "https://"). And on a justified line only where the line, the address whole on the next,
       // would be placed justified and visibly stretched (keepsWhole): one placement would set ragged, or nearly full, keeps it
-      // whole, as the original and today's do (2610.21880v1 p1's footnote: "sohani@mail." cut where its line before would be set
+      // whole, as the original does (2610.21880v1 p1's footnote: "sohani@mail." cut where its line before would be set
       // ragged at 0.27-0.32 em a gap)
       if (t0.crop?.breaks?.length && !line.centred && !line.flush && !keepsWhole(t0, cap)) {
         const asp = items[0]!.asp ?? 0

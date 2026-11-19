@@ -1,11 +1,11 @@
-// S.overFollower (design-b §1.5, E26; the owner's ruling of 2026-11-03: a run-in head's room on its row): a unit whose last row
+// S.overFollower (design-b §1.5, E26; docs/PDF-READER.md §19.10: a run-in head's room on its row): a unit whose last row
 // another unit's first continues on a shared line, that row the only line of its last block, nothing kept between the two,
 // and its fit clipped there, or shrunk to fit it: its last block run on to the end of the next unit's first line, as one line
 // of the row, and laid again; taken where it fits so, and, where its fit shrank it, only where it is set larger so (the row
 // before the size: TeX sets a run-in head on its paragraph's first line as wide as its text, and the size tie sets the
 // paragraph at the head's scale; 2611.03178v1-zh p16, a head shrunk to 0.85 in its own line and its paragraph with it).
 // Ported from engine 065c1d973 run.mjs overFollower RUN:1763-1789, its shrunk case added. Its facts: the follower
-// (the next member of its flow) and whether it will be laid (admitted, not laid yet: today's `f.refused`, `f.taken`), the
+// (the next member of its flow) and whether it will be laid (`open`: admitted, not laid yet), the
 // shared row (the follower's lead row, F.chains: lane L1's Placed.join), the follower's first line in the file (its page and
 // x1: lane L1's first Line of the follower), whether something is kept between the two (keptAfter: Placed.join's kept).
 import type { FitBlock, FitParams, Layout, Tokens } from '../fit/types.ts'

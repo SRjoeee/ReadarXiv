@@ -2,12 +2,12 @@
 // original's number and punctuation, and the label the unit is then laid with. Ported from engine 065c1d973: labelInTarget
 // L2:1184-1195, spacedText L2:1230-1235, headLabelInTarget L2:1245-1259 (not its refusal of a babel name's head, L2:1274), the run's choice RUN:2029-2036,
 // rules/tex-names.mjs headName :60-63, colourOfStyle L2:2909, hexOf L2:4569. A head is named from the parts its part states
-// (Label.name, num, punct, as TeX set them), not by today's pattern over its text (headInTarget :145-161, which took one
-// capital before a number's first dot and no more: "Corollary VI.2" stayed the original's, 2610.21312v1).
+// (Label.name, num, punct, as TeX set them; docs/PDF-READER.md §18.39), never by a pattern over its text: one that takes a
+// single capital before a number's first dot misses "Corollary VI.2" (2610.21312v1).
 //
 // Its inputs, and the field each comes from once lane L1 states it (until then the tap's recorded values):
 // - `label`: the label the class set before the unit's first line, its glyphs (prepareUnit's) ← Placed.label (Label: kind,
-//   ink, name, num, punct, their styles); today's glyphs are the page's characters in its box
+//   ink, name, num, punct, their styles)
 // - `head`: a theorem-like head's parts ← Placed.label's name, num and punct, each one glyph of its ink with its text and
 //   style
 // - `relabels`: the unit's label group exists and the wrap does not keep the label as the original's ← Placed.fixed (bit 4)
@@ -50,7 +50,7 @@ export type LabelInput = {
   label: UnitLabel | undefined
   head: HeadParts | null
   kind: string
-  /** the reader draws labels anew (today's door: always) */
+  /** the reader draws labels anew */
   labels: boolean
   relabels: boolean
   to: string
@@ -62,10 +62,10 @@ export type LabelInput = {
 type Labelled = { relabel: string | null; head: HeadLabel | null; label: UnitLabel | undefined }
 
 /** a float's label in the target's name, its number and punctuation the original's; null where it keeps the original's
- *  (L2:1184 labelInTarget). Where its part states its float's type (`float`, the owner's ruling of 2026-11-08: one form a
- *  paper), by the type: a figure's or a table's in the rules' word, its glyphs after its name as TeX printed them, any
- *  number ("A1", "S3", "I"); any other type's (an algorithm's, a sub-figure's) the original's, and one whose parts do not hold
- *  its every glyph or state no number. Else by its spelling, as today's */
+ *  (L2:1184 labelInTarget). Where its part states its float's type (`float`: one form a paper), by the type: a figure's or
+ *  a table's in the rules' word, its glyphs after its name as TeX printed them, any number ("A1", "S3", "I"); any other
+ *  type's (an algorithm's, a sub-figure's) the original's, and one whose parts do not hold its every glyph or state no
+ *  number. Else by its spelling */
 export function labelInTarget(
   label: UnitLabel | undefined,
   names: LabelInput['words'],

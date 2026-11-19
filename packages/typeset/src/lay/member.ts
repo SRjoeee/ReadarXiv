@@ -2,9 +2,8 @@
 // its frame breaks (X.cut with X.walk inside), laid again on its lead's row where it fell lower (S.onLeadRetry), a numbered
 // heading on its last lines (X.numbered), a run-in head over its follower's first row (S.overFollower), its further steps
 // where clipped (X.further) else its runs (X.runs), a CJK cell settled into its bands (S.settle), the row it leaves its
-// follower (S.share); then its fill leadings (S.fill.leads). Today's layOnce RUN:2255-2316 and unitFillLeads RUN:2617-2624, as
-// tests/replay/round.ts proved them step by step against the tap on every round of the corpus; each step's answer is written
-// to the trace in the tap's slot.
+// follower (S.share); then its fill leadings (S.fill.leads). Held step by step against the tap on every round of the corpus
+// (tests/replay/round.ts); each step's answer is written to the trace in the tap's slot.
 import { layoutCut } from '../fit/cut.ts'
 import { fitFurther } from '../fit/further.ts'
 import { type NumberCrop, numberedLayout } from '../fit/numbered.ts'
@@ -62,8 +61,8 @@ export type MemberLay = { state: 'laid'; lay: FillLaid; over: boolean } | { stat
  * layFlow's F2-F8 and L9 for one member: its lay, each step written to `trace`. A merged cell the lay fills, its lines broken
  * between words first (FitParams.words, lay/adapt.ts; docs/PDF-READER.md §18.75), that its fit leaves unfit even so, not even
  * below its floor, is laid again without the rule, its words cut where a line must end: the rule never leaves a cell the
- * original's that today's lay draws (each walk of the fit lays a size's states as before already, fit/walk.ts triesOf; the
- * steps after it, a lead's retry and a follower's, choose between layouts the rule may change)
+ * original's that the lay without it draws (each walk of the fit lays a size's states as before already, fit/walk.ts
+ * triesOf; the steps after it, a lead's retry and a follower's, choose between layouts the rule may change)
  */
 export function layMember(p: Prepared, R: RuleParams, trace: Trace | null = null): MemberLay {
   const n = trace?.slots.length ?? 0

@@ -175,13 +175,13 @@ type DisplayItem = TextItem | CropItem
 export type DisplayLine = [y: number, x0: number, x1: number, items: DisplayItem[]]
 
 /** a run's own fill as the drawing writes it (svgOfUnit fillAttr: a fill as it is); a colour that is no fill names none, so the run
- *  takes the layer's ink: the reader's sheet's, the PDF's own black (the owner's ruling of 2026-11-08), or CJK_INK for a CJK run */
+ *  takes the layer's ink: the reader's sheet's, the PDF's own black (docs/PDF-READER.md §11.8), or CJK_INK for a CJK run */
 const fillOf = (c: string | undefined) =>
   c !== undefined && /^#[0-9a-f]{6}$/.test(c) ? Number.parseInt(c.slice(1), 16) : undefined
 
-/** the ink of a CJK run that names no fill of its own: today's layer ink (layer-proto/run.mjs SVG_RULES), 92 % of black at full
- *  coverage. The owner's exception of 2026-11-08 to the PDF's black: the translation's CJK text at today's weight, its Latin,
- *  digits and formulas in the PDF's black (lane cjk-weight's record: the one difference between today's CJK and v2's was this ink) */
+/** the ink of a CJK run that names no fill of its own: the approved prototype's ink, 92 % of black at full coverage. The one
+ *  exception to the PDF's black (docs/PDF-READER.md §11.8): the translation's CJK text at that weight, its Latin, digits and
+ *  formulas in the PDF's black */
 export const CJK_INK = 0x141414
 
 /**
@@ -221,8 +221,8 @@ export function inkLines<L extends readonly [number, number, number, readonly It
 }
 
 /**
- * D.display: the unit's laid lines on page `page`, in its layout's order: each line's baseline, its extent (x0 to x0 + used, as
- * today's record reads it) and its items. A text run's `size` is the size its face is measured at (Metrics: the FaceId is the
+ * D.display: the unit's laid lines on page `page`, in its layout's order: each line's baseline, its extent (x0 to x0 + used)
+ * and its items. A text run's `size` is the size its face is measured at (Metrics: the FaceId is the
  * face at 100 px with its size correction), a superscript's 0.62 of the line's and small capitals' their share; a crop's
  * `src` its ink on its page with its baseline, `k` the line's scale, `piece` its element (`label` for a label's)
  */

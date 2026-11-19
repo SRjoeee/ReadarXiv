@@ -1,7 +1,7 @@
 // Hyphenation for the breaker (B.break): Liang's patterns (TeX's own, served as data: Rules.breaking.hyphenation) and, for
 // Russian, Khmelev's syllable rules; the fewest letters before and after a break the layout rules' (babel's). Ported from
-// engine 065c1d973 layer-proto/hyph.mjs: hyphenationOf :68-82, breakPoints :88-96, liang :98-126, russian :128-142. Module
-// state removed on the way (no behaviour): today's breakPoints caches its answers by word; the port computes them each call.
+// engine 065c1d973 layer-proto/hyph.mjs: hyphenationOf :68-82, breakPoints :88-96, liang :98-126, russian :128-142. No
+// module state (a cache by word would change no answer): breakPoints computes its answers each call.
 // Fetching the patterns (loadHyphenation) is the host's.
 
 /** a language's patterns as breakPoints reads them */

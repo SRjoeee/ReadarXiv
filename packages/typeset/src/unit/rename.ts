@@ -4,8 +4,7 @@
 // package names whole in the target left as the page shows it. Ported from engine 065c1d973: renameRefs L2:1289-1306
 // (GENERATED_REF L2:1277, CITE_NOTE L2:1279), nameOfRow L2:1266-1271, rules/tex-names.mjs refInTarget :103-140, refName
 // :74-84, conjunctionOf :86-91, ownName :36, unspaced :38, NUMBER :23, UNINFLECTED :17, BABEL_TYPES :20, WORDS :94,
-// GENERATED_COMMANDS :14. Today's renameRefs writes `rename` onto each resolution; the port returns the replacements by
-// element and the composition sets them.
+// GENERATED_COMMANDS :14. The rule returns the replacements by element, and the composition sets them.
 //
 // Its inputs, and where each comes from once the rule set and lane L1 state them:
 // - `elements`: the unit's resolutions in the row's order (U.elements' answer): each one drawn as its page's text
@@ -87,8 +86,8 @@ const NUMBER =
   /^[([]?(?:(?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+|[.\-–][A-Za-z](?![A-Za-z]))*[a-z]?|[IVXLCDM]{1,7}|[ivxlcdm]{1,7}|[A-Z])[)\]]?$/
 const longestFirst = (a: string, b: string) => b.length - a.length
 
-/** the packages' names for one target, in today's order (tex-names.mjs:25 CONJUNCTIONS, :94 WORDS: the words of every
- *  target, as today's module reads them once) */
+/** the packages' names for one target: the conjunctions and the words of every target (the types, the heads' and the
+ *  references' names), each longest first, so that the name found at a place is the longest there */
 export function refNamesOf(data: TexNamesData, to: string): RefNames {
   return {
     to,
@@ -255,7 +254,7 @@ function textsOf(content: readonly OutPiece[], out: string[] = []): string[] {
   return out
 }
 /**
- * The paper's own names in the target, English → its word (today's ownNames, RUN:813-819, each row nameOfRow's): the name
+ * The paper's own names in the target, English → its word (each row's word as wordOf reads its text): the name
  * units the part states (Part.paper.names, [English, unit id]), each by its row where it is in and a translation; none where
  * it is not in, or no translation, and its heads and references keep the original's. Read when asked, each row once a call:
  * a name's row is read only by a member whose head or reference names it, and such a member's page waits for its paper's names

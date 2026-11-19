@@ -1,4 +1,4 @@
-// X.runs (design-b §1.5, T6, T32, E28; the ruling of 2026-10-09: sizes per unit): a unit's runs between its displays, each
+// X.runs (design-b §1.5, T6, T32, E28; docs/PDF-READER.md §18.7: sizes per unit): a unit's runs between its displays, each
 // laid as its own text block, joined as one layout; and whether a layout keeps the pages its fit set its lines on. Ported
 // from engine 065c1d973 layer2.mjs L2:4163-4257, L2:4379-4400 (moved first as JavaScript by lab/typeset/move-fit.mjs, now
 // TypeScript), held by the chain's and the fill's replays on the corpus.
@@ -87,8 +87,8 @@ const runParams = (P: FitParams, run: Run, last: boolean): FitParams => ({
 })
 /**
  * A unit's runs (runsOf) laid each at its own state: the first of the fit's states at which its own text fits its own slots,
- * so that only a cramped run shrinks, its leading its own too (the owner's ruling of 2026-10-09, sizes per unit, carried to
- * its natural unit: a block between two displays reads as its own text block). Every run fits at the state the unit fitted
+ * so that only a cramped run shrinks, its leading its own too (docs/PDF-READER.md §18.7: sizes per unit, carried to its
+ * natural unit: a block between two displays reads as its own text block). Every run fits at the state the unit fitted
  * at (the unit's walk sets each run on its own slots), so each comes out at that state or a more natural one. One tracking
  * a paragraph: the walk tightens a run's tracking (and its CJK punctuation's compression) before it shrinks it, so a cramped
  * run is set tighter than a roomy one, and a paragraph's parts would read at two letter spacings, its roomy part's last line

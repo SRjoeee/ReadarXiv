@@ -1,6 +1,5 @@
 // B.slots (design-b §1.5): the slots (lines) a unit's blocks hold at a state of the fit, and the floor a paragraph's last line
-// keeps over the next line of its column. Today's code (layer2.mjs L2:3118-3281, flowMeasureAt L2:597-610, inFlow L2:3061),
-// moved by lab/typeset/move-fit.mjs.
+// keeps over the next line of its column.
 import { measureOf, measureOn } from '../unit/blocks.ts'
 import type { FitBlock, FitParams, FitState } from '../fit/types.ts'
 
@@ -33,7 +32,7 @@ type Flowing = { flow?: unknown; readonly [k: string]: unknown }
  *  a flow of its own) */
 const inFlow = (a: Flowing, b: Flowing): boolean => a.flow === b.flow
 /** a block's foot at a state: the lowest baseline a line of it is laid at, its last less what it borrows (its room TeX's facts
- *  leave, Block.free: the owner's ruling of 2026-11-08), or less the gap's free part where the state took it and it is more
+ *  leave, Block.free: docs/PDF-READER.md §18.11), or less the gap's free part where the state took it and it is more
  *  (Block.glue, FitState.glue: a float's member, docs/PDF-READER.md §18.90) */
 const lowOf = (b: FitBlock, st: FitState, s: number): number =>
   (b.B.at(-1) as number) -
@@ -46,7 +45,7 @@ function roomOf(b: FitBlock, st: FitState): number {
     : (b.free ?? 0)
 }
 /**
- * The gap under a paragraph never tighter than its lines (the half-leading round, 2026-10-17, its second form): the lowest
+ * The gap under a paragraph never tighter than its lines (docs/PDF-READER.md §18.11): the lowest
  * baseline a unit's last line may take at a state, where the next line of its column in the original keeps its own baseline
  * (P.halfLead.below: the original's room from the unit's last baseline down to that line; run.mjs edgesOf). A paragraph's
  * first line stays on the original's first baseline, as TeX set it, whatever is over it (a heading, a figure, a skip, the
@@ -55,9 +54,8 @@ function roomOf(b: FitBlock, st: FitState): number {
  * room a gap lacks is the paragraph's above it: where the next line would stand nearer its last line than its own leading,
  * L p0, and the original's own skip there past its pitch, it ends higher by the deficit, its last baseline no lower than that
  * line's plus L p0 and the skip, its fill spread over a shorter height. Its own leading alone, never the next paragraph's
- * (the owner's ruling of 2026-11-08, chosen on a preview of the rules: today's held the gap to the larger of both, and a
- * paragraph whose translation nearly fills its block was pulled under the leading its own block allows, 1810.04805v2 p8 t156
- * at 1.08 among neighbours at 1.38-1.5, its own 1.14)
+ * (§18.11: held to the larger of both, a paragraph whose translation nearly fills its block was pulled under the leading its
+ * own block allows, 1810.04805v2 p8 t156 at 1.08 among neighbours at 1.38-1.5, its own 1.14)
  * (the page fill's states, `box`: slotsAt stops its last frame's slots there, so that the lines a frame holds still fall with
  * the leading and the fill's search is monotone). Where the original leaves that much or more (a heading's room, nothing under
  * it in its column) nothing changes. Null where nothing is asked: at the original's pitch or
@@ -83,13 +81,14 @@ function floorOver(b: FitBlock, below: number, L: number, st: FitState, s: numbe
   let floor = (b.B.at(-1) as number) - below + L * p0 + skip
   // (a state that borrows room under it, TeX's (Room.runs, Room.sep): the gap measured from the borrow's limit, its foot,
   // which stands TeX's separation over the next ink; at its own leading that much higher, the original's skip past the
-  // separation (a list's \itemsep, flush bottom's stretch) the borrow's. Lab option (i) of 2026-11-09, shown to the owner alone and with (iii):
-  // 1810.04805v2's references that need every line of theirs stood at the original's pitch among entries spread to 1.38)
+  // separation (a list's \itemsep, flush bottom's stretch) the borrow's (docs/PDF-READER.md §18.11: the gap taken from
+  // TeX's last line, 1810.04805v2's references that need every line of theirs stood at the original's pitch among entries
+  // spread to 1.38)
   if ((b.B.at(-1) as number) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)
   return floor > low + 1e-9 ? floor : null
 }
 /**
- * The same floor under each paragraph TeX states inside the unit (the owner's ruling of 2026-11-08, (a): the gap under a
+ * The same floor under each paragraph TeX states inside the unit (docs/PDF-READER.md §18.11: the gap under a
  * paragraph follows its own leading, a paragraph's that ends a unit or one that ends inside it): a block whose next block opens
  * a paragraph (`opens`: SpanAt.opens, El.opens) in its column, the original's next line that paragraph's first, its leading
  * the block's own (`leads`, the page fill's: each paragraph filled at its own). 2608.25210v2 p3's prompt boxes: an item's
@@ -159,9 +158,9 @@ function flowMeasureAt(b: FitBlock, y: number): [number, number] {
   return measureOn((lead.G ?? lead.B).slice(0, j + 1), (i) => (i < j ? measureOf(lead, y, i) : shared), y)
 }
 /** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
- *  the original's times the leading, whatever the size (D6's F6a, 2026-10-08: a Latin line shrunk with its size sat on none
- *  of the original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it; every
- *  script's lines now stay on the original's baselines while the size shrinks, as CJK's did) */
+ *  the original's times the leading, whatever the size (a Latin line pitched by its shrunk size sat on none of the
+ *  original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it: every script's
+ *  lines stay on the original's baselines while the size shrinks) */
 function slotsAt(blocks: readonly FitBlock[], st: FitState, P: FitParams, s: number): Slot[] {
   const out: Slot[] = []
   // (each block's foot, the lowest a line of it is laid at: its last baseline less what it borrows; a line TeX's rule moves

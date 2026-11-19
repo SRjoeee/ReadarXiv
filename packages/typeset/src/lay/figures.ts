@@ -1,16 +1,16 @@
-// S.figures over the part (design-b §1.6 L4; shared/figures.ts, today's paintFigures): a page's figure texts, each drawn in its
+// S.figures over the part (design-b §1.6 L4; shared/figures.ts): a page's figure texts, each drawn in its
 // translation where it says something its source does not, in the faces of its style, each at the size its own width needs, on
 // its original's baseline from its anchor's edge into the free line beside its box, by its ink as the breaker sets every line (a
 // full-width mark's blank half at its edge past the anchor's edge, as its face draws it, and its target's compressMax), the original's
 // where its width does not fit (width the fit's only test, figure-fit.ts: no fact over or under its text is read; nor its set's
-// size tie, which the part states and no size reads: each text at its own size, docs/PDF-READER.md §19.12, the owner's
-// rules of 2026-11-13). Its facts are the part's, as the prepare states them from today's figure reading
-// (layout/figure-text.mjs): its line (its box along its run and its baseline), its anchor (Placed.align: l start, c centre, r
+// size tie, which the part states and no size reads: each text at its own size, docs/PDF-READER.md §19.12). Its facts are
+// the part's, as the prepare states them from its figure reading (the engine's locate/figure-text.ts): its line (its box
+// along its run and its baseline), its anchor (Placed.align: l start, c centre, r
 // end), its room before and after its box (Room.side), its style (size, fill, family, weight, slant) and its groups' (a run of its glyphs in another face: SpanAt.style, its translation inside the group drawn in
 // it), its own text (Placed.plain). One turned (Placed.dir) is set along its run as a level one along
 // x, from its run's origin, length and room before and after along it (Placed.run: its line is its box on the page), and drawn
-// at its angle (its items' `dir`), as today's svgOfFigure turns it. A figure text drawn is one laid line of its runs, its text
-// group off. What is not drawn stays the original's: one whose ink stays (the part's why, `unwrapped`: a label today's figure
+// at its angle (its items' `dir`). A figure text drawn is one laid line of its runs, its text
+// group off. What is not drawn stays the original's: one whose ink stays (the part's why, `unwrapped`: a label the figure
 // reading leaves where it stands), a turned one a part made before the prepare stated its run (`kind`), one whose anchor the
 // part does not state (`kind`, align 'j'), its unit one the paper keeps (`kept`), its row none (`none`) or failed (the row's why,
 // as the entry's contentOf), the same

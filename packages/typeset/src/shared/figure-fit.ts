@@ -1,14 +1,14 @@
 // S.figures' fit (docs/PDF-READER.md §19.12): a figure text keeps the original's size wherever its translation is no wider than
-// the original (the owner's rule of 2026-11-13: whether to shrink is whether the translation goes past the original's own room;
-// where it does not, it is not shrunk). Width is the only test, and the text's own: each text is sized by its own width alone,
-// whatever the other texts of its figure need (the owner's ruling of 2026-11-13 on a figure's sets, (B): each at its own size).
+// the original (whether to shrink is whether the translation goes past the original's own room; where it does not, it is not
+// shrunk). Width is the only test, and the text's own: each text is sized by its own width alone, whatever the other texts of
+// its figure need (a figure's set each at its own size, which keeps it nearer the original than one size a set).
 // Height is none: drawn at the original's size a translation stands in the band the original's line stands in, so no stroke
 // under it, no ink over it and no container's edge is measured. A wider translation, on its original's baseline from its
 // anchor's edge, takes the free line beside its box (its room, `before` and `after`, as the part states it); where that is not
 // enough it steps by what its width needs and no more, to `floor` of the size at the most (one needing less is left the
 // original's, `unfit`). A translation is fitted and anchored by its ink, as every line the breaker sets: a full-width mark's
 // blank half at its edge (`blank1`, B.break leadOf and hangOf) is no part of the line it needs, and stands past its anchor's
-// edge (today's set it by its advance: a centred label ending with a closing mark a quarter em off its original's middle, a
+// edge (set by its advance, a centred label ending with a closing mark stood a quarter em off its original's middle, a
 // right-aligned one half an em short of its end). Ported from engine 065c1d973 layer-proto/figure-fit.mjs (lineOf, fitFigure,
 // sameAsSource).
 

@@ -5,7 +5,7 @@
 //
 // Its inputs, and the part's field each comes from once lane L1 states it (until then the tap's recorded values):
 // - `rects`: the unit's lines as rectangles, its baseline less 0.215 and plus 0.683 of its size (tex.mjs texRects) ← Placed.lines
-//   (page, x0, x1, base, size; the band is today's reading of a line's extent)
+//   (page, x0, x1, base, size; the band is a share of the size, not the line's own ink)
 // - `lineInfo`: each line's exact baseline, size, top, bottom, its row `j` in the unit's lines and its frame ← Placed.lines
 //   (base, top, bottom, col; `j` its index)
 // - `keep`: the lines the unit keeps as the original's (held lines, a display's rows) ← Line flag KEPT
@@ -282,8 +282,8 @@ function tightOf(
   )
 }
 
-/** a block's grid with one pitch inside it: each gap TeX's \lineskip rule opened closed to `p0` (L2:3172 evenGridOf; the
- *  maintainer's ruling of 2026-10-29) */
+/** a block's grid with one pitch inside it: each gap TeX's \lineskip rule opened closed to `p0` (L2:3172 evenGridOf;
+ *  docs/PDF-READER.md §18.8) */
 export function evenGridOf(G: readonly number[], opened: readonly boolean[], p0: number): number[] {
   const out = [G[0]!]
   for (let k = 1; k < G.length; k++) {

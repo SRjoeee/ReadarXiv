@@ -4,13 +4,11 @@
 // engine 065c1d973: resolvePlaceholders L2:1382-1465 (its control flow, in the row's order), bracketed L2:1943-1956,
 // placeholdersOf L2:1062-1069, cropsOf TEX:404-435 (which resolution, in the row's order), prepareUnit L2:1031, 1041-1042, 1476.
 //
-// What it reads of each element is its reading, whatever the row (`ElementReading`): what today's reading of the page sets it
-// to in each case the row decides. Today that is worked out from the page's characters (texParts' renderings, drawnAs,
-// unbracketed, displayLines, leadMark: the tap's recorded inputs, read again by lab/typeset/derive.mjs with today's code);
-// lane L1 states it as the element's El: `fixed` ← El.keep / El.text / an empty El.ink (EMPTY, OUTSIDE, a macro of no ink, a
-// TEXT row); `symbol` ← El.text and El.leads; `gap`, `drawn` ← El.text (drawn as text), El.ink (as crops), El.style; `inner`
-// ← El.brackets; `display` ← the KEPT lines a display stands on; `cite` ← a citation's learnt text; `segs` ← El.ink.
-// `cls2` (each piece's class) ← El.kind. Nothing here reads a page's characters.
+// What it reads of each element is its reading, whatever the row (`ElementReading`): what the element's facts set it to in
+// each case the row decides. The part states it as the element's El: `fixed` ← El.keep / El.text / an empty El.ink (EMPTY,
+// OUTSIDE, a macro of no ink, a TEXT row); `symbol` ← El.text and El.leads; `gap`, `drawn` ← El.text (drawn as text), El.ink
+// (as crops), El.style; `inner` ← El.brackets; `display` ← the KEPT lines a display stands on; `cite` ← a citation's learnt
+// text; `segs` ← El.ink. `cls2` (each piece's class) ← El.kind. Nothing here reads a page's characters.
 import { cropFields, cropPartsOfSegments } from './crops.ts'
 import type { V0Piece } from './breaks.ts'
 

@@ -1,6 +1,6 @@
 // The typesetter's entry and its result, as decided (the page decision: the objects and the entry are design A's,
 // design-a §1.2; the inside and the ledger are design B's, design-b §1.5 to §1.7). Types only: the composition
-// (layPage, layFlow) is built from the rules once each rule is proven against today's recorded outputs (the tap).
+// (layPage, layFlow) is in lay/.
 import type { Box, Id, Ink, Link, PrepWhy, Row, Why as RowWhy } from '@readarxiv/format'
 import type { ScriptRules } from './data/rules/types.ts'
 import type { RefNames } from './unit/rename.ts'
@@ -12,9 +12,9 @@ export type Lang = string
 export type Script = 'Hans' | 'Hant' | 'Jpan' | 'Kore' | 'Latn' | 'Cyrl'
 
 /**
- * A served face, as the host loads and measures it: today's canvas font string at 100 px (fonts.mjs fontString(face, 100):
- * `400 100px "axt-nimbus-roman", "axt-lm-math", "axt-shs-sc"`). The tap's recorded widths are keyed by it
- * (`metrics/<pair>.metrics.json.gz`), so a face is named by it; a canvas adapter sets the font at the asked size from it
+ * A served face, as the host loads and measures it: its canvas font string at 100 px (breaker/measure.ts
+ * fontString(face, 100): `400 100px "axt-nimbus-roman", "axt-lm-math", "axt-shs-sc"`). The tap's recorded widths are keyed
+ * by it (`metrics/<pair>.metrics.json.gz`), so a face is named by it; a canvas adapter sets the font at the asked size from it
  */
 export type FaceId = string
 
@@ -53,10 +53,9 @@ export type Choices = {
 
 /**
  * Everything typographic the typesetter reads, for one target (design-b §1.4's shape): the rule set's fields resolved for it
- * (`set`: today's resolveRules params, by the names every ported rule reads them by; design-a's grouping of them by use is a
- * rename for after the port), its labels and babel's names, the hyphenation patterns the host handed in (never fetched by
- * the typesetter), the reader's choices. Built by `rulesFor` (rules-for.ts) from one data file a language
- * (src/data/rules/). Data, not a seam (design-a §4): tests pass edited values
+ * (`set`: resolveRules' params, by the names every rule reads them by), its labels and babel's names, the hyphenation
+ * patterns the host handed in (never fetched by the typesetter), the reader's choices. Built by `rulesFor` (rules-for.ts)
+ * from one data file a language (src/data/rules/). Data, not a seam (design-a §4): tests pass edited values
  */
 export type Rules = Readonly<{
   target: Lang
@@ -127,7 +126,7 @@ export type Item =
       skew?: 1
       dx?: number[]
       /** a superscript's raise over the line's baseline, PDF units (a footnote's mark, a symbol drawn raised: 0.36 of the line's
-       *  size, today's svgOfUnit); the page's drawing sets the run that much higher (the checkpoint's (10): drawn on the baseline) */
+       *  size); the page's drawing sets the run that much higher (unraised, it stood on the baseline) */
       rise?: number
       /** a run set along a direction (a figure text the original sets turned: Placed.dir, a unit vector, the page's y up): its
        *  line's baseline runs from (x0, y) along it, and `x` (and `dx`) is its place along it from x0 (x − x0 its distance from
@@ -231,8 +230,8 @@ export type Step =
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 /**
  * One rule applied to one member, in step order: the tap's slot (the tap's spec §3), so that the gate compares the
- * port's ledger with today's slot by slot and names the first rule whose value differs. `round`: the member's lay (today a
- * unit laid again is a round of its own; 0 for the slots before any lay)
+ * typesetter's ledger with the recorded one slot by slot and names the first rule whose value differs. `round`: the member's
+ * lay (a unit laid again is a round of its own; 0 for the slots before any lay)
  */
 export type LedgerSlot = { step: Step; by: RuleId; round: number; value: Json }
 /** a page's ledger: each member's slots, each pass page's fill target, the table groups read */
