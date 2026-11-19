@@ -1,4 +1,4 @@
-// The layout marks of the marked original (Plan 8b, Task 1; the layout research of 2026-10-06): where on the page TeX
+// The layout marks of the marked original: where on the page TeX
 // sets each placeholder of a unit, each footnote call, each table cell and each heading, as named destinations beside
 // the unit marks MARK_DEF already writes; and the marks file, what the layout maker reads from the marked original (its
 // marks, its line counts, its words), kept so that a new layout is made from it with no compile.
@@ -11,8 +11,8 @@
 // skips; and none is written to a file or a PDF string, so that the aux, the lists and the bookmarks are byte for byte
 // the paper's, but a babel name's (NAMES_TEX), which writes itself into the lists and the running heads it is copied
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
-// layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
-// lines they carry and lose, and fails on a loss of no accepted cause.
+// layout-marks-cases.mjs) hold every text item of the page in place; what a line the marks move could cost on arXiv's
+// page (a unit not located, or drawn otherwise) is counted by the prepare's corpus gates (lab/pdf/README.md).
 import {
   BACKREF_LIST,
   calledAt,
@@ -106,7 +106,7 @@ export const MARK_CLASSES = Object.freeze([
   'macro',
   'number',
 ] as const)
-/** the classes the run marks when asked: the global default, every class (Task 2's corpus check). The paper's own switch
+/** the classes the run marks when asked: the global default, every class. The paper's own switch
  *  (layoutMarking's `switches`, what TeX answers to the mark probe) takes marks off a command's placeholders where TeX
  *  says they would change what follows them */
 export const LAYOUT_CLASSES: readonly MarkClass[] = Object.freeze([...MARK_CLASSES])
@@ -846,9 +846,9 @@ const OWN_NODE =
  * with the paragraph the document goes on with where the sample left vertical mode: it set no ink where no node at any depth of
  * that box sets any, whatever lines the box holds. A sample that ends the paragraph or the line where it is used and sets nothing
  * (`\\par`, `\\\\`, `\\newline`, LaTeX's `\\medbreak`, cas-sc's `\\sep`, which its keywords environment makes `\\par`) is inkless
- * there: the paragraph or the line it ends is TeX's own statement (the paragraph points), not ink of the macro (the coordinator's
- * ruling of 2026-11-16, lane cm-fix, reversing the morning's: read "never inkless", such a macro was given a mark it has no ink
- * after, its element no ink and no text, its unit the original's); an `\\item` a paper's macro makes is inked by the label LaTeX
+ * there: the paragraph or the line it ends is TeX's own statement (the paragraph points), not ink of the macro (PDF-READER
+ * §18.80: read "never inkless", such a macro would be given a mark it has no ink after, its element no ink and no text, its
+ * unit the original's); an `\\item` a paper's macro makes is inked by the label LaTeX
  * sets at the next paragraph's start, which the ask sets in its box. With `ask` (useAnswersOf: the loop's first pass, the marked files), the marks' own points and
  * destinations in the box are no ink (OWN_NODE). A sample with no listing, an error, a line cut short or a node not known is
  * no answer: what it sets is not known
@@ -1028,7 +1028,7 @@ export function readInkDecorated(
 }
 /**
  * The text each ask sets where the document uses a macro, from the loop's first pass's log (ASK_TEX: the ink section's form),
- * read only where TeX states every glyph as itself (the coordinator's ruling on the third cause, 2026-11-16, lane cm-fix): the
+ * read only where TeX states every glyph as itself (PDF-READER §18.80): the
  * sample's listing holds characters of a text font (OT1, T1, LY1, TU) that the encoding sets as ASCII's letters, digits and
  * punctuation (readInkTexts' own), and nodes that set no ink between them (glue, kerns, penalties, boxes at any depth); a
  * ligature (a slot standing for two characters), a formula, a rule, leaders, a character of any other font or slot, an error,
@@ -1729,7 +1729,7 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  * (below), and else nothing: no line of it changes but pdfTeX's warnings of a destination set twice. Each part keeps TeX's
  * lists as the paper's, a destination (a whatsit) beside them:
  * - **The alignment.** For a unit's, a heading's or a cell's end mark (`<i>e`, `h<i>e`, `t<i>e`: its line names it as the
- *   mark does, `h<i>`, `t<i>`, which today's readAlign passes over for a cell), a message to the log,
+ *   mark does, `h<i>`, `t<i>`), a message to the log,
  *   `AXT-ALIGN <i> <mode> <lo> <ls> <ro> <rs> <po> <ps>`: the mode TeX is in (p a paragraph, h an \hbox's restricted
  *   horizontal mode, v vertical), and the stretch's order and amount of \leftskip, \rightskip and \parfillskip (readAlign):
  *   the author's own alignment, \centering's both skips infinite and its \parfillskip none. TeX breaks a paragraph's lines
@@ -1882,13 +1882,13 @@ export function readMarkProbe(log: string | null | undefined, samples: readonly 
  *   and around each float's finished box (after \@endfloatbox, the box repacked as the body is: a point at the box's
  *   start would give its first paragraph a \parskip), points alone (bs, be, fs, fe and a count kept in a macro): a range
  *   across a page or a column, or one an [h] float is shipped into, is cut to its own.
- *   Every glyph, box and destination where it was (the stream spike of 2026-10-06: pdfLaTeX and XeLaTeX to 1e-12 pt on
+ *   Every glyph, box and destination where it was (measured 2026-10-06: pdfLaTeX and XeLaTeX to 1e-12 pt on
  *   seven papers; LuaTeX's PDF writer sets the glyphs after a literal by an absolute matrix, ≤ 0.011 pt off: accepted)
  * What no TeX here can keep: a font kern between a heading's last letter and a full stop its class adds by expansion
- * (acmart's \@addpunct, amsart's and IEEEtran's run-in heads; 0.09 to 1.22 pt on that line, accepted: Task 2), and a
+ * (acmart's \@addpunct, amsart's and IEEEtran's run-in heads; 0.09 to 1.22 pt on that line, accepted), and a
  * punctuation mark a package sets before a citation or a call by looking past it (natmove, cite.sty's super, biblatex's
  * \autocite, fnpct) — where TeX's answer to the mark probe takes the marks off (layoutMarking's `switches`). pdfTeX may
- * draw a virtual font's glyph after a whatsit off where TeX set it; no corpus paper shows it (Task 2's TeX boxes)
+ * draw a virtual font's glyph after a whatsit off where TeX set it; no corpus paper's TeX boxes show it
  */
 /**
  * The classes of the points (POINTS, and the cell's end LAYOUT_TEX sets through \\axt@dest), each by the names its points
@@ -1958,8 +1958,8 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   // \\lastxpos, in sp from the page's left: zref-savepos's primitives, in every engine and mode), the page's text frame as TeX
   // set it (packages/engine/src/marks/channels.ts readBodies). Then `<depth>`: the depth of the text block's bottom under the
   // page's top edge as LaTeX's \\@outputpage ships it, an inch, \\voffset, \\topmargin, the head's \\headheight and
-  // \\headsep, then \\textheight: TeX's text block bottom, under which no line of a column's text stands (the borrowing ruling
-  // of 2026-11-08), a dimension and no position, so the same in every engine. A \\write delayed to the shipout beside a saved
+  // \\headsep, then \\textheight: TeX's text block bottom, under which no line of a column's text stands (the borrowing rule,
+  // PDF-READER §18.11), a dimension and no position, so the same in every engine. A \\write delayed to the shipout beside a saved
   // position: two whatsits beside the point, before its \\penalty10000, so that no place to break is made or lost and nothing
   // moves; written to the log alone)
   [
@@ -2057,7 +2057,7 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   // (each paragraph's start, q<n> at LaTeX's para/begin, inside its indentation box: \\IndentBox, not yet put back, wrapped
   // whole with the point before it, of its size; never a node of the paragraph's own, which would make a paragraph whose
   // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ no longer empty, a line
-  // of its own: 2609.26457 p8 on TeX Live 2023, 2026-10-25. A paragraph with no indent (\\noindent, an \\item's, the first
+  // of its own: 2609.26457 p8 on TeX Live 2023. A paragraph with no indent (\\noindent, an \\item's, the first
   // after a heading whose class takes it) carries none and reads as the one before; the ledger's blocks, orphan-text.md §4)
   [
     'para-start',
@@ -2074,9 +2074,9 @@ export const POINTS: readonly (readonly [PointClass | null, string])[] = [
   // footnote's mark, the point of an element of ours, a unit's end mark), an adjustment, a discretionary, a formula), but where
   // it would make TeX build a line it does not build: on an empty list (TeX builds none for an empty paragraph) and on a list
   // that still ends in a glue (a paragraph ending in \\, `\hfil\break` and the line's space, whose last line the point would
-  // make a line of its own: 2602.23285v2; and a leaders' glue, which \hskip cannot put back). Until 2026-11-13 a whatsit, an
-  // adjustment and a discretionary stated none either, and a paragraph that ends in a footnote under hyperref's colour links or
-  // in an element's point stated no end: the unit's paragraph after it ran on from it (2111.09276v1 p5, docs/PDF-READER.md
+  // make a line of its own: 2602.23285v2; and a leaders' glue, which \hskip cannot put back). A whatsit, an adjustment and a
+  // discretionary state an end as any node does: else a paragraph that ends in a footnote under hyperref's colour links or in
+  // an element's point states no end, and the unit's paragraph after it runs on from it (2111.09276v1 p5, docs/PDF-READER.md
   // §18.66; lab/pdf/spikes/para-end-cases.mjs, with microtype, moves no glyph). A list that ends in a box (an \hbox, a \vbox)
   // states none still, for a debt and not a rule: with points after boxes as well as after whatsits, pdfTeX 1.40.28 segfaults on
   // 2610.30769v1 (a link of the paper's own that ends in another nesting level than it starts, which its own compile warns of;
@@ -2457,7 +2457,7 @@ export const LAYOUT_TEX_REDUCED = LAYOUT_TEX.split(POINTS_TEX).join(POINTS_TEX_R
  * The separations the rebuilt prepare's marked compile states (the compile move's B1: the display design's F12, 2d's glues, F40's
  * form 1): messages to the log alone, by macros that set nothing, so that every glyph, box and point stays where it was (the TeX
  * gate's cases, lab/pdf/spikes/gap-cases.mjs). After LAYOUT_TEX, whose heading mark and float bracket it reads, and only where
- * its option asks (STATEMENTS_TEX): today's reader's marked TeX stays the bytes it was. Read by marks/channels.ts readHeads and
+ * its option asks (STATEMENTS_TEX): without it, the marked TeX is LAYOUT_TEX alone. Read by marks/channels.ts readHeads and
  * readGlues; \parskip's shrink needs no TeX (LINES_TEX prints \parskip whole: readSkips).
  * - **A heading's skips** (`AXT-SECT h<i>s b <before>`, `a <after>`, `l <\baselineskip>`, `p <\parskip>`, each as TeX prints
  *   it). Once the document begins, LaTeX's \@startsection hands each heading's style, its sixth argument, which TeX executes right
@@ -2511,7 +2511,7 @@ export const MEASURE_TEX = [
  * \unskip it begins with, its own taken first (the kernel's then finds the point last and takes nothing: one glue taken, as
  * before), in horizontal mode and while the gate is on: past the line's last glyph, before its \nobreak, no place to break made
  * or lost. LaTeX's `\break` (robust: its own code the macro `\break `, `\penalty-\@M`) sets one too where it ends a line in a
- * paragraph (horizontal mode, not an \hbox's restricted one; the coordinator's ruling 4 of 2026-11-16: amsart's `\address{…
+ * paragraph (horizontal mode, not an \hbox's restricted one; PDF-READER §18.77: amsart's `\address{…
  * \hfill\break\indent …}`, 2608.03841v2's eight, the corpus's only uses in a unit's text), before its penalty, nothing taken (an
  * `\hfill` before it stays the line's); none in vertical or math mode, none for \@gnewline's own \break (`\axt@kbskip`). Its
  * robust wrapper is the kernel's: what a write of it writes is as before. A point of the optional class `forced-break`
@@ -2532,7 +2532,7 @@ export const BREAKS_TEX = [
  * for a page (a class whose output routine is its own: REVTeX's ltxgrid, aastex631, opticajnl; a page of floats) its
  * \@outputpage hook brackets the whole output box, floats and all, under the same names. Before that hook, in the same hook's
  * code of a label of its own (so that it runs before the head's, top-level code always last), this states the serial that bracket
- * is about to take: `AXT-WHOLE <n>`, a message alone, setting nothing. LAYOUT_TEX, today's reader's, keeps its bytes. Read by
+ * is about to take: `AXT-WHOLE <n>`, a message alone, setting nothing. LAYOUT_TEX keeps its bytes. Read by
  * marks/channels.ts readWhole
  */
 export const WHOLE_TEX = [
@@ -2541,8 +2541,8 @@ export const WHOLE_TEX = [
   String.raw`\ifdefined\AddToHook\AddToHook{cmd/@outputpage/before}[axt-whole]{\ifcsname ifaxt@bodied\endcsname\axt@whole\fi}\fi`,
   String.raw`\makeatother`,
 ].join('')
-/** the TeX of the statements the rebuilt prepare's marked compile makes and today's reader's does not (live.ts originalFiles
- *  `statements`, which compiledOf sets: after LAYOUT_TEX on its line, and left out of a reduced compile), each slice's in turn:
+/** the TeX of the statements the marked compile makes where its option asks (live.ts originalFiles `statements`, which
+ *  compiledOf sets: after LAYOUT_TEX on its line, and left out of a reduced compile), each slice's in turn:
  *  the separations (GAPS_TEX), each paragraph's measure (MEASURE_TEX), the forced breaks' points (BREAKS_TEX) and the body
  *  brackets that hold a whole page (WHOLE_TEX) */
 export const STATEMENTS_TEX = GAPS_TEX + MEASURE_TEX + BREAKS_TEX + WHOLE_TEX

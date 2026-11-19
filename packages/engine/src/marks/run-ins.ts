@@ -1,19 +1,19 @@
 // A unit's run-in labels, stated `must` (the translate decision: "the PDF's source reader marks links and run-in labels";
 // the translate contract's Piece: a `must` span comes back exactly once or the reply is refused). The markers wire (Microsoft's,
 // the server's first translator) sends a span that is not `must` on no wire, its words the sentence's and its style lost:
-// staging, 2026-11-08, 1810.04805v2 p8's "\noindent\textbf{No NSP}: ..." and 2010.11929v2 p5's "\textbf{Training \& Fine-tuning.}"
-// came back regular. Today's wire kept such a pair as two markers by its own rule (src/pdf-reader/engine/translate/mt.mjs
-// classOf at 065c1d973, its sentence rule and its boundary rule), ported here over the unit's typed content: a style group
-// whose two ends stand where its sentence is cut anyway costs the endpoint no cut of its own. Today's flat text: each text as
-// it is, an element that sets no ink nothing (the marking's INVISIBLE: a switch, a skip, a label), one that breaks the text (a
-// forced break, an item, a display) or any other one character; a group with no text nothing, or one character where it holds
-// an element that sets ink. Not ported: today's merge of same-style neighbours, and its keeping of a pair that sets more than a
-// style (a box, a paper's macro of prose), which the translate lane's wire sends on no wire by its own decision. A figure text's
-// run of glyphs in another face (locate/ink.ts figureRuns: a group of no source) is a style group read by the same rules.
+// on staging, 1810.04805v2 p8's "\noindent\textbf{No NSP}: ..." and 2010.11929v2 p5's "\textbf{Training \& Fine-tuning.}"
+// came back regular. Such a pair is kept as two markers by a sentence rule and a boundary rule over the unit's typed
+// content: a style group whose two ends stand where its sentence is cut anyway costs the endpoint no cut of its own.
+// The flat text the rules read: each text as it is, an element that sets no ink nothing (the marking's INVISIBLE: a switch,
+// a skip, a label), one that breaks the text (a forced break, an item, a display) or any other one character; a group with
+// no text nothing, or one character where it holds an element that sets ink. Same-style neighbours are not merged, and a
+// pair that sets more than a style (a box, a paper's macro of prose) is not kept: the translate package's wire sends it on
+// no wire by its own decision. A figure text's run of glyphs in another face (locate/ink.ts figureRuns: a group of no
+// source) is a style group read by the same rules.
 //
 // A label after a forced break is kept on the premise that the endpoint's sentence is cut there; on the markers wire it is not
-// (a forced break is a marker like any other, and Microsoft reads neither a marker nor a colon as a sentence's end): staging,
-// 2026-11-09, 1810.04805v2 p8's "as \bertbase: \\ \noindent \textbf{No NSP}: A bidirectional model ... (NSP) task." went out
+// (a forced break is a marker like any other, and Microsoft reads neither a marker nor a colon as a sentence's end): on
+// staging, 1810.04805v2 p8's "as \bertbase: \\ \noindent \textbf{No NSP}: A bidirectional model ... (NSP) task." went out
 // as one sentence of Microsoft's, the label's words a fragment between two markers inside it, and came back as the word for
 // "no" alone, the term lost. So the break such a label follows, where no stop ends the text before it, states the line it
 // ends: its `stop` a line end, which a wire writes after the element so that the endpoint's sentence ends there (begun on its
@@ -23,8 +23,8 @@
 // kept its italic) begins its line as one right after the break does, as a group before the unit's first word begins the unit.
 //
 // A style group was one whose open names a style (STYLE_OPEN): a paper's macro never was, whatever TeX set it in. 2608.25210v2's
-// run-in heads are its `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}` (staging, 2026-11-09: on no wire, back
-// regular). So a group of a command the style tables name no style of, which TeX set in a face that is not the face around it
+// run-in heads are its `\newcommand{\topic}[1]{\vspace{.5pt} \noindent{\bf #1.}}` (on no wire, back regular on
+// staging). So a group of a command the style tables name no style of, which TeX set in a face that is not the face around it
 // (read off its glyphs: marks/faces.ts, the caller's `faced`), is a style group too, by the same rules; and the stop TeX set
 // at a group's end that its source does not write (its `stop`, faces.ts) ends its text here as a stop the source wrote would.
 import type { KnownSpanKind, Piece } from '@readarxiv/format'

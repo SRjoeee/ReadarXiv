@@ -250,7 +250,7 @@ function taggedLines(log: string, tag: string): string[] {
 /**
  * Each unit's \baselineskip and \parskip, natural, where its paragraph ends (LINES_TEX's `AXT-LINES <unit> <\prevgraf>
  * <\baselineskip> <size> <\parskip>`, the last TeX pass's), in PDF units, by unit index: TeX's normal paragraph separation
- * there, their sum, which the next ink under a borrowed line keeps (the owner's ruling of 2026-11-08); and \parskip's shrink, a
+ * there, their sum, which the next ink under a borrowed line keeps (PDF-READER §18.11); and \parskip's shrink, a
  * third, where it is of points (TeX's least separation there is the natural less it: the display design's 2d, rule 2), none
  * where it is of an infinite order. A unit TeX set no paragraph for (a caption measured in a box alone, a heading, the front
  * matter's) states none; nor does a compile made before \parskip was stated
