@@ -11,7 +11,7 @@ import type { FitState, LaidItem, LaidLine, Layout } from '../fit/types.ts'
 import type { FaceId, Item } from '../types.ts'
 
 /** the least kern after a word that copies as a space, em of the line's size (L2:4632 COPY_SPACE_EM) */
-const COPY_SPACE_EM = 0.25
+export const COPY_SPACE_EM = 0.25
 
 /** a line's own fit where the unit's runs were laid apart (X.runs: `seg`), else the unit's */
 type Seg = { f: number; scale: number; state: FitState }

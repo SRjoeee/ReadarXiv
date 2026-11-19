@@ -18,9 +18,9 @@ export type Refusal =
   | 'unread'
 
 /** The one measured length floor (the LLM probe: both cut units under 0.2, p05 0.29), for every target */
-const LENGTH_FLOOR = 0.2
+export const LENGTH_FLOOR = 0.2
 /** … for units of this many plain characters or more */
-const FLOOR_FROM = 200
+export const FLOOR_FROM = 200
 
 const OBJ = '￼'
 /** whether a text holds a C0 or C1 control but tab and newline */

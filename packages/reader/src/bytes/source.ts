@@ -35,7 +35,7 @@ export { chunkUrl }
  *  are its round trip, a lossy one's TCP's backoff, 6.2 to 7 s; the one stall measured that came back lasted 9.5 s) */
 export const STALL_MS = 10_000
 /** how many times a range is asked, at most, where the network fails it, but by an owner that keeps reading */
-const RANGE_TRIES = 2
+export const RANGE_TRIES = 2
 /** the pause before a read the network failed at once is asked again, ms, doubled at each failure, to RETRY_MAX_MS;
  *  unmeasured */
 const RETRY_MS = 1_000

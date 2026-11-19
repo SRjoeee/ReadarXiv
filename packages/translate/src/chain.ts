@@ -37,14 +37,14 @@ import { wholeWordsOf } from './words.ts'
 export const ATTEMPTS = 3
 /** the n-th wait, ms: BACKOFF_MS × 3^(n−1) × (0.5 + random) (chain.ts backoffDelay). The policy carried over (DESIGN §8:
  *  three attempts with backoff), unmeasured */
-const BACKOFF_MS = 500
+export const BACKOFF_MS = 500
 /** a 429's cooldown at least, ms (chain.ts MIN_COOL_MS): the policy carried over (DESIGN §8), unmeasured */
 const MIN_COOL_MS = 1_000
 /** a 429's cooldown where it names none, ms: the request layer's base pause (`RATE_LIMIT_BASE_PAUSE_MS`,
  *  src/providers/request/retry-policy.ts; DESIGN §8.3), unmeasured */
-const DEFAULT_COOL_MS = 5_000
+export const DEFAULT_COOL_MS = 5_000
 /** how many times the chain's last translator waits a cooldown out before its unit is unavailable (chain.ts `waits < 2`) */
-const LAST_WAITS = 2
+export const LAST_WAITS = 2
 /** the longest the chain's last translator waits pauses out for one unit, in all (a 429's cooldown, a gate's refusal): what
  *  the chain already gives one request of it, ATTEMPTS tries of its `callMs` (the LLM's 105 s, a web translator's 30 s). A
  *  pause past it is no slower answer but the translator out for now: it is never slept, the translator is passed over as a
@@ -64,7 +64,7 @@ const STORE_WRITE_MS = 5_000
 export const WRITE_EVERY = 200
 /** a stored value at most, in UTF-16 code units of the translator's raw reply (design-a §1.6). DESIGN §9 states the bound
  *  as 64 KiB; a ruling, unmeasured */
-const VALUE_MAX = 64 * 1024
+export const VALUE_MAX = 64 * 1024
 /** `supports` answers within this, ms, or the translator is passed over: the probes' deadline (DESIGN §8.5, `PROBE_MS`
  *  2 s); a ruling, unmeasured */
 const SUPPORTS_MS = 2_000
@@ -72,7 +72,7 @@ const SUPPORTS_MS = 2_000
  *  unmeasured */
 export const GATE_MS = 1_000
 /** the store key's grammar; it rises only if the grammar changes */
-const KEY_VERSION = 't1'
+export const KEY_VERSION = 't1'
 /** The behaviour digest of the chain's own outcome rules: the SHA-256 of the chain's outcomes over the case table of
  *  tests/chain-cases.ts, held by tests/chain-digest.test.ts and written by `pnpm digests --write`. The rules, each with a
  *  case there that it alone decides: fall-through per unit; one re-ask where a translator asks it; the runs floor of stretches

@@ -107,10 +107,10 @@ export const footFloorOf = (blocks: readonly FitBlock[], st: FitState, P: FitPar
   footFloorAt(blocks, st, P, s)
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent (TeX's
  *  \abovedisplayshortskip, nothing but stretch, sets one that near; its \abovedisplayskip does not) */
-const SHORT_SKIP = 0.3
+export const SHORT_SKIP = 0.3
 /** of a line's size: how far before a display TeX's short skip asks the line over it to end (\predisplaysize, the line's
  *  width and 2 em) */
-const PREDISPLAY = 2
+export const PREDISPLAY = 2
 /** how near a formula's baseline is to a line's of the file for it to stand on that line (PDF units): both are written to a
  *  hundredth */
 const ON_LINE = 0.05

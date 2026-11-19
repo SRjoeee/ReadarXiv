@@ -121,7 +121,7 @@ const OWN_MARKS = '.,;:。．，、；：।۔،؛'
 export const OWN_LEAD = new RegExp(`^([ \\t\\n\\f\\r\\ue000]*)[${OWN_MARKS}]+`)
 
 /** the stop a display that states none of its own ends its sentence with, where TeX set it at that sentence's end */
-const DISPLAY_END = '.'
+export const DISPLAY_END = '.'
 /** a text that begins a sentence: its first letter upper case (Unicode Lu, Lt) */
 const BEGINS = /^\s*[\p{Lu}\p{Lt}]/u
 /**

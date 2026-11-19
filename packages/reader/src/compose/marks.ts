@@ -14,8 +14,8 @@
 import type { Clock } from '../stack/clock.ts'
 
 /** the card's padding, CSS pixels at the reader's 100 % (the sheet's --axt-tr-pad-x and -pad-y, where it gives none) */
-const PAD_X = 4
-const PAD_Y = 2
+export const PAD_X = 4
+export const PAD_Y = 2
 
 /** a paragraph's box on the page, PDF units [x0, y0, x1, y1] (y up), by its member's ord */
 export interface MarkBox {
