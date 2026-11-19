@@ -8,6 +8,8 @@
 // adds no field of its own. The file's other fields (note, licence, image, files, gaps, conjunctionGaps) are the engine's:
 // the typesetter takes none of them. And the commands whose names U.rename puts in the target (unit/rename.ts
 // GENERATED_COMMANDS) are the ones the source reader reads (packages/engine/src/source/tex-names.ts GENERATED_COMMANDS).
+// And the targets whose names do not inflect (UNINFLECTED, a copy in each package) are languages of one plural category in
+// Unicode CLDR's plural rules, as Intl.PluralRules reads them (no data file).
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -51,5 +53,21 @@ describe("the typesetter's head and reference names are the engine's tex-names.j
 describe("the typesetter's generated reference commands are the source reader's", () => {
   it("lists cleveref's and hyperref's commands as packages/engine/src/source/tex-names.ts does, in its order", () => {
     expect([...GENERATED_COMMANDS]).toEqual([...SOURCE_COMMANDS])
+  })
+})
+
+describe('the targets whose names do not inflect', () => {
+  const uninflected = (path: string): string[] => {
+    const m = /const UNINFLECTED = new Set\(\[([^\]]*)\]\)/.exec(readFileSync(resolve(__dirname, '../..', path), 'utf8'))
+    return m ? [...(m[1] ?? '').matchAll(/'([^']+)'/g)].map((x) => x[1] ?? '') : []
+  }
+  const ENGINE = uninflected('packages/engine/src/source/tex-names.ts')
+  const TYPESET = uninflected('packages/typeset/src/unit/rename.ts')
+  it('are the same targets in the source reader and the typesetter', () => {
+    expect(ENGINE.length).toBeGreaterThan(0)
+    expect(TYPESET).toEqual(ENGINE)
+  })
+  it("are each a language of one plural category, `other`, in Unicode CLDR's plural rules", () => {
+    for (const code of ENGINE) expect([code, new Intl.PluralRules(code).resolvedOptions().pluralCategories]).toEqual([code, ['other']])
   })
 })

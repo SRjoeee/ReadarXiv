@@ -77,7 +77,9 @@ export const GENERATED_COMMANDS: readonly string[] = Object.freeze([
 const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
 /** a citation's note, its last optional argument (L2:1279 CITE_NOTE) */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
-/** the targets whose names do not inflect (tex-names.mjs:17) */
+/** the targets whose names do not inflect (tex-names.mjs:17): each a language of one plural category, `other`, in Unicode
+ *  CLDR's plural rules (Intl.PluralRules reads them; tests/typeset/tex-names.test.ts holds it) whose names table was read
+ *  so; the converse is not claimed: a language of one plural category is not one of these until its names table is read so */
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
 /** the counter types babel names that neither cleveref nor ctex does (tex-names.mjs:20): article.cls's \figurename,
  *  \tablename and \appendixname, as babel's captions */
