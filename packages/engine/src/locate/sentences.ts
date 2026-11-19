@@ -39,7 +39,7 @@ export function sentenceStarts(w: Work): void {
     // (an element a sentence may begin with, where a row's start falls on it (its translator set it first in its sentence:
     // "\method{} trains …", "\citet{x} proposes …"), placed at its ink's first box on A, its line and x0, as a word is; never a
     // display (a block of its own) nor an element TeX set outside the unit's text (kept where it stands). Words alone, the left
-    // pane lit it with the sentence before, the start moved on past it: 556 of 2,148 starts of staging's rows, 2026-11-10)
+    // pane lit it with the sentence before, the start moved past it: 556 of 2,148 source starts on staging, measured 2026-11-10)
     const els = new Map(mem.elements)
     for (const [o, id] of elementsOf(content)) {
       const el = els.get(id)

@@ -2,7 +2,7 @@
 // `docs/route/ocg-erasure.md` §1): the classes a unit's ink is hidden by — its text `u<id>`, its placeholders `u<id>.p`, its
 // label `u<id>.l` — and a babel name's `n<occ>`, as glyphs and painted rules of each page of the compile the reader shows. The
 // layout file and the page's geometry are not read (but one baseline test for a label): what a unit owns is what TeX shipped
-// between its points (`/axt-<name> ri`, layout/marks.mjs LAYOUT_TEX), in its start point's region (stream.mjs regionsOf: in a
+// between its points (`/axt-<name> ri`, marks/marks.ts LAYOUT_TEX), in its start point's region (stream.ts regionsOf: in a
 // column's body or not, at a depth of floats).
 //
 // The rules (MR):
@@ -16,22 +16,22 @@
 //   3. a unit with an end mark alone (a title: TeX sets no start in vertical mode): from the point before it on its page, its
 //      glyphs alone (a rule above a title is no title's); marks set twice are its first occurrence where that is an end mark
 //      alone and every later one a pair (a title its class sets again: acmart);
-//   4. a placeholder (`p<id>.<j>a`/`b`, a footnote call `n<id>.<j>a`/`b`): stream.mjs ownedOf's entry where the marking is
+//   4. a placeholder (`p<id>.<j>a`/`b`, a footnote call `n<id>.<j>a`/`b`): stream.ts ownedOf's entry where the marking is
 //      given (`follows`), else the pair, or an opening alone to the next point in its region (a unit's head piece's opening
 //      point at the unit's start mark: patch writes the start mark first, so that no run-in heading sets it);
 //   4b. a footnote's call after the unit's last word that TeX gave no mark: the raised glyphs right after its end mark, on that
 //      line, in no group;
 //   4c. the closing punctuation TeX sets after the unit's end mark (amsthm's ")" after a theorem's note where the body begins on
 //      a line of its own, a bibliography style's stop after an entry): the glyphs right after the mark, on that line, in no
-//      group, each TAIL_PUNCT abutting the one before it — the unit's text, as the maker's line takes them (make.mjs lineOf);
+//      group, each TAIL_PUNCT abutting the one before it — the unit's text, which the layer draws again after its translation;
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
 //      unit's text (amsthm's "(Note).") —; none for a table cell; a caption's by TeX's call alone: what TeX set from the label
-//      point before its \fnum@<type> (`ka<k>`, layout/marks.mjs) to its start, whatever line it stands on (IEEEtran's "TABLE I"
+//      point before its \fnum@<type> (`ka<k>`, marks/marks.ts) to its start, whatever line it stands on (IEEEtran's "TABLE I"
 //      centred above its text), none where TeX set no such point;
 //   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`; 6b. the counter TeX set after it on its line, no unit's, its own;
 //      6c. the number TeX set right before it at its line's start, no unit's, TeX's stream setting nothing between, its label
-//      `n<occ>.l` (names.mjs counterBefore: a heading its class numbers itself);
+//      `n<occ>.l` (marks/names.ts counterBefore: a heading its class numbers itself);
 //   7. images and forms are no unit's text here (a form whose ink is all one group's is wrapped whole by wrap.ts); an image TeX
 //      painted inside a placeholder's ink (an inline \includegraphics, 2610.21924v1's `\COMPASSicon`) is the placeholder's.
 // A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first text's over a later.
@@ -39,14 +39,14 @@
 // units do not name; the work is bounded (OWN_WORK).
 //
 // The spell check (§1.3) is what makes "a unit that cannot be delimited shows the original" exact: a unit's `u` glyphs must
-// spell its source text, letters and digits alone (stream.mjs spellOf: NFKD, marks and case dropped, a letter Unicode does not
+// spell its source text, letters and digits alone (stream.ts spellOf: NFKD, marks and case dropped, a letter Unicode does not
 // decompose as its base letters: TeX's accents, ligatures, letter symbols, hyphenation and punctuation are no unit's evidence),
 // a wrapper's own words at its slot and lines of their own no unit's aside (spells), or it is `unhidden: 'spell'`; its label
 // must be a label's form (a number, an item's mark,
-// a caption's name and number) or empty, else the label is left the original's ink (`labelKept`, the coordinator's amendment of
-// 2026-10-28) where its ink is apart from the text's, and the unit `spell` where it is not.
+// a caption's name and number) or empty, else the label is left the original's ink (`labelKept`, PDF-READER §19.9) where its
+// ink is apart from the text's, and the unit `spell` where it is not.
 //
-// Pure arithmetic over what pageInk read (layout/ink.mjs, `indices`); imports the stream's regions and a unit's source text.
+// Pure arithmetic over what pageInk read (ink.ts, `indices`); imports the stream's regions and a unit's source text.
 // An original module (no port statement).
 import { utf8 } from '../instrument/mt.ts'
 import { symbolText } from '../source/text-symbols.ts'
@@ -118,7 +118,7 @@ export interface Ownership {
 }
 /** a reading's glyphs and painted boxes, each [page, index] */
 type Taken = { glyphs: Place[]; boxes: Place[] }
-/** a unit's text range: its start point, none for a unit of an end mark alone (MR 3), and its end point */
+/** a unit's text range: its start point, none for a unit of an end mark alone (a title), and its end point */
 type TextRange = { s: Place | null; e: Place }
 /** a unit's source text for the spell check (sourceOf) */
 type Source = { text: string; bare: string; parts: string[] }
@@ -126,11 +126,11 @@ type Source = { text: string; bare: string; parts: string[] }
 type LineRun = { p: number; y: number; size: number; x0: number; x1: number }
 
 export { UNHIDDEN }
-/** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */
+/** a label's form, the paper's theorem names beside the standard ones: marks/label-form.ts */
 export { isLabelForm, labelFormOf }
-/** pageInk's kind of an image's box (layout/ink.mjs: -3), a placeholder's ink where TeX painted it between its points (MR 7) */
+/** pageInk's kind of an image's box (ink.ts: -3), a placeholder's ink where TeX painted it between its points (an inline image) */
 const IMAGE_BOX = -3
-/** the readings of a placeholder bounded by TeX's facts on both sides (stream.mjs OWNED_HOW): between its two points, or from
+/** the readings of a placeholder bounded by TeX's facts on both sides (stream.ts OWNED_HOW): between its two points, or from
  *  its opening one to the text after it in its unit */
 const BOUNDED: ReadonlySet<number | undefined> = new Set([
   OWNED_HOW.indexOf('closed'),
@@ -143,24 +143,24 @@ export const OWN_WORK = 20_000_000
 const SPELL_LIST_MAX = 64
 
 const START = /^([th]?)(\d+)s$/
-/** the point the marked compile sets before a caption's label, \\fnum@<type>, where TeX sets it (layout/marks.mjs) */
+/** the point the marked compile sets before a caption's label, \\fnum@<type>, where TeX sets it (marks/marks.ts POINTS_TEX) */
 const LABEL_POINT = /^ka\d+$/
 const END = /^([th]?)(\d+)e$/
-/** a rule TeX paints on a line of a unit's text (MR 2b) is no thicker than this share of the line's size: its rules are a
- *  default rule's 0.4 pt (a twentieth of an 8 pt line, a sixtieth of a 24 pt one); a letter's ink, an icon's, a logo's parts
- *  are a quarter of a size or more */
+/** a rule TeX paints on a line of a unit's text (OT1's \\_, an underline) is no thicker than this share of the line's size:
+ *  its rules are a default rule's 0.4 pt (a twentieth of an 8 pt line, a sixtieth of a 24 pt one); a letter's ink, an icon's,
+ *  a logo's parts are a quarter of a size or more */
 export const RULE_EM = 0.1
 /** a cell's lead macro's ink abuts its start: each gap under this share of an em (a word's space is a third; two \\tabcolsep
  *  between columns are more than one) */
 const CELL_ABUT = 0.6
-/** a footnote's mark after a unit's last word stands at least this share of the line's size above its baseline (make.mjs SHIFT) */
+/** a footnote's mark after a unit's last word stands at least this share of the line's size above its baseline */
 const RAISED = 0.2
-/** a head macro's closing punctuation after the unit before a start (MR 5): a closing bracket or quote, a stop, a colon */
+/** a head macro's closing punctuation after the unit before a start: a closing bracket or quote, a stop, a colon */
 export const HEAD_PUNCT = /^[)\]}.,:;!?\u2019\u201d]$/u
 /** that punctuation abuts the glyph before it: each gap under this share of an em (a word's space is a third) */
 export const HEAD_ABUT = 0.2
-/** the closing punctuation glued past a unit's end mark on its line that is the unit's text (MR 4c), as the maker's line takes it
- *  (make.mjs lineOf): a stop, a comma, a colon, a closing bracket */
+/** the closing punctuation glued past a unit's end mark on its line that is the unit's text, which the layer draws again after
+ *  its translation: a stop, a comma, a colon, a closing bracket */
 export const TAIL_PUNCT = /^[.,;:!?)\]]$/
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 const CLOSING = /^([pn])(\d+)\.(\d+)b$/
@@ -173,7 +173,7 @@ const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
 const NAME_END = /^n(\d+)\.([a-z]{1,16})\.e$/
 const BRACKET = /^[bf][se]\d+$/
 
-/** a text's evidence for the spell check: its letters and digits, without their accents, lower case (stream.mjs's) */
+/** a text's evidence for the spell check: its letters and digits, without their accents, lower case (stream.ts's) */
 export { spellOf }
 /** a head's joint between a babel name and its unit's text, as a label holds it: its punctuation alone */
 const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
@@ -183,11 +183,11 @@ const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
  * `indices` — `glyphs` ({ n, k, u, x0, x1, y, size, top, bottom }, stream order), `boxes` (stride 4), `paths` (each box's
  * painted path's place, or its kind: < 0), `points` ({ name, glyph, box }), `boxAt` — and its `view`; a page that was not read
  * is { glyphs: [], boxes: [], paths: [], points: [], boxAt: [] }. `units` the paper's units (their ids their indices; each its
- * source text `src`, else layout/../translate/mt.mjs plainSource of its pieces); `follows` (layout/marks.mjs followsOf over the
+ * source text `src`, else its pieces' text, sourceOf); `follows` (marks/marks.ts followsOf over the
  * units and the points' names) where the marking is known, else null; `texts` (a Map, a macro's source -> the text the
  * marking's probe showed it sets: the marks file's `marking.texts`) where known, else null; `inkless` (a Set, the macros TeX
- * said set no ink: the marks file's `marking.inkless`) where known, else null: such a macro is no placeholder of ink, as the
- * maker reads it (make.mjs), so a unit that opens with one (a title's `\\boldmath`) opens with its text; `names` the paper's
+ * said set no ink: the marks file's `marking.inkless`) where known, else null: such a macro is no placeholder of ink
+ * (inkClassOf), so a unit that opens with one (a title's `\\boldmath`) opens with its text; `names` the paper's
  * theorem-like environments' printed names (openPaper's `theoremNames`), each a label's name (labelFormOf), else null.
  * Returns { glyphs, boxes, units, stats }: `glyphs[p - 1][g]`, `boxes[p - 1][b]` the group a page's glyph or painted rule is
  * hidden with, or null; `units` Map id -> { groups: Set, pages: Set, unhidden: a code of UNHIDDEN or null, labelKept }; `stats`
@@ -275,7 +275,7 @@ export function ownOf(
     }
   }
 
-  /** a placeholder's class, none for a macro TeX said sets no ink (`inkless`, as the maker reads the marking: make.mjs) */
+  /** a placeholder's class, none for a macro TeX said sets no ink (`inkless`, the marking's) */
   const inkClassOf = (piece: Piece) => {
     const c = classOf(piece)
     return c === 'macro' && inkless?.has(piece.src) ? null : c
@@ -312,7 +312,7 @@ export function ownOf(
     return false
   }
 
-  // ---- the text of each unit (MR 1–3, 2a)
+  // ---- the text of each unit
   const ids = new Set<number>()
   for (const name of where.keys()) {
     const m = START.exec(name) ?? END.exec(name) ?? OPENING.exec(name) ?? CLOSING.exec(name)
@@ -321,7 +321,7 @@ export function ownOf(
   // biome-ignore lint/suspicious/useIterableCallbackReturn: a concise arrow, Set.add's value, which no one reads
   if (units) units.forEach((_, i) => ids.add(i))
   const textOf = new Map<number, TextRange>()
-  /** the units whose label the walk back from their start reached past a babel name's range (MR 5): their label is that head's joint */
+  /** the units whose label the walk back from their start reached past a babel name's range: their label is that head's joint */
   const afterName = new Set<number>()
   for (const id of [...ids].sort((a, b) => a - b)) {
     const u = unit(id)
@@ -335,7 +335,7 @@ export function ownOf(
       e: Place | null = E[0] ?? null
     if (S.length > 1 || E.length > 1) {
       // (marks TeX set more than once: the unit is its first occurrence where that is an end mark alone and every later one a
-      // pair, one start before each end — a title TeX set in vertical mode, where no start mark goes (MR 3), its class setting
+      // pair, one start before each end — a title TeX set in vertical mode, where no start mark goes, its class setting
       // its text again later in a line, start and end marks both: acmart's ACM Reference Format, 2610.22065v1 p1u0. TeX keeps
       // the first destination of a name, so the layout's is that one too. The later occurrences' ink is the page's. Anything
       // else — a heading again in a running head, every occurrence a pair — is the original's)
@@ -379,7 +379,7 @@ export function ownOf(
         continue
       }
     } else {
-      // MR 3: from the point before the end mark on its page (or the page's start); its glyphs alone, no rule: what stands
+      // a title's: from the point before the end mark on its page (or the page's start); its glyphs alone, no rule: what stands
       // above a title (a class's rule over it) is no title's, and the spell check reads no rule
       // (the point before it not its own placeholder's: a title's placeholder — a dash, a colon in math — sets points in it,
       // 2610.20848v1 p1u1)
@@ -394,11 +394,11 @@ export function ownOf(
       list = prev ? take(prev, e, at(e)) : takeFromStart(e, at(e))
       list = { glyphs: list.glyphs, boxes: [] }
     }
-    // (a unit's text takes its glyphs and the rules TeX painted on its own lines (MR 2b): OT1's \_, which is a rule and no
+    // (a unit's text takes its glyphs and the rules TeX painted on its own lines: OT1's \_, which is a rule and no
     // glyph, an underline, a stroke through; any other box in its range — a footnote's separator above its lines, a box as tall
     // as a letter (an icon), a rule past its lines — is the page's, left standing; a placeholder's are its own, `.p`, claimed
-    // over the text's below. MR 3's title takes no box: `list.boxes` is empty there. Their search past OWN_WORK: the unit
-    // not owned, as any past it)
+    // over the text's below. A title of an end mark alone takes no box: `list.boxes` is empty there. Their search past
+    // OWN_WORK: the unit not owned, as any past it)
     const rules = lineRules(list)
     if (!rules) {
       u.unhidden = 'marks'
@@ -407,7 +407,7 @@ export function ownOf(
     textOf.set(id, { s, e })
     claim({ glyphs: list.glyphs, boxes: rules }, `u${id}`, 'u')
   }
-  /** the rules TeX painted on the text's own lines (MR 2b): lineRulesOf over the range's glyphs and boxes, its work counted;
+  /** the rules TeX painted on the text's own lines: lineRulesOf over the range's glyphs and boxes, its work counted;
    *  null where it would pass OWN_WORK */
   function lineRules(list: Taken): Place[] | null {
     const r = lineRulesOf(pages, list.glyphs, list.boxes, OWN_WORK - work)
@@ -433,7 +433,7 @@ export function ownOf(
   }
 
   // ---- a text symbol's own glyph is its unit's text: the layer draws a text symbol as its character, never from a crop, so its ink
-  // is hidden with the text wherever the unit is drawn (a cell's lead symbol's below, a placeholder's in MR 4, a unit's lead's here)
+  // is hidden with the text wherever the unit is drawn (a cell's lead symbol's and a placeholder's below, a unit's lead's here)
   /** the text symbols whose own glyph went to their unit's text, by `${id}.${k}`: the spell check reads their characters */
   const symbolsInText = new Set<string>()
   /** how many of `glyphs` (a reading's, in stream order) from the first set `text` exactly, character for character (NFKC, white
@@ -451,11 +451,11 @@ export function ownOf(
     }
     return 0
   }
-  // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
-  // (a unit whose call the marked compile states, an author's (latex-front.mjs \axtcall: the point `<i>c` before the command or
-  // the \and that opens its block): its lead is what TeX set between that point and its start, its label whatever its form but a
-  // word, and what stands before the point is the author's before, its trail (locate). Walked back to the end mark before, ICML's
-  // marks after a name were the next name's label, 2611.03953v2's "12" before "Jiacheng Lu")
+  // ---- the labels: before the placeholders, so that a placeholder's ink is never a label's
+  // (a unit whose call the marked compile states, an author's (marks/marks.ts CALL_TEX's \axtcall: the point `<i>c` before the
+  // command or the \and that opens its block): its lead is what TeX set between that point and its start, its label whatever its
+  // form but a word, and what stands before the point is the author's before, its trail (locate). Walked back to the end mark
+  // before, ICML's marks after a name would be the next name's label, 2611.03953v2's "12" before "Jiacheng Lu")
   const stated = new Set<number>()
   for (const [id, { s }] of textOf) {
     // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
@@ -499,8 +499,8 @@ export function ownOf(
         stated.add(id)
         break
       }
-      // (a paper's macro at the unit's head, its point \\axthpk's (marks.mjs layoutMarking): the glyphs between it and the start,
-      // or the next such point, are that piece's ink, and the label is what stands before it)
+      // (a paper's macro at the unit's head, its point \\axthpk's (marks/marks.ts layoutMarking): the glyphs between it and the
+      // start, or the next such point, are that piece's ink, and the label is what stands before it)
       if (headOpen(X.name, id)) {
         if (lead.glyphs.length) claim({ glyphs: lead.glyphs.reverse() }, `u${id}.p`, 'p')
         lead.glyphs = []
@@ -600,14 +600,14 @@ export function ownOf(
     claim(lead, `u${id}.l`, 'l')
   }
 
-  // ---- a cell's lead macro (MR 5b): a cell that opens with a placeholder of no mark of its own (\\CompletionTokenCap{}, \\#,
+  // ---- a cell's lead macro: a cell that opens with a placeholder of no mark of its own (\\CompletionTokenCap{}, \\#,
   // \\bertbase, \\texttt{max\\_tokens}, \\dprime{}) has that ink set before its start mark, on its line, after the point before
   // it. A cell takes no label, and what stands before it on its line may be an unmarked cell's (a number), however close the
   // columns (\\tabcolsep 2pt, @{}): so the placeholder's ink is told by its TEXT alone — the text the marking's probe showed the
-  // placeholder sets (`texts`, marks.mjs readInkTexts: "1,024", "max_tokens", a formula's glyph it spells no character of as
+  // placeholder sets (`texts`, marks/marks.ts readInkTexts: "1,024", "max_tokens", a formula's glyph it spells no character of as
   // INK_ANY, one glyph) or a text symbol's (\\# "#") — the glyphs right before the start, in stream order, that spell exactly it
-  // (marks.mjs leadStep), none of them CELL_ABUT of an em or more from the next, on the start's line, in its region, in no
-  // group. Where the text is not known or the glyphs there are not it, the cell is the original's, as before (leadUnmarked);
+  // (marks/marks.ts leadStep), none of them CELL_ABUT of an em or more from the next, on the start's line, in its region, in no
+  // group. Where the text is not known or the glyphs there are not it, the cell is the original's (leadUnmarked);
   // 2610.21098v1 p13, 2610.21176v1 p13
   const cellLead = new Set<number>()
   /** the text a unit's unmarked lead placeholders set, NFKC with no white space, and its parts in order (each `symbol` where
@@ -681,8 +681,8 @@ export function ownOf(
     }
     if (end !== 0) continue
     // (each part its own: a text symbol's (\\#) with the text — the layer draws it as its character in the translation, never
-    // from a crop, so its ink is hidden whenever the cell is drawn —, a macro's, which the maker finds by the same text and
-    // crops, the placeholder's `.p`: a mixed lead all `.p` would leave the "#" under the drawn one)
+    // from a crop, so its ink is hidden whenever the cell is drawn —, a macro's, which glyphPiecesOf finds by the same text,
+    // a crop, the placeholder's `.p`: a mixed lead all `.p` would leave the "#" under the drawn one)
     run.reverse()
     took.reverse()
     let w = 0
@@ -701,8 +701,8 @@ export function ownOf(
     cellLead.add(id)
   }
 
-  // ---- the placeholders (MR 4)
-  // (the erasure's reading: stream.mjs ownedOf `erasure`, a piece's ink found exactly where the maker's reading leaves it LOST;
+  // ---- the placeholders
+  // (the erasure's reading: stream.ts ownedOf `erasure`, a piece's ink found exactly where the reading without it leaves it LOST;
   // and the displays units open with, by their start marks, `leads` below)
   const heads = units ? headsOf(units, new Set(where.keys())) : null
   const streamed = follows || heads ? pages.map((pg, i) => streamPage(pg, i)) : null
@@ -729,7 +729,7 @@ export function ownOf(
         e = { ...take(A, close[0]!, r), how: OWNED_HOW.indexOf('closed') }
       else if (close.length === 0) {
         // an opening alone: to the next point in its region (a bracket's, a name's and a point another reader reads alone passed
-        // over: stream.mjs READ_ALONE)
+        // over: stream.ts READ_ALONE)
         let B: Place | null = null
         for (let p = A[0]; p <= P && !B; p++) {
           const pts = pages[p - 1]!.points
@@ -746,12 +746,12 @@ export function ownOf(
     }
     // (a text symbol's own glyph, those of its ink from the first that set its character, is its unit's text: the layer draws a text
     // symbol as its character, never from a crop, so its ink is hidden with the text wherever the unit is drawn, as a cell's lead
-    // symbol's is above. In the placeholders' group it stood under the drawing wherever no other piece of the unit moved on its page
-    // (layer-proto/hide.mjs): 2610.19159v1 p153u1701's `<`. A text symbol sets its character and nothing else, so what a reading
+    // symbol's is above. In the placeholders' group it would stand under the drawing where no other piece of the unit moved on its
+    // page: 2610.19159v1 p153u1701's `<`. A text symbol sets its character and nothing else, so what a reading
     // took past those glyphs is no ink of its: an opening point alone (`\\}` ends in a control symbol, and has no closing mark) reads
     // to its unit's next mark, past the box it ends (2610.21477v1 u42's `\\}` took the next box's title, "(3) Extraction Prompt",
     // into its placeholders' group, hidden wherever another piece of u42 moved on the page). Where the reading does not begin with
-    // the character (a rule's `\\_` under OT1), it is the placeholder's, as before
+    // the character (a rule's `\\_` under OT1), it is the placeholder's
     const k = Number(m[3]),
       piece = units?.[id]?.pieces?.[k],
       sym = piece?.t === 'ph' ? symbolText(piece.src) : null
@@ -766,17 +766,17 @@ export function ownOf(
     }
     // (an image its own only where its reading is bounded by TeX's facts on both sides: its closing point, or the text after it in
     // its unit; one that runs on to its unit's next mark may pass over a figure TeX set there, 2010.11929v2's wrapfigure after
-    // `\subsection{Inspecting \oursfull{}}`: MR 7)
+    // `\subsection{Inspecting \oursfull{}}`)
     if (e) claim(e, `u${id}.p`, BOUNDED.has(e.how) ? 'p' : 'q')
     // a placeholder whose ink cannot be told apart is in the text's range: hidden with it, it could not be kept in place, and the
     // spell check reads no symbol (=, ×, †): its unit is the original's
     else if (lost && unitOf.has(id) && !unitOf.get(id)!.unhidden && textOf.has(id)) unit(id).unhidden = 'marks'
   }
 
-  // ---- a footnote's call after the unit's last word that TeX gave no mark (MR 4b): its mark, the raised glyphs right after the
-  // unit's end mark, on the end mark's line, in its region, in no group — `u<id>.p`, as the maker finds it (make.mjs besideMarks):
-  // 2610.35877v1's abstract ends `step.\footnotemark`, TeX's answer for the call `00000020` (a mark around it moves the word after
-  // it), and the "1" its translation draws again stood under it
+  // ---- a footnote's call after the unit's last word that TeX gave no mark: its mark, the raised glyphs right after the
+  // unit's end mark, on the end mark's line, in its region, in no group — `u<id>.p`, which the instrument gives the call's piece
+  // (instrument/instrument.ts glyphPiecesOf): 2610.35877v1's abstract ends `step.\footnotemark`, TeX's answer for the call
+  // `00000020` (a mark around it moves the word after it), and the "1" its translation draws again would stand under it
   for (const [id, { e }] of textOf) {
     const pieces = units?.[id]?.pieces
     if (!e || !Array.isArray(pieces)) continue
@@ -818,14 +818,14 @@ export function ownOf(
     if (run.length) claim({ glyphs: run }, `u${id}.p`, 'p')
   }
 
-  // ---- the closing punctuation TeX sets after a unit's end mark (MR 4c): the glyphs right after the mark, on its line, in its
+  // ---- the closing punctuation TeX sets after a unit's end mark: the glyphs right after the mark, on its line, in its
   // region, in no group, each of TAIL_PUNCT right of the glyph before it and within HEAD_ABUT of its own em of it, the first
-  // after the unit's own (its text's or a placeholder's): the unit's text, as the maker's line takes them past its end mark
-  // (make.mjs lineOf), so that its group hides what the layer draws again after the translation (layer2.mjs tailOf). MR 5 gives
-  // them to it where the next unit begins on that line; where the head breaks its line after the note (thmtools' headpunct
-  // `\\`), none reached them, and 2501.14787v1 p10's ")" after "Vector Space" stood beside the note's translation drawn with
-  // its own. After the labels and the placeholders, so that a mark MR 5 gave a unit or a label stays theirs, and the glyph
-  // before it may be a placeholder's
+  // after the unit's own (its text's or a placeholder's): the unit's text, so that its group hides what the layer draws again
+  // after the translation (the unit's tail, Placed.tail). The labels' walk gives them to it where the next unit begins on that
+  // line; where the head breaks its line after the note (thmtools' headpunct `\\`), none reaches them, and 2501.14787v1 p10's
+  // ")" after "Vector Space" would stand beside the note's translation drawn with its own. After the labels and the
+  // placeholders, so that a mark the labels' walk gave a unit or a label stays theirs, and the glyph before it may be a
+  // placeholder's
   for (const [id, { e }] of textOf) {
     if (!e || work > OWN_WORK) continue
     const [p] = e,
@@ -842,8 +842,8 @@ export function ownOf(
       const A = pg.glyphs[g]!,
         L = pg.glyphs[left]!
       work++
-      // (right of the glyph before it, as the maker's line takes none left of the end mark, and within the gap at its own size,
-      // as the maker's glue is the line's: a placeholder set large before it widens nothing)
+      // (right of the glyph before it, and within the gap at its own size, so that a placeholder set large before it widens
+      // nothing)
       if (
         R.glyph[g] !== r ||
         G[g] !== null ||
@@ -859,7 +859,7 @@ export function ownOf(
     if (run.length) claim({ glyphs: run }, mine, 'u')
   }
 
-  // ---- the names (MR 6)
+  // ---- the names
   /** each name's group and its page, for its counter (below) */
   const named: [group: string, page: number][] = []
   for (const [name, list] of where) {
@@ -979,10 +979,10 @@ export function ownOf(
       const chars = lead.map(([p, i]) => pages[p - 1]!.glyphs[i]!.u ?? '').join('')
       // the label is no label: its ink left the original's where it stands apart from the text's, else the unit the original
       // (a head's joint after the babel name that leads the unit, its punctuation alone, is a label: the name's lead draws it,
-      // run.mjs jointOf; IEEEtran's "—" after "Abstract", amsthm's "." after "Proof")
+      // the typesetter's lay/lead.ts jointOf; IEEEtran's "—" after "Abstract", amsthm's "." after "Proof")
       // (a lead a call states, set after the author's call, is the author's label whatever its form — a "†" before the name —, but
       // a word the class sets there, no label's form, llncs' and IJCAI's " and " before the last author: left the original's ink
-      // where it stands and so to the ink units, translated as before, never the author's label, which kept it English)
+      // where it stands and so to the ink units, translated there, never the author's label, which would keep it English)
       if (
         !isLabelForm(chars, units?.[id]?.bracketed === true, form) &&
         !(afterName.has(id) && JOINT.test(labelText(chars))) &&
@@ -1016,7 +1016,7 @@ export function ownOf(
    *  title is the rest. Ink on a line of the title's own cannot be told from it: none is trimmed there (2610.20581v1 p1u0) */
   function trimLead(id: number, want: string): boolean {
     // (a title that opens with a placeholder of no mark of its own — \\sysname: before its text — has that ink in this lead,
-    // which its source spells as nothing: never released, the title the original's, review of b479095e)
+    // which its source spells as nothing: never released, the title the original's)
     if (units && opensUnmarked(units[id], id)) return false
     const mine = `u${id}`,
       list: Place[] = []
@@ -1151,11 +1151,11 @@ export function ownOf(
   for (const u of unitOf.values()) if (u.unhidden) unhidden[u.unhidden]!++
   spell.sort((a, b) => a - b)
   leaks.sort((a, b) => a - b)
-  // ---- a display its unit opens with, which the marking passes over (marks.mjs headsOf): TeX ships it in the paragraph it begins, right
-  // before its unit's start mark (stream.mjs headInk). Its glyphs no group's, the wrap's as before — the layer draws such a
-  // display as the original's ink, never erasing it, which a group hidden with its unit's placeholders would — but its unit's
-  // placeholders' for the ledger (`leads`: per page, glyph -> `u<id>.p`), so that no ink unit nor kept block is made of it: it is
-  // its unit's display, a block of its own in the light map (2501.14787v1 p24u193 had three kept blocks of it)
+  // ---- a display its unit opens with, which the marking passes over (marks/marks.ts headsOf): TeX ships it in the paragraph
+  // it begins, right before its unit's start mark (stream.ts headInk). Its glyphs no group's, none wrapped — the layer
+  // draws such a display as the original's ink, never erasing it, which a group hidden with its unit's placeholders would — but
+  // its unit's placeholders' for the ledger (`leads`: per page, glyph -> `u<id>.p`), so that no ink unit nor kept block is made
+  // of it: it is its unit's display, a block of its own in the light map (2501.14787v1 p24u193 had three kept blocks of it)
   const leads = pages.map(() => new Map<number, string>())
   const found = heads ? (owned ?? ownedOf(streamed!, { follows: () => null, heads })) : null
   for (const [name, e] of found ?? []) {
@@ -1163,10 +1163,10 @@ export function ownOf(
     if (!m || where.has(name) || e.how >= OWNED) continue
     for (const [p, g] of e.glyphs) if (gOwn[p - 1]![g] === null) leads[p - 1]!.set(g, `u${m[2]}.p`)
   }
-  // ---- each name's counter (MR 6b): the counter TeX set after it on its line, no unit's once the units have let go of what is
+  // ---- each name's counter: the counter TeX set after it on its line, no unit's once the units have let go of what is
   // not theirs (a heading's range from its start mark held IEEEtran's "A" on the line before its title, which its spelling let
   // go), in the name's column: the name's, so that the layer sets it after the name's word instead of leaving it at its own place
-  // past a gap (names.mjs counterAfter, the maker's rule too, make.mjs nameAt)
+  // past a gap (marks/names.ts counterAfter; locate's member of the name reads them as its counter, `counterA`)
   for (const [group, p] of named) {
     const G = pages[p - 1]!.glyphs,
       O = gOwn[p - 1]!,
@@ -1200,11 +1200,11 @@ export function ownOf(
     if (k && next.slice(0, k).every((g) => O[g] === null && colOf(G[g]!.x0, G[g]!.x1) === col))
       for (const g of next.slice(0, k)) O[g] = group
   }
-  // ---- each name's number (MR 6c): the number TeX set right before it at its line's start (a heading its class numbers itself:
+  // ---- each name's number: the number TeX set right before it at its line's start (a heading its class numbers itself:
   // spconf.sty's thebibliography sets \section{References}, "9." and \hskip 0.6em before the word, 2610.20967v1), no unit's, in
   // the name's column, TeX's stream setting nothing between it and the name's first glyph: the name's label, `n<occ>.l`, so that
-  // it moves with the name's word and the line TeX centred is laid whole (names.mjs counterBefore). Left the page's, the line
-  // was read off the word alone, justified, and its translation set from the word's start after the number that stayed
+  // it moves with the name's word and the line TeX centred is laid whole (marks/names.ts counterBefore). Left the page's, the
+  // line would be read off the word alone, justified, and its translation set from the word's start after the number
   for (const [group, p] of named) {
     const G = pages[p - 1]!.glyphs,
       O = gOwn[p - 1]!,
@@ -1257,14 +1257,14 @@ export function ownOf(
 }
 
 /**
- * The painted rules of `boxes` ([page, index] of `pages`' boxes) that stand on a line of `glyphs` ([page, index]): MR 2b's, and
- * an ink unit's (layout/ink-units.mjs claimInk), #117 (1512.03385v1's Table 1 caption, whose three OT1 \_ rules stayed under
- * its translation). A rule: a painted box no thicker than RULE_EM of its line's size and at least twice as long as thick, its
- * middle within half a size of the line's baseline, across within the line's glyphs' extent and half a size past either end,
- * and no part of a frame: no other thin box of `boxes` that is no such rule meets it within its own thickness (amsthm's
- * \openbox, a \fbox: their upright sides; kept whole the page's; a box behind the text, thick both ways, is none). A line:
- * the glyphs on one baseline of a page (a placeholder between them, its runs one line). The work is counted as it is done
- * (each glyph and box read, each line and box compared): past `max` the reading stops, `over`, with no rule (a PDF's
+ * The painted rules of `boxes` ([page, index] of `pages`' boxes) that stand on a line of `glyphs` ([page, index]): a unit's
+ * text's (ownOf), and an ink unit's (locate/ink-units.ts claimInk; 1512.03385v1's Table 1 caption, whose three OT1 \_ rules
+ * would stay under its translation). A rule: a painted box no thicker than RULE_EM of its line's size and at least twice as
+ * long as thick, its middle within half a size of the line's baseline, across within the line's glyphs' extent and half a
+ * size past either end, and no part of a frame: no other thin box of `boxes` that is no such rule meets it within its own
+ * thickness (amsthm's \openbox, a \fbox: their upright sides; kept whole the page's; a box behind the text, thick both ways, is
+ * none). A line: the glyphs on one baseline of a page (a placeholder between them, its runs one line). The work is counted as
+ * it is done (each glyph and box read, each line and box compared): past `max` the reading stops, `over`, with no rule (a PDF's
  * content is anyone's: a line of 20,000 rules beside 20,000 thin boxes would be 400 million comparisons). Returns
  * { rules, work, over }
  */
@@ -1393,11 +1393,11 @@ function slotted(parts: readonly string[], ink: string): boolean {
 /** a unit's source text for the spell check, as spellOf reads it, in parts: its `src` where it has one, else its pieces' — a
  *  placeholder dropped, but a text symbol whose glyph is the text's, its character: one of no mark of its own (\\o, \\ss:
  *  `marked(k)` false), whose ink TeX set among the text's (in the unit's lead, before any text, only where `lead`: a cell's lead
- *  ink taken with its text; any other unit's lead ink is its label's or its placeholder's, MR 5), and one whose own glyph MR 4
- *  or a unit's lead gave the text (`inText(k)`); and a slot before each wrapper's argument (an `open` piece: siamart's
- *  \\funding{…}), where the macro may set words of its own. Returns { text, bare, parts: [text before the first slot, …] }
- *  (`bare` the text without the symbols: one whose ink an opening alone before it took, `$x$\\o`, is no text's), or null where
- *  there is none */
+ *  ink taken with its text; any other unit's lead ink is its label's or its placeholder's), and one whose own glyph the
+ *  placeholders' pass or a unit's lead gave the text (`inText(k)`); and a slot before each wrapper's argument (an `open`
+ *  piece: siamart's \\funding{…}), where the macro may set words of its own. Returns { text, bare, parts: [text before the
+ *  first slot, …] } (`bare` the text without the symbols: one whose ink an opening alone before it took, `$x$\\o`, is no
+ *  text's), or null where there is none */
 function sourceOf(
   u: OwnUnit | undefined,
   marked: (k: number) => boolean,
@@ -1429,7 +1429,7 @@ function sourceOf(
   return { text: parts.join(''), bare, parts }
 }
 
-/** a page as stream.mjs ownedOf reads one: its glyphs' columns (x0, y, size, u) and their count (the page's index, which the
+/** a page as stream.ts ownedOf reads one: its glyphs' columns (x0, y, size, u) and their count (the page's index, which the
  *  pages' map hands it, unread) */
 function streamPage(pg: OwnPage, page?: number): StreamPage
 function streamPage(pg: OwnPage): StreamPage {

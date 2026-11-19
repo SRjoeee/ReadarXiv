@@ -1,4 +1,4 @@
-// The contents and the heading being read (today's R engine/view/contents.mjs and outline.ts; docs/PDF-READER.md §6.3, §11.8):
+// The contents and the heading being read (docs/PDF-READER.md §6.3, §11.8):
 // the paper's headings as its units name them (kind `heading`, their `depth` the sectioning command's), the title left out, a
 // tree of three levels at most ranked among the depths the paper uses (an article's sections are 1, a thesis's chapters 1 and
 // its sections 2); a heading with no depth (a \paragraph) is not in the contents once any has one. Each is at its member's first
@@ -50,9 +50,8 @@ export function plainOf(pieces: readonly Piece[]): string {
 /**
  * An element's copy text in a title, as its part states it (format's El): `text`, its glyphs' text on A ('' where TeX set nothing
  * for it), else `copy`, its source's plain text (a formula's as linear text: "τ_V"); a forced break a space. An element no part has
- * stated yet, or one that states neither (its ink not found: 2608.06701v1's `\sage`), is nothing, as today's reader drops every
- * element (R engine/translate/mt.mjs plainTranslated): never its TeX source, which the contents showed as "\sys" and the translated
- * words for "Overview of BLIP" (2608.25210v2; 177 entries of 38 papers at B15)
+ * stated yet, or one that states neither (its ink not found: 2608.06701v1's `\sage`), is nothing: never its TeX source, which
+ * the contents showed as "\sys" and the translated words for "Overview of BLIP" (2608.25210v2; 177 entries of 38 papers)
  */
 function copyTextOf(kind: string | undefined, el: El | undefined): string {
   if (kind === 'break' || el?.brk) return ' '

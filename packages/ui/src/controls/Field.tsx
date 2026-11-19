@@ -1,4 +1,4 @@
-// A labelled field (the redesign's design, §6.3, §9; Part 3's interfaces): its label above the one control it wraps, a
+// A labelled field (docs/UI.md): its label above the one control it wraps, a
 // hint and an error under it, and the wiring a screen reader needs — the label names the control, the error (first) and
 // the hint describe it, and the control is marked invalid while there is an error. The control is a TextInput, or any
 // control that reads useField() (a combobox) and puts the wiring on its own element

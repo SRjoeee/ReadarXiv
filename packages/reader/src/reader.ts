@@ -1,4 +1,4 @@
-// openReader (the host decision: A's host, B's session): a reader in `root` for one paper, over a host that gives the
+// openReader: a reader in `root` for one paper, over a host that gives the
 // network, where arXiv's bytes are read first, the preferences, and optionally the rows made here. Everything else is the
 // reader's own and the same in both hosts: the byte store, PDF.js and its workers, the v2 client, the objects, composing, the
 // highlight. A reader owns all it makes (no state outside a reader): its marks are on `root`, its sheets and faces in it, its
@@ -176,8 +176,9 @@ export interface ReaderState {
    *  (machine.ts linkSaid, PDF-READER §8.1). A view that waits for nothing is told nothing */
   network: boolean
   /** `lost`: a face the translation is set in could not be had (an answer no ask would mend, or a failure met twice), its
-   *  passages drawn in their fallback until the page is loaded again (the chrome says so once, for every host: UI.md S-R-28,
-   *  chrome/events.ts); null while none is */
+   *  passages the original's with the served faces (one that failed for now until it comes: compose/served.ts `heal`), drawn
+   *  in their fallback with a host's own (compose/faces.ts), until the page is loaded again; kept for the visit (the chrome
+   *  says so once, for every host: UI.md S-R-28, chrome/events.ts); null while none is */
   faces: 'lost' | null
   crashed: boolean
 }
@@ -189,7 +190,7 @@ export interface Reader {
   close(): void
 }
 
-/** what lays a page: the reader's own typesetter where a host gives none (lane L3's layPage over the rule set's rules, the
+/** what lays a page: the reader's own typesetter where a host gives none (the typesetter's layPage over the rule set's rules, the
  *  served faces and the reader's Metrics: compose/typeset.ts, served.ts); a host's own where it gives one (the e2e's fixture
  *  lay), with the faces its pages name. Given an engine without `lay`, nothing is laid and every page stays arXiv's */
 export interface Engine {
@@ -236,7 +237,7 @@ export function openReader(
   const listeners = new Set<() => void>()
   let closed = false
   /**
-   * The follows' wakes (design-performance-2026-11-13 Q9): a follow that settles (the last document says nothing runs) waits for
+   * The follows' wakes (docs/PDF-READER.md §11.5): a follow that settles (the last document says nothing runs) waits for
    * one instead of asking again a minute later, 60 asks an hour a settled tab. The wake is the session's own word: an object
    * answered `gone` (the paper's objects replaced) asks the document again, once a catalog. The page shown again, the network
    * back, the back-forward cache and a new target need none: the session ends the follow and starts another, which asks at
@@ -287,7 +288,7 @@ export function openReader(
   // ---- PDF.js, the panes, composing: made once the kit is in (the original's first range does not wait for it)
   const kitReady = loadKit(o.pdfjs ?? {})
   let syncAvailable = false
-  /** a face lost this visit (faces.ts `lost`): kept, as its passages stay in their fallback */
+  /** a face lost this visit (faces.ts, served.ts `lost`): kept, told once whatever comes since */
   let facesLost = false
   let kit: Kit | null = null,
     panes: Panes | null = null,
@@ -345,7 +346,7 @@ export function openReader(
   let rows = new Map<string, Row>()
   let rowsTarget = ''
   let rowsDone = false
-  /** our server's rows asked again (R3, the coordinator's ruling of 2026-11-18): for the run (`run`: the target and the objects
+  /** our server's rows asked again (PDF-READER §8.1, "Our server's rows, read"): for the run (`run`: the target and the objects
    *  its document names), the tries made since a read of one that had failed last succeeded, and those whose read failed: each
    *  wait the session's own for asking again (machine.ts backoff: a second, doubled to BACKOFF_MAX_MS), counted from none again
    *  once a read of a failed one succeeds or the document names other objects */
@@ -385,8 +386,8 @@ export function openReader(
   /** the parts of one layer (its catalog, the head read from it): page n's, or null where the head names none. One function a
    *  layer, kept while its catalog is the layer's: the composer reads a layer's parts once, and anew for another (Layer.part is
    *  the layer). One function for every layer laid a newer catalog's composed document with the parts of the head before it,
-   *  whose members its groups lack, each page then settled as arXiv's for good (staging, 2026-11-08: 1706.03762v7 once its
-   *  catalog moved, laid 0 and two pages arXiv's for 18 minutes) */
+   *  whose members its groups lack, each page then settled as arXiv's for good (on staging, 1706.03762v7 once its catalog
+   *  moved: laid 0 and two pages arXiv's for 18 minutes) */
   let layerParts: { catalog: string; part: (n: number) => Promise<Part | null> } | null = null
   const partsOf = (c: Ref, h: Head) => {
     if (layerParts?.catalog !== c.sha256)
@@ -588,7 +589,7 @@ export function openReader(
     const s = served
     if (!s) return none
     const { pastFootOf, typesetLay } = await import('./compose/typeset.ts')
-    // (the borrow past TeX's bottom as the website's address sets it for the visit, the owner's switch: PDF-READER §18.37)
+    // (the borrow past TeX's bottom as the website's address sets it for the visit: PDF-READER §18.37's switch)
     const pastFoot = pastFootOf(typeof location === 'undefined' ? null : location)
     return typesetLay({
       served: s,
@@ -732,8 +733,8 @@ export function openReader(
       // the layer's code: composing and the highlight, a chunk of its own (imported after the left's page 1, or 1.5 s); the
       // reader's own typesetter and its served faces with it, where the host gives no engine. What the composed document's open
       // reads is asked with it, the code's load waiting for none of it: its groups, and the typesetter, whose patterns, faces'
-      // index and CJK tables are asked once a translation is to be shown (warmSoon; staging, 2026-11-08: three round trips in a
-      // row before composedOpen)
+      // index and CJK tables are asked once a translation is to be shown (warmSoon; on staging, asked later, three round trips
+      // in a row before composedOpen)
       let faces: import('./compose/faces.ts').Faces | null = null
       void import('./compose/groups.ts').catch(() => {})
       typesetCode = o.engine ? null : import('./compose/typeset.ts')
@@ -943,7 +944,7 @@ export function openReader(
           // the server's rows: every ref the documents name for the target, each once read, until its run is done or failed (a
           // run not started, `none`, is no end: the prepare's units or the open start it, machine.ts needsOf; one started again
           // after an end is the machine's to take again, rowsOfDoc). The end is our server's document's and every object it
-          // names (PDF-READER §8.1, the coordinator's rulings of 2026-11-18): an object whose read failed is a fault of that
+          // names (PDF-READER §8.1): an object whose read failed is a fault of that
           // read, never the run's end; it is not read, so the next round asks it again; and a run done is complete only once
           // every object its document names is read, one unread asked again at the session's pace (rowsAgain), whatever the
           // units hold meanwhile: the units shown are the toggles' and the units read can be a layer's before, never the end's
@@ -970,7 +971,7 @@ export function openReader(
             }
             // (a document held since this round began, heard while it read its objects, is read now, never waited for: the wait
             // below is for the next change, and a follow whose last document says nothing runs asks for no other, so its run's
-            // end stayed unread with every row in, arriving for good: staging, 2026-11-17, 2608.04322v1)
+            // end stayed unread with every row in, arriving for good: 2608.04322v1 on staging)
             if (rt.state.doc !== d) continue
             if (tg && (tg.state === 'done' || tg.state === 'failed')) {
               rowsDone = true
@@ -1002,7 +1003,7 @@ export function openReader(
             })
           }
         } catch (e) {
-          // (these rows will not come: a page another target still shows goes back to the original's, layer-side.mjs dropOthers)
+          // (these rows will not come: a page another target still shows goes back to the original's)
           if (!signal.aborted) {
             rowsDone = true
             rowsIn([])
@@ -1131,8 +1132,8 @@ export function openReader(
   const onOnline = () => rt.input({ i: 'env.online', on: true }),
     onOffline = () => rt.input({ i: 'env.online', on: false })
   // (the page put away into the back-forward cache, and shown from it again: the session put away meanwhile, our server neither
-  // followed nor asked, no timer live, and followed anew on return, the panes as they were (as today's website session puts a
-  // paper away and shows it again). A pagehide that is not persisted is the host's to close the reader on)
+  // followed nor asked, no timer live, and followed anew on return, the panes as they were, PDF-READER §11.5. A pagehide that
+  // is not persisted is the host's to close the reader on)
   const onHide = (e: PageTransitionEvent) => {
     if (e.persisted) rt.input({ i: 'env.away', on: true })
   }

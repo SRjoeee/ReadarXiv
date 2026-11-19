@@ -1,10 +1,9 @@
-// src/pdf-reader/engine/rules/text-symbols.mjs
-// LaTeX's text symbols: one table for every reader of a placeholder that is one. The layout maker draws a symbol it cannot
-// mark as its character where arXiv's page shows that character on the unit's line (layout/marks.mjs, make.mjs); the layer
-// draws one from its source as text, whose glyph its line's erasing covers (layer-proto/layer2.mjs texToText2, textSymbol:
-// the controller's text-symbol ruling of 2026-10-15). Two copies of it drifted apart: the layer knew none of
-// \textbackslash, \textasciicircum and \textbar, which the maker's had, read them as a paper's own macros, and left their
-// units the original's (2610.19159: 256 units, with \textquotesingle and \textquotedbl, which neither had). Imports nothing.
+// LaTeX's text symbols: one table for every reader of a placeholder that is one. The ownership takes a symbol's glyphs
+// that set its character as its unit's text (own/own.ts; marks/marks.ts followsOf reads it as that character); the layer
+// draws one from its source as text, whose glyph its line's erasing covers (PDF-READER §18.17; texToText2, textSymbol:
+// the layer's reading, copied in instrument/instrument.ts). Two copies of it drift apart: a layer that knew none of
+// \textbackslash, \textasciicircum and \textbar would read them as a paper's own macros and leave their
+// units the original's (2610.19159: 256 units, with \textquotesingle and \textquotedbl). Imports nothing.
 
 /**
  * The kernel's and textcomp's text symbols, as LaTeX defines them in every encoding, each the one character it sets
@@ -14,7 +13,7 @@
  * writes them in its text has made them its own as often as not (2608.23818's indices, a coloured italic i and j with \xspace),
  * and the table would draw ı and ȷ for them. Each is one character;
  * most are one glyph in every encoding, but OT1 sets \l, \L, \aa and \AA of two (a bar or a ring over a letter), which a page's
- * text then gives as two characters, not the one: there the maker finds none and the piece stays LOST, as it was
+ * text then gives as two characters, not the one: there none is found, and its ink stays the placeholder's (own/own.ts)
  */
 export const TEXT_SYMBOLS: Readonly<Record<string, string>> = Object.freeze({
   '\\%': '%',

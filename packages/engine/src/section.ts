@@ -1,7 +1,7 @@
 // An incremental-update section (ISO 32000-1 §7.5.6), written after a document's bytes: the objects, one cross-reference
 // section of the document's own kind (a classic table, or a cross-reference stream, /W [1 4 2], uncompressed), its trailer
 // with /Prev and the document's /Root, /Info and /ID, and `startxref`. Shared by the wrap (wrap.ts: our final pass's
-// pages wrapped by optional content) and our base as an update over arXiv's PDF (layout/delta.mjs deltaOf: the delta), so that
+// pages wrapped by optional content) and our base as an update over arXiv's PDF (the delta, docs/route/delta.md), so that
 // both write the one form. Imports nothing.
 
 /** an object written whole, `n g obj … endobj`: its number, generation and bytes */

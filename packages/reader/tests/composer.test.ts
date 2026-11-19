@@ -2,7 +2,8 @@
 // drawing: a page "is put in place" when the test says so, as the stack's swap tells it) and a clock moved by hand: laying one page
 // at a time (the hold), what stays the original's, the stall clock, failures asked again, another target and the toggles in
 // place, the translating marks, the pages ahead, the faces' wave; and the faces' own rules (four at a time, asked once, a lasting
-// answer never asked again); the served faces' tables that cannot be had under it (no lay, no table asked again and again).
+// answer never asked again); the served faces' tables that cannot be had under it (no lay, no table asked again and again), and
+// a slice lost for now asked again at the session's pace while a page needs it, its pages laid again in place when it comes.
 import { type OutPiece, type Part, type Placed, type Row, toggleKind } from '@readarxiv/format'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -18,6 +19,7 @@ import type { Groups } from '../src/compose/groups.ts'
 import type { Lay, Laid, Page, Rows } from '../src/compose/page.ts'
 import { createServed, type Served } from '../src/compose/served.ts'
 import { PROBE_TEXT } from '../src/compose/text-rendering.ts'
+import { BACKOFF_MS } from '../src/session/machine.ts'
 import type { Clock } from '../src/stack/clock.ts'
 import { layPage, rulesFor } from '@readarxiv/typeset'
 import { kindShown, leftKinds } from '../src/compose/classes.ts'
@@ -1419,6 +1421,167 @@ describe("the served faces' tables that cannot be had, under the composer", () =
       served.faces.dispose()
     },
   )
+
+  describe('a slice lost for now (a failure that may pass, met twice): its pages laid with the rest, the slice asked again at the session pace while a page that needs it is near, its pages laid again in place when it comes', () => {
+    const SLICE = '/static-fonts/0000000000000002.woff2'
+    /** pages 1 (a Latin member and a CJK one), 2 (a CJK one alone) and 3 (a Latin one alone), near, their rows in; the CJK slice
+     *  answered `answers` first ('network': the fetch rejected), then served */
+    function healWorld(answers: (number | 'network')[]) {
+      const clock = handClock()
+      const asked: [string, number][] = []
+      const fetch = async (u: string) => {
+        asked.push([u, clock.now()])
+        if (u === SLICE && answers.length) {
+          const a = answers.shift()
+          if (a === 'network') throw new TypeError('Failed to fetch')
+          return new Response('', { status: a as number })
+        }
+        if (u in TABLES) return new Response(JSON.stringify(TABLES[u]), { status: 200 })
+        return new Response(new Uint8Array([1]), { status: 200 })
+      }
+      const lost: string[] = []
+      const served = createServed({
+        fetch,
+        root: document.body,
+        platform: {
+          measure: (_f, t) => ({ width: t.length * 50, ascent: 70, descent: 20, right: t.length * 50 }),
+          face: async () => ({ add() {}, remove() {} }),
+        },
+        timers: clock,
+        lost: (id) => lost.push(id),
+      })
+      const parts = new Map([
+        [1, partOf(1, [member(10, 1, 0), member(11, 1, 1, 'cjk')])],
+        [2, partOf(2, [member(20, 2, 0, 'cjk')])],
+        [3, partOf(3, [member(30, 3, 0)])],
+      ])
+      const stack = fakeStack(3)
+      const inner = metricsLay(served.metrics)
+      /** each page's lays */
+      const lays = new Map<number, number>()
+      const lay: Lay = (part, rows) => {
+        lays.set(part.page, (lays.get(part.page) ?? 0) + 1)
+        return inner(part, rows)
+      }
+      const composer = createComposer({
+        stack: stack as unknown as Stack,
+        kit: {} as never,
+        faces: served.faces,
+        lay,
+        unlaid: 'original',
+        lang: () => 'de',
+        links: { open: () => {}, follow: () => {}, unnamed: () => 'Link' },
+        clock,
+        original: (_n, settled) => ({ key: settled ? 'own' : 'left', kind: 'skeleton' }) as unknown as PageContent,
+      })
+      composer.setDocuments({ original: {} as never, composed: {} as never, groups: groupsStub() })
+      stack.setNear([1, 2, 3])
+      composer.setLayer(
+        { pages: 3, part: async (n) => parts.get(n) ?? null },
+        rowsOf('de', ['u10', 'u11', 'u20', 'u30'], true),
+      )
+      return {
+        composer,
+        served,
+        stack,
+        clock,
+        lays,
+        lost,
+        /** the clock moved `ms`, half a second a step, each near page's commit put in place as the stack's swap tells it */
+        async run(ms: number) {
+          for (let t = 0; t < ms; t += 500) {
+            await settle()
+            for (let n = 1; n <= 3; n++) {
+              const k = stack.contentOf(n)?.key
+              if (k?.startsWith('laid:') && stack.near(n) && stack.showing(n) !== k) stack.put(n)
+            }
+            clock.advance(500)
+          }
+          await settle()
+        },
+        states: (n: number) => composer.laid(n)?.members.map((m) => m.state) ?? null,
+        slices: () => asked.filter(([u]) => u === SLICE).map(([, t]) => t),
+        dispose() {
+          composer.dispose()
+          served.faces.dispose()
+        },
+      }
+    }
+    it("failing twice, then served: the CJK units the original's after the second failure, told once; then laid again in place, no reload; a page that does not need it not laid again", async () => {
+      const w = healWorld([503, 503, 503, 503])
+      await w.run(2500)
+      expect(w.slices()).toEqual([0, 1000, 1000, 2000])
+      // (page 1 laid with its Latin member, page 2 laid with nothing of its own the original's, page 3 laid)
+      expect([w.states(1), w.states(2), w.composer.settled(2), w.states(3), w.lost]).toEqual([
+        ['laid', 'face'],
+        null,
+        true,
+        ['laid'],
+        ['shs-sc-regular'],
+      ])
+      const lays3 = w.lays.get(3)
+      await w.run(2000)
+      expect(w.slices()).toEqual([0, 1000, 1000, 2000, 2000 + BACKOFF_MS])
+      expect([w.states(1), w.states(2), w.composer.settled(2), w.states(3), w.lost]).toEqual([
+        ['laid', 'laid'],
+        ['laid'],
+        false,
+        ['laid'],
+        ['shs-sc-regular'],
+      ])
+      expect([w.lays.get(3), w.stack.showing(1) === w.stack.contentOf(1)?.key, w.composer.muted(1)]).toEqual([
+        lays3,
+        true,
+        false,
+      ])
+      await w.run(120_000)
+      expect(w.slices()).toHaveLength(5)
+      w.dispose()
+    })
+    it('the network failing for ever: the pages laid with the rest, the slice asked again at 3, 6, 11, 20, 37, 68, 99 s and no faster, no page laid again for an ask that failed', async () => {
+      const w = healWorld(Array.from({ length: 200 }, () => 'network' as const))
+      await w.run(2500)
+      const lays = [...w.lays.values()].reduce((a, b) => a + b, 0)
+      await w.run(120_000)
+      // (each ask asked once more within it after RETRY_MS: two fetches an ask)
+      expect(w.slices().filter((_, k) => k >= 4 && k % 2 === 0)).toEqual(
+        [3, 6, 11, 20, 37, 68, 99].map((s) => s * 1000),
+      )
+      expect(w.slices()).toHaveLength(4 + 2 * 7)
+      expect([[...w.lays.values()].reduce((a, b) => a + b, 0), w.states(1), w.states(3), w.lost]).toEqual([
+        lays,
+        ['laid', 'face'],
+        ['laid'],
+        ['shs-sc-regular'],
+      ])
+      w.dispose()
+    })
+    it('asked only while a page that needs it is near: gone from the view, never asked; near again, asked after BACKOFF_MS and its pages laid', async () => {
+      const w = healWorld([503, 503, 503, 503])
+      await w.run(2500)
+      w.stack.setNear([3])
+      await w.run(120_000)
+      expect(w.slices()).toEqual([0, 1000, 1000, 2000])
+      const back = w.clock.now()
+      w.stack.setNear([1, 2, 3])
+      await w.run(2000)
+      expect(w.slices()).toEqual([0, 1000, 1000, 2000, back + BACKOFF_MS])
+      expect([w.states(1), w.states(2)]).toEqual([['laid', 'laid'], ['laid']])
+      w.dispose()
+    })
+    it("a slice not there (404): its units the original's for the visit, asked no more", async () => {
+      const w = healWorld([404])
+      await w.run(122_500)
+      expect(w.slices()).toEqual([0])
+      expect([w.states(1), w.composer.settled(2), w.states(3), w.lost]).toEqual([
+        ['laid', 'face'],
+        true,
+        ['laid'],
+        ['shs-sc-regular'],
+      ])
+      w.dispose()
+    })
+  })
 })
 
 describe('the toggles turned and turned back: the drawing a function of the part, the rows and the toggles', () => {

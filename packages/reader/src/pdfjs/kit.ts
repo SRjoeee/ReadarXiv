@@ -1,14 +1,14 @@
-// PDF.js inside the reader (design §4.5 "PDF.js's set-up lives in the reader, so both hosts run the same"; the host
-// design A §1.2, §1.5; design-b §1.7): the library and its viewer components loaded once a page, the options the website
-// measured for every document, the one fix of PDF.js's page views the reader still needs, and a worker per document role per
-// reader, made over its own port (never GlobalWorkerOptions), so that two readers on one page share none.
+// PDF.js inside the reader (its set-up lives in the reader, so both hosts run the same): the library and its viewer
+// components loaded once a page, the options the website measured for every document, the one fix of PDF.js's page views
+// the reader still needs, and a worker per document role per reader, made over its own port (never GlobalWorkerOptions), so
+// that two readers on one page share none.
 //
 // The options (the website's, each measured): `enableHWA` (GPU-backed canvases: without it a pinch in WebKit took 40 to
 // 75 ms a frame); `disableStream` and `disableAutoFetch` (a paper read by ranges, a document reading what its pages need and
 // never the rest behind them), 64 KiB chunks (ranged.ts). The data files (cMaps, standard fonts, wasm) and the worker are
 // served from `<base>` = `/pdfjs/<version>/` by default, which the reader's build plugin (`@readarxiv/reader/vite`) fills.
 //
-// What of today's fixes stays: `forgetCancelledText` (a TextLayerBuilder cancelled keeps no hold on its spans: 6,729 detached
+// The fix the page views need: `forgetCancelledText` (a TextLayerBuilder cancelled keeps no hold on its spans: 6,729 detached
 // spans on the thesis, measured on the website), a per-document class patch, idempotent. `quietRoot`, `eagerPages` and `aheadHeld`
 // were PDFViewer's and go with it: the page stack sizes its own slots and has one scheduler. `globalThis.pdfjsLib` is set, since
 // PDF.js's viewer module reads it as it is evaluated.

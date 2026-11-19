@@ -1,8 +1,6 @@
-// S.fill.leads (design-b §1.5, E30): a unit's fill leadings as its lay ends: the loosest leading from its fitted one up to
-// its top at which its fitted state still sets it whole as the page fill lays it, else the loosest closer one. Today's code
-// (run.mjs RUN:494-595: fillLeadsOf, closerLead, guessCloser), moved by lab/typeset/move-fit.mjs. The layout found,
-// which the page's fill reuses (today's fillLaid, a module WeakMap), is a field of
-// the unit, `fillLaid` (design-b §1.5: FillLeads.laid).
+// S.fill.leads: a unit's fill leadings as its lay ends: the loosest leading from its fitted one up to its top at which its
+// fitted state still sets it whole as the page fill lays it, else the loosest closer one. The layout found, which the page's
+// fill reuses, is a field of the unit, `fillLaid`.
 import { footFloorOf } from '../breaker/slots.ts'
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
@@ -42,7 +40,7 @@ type FrameLeads = { leads: (number | undefined)[]; last: number }
  * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null; the looser of that and
  * P.fillLeadRel × the original's pitch scaled by the fit's size, where the script has one); `fillLead`, the
  * loosest leading from its fitted one up to the top at which its fitted state still sets it whole as the page fill lays it
- * (its last line no lower than a leading over the next line of its column, layer2.mjs footFloorAt: its last baseline on its
+ * (its last line no lower than a leading over the next line of its column, footFloorAt: its last baseline on its
  * frame's last but where that would leave the gap under it tighter than its lines); where its fitted one does not, the
  * loosest closer one, down to the original's pitch (null where that state does not set it again). Set on the unit as it is laid (afterLay), so that the fill leading a page's pass reads of a unit
  * running on to it from a page before no longer depends on whether that page's pass has run (the 1b design, §2.1 C1). Not
@@ -74,7 +72,7 @@ function fillLeadsOf(p: FillUnit, P: FillRules): void {
   // search from the top is the reference, and the halving drew the same on every fixture. So for the tracking and size)
   p.fitLines = p.layout.lines.length
   const st = p.layout.state
-  // (as the page fill lays it, its last line no lower than a leading over the next line of its column: layer2.mjs footFloorAt.
+  // (as the page fill lays it, its last line no lower than a leading over the next line of its column: footFloorAt.
   // A state that sets it so sets it without the floor too, which only takes slots off its last frame's foot: the fitted state
   // is laid again only where that one does not set it)
   const lo = st.lead,
@@ -178,7 +176,7 @@ function shareOver(p: FillUnit, own: FrameLeads | null, sh: FillShare | null): F
 }
 /** each block's frame, a page's or a column's: consecutive blocks on one page that overlap across (pageCutsOf's frames); and
  *  each paragraph TeX states inside the unit (a block that opens one, `opens`: SpanAt.opens, El.opens), whose leading is its
- *  own (the owner's ruling of 2026-11-08, (a)) */
+ *  own (docs/PDF-READER.md §18.11) */
 function framesOf(blocks: readonly FitBlock[]): number[] {
   const of: number[] = []
   blocks.forEach((b, bi) => {
@@ -194,13 +192,13 @@ function framesOf(blocks: readonly FitBlock[]): number[] {
   return of
 }
 /**
- * Each frame of a unit over a page or column break filled over its own block (the owner on staging, 2026-11-08: 1810.04805v2
+ * Each frame of a unit over a page or column break filled over its own block (docs/PDF-READER.md §18.11; 1810.04805v2
  * p6's last paragraph of a column, going on to the next page, held to the original's pitch with its frame's last line empty:
  * its two lines on the next page filled their two, and one leading a unit held the four here, in five, to theirs), and each
- * paragraph TeX states inside it (framesOf; the owner's comment #9 on 2608.25210v2 p3: a prompt held to the pitch its item's
- * run-in line needed), whichever way the unit's fill leading was found (fillLeadsOf, its closer search's too). From the
- * unit's fill leading `lo` (its every frame's), each frame in turn, the earlier ones first, the loosest leading up to `hi` at
- * which the unit is still set whole and keeps its pages (no line on a later page than its fit set it: keepsPages), the others
+ * paragraph TeX states inside it (framesOf; 2608.25210v2 p3: a prompt held to the pitch its item's run-in line needed),
+ * whichever way the unit's fill leading was found (fillLeadsOf, its closer search's too). From the unit's fill leading `lo`
+ * (its every frame's), each frame in turn, the earlier ones first, the loosest leading up to `hi` at which the unit is still
+ * set whole and keeps its pages (no line on a later page than its fit set it: keepsPages), the others
  * at theirs. A frame of one block first tried where its lines at `lo` (`laid`) would end on its last baseline, arithmetic, and
  * one step looser (no layout more where a frame has no room: most are full), any other first one step looser; then by
  * halving, as the unit's own. The leadings
@@ -284,8 +282,8 @@ function frameLeadsOf(p: FillUnit, bx: FitState, lo: number, hi: number, laid: L
  * closer, down to the original's pitch, at which it does, and no looser; where none does, `lo`. Returns its leadings as
  * frameLeadsOf's, `needs` (by frame before the last that a cut follows: the leading it is filled to holding its share, null
  * where it does not hold it) and `lo`; null where the unit's tokens hold no frame's cut. The page fill keeps it where every such
- * frame holds its share at or above its page's band floor (fillPage); every other lay is (i)'s, frameLeadsOf's, the cuts marked
- * `share` read by none (lab option (i)'s frame share, bounded by the band, 2026-11-09)
+ * frame holds its share at or above its page's band floor (fillPage); every other lay is frameLeadsOf's, the cuts marked
+ * `share` read by none (the frame share bounded by the band, docs/PDF-READER.md §18.11)
  */
 function frameShareOf(p: FillUnit, bx: FitState, lo: number, hi: number, laid: Layout): FillShare | null {
   const of = framesOf(p.blocks),
@@ -404,7 +402,7 @@ function frameShareOf(p: FillUnit, bx: FitState, lo: number, hi: number, laid: L
  * By halving from the grid's ends, as a looser leading holds no more lines than a closer one (monotone in practice, as the
  * fill's other searches take it); first, where a guess is given (guessCloser), the guess confirmed by two layouts, it set
  * and the step looser not, which the halving would have found by the same order: each search of the kind took six layouts
- * or seven a unit, which the speed check of 2026-10-17 found (the page fill under the gap rule 0.7 % more fit states).
+ * or seven a unit, measured by the speed check of 2026-10-17 (the page fill under the gap rule 0.7 % more fit states).
  * Returns { k, l } (the layout at L(k), the one the search laid there) or null where L(K) does not set it either
  */
 function closerLead<L>(K: number, sets: (k: number) => L | null, guess: number | null): { k: number; l: L } | null {

@@ -1,8 +1,6 @@
-// Translating (docs/PDF-READER.md §11.8, the owner's "Field" of 2026-10-25 in his "Glint" of 2026-11-01): while a near page is not
-// laid, its slot shows the original's page and each paragraph the parts read so far locate on it carries a mark over its box,
-// showing its own share of one diagonal light that crosses the whole page. Carried from today's layer side
-// (src/pdf-reader/engine/view/layer-side.mjs markPage, alignPasses, padsOf at baf2083e0); the look is the reader's sheet's
-// (styles.ts, every value a `--axt-tr-*` custom property).
+// Translating (docs/PDF-READER.md §11.8, "Translating"): while a near page is not laid, its slot shows the original's page and
+// each paragraph the parts read so far locate on it carries a mark over its box, showing its own share of one diagonal light
+// that crosses the whole page. The look is the reader's sheet's (styles.ts, every value a `--axt-tr-*` custom property).
 //
 // - The marks of a page stand in one element over it (`.axt-translating`, a size container: the light's picture and each mark's
 //   place are in its container units), hidden from assistive technology and under the pointer; each mark at its paragraph's box

@@ -19,8 +19,8 @@ export type Capsule =
    *  by itself (at its time, or once the network is back): no retry offered at all (PDF-READER §8.1) */
   | { kind: 'notNow'; words: CapsuleWords; href?: string; label?: string; wait?: true; self?: true }
   /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
-   *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
-   *  of 2026-10-04) */
+   *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (UI.md
+   *  §3.5) */
   | { kind: 'notice'; words: CapsuleWords; action: 'retry' | null }
   | { kind: 'unsupported'; words: CapsuleWords; action: 'language' }
   | { kind: 'narrow'; words: CapsuleWords }
@@ -34,7 +34,7 @@ export type Capsule =
    *  own for a face lost likewise (S-R-28, model.ts `faces`) */
   | { kind: 'toast'; words: CapsuleWords; icon: 'check' | 'info' }
   /** a run under way, in the host's words where it gives them (the website's): with the spinner, its count a part of its own;
-   *  none where the host words none (the progress line alone shows it, the maintainer's of 2026-09-25). `show`: the chip that
+   *  none where the host words none (the progress line alone shows it, PDF-READER §6.6). `show`: the chip that
    *  shows the translation (StateWords `showTranslation`), where it is not on screen and some of it is there */
   | { kind: 'progress'; stage: Stage; words: CapsuleWords; show?: true }
 /** what the reader waits for while a run is under way, as a host's words say it: its turn at our server, the translation (the
@@ -78,7 +78,7 @@ export interface Card {
 /** the reasons a key settles: the settings are where it is fixed (the popup's rule) */
 const KEYS: ReadonlySet<ProviderErrorKind> = new Set(['no-key', 'auth'])
 
-/** a translation or a prepare under way: the progress line shows it, and no capsule does (the maintainer, 2026-09-25) */
+/** a translation or a prepare under way: the progress line shows it, and no capsule does (PDF-READER §6.6) */
 const running = (state: ReaderState) => state.phase === 'translating' || state.phase === 'preparing'
 
 /** What the reader has done with the notices this visit (StatusCapsule keeps it). `refusalsSeen`: the refused writes closed */
@@ -102,7 +102,7 @@ const originalApart = (state: ReaderState, words: StateWords): boolean =>
 export function stageOf(state: ReaderState): Stage | null {
   const apart =
     state.phase === 'failed' && state.failures.pdf !== null && (state.preparing !== null || state.rowsComing)
-  // (our server at capacity: the paper waits its turn, asked again by itself; the coordinator's decision 5, 2026-11-11)
+  // (our server at capacity: the paper waits its turn, asked again by itself; PDF-READER §6.6, "Waiting in line")
   if (causeOf(state) === 'busy') return 'queued'
   if (!running(state) && !apart) return null
   if (state.reconnecting) return 'reconnecting'
@@ -122,7 +122,7 @@ export const nothingShown = (state: ReaderState): boolean =>
   state.failures.pdf !== null && !translationThere(state) && (!state.available || state.unavailable !== null)
 /** the paper's first making: its layer being made (no layer to show yet, the first time anyone opens it), or made this visit and
  *  the count of its translation not known yet (the layer's units not read): one wait, the translation's, from the open until the
- *  count shows (the coordinator's decision 1, 2026-11-11) */
+ *  count shows (PDF-READER §6.6, "One word for the wait") */
 export const firstOf = (state: ReaderState): boolean =>
   state.preparing !== null || (state.made && state.translated.total <= 0)
 /** a run's stage in the host's words, or null where it gives none; `chip`: the chip that shows the translation beside them */
@@ -172,10 +172,10 @@ export function capsuleOf(
       return { kind: 'saveFailed', words: plain(words.saveFailed ?? O.saveFailed) }
   }
   // no paper: its card says that much, and nothing about a paper is true of it. A failure's card is the pane's whole answer, but
-  // the original's own card standing apart: the translation's state is told beside it (L11 third round, gap 5)
+  // the original's own card standing apart: the translation's state is told beside it (PDF-READER §6.6)
   if (state.noPaper || (state.phase === 'failed' && !originalApart(state, words)) || state.phase === 'loading')
     return null
-  // before anything else: it says why the translated displays are greyed (the maintainer, 2026-09-26)
+  // before anything else: it says why the translated displays are greyed (S-R-17)
   if (!state.available) {
     const said = plain(
       (state.unavailable?.why === 'too-large' ? words.tooLarge : undefined) ?? words.noPdf ?? R.status.noPdf,
@@ -194,7 +194,7 @@ export function capsuleOf(
       action: 'language',
     }
   }
-  // a wait the session goes on from by itself, said over the run it pauses (the coordinator's R7, 2026-11-12): the network down
+  // a wait the session goes on from by itself, said over the run it pauses: the network down
   // while a run is waited for, over the count, which cannot move until it is back (the session asks again by itself then: no
   // retry), and the count again once it is (PDF-READER §8.1); the visitor's rate likewise; our server at capacity is the queue, a
   // run's stage where the host words it (stageOf)
@@ -263,8 +263,8 @@ export const retryOffered = (c: Capsule): boolean =>
 
 /** what is under way, said to screen readers in the status region: the progress line is decorative, and no capsule shows it
  *  (where a host's words show it, the capsule says them itself). The end held for the layer's first page (`laying`: the
- *  translation there, a stored one read or a run's last rows in, the page being laid) is a load, never "translating" (the
- *  coordinator's R2 of 2026-11-12: the words say what is in flight); the first making's end held is its wait still (firstOf) */
+ *  translation there, a stored one read or a run's last rows in, the page being laid) is a load, never "translating" (S-R-12,
+ *  PDF-READER §6.6: the words say what is in flight); the first making's end held is its wait still (firstOf) */
 export function spokenOf(state: ReaderState): string {
   return state.phase === 'loading' || (state.phase === 'translating' && state.laying && !firstOf(state))
     ? R.status.loading
@@ -276,11 +276,11 @@ export function spokenOf(state: ReaderState): string {
 }
 
 /**
- * The progress line under the toolbar, all that shows a load or a translation under way (the maintainer, 2026-09-25):
- * one line over the whole process, which never starts again (the maintainer asked why it ran twice, 2026-10-02;
- * ProgressLine holds the longest it reached) — the PDF's download its first stretch when a translation follows it (all of
- * it when the original alone is shown), then, where the paper's layer is being prepared, half the rest by the prepare's
- * stage, then the paragraphs translated to the end, from where the prepare left it (the coordinator's decision 4, 2026-11-11)
+ * The progress line under the toolbar, all that shows a load or a translation under way (PDF-READER §6.6):
+ * one line over the whole process, which never starts again (ProgressLine holds the longest it reached) — the PDF's
+ * download its first stretch when a translation follows it (all of it when the original alone is shown), then, where the
+ * paper's layer is being prepared, half the rest by the prepare's stage, then the paragraphs translated to the end, from
+ * where the prepare left it
  */
 interface Line {
   on: boolean
@@ -292,8 +292,8 @@ const DOWNLOAD = 0.15,
 /** where the prepare's stretch ends, and the translation that follows it in the same process starts */
 const PREPARED = DOWNLOAD + (1 - DOWNLOAD) * PREPARE
 /** `held`: the original held on screen by the host's rules (heldOf): while the paper is made the line is the original's load, whole
- *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display, the
- *  maintainer's ruling that nothing a website reader sees changes at the cut-over: L11 third round, gap 3). `prepared`: this
+ *  once it is read, as the website's page draws it there (its phase still the original's loading in the original's display:
+ *  nothing a website reader sees changes at the cut-over, PDF-READER §6.6). `prepared`: this
  *  process of the line had the paper's first making (ProgressLine): the translation takes what remains after the prepare's
  *  stretch, never a share of the whole that leaves the line standing still; a process without one keeps the download's base */
 export function lineOf(state: ReaderState, held = false, prepared = false): Line {
@@ -314,7 +314,7 @@ export function lineOf(state: ReaderState, held = false, prepared = false): Line
  *  (session/machine.ts GOES_ON), as the chrome names its causes */
 const GOES_ON: ReadonlySet<Cause> = new Set<Cause>([...GOES_ON_WHY].map(causeFor).filter((c): c is Cause => c !== null))
 /** a wait the session goes on from by itself (GOES_ON): a wait, as the first-time wait is, never a refusal; the display the reader
- *  chose is kept through it (the coordinator, 2026-11-12) */
+ *  chose is kept through it (PDF-READER §8.1) */
 const goesOnNow = (state: ReaderState): boolean => {
   const cause = causeOf(state)
   return cause !== null && GOES_ON.has(cause)
@@ -379,7 +379,7 @@ interface Look {
   tone?: 'alert' | 'wait'
 }
 /** the failures that are a wait, not a fault: our server or the service out of reach for now (the one such kind the website's
- *  run reaches the chrome as: events.ts kindOf; the extension's today session says `timeout` and `rate-limit` too, its chain's
+ *  run reaches the chrome as: events.ts kindOf; the extension's v1 session says `timeout` and `rate-limit` too, its chain's
  *  kinds as they are, but its parts draw no sign by state) */
 const WAITS: ReadonlySet<ProviderErrorKind> = new Set(['network'])
 
@@ -449,7 +449,7 @@ export function cardOf(
   if (state.failures.pdf !== null && words.originalLost && !words.openOriginal)
     return { reason: words.originalLost, action: state.selfAsks.pdf ? null : 'retry' }
   // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's (the extension's
-  // today session says `rate-limit`, its chain's kind as it is). A key's reason is the key's only where the service chosen
+  // v1 session says `rate-limit`, its chain's kind as it is). A key's reason is the key's only where the service chosen
   // carries one (the host's reason). No retry where the session asks again by itself for the failure the card shows
   const self = words.openOriginal || state.failures.pdf === null ? state.selfAsks.service : state.selfAsks.pdf
   return {

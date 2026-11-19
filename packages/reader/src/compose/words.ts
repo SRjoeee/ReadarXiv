@@ -1,5 +1,5 @@
 // The words the reader sets where no chrome shows them: a page's name (UI.md S-R-11a, said to screen readers, never shown) and the
-// name of a laid page's link with no text under it, by where it goes (S-R-25, the owner's words of 2026-10-17). From the string
+// name of a laid page's link with no text under it, by where it goes (S-R-25). From the string
 // catalogue (`@readarxiv/ui`) in the interface's language unless a host gives its own through openReader; read at each use (the
 // catalogue is a live binding), so that a language switched meanwhile names the next drawing.
 import { R } from '@readarxiv/ui'

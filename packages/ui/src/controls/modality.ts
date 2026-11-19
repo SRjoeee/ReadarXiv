@@ -1,5 +1,5 @@
 // How the reader is being worked, pointer or keyboard, for its focus rings (better-accessibility: the ring is the
-// keyboard's; the maintainer, 2026-09-26). The browser's :focus-visible is right for every control but a text field,
+// keyboard's; PDF-READER §13). The browser's :focus-visible is right for every control but a text field,
 // which it rings after a press too, since typing follows: the page's field and the language menu's search, ringed on a
 // click, with the menu's first option beside them. `data-axt-pointer` on <html> marks the pointer's turn, from a press
 // until a key that moves or acts (typing is left to it); the sheets take those rings off while it is there (reader.css

@@ -46,7 +46,7 @@ export function Outline({ controller, open }: { controller: ReaderController; op
   const shownRow = (k: number): boolean => parents[k]! < 0 || (expanded.has(parents[k]!) && shownRow(parents[k]!))
   return (
     // closed, inert, not hidden: out of the tab order and the accessibility tree, still displayed, so that the style
-    // sheet slides it (a hidden sidebar is display: none, which no transition leaves: the final review)
+    // sheet slides it (a hidden sidebar is display: none, which no transition leaves)
     <aside id="axt-contents" className="chrome toc" aria-label={R.contents} inert={!open}>
       <div className="toc-h">{R.contents}</div>
       <ul className="toc-list">

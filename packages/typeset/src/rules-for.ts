@@ -1,10 +1,9 @@
-// rulesFor (design-a §1.2): one target's Rules, from the rule set's data files (src/data/rules/: one a language, its script's
-// fields beneath its own) and the reader's choices. Ported from engine 065c1d973 rules/layout.mjs resolveRules
-// (layout.mjs:346-372) and rules/script.mjs scriptOf: the script's fields with the language's over them, field by field (an
+// rulesFor: one target's Rules, from the rule set's data files (src/data/rules/: one a language, its script's fields beneath
+// its own) and the reader's choices (resolveRules): the script's fields with the language's over them, field by field (an
 // object field replaced whole, never merged), `cjk` from the script, babel's hyphenation minimums; the patterns to read:
 // English's for every Latin word, the language's own where `latinPatterns` names one, a Cyrillic target's `cyrillicPatterns`;
-// the target's head names (data/rules/heads.ts, today's rules/tex-names.json heads that tex-names.mjs headName reads) and its
-// reference names (data/rules/refs.ts: the names cleveref and hyperref generate, that tex-names.mjs refInTarget reads).
+// the target's head names (data/rules/heads.ts: a theorem-like head's printed name) and its reference names
+// (data/rules/refs.ts: the names cleveref and hyperref generate).
 // Each call answers fresh objects: a caller may change its own.
 import { HEADS } from './data/rules/heads.ts'
 import { HYPHENATION, LANGUAGES, SCRIPTS } from './data/rules/index.ts'
@@ -13,7 +12,7 @@ import type { ScriptRules } from './data/rules/types.ts'
 import type { Choices, Lang, RuleParams, Rules, Script } from './types.ts'
 import { type RefNames, refNamesOf } from './unit/rename.ts'
 
-/** the packages' reference names for a target, as tex-names.mjs reads them: every target's heads and references, its own
+/** the packages' reference names for a target: every target's heads and references, its own
  *  words (U.rename's RefNames) */
 const refsFor = (target: Lang): RefNames =>
   refNamesOf(
@@ -65,7 +64,7 @@ const SCRIPT_KEYS = [
   'cjkFaces',
 ] as const satisfies readonly (keyof ScriptRules)[]
 
-/** the script a BCP 47 tag is written in: its likely script (zh-TW Hant, sr Cyrl), rules/script.mjs scriptOf */
+/** the script a BCP 47 tag is written in: its likely script (zh-TW Hant, sr Cyrl) */
 export const scriptOf = (lang: Lang): string => new Intl.Locale(lang).maximize().script ?? ''
 
 /** a target the rule set has no rules for */
@@ -78,7 +77,7 @@ export class NoRules extends Error {
 
 const copy = <T>(v: T): T => (v !== null && typeof v === 'object' ? structuredClone(v) : v)
 
-/** today's resolveRules(BUILTIN_RULES, target): the params, the labels, the patterns' languages, the CJK faces */
+/** the rule set resolved for one target: the params, the labels, the patterns' languages, the CJK faces */
 export function resolveRules(target: Lang) {
   if (!Object.hasOwn(LANGUAGES, target)) throw new NoRules(`the target ${JSON.stringify(target)}`)
   const script = scriptOf(target)
@@ -105,11 +104,11 @@ export function resolveRules(target: Lang) {
 
 /**
  * One target's Rules: the rule set resolved for it, the hyphenation patterns the host loaded (`hyph`, by language; data handed
- * in, never fetched here), the reader's choices (today's default: captions in the target, nothing left)
+ * in, never fetched here), the reader's choices (by default captions in the target, nothing left)
  */
 export function rulesFor(target: Lang, choices: Choices = {}, hyph: Readonly<Record<string, unknown>> = {}): Rules {
   const r = resolveRules(target)
-  // (the borrow past TeX's text block bottom where the reader sets it (§18.37, the owner's switch): in the params the fit reads;
+  // (the borrow past TeX's text block bottom where the reader sets it (§18.37, "The switch"): in the params the fit reads;
   // absent, the fit's own rule)
   const past = choices.pastFoot
   return {

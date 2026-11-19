@@ -46,14 +46,14 @@ const TEXT_KINDS = new Set<string>([
   'footnote',
   'macro',
 ] satisfies readonly KnownElKind[])
-/** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
+/** the classes the typesetter draws as the page's text (its lay/read.ts drawnAs: a citation, a reference, a macro) */
 const TEXT_CLASSES = new Set<string>(['cite', 'num', 'macro', 'umacro'] satisfies readonly KnownElClass[])
 const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',
   theorem: 'head',
   footnote: 'mark',
-  // (a babel name's: the number a class set right before a heading it sets itself, the wrap's `n<occ>.l` (own.mjs MR 6c),
+  // (a babel name's: the number a class set right before a heading it sets itself, the wrap's `n<occ>.l` (own/own.ts MR 6c),
   // a heading's number as a section's is: 2610.20967v1's "9. REFERENCES")
   name: 'head',
 }
@@ -71,7 +71,7 @@ export function lineGeometry(w: Work, owned: Owned): void {
       const b = inkA.pages[ap - 1]!.boxes
       return { page: ap, x0: b[4 * ai]!, y0: b[4 * ai + 1]!, x1: b[4 * ai + 2]!, y1: b[4 * ai + 3]! }
     })
-  // (each B glyph's region by B's brackets, stream.mjs regionsOf's: a float's depth, a column's body or not; read once a page)
+  // (each B glyph's region by B's brackets, own/stream.ts regionsOf's: a float's depth, a column's body or not; read once a page)
   const regionsB = new Map<number, Int32Array>()
   const regionB = (b: number): number => {
     const p = (pageB[b] as number) - 1
@@ -94,7 +94,7 @@ export function lineGeometry(w: Work, owned: Owned): void {
     // (an element whose rows stay where TeX set them: a display, and a group of one pitch TeX set on lines of its own)
     const rowsKept = (id: string) => kindOf(id) === 'display' || !!mem.ownRows?.has(id)
     const classOf = new Map(unit?.classes ?? [])
-    // (an element whose ink stands apart from the unit's text lines: outside the unit (B11 OUTSIDE), kept where it stands
+    // (an element whose ink stands apart from the unit's text lines: OUTSIDE the unit, kept where it stands
     // and no line of the unit's)
     const textCut = cutLines(
       [...mem.text].sort((x, y) => x - y),
@@ -127,8 +127,8 @@ export function lineGeometry(w: Work, owned: Owned): void {
     // stayed on that row's line as a script, its "4)" a line of its own: §17.9)
     const cut = unit?.display ? rowsOf(inline, atA, boxesOf_(mem.textBoxes)) : cutLines(inline, atA)
     // (the lines whose ink stays, KEPT, in their place in the stream: a display's rows; and a held line, the glyphs inside its
-    // span on A that B printed and no unit owns: the lines its source does not write (B17; today's heldOf MAKE:1855 read them
-    // by the source's words, under a 0.2 share: ownership says it))
+    // span on A that B printed and no unit owns: the lines its source does not write (ownership says it, never a share of
+    // the source's words))
     // (a display's rows by rows.ts: its ink's bands joined where its glyphs interleave in the stream, never the text line rule,
     // which cuts a row's stacked parts apart)
     const kept: CutLine[] = []
@@ -155,8 +155,8 @@ export function lineGeometry(w: Work, owned: Owned): void {
       }
       const held: number[] = []
       // (a float TeX set inside the paragraph, between two of its lines, is none of its held lines: a glyph in another float depth
-      // than the unit's text by B's brackets, or, where B brackets none, drawn inside a form XObject where its text is not (L1's
-      // second held-line fault, 2610.10492v1 ord 21: a float's glyphs no unit owns read as the paragraph's KEPT lines))
+      // than the unit's text by B's brackets, or, where B brackets none, drawn inside a form XObject where its text is not
+      // (2610.10492v1 ord 21: a float's glyphs no unit owns would be read as the paragraph's KEPT lines))
       const firstText = mem.text.length ? (mem.text[0] as number) : -1
       const textB = firstText >= 0 ? (m.aToB[firstText] as number) : -1
       const depthOf = (b: number) => regionB(b) >> 1
@@ -239,14 +239,14 @@ export function lineGeometry(w: Work, owned: Owned): void {
     }
     // (the pages it has ink of its own on, which a group of its holds: a KEPT line's page alone is none of them)
     mem.pages = [...new Set(mem.lines.filter((l) => !(l[9] & 1)).map((l) => l[0]))]
-    // style: TeX's font state is not stated by today's instrument: read off all of its own glyphs on A, level and turned, as
-    // today's reader reads it (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage
+    // style: the instrument does not state TeX's font state: read off all of its own glyphs on A, level and turned
+    // (facts.ts styleOf: the role, weight and slant of its fonts' names, the size, fill and design; stage
     // 1b states it). A figure text set turned has its glyphs in `turned` alone: their font, size and fill are its style, as
-    // today's figure texts take their turned glyphs' font (layout/figure-text.mjs); read off its level glyphs alone, a bold
+    // figure-text.ts reads a turned run's font off its glyphs; read off its level glyphs alone, a bold
     // axis title was the default serif (35 lines on 11 pages of the parity's pairs)
-    // (its size today's reader's: the median of its text glyphs' sizes, up the line (TeX's, its font expansion aside), math
-    // fonts aside, facts.ts unitSize; where it has none, the most common size of its glyphs, `read` 'size:lines': today then
-    // reads it off its lines' bands)
+    // (its size: the median of its text glyphs' sizes, up the line (TeX's, its font expansion aside), math
+    // fonts aside, facts.ts unitSize; where it has none, the most common size of its glyphs, `read` 'size:lines': the
+    // typesetter then reads it off its lines' bands)
     const own: StyleGlyph[] = [
       ...mem.text.map(gA),
       ...mem.turned.map(([ap, aj]) => turnedStyleGlyph(inkA.pages[ap - 1]!.turned![aj]!)),
@@ -256,8 +256,8 @@ export function lineGeometry(w: Work, owned: Owned): void {
     // "REFERENCES" in faked small capitals, read against `ref` as capitals at the small capitals' size: 32 names of 14 papers of
     // the corpus))
     const source = unit && unit.name === undefined ? sourceText(unit.content) : null
-    // (its faked small capitals aside, as today's originalStyle reads its size: smallCapsOf's, facts.ts fakedCaps; their share
-    // Style.sc, and whether its text is set in them, today's vote, Style.caps)
+    // (its size read with its faked small capitals aside, facts.ts fakedCaps; their share Style.sc, and whether its text is set
+    // in them, the vote of its letters, Style.caps)
     const caps = fakedCaps(txt, source, mem.kind.startsWith('ink'))
     const read = unitSize(caps.small.size ? txt.filter((g) => !caps.small.has(g)) : txt)
     const size = read ?? mostOf(txt.map((g) => r2(g.size))) ?? 10
@@ -328,7 +328,7 @@ export function lineGeometry(w: Work, owned: Owned): void {
     }
     // the lead: TeX's \baselineskip where its paragraph states it (LINES_TEX's AXT-LINES, as the paragraph ends: the one TeX
     // appended its lines at), the pitch TeX set its lines at, which TeX's \lineskip rule only widens, under a line too tall for
-    // it, never narrows; else (read) the pitch of its lines, where it has two on one page, else its size's, today's rule. A gap
+    // it, never narrows; else (read) the pitch of its lines, where it has two on one page, else 1.2 times its size. A gap
     // the \lineskip rule opened is no pitch of the paragraph: read as one (2602.23285v2 p4 t29, gaps 10.96 and 12.24, read
     // 12.24), a translation that set the tall line elsewhere had that gap added to the push its own tall line took. A
     // paragraph whose lines stand nearer than the \baselineskip stated was not set at it (a negative skip after a forced
@@ -360,17 +360,17 @@ export function lineGeometry(w: Work, owned: Owned): void {
       if (p0.t !== 'el' && p0.t !== 'unit') continue
       const gl = mem.els.get(id) ?? []
       // (a nested unit, a footnote set inside the unit: its mark, the glyphs TeX set for it in the unit's text, an element of
-      // the unit's as today's placeholdersOf reads it (L2:1066, a footnote mark); one B gives none an element of no ink, so that
+      // the unit's (a footnote mark); one B gives none an element of no ink, so that
       // the part says which of the unit's pieces are its nested units: the instrument's class `nested`)
       const p = p0.t === 'unit' ? { kind: 'note-mark' } : p0
       const bx = mem.elBoxes.get(id) ?? []
       const bxB = mem.elBoxesB.get(id) ?? []
       // (its glyphs by line of TeX's, each line's box of its own ink: across its glyphs' advances and their outlines (an italic
-      // glyph's overhang past its advance is its ink), top to bottom, on that line's baseline. As today's file's segment of a
-      // piece (layout/stream.mjs: the piece's own ink, on its line's baseline), which the typesetter crops. An element in the
+      // glyph's overhang past its advance is its ink), top to bottom, on that line's baseline: the piece's segment, its own
+      // ink on its line's baseline, which the typesetter crops. An element in the
       // unit's text stands on the unit's lines, each glyph on the line the unit's text was cut into: an overline's nucleus, a
       // fraction's denominator back under its numerator, a big delimiter, a script are their line's whatever their own baselines
-      // (today's file: both its points on one line of the unit, the whole piece one segment of that line's, make.mjs), and one
+      // (both its points on one line of the unit, the whole piece one segment of that line's), and one
       // TeX broke over lines has a box on each. Cut alone, a fraction's denominator, which runs back left under its numerator,
       // read as a line of its own (2608.06701v1 p8's 2×|LCS(X,Y)| / (|X|+|Y|), set as two crops side by side). One outside the
       // unit's lines (a mark in a margin, kept where it stands) is cut into lines of its own, each on the baseline of the unit's
@@ -493,11 +493,11 @@ export function lineGeometry(w: Work, owned: Owned): void {
         } else ink.push([ap, r2(x0), r2(y0), r2(x1), r2(y1), r2(y0)])
       })
       const el: El = { kind: p.kind, ink }
-      // (TeX sets it as its unit's end mark: a fill pushed it to its line's end, its own box's or the source's (F14))
+      // (TeX sets it as its unit's end mark: a fill pushed it to its line's end, its own box's or the source's (PDF-READER §18.78))
       if (classOf.get(id)?.end) el.end = 1
       if (rowsKept(id) || outside.has(id)) el.keep = 1
-      // (its text where every glyph's Unicode is a reading of it: none `nu`, A17; else the typesetter crops it, TEX:420. Read
-      // as the page's text layer reads it, today's rendering (tex.mjs renderingOf over PDF.js's text content): a space between two
+      // (its text where every glyph's Unicode is a reading of it: none `nu`; else the typesetter crops it. Read
+      // as the page's text layer reads it (PDF.js's text content): a space between two
       // glyphs PDF.js's text content sets one between (facts.ts textOf). Stated where the typesetter may draw it as text: a
       // kind of text, a class drawn as the page's text (a citation, a reference, a macro: the instrument's), its own brackets
       // (U.brackets reads the text inside them), ink over lines (a formula broken over lines is drawn as text where its
@@ -510,7 +510,7 @@ export function lineGeometry(w: Work, owned: Owned): void {
       const copy0 = classOf.get(id)?.copy ?? ''
       const lineEnds = {
         literal,
-        // (one word as written, its line's ends joins as its copy reads them (facts.ts LineEndOptions.oneWord, lane url-join): a
+        // (one word as written, its line's ends joins as its copy reads them (facts.ts LineEndOptions.oneWord): a
         // URL (urlCopyOf), or a literal mark whose copy, the source's reading, holds no white space)
         oneWord: isUrl || (literal && copy0 !== '' && !/\s/u.test(copy0)),
         source: [p0.t === 'el' ? p0.src : '', copy0, unitText].join('\n'),
@@ -525,15 +525,15 @@ export function lineGeometry(w: Work, owned: Owned): void {
       // no rule or image among them. Plain text carries no shift and no size: a script's raise or drop, a fraction's parts, a
       // rule TeX set over or under it are none of it, and such an element is drawn as its ink (the typesetter's crop of El.ink
       // where it has no text). TeX sets one box's glyphs on one baseline, equal on the engine's hundredth of a point: no
-      // threshold. 2609.20976v1 p2's `\kmsMpc`, "km s⁻¹ Mpc⁻¹", was drawn as the text "km s−1 Mpc−1"; today's reader crops a
-      // text macro raised 0.1 em or more over its baseline (layer2.mjs scriptedOf) and draws a lowered one as text (1810.04805v2's
+      // threshold. 2609.20976v1 p2's `\kmsMpc`, "km s⁻¹ Mpc⁻¹", was drawn as the text "km s−1 Mpc−1"; a threshold that crops a
+      // text macro raised 0.1 em or more over its baseline draws a lowered one as text (1810.04805v2's
       // BERT_base, wrong too). A formula's text is no drawing (it is cropped, its text read for its brackets), nor a display's.
       // And each glyph where that text is drawn: on the baseline of the line it stands on (its ink's line, the hundredth most of
       // that line's body glyphs share, lines.ts); a footnote's mark is drawn raised whatever TeX set it as (El.mark: a superior
       // figure on the baseline, newpx's, 2307.16209v1). One box TeX raised or lowered whole has its glyphs on one baseline of
       // their own: 2610.17024v1 p11's `\REPOFOOTNOTE{}`, a
       // paper's macro around a footnote, its "3" 6.58 pt and 3.16 pt over the line's baseline, was read level against its own
-      // glyphs alone, stated the text "3" and drawn flat at the line's size; on staging and in today's reader both)
+      // glyphs alone, stated the text "3" and drawn flat at the line's size)
       const cls0 = classOf.get(id)?.cls
       const textClass = cls0 !== undefined ? TEXT_CLASSES.has(cls0) : TEXT_KINDS.has(p.kind)
       // (its glyphs on one baseline a line, each glyph of a character on its line's baseline)
@@ -599,12 +599,12 @@ export function lineGeometry(w: Work, owned: Owned): void {
         el.copy = textOf(gl.map(gA), lineEnds)
       // (a nested unit's mark, a footnote's: its copy text the glyphs TeX set for it, what its crop shows (a mark is drawn as its
       // crop, El.mark). The instrument reads `\footnotemark` from no source of the mark's and states "?", whatever the class sets:
-      // "1", "∗" (the compile move's F21: 179 marks of 37 of the 89 papers). One TeX set no glyph for keeps the instrument's)
+      // "1", "∗" (PDF-READER §18.16: 179 marks of 37 of the 89 papers). One TeX set no glyph for keeps the instrument's)
       if (p0.t === 'unit' && gl.length && !gl.some((a) => gA(a).nu)) el.copy = textOf(gl.map(gA), lineEnds)
       // (a URL's copy text, its crop's: its glyphs' text as the page sets it (urlCopyOf), what the crop shows: no space at a line's end
-      // inside it, which TeX's url package breaks without one, #633 review. The instrument's copy is the source's reading
+      // inside it, which TeX's url package breaks without one. The instrument's copy is the source's reading
       // (texToText2), which reads a URL's "_1" as the subscript "₁" and knows no prefix a macro prints (a DOI's, an eprint's): 30
-      // of the corpus's 360 URLs with break points were cut elsewhere than after a break, #630. Where TeX set it on one line,
+      // of the corpus's 360 URLs with break points were cut elsewhere than after a break. Where TeX set it on one line,
       // where its url package lets TeX break it, counted in that text (urlBreaks))
       if (isUrl && el.text !== undefined) el.copy = urlCopyOf(gl.map(gA))
       if (isUrl && ink.length === 1) {
@@ -612,8 +612,8 @@ export function lineGeometry(w: Work, owned: Owned): void {
         if (breaks.length) el.breaks = breaks
       }
       // (a text macro none of whose glyphs the instrument gives it, 1810.04805v2's \bert set as "BERT", the unit's text: its
-      // text the unit's own text glyphs between its two points on B, as today's reader finds its rendering among the unit's
-      // characters (texParts: TEX:487-495); its ink stays the unit's text's)
+      // text the unit's own text glyphs between its two points on B, its rendering among the unit's characters; its ink stays
+      // the unit's text's)
       const cls = classOf.get(id)?.cls
       const span = placeSpan.get(`${mem.unit}|${id}`)
       if (!gl.length && (cls === 'macro' || cls === 'umacro') && span) {
@@ -625,12 +625,12 @@ export function lineGeometry(w: Work, owned: Owned): void {
         }
         if (between.length && !between.some((a) => gA(a).nu)) el.text = textOf(between.map(gA), lineEnds)
       }
-      // (an element of no ink states which of three it is (rootcause/lave.md §2, math.md §4), of a class the reading draws from
+      // (an element of no ink states which of three it is, of a class the reading draws from
       // its ink (INKED_CLASSES): TeX set nothing for it, its text '' — both its places stated and no glyph of B between them,
       // or the instrument's `empty` (its probe said it sets none, or its points prove it set none of its own: 2610.19159v1's
       // `\trajectoryMark{}`, 2402.10294v1's `\url` in `\urldef\tempurl`) —; or TeX set it before the unit's start point,
       // outside the unit's text: El.keep, its ink never erased (the instrument's `outside`); with neither, its ink was not
-      // found, and the reading leaves its unit the original's. Before, an empty ink of a visible class read as TeX's nothing:
+      // found, and the reading leaves its unit the original's. An empty ink of a visible class read as TeX's nothing would leave
       // 2608.25210v2 p7's algorithm erased under one line, 2402.10294v1's reference [1] drawn without its year)
       const emptySpan = !!span && span[0] === span[1]
       const stated = cls ?? p.kind
@@ -639,11 +639,11 @@ export function lineGeometry(w: Work, owned: Owned): void {
         else if (outsidePiece.has(`${mem.unit}|${id}`)) el.keep = 1
         // (an inked macro whose ink nothing on the page bounds (no closing point, a paper's macro's; no opening point where it is
         // glued to the word before it; or set after its unit's end point) is stated by the text TeX set for it where the document
-        // uses it, every glyph stated as itself (PieceClass.told, the loop's first pass's ask; the coordinator's ruling on the
-        // third cause, 2026-11-16, lane cm-fix): elsarticle's `\sep` set as "," in 2610.38269v1's keywords, glued to the word
+        // uses it, every glyph stated as itself (PieceClass.told, the loop's first pass's ask; PDF-READER §18.80):
+        // elsarticle's `\sep` set as "," in 2610.38269v1's keywords, glued to the word
         // before it, and in 2610.20848v1's after the unit's end point. Its glyphs stay the unit's text's, as a text macro's do
         // (\bert above); one whose text TeX did not state glyph by glyph stays not found, and one the probe states a text for
-        // (PieceClass.text) is stated by that later, as before)
+        // (PieceClass.text) is stated by that later)
         else if ((cls === 'macro' || cls === 'umacro') && classOf.get(id)?.told && !classOf.get(id)?.text) {
           el.text = classOf.get(id)!.told!
           mem.told ??= new Set()
@@ -699,8 +699,8 @@ const lettersOf = (u: string) => u.replace(/[\uFB00-\uFB06]/g, (c) => c.normaliz
  * last glyph's ink and the next one's (their outlines where read, else their advances), with how much of its copy text `copy`
  * stands before it, in UTF-16 code units, the unit the typesetter slices it in: read off the text itself, each glyph found in
  * it in turn, so that a space it holds between two glyphs (urlCopyOf's, where they stand apart on a line), an astral
- * character's two units and a ligature's letters are counted as the text has them (a count of the glyphs misplaced every cut after any of them,
- * Devin on #630). None where the glyphs are not that text: a cut there would fall elsewhere than after a break. Its glyphs in
+ * character's two units and a ligature's letters are counted as the text has them (a count of the glyphs misplaced every cut
+ * after any of them). None where the glyphs are not that text: a cut there would fall elsewhere than after a break. Its glyphs in
  * their order on the line
  */
 export function urlBreaks(gs: readonly DocGlyph[], copy: string): [number, number][] {
@@ -788,7 +788,7 @@ export function rooms(w: Work): void {
 
 /** each line's column and measure on A: on a page of two columns (lines on both halves that keep to their half), a line
  *  keeps to the left half (0), the right (1), or spans (2); its measure TeX's frame of it where TeX shipped the page's frame
- *  (`frames`: the column its extent meets alone, else the text block), else today's column of it (below). TeX's own measure of
+ *  (`frames`: the column its extent meets alone, else the text block), else its column (below). TeX's own measure of
  *  a paragraph that states one (its \parshape, \hangindent, \leftskip, \rightskip) is read after it (measures.ts) */
 function columnsAndMeasures(
   members: Member[],
@@ -807,14 +807,14 @@ function columnsAndMeasures(
     const two = left >= 3 && right >= 3
     for (const l of lines) l[1] = !two ? 0 : l[3] <= mid + 2 ? 0 : l[2] >= mid - 2 ? 1 : 2
   }
-  // (each line's measure, today's column of it (run.mjs columnOf RUN:1557-1569, which U.decor widens a line of its own to): the
+  // (each line's measure where TeX shipped no frame, its column (columnOf, which U.decor widens a line of its own to): the
   // page's paragraphs' lines over its middle, three at least, else those of the nearest page before it that has three, else
   // the page's text area (its members' lines' hull); from their leftmost start to their furthest end, but a line TeX set
   // overfull: an end past the furthest end two lines share (within 0.2 pt) by less than the line's size is no edge)
   const paras = new Map<number, Line[]>()
   const area = new Map<number, [number, number]>()
-  // (text lines: a display's rows and a held line, which today's rectangles leave out, are none; each by the extent of its
-  // own text glyphs, which today's rectangles are (its words', an inline formula that overruns the line's end aside))
+  // (text lines alone: a display's rows and a held line are none; each by the extent of its own text glyphs (its words', an
+  // inline formula that overruns the line's end aside))
   for (const mem of members) {
     const text = new Set(mem.text)
     mem.lines.forEach((l, j) => {
@@ -854,16 +854,16 @@ function columnsAndMeasures(
   // (TeX's frame of a line: of its page's columns the one its extent meets alone, a line in the left column that hangs into the
   // gutter (a protruded stop, an overfull box) its column's; a line over both columns, in none (the gutter) or outside the text
   // block (a margin's, arXiv's turned stamp, ink no compile of the source sets), the text block. The gutter is no line's paper:
-  // a line ends inside its column's measure (the maintainer, 2026-11-08: 2610.22065v1 p1's ACM reference line, today's run 16 pt
-  // past its column into the gutter, called wrong); a name centred on the page is centred on the block's middle, never on a
+  // a line ends inside its column's measure (PDF-READER §18.77: 2610.22065v1 p1's ACM reference line, run 16 pt past its
+  // column into the gutter, is wrong); a name centred on the page is centred on the block's middle, never on a
   // hull of the page's ink that takes in the stamp at x 24 (2610.40645v1 p1's and 2610.10069v1 p1's "Abstract")
   const frameOf = (f: TexFrame, x0: number, x1: number): [number, number] => {
     const meets = f.columns.filter((c) => x1 > c[0] && x0 < c[1])
     return meets.length === 1 ? meets[0]! : f.block
   }
   const measures = new Map<Line, [number, number]>()
-  // (a line's middle as today's widened block has it: from its label's start where its label stands on it, the label drawn
-  // anew beginning the block (U.decor's first rectangle, RUN:2039); 1512.03385v1 p11's "Table 9." caption across both columns,
+  // (a line's middle as its widened block has it: from its label's start where its label stands on it, the label drawn
+  // anew beginning the block (U.decor's first rectangle); 1512.03385v1 p11's "Table 9." caption across both columns,
   // whose words' middle stands in the right column and whose block's in neither: the page's text area)
   for (const mem of members)
     for (const l of mem.lines) {
@@ -874,7 +874,7 @@ function columnsAndMeasures(
     }
   // (a table's cell: its line's room is its table's extent on the page where the table reaches past its text column, a float set
   // across both columns of a two-column page (2610.17024v1 p15's cell, whose room ended at the left column's edge, short of the
-  // next cell's ink; today's widen ran on to it, its block's middle over the gutter giving it the page's text area): the hull of
+  // next cell's ink): the hull of
   // the table's cells' lines there, the column's measure widened to it. A table inside one column keeps its column's measure)
   const tables = new Map<string, [number, number]>()
   for (const mem of members) {
@@ -986,7 +986,7 @@ function inkIndex(inkA: Doc): { under: InkUnder; next: InkNext } {
 /** the free depth under a member's last line in its column, to the first ink not its own (a page's glyph or box), the page's
  *  bottom edge where there is none; the distance to the next text line of its column, baseline to baseline; and, with TeX's
  *  facts, the room under each run of its text lines and its paragraph's separation (Room.runs, Room.sep: what a translation
- *  may borrow, the owner's ruling of 2026-11-08) */
+ *  may borrow, PDF-READER §18.11) */
 function roomOf(
   mem: Member,
   inkA: Doc,
@@ -997,8 +997,8 @@ function roomOf(
   const inkBelow = ink.under
   const last = mem.lines.at(-1)!
   // (its last block, as Room.below and Room.next read it, from its line `at` up: its lines on the page each standing above the one
-  // under it and across its column, to a kept row (a display, a held line: today's blocks split there); across: the block's
-  // column, its lines' measures, as design-a's "the next text line of its column" reads it, which a translation's last line may
+  // under it and across its column, to a kept row (a display, a held line: the block ends there); across: the block's
+  // column, its lines' measures, as "the next text line of its column" is read, which a translation's last line may
   // fill whatever the original's extent; never a column of its before a column break (a caption whose short last line keeps to
   // one column of a block across both stands in the block over it))
   const lastBlockOf = (at: number) => {
@@ -1031,11 +1031,11 @@ function roomOf(
   const tp = lastText[0]
   const { x0: bx0, x1: bx1 } = lastBlockOf(at)
   // (the room below: from its last line's bottom to the first ink under it across its last block (its lines' measures, as for the
-  // next line: a translation's lines span the block, so what stands under the block's full lines is under its last, a display,
-  // the checkpoint's free-11))
+  // next line: a translation's lines span the block, so what stands under the block's full lines, a display, is under its
+  // last))
   const [p, , lx0, lx1] = last
   const below = depthUnder(last, p === tp ? Math.min(lx0, bx0) : lx0, p === tp ? Math.max(lx1, bx1) : lx1)
-  // (the next line under its last text line (today's edgesOf `below` RUN:1655): from that line's baseline, across its last
+  // (the next line under its last text line: from that line's baseline, across its last
   // block, the page's glyphs under that baseline by more than three quarters of its pitch, its own travelling ink aside (its text,
   // label and elements set anew: a script of its last line) and its kept rows counted (a display that stays under it is the next
   // ink the fill meets); of the highest, those within half a size, their median baseline)
@@ -1056,16 +1056,16 @@ function roomOf(
       .sort((a, b) => a - b)
     nextBase = ys[(ys.length - 1) >> 1] as number
   }
-  // (the room under each run of its text lines, from its last up (today's freeFor, RUN:1677, which RUN:2193 gives every block but
-  // a cell's): a member running on to the next page or column may borrow at the foot of the one it leaves, a run over a kept row
+  // (the room under each run of its text lines, from its last up (not a cell's, a figure text's, an ink figure's or a name's:
+  // `tex.runs`): a member running on to the next page or column may borrow at the foot of the one it leaves, a run over a kept row
   // of its own only down to that row. A run: its lines on one page each standing above the one under it and across its column
   // (its lines' measures), with no other ink between the two (the first ink under the upper the lower's own: a float TeX set
-  // between two lines of a paragraph ends a run, as today's blocks end at its gap; its own travelling ink there is its lines',
+  // between two lines of a paragraph ends a run; its own travelling ink there is its lines',
   // travellingInk: a rule TeX set under its line, 2608.18502v1 p9's `\underline`, ended its run), to a kept row. Its room is read across it as
-  // its lines are laid (today's block's extent, the typesetter's measure): its lines' own hull, from their start (a member's
+  // its lines are laid (the typesetter's measure): its lines' own hull, from their start (a member's
   // first line on a row it shares starts there) to their furthest end, a line borrowed under it laid at its last line's (a
   // paragraph set beside a figure, 2602.23285v2 p5 t32: read to the column's end, the figure beside it was the ink under every
-  // line); a run of one line to its column's end (a single line widened to it, U.decor, RUN:1576). Stated where TeX states its
+  // line); a run of one line to its column's end (a single line widened to it, U.decor). Stated where TeX states its
   // page's text block bottom
   // (TeX's frame, Instrument.tex.frames' foot): the depth under the run's last baseline of the next ink's baseline (a glyph's;
   // a box's top), the page's bottom edge where none, and of that bottom)

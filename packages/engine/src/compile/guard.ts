@@ -1,11 +1,11 @@
-// The layout guard (R1, 2026-10-19): the marked original must be the paper. A unit mark is TeX of ours inserted into the
+// The layout guard (PDF-READER §19.6): the marked original must be the paper. A unit mark is TeX of ours inserted into the
 // paper's own source, and the front end's reading of a construct it does not know (pgffor's `\foreach \i in {…}`, etoc's
 // `\etocdepthtag.toc{…}`, a length argument) can make the marked original another document than arXiv's: a brace the
 // writer doubled, a mark TeX writes into a file and reads back where no text is set, an error the paper's own source does
 // not have. Then the whole paper lost its layout through a fault of ours (2610.21377, 2610.21288, 2610.21201: 343 rows of
-// the 50-paper sweep). The checks here hold for any paper; layout/paper.mjs markedOfPaper applies them, before the marked
+// the 50-paper sweep). The checks here hold for any paper; paper.ts markedOfPaper applies them, before the marked
 // compile (the braces) and after it (the compile ran through, its pages, the auxiliary files, the TeX errors), and leaves
-// unmarked the units the evidence blames. A unit left unmarked is the paper's own source (latex-front.mjs patch
+// unmarked the units the evidence blames. A unit left unmarked is the paper's own source (source/latex-front.ts patch
 // `asSource`) and simply stays unlocated; the rest of the paper keeps its layout.
 //
 // An original module (no port statement). It imports the engine's own modules alone, by relative path, and no node:
@@ -20,7 +20,7 @@ import type { Fsys, SourceUnit } from '../source/latex-front.ts'
 import type { TexError, UnitLines } from './tex-errors.ts'
 import type { PdfLike } from './base.ts'
 
-/** the paper as the guard reads it (live.mjs openPaper's): its units, its project's file texts and main file, its files */
+/** the paper as the guard reads it (live.ts openPaper's): its units, its project's file texts and main file, its files */
 export type GuardPaper = {
   units: readonly SourceUnit[]
   project: { main: string; files: ReadonlyMap<string, string> }
@@ -37,7 +37,7 @@ export type GuardCompile =
     }
   | null
   | undefined
-/** a unit's lines in the files a compile was given (live.mjs originalFiles' `spans.lines()`), and with its bytes there */
+/** a unit's lines in the files a compile was given (live.ts originalFiles' `spans.lines()`), and with its bytes there */
 type Lines = UnitLines<SourceUnit>
 type Spanned = Lines & { from: number; to: number }
 /** a list's or a group's frame as marksOutOfPlace reads the file: the control word before it, its argument's place */
@@ -101,10 +101,10 @@ export function braceBalance(text: string): number {
 
 /**
  * Before the marked compile: the units whose writing changes their file's brace balance, each unit's rendering in the
- * marked file (its range there, `lines`: live.mjs originalFiles' `spans.lines()`) against the paper's source of it (its
+ * marked file (its range there, `lines`: live.ts originalFiles' `spans.lines()`) against the paper's source of it (its
  * range in the file the project read), the innermost that does: a nested unit (a footnote's) by its own range, its outer
  * unit by what is left of its own once its nested units' are taken away. A file's balance is what its units add to it
- * and what our other edits add (the head, a babel name a style writes literally: layout/marks.mjs literalNames, each
+ * and what our other edits add (the head, a babel name a style writes literally: marks/marks.ts literalNames, each
  * balanced by construction): `other`, whether a file's balance moved by more than its units explain (`skip`, the main
  * file's head of ours, left out). Gives { units: Set of unit indices, other }
  */
@@ -295,7 +295,7 @@ const marksAtError = (before: string, after: string): RegExpExecArray[] => {
   return marks.filter((m) => m.index > from && m.index < to)
 }
 /**
- * The units the mark probe's errors stand at where TeX read the marked preamble (live.mjs markedPreamble, probeFiles `preamble`):
+ * The units the mark probe's errors stand at where TeX read the marked preamble (live.ts markedPreamble, probeFiles `preamble`):
  * an error TeX raised on a line of input of the probe's main file from `first` to `last` (the preamble's) names the units of the
  * marks of ours it stands among (marksAtError, unitOfMark), ids below `count`. TeX reads a
  * class's command in the preamble as the class defines it, and one that reads its argument as data raises its errors there, at
@@ -399,10 +399,10 @@ export function cutCopyUnits(
   return out
 }
 
-/** a log as TeX wrote it, its lines of 79 characters joined again (live.mjs unwrapped) */
+/** a log as TeX wrote it, its lines of 79 characters joined again (live.ts unwrapped) */
 const unwrapped = (log: string): string => log.replace(/^(.{79})\n/gm, '$1')
 /** whether a compile's last pass wrote its PDF itself (pdfTeX's or LuaTeX's "Output written on <job>.pdf"): its log then names
- *  every destination of ours TeX set twice, its own warning at the second (marks.mjs duplicatesIn). XeTeX's xdvipdfmx and the DVI
+ *  every destination of ours TeX set twice, its own warning at the second (marks.ts duplicatesIn). XeTeX's xdvipdfmx and the DVI
  *  driver latexmk runs tell theirs to no log the host returns */
 export const tellsTwice = (log: string | null | undefined): boolean =>
   /^Output written on .*\.pdf \(\d+ pages?\b/m.test(unwrapped(lastTexLog(log ?? '')))
@@ -415,7 +415,7 @@ export const tellsTwice = (log: string | null | undefined): boolean =>
  * never (a class's macro that discards it: 2610.21201v1's `\jmlr@author`), and the unit is located there. One TeX set twice, a
  * unit's own start or end mark the log names (a class that sets an author's name again from what it stored, in the e-mail
  * footnote: elsarticle's and cas-common's `\emailauthor`), stays out of place: the reading would drop every destination the log
- * names (marks.mjs readMarked `dropped`) and leave the unit the original's anyway, and the class may take the stored argument
+ * names (own/stream.ts ownedOf `dropped`) and leave the unit the original's anyway, and the class may take the stored argument
  * apart as data, our marks among its words — cas-common's `\parsename` splits the name at its spaces and takes each given name's
  * head for its initial, our `\leavevmode`, so that its footnote read "(. Chung)" where arXiv's reads "(M. Chung)" and the unit
  * made of it was refused (2610.21084v1) —: unmarked, the class's copy is the paper's own. A mark read back where no text is set —
@@ -453,7 +453,7 @@ export const texLiveOf = (log: string | null | undefined): string | null =>
  * /Info (`info.Custom`, a Map of the keys it has no field for), and no scan of the bytes: a PDF holds other banners, an
  * included PDF's Info dictionary (`/PTEX.InfoDict`) and a superseded object's, and object order does not say which is the
  * document's. No other signal counts (never the Producer, never a version number). A document that cannot say is null; only
- * a memory-class error is thrown (base.mjs creationEpochOf).
+ * a memory-class error is thrown (base.ts creationEpochOf).
  */
 export const texLiveOfPdf = async (doc: PdfLike): Promise<string | null> => {
   let banner: unknown = null
@@ -469,7 +469,7 @@ export const texLiveOfPdf = async (doc: PdfLike): Promise<string | null> => {
  * The compiler arXiv's PDF says made it, from the Creator and Producer of its Info dictionary (the one PDF.js resolves): `latex`
  * for a PDF dvips wrote (arXiv's latex route: latex, dvips, Ghostscript), `pdflatex` for pdfTeX's, `xelatex` for XeTeX's driver
  * (xdvipdfmx), `lualatex` for LuaTeX's; null for a document that does not say or says another tool (a PDF library, a converter).
- * It is the ground truth of a package that names no compiler (paper-meta.mjs guesses one from the files: a source with no
+ * It is the ground truth of a package that names no compiler (paper-meta.ts analyze guesses one from the files: a source with no
  * figure was taken for pdflatex though arXiv built it with latex and dvips, 1007.0072v1). Only a memory-class error is thrown
  */
 export const compilerOfPdf = async (doc: PdfLike): Promise<'latex' | 'pdflatex' | 'xelatex' | 'lualatex' | null> => {
@@ -495,7 +495,7 @@ export const texRan = (log: string | null | undefined): boolean => /^This is \S*
  *  in that is the engine's, not the compile's (a host's own failure, its cap on a compile's result) */
 export const engineUnknown = (c: GuardCompile): boolean =>
   /\bunknown engine\b/i.test(`${c?.error ?? ''}\n${c?.log ?? ''}`)
-/** a why as a refusal holds it (layer-proto/format.mjs whyText): no control character, within WHY_MAX */
+/** a why as a refusal holds it (instrument/format.ts whyText): no control character, within WHY_MAX */
 export { whyText }
 /** the host's limit a compile met, where it says one (the web's `limit`, the TeX page's timeout), else null */
 export const limitOf = (c: GuardCompile): string | null =>
@@ -521,12 +521,12 @@ const errorKey = (e: TexError): string =>
 export const ownErrors = (log: string | null | undefined): Set<string> => new Set(texErrors(log ?? '').map(errorKey))
 
 /**
- * The units the marked compile's errors stand in (tex-errors.mjs unitsAtErrors),
+ * The units the marked compile's errors stand in (tex-errors.ts unitsAtErrors),
  * each of its errors with a line of input but a letter lost (the paper's own letters), and less those the unmarked
  * original has too where it was compiled (`own`, ownErrors); and the units holding the line TeX names where it ignored all
  * text after it ("Incomplete \iffalse; all text was ignored after line N": a conditional that never ended, which names no
  * line of input of its own), in whichever file has a unit there. `files` the bytes the compile was given, `lines` its
- * units' spans (live.mjs originalFiles' `spans.lines()`). Gives unit indices
+ * units' spans (live.ts originalFiles' `spans.lines()`). Gives unit indices
  */
 export function errorUnits(
   paper: { units: readonly SourceUnit[] },
@@ -554,7 +554,7 @@ export function errorUnits(
   return out as Set<number>
 }
 
-/** a name mark of ours as TeX's log shows it (layout/marks.mjs NAMES_TEX: \\axtnma{key}, \\axtnmb{key} and their inner forms) */
+/** a name mark of ours as TeX's log shows it (marks/marks.ts NAMES_TEX: \\axtnma{key}, \\axtnmb{key} and their inner forms) */
 const NAME_MARK = /\\axt@?nm[ab]\b/
 /** a mark of ours in a line of TeX's context: MARK_IN_LINE's, or one whose argument the log cut at the line's end (`\\axtpmm {p1.3...`),
  *  which keeps its unit's number */
@@ -629,7 +629,7 @@ export function contextUnits(
 }
 
 /** the unmarked original: the paper's own files, its main one with graphicx's draft (the marked original's frames, which
- *  set no other place) and END_TEX (AXT-END, by which a compile ran through: live.mjs ranThrough) on one line before its
+ *  set no other place) and END_TEX (AXT-END, by which a compile ran through: live.ts ranThrough) on one line before its
  *  first, nothing else of ours */
 export const unmarkedFiles = (paper: GuardPaper): Map<string, Uint8Array> =>
   new Map([

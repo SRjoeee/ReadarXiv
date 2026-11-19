@@ -33,7 +33,7 @@ export interface DocGlyph {
   pid?: number | undefined
   clipped?: true | undefined
   unseen?: true | undefined
-  /** its Unicode is no reading of it (A17, today's `nu`): no character of its font's own map, or none Unicode stands for; read
+  /** its Unicode is no reading of it: no character of its font's own map, or none Unicode stands for; read
    *  where the document was read `mapped` */
   nu?: true | undefined
   /** its size along the line (PDF.js's text item's: its transform's x scale), where it differs from `size`, the size up it:
@@ -75,7 +75,7 @@ export interface DocTurned {
 
 /** the points pageInk keeps apart from the marks' (`points`): TeX's paragraphs' (`q<n>`) and their ends (`qe<n><code>`, with the
  *  counts of the page's points and paragraph points before each), its regions (a code region's glyphs, regionsOfPoints) and its
- *  pictures' (`zs`, `ze`): what today's ledger, ink units and figure texts read of a marked compile's page besides its points */
+ *  pictures' (`zs`, `ze`): what the ledger, ink units and figure texts read of a marked compile's page besides its points */
 export interface DocMarks {
   paras: DocPoint[]
   paraEnds: (DocPoint & { point: number; para: number })[]

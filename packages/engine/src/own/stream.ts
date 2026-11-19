@@ -1,13 +1,13 @@
-// Each placeholder's own ink in the marked compile, by content-stream order (Plan 8b, Task 6b; spec §4.2; the stream
-// ownership spike of 2026-10-06). LAYOUT_TEX sets a point, `/axt-<name> ri`, beside each destination it sets
-// (layout/marks.mjs), and points around each column's body (bs<n>, be<n>, in \@makecol, else at \@outputpage) and each float's box (fs<n>,
-// fe<n>); pageInk reads them in order among the glyphs and the boxes (layout/ink.mjs). A piece's own ink is what the
+// Each placeholder's own ink in the marked compile, by content-stream order (PDF-READER §19.9). LAYOUT_TEX sets a point,
+// `/axt-<name> ri`, beside each destination it sets (marks/marks.ts POINTS_TEX), and points around each column's body (bs<n>,
+// be<n>, in \@makecol, else at \@outputpage) and each float's box (fs<n>, fe<n>); pageInk reads them in order among the glyphs
+// and the boxes (ink.ts). A piece's own ink is what the
 // content stream shows between its two points: every glyph and rule TeX set for it, its scripts, limits, bars and
 // radicals, and nothing of its neighbours', where geometry can only guess. What TeX ships between two points that is
 // not the piece's — a page's footnotes and their rule, its running foot and the next page's head, a float shipped in
 // mid-paragraph or at a column's head — lies outside the region of its opening point, and is cut: a region is in a
 // column's body or not, at a depth of floats.
-// Imports a label's form alone (label-form.mjs): pure arithmetic over what pageInk read.
+// Imports a label's form alone (marks/label-form.ts): pure arithmetic over what pageInk read.
 import type { InkPoint, PackedGlyphs } from '../ink.ts'
 import { isLabelForm, LABEL_NAME, labelText } from '../marks/label-form.ts'
 
@@ -16,7 +16,7 @@ export type StreamGlyphs = Pick<PackedGlyphs, 'n' | 'x0' | 'y' | 'size' | 'u'>
 /** a page's view as PDF.js gives it (PDFPageProxy.view): x0, y0, x1, y1 */
 export type View = readonly [x0: number, y0: number, x1: number, y1: number]
 /** a page of the marked compile as pageInk read it, its glyphs packed in stream order (packGlyphs), with its view; its
- *  paragraphs' points (marks.mjs POINTS_TEX q<n>), where a display a unit opens with begins */
+ *  paragraphs' points (marks/marks.ts POINTS_TEX q<n>), where a display a unit opens with begins */
 export interface StreamPage {
   glyphs: StreamGlyphs
   boxes: readonly number[]
@@ -25,13 +25,13 @@ export interface StreamPage {
   view: View
   paras?: readonly InkPoint[]
 }
-/** the one unmarked piece after a paper's macro (marks.mjs followsOf `split`): its opening mark's name, the text the probe
+/** the one unmarked piece after a paper's macro (marks/marks.ts followsOf `split`): its opening mark's name, the text the probe
  *  showed the macro sets, and where text follows the piece, that text as an opening's (`want`, `rest`) and the points that
  *  may end it (`ends`), the three together */
 export type Split =
   | { name: string; text: string; want?: undefined; rest?: undefined; ends?: undefined }
   | { name: string; text: string; want: string; rest: string; ends: string[] }
-/** what the marking says of a piece with an opening point (marks.mjs followsOf): `closing`, it has a closing mark; `want`, the
+/** what the marking says of a piece with an opening point (marks/marks.ts followsOf): `closing`, it has a closing mark; `want`, the
  *  first WANT characters of the text after it in its unit, '' for none; `ends`, the names of its unit's next marks; `blocked`,
  *  a visible piece with no mark follows it with no text between; `through` (the erasure's), past such pieces, the next marked
  *  piece's opening mark, else null; `rest`, the whole text after it up to its next visible piece as spellOf reads it;
@@ -49,8 +49,8 @@ export interface Follow {
   split?: Split
   moved?: string
 }
-/** a display a unit opens with, which the marking passes over (marks.mjs headsOf), by its unit's start mark: the opening mark's
- *  name it would have had, its display group's later displays', and whether it is one display of no row break (`whole`) */
+/** a display a unit opens with, which the marking passes over (marks/marks.ts headsOf), by its unit's start mark: the opening
+ *  mark's name it would have had, its display group's later displays', and whether it is one display of no row break (`whole`) */
 export interface Head {
   name: string
   group?: readonly string[]
@@ -75,8 +75,8 @@ export interface Regions {
 export type Take = (name: string, e: Owned, pages: readonly StreamPage[]) => void
 
 /** how a piece's ink was found, or why none was: the first OWNED are owned (its glyphs and rules, maybe none), the rest
- *  are not, and the maker writes the piece LOST — but 'in the display before it', a later display of a display group,
- *  whose ink is the group's first display's (the maker writes it JOINED) */
+ *  are not, and own.ts leaves the piece's unit the original's — but 'in the display before it' (OWNED), a later display of
+ *  a display group, whose ink is the group's first display's */
 export const OWNED_HOW = Object.freeze([
   'closed',
   'open, to the text after it',
@@ -103,31 +103,31 @@ export const OWNED_HOW = Object.freeze([
 /** how a piece's ink was found, or why none was */
 export type OwnedHow = (typeof OWNED_HOW)[number]
 export const OWNED = 6
-/** the glyph columns ownedOf reads of a page (ink.mjs packGlyphs), and the owned rows after it (marks.mjs): a glyph's
- *  origin, baseline, size and character */
+/** the glyph columns ownedOf reads of a page (ink.ts packGlyphs; own.ts streamPage): a glyph's origin, baseline, size and
+ *  character */
 export const STREAM_COLUMNS = Object.freeze(['x0', 'y', 'size', 'u'] as const satisfies readonly (keyof StreamGlyphs)[])
 const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i])) as Readonly<Record<OwnedHow, number>>
 /** a bracket's point: a column's body (b) or a float's box (f), its start (s) or end (e), by a number */
 const BRACKET = /^([bf])([se])(\d+)$/
-/** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
+/** a babel name's point (marks/marks.ts NAMES_TEX): no piece's next mark, its text no unit's */
 const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
-/** a point one reader reads alone (marks.mjs POINTS_TEX): a caption's label's `ka<k>` (own.mjs MR 5's), a float of no counter's
- *  `fn<n>` (the ledger's); every other reading passes over it as over a bracket (PDF-READER §18.34) */
+/** a point one reader reads alone (marks/marks.ts POINTS_TEX): a caption's label's `ka<k>` (own.ts's labels), a float of no
+ *  counter's `fn<n>` (the ledger's); every other reading passes over it as over a bracket (PDF-READER §18.34) */
 export const READ_ALONE = /^(?:ka|fn)\d+$/
 /** where other text begins that no unit's mark opens: the start of a babel name that heads a block of its own ("References",
- *  "Abstract", "Proof", marks.mjs NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own text:
- *  `\[x=\text{\figurename}\,1\]`), its key in any case (a primitive \uppercase's capitals), and a biblatex entry's (marks.mjs
- *  POINTS_TEX `bi<n>`): a piece alone past its unit's end owns nothing past one on its page. The keys are the caption names'
- *  (article.cls's \abstractname, \refname, \contentsname, \listfigurename, \listtablename, \appendixname, \indexname;
- *  book.cls's \bibname; amsthm.sty's \proofname; babel's english.ldf's \prefacename, \glossaryname) */
+ *  "Abstract", "Proof", marks/marks.ts NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own
+ *  text: `\[x=\text{\figurename}\,1\]`), its key in any case (a primitive \uppercase's capitals), and a biblatex entry's
+ *  (marks/marks.ts POINTS_TEX `bi<n>`): a piece alone past its unit's end owns nothing past one on its page. The keys are the
+ *  caption names' (article.cls's \abstractname, \refname, \contentsname, \listfigurename, \listtablename, \appendixname,
+ *  \indexname; book.cls's \bibname; amsthm.sty's \proofname; babel's english.ldf's \prefacename, \glossaryname) */
 const BEGINS =
   /^(?:n\d+\.(?:abstract|ref|bib|contents|listfigure|listtable|appendix|index|proof|preface|glossary)\.s|bi\d+)$/i
 /** a biblatex entry's point, and its bibliography's end: no piece's next mark either, its entry no unit of the source */
 const BIB_ITEM = /^b[iz]\d+$/
-/** a draft image frame's corner (pipeline/live.mjs DRAFT: g<n>a, g<n>b on its baseline, g<n>t at its top): no piece's next mark
+/** a draft image frame's corner (compile/live.ts DRAFT: g<n>a, g<n>b on its baseline, g<n>t at its top): no piece's next mark
  *  either. What the frame holds between g<n>a and g<n>b is graphicx's draft — its outline's rules, its file's name — where the
- *  final pass sets the image: a piece's reading takes the outline, which the maker reads as the image's box (make.mjs
- *  ownedOn), and never the name, no glyph of the paper's */
+ *  final pass sets the image: a piece's reading takes the outline, the image's box there, and never the name, no glyph of
+ *  the paper's */
 const FRAME = /^g(\d+)[abt]$/
 /** each page's glyphs and boxes inside a draft frame (FRAME: from its g<n>a point to its g<n>b point on the page), 1 each:
  *  { glyph, box }; null for a page with none */
@@ -157,7 +157,7 @@ const START = /^[th]?(\d+)s$/
 /** a mark of a unit: its start or end mark, or a point of one of its pieces; its unit's number */
 const UNIT_MARK = /^(?:[th]?(\d+)[se]|[pn](\d+)\.\d+[ab])$/
 /** whether a point's name is a mark of a unit numbered before `id`: the source sets its units in order, so after a piece of
- *  unit `id` it is that unit's text set again (MR 3's later occurrence), never the next unit's */
+ *  unit `id` it is that unit's text set again (a title its class sets again), never the next unit's */
 const earlierUnit = (name: string, id: number) => {
   const m = UNIT_MARK.exec(name)
   return !!m && Number(m[1] ?? m[2]) < id
@@ -241,7 +241,7 @@ export const WANT = 8
  *  unmeasured. Ranges that overlap past it, packages/engine/tests/own-work.test.ts */
 const WORK = 20_000_000
 
-/** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's (own.mjs's
+/** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's (own.ts's
  *  spell check, the text after a piece told from the piece's own ink) */
 // (a spacing accent — OT1's \\^ sets ˆ beside its letter, a modifier letter to Unicode: TeX's own, U+02C6, U+02C7 and
 // U+02D8 to U+02DD, the others no letters already; not every modifier letter, CJK's prolonged sound mark and iteration mark among
@@ -320,9 +320,8 @@ const charOf = (u: string) =>
  *  top and whose closing one comes after the right column's end, the left column's own pair inside them (`bs58 bs57 … be57 …
  *  be58`, 2608.25210v2 p17). Read as one flag, the left column's close put the right column outside every body: its
  *  references' text refused across the page break and drawn as notes */
-/** a page's columns as the maker reads them (make.mjs columnOf, its column count the marks file's, columnsOf): by the page's
- *  column mark (MARK_DEF's c<n>-<k>, the last of the page's) and its view's middle, an x range's column, 0 or 1 on a page of
- *  two columns, 2 across both (4 pt past the middle either way), 0 on a page of one */
+/** a page's columns: by the page's column mark (MARK_DEF's c<n>-<k>, the last of the page's) and its view's middle, an x
+ *  range's column, 0 or 1 on a page of two columns, 2 across both (4 pt past the middle either way), 0 on a page of one */
 export function columnsAt(page: { points?: readonly { name: string }[]; view?: View }) {
   let two = false
   for (const pt of page.points ?? []) {
@@ -390,17 +389,17 @@ const ruleOnLine = (box: readonly number[], y: number, size: number) => {
 /** a label of a name (a theorem's, a proof's, a definition's …), not a number or a mark alone: what \\everypar sets before a display */
 const NAMED_LABEL = new RegExp(`^${LABEL_NAME}`, 'u')
 /**
- * The ink of a display its unit opens with, which the marking passes over (`heads`, marks.mjs headsOf: no mark goes before a
- * unit's start mark at its head, marks.mjs headEnd, so the display has no point of its own): TeX ships it right before the unit's
- * start mark, in the paragraph it begins (\\[ or $$ in vertical mode begins one), so what the start mark's region holds on its page
- * from that paragraph's point (`paras`, marks.mjs POINTS_TEX q<n>) — or, with none after it, from the last mark before the start
- * mark — to the start mark is the display's: a listing or any text no mark bounds before it stays out; none where neither stands
- * on the start mark's page before it in its region (the display may have begun on the page before, TeX breaking it over the page),
- * but for a display of no row break (`whole`), from where its region begins on the page. A babel
+ * The ink of a display its unit opens with, which the marking passes over (`heads`, marks/marks.ts headsOf: no mark goes before
+ * a unit's start mark at its head, marks/marks.ts headEnd, so the display has no point of its own): TeX ships it right before
+ * the unit's start mark, in the paragraph it begins (\\[ or $$ in vertical mode begins one), so what the start mark's region holds
+ * on its page from that paragraph's point (`paras`, marks/marks.ts POINTS_TEX q<n>) — or, with none after it, from the last mark
+ * before the start mark — to the start mark is the display's: a listing or any text no mark bounds before it stays out; none
+ * where neither stands on the start mark's page before it in its region (the display may have begun on the page before, TeX
+ * breaking it over the page), but for a display of no row break (`whole`), from where its region begins on the page. A babel
  * name's points are passed over, a name TeX sets inside a display being the display's (`\text{\figurename}`). Out
  * of it: what stands on the line of the region's glyph before that point (the closing punctuation the unit before set after its
- * end mark, own.mjs MR 4c; a rule under that line) and on the start mark's own line (the unit's label, MR 5); and the paragraph's
- * first line where it stands above all the rest and is a label of a name (label-form.mjs: "Theorem 5.", "Proof.", which
+ * end mark, own.ts's; a rule under that line) and on the start mark's own line (the unit's label, own.ts's); and the paragraph's
+ * first line where it stands above all the rest and is a label of a name (marks/label-form.ts: "Theorem 5.", "Proof.", which
  * \\everypar sets on that line before the display; never a number, a letter or a mark alone, which a display's top row may be).
  * Page `P`, its regions `R`, the start mark at `q`. Null where it cannot be
  * told: the mark before is a piece's opening point (its ink runs to the next mark, this start mark: the two would share it), or no
@@ -505,7 +504,7 @@ function headEntries(
 /**
  * Each piece's own glyphs and rules in the marked compile, by its opening point's name: Map name → { how, glyphs, boxes }
  * (OWNED_HOW; glyphs and boxes [page, index] into the pages, in stream order, none where it is not owned). `pages`, page
- * by page (1-based at index 0), what pageInk read of the marked compile, its glyphs packed in stream order (ink.mjs
+ * by page (1-based at index 0), what pageInk read of the marked compile, its glyphs packed in stream order (ink.ts
  * packGlyphs, STREAM_COLUMNS at least), with each page's view; `follows(name)`, for an opening point's name, what the
  * marking says of its piece ({ closing, want, ends, blocked, group }, Follow), or null for a name that is no piece of a
  * unit; `dropped`, the names the log reports set twice.
@@ -529,11 +528,11 @@ function headEntries(
  *   gives it no closing point it ends where TeX ends what it stands in, never later; for a piece of a cell, the cell's end. A
  *   piece after its cell's end mark with its opening point alone (its source ends in a control word, or its class may read
  *   ahead) ends at its cell's end point, `t<i>x`, which LAYOUT_TEX sets at the cell template's end and the marking names among
- *   its unit's next marks (`ends`): its unit's next mark, as any. Before that point was set it ran to the next unit's start: the
- *   row's other entries no unit is, the rules between the columns, the rules under its row and a later row's ground (the design's
- *   E1: 2610.21176v1 p13's `\checkmark` its table's bottom rule). Where TeX states no cell end (a table no template of LaTeX's
+ *   its unit's next marks (`ends`): its unit's next mark, as any. Without that point it would run to the next unit's start: the
+ *   row's other entries no unit is, the rules between the columns, the rules under its row and a later row's ground
+ *   (2610.21176v1 p13's `\checkmark` its table's bottom rule). Where TeX states no cell end (a table no template of LaTeX's
  *   sets: tabularray's tblr, a plain \halign; a p column of LaTeX's own tabular without array.sty, whose template latex.ltx's
- *   \@classv builds and the marks do not wrap), the reading is as before, to the next mark: no bound is guessed
+ *   \@classv builds and the marks do not wrap), the reading runs to the next mark: no bound is guessed
  * - Past another region's mark (pastOther): an opening point alone whose next mark is another region's (a float TeX shipped into
  *   the stream after a display, before the text after it), the text after it not found before that mark, owns what its own region
  *   holds from it to the next mark there on its page, up to the text after it (2610.20507v1's display (16) before its Figure 3)
@@ -544,31 +543,31 @@ function headEntries(
  *   region after its point and before its unit's next text is what TeX set for it (a display at a column's foot, its
  *   number, a display \allowdisplaybreaks breaks over a page). The rule is asked only where the one before it found
  *   nothing ('the next mark on another page', 'the text after it not found'), so no piece found otherwise moves.
- * - A display group (`group`, marks.mjs followsOf): displays with nothing visible between them whose later ones have no
+ * - A display group (`group`, marks/marks.ts followsOf): displays with nothing visible between them whose later ones have no
  *   opening point, since TeX sets none on the empty list it resumes the paragraph with (a whatsit there would keep the
  *   empty paragraph between two displays a line). The first owns the whole group's ink, to the text after the last
  *   ('open, with the displays after it'); each later one is 'in the display before it'. Their split is not TeX's to give.
- * - A display its unit opens with (`heads(start)`, the start mark's name to { name, group }: marks.mjs headsOf), which has
+ * - A display its unit opens with (`heads(start)`, the start mark's name to { name, group }: marks/marks.ts headsOf), which has
  *   no point, since the marking sets none at a unit's head: what the start mark's region holds on its page from the paragraph's
  *   point the display begins (a page's `paras`) or the mark before to the start mark, on lines of its own (headInk), 'closed'; its
  *   group's later displays in it. A start mark set twice gives none.
  * A name set twice owns nothing, nor where the work is past its bound.
- * `erasure` (own.mjs's, the per-unit erasure's reading; the maker's is without it, its layouts unchanged): a piece is found
- * where its ink is told exactly though the maker leaves it LOST — the text after it compared with TeX's quotes as one (`"`
+ * `erasure` (own.ts's, the per-unit erasure's reading): a piece is found where its ink is told exactly though the reading
+ * without it leaves it LOST — the text after it compared with TeX's quotes as one (`"`
  * set as ” by OT1); nothing before the text after it but rules, those rules its own (\\_ before \\allowbreak); an opening
  * alone followed by placeholders with no mark of their own and nothing else up to the next marked piece's opening
- * (`through`, marks.mjs followsOf), what stands between the two its own and theirs; and a later unit's opening next, as a
- * later unit's start mark is (that unit's label on its line left out). The sweep of 2026-10-24.
- * The maker's reading takes `through` too where the marking gives a `split` (marks.mjs followsOf: a paper's macro and the one
- * placeholder after it no mark could stand before, \\footnote after \\xspace, the macro's text known): the glyphs to the next
- * marked piece's point parted, the macro's those that set its text from the first, character for character (textedTo), the
- * placeholder's the rest, under the opening mark's name it would have had; where they do not set it, leave nothing, or the rest
- * runs on as the macro's word (runsOn), LOST as before.
+ * (`through`, marks/marks.ts followsOf), what stands between the two its own and theirs; and a later unit's opening next, as a
+ * later unit's start mark is (that unit's label on its line left out).
+ * Without it, the reading takes `through` too where the marking gives a `split` (marks/marks.ts followsOf: a paper's macro and
+ * the one placeholder after it no mark could stand before, \\footnote after \\xspace, the macro's text known): the glyphs to
+ * the next marked piece's point parted, the macro's those that set its text from the first, character for character
+ * (textedTo), the placeholder's the rest, under the opening mark's name it would have had; where they do not set it, leave
+ * nothing, or the rest runs on as the macro's word (runsOn), LOST.
  * - A display that ends a footnote (footEnd: a display, its unit's last visible piece, after the unit's end mark, outside the
  *   bodies, no mark after it on its page): what its region holds from it to the page's folio (folioOf), each of its lines
  *   indented from the footnote's own and near the one before; with no folio, a line at the footnote's edge (a note after it
- *   with no mark) or one apart (the page's foot), none (the release sweep of 2026-10-24, 2610.16663v1 p16u58: the maker left
- *   it LOST, the erasure the unit the original's).
+ *   with no mark) or one apart (the page's foot), none (2610.16663v1 p16u58: unread, it would be LOST without
+ *   `erasure`, and with it its unit the original's).
  */
 export function ownedOf(
   pages: readonly StreamPage[],
@@ -702,10 +701,10 @@ export function ownedOf(
         continue
       }
       let { glyphs, boxes } = takeTo([pb, qb])
-      // (a punctuation mark its command set before its own ink, moved from after it (marks.mjs followsOf `moved`, TeX's 3: the
+      // (a punctuation mark its command set before its own ink, moved from after it (marks/marks.ts followsOf `moved`, TeX's 3: the
       // closing mark after that mark), the text's, not the piece's: its first glyph where that is the mark, more follow, and no such
       // mark stands right after the closing point — TeX's own output telling the moved mark from a piece's own ink that opens
-      // with it: `\url{../data}.` keeps its dot, the full stop after its closing point, the review of #501)
+      // with it: `\url{../data}.` keeps its dot, the full stop after its closing point)
       if (f.moved && glyphs.length > 1) {
         const [p0, g0] = glyphs[0]!,
           B = pages[pb - 1]!,
@@ -795,11 +794,11 @@ export function ownedOf(
       const P = pages[pa - 1]!,
         N = P.points[next[1]]!
       // (an earlier unit's marks right after it, in its region, before the text after it: that unit's text TeX set again inside
-      // this piece's own ink — MR 3's later occurrence, a class keeping a title's or an author's argument, marks and all, that a
+      // this piece's own ink — a unit's later occurrence, a class keeping a title's or an author's argument, marks and all, that a
       // paper's macro sets once more: acmart's \shorttitle and \authors where VLDB's Reference Format calls \vldbtitle and
       // \vldbauthors, 2608.25210v2 p1, whose \vldbtitle owned nothing, its next point the title's start mark set again. No bound
       // of the piece's: its ink runs past them to where the text after it begins; where that text is not found there, or where
-      // its own ink stands before them (nothing then tells them its ink's), as before)
+      // its own ink stands before them (nothing then tells them its ink's), to the next mark)
       if (f.want && !f.blocked && earlierUnit(N.name, Number(m[2])) && regions[pa - 1]!.at[next[1]] === rA) {
         const lead = takeTo(next)
         let r = rank.get(`${next[0]}|${next[1]}`)! + 1
@@ -843,7 +842,7 @@ export function ownedOf(
         return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
         // (the erasure's: a later unit's opening as its start mark only where that unit's start mark follows it on the page — the
-        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it. And the maker's
+        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it. And either's
         // for a display past its unit's end mark, which ends the unit: its ink found where the erasure's is, so that its light is a
         // block of its own, never LOST outside its unit's lines while the wrap hides it with its unit's placeholders, 2610.20595v1
         // p19u153)
@@ -853,12 +852,12 @@ export function ownedOf(
         const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]!) ? [N.name, opening[2]] : null)
         const S = f.blocked ? f.split : null
         if (S && (S.ends ? S.ends.includes(N.name) : f.through && N.name === f.through)) {
-          // (a paper's macro and the one unmarked piece right after it, which no mark could stand before (marks.mjs followsOf
+          // (a paper's macro and the one unmarked piece right after it, which no mark could stand before (marks/marks.ts followsOf
           // `split`), their ink to the next marked piece's point — or, text after that piece, to where that text begins, as an
           // opening's ink runs to the text after it: a .bbl's `\\DOIprefix\\doi{…}.` at an entry's end —, the macro's the glyphs
           // that set the text TeX sets for it, character for character, the piece's the rest; but where the rest runs on as the
-          // macro's word, which its text then did not hold whole, none. The maker's reading parts the two; the erasure's owns them
-          // as the macro's, one ink of its unit's as `through` reads it)
+          // macro's word, which its text then did not hold whole, none. The reading without `erasure` parts the two; the
+          // erasure's owns them as the macro's, one ink of its unit's as `through` reads it)
           const end = textedTo(pages, glyphs, S.text)
           const stop =
             end > 0 && end < glyphs.length && !runsOn(pages, glyphs, end)
@@ -912,7 +911,7 @@ export function ownedOf(
           P0.boxes[4 * b + 3]! > P0.glyphs.y[g0]! - 0.5 * P0.glyphs.size[g0]!
         if (erasure && ruled.length && !ruled.some(under))
           return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
-        // (and the maker's where they are a draft image frame's outline alone: the final pass's image in its place, FRAME)
+        // (and in either reading where they are a draft image frame's outline alone: the final pass's image in its place, FRAME)
         if (ruled.length && ruled.every(([q, b]) => framed[q - 1]?.box[b]))
           return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
         return none(HOW['open, nothing before the text after it'])
@@ -1073,7 +1072,7 @@ const EMPTY: StreamPage = Object.freeze({
 })
 
 /**
- * ownedOf a page at a time (the page stream, E2a): the pages added in order, each piece found once every page it may read
+ * ownedOf a page at a time (the page stream): the pages added in order, each piece found once every page it may read
  * is in, over a window of the pages held, and each page let go once no piece left to find may read it. A piece is found by
  * its opening point's page, in the pages' order and, on a page, as ownedOf meets them; it may read its own page, the page
  * of its closing point (its destination's, `closing(name)`: the two are one place in TeX's list, \axt@dest), and where it
@@ -1261,7 +1260,7 @@ function textTo(pages: readonly StreamPage[], glyphs: readonly Place[], want: st
   return first
 }
 
-/** one glyph of any text but none in a text the probe showed (marks.mjs INK_ANY: a formula's glyph no character spells) */
+/** one glyph of any text but none in a text the probe showed (marks/marks.ts INK_ANY: a formula's glyph no character spells) */
 const INK_ANY = '\uFFFC'
 /** a glyph's or a text's characters as the split reads them: NFKC, white space out */
 const setAs = (s: string) => s.normalize('NFKC').replace(/\s/g, '')

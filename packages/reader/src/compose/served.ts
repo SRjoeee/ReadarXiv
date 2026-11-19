@@ -1,5 +1,5 @@
 // The served faces and the typesetter's Metrics over them (the default engine's: compose/typeset.ts). The faces are the files
-// our site serves, as today's reader reads them (src/pdf-reader/session/faces.ts servedFaces, layer-proto/fonts.mjs sliceFace):
+// our site serves:
 //
 //   GET /static-fonts/index.json                  { schema: 1, fonts, faces: { <face id>: { group }, … } }
 //   GET /static-fonts/<group>.json?fonts=<fonts>  { schema: 1, group, slices: [[start, end, …], …], faces: { <id>: [{ path } | null, …] } }
@@ -10,28 +10,32 @@
 // server's). Each is asked as every ask of our server is (session/client.ts `request`): its answer and its body never silent
 // for REQUEST_MS, the network, a 5xx or nothing in time asked once more after RETRY_MS; and any other answer but the file, a 404
 // or a 410 (a 408 or 429 above all: our site's visitor limit) asked once more after its Retry-After, BUSY_MAX_MS at most
-// (RETRY_MS where it names none). A 404, a 410 or a table of another shape is not there; anything else that fails is a failure
+// (RETRY_MS where it names none). A 404, a 410 or a table of another shape is not there, and so is a slice whose body passes its
+// cap or whose bytes no face is made of (the file's, `lasting`); anything else that fails is the link's, a failure
 // for now. A table (the index, a group's, a language's patterns) is asked once a visit: one not there, or failing for now, is
 // none for the visit (the faces it would give lost, told once each; the language hyphenates nothing). A slice is fetched as
 // data and made a FontFace of its face's family, weight and style, its code points as its unicode-range (never imported:
 // compose/faces.ts says why), added to the document with the other slices of the ask that needs it, in one stretch once they
 // are all in (`addIn`: one change of the document's fonts an ask), while the reader lives, and taken out with it; one not there
-// is lost at once, one failing for now asked again by the next wave that wants it, and lost if it fails again.
+// is lost at once, one failing for now asked again by the next wave that wants it, and lost if it fails again: lost for now,
+// asked again by itself at the session's pace (machine.ts `backoff`) while a page whose text needs it wants it (`heal`), and
+// once it comes, in the document alone and told, its pages laid again (the composer).
 // A face is the typesetter's font string (typeset types.ts FaceId: `400 100px "axt-nimbus-roman", "axt-lm-math"`), each family
 // the catalogue's (typeset data/faces.ts FACES), never a system face nor a generic family.
 //
-// The Metrics measure as lane L7's spec for the reader says (lane L7's record, "The reader's own Metrics", held in a browser
-// by lab/typeset/metrics-browser.mjs's `rules` mode, equal to the measurer on 98,862 of 98,862): a text cut where its
+// The Metrics measure (held in a browser by lab/typeset/metrics-browser.mjs's `rules` mode, equal to the measurer on 98,862 of 98,862): a text cut where its
 // characters' slice changes (the first family of the string whose face, by CSS's matching, has a slice declaring the
 // character), each run measured alone in the font string without small capitals, a run of CJK characters unkerned and cut
 // between two adjacent CJK punctuation marks (no text-spacing-trim), the runs' widths summed; the ink their highest ascent,
 // deepest descent and furthest right. `ready` is true where every slice the text needs is loaded, 'never' where a character is
 // in no slice of the string's faces (a face whose table cannot be had holds none), or its slice is lost (an answer no ask would
-// mend, or a failure met twice), else false: the typesetter waits for the face (the page's `wait.faces`), and the composer asks
-// it here (`faces.ready`), whose answer is each face's table read or found not to be had, never a wait asked again at once.
+// mend, or a failure met twice, until it comes), else false: the typesetter waits for the face (the page's `wait.faces`), and
+// the composer asks it here (`faces.ready`), whose answer is each face's table read or found not to be had, never a wait
+// asked again at once.
 import { FACES, hyphenationOf, type Metrics, type Patterns } from '@readarxiv/typeset'
 import { type Fetch, realTimers, type Timers } from '../bytes/source.ts'
-import { bodyWithin, RETRY_MS, request } from '../session/client.ts'
+import { bodyWithin, Refused, RETRY_MS, request } from '../session/client.ts'
+import { backoff } from '../session/machine.ts'
 import { type Faces, WAVE_SLOTS } from './faces.ts'
 import type { FaceId } from './page.ts'
 
@@ -66,6 +70,16 @@ interface ServedFace {
   /** null until its group's table is read */
   slices: Slice[] | null
 }
+/** a slice lost for now (a failure that may pass, met twice): its asks again that failed, the timer of its next, whether one is
+ *  in flight, and the demands of the pages whose lays met a text that needs it */
+interface Heal {
+  face: ServedFace
+  slice: Slice
+  tries: number
+  timer: unknown
+  asking: boolean
+  wants: (() => boolean)[]
+}
 /** a run of a text: one slice's characters (a CJK run apart), its face */
 interface Run {
   slice: Slice
@@ -83,7 +97,7 @@ const inRanges = (r: readonly number[], cp: number) => {
   return false
 }
 const hex = (n: number) => n.toString(16).toUpperCase()
-/** a slice's unicode-range descriptor from its [start, end] pairs (today's layer-proto/fonts.mjs unicodeRangeOf) */
+/** a slice's unicode-range descriptor from its [start, end] pairs */
 export const unicodeRangeOf = (ranges: readonly number[]): string => {
   const out: string[] = []
   for (let i = 0; i + 1 < ranges.length; i += 2) {
@@ -197,8 +211,9 @@ export function browserPlatform(): Platform {
 export interface Served {
   /** the typesetter's Metrics over the faces loaded */
   readonly metrics: Metrics
-  /** the composer's faces: a font string's class and family, its slices for a text loaded (`[face, text]`) */
-  readonly faces: Faces
+  /** the composer's faces: a font string's class and family, its slices for a text loaded (`[face, text]`), a slice lost for
+   *  now asked again while a page needs it */
+  readonly faces: Required<Faces>
   /** the hyphenation patterns of `langs`, each as the typesetter reads it (hyphenationOf), null where it cannot be had */
   hyph(langs: readonly string[]): Promise<Record<string, Patterns | null>>
   /** the patterns of a language read already (null: none to be had), undefined while not */
@@ -215,8 +230,25 @@ class Answer extends Error {
     this.status = status
   }
 }
-/** a 404 or a 410: not there, and will not be (anything else may pass) */
-const lasting = (e: unknown) => e instanceof Answer && (e.status === 404 || e.status === 410)
+/** a slice's bytes no face is made of: the platform's face refused them (Chromium's FontFace rejects its load with a
+ *  SyntaxError) */
+class NoFace extends Error {
+  constructor(e: unknown) {
+    super(`no face is made of these bytes: ${String(e)}`)
+  }
+}
+/**
+ * Whether a failure says the FILE is wrong, not the link: not there (a 404, a 410), a body past its cap (`bodyWithin`'s
+ * Refused('bad')), bytes no face is made of (NoFace). A slice is a file named by its content: its size and its bytes are what
+ * they are, and will not be otherwise. Anything else that fails is
+ * the link's and may pass: the network, a 5xx or nothing in time (each asked once more within its ask), another answer under
+ * 500 (a 408 or a 429 above all, asked once more after its Retry-After), a body the link breaks or that stops (a declared
+ * length not reached, a stream reset: Refused('network'))
+ */
+const lasting = (e: unknown) =>
+  (e instanceof Answer && (e.status === 404 || e.status === 410)) ||
+  (e instanceof Refused && e.why === 'bad') ||
+  e instanceof NoFace
 /** an answer under 500 that is not the file and may pass (a 408 or 429 above all): the wait before its one more ask, its
  *  Retry-After (seconds or a date) at most BUSY_MAX_MS, RETRY_MS where it names none */
 function againAfter(r: Response): number | null {
@@ -437,6 +469,29 @@ export function createServed(o: {
   }
   /** the demands of each slice waiting for its slot: let go there, never asked, where none of them wants it any more */
   const demands = new Map<string, (() => boolean)[]>()
+  /** the slices lost for now, by key (`heal`); the keys of those a text of the lay under way needs (`lostIn`); the listeners
+   *  told each one that comes */
+  const healing = new Map<string, Heal>()
+  let met: Set<string> | null = null
+  const healers = new Set<(key: string) => void>()
+  /** a slice's file read and made a face of its face's family, weight and style (NoFace where its bytes are none); null where
+   *  the reader closed meanwhile */
+  const faceOfSlice = async (face: ServedFace, slice: Slice): Promise<FontFaceLike | null> => {
+    asked++
+    const bytes = await fileOf(`/${slice.path}`, CAPS.slice)
+    if (gone) return null
+    let f: FontFaceLike
+    try {
+      f = await P.face(face.family, bytes, {
+        weight: String(face.weight),
+        style: face.style,
+        unicodeRange: unicodeRangeOf(slice.ranges),
+      })
+    } catch (e) {
+      throw new NoFace(e)
+    }
+    return gone ? null : f
+  }
   const loadSlice = (face: ServedFace, slice: Slice, wanted: () => boolean, quiet = false): Promise<void> => {
     if (loaded.has(slice.key) || inn.has(slice.key) || lost.has(slice.key)) return Promise.resolve()
     let p = loading.get(slice.key)
@@ -454,17 +509,9 @@ export function createServed(o: {
         // (a reader closed while this waited asks nothing; nor a slice no page wants any more (a page scrolled away, a
         // generation before): it is forgotten, and a later ask asks it)
         if (gone || !want.some((f) => f())) return
-        asked++
-        const bytes = await fileOf(`/${slice.path}`, CAPS.slice)
-        if (gone) return
-        const f = await P.face(face.family, bytes, {
-          weight: String(face.weight),
-          style: face.style,
-          unicodeRange: unicodeRangeOf(slice.ranges),
-        })
-        if (gone) return
+        const f = await faceOfSlice(face, slice)
         // (in the document with the others of its ask, once they are all in: addIn)
-        inn.set(slice.key, f)
+        if (f) inn.set(slice.key, f)
       } finally {
         free()
       }
@@ -472,10 +519,13 @@ export function createServed(o: {
       // (the reader closed: its asks let go, nothing told)
       if (gone) return
       o.warn?.(`the face ${face.id}'s slice ${slice.path}`, e)
-      // (not there, or a failure for now met twice: lost, its texts left the original's; else asked again next time)
+      // (the file's (`lasting`: not there, past its cap, no face), or a failure for now met twice: lost, its texts left the
+      // original's; else asked again next time. A failure for now met twice is lost for now: asked again by itself while a page
+      // needs it, `heal`)
       if (lasting(e) || failed.has(slice.key)) {
         lost.add(slice.key)
         tellLost(face.id, quiet)
+        if (!lasting(e)) healing.set(slice.key, { face, slice, tries: 0, timer: null, asking: false, wants: [] })
       }
       failed.add(slice.key)
     })
@@ -484,6 +534,46 @@ export function createServed(o: {
       if (loading.get(slice.key) === p) loading.delete(slice.key)
     })
     return p
+  }
+  /** a slice lost for now asked again after the session's wait for its tries (machine.ts `backoff`: BACKOFF_MS, doubled to
+   *  BACKOFF_MAX_MS: the reader's own pace for asking again by itself after a failure, its rows' too), where none is in flight
+   *  or waited for */
+  const healSoon = (h: Heal) => {
+    if (gone || h.asking || h.timer !== null) return
+    h.timer = ask.timers.later(() => void healNow(h), backoff(h.tries + 1))
+  }
+  /** a slice lost for now asked again as any slice is (a slot of the wave, an ask's bound and its one more ask), where a page
+   *  that needs it wants it (none does: let be until one asks again, `heal`). Come: out of the lost, in the document alone (one
+   *  change of its fonts) and told, nothing told again; the file's now (`lasting`), lost for the visit; failing again, asked
+   *  after a longer wait */
+  const healNow = async (h: Heal) => {
+    h.timer = null
+    const key = h.slice.key
+    h.wants = h.wants.filter((f) => f())
+    if (gone || healing.get(key) !== h || !h.wants.length) return
+    h.asking = true
+    if (!(await slot())) return
+    let f: FontFaceLike | null = null
+    try {
+      if (gone || !h.wants.some((w) => w())) return
+      f = await faceOfSlice(h.face, h.slice)
+    } catch (e) {
+      if (gone) return
+      o.warn?.(`the face ${h.face.id}'s slice ${h.slice.path}`, e)
+      if (lasting(e)) healing.delete(key)
+      else h.tries++
+    } finally {
+      free()
+      h.asking = false
+    }
+    if (f && !gone) {
+      lost.delete(key)
+      healing.delete(key)
+      inn.set(key, f)
+      addIn([key])
+      for (const l of [...healers]) l(key)
+    }
+    if (healing.get(key) === h) healSoon(h)
   }
   /** the tables a font string's faces need read: the index, then the group of each face not read yet */
   const tablesOf = async (font: string, quiet = false) => {
@@ -581,7 +671,11 @@ export function createServed(o: {
       if (runs === 'never') return 'never'
       if (!runs) return false
       for (const r of runs) {
-        if (lost.has(r.slice.key)) return 'never'
+        if (lost.has(r.slice.key)) {
+          // (its slices lost for now told to the lay under way, `lostIn`: asked again while its page needs them)
+          if (met) for (const q of runs) if (healing.has(q.slice.key)) met.add(q.slice.key)
+          return 'never'
+        }
         if (!loaded.has(r.slice.key)) return false
       }
       return true
@@ -602,7 +696,7 @@ export function createServed(o: {
     parseFont(id)
       ?.families.map((f) => JSON.stringify(f))
       .join(', ') ?? 'serif'
-  const faces: Faces = {
+  const faces: Required<Faces> = {
     classOf(id) {
       let c = classes.get(id)
       if (c) return c
@@ -650,6 +744,28 @@ export function createServed(o: {
       // are added all the same, ready for the page that asks them next)
       addIn(keys)
     },
+    lostIn<T>(f: () => T): [T, string[]] {
+      const outer = met
+      const mine = new Set<string>()
+      met = mine
+      try {
+        return [f(), [...mine]]
+      } finally {
+        met = outer
+      }
+    },
+    heal(keys, wanted) {
+      for (const k of keys) {
+        const h = healing.get(k)
+        if (!h) continue
+        h.wants.push(wanted)
+        healSoon(h)
+      }
+    },
+    healed(f) {
+      healers.add(f)
+      return () => void healers.delete(f)
+    },
     get asked() {
       return asked
     },
@@ -659,6 +775,9 @@ export function createServed(o: {
     dispose() {
       gone = true
       closed.abort()
+      for (const h of healing.values()) ask.timers.clear(h.timer)
+      healing.clear()
+      healers.clear()
       for (const go of waiting.splice(0)) go(false)
       for (const f of added) f.remove()
       added.length = 0

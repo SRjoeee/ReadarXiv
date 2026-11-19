@@ -1,4 +1,4 @@
-// One person, one translation per paper (the owner's ruling of 2026-11-10, docs/PDF-READER.md §19.15): where the names toggle
+// One person, one translation per paper (docs/PDF-READER.md §19.15): where the names toggle
 // shows the author block, a unit the part states names a person of the block elsewhere (Part.paper.named) is laid with the
 // block's translation of the name; with the toggle off it is laid from its own row, as before. Made here, at the lay, from rows
 // as they came, never stored: each row stays its own unit's translation (a stored mix would go stale with the block's row),

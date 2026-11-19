@@ -1,7 +1,7 @@
 // A label's form (the per-unit erasure's §1.3, docs/route/ocg-erasure.md): what a unit's label holds — a number or an item's
-// mark, maybe a caption's, a section's or a theorem's name before it, in brackets or with a stop after it. own.mjs reads a label by
-// it (MR 5); stream.mjs headInk tells by it the head \everypar sets on the first line of a paragraph a display begins.
-// An original module (no port statement), moved out of own.mjs whole so that stream.mjs, which own.mjs imports, reads it too.
+// mark, maybe a caption's, a section's or a theorem's name before it, in brackets or with a stop after it. own/own.ts reads a
+// unit's label by it; own/stream.ts headInk tells by it the head \everypar sets on the first line of a paragraph a display begins.
+// An original module (no port statement), a module of its own so that own/stream.ts, which own/own.ts imports, reads it too.
 
 /** a label's form (§1.3): a number or an item's mark, maybe a caption's or a section's name before it, in brackets or with a
  *  stop after it — of its characters, NFKC, lower case, no white space */
@@ -23,7 +23,7 @@ export const labelText = (s: string) => s.normalize('NFKC').toLowerCase().replac
  * printed names of the theorem-like environments its files define — thmtools' "Recall", "Notation", a \newtheorem's
  * "Conjecture"), each as a label holds it (NFKC, lower case, no white space); LABEL_FORM where it gives none. A head TeX sets of
  * such a name ("Recall 7 (") is then its unit's label, in its label group, which the layer draws in the paper's name unit's
- * word for it (rules/tex-names.mjs: one word a name, every head of it), where it was left the original's ink (`labelKept`)
+ * word for it (source/tex-names.ts headName: one word a name, every head of it), where it was left the original's ink (`labelKept`)
  */
 export function labelFormOf(names: readonly unknown[] | null | undefined) {
   const own = [...new Set((names ?? []).map((n) => labelText(String(n))).filter((n) => /\p{L}/u.test(n)))].map((n) =>
@@ -31,9 +31,9 @@ export function labelFormOf(names: readonly unknown[] | null | undefined) {
   )
   return own.length ? formOf(`(?:${LABEL_NAME}|${own.join('|')})`) : LABEL_FORM
 }
-/** (`note`: the label of a theorem's note, a unit the front end read in a head's brackets (latex-front.mjs `bracketed`): the head
- *  macro sets the bracket that opens the note after its name and number, amsthm's "Definition 5.1 (", which is the head's own,
- *  and so the label's) */
+/** (`note`: the label of a theorem's note, a unit the front end read in a head's brackets (source/latex-front.ts `bracketed`):
+ *  the head macro sets the bracket that opens the note after its name and number, amsthm's "Definition 5.1 (", which is the
+ *  head's own, and so the label's) */
 export const isLabelForm = (s: string, note = false, form = LABEL_FORM) => {
   const t = labelText(s)
   const u = note ? t.replace(/[([]$/u, '') : t

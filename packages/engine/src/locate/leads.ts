@@ -6,7 +6,7 @@ import { type Member, sameColumn, type Work } from './work.ts'
 export function leadNames(w: Work): void {
   const { NB, pageB, unitB, gB } = w.ix
   const { members } = w
-  // ---- a babel name that leads a unit (today's RUN_IN, make.mjs leadAt: the first unit start after the name's end on its line,
+  // ---- a babel name that leads a unit (leadAt's rule: the first unit start after the name's end on its line,
   // in its column, in our compile): the unit whose glyph TeX set next after the name's in B's stream (glyphs of no unit between
   // aside), that glyph its first, on the name's baseline on B (0.5 pt, leadAt's) from the name's end on (0.05 pt, leadAt's).
   // TeX's stream tells the column: after a column's last line it goes on at the next column's top, never at a line beside it

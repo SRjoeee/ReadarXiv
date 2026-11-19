@@ -1,8 +1,8 @@
-// layPage's composition over prepared flows (design-b §1.6 L8-L11, E1): every flow of the part laid (L8, layFlow), each laid
-// member's fill leadings with it (L9); then each pass page the page reads, ascending (its own and the first page of every
-// member with a line on it: design-a §1.3), filled over the members with a line there in stream order (L10, S.fill.page's
-// pass); the table groups settled (L11, S.table.settle: a cell unfit withheld alone, its group whole where it spans); the
-// page's members as drawn (E1, D.display). Pure: the flows are laid anew on each call, nothing is kept between calls.
+// layPage's composition over prepared flows (steps L8-L11): every flow of the part laid (L8, layFlow), each laid member's
+// fill leadings with it (L9); then each pass page the page reads, ascending (its own and the first page of every member with
+// a line on it), filled over the members with a line there in stream order (L10, S.fill.page's pass); the table groups
+// settled (L11, S.table.settle: a cell unfit withheld alone, its group whole where it spans); the page's members as drawn
+// (D.display). Pure: the flows are laid anew on each call, nothing is kept between calls.
 import { type DisplayLine, displayLines } from '../emit/display.ts'
 import type { PageRules } from '../shared/fill-page.ts'
 import { fillPass, type PassUnit } from '../shared/fill-pass.ts'
@@ -82,14 +82,14 @@ type PageTie = CellTie | { rule: 'size'; ords: readonly number[] }
 export type CellTie = { rule: 'cells'; cells: readonly number[]; spanning?: readonly number[] }
 
 /**
- * Page `page` laid from its part's flows (each member prepared), its ties, the rules: design-b's L8-L11 and E1. The members of a
- * size tie laid on the page at one scale of their own sizes, the smallest any of them is laid at: each laid larger is capped there
- * (its fit's states from that scale down, P.capScale) and the page laid again (the checkpoint's free-9: a paragraph's first
- * part at its size, its part after the float shrunk; the maintainer's ruling: the text of one paragraph is to be even). By scale,
- * not by points: a run-in head TeX set smaller than its paragraph keeps the original's ratio to it, and neither shrinks the other
- * for being of another size (the coordinator's decision under that ruling, 2026-11-08: 2610.30034v1 p2's head at 8.97 capped its
- * paragraph at 8.97, 0.9 of its 9.96). The least a member is capped at is its tie-mates' begun on its own first page or before
- * (tieCaps, §18.64): a later page's pass never reaches back over the page break
+ * Page `page` laid from its part's flows (each member prepared), its ties, the rules: steps L8-L11, then the members drawn.
+ * The members of a size tie laid on the page at one scale of their own sizes, the smallest any of them is laid at: each laid
+ * larger is capped there (its fit's states from that scale down, P.capScale) and the page laid again (the text of one
+ * paragraph is set even: else a paragraph's first part stays at its size and its part after the float is shrunk). By scale,
+ * not by points (docs/PDF-READER.md §18.64): a run-in head TeX set smaller than its paragraph keeps the original's ratio to
+ * it, and neither shrinks the other for being of another size (by points, 2610.30034v1 p2's head at 8.97 capped its
+ * paragraph at 8.97, 0.9 of its 9.96). The least a member is capped at is its tie-mates' begun on its own first page or
+ * before (tieCaps, §18.64): a later page's pass never reaches back over the page break
  */
 export function layPagePrepared(
   page: number,
@@ -106,7 +106,7 @@ export function layPagePrepared(
   // page a tie is laid for caps alike; read off the page's members alone, a member on pages 1-2 tied to one on page 2 was laid
   // at its own size for page 1 and at the other's for page 2)
   // (never under the fit's floor: a member another of its tie was set under the floor (X.further's shrink) for is capped at the
-  // floor, no lower; the checkpoint's (6), no rule drives a unit there that its own text does not. A member's own floor where
+  // floor, no lower: no rule drives a unit there that its own text does not. A member's own floor where
   // U.params sets one: a line of the page's head or foot keeps its size)
   const floor = Number((R as unknown as { floor?: number }).floor ?? 0)
   const floorOf = new Map<number, number>()
@@ -313,9 +313,9 @@ function layPageTied(
 }
 
 type Lay = { m: FlowMember; unit?: PassUnit; state: 'laid' | Unlaid; slots: LedgerSlot[]; error?: string }
-/** L11, S.table.settle: each table group's verdict over its members (RUN:2401-2425, tableSettle). A cell its own lay could not
+/** L11, S.table.settle: each table group's verdict over its members (tableSettle). A cell its own lay could not
  *  draw whole (its flow threw: 'error'; refused; clipped, then 'unfit') is the original's by itself, the group's other cells
- *  laid, as a paragraph's would be (the coordinator's ruling (c)); the group is withheld whole, every cell with it, where the
+ *  laid, as a paragraph's would be (PDF-READER §18.72); the group is withheld whole, every cell with it, where the
  *  geometry needs it alone: such a cell spans (its box the others' too). A group on two pages is laid like any other, each cell
  *  by itself (PDF-READER §18.72: the part holds every member of a tie it touches, so every page lays the group whole). A group
  *  the call holds no member of is not this page's. Its members' states set in `lays` */
@@ -353,8 +353,8 @@ function layPageOnce(
   const lays = new Map<number, Lay>()
   for (const [o, { m, why }] of failed) lays.set(o, { m, state: 'error', slots: [], error: why })
   for (const flow of flows) {
-    // (a flow whose lay throws leaves its members the original's, 'error' with the reason, and touches no other flow (design-a
-    // §1.4; today any throw refuses its unit, RUN:2521-2526); a memory error is the caller's)
+    // (a flow whose lay throws leaves its members the original's, 'error' with the reason, and touches no other flow; a memory
+    // error is the caller's)
     let laidFlow: ReturnType<typeof layFlowPrepared>
     try {
       laidFlow = layFlowPrepared(flow, R, trace)
@@ -381,7 +381,7 @@ function layPageOnce(
   }
   const all = [...lays.values()].sort((a, b) => a.m.ord - b.m.ord)
   // L10: the pass pages, ascending, each over the members laid with a line on it (a part holds every flow with a line on the
-  // first page of each member on this one, design-a §1.3 (b): each pass page's members here are all of that page's)
+  // first page of each member on this one: each pass page's members here are all of that page's)
   const passPages = [
     ...new Set([page, ...all.filter((x) => x.m.pages.includes(page)).map((x) => firstPage(x.m))]),
   ].sort((a, b) => a - b)
@@ -395,7 +395,7 @@ function layPageOnce(
     }
   // L11: each table group, one verdict for its members
   const tables = settleTies(ties, lays)
-  // E1: the members with a line on the page
+  // the members with a line on the page, as drawn
   const members: PageMember[] = all
     .filter((x) => x.m.pages.includes(page))
     .map((x) => {

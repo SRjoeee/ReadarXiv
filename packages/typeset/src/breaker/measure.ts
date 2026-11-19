@@ -1,12 +1,12 @@
-// B.measure (design-b §1.5): each token's width at 100 px in its face, as the breaker reads it: a superscript's at 0.62 of it,
+// B.measure: each token's width at 100 px in its face, as the breaker reads it: a superscript's at 0.62 of it,
 // small capitals' at their share (`sc`), a space's in its face, a lead's last token with the glue its class sets after it.
-// Ported from engine 065c1d973: measureTokens L2:2899-2905, fontString fonts.mjs:393 (the face's canvas string, by which the
-// host measures it and the tap's metrics tables key it). Its widths come from Metrics: the table adapter in tests and the gate
-// (the tap's recorded widths), the canvas adapter in the reader.
+// A face is named by its canvas string (fontString), by which the host measures it and the tap's metrics tables key it.
+// Its widths come from Metrics: the table adapter in tests and the gate (the tap's recorded widths), the canvas adapter in
+// the reader.
 import type { Metrics } from '../types.ts'
 import type { Face, Token } from './tokens.ts'
 
-/** the canvas font string of a face at `px` (fonts.mjs:393 fontString): a role face's size its correction's share */
+/** the canvas font string of a face at `px`: a role face's size its correction's share */
 export const fontString = (face: Face, px: number): string =>
   face.id
     ? `${face.style === 'italic' ? 'italic ' : ''}${face.caps ? 'small-caps ' : ''}${face.weight} ${px * face.size}px ${face.family}`
@@ -23,9 +23,8 @@ export function measure(tokens: readonly Token[], metrics: Metrics): Token[] {
   })
 }
 
-/** the measures the breaker and the fit read of a run, at 100 px in its face (layer2.mjs w100 L2:2303, ink100 L2:2319,
- *  inkRight100 L2:2347; tokenInk L2:2340 is ink100 of a token's text): from Metrics, the canvas's numbers in the reader and
- *  the tap's recorded ones in the replays and the gate */
+/** the measures the breaker and the fit read of a run, at 100 px in its face (a token's ink is ink100 of its text): from
+ *  Metrics, the canvas's numbers in the reader and the tap's recorded ones in the replays and the gate */
 export type FitMeasure = {
   w100(s: string, face: Face): number
   ink100(s: string, face: Face): { a: number; d: number }
