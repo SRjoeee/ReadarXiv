@@ -8656,6 +8656,35 @@ rows, 23,180 by the runner). And the release check read each run whole by its ex
   release check's own rows step at this head finds no reply in the lab's Google store to 239 units its chain asks, at the base
   as here: its Google numbers are read over the round's rows.
 
+### 18.97 What an opaque fill painted after a glyph covers whole is not on the page (the coordinator's ruling of 2026-11-19)
+
+2610.40394v1's Figure 1 (p4) sets each of its five labels in a box of rounded corners, and the program that drew it paints a
+word, then the box's white fill over it, then the label's own word: a reader of arXiv's page sees "Completeness", never the
+"Proof" under it. The engine read a glyph as shown unless it was wholly outside the clip in force or painted at an alpha of 0
+(pageInk's `unseen`, §19.12), so the covered word was a figure text of its own (the label's word starts 3.5 pt back of its end,
+past a run's reach), was sent, and was drawn under the label's translation, two translations on top of each other on each of
+the five labels; production drew one. The owner's ruling of 2026-11-11 that no figure text is kept for another text's glyph
+(figure-lines.ts' judge) is untouched: the covered word is no text at all.
+
+**The one statement** (`ink.ts`, the figures' reading, beside the clip and the alpha): a glyph that a fill painted after it
+covers whole is `unseen`. Whether a fill covers what lies under it is one predicate (`opaqueNow`, which a figure path's
+`opaque` reads too): a colour, no pattern nor PDF.js's transparent, at an alpha of 1 under no blend mode but Normal and no soft
+mask, its groups' alike, and every clip in force a rectangle on the page's axes, so that the clip's box and the groups' bounds
+are where it shows. Whole (`holdsWhole`): the glyph's own ink box (its outline's, else its advance and its font's band, as the
+clip reads it; a turned glyph's the box of those corners turned) inside the clip in force and inside the region the fill's path
+encloses by its own rule (nonzero, or even-odd), no edge of the region passing inside the box and the box's middle inside the
+region: a straight edge read exactly, a curve by the box of its points and control points, which holds the curve. No tolerance:
+an ink box an edge passes through is covered in part and shows, and one a curve's control box meets shows whether the curve
+clears it or not (a label close to a node's round corner stays seen). The walk keeps the glyphs painted so far by the cell of
+its grid their ink's middle lies in, and each opaque fill tests those inside its box, a step each, so that the page's bounds
+hold. A stroke (it paints its line's width, not its path's region), an image (its samples and its mask say what of it is
+opaque, and the operator list holds neither), a shading (its own domain's) and an annotation's appearance (drawn or not by its
+flags) cover nothing the walk states; a soft mask's content paints no colour. Every reader of a glyph's visibility reads the
+statement as it reads the clip's: a run with such a glyph is not shown whole and makes no unit (figure-text.ts), and such a
+glyph neither crowds a label, nor ends its free line, nor stands in a box beside the texts the box holds (figure-text.ts,
+figure-lines.ts), nor is ink beside a member's lines or under them (flows.ts, facts-pass.ts, geometry.ts); the reader gate's I3
+by ink reads what the part states, so the covered word, no member, is no ink there.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server
@@ -11296,10 +11325,10 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   band meets other ink inside its box (another glyph, a stroke's segment widened by its half line width, a fill's edge, an image
   or a shading not holding the band) is `crowded`, left the original's: a translation there could cover that ink. Ink is what
   the page shows, and a ground lies under the text (PIPELINE 56, the owner's report of 2026-11-02 on 1706.03762v7 pp13-15,
-  whole stretches of its attention figures' labels English): a glyph wholly outside the clip in force and any paint at an alpha
-  of 0, a constant's or a transparency group's painted at 0 (PDF 11.6.6), are no ink (pageInk's `unseen`, the figures' reading
-  alone; its boxes kept, at their index, for every other reader), neither crowding a label nor ending its free line, and a run
-  of such glyphs is no unit, as a run the clip cuts is not. A glyph is wholly outside by its own ink (its outline across, else
+  whole stretches of its attention figures' labels English): a glyph wholly outside the clip in force, a glyph an opaque fill
+  painted after it covers whole (§18.97), and any paint at an alpha of 0, a constant's or a transparency group's painted at 0
+  (PDF 11.6.6), are no ink (pageInk's `unseen`, the figures' reading alone; its boxes kept, at their index, for every other
+  reader), neither crowding a label nor ending its free line, and a run of such glyphs is no unit, as a run the clip cuts is not. A glyph is wholly outside by its own ink (its outline across, else
   its advance); a Type 3 glyph is seen as PDF.js draws it, which runs its procedure whatever the rendering mode: one that begins
   with d0 at alpha 1 (showType3Text sets both constants so), another by what its procedure paints, the fill's alpha where it
   fills and the stroke's where it strokes, none where it paints nothing (an invisible text layer); a path's fill and stroke each
