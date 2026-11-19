@@ -177,6 +177,7 @@ started by hand, not by a runner (Security, rule 1).
 | `typeset-data` (today's readings derived again, the lab's tests) | 7 s: pass |
 | `reader-parts` (this run's parts laid by the entry over each rows store; I3 by ink, I4, I5) | 641 s: pass at `6b91f86ff`, at its record (`reader-parts.json`) |
 | `harness-lab` (the harness with five corpus papers, this run's bundles and rows) | 559 s: pass over `46dd8fcdf`, 130 of 130 |
+| `text-order` (I8: every page this run lays read by the composer's text module in Node, in reading order; out-of-order members held to `text-order.json`, which names none) | after `reader-parts` (its Google rows); a `run` slot |
 | `build-today`, `e2e:reader-today`, `e2e:registration-today` (today's reader, the way back until the cut-over) | 6 s, 169 s, 54 s: pass at `6b91f86ff`, 159 of 159 and 84 of 84 |
 | `display` (display ≥ today, under the default options and with every switch on; **a cut-over blocker**) | 16 min at `a7a6e4097` |
 | `perf-batch` (NEW's prepare in the round's box and its reader built from this commit, against the last round recorded) | about 9 min and the waits for its slots |
