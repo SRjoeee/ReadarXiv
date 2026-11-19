@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import { tableMetrics } from '../../src/metrics/table.ts'
 import { gatePair } from './gate.ts'
-import { cropLays, entryByToday, gateL1Pair, invariantsOf, todayMember, todayTies } from './gate-l1.ts'
+import type { OutPiece, Row, Unit } from '@readarxiv/format'
+import { acceptedRows, cropLays, entryByToday, gateL1Pair, invariantsOf, todayMember, todayTies } from './gate-l1.ts'
 import { type PageMember, tieCaps } from '../../src/lay/page.ts'
 import type { FlowMember } from '../../src/lay/flow.ts'
 import type { Metrics } from '../../src/types.ts'
@@ -82,6 +83,51 @@ describe("the entry's members compared with the runner's, by today's unit (round
     const by = entryByToday([m(121), m(122), m(125)], unitOf)
     expect([...by.keys()]).toEqual([125, 126])
     expect(by.get(125)).toEqual({ ord: 121, state: 'laid' })
+  })
+})
+
+describe('a store’s rows read as the product’s chain reads them: a Result the acceptance rule refuses is no row', () => {
+  const a = 'a'.repeat(64),
+    b = 'b'.repeat(64),
+    c = 'c'.repeat(64)
+  const unit = (id: string): Unit => ({
+    id,
+    kind: 'para',
+    content: [
+      { t: 'text', s: 'See (' },
+      { t: 'el', id: '1', kind: 'other', src: '\\ref{x}' },
+    ],
+  })
+  const units = new Map([a, b, c].map((id) => [id, unit(id)]))
+  const results = new Map<string, Row>([
+    // (its element lost: the rule refuses it)
+    [a, { id: a, ok: true, by: 't', content: [{ t: 'text', s: 'Siehe (' }] }],
+    // (its element kept: given)
+    [
+      b,
+      {
+        id: b,
+        ok: true,
+        by: 't',
+        content: [
+          { t: 'text', s: 'Siehe (' },
+          { t: 'el', id: '1' },
+        ],
+      },
+    ],
+    // (a failed Result: given as it is, the unit's reason kept)
+    [c, { id: c, ok: false, why: { kind: 'refused' } }],
+  ])
+  // (the rule as the caller hands it: here an element lost refuses, as the translate package's does)
+  const accept = (u: Unit, content: readonly OutPiece[]) =>
+    u.content.filter((p) => p.t === 'el').length === content.filter((p) => p.t === 'el').length
+  it('withholds an ok Result the rule refuses, and gives the rest as they are', () => {
+    const got = acceptedRows(results, units, accept)
+    expect([...got.keys()]).toEqual([b, c])
+    expect(got.get(b)).toBe(results.get(b))
+  })
+  it('gives every Result where no rule is given', () => {
+    expect(acceptedRows(results, units, undefined)).toBe(results)
   })
 })
 
