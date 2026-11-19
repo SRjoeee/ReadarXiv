@@ -14,8 +14,8 @@
 //   words of a number with its ± or unit): it neither moves the box nor speaks against the column, since entries that line up
 //   by their class line up whatever their parts, where the rest of that entry is inside the hull too: no free word on its
 //   baseline stands in the blank between the hull and the nearest hulls beside it (else the rest is set past the hull, or a
-//   column no unit cell is stands there, and the entry's ends are unstated: the column has none; the coordinator's rulings (d)
-//   and (d') of 2026-11-14: "5.3% / 0.27" under a narrower header, its "5.3%" in the blank). A word that meets the hull, passes
+//   column no unit cell is stands there, and the entry's ends are unstated: the column has none; PDF-READER §18.13:
+//   "5.3% / 0.27" under a narrower header, its "5.3%" in the blank). A word that meets the hull, passes
 //   its edge and stands otherwise (a number with a space in it beside the column's edge, siunitx's S column's numbers set on
 //   their decimal marker, a word over two columns) is an entry not read whole: the column has none;
 // - a column that holds a cell whose text TeX set as a paragraph of its own (a p, m, b or X column, a \parbox: its box is that
@@ -29,7 +29,7 @@
 // two), free ink not on the table's band, and the ink of a member that is no cell of the table (it never extends a hull nor
 // speaks against a column). Each leaves a box narrower than TeX's, never wider; TeX's own statement of the box (the template's
 // edges as points) is the TeX gate's.
-// A cell's room in its column (Room.column, the owner's approval of 2026-11-14) is its column's box widened by the column's share
+// A cell's room in its column (Room.column, PDF-READER §18.13) is its column's box widened by the column's share
 // of the blank TeX leaves beside it, never past the cell's own side: roomsOf below.
 
 /** a column's class: TeX's \hfil on the side or sides the slack goes */
@@ -281,7 +281,7 @@ export function columnBoxes(
 }
 
 /**
- * Each cell's room in its column (Room.column; the owner's approval of 2026-11-14, docs/PDF-READER.md §18.13): its column's box
+ * Each cell's room in its column (Room.column; docs/PDF-READER.md §18.13): its column's box
  * widened, on each side its own class lets its text grow, by the column's share of the blank on that side. The share is half the
  * blank between the box's edge and what stands next to the column on the table's band on that side: TeX makes the blank between
  * two columns of each one's own \tabcolsep, so half of it is this column's, and the other half stays between the cell and what

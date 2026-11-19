@@ -1,6 +1,5 @@
-// The author block under the title: the one stretch of a paper the names toggle governs, whole, and nothing else (the owner's
-// ruling of 2026-11-09: the toggle governs the whole block under the title and affects nothing else, docs/PDF-READER.md
-// §19.13). Read off TeX's stream on arXiv's page
+// The author block under the title: the one stretch of a paper the names toggle governs, whole, and nothing else
+// (docs/PDF-READER.md §19.13). Read off TeX's stream on arXiv's page
 // (A's glyphs in their content stream's order, which is the order TeX shipped them in), by the source units that own its
 // glyphs: after the title, the block opens at its first name or place (a unit of the author block, or a line no unit is whose
 // letters are an author's names: the ink units' rule 8) and runs through the names, the places and what TeX sets between and

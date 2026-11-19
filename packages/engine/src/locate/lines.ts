@@ -4,8 +4,8 @@
 // or down (a column's top: no script is that far); and wherever the page changes; two lines so cut one after the other on one baseline,
 // across each other, are one (a tall fraction's denominator under its line's band). A glyph off the band that goes on along it (a
 // script, a fraction's parts), or whose ink reaches across the line's (a big delimiter, its origin at its top), is the line's. A line's
-// baseline is the one most of its body glyphs' characters share (to 0.01 pt; today's maker's rowOf); its extent their
-// advances'; its top and bottom their own ink's; its size today's (lineSize).
+// baseline is the one most of its body glyphs' characters share (to 0.01 pt); its extent their
+// advances'; its top and bottom their own ink's; its size lineSize's.
 // A glyph is cut into a line by its ink (isInk), never by its Unicode: TeX's math extension pieces are blank to PDF.js.
 import type { DocGlyph } from '../doc.ts'
 
@@ -31,7 +31,7 @@ export interface CutLine {
  * outline, and none of their 6.0 M page glyphs paints nothing (a font's space would: its outline empty, ink.mjs's top = bottom
  * and ix0 = ix1 at its origin). Read by its Unicode, the brace of 2610.30034v1 p4 t60 stood on no line and in no box of its
  * element, erased with the element's group and never drawn again. Inside a form XObject the glyphs are an included figure's,
- * read as today's figure reading reads them, a blank one a word space: there the outline is no reading of what PDF.js draws
+ * read as figure-text.ts reads them, a blank one a word space: there the outline is no reading of what PDF.js draws
  * (of the 88 papers' 9,355 blank glyphs in forms, 3,320 carry an outline, a .notdef box, that PDF.js never draws: not in their
  * font)
  */
@@ -52,7 +52,7 @@ export const r2 = (v: number): number => {
 /** a line's body glyphs: within this share of its size (MAKE:72) */
 const BODY = 0.15
 /**
- * A line's size as today's maker states it (layout/make.mjs rowOf and mainsOf, MAKE:382-401): the median of its main glyphs'
+ * A line's size: the median of its main glyphs'
  * sizes (the upper one of an even count), its main glyphs those within PART_MAIN of its largest size where they set at least
  * MAINS_SHARE of its characters (a line of words with a large formula sign is the line of its words), else all of them; to a
  * hundredth, at most SIZE_MAX. The typesetter draws a line's band by it (texRects); its fonts' boxes are its top and bottom
@@ -118,8 +118,8 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
     // (back to the line's start or before it: where a line begins; back within the line, a fraction's denominator)
     const toStart = back && L !== null && g.x0 <= L.x0 + 0.5 * g.size
     // (the ink it crosses is the line's own text's, on the baseline its body glyphs share: a tall formula's ink beside it is
-    // no line of it, so an indented continuation under a formula reaching down to it starts a line (cloud Codex on
-    // fa6e1c089: an item's second line, x 85, baseline 688, beside an inline formula down to 680, read with the first))
+    // no line of it, so an indented continuation under a formula reaching down to it starts a line (an item's second
+    // line, x 85, baseline 688, beside an inline formula down to 680, would be read with the first))
     const band = L ? (L.bands.get(r2(L.y0)) ?? [L.top, L.bottom]) : null
     const crosses = L !== null && band !== null && !toStart && g.bottom < band[0] && g.top > band[1]
     // (back at the line's start, a glyph whose ink stands wholly over or under the line's own text is off it wherever its
@@ -176,7 +176,7 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
   }
   const finish = (l: { page: number; gs: number[]; size: number }): CutLine => {
     // (its baseline the one most of its body glyphs' characters share, to a hundredth: its glyphs within BODY of its size,
-    // all where none is; today's rowOf and baselineOf, MAKE:283-291, 397-410)
+    // all where none is)
     const glyphs = l.gs.map((i) => at(i).g)
     const lsize = lineSize(glyphs)
     const body = glyphs.filter((g) => Math.abs(g.size - lsize) <= BODY * lsize)
@@ -206,7 +206,7 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
   // (two lines cut one after the other on one page, on one baseline, across each other, are one line of TeX's: TeX never sets two
   // lines of a box on one baseline over each other. A tall fraction's denominator, wholly under its line's band and back left of
   // its numerator's end, began a line of its own that the rest of its line's words then stood on (2610.21026v1 p5: lines 3
-  // and 4 both on 277.19, 107.25-287.67 and 257.53-504); today's maker read two rows on one baseline that meet as one line)
+  // and 4 both on 277.19, 107.25-287.67 and 257.53-504))
   const lines: CutLine[] = []
   for (const l of out) {
     const cur = finish(l)

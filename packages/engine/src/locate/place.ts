@@ -12,8 +12,8 @@ import { cutLines, isInk } from './lines.ts'
 import type { Claims, Ink } from './ownership.ts'
 import { eachBetweenPaired, INKED_CLASSES, lettersIn, type Member, piecesOf, type Work } from './work.ts'
 
-/** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS, today's
- *  rules/text-symbols.mjs), read here so that the back half needs nothing of the front half but the table */
+/** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS),
+ *  read here so that the back half needs nothing of the front half but the table */
 const symbolText = (src: string): string | null => {
   const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src)
   return m && Object.hasOwn(TEXT_SYMBOLS, m[1] as string) ? (TEXT_SYMBOLS[m[1] as string] as string) : null
@@ -250,7 +250,7 @@ export function place(
     )
   }
   // (an element TeX set ink for between its two points that its unit's ownership gives none of, glyph or box: its ink is not
-  // found, which is no statement that TeX set none (today's LOST, make.mjs, against its EMPTY: both its points stated and
+  // found, which is no statement that TeX set none (that needs both its points stated and
   // nothing between them, or TeX's probe said it sets none). Read as none, it is drawn as nothing while its ink is erased with
   // the unit's text or stays under the translation. A text macro whose glyphs there are the unit's text is found as that text.
   // The unit stays the original's)

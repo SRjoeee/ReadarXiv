@@ -11,7 +11,7 @@ import { isInk, r2 } from './lines.ts'
 import type { Claims } from './ownership.ts'
 import { BRACKET, CALL, type Member, ON_ROW, UNIT_MARK, type Work } from './work.ts'
 
-// ---- a unit's end mark (docs/PDF-READER.md §18.52; the coordinator's ruling of 2026-11-12): what TeX pushed to the end of the
+// ---- a unit's end mark (docs/PDF-READER.md §18.52): what TeX pushed to the end of the
 // unit's last line after its text, amsthm's `\qed` (`\unskip\penalty9999\hbox{}\nobreak\hfill\quad\hbox{\qedsymbol}`, its
 // `\openbox` four rules, set by `\end{proof}` after the unit's end point), a class's or an author's mark after `\hfill`. It
 // belongs to the end of the unit's text: left where TeX set it (Room.stays, in no group), a translation a line longer stood it

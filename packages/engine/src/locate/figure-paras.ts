@@ -1,4 +1,4 @@
-// A figure's paragraphs (F3, the owner's ruling of 2026-11-10, PDF-READER §18.36): its printed lines of prose (figure-lines.ts)
+// A figure's paragraphs (F3, PDF-READER §18.36): its printed lines of prose (figure-lines.ts)
 // read as the paragraphs they print, each one figure text laid as a body paragraph is. Facts of the lines alone, every measure
 // the figure reading's in the text's size (ALIGN_TOL) or a share of it named here. A paragraph is lines of one figure, one under
 // the other with no blank line between, in one face family, size, weight and fill, set by TeX's interline rule (its one pitch, or
@@ -7,7 +7,7 @@
 // spaces stretched: unlike between them, or unlike its short last line's natural ones), the line reaching its right edge. A
 // line that opens with an item's enumerator (a list's, figure-lines.ts listed) begins an item of its own. Ragged lines are
 // joined by no guess from their shape: stacked legend entries read so (lane fig-text's ragged images); the lines a closed shape
-// holds alone are F3's next step (the coordinator's decisions of 2026-11-10 and 2026-11-11).
+// holds alone are the container step's (figure-lines.ts, PDF-READER §18.36).
 
 import { oneFamily } from './facts.ts'
 

@@ -37,10 +37,10 @@ import { isInk, r2 } from './lines.ts'
 import { WORD_GAP } from './trails.ts'
 import { spellOf } from '../own/stream.ts'
 
-/** a line that ends short of its column's right edge by this share of its size ends at a forced break (today's SHORT TEX:87),
+/** a line that ends short of its column's right edge by this share of its size ends at a forced break (the break's \hfil),
  *  read only where the marked compile set no point for the break */
 const SHORT = 0.5
-/** the element classes that set ink of their own (today's VISIBLE, tex.mjs:18): a piece of another class sets none */
+/** the element classes that set ink of their own: a piece of another class sets none */
 const VISIBLE = new Set<string>([
   'cite',
   'num',
@@ -50,9 +50,9 @@ const VISIBLE = new Set<string>([
   'display',
   'symbol',
 ] satisfies readonly KnownElClass[])
-/** the characters of a text an opening point is found by (today's stream.mjs WANT) */
+/** the characters of a text an opening point is found by (as own/stream.ts WANT) */
 const WANT = 8
-/** the ink units of the page's head and foot (made on A, today's ink-units.mjs INK_KIND heads and notes): their lines TeX sets
+/** the ink units of the page's head and foot (made on A, ink-units.ts INK_KIND heads and notes): their lines TeX sets
  *  as boxes of the text's width (\@oddhead, \@oddfoot), and states no alignment of */
 const HEAD_FOOT = new Set(['inkheads', 'inknotes'])
 
@@ -260,7 +260,7 @@ function open({
   for (const mem of members) {
     const c = mem.unit >= 0 ? units[mem.unit]?.cell : undefined
     if (!c || !mem.located) continue
-    // (today's column of a cell: the cells of its table, column and span, RUN:1508 columnKey)
+    // (a cell's column: the cells of its table, column and span)
     const k = `${c.table}|${c.col}|${c.span ?? 1}`
     ;(column.get(k) ?? column.set(k, []).get(k)!).push(mem)
   }
@@ -561,7 +561,7 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
   //   \@centercr, which ends a paragraph, 2610.30034v1's title, 2608.25210v2 t8); else, in a unit TeX states it set centred
   //   or ragged (InstrumentUnit.align), where its paragraph ends there are as many as its groups, each is one's point, past
   //   the lines TeX wrapped itself (2610.21504v1's title); else where as many of its line ends end short of their column's
-  //   right edge by SHORT of a size (today's reading, forcedBreaks TEX:120: the break's \hfil), none over a held line, they
+  //   right edge by SHORT of a size (the break's \hfil), none over a held line, they
   //   are the groups', in order, the lines read; else no break of the window is stated. A window's count is its own:
   //   another's, or a break at the unit's end, leaves it as it is)
   if (unplaced.length && unit && mem.bFirst >= 0) {
@@ -700,16 +700,16 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
   // (`\medbreak`, `\noindent`, a footnote whose mark it set elsewhere) bounds nothing, as B's run holds no glyph of it. Each side
   // of the end is met by what stands there (sideB, sideOf: one rule, both directions): where the unit's glyph next to the end
   // is a piece's and no letter or digit stands between, by that piece itself (a footnote's mark ending the paragraph before, an
-  // element opening the next); else by its text, spelled, WANT characters (today's stream.mjs WANT): the source's text before a
-  // group's open ends B's before the end, and the text the group's content begins with (inside it, as today's paragraphBreaks
-  // asks: the group closed after it) begins B's after it. TeX opened the paragraph at the group so met on both sides, one group
+  // element opening the next); else by its text, spelled, WANT characters: the source's text before a
+  // group's open ends B's before the end, and the text the group's content begins with (inside it, the group closed
+  // after it) begins B's after it. TeX opened the paragraph at the group so met on both sides, one group
   // alone (SpanAt.opens: the outermost of those opened together), else at the element B's next glyph opens, where its side
   // before is met too (El.opens). An end inside a piece's own glyphs opened none at it. One at no group's open and no element,
   // before the member's first placed word, is none inside its text (2a's case i). Else it is
   // stated by what else holds its place (design-display 2a's order): a forced break that ended the line before (El.ends); a
   // region (a display ends the paragraph before, or the line before or its own is held: a block of its own already); its first
   // word alone. Every point but a region's states its first word too where the member places it on the paragraph's line
-  // (Placed.paras: a group or an element is a carrier a translator's reply can drop, the coordinator's ruling of 2026-11-13).
+  // (Placed.paras: a group or an element is a carrier a translator's reply can drop, PDF-READER §18.69).
   // One stated by none of these is counted (`opensUnstated`) and listed, apart as an open or an element stands where the next
   // paragraph begins in the source (which must be none) or plain text does)
   if (mem.bFirst >= 0 && unit) {
@@ -1028,11 +1028,11 @@ function readLineFlags(fx: FactsIndex, r: MemberReading): void {
   const { members, bandOn } = fx
   const { mem, own, sizeOf } = r
   // -- its lines' flags: PINNED (shares its baseline with ink that stays), SHORTSKIP (a display under it with TeX's short skip)
-  // (PINNED as today's edgesOf reads a line alone, RUN:1638-1650: any glyph of the page on its baseline's band within its
+  // (PINNED: any glyph of the page on its baseline's band within its
   // block's span and off its own extent, its own label's aside (whether a label kept stands before it is U.params' to say);
   // its block, its run of lines on one page and column, each under the one before; the band by the line's size)
   const label = new Set(mem.label)
-  // (and the glyphs of the name that leads it: its lead's, drawn with it (Placed.bound), as today's line starts at the name)
+  // (and the glyphs of the name that leads it: its lead's, drawn with it (Placed.bound), its line starting at the name)
   const leader = mem.leader !== undefined ? members[mem.leader] : undefined
   for (const a of leader?.text ?? []) label.add(a)
   // (its block: the run of its lines on one page and column, each under the one before, which the line before and the line
@@ -1106,7 +1106,7 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
     const stays = staysOf(mem.lines, staysOn, blockOf)
     if (stays) mem.room.stays = stays
   }
-  // (a figure text's room as today's figure reading tells it (layout/figure-text.mjs roomOf, its set's cut): along a level run,
+  // (a figure text's room as its figure reading tells it (figure-text.ts roomOf, its set's cut): along a level run,
   // the free line from its room before its box to its room after; and the stroke under its text, which a translation reaching
   // it is crowded by. A turned one's is stated with its run (Placed.run: its first glyph's origin, its box's length along its
   // direction, its room before and after along it; its line is its box on the page, which tells none of them), its side the
@@ -1168,12 +1168,12 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
   // readAlign): the maker's reading (MAKE:2121-2135); a single-line cell by its column
   if (unit && unit.align !== 'c' && unit.align !== 'l' && unit.align !== 'r') {
     const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
-    // (a cell is read by its column's cells alone, never by the page's column: today's centredFlag RUN:2102)
+    // (a cell is read by its column's cells alone, never by the page's column)
     let a = unit.cell ? (unit.align ?? 'j') : alignOf(mem.lines, sizeOf, blockOf, unit.align, labelX0)
     // (a single line TeX told justified that its own ink reads centred keeps TeX's word where its row is not centred: the row is
     // everything TeX set on that line within its measure, the member's own ink, its label, the end mark a fill pushed (its `~$`
-    // element), another member's line on its baseline (a run-in head before it); the coordinator's ruling of 2026-11-16, lane
-    // cm-fix: 2610.40645v1 p19's proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its words alone read
+    // element), another member's line on its baseline (a run-in head before it); PDF-READER §18.77: 2610.40645v1 p19's
+    // proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its words alone read
     // centred under F13's measure. The row only keeps TeX's word: a row of other members' ink whose hull happens to stand about
     // the middle is no centring (a theorem's head beside its first line, 2608.11084v1 p13; a list item's label and its last line,
     // 2608.27210v1 p2). A line nothing told is read by its own ink as before: a running head's title beside its page number on

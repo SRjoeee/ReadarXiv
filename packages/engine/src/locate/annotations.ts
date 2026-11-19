@@ -35,7 +35,7 @@ export function annotationOf(an: Annotation): {
   return { to, rect: [x0, y0, x1, y1], boxes }
 }
 /** the glyphs (their indices on the page) an annotation holds: each one's glyph point, its advance centre on its baseline,
- *  strictly inside one of its boxes (PDF.js's overlaidText rule, today's pointsOf), white space aside */
+ *  strictly inside one of its boxes (PDF.js's overlaidText rule), white space aside */
 export function pointsOf(
   glyphs: readonly { u: string; x0: number; x1: number; y: number }[],
   { boxes }: { boxes: readonly [number, number, number, number][] },
@@ -47,8 +47,7 @@ export function pointsOf(
   })
   return pts
 }
-/** an annotation's quads (PDF.js's quadPoints, eight numbers a quad) as boxes, null where it has none or they are ill formed
- *  (today's links.mjs quadBoxes) */
+/** an annotation's quads (PDF.js's quadPoints, eight numbers a quad) as boxes, null where it has none or they are ill formed */
 function quadBoxesOf(q: ArrayLike<number> | null | undefined): [number, number, number, number][] | null {
   if (!q || typeof q.length !== 'number' || !q.length) return null
   const flat = Array.from(q)

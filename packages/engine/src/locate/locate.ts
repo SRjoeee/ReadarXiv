@@ -12,8 +12,8 @@
 //   style's size and fill; TeX's statements where the instrument has them (its alignment). Where it stands on A against B:
 //   `same` (every pair within 0.01 pt on its page), `shifted` (each of B's lines moved whole), `respaced`, `rebroken`.
 // - Members: one placement per unit, a babel name's every occurrence its own; then the units no source unit is, made on A by
-//   today's rule where A's pages are given (ink.ts: ink units, kept blocks, figure texts, of A's glyphs no source unit owns, B's
-//   marks carried onto A); then the units born on A (born.ts) from the glyphs B never printed that today's rule makes nothing of. Flows: members that share a TeX line, consecutive in the stream. Ties: a table's cells; a
+//   the ink makers where A's pages are given (ink.ts: ink units, kept blocks, figure texts, of A's glyphs no source unit owns, B's
+//   marks carried onto A); then the units born on A (born.ts) from the glyphs B never printed that no ink maker takes. Flows: members that share a TeX line, consecutive in the stream. Ties: a table's cells; a
 //   figure's set. Links: A's annotations, each owned by the element or the text its rectangle lies over.
 // - Groups (design §4.5): per member and page, `<ord>.<page>.t` its text (and a name's or figure text's word), `.e` its
 //   travelling elements, `.l` its label; a display, a kept block and what is not located are in no group.
@@ -41,7 +41,7 @@ export { urlBreaks } from './geometry.ts'
 export { TEXT_NAMES } from './page-units.ts'
 export type { Place } from './work.ts'
 
-// ---- the facts today's reader works out from the page before it typesets (stage 1a-2: facts-pass.ts)
+// ---- the facts of each located member read off the page for the typesetter (stage 1a-2: facts-pass.ts)
 function facts(w: Work, owned: Owned): void {
   const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA } = w.ix
   const { members, units } = w

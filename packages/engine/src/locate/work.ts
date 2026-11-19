@@ -79,7 +79,7 @@ export interface Member {
   join?: [number] | [number, 1]
   dir?: [number, number]
   /** a figure text set turned (`dir`): its run, its first glyph's origin, its box's length along `dir` and its room before and
-   *  after its box along it (Placed.run; its line is its box on the page), as today's figure reading tells them */
+   *  after its box along it (Placed.run; its line is its box on the page), as figure-text.ts tells them */
   run?: [x: number, y: number, length: number, before: number, after: number]
   /** a babel name's own text on A, as the text layer reads it (Placed.plain: S.names tells by it a target word the original's) */
   plain?: string
@@ -133,7 +133,7 @@ export interface Member {
   /** its groups whose command names no face and whose own text TeX set in a face other than the face around it, read off its
    *  glyphs on A (group-style.ts; SpanAt.style where the instrument states none): each one's open piece id and style */
   spanFaces?: [string, Style][]
-  /** the facts it carries as read on A by today's reader's rule, not stated by TeX (stage 1b states them) */
+  /** the facts it carries as read off A's geometry, not stated by TeX (stage 1b states them) */
   read: string[]
   /** its alignment read centred by its own block (facts.ts centredByBlock, a single line's stack): read again on TeX's line once
    *  the flows say which members share it (the row's) */
@@ -178,7 +178,7 @@ export interface Located {
    *  lab's stage states a unit absent from the candidate by (lab/pdf/prepare-back/stated.mjs) */
   displays: DisplayLine[]
   /** the lines on A TeX set inside a counted float that no unit owns, read as their float's text by depth alone, where A's pages
-   *  were given (ink.ts; today's ledger, PDF-READER §18.45): stated beside the units, never read by them; the lab's stage lists
+   *  were given (ink.ts; the ledger, PDF-READER §18.45): stated beside the units, never read by them; the lab's stage lists
    *  them and its report counts them */
   floatLines: FloatLine[]
   stats: {
@@ -188,7 +188,7 @@ export interface Located {
     places: Record<Place, number>
     born: number
     bornGlyphs: number
-    /** the units made on A by today's rule (ink.ts), where A's pages were given */
+    /** the units made on A (ink.ts), where A's pages were given */
     made?: InkStats
     /** the source units kept as artefacts (Rule 1, PDF-READER §18.22), and whether the paper's body face is one of one pitch */
     artefacts?: { units: number; bodyFixed: boolean; groups?: number; read?: number }
@@ -535,8 +535,8 @@ export const UNIT_MARK = /^[ht]?\d+[se]$/
 /** a body's or a float's bracket in B's stream (LAYOUT_TEX) */
 export const BRACKET = /^[bf][se]\d+$/
 
-/** a glyph stands on a row where its baseline is within this share of the row's size of the row's (today's keptBetween and
- *  ownLabelOnRow, RUN:1592-1626; columnsAndMeasures' label on its line, MAKE's) */
+/** a glyph stands on a row where its baseline is within this share of the row's size of the row's (ink between two lines and a
+ *  label on its line, flows.ts, geometry.ts; a unit's head on its first line, end-marks.ts) */
 export const ON_ROW = 0.4
 
 /** a member's own ink that goes with its lines, set anew where its translation is laid: the glyphs (A's, global) of its text,

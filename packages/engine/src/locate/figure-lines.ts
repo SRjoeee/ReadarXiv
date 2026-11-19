@@ -1,5 +1,5 @@
-// A figure's texts as its printed lines tell them (the owner's ruling of 2026-11-10, PDF-READER §18.26): the runs today's figure
-// reading cuts (figure-text.mjs figureUnitsOf, its atoms, read as they are) gathered into the lines they stand on, a line that
+// A figure's texts as its printed lines tell them (PDF-READER §18.26): the runs the figure
+// reading cuts (figure-text.ts figureUnitsOf, its atoms, read as they are) gathered into the lines they stand on, a line that
 // holds a run set in a face of one pitch and words of another one figure text whose runs of one pitch are its elements (F0:
 // "Project Page:" and its address, a title and its path), a line whose every word stands between glyphs of one pitch kept whole
 // (code: Rule 1's inside-a-line, read on the line); and each crowded text's ink (roomOf's `met`) judged by its relation to the
@@ -26,7 +26,7 @@ import { glyphWith } from '../glyph.ts'
 import { accentOver, COMBINING, classifyFont, lineEnd, TRACKING_SPACE_FACTOR } from './facts.ts'
 import { ledApart, PARA_ALIGN_TOL, type ParaLine, parasOf, sameFace } from './figure-paras.ts'
 
-/** a glyph as the figure reading reads one (pageInk's, a page of today's makers) */
+/** a glyph as the figure reading reads one (pageInk's, on a page as the ink makers read it) */
 interface G {
   u: string
   font: string
@@ -108,8 +108,8 @@ interface Line {
 
 /**
  * The figure texts of a document's pages that its printed lines make anew (F0's lines, the lines of code) or whose crowding the
- * relation reading judges otherwise than today's reading: each with its runs (`ks`); a run of no such text stays as today's
- * reading made it. `owned(p, g)`: whether a glyph is a unit's or a block's (no figure's text). `fixed`: the faces the document
+ * relation reading judges otherwise than figureUnitsOf: each with its runs (`ks`); a run of no such text stays as figureUnitsOf
+ * made it. `owned(p, g)`: whether a glyph is a unit's or a block's (no figure's text). `fixed`: the faces the document
  * sets at one pitch where Rule 1 keeps such text (none: no line is read for F0). `textFaces`: the faces the document's source
  * units set their text in (none read: no face is a formula's own by them, F1)
  */
@@ -128,7 +128,7 @@ export function figureLinesOf(
     const out = linesOf(pages, fig, owned, fixed, textFaces, labels)
     // (a text drawn twice keeps the original's: one of its units has its double, doubledOf; the only ink that keeps a figure text)
     // (a text the engine cannot draw as it was set, a script or an accent set apart from its base: the original's, F3's `script`;
-    // and a unit no text holds so, kept as today's unit, marked)
+    // and a unit no text holds so, kept as figureUnitsOf's unit, marked)
     const glyphsOn = (p: number) => (pages[p - 1]?.glyphs ?? []) as G[]
     for (const t of out)
       if (t.why === null && setApart(t, glyphsOn(t.page))) {
@@ -175,7 +175,7 @@ export function figureLinesOf(
         for (const k of t.ks) if (fig.units[k]) fig.units[k]!.double = true
       }
     // (a text a word of which a decoration holds, an element `cite` (judge's decorate): the original's whole, its words never
-    // translated around the decorated one until a decoration can follow its words (the owner's ruling of 2026-11-12, §18.61);
+    // translated around the decorated one until a decoration can follow its words (PDF-READER §18.61);
     // kept here, before ink.ts ties the labels' sizes, so that it keeps a set of its own as every text kept whole does. One kept
     // for another reason keeps that one; a decorated stretch with no letter (`ref`) holds nothing, an element in the translation)
     for (const t of out) if (t.why === null && t.els.some((e) => e.kind === 'cite')) t.why = 'decoration'
@@ -202,8 +202,8 @@ export function figureLinesOf(
       }
     }
     for (const t of out) countKept(t)
-    // (the units no text holds: drawn twice, today's kept; else a turned run today crowded, which the line reading (level lines)
-    // never takes, laid as today's unit: an axis's title by its axis or its tick labels)
+    // (the units no text holds: drawn twice, kept; else a turned run figureUnitsOf crowded, which the line reading (level lines)
+    // never takes, laid as its unit: an axis's title by its axis or its tick labels)
     const inText = new Set(out.flatMap((t) => t.ks))
     for (const u of fig.units) {
       if (inText.has(u.k)) continue
@@ -241,7 +241,7 @@ export type LinesWork = {
   boxed: number
   interior: number
   /** the figure texts kept as the original's, by why: drawn twice (`double`: its string again on its page, a little off it), F1's
-   *  torn formula (`torn`), a run crowded by today's reading with no ink met (`today`), a line of code or of formulas kept whole
+   *  torn formula (`torn`), a run crowded by figureUnitsOf with no ink met (`today`), a line of code or of formulas kept whole
    *  (`code`, `formula`), one the engine cannot draw as it was set (`script`: setApart), one a word of which a decoration holds
    *  (`decoration`, §18.61); and `inked`, the texts laid over ink their room met (step 2: no ink but its own double keeps a text) */
   kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'script' | 'decoration' | 'inked', number>
@@ -262,9 +262,9 @@ const SCRIPT_RATIO = 0.75
 const NOTE_SIGNS = /^[∗*†‡§¶]+$/u
 const NOTE_DIGITS = /^[0-9,]+$/u
 /**
- * Whether a figure text holds what the engine cannot draw as it was set (F3's `script`, the coordinator's ruling of 2026-11-11:
+ * Whether a figure text holds what the engine cannot draw as it was set (F3's `script`, PDF-READER §18.36:
  * such a text is the original's, never translated flat, as a formula line is): a script among its own glyphs, row by row, by
- * today's one definition (ink-units.mjs scriptsOf, rule 4: smaller than the row's text and off its baseline, read on the
+ * the ink units' one definition (ink-units.ts scriptsOf, rule 4: smaller than the row's text and off its baseline, read on the
  * engine's hundredth of a point; the row's text size its largest, where a line of prose's is its most frequent), at most
  * LaTeX's script ratio of that size (SCRIPT_RATIO: a plotting program's face a hundredth smaller is none), a note mark aside; or a spacing accent or a combining mark set over another of its
  * glyphs (its ink's middle across inside that glyph's ink, its ink above it) that TeX's \accent did not set over its letter
@@ -341,7 +341,7 @@ function doubledOf(
   const out = new Set<number>()
   const pairs: [number, number][] = []
   const by = new Map<string, TodayFigures['units']>()
-  // (a level unit's glyphs along x, real ones: its page's, by today's map)
+  // (a level unit's glyphs along x, real ones: its page's, by figureUnitsOf's map, `fig.glyphs`)
   const gsOf = new Map<number, number[]>()
   fig.glyphs.forEach((map, pi) => {
     const G = (pages[pi]?.glyphs ?? []) as G[]
@@ -615,7 +615,7 @@ function linesOf(
       if (idx.some((i) => taken.has(i) || !(reads[i]!.kind === 'plain' || reads[i]!.kind === 'mixed'))) continue
       idx.sort((a, b) => lines[b]!.y - lines[a]!.y || lines[a]!.x0 - lines[b]!.x0)
       // (the runs it holds on one baseline are one line, however far apart their words stand: the path is the fact that holds
-      // them together, no wider run gap (the coordinator's (c), 2026-11-11))
+      // them together, no wider run gap (PDF-READER §18.36))
       const rows: { l: Line; read: Read }[] = []
       for (const i of idx) {
         const l = lines[i]!
@@ -710,7 +710,7 @@ function linesOf(
         )
         continue
       }
-      // (rows set flush in the path (option 3, the coordinator's ruling of 2026-11-11, taken to the owner): a row joins the row
+      // (rows set flush in the path (PDF-READER §18.36): a row joins the row
       // above where the break between them is one a wrap made and the sentence goes on. A wrap: the two rows one under the other
       // with no blank line, in one face, not each led by ink of its own, and the break forced, the next row's first word unable to
       // stand on the row above within the measure the path's inside gives it at that row's height, its inset on the flush side
@@ -812,7 +812,7 @@ function linesOf(
         out.push(ft)
         return
       }
-      // (a run alone, as today's reading made it, judged anew where it was crowded or stands in part on a tone)
+      // (a run alone, as figureUnitsOf made it, judged anew where it was crowded or stands in part on a tone)
       if (!items.length) {
         for (const k of l.ks) if (fig.units[k]!.why === 'crowded') count('today')
         return
@@ -1108,7 +1108,7 @@ const romanValue = (s: string) =>
  * A line read (F0, F1): its glyphs' roles in its order. A stretch of T that spells a word is the line's text; one standing between
  * F glyphs right before and right after it, every one of them, makes the line code, kept whole (Rule 1's inside-a-line:
  * 2411.13093v4 p19's Georgia word inside a Consolas line). The glyphs no run holds before its first run's (an icon TeX set before
- * the first word) are none of it, as today's reading leaves them
+ * the first word) are none of it, as figureUnitsOf leaves them
  */
 function lineRead(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math: Formulas): Read {
   // (the glyphs no run holds before its first run's: the text's where each abuts the glyph after it, no word space between (an
@@ -1131,7 +1131,7 @@ function lineRead(l: Line, glyphs: readonly G[], pitch: (g: G) => boolean, math:
     else stretches.push({ r: role[i]!, gs: [g] })
   })
   const words = stretches.filter((s) => s.r === 'T' && WORD.test(textOf(s.gs, glyphs).normalize('NFKC')))
-  // (F1: a line no word of which stands outside its formulas is kept whole, as today's runs of a math face are)
+  // (F1: a line no word of which stands outside its formulas is kept whole, as a run in a math face stays the original's ink)
   if (!words.length) return { gs, pieces: stretches, kind: role.includes('M') ? 'formula' : 'none', marker: [] }
   const code =
     role.includes('F') &&
@@ -1267,7 +1267,7 @@ function signsApart(read: Read, free: ReadonlySet<number>, glyphs: readonly G[])
 /**
  * A line's figure text where it is one this reading makes: a line of code or of formulas, kept whole; a line of words with a run
  * of one pitch or a formula in it (F0, F1: each an element); an item, its marker its label (F3). Else null: one run alone with
- * nothing to join, or runs of words alone, as today's reading made them
+ * nothing to join, or runs of words alone, as figureUnitsOf made them
  */
 function textOfRead(l: Line, read: Read): FigureText | null {
   const base = {
@@ -1541,7 +1541,7 @@ function proseFacts(x: ProseLine, glyphs: readonly G[], boxes: readonly number[]
   }
   // (its word spaces: between two clusters of text, the first ending in no punctuation (TeX widens a space after one); a line
   // shows justification only where two of them or more are one (TeX stretches a line's spaces alike), never a tab's gap. A
-  // formula's space to the words beside it, read as a word space, was tried and withdrawn (2026-11-11): a math cluster beside a
+  // formula's space to the words beside it is no word space (PDF-READER §18.36): read as one, a math cluster beside a
   // text-role digit or bracket put a math space among them, the line read uneven, and 2609.19644v1 lost 3 joins for none gained)
   const gaps: number[] = []
   for (let i = 1; i < cl.length; i++)
@@ -1601,8 +1601,8 @@ export function textOf(gs: readonly number[], glyphs: readonly G[]): string {
  * stands on another line's baseline (RUN_DY) is that line's, taken or not: a torn piece stands on no line's (a table's number
  * cells under a group header's formula, no unit, stand on their row's; a caption's last mark past its line's run gap on the
  * caption's: 2609.19644v1 p11). The reach is one band's height over and under the baseline, and no further: a formula's stacked
- * parts (a limit, a denominator, a script) stand in the band directly over or under its line. Tried 2026-11-11 and withdrawn: no
- * reach, the line nearest by baseline among the lines across the glyph (e32819331). A display forms no line (no unit takes a
+ * parts (a limit, a denominator, a script) stand in the band directly over or under its line. Not the line nearest by baseline
+ * among the lines across the glyph, with no reach (PDF-READER §18.35): a display forms no line (no unit takes a
  * formula's run), so a display, its equation number or a folio 3 to 27 sizes below stood nearest a paragraph's last line
  * (2609.19644v1: 33 of F1's 47 lines drawn there against 39)
  */
@@ -1629,7 +1629,7 @@ function torn(
 }
 
 /**
- * A crowded figure text's met ink judged by its relation to the text (the owner's reformulation of 2026-11-10): own (its glyphs,
+ * A crowded figure text's met ink judged by its relation to the text (PDF-READER §18.26): own (its glyphs,
  * a rule inside one of its elements' extent: a fraction's bar, a chip's rule), a decoration (a shape holding the ink centres of a
  * contiguous stretch of its glyphs and of no other glyph: a frame round a citation, a chip's fill; a rule of horizontal segments
  * alone under or through such a stretch; a doubled copy, a glyph of the same character over one of its own within half its size

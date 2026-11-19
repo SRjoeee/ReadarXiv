@@ -1,9 +1,9 @@
-// COPIED from src/pdf-reader/engine/rules/content-classes.mjs (abe884b5e) for today's ink makers beside it, which locate runs over arXiv's page,
+// COPIED from src/pdf-reader/engine/rules/content-classes.mjs (abe884b5e) for the ink makers beside it, which locate runs over arXiv's page,
 // without the readings of the reader's toggles, which nothing of the packages calls (the reader's are packages/format's).
 // The content classes (docs/route/orphan-text.md): every text glyph of our final pass belongs to exactly one, and each class
 // has one translation path and one reader toggle. One table, read by the maker child's ledger (layout/ledger.mjs), by the
 // sweep and by the readers' settings: a class is translated once on the server, into the shared cache, and a toggle only shows
-// or hides what was made, with no prepare and no translation again. The toggles are the owner's (2026-10-25): what is always
+// or hides what was made, with no prepare and no translation again (PDF-READER §19.13). The toggles: what is always
 // translated, five items a reader turns on or off, and what is never translated. A unit's class is a pure function of its kind
 // (UNIT_CLASS), which the bundle's units carry, so the server and every reader tell it alike.
 // An original module (no port statement). Imports nothing.
@@ -137,7 +137,7 @@ const UNIT_CLASS: Readonly<Record<string, ClassId>> = Object.freeze({
   author: 'names',
   figure: 'figures',
   // (an author block's places, latex-front.mjs frontBlock: the names' toggle with its names, `author`, the whole block one
-  // toggle, the owner's ruling of 2026-10-30; they were the body's, always translated, from 2026-10-28)
+  // toggle: PDF-READER §19.13)
   affiliation: 'names',
   // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
   inkheads: 'heads',
@@ -154,8 +154,7 @@ const UNIT_CLASS: Readonly<Record<string, ClassId>> = Object.freeze({
   name: 'generated',
   // (a bibliography's entry, latex-front.mjs bibliography: one unit, whole, the references'. `refnames`, an entry's names cut apart
   // by PIPELINE 29, is made no more; a bundle of 29 a reader still reads keeps both halves of an entry under the one toggle the
-  // owner gave the bibliography, and "names" the author block's alone: 2026-10-28, the two decoupled; the whole block, its places
-  // too, 2026-10-30)
+  // bibliography has, and "names" governs the author block alone, its places too: PDF-READER §19.13)
   reference: 'references',
   refnames: 'references',
 })

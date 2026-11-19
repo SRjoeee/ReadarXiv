@@ -28,7 +28,7 @@ export function lineShape(s: ParaMeasure, k: number): [indent: number, length: n
 
 /**
  * The stated paragraphs' lines' measures. A line takes a paragraph's measure only where TeX's own statements leave no other
- * paragraph for it (the coordinator's ruling of 2026-11-16 on defect 2, lane cm-fix): (i) a line of its unit's last paragraph
+ * paragraph for it (PDF-READER §18.77): (i) a line of its unit's last paragraph
  * takes the paragraph TeX pairs the unit with (Instrument.tex.paras: the last AXT-MEASURE before the unit's `AXT-ALIGN u p`, the
  * paragraph its end mark ended in), where no paragraph end of the unit's own stands before the line in B's stream, and only where
  * that paragraph comes after the end B shows before the line and no later than the first end B shows after it, and its own end,

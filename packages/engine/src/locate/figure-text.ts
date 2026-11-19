@@ -1,8 +1,7 @@
-// COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
-// marked COPY, a turned glyph's owner read where the page states one (streamOf: today's pages own none), and, marked CHANGED, a line of a
+// COPIED as it is from src/pdf-reader/engine/layout/figure-text.mjs (abe884b5e), its imports pointed at this package's modules and, where
+// marked COPY, a turned glyph's owner read where the page states one (streamOf, `turnedOwners`), and, marked CHANGED, a line of a
 // justified paragraph set from its start (setsOf), a run ended where it goes into or out of a face of one pitch (`fixed`, Rule 1's
-// fact) and a run gone on across a size change inside a word (figureUnitsOf `sized`): run by locate over arXiv's page (../ink.ts),
-// held equal to today's by tests/pdf-reader/locate-ink-today.test.ts. Today's file stays the production prepare's until the cut-over.
+// fact) and a run gone on across a size change inside a word (figureUnitsOf `sized`): run by locate over arXiv's page (../ink.ts).
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
 // a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units
@@ -59,9 +58,9 @@
 // under the text, as a ground is: it crowds nothing and ends no free line, and the unit carries its depth (`under`): whether a
 // translation meets it is told where the translation's faces and size are known, by the layer (figure-fit.mjs).
 //
-// Its set and its room (the owner's rule of 2026-10-29: the labels of one group set at one size, the original's, each keeping the
-// original's alignment; a translation may take free space, never touching other ink nor leaving its figure; a group that cannot
-// fit shrinks as one). A unit in a column — runs of one figure, size and direction whose starts, ends or middles lie on one line
+// Its set and its room (PDF-READER §19.12: the labels of one group a set, each keeping the original's alignment; a
+// translation may take free space, never touching other ink nor leaving its figure; each sized by its own width alone).
+// A unit in a column — runs of one figure, size and direction whose starts, ends or middles lie on one line
 // within ALIGN_TOL (across their direction; for turned runs a level or upright line of the page too), two units or more among
 // them (a legend's "…" tells its column's start) — keeps its column's edge as its anchor, whatever it read alone (a legend's
 // entry with its frame right after it was set from its end, the longest one centred). The units of one column, and those of one
@@ -406,8 +405,8 @@ interface Evidence {
 }
 
 /** a unit's band's ascent and descent at most, in em: past it no glyph stands at the size the unit is drawn at, so a run a glyph of
- *  which stands further from its baseline is no unit (below). The value is the reader's, which holds a figure row's band to it:
- *  today's src/pdf-reader/engine/layer-proto/figure-rows.mjs:37 BAND_MAX (checkFigures) (its copy in deps.mjs until 2026-11-14) */
+ *  which stands further from its baseline is no unit (below). The value is the reader's, which holds a figure row's band to it
+ *  (checkFigures' BAND_MAX) */
 const BAND_MAX = 4
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
@@ -528,7 +527,7 @@ function streamOf(pg: FigurePage, owners: readonly (OwnerName | null | undefined
       pid: x.pid ?? 0,
     })
   }
-  // (COPY: a turned glyph's owner where the page states one, `turnedOwners`: today's pages own none, own.mjs reads no turned glyph)
+  // (COPY: a turned glyph's owner where the page states one, `turnedOwners` (ink.ts); none where it states none)
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]!
@@ -669,7 +668,7 @@ export function figureUnitsOf(
   // (TeX's own glyph in a picture after a run of TeX's that spells a word: its line goes on over faces and colours, math aside)
   const texLine = (x: StreamGlyph, run: Run) =>
     run.word && !x.form && !run.form && x.picture > 0 && famOf(x.font) !== 'math' && famOf(run.font) !== 'math'
-  // (CHANGED: a word is told by its spacing, not its sizes, the owner's rule of 2026-11-10. A glyph is of the run's sizes where it
+  // (CHANGED: a word is told by its spacing, not its sizes, PDF-READER §18.24. A glyph is of the run's sizes where it
   // is set at one of them, within 1 %, as a run's glyphs were of its one size; or where it stands no word space past the glyph
   // before it (SPACE_GAP of their size, as `word` reads one below; a space glyph is a word space), its word's whatever its
   // size, whose size is the run's then too, so that the words after it at either size go on with it. iclr2025's faked small
@@ -683,7 +682,7 @@ export function figureUnitsOf(
     glyphMaps: Map<number, number>[] = [],
     turnedMaps: Map<number, number>[] = []
   // (CHANGED: the ink each crowded unit's band meets, by its k, and its stroke under its text: locate's relation reading judges
-  // it, figure-lines.ts, the owner's reformulation of 2026-11-10)
+  // it, figure-lines.ts, PDF-READER §18.26)
   const met = new Map<number, { items: TodayMet[]; under: number | null }>()
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
@@ -997,8 +996,8 @@ export function containersOf(
     // (the nodes of a box round a whole chart, 2608.06701v1 p2). A fill or a frame under words of one line, inside that line's
     // band (one band's height over and under its baseline, the reach figure-lines' torn reads a line's own ink in), is a
     // decoration that goes with its words: a code chip in a bubble (2608.06701v1 p9, 0.96 of the size), where a node's box
-    // stands past it (2608.06007v1 p8, 1.5 of the size and more). Other ink inside, a stroke, a legend's samples, is no reason:
-    // the coordinator's reading of 2026-11-11, what would end up in the wrong place, never whether ink is)
+    // stands past it (2608.06007v1 p8, 1.5 of the size and more). Other ink inside, a stroke, a legend's samples, is no reason
+    // (PDF-READER §18.36): what counts is what would end up in the wrong place, never whether ink is)
     for (let c = 0; c + 3 < B.length && alone; c += 4) {
       if (c / 4 === b || U?.has(c / 4)) continue
       const inner = SH.get(c / 4)
@@ -1168,7 +1167,7 @@ function spanIn(u: FigureUnit, b: readonly number[]): [number, number] {
  *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
  *  one figure, one direction, one size), and the lines its edges may share (`axes`: across its direction always; for a run
  *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line), and
- *  (CHANGED) its word space (`space`, spaceOf: setsOf's measure). Its size is setsOf's to key (CHANGED: today's keyed it to the
+ *  (CHANGED) its word space (`space`, spaceOf: setsOf's measure). Its size is setsOf's to key (CHANGED: within 1 %, not to the
  *  hundredth, see there) */
 function edgesOf(r: Run, gs: readonly StreamGlyph[]): Evidence {
   const f = r.frame,
@@ -1213,7 +1212,7 @@ const AXES = Object.freeze(['along', 'x', 'y'] as const)
 type Axis = (typeof AXES)[number]
 
 /**
- * A page's units in their columns and sets (the owner's rule of 2026-10-29: the labels of one group set at one size, each
+ * A page's units in their columns and sets (PDF-READER §19.12: the labels of one group a set, each
  * keeping the original's alignment). A column: the runs of one key (one figure, direction and size) whose starts, ends or
  * middles lie on one line within ALIGN_TOL of their size — across their direction, or for runs turned off the page's axes on
  * a level or upright line of the page (a turned axis's labels, each ending at its tick) —, units or not (a legend's "…", a
@@ -1237,8 +1236,8 @@ function setsOf(
   // votes are counted; the column line of each edge and axis, made for each)
   // (each edge's columns on each line: the runs of a key in the order of that edge's place, each joined to the one before
   // within the tolerance)
-  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. CHANGED: today's keyed the size to the
-  // hundredth, and 2411.13093v4 p18's lines 515 and 527, set at 7.07 pt among their paragraph's 7.06's, made a column of their own)
+  // (one size as a run is one: within 1 % of the size before it, as glyphs join a run. CHANGED: keyed to the hundredth, the size
+  // made 2411.13093v4 p18's lines 515 and 527, set at 7.07 pt among their paragraph's 7.06's, a column of their own)
   {
     const bySize = new Map<string, number[]>()
     // biome-ignore lint/suspicious/useIterableCallbackReturn: the list made and pushed to in one statement, as written; forEach drops what it returns
@@ -1305,7 +1304,7 @@ function setsOf(
   // their texts: one ("Population mean" twice, 2610.10492v1), none (2610.20808v1's "pt" "en" "es"), or one each, the one label
   // more letters, the other more spaces (2610.40394v1's "Ordinary Differential Equations" and "History & General Mathematics",
   // 2.348 pt both): no stretch, no measure. 2411.13093v4 p18's full lines' spaces run from 3.96 to 6.36 pt, its unjustified
-  // lines' 3.90. CHANGED: today's set a paragraph's indented line, which shares its end and not its start, from its end —
+  // lines' 3.90. CHANGED: a paragraph's indented line, which shares its end and not its start, is not set from its end:
   // 2411.13093v4 p18's prompt, an entry's translated first line flush against the box's right edge, its next line from the left)
   const measured = new Map<number, boolean>()
   const isMeasure = (line: Column, c: number) => {
@@ -1403,7 +1402,7 @@ function setsOf(
 
 /**
  * Each unit's room on its line (`before`, `after`: PDF units along its direction before its box's start and after its end), the
- * free line a translation longer than its original may take (the owner's rule of 2026-10-29: into free space, never touching
+ * free line a translation longer than its original may take (PDF-READER §19.12: into free space, never touching
  * other ink, never leaving its figure): the ink its band meets nearest along its baseline (roomOf's `free`: another glyph, a
  * stroke, a fill's edge, an image) less ROOM_CLEAR of its size; never past its figure's extent (pageInk's `figures`, with its
  * figure's glyphs) nor its page's box, where either edge of its band leaves them (spanIn); half the line between it and another unit whose band its own meets (a neighbour's translation may take

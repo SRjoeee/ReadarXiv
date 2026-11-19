@@ -1,8 +1,7 @@
-// COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at deps.mjs (today's, copied) and, where
+// COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at the package's modules and, where
 // marked COPY, nothing else but two changes, marked CHANGED (a formula's interior: an orphan line between two of a formula's lines
 // the formula's; a float of a type with no counter no float: its text the page's own outside the bodies): run by locate over
-// arXiv's page (../ink.ts), held equal to today's by tests/pdf-reader/locate-ink-today.test.ts, the changes apart. Today's file
-// stays the production prepare's until the cut-over.
+// arXiv's page (../ink.ts).
 // ADDED (no class moves): the float lines, each line the depth rule reads as its float's text (RULES' last `figures`), stated
 // with its float and why no unit owns it, and counted (`floatLines`, `floatCount`): PDF-READER §18.45.
 // The ledger of our final pass (docs/route/orphan-text.md, stage 1): every text glyph of every page given exactly one content
@@ -55,11 +54,11 @@ export interface LedgerPage {
 }
 /** a point of the marked compile as the makers read one (pageInk's): its name, and the glyphs and boxes the page showed before it */
 export type TodayPoint = InkPoint
-/** a page as today's makers read one (layout/wrap-final.mjs's pages: pageInk's result, its view, and the marks' points), as its
+/** a page as the ink makers read one (pageInk's result, its view, and the marks' points), as its
  *  callers hold it; each maker reads it by its own page type (LedgerPage, FigurePage, the ink units'), all of whose fields are
  *  optional */
 export type TodayPage = Record<string, unknown>
-/** a piece as today's front end holds one: its strings UTF-8 bytes read latin1; an element's `kind` where the instrument states it */
+/** a flat piece (ink.ts flatOf): its strings UTF-8 bytes read latin1; an element's `kind` where the instrument states it */
 export interface TodayPiece {
   t: string
   s?: string
@@ -67,9 +66,9 @@ export interface TodayPiece {
   id?: number
   kind?: string
 }
-/** a unit as the makers read today's front end's ({ kind, pieces }), null for none (a babel name's or a structural name's) */
+/** a unit as the makers read a source unit ({ kind, pieces }), null for none (a babel name's or a structural name's) */
 export type TodayUnit = { kind: string; pieces: TodayPiece[] } | null
-/** an owner of a glyph or a box as today's ownership names it, its group's name: a unit's text `u<id>`, its placeholders'
+/** an owner of a glyph or a box as ownership names it, its group's name: a unit's text `u<id>`, its placeholders'
  *  `u<id>.p`, its label's `u<id>.l` (own.mjs), a babel name's `n<occ>`, a figure text's `f<k>` (figureGroup); locate's own
  *  marks beside them ('u', 'b', 'f' and arXiv's ink: ink.ts), which these makers read as owned. A string, as it is: ownership
  *  on A has one writer after R3b, its module the reader of these names */
@@ -310,10 +309,10 @@ const RULES: readonly LineRule[] = Object.freeze(
       ['code', (l) => l.code > 0 && l.code >= CODE_SHARE * l.n],
       // (CHANGED: a line TeX set in a display, by its points (pageInk's `regions`, marks.mjs POINTS_TEX), wherever it stands — under
       // a footnote rule, in a box, a float, beside a column — and whatever its face: the formula's, kept as the paper has it.
-      // 2608.08481v1 p7's displays (7) and (8), REVTeX's widetext at the page's foot and set in a text face by \mathrm, were the
-      // foot's notes by their place and translated; today's reads them so. A glyph TeX set in text mode there (an \hbox in its math,
+      // 2608.08481v1 p7's displays (7) and (8), REVTeX's widetext at the page's foot and set in a text face by \mathrm, read by
+      // their place alone, would be the foot's notes and translated. A glyph TeX set in text mode there (an \hbox in its math,
       // `dtext`: \text, \mbox, a brace's label) is no formula's: a line mostly such text goes through the rules of place and is read
-      // as text, as today's (the coordinator's ruling of 2026-11-09: 2610.22299v1's display (1), a sentence), a formula line with a
+      // as text (PDF-READER §18.19: 2610.22299v1's display (1), a sentence), a formula line with a
       // short \text{if} stays the formula's)
       ['math', (l) => l.display > 0 && l.display >= CODE_SHARE * l.n],
       // (a biblatex entry's line in a column's body, whatever it holds: TeX set it in that entry — its URL alone, its numbers alone)

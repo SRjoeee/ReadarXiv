@@ -28,7 +28,7 @@ function texOf(list: readonly Piece[]): string {
 export function keepArtefacts(w: Work, claims: Pick<Claims, 'asElement'>): void {
   const { inkA, gA, atA, fixedFaces } = w.ix
   const { members, units, stats } = w
-  // ---- artefacts (Rule 1, the owner's ruling of 2026-11-10, PDF-READER §18.22): a unit whose text is set wholly in a face of one
+  // ---- artefacts (Rule 1, PDF-READER §18.22): a unit whose text is set wholly in a face of one
   // pitch, a typewriter's, is an artefact the paper presents exactly (code, a command, a prompt, JSON, an identifier, an OCR or
   // a model's sample): kept as the original, never translated, as a code environment's lines are (its unit kept, its member
   // fixed); a figure text so set too (ink.ts). Unless the paper's own body face, the face most of its source units' text glyphs

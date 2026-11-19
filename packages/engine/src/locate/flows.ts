@@ -11,17 +11,16 @@ import { isInk, r2 } from './lines.ts'
 import { assign, BRACKET, field, type Located, type Member, ON_ROW, sameColumn, type Work } from './work.ts'
 
 /** a shared line's separation at most, in em of the follower's size, read from the leader's ink end (sepOf, the separation
- *  Placed.join states): a run-in head's \quad, a float split's word space (today's need.mjs SHARED_SEP, rowLeadOf, over the
- *  layout file's ink rows; lab/typeset/registry.ts F.chains). Further apart, two pieces on one baseline are TeX's boxes set
- *  side by side (a running head's title and folio, two minipages' titles, 2609.36054v2 p1's footer "page 1 of 14" 4.3 em after
- *  a footnote's last line), not one line of a paragraph */
+ *  Placed.join states): a run-in head's \quad, a float split's word space. Further apart, two pieces on one baseline are TeX's
+ *  boxes set side by side (a running head's title and folio, two minipages' titles, 2609.36054v2 p1's footer "page 1 of 14"
+ *  4.3 em after a footnote's last line), not one line of a paragraph */
 const SHARED_SEP = 3
 
 export function flowsAndTies(w: Work): void {
   const { ins, B, NB, m, inkA, pageB, unitB, gA } = w.ix
   const { members, units } = w
   // ---- flows: a member whose first line is the one before's last line, on its baseline after its end (SHARED_SEP of its size at
-  // most, today's rowLeadOf), in one paragraph of TeX's (no paragraph end of B's between the one's last glyph and the other's
+  // most), in one paragraph of TeX's (no paragraph end of B's between the one's last glyph and the other's
   // first, where the instrument states them); a table's cell and a figure's text are set in boxes of their own, never in a
   // paragraph with another
   const ends: number[] = []
@@ -47,7 +46,7 @@ export function flowsAndTies(w: Work): void {
   const insert = (x: Member) => ownBox(x) || x.kind === 'caption' || x.kind === 'footnote'
   // (whether something of the page stays on a shared row between the member before's end there and the next one's first text:
   // a shown glyph of A whose advance's middle stands between the two, on the row (its baseline within ON_ROW of the row's size of
-  // the row's): today's keptBetween (RUN:1592, over the page's characters), the next member's own label among them, which goes
+  // the row's), the next member's own label among them, which goes
   // with it (ownLabelOnRow, RUN:1623). Placed.join's kept: the next member is not laid from the first one's end, where something
   // else stays there, and the first one's text on the row ends where TeX's did (keptAfter, RUN:1596))
   const keptOn = (a: Line, b: Line, size: number) => {
@@ -62,8 +61,8 @@ export function flowsAndTies(w: Work): void {
   }
   // (Placed.join's separation: from the leader's ink end on the row, its last line's glyphs' outlines (an advance where a glyph
   // has none), to the follower's first line: S.rowStart lays the follower from the translation's ink end (S.share's `ink`), so
-  // the separation it keeps is the original's from its ink; today's shared row is the file's row, its glyphs' ink (make.mjs
-  // rowsOf), 2610.40645v1 p34's "Proof of Proposition 4.4." and its theorem 4.49 pt apart drawn where v2's were 3.33)
+  // the separation it keeps is the original's from its ink: read between advance boxes, it falls short by the leader's last
+  // glyph's right side bearing (2610.40645v1 p34's "Proof of Proposition 4.4." and its theorem, 3.33 pt apart for 4.49)
   // (and its elements' boxes on that line, no glyph's, which travel with it in their crops: an ORCID icon after a name. Read
   // from the glyphs alone, the next member was laid the icon's width after it, the mark TeX set right after the icon apart from
   // the name: 2609.20976v1 p1, §18.60. An element's glyphs are among the line's glyphs already, read by their ink)
@@ -93,7 +92,7 @@ export function flowsAndTies(w: Work): void {
   // it, where B printed that: right before the member whose first glyph on B is the next glyph of its page some member owns
   // after its last, as a name leads the unit after it (leads.ts). amsthm's head no source unit owns, made on A, and its theorem's
   // text after it on the row (2608.25210v2 p4 "Definition 2. Minimal Provenance."): one flow, as a run-in head's and its
-  // paragraph's, today's shared line over every unit of the page (need.mjs rowLeadOf). One B never printed, or after which no
+  // paragraph's. One B never printed, or after which no
   // member begins on its page, stands after the instrument's, as made. Which box TeX set a member made on A in the instrument
   // does not say: none is the body an insert is passed over to)
   const madeOnA = (x: Member) => x.unit < 0 || x.unit >= ins.units.length
@@ -299,8 +298,8 @@ export function flowsAndTies(w: Work): void {
     const f = led.lines[0]
     if (!flow || !l || !f || n.lines.length !== 1) continue
     if (f[0] !== l[0] || Math.abs(f[4] - l[4]) > 0.5 || f[2] < l[3] - 0.05) continue
-    // (the name alone taken out of the flow it stood in, the members beside it left in theirs (two names on one line: Devin on
-    // #624), the flow dropped where it is left empty; and out of the size ties, which name it with that flow's members)
+    // (the name alone taken out of the flow it stood in, the members beside it left in theirs (two names on one line), the flow
+    // dropped where it is left empty; and out of the size ties, which name it with that flow's members)
     const own = flowOf.get(n.ord)
     if (own) {
       own.splice(own.indexOf(n.ord), 1)
@@ -328,7 +327,7 @@ export function flowsAndTies(w: Work): void {
 // theorem head between its label and its text, 2610.30034v1 p5's "Lemma 3 (Bellman-objective decomposition): Let"): its
 // alignment is TeX's line's, never a fragment's, read again over the row, its label's start to the last member's end on it;
 // its fragment's middle at the column's was a coincidence of the note's length, and its translation was set from the
-// fragment's middle, 36 pt into the column (today's maker reads the line with its label: MAKE:2121-2135)
+// fragment's middle, 36 pt into the column)
 /** a single line's alignment its block read centred (Member.byBlock), read again over the TeX line its flow says it shares: the
  *  row from its label's start (or the first member's start the flow joins before it on that row) to the last member's end the
  *  flow joins after it there; justified where the row's stack does not centre it (centredByBlock over the row, the row's own
