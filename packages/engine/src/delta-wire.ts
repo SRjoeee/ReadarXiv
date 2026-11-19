@@ -12,9 +12,6 @@ export const BASE_KINDS = Object.freeze(['delta', 'full'] as const)
 export type BaseKind = (typeof BASE_KINDS)[number]
 /** the delta's bytes at most (the reader holds it in memory beside the tails) */
 export const DELTA_MAX_BYTES: number = 24 * 2 ** 20
-/** the delta's share of our whole base page's bytes at most: past it a whole base (`full`) is kept, the delta saving little
- *  (a `latex` paper's fonts and images, re-encoded by another driver, match none of arXiv's) */
-export const DELTA_MAX_SHARE: number = 0.35
 /** the objects at most: of either document read, and of the delta written */
 export const DELTA_OBJECTS_MAX: number = 200_000
 /** the replaced pages' ranges a head names at most */
@@ -23,7 +20,7 @@ export const REPLACED_MAX: number = 4096
  *  a document it cannot read (the object layer, the page tree), `encrypted`, `xref` a cross-reference it will not read safely
  *  (hybrid, an entry not at its object, a section that does not parse), `stream` a stream whose /Length does not end at
  *  `endstream`, `pages` our pages more than arXiv's or a replaced page past ours, `boxes` a replaced page of ours whose box, rotation or user unit is not arXiv's page's (the delta keeps the original's page dict but its contents and resources), `bound` a bound of the builder's or of the
- *  delta (DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, the held and decoded bytes), `empty` no page replaced, `proof`
+ *  delta (DELTA_MAX_BYTES, DELTA_OBJECTS_MAX, the held and decoded bytes), `empty` no page replaced, `proof`
  *  the structural proof failed, `shape` a delta the page pass was given that does not check (a head's reader would
  *  refuse it) */
 export const DELTA_WHYS = Object.freeze([
