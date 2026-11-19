@@ -2,12 +2,12 @@
 // each field mirrors: types.ts). The source, edited here; taken at engine 065c1d973 from today's rules/layout-rules.json
 // (schema 10, version 10).
 
-import type { LanguageRules, ScriptRules } from './types.ts'
+import type { FitKnob, LanguageRules, ScriptRules } from './types.ts'
 
 /** each script's fields: what a target written in it reads where its language sets nothing of its own */
 export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
   Hans: {
-    order: ['track', 'borrow', 'lead', 'shrink'],
+    order: ['track', 'borrow', 'lead', 'shrink'] satisfies readonly FitKnob[],
     leadBase: 1.3,
     leadFloor: 1,
     leadEm: null,
@@ -46,7 +46,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     },
   },
   Hant: {
-    order: ['track', 'borrow', 'lead', 'shrink'],
+    order: ['track', 'borrow', 'lead', 'shrink'] satisfies readonly FitKnob[],
     leadBase: 1.3,
     leadFloor: 1,
     leadEm: null,
@@ -85,7 +85,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     },
   },
   Jpan: {
-    order: ['track', 'borrow', 'lead', 'shrink'],
+    order: ['track', 'borrow', 'lead', 'shrink'] satisfies readonly FitKnob[],
     leadBase: 1,
     leadFloor: 1,
     // (jlreq's line pitch, 1.7 zw at the body's size: jlreq.cls:411 `baselineskip={17zw/10}`, TeX Live 2025; one rule at every
@@ -126,7 +126,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     },
   },
   Kore: {
-    order: ['track', 'borrow', 'lead', 'shrink'],
+    order: ['track', 'borrow', 'lead', 'shrink'] satisfies readonly FitKnob[],
     // (xetexko's \linespread{1.38889} under its `hangul` option on the class's own pitch: xetexko.sty:2596-2601, luatexko.sty:
     // 992-997, TeX Live 2025; the owner's choice of 2026-11-15, docs/PDF-READER.md §18.89)
     leadBase: 1.38889,
@@ -174,7 +174,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     },
   },
   Latn: {
-    order: ['track', 'borrow', 'shrink', 'lead'],
+    order: ['track', 'borrow', 'shrink', 'lead'] satisfies readonly FitKnob[],
     leadBase: 1,
     leadFloor: 0.95,
     leadEm: null,
@@ -211,7 +211,7 @@ export const SCRIPTS: Readonly<Record<string, ScriptRules>> = {
     cjkFaces: null,
   },
   Cyrl: {
-    order: ['track', 'borrow', 'shrink', 'lead'],
+    order: ['track', 'borrow', 'shrink', 'lead'] satisfies readonly FitKnob[],
     leadBase: 1,
     leadFloor: 0.95,
     leadEm: null,

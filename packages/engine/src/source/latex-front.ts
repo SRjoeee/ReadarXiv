@@ -7,6 +7,7 @@
 // are Uint8Arrays.
 
 // ---------------------------------------------------------------- files and bytes
+import type { KnownKind } from '@readarxiv/format'
 import { edgeMark } from '@readarxiv/text'
 import { latin1 } from '../bounded-reads.ts'
 import { isMemoryError } from '../memory.ts'
@@ -2956,7 +2957,7 @@ function proseInEnvironment(macro: Macro): boolean {
 
 // ---------------------------------------------------------------- units
 /** the kinds set in the running text, which a display standing alone after them belongs to */
-const IN_TEXT = new Set(['para', 'theorem', 'abstract'])
+const IN_TEXT = new Set<string>(['para', 'theorem', 'abstract'] satisfies readonly KnownKind[])
 /** a display environment: a math environment but the inline one */
 const displayEnv = (env: string) => MATH_ENVS.test(env) && !/^math\*?$/.test(env)
 /**
@@ -8069,6 +8070,9 @@ export function frontMarks(units: readonly SourceUnit<WalkFile>[]): (u: SourceUn
  *  other row's end of a table's (authblk's \\authorcr: 2608.03994's authors, an \\author{\\authorcr …} in a box,
  *  stopped TeX at \\maketitle with a hundred "Missing } inserted") */
 const AUTHOR_WIDE: UnitMark = { start: '\\axtwide{', end: '}', whole: true }
+/** the breaks of a line or a row and the notes a wide unit cannot hold: latex.ltx's \\\\, \\newline, \\linebreak, \\thanks,
+ *  \\footnote, \\footnotemark, \\tabularnewline; TeX's \\par, \\cr, \\crcr; article.cls's \\and, authblk.sty's \\authorcr; the
+ *  conference styles' author separators \\And and \\AND (neurips_2026.sty's, iclr2026_conference.sty's, acl.sty's \\def) */
 const fitsWide = (u: SourceUnit<WalkFile>) =>
   !u.pieces.some(
     (p) =>

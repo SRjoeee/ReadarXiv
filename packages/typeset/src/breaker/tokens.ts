@@ -22,6 +22,7 @@
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
 // - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
+import type { KnownElKind } from '@readarxiv/format'
 import { cjkLeadRe, clustersOf, fullWidthPunctOf, kinsokuOf, keptPair, markOf, noStart, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
 import { dropMarks, type MarksAfter, type MarksTrace, mergeTail } from '../unit/marks.ts'
@@ -246,7 +247,7 @@ const CLOSERS_END = /[\p{Pe}\p{Pf}"']+$/u
 const SENTENCE_END = /\p{Sentence_Terminal}$/u
 /** the elements that stand between a title set in the line and its sentence, none of them its first word: a tie, a citation, a
  *  note's mark (engine bundle/run-in.ts's BETWEEN, by the part's El.kind) */
-const BETWEEN = new Set(['space', 'cite', 'note-mark', 'footnote'])
+const BETWEEN = new Set<string>(['space', 'cite', 'note-mark', 'footnote'] satisfies readonly KnownElKind[])
 
 const GROUP_ITALIC = 1,
   GROUP_BOLD = 2,

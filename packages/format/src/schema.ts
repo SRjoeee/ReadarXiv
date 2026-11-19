@@ -34,6 +34,74 @@ export const ElKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
 /** a span's style: an open string (bold italic mono sc link colour other …) */
 export const SpanKind = z.string().regex(/^[a-z][a-z-]{0,31}$/)
 
+// The values the engine makes of each open string above, named: Kind, ElKind and SpanKind stay open (a reader takes a
+// value it does not know: a part made by an engine before or after this one may hold another), and a list of the code that
+// reads some of them is declared of these (`satisfies`), so that TypeScript holds every member to a value the code makes.
+/** the unit kinds the engine makes (Kind): the source reader's (source/latex-front.ts: para, heading, caption, footnote, cell,
+ *  abstract, theorem, figure, author, affiliation, reference), the ink units' (locate/ink-units.ts INK_KIND, locate/ink.ts's
+ *  inkfigures), a babel name's (instrument/units.ts NAME_KIND) and the author block's named form (bundle/names.ts NAMED_KIND) */
+export type KnownKind =
+  | 'para'
+  | 'heading'
+  | 'caption'
+  | 'footnote'
+  | 'cell'
+  | 'abstract'
+  | 'theorem'
+  | 'figure'
+  | 'author'
+  | 'affiliation'
+  | 'reference'
+  | 'inkheads'
+  | 'inkcontents'
+  | 'inknotes'
+  | 'inkorphan'
+  | 'inknames'
+  | 'inkreferences'
+  | 'inkfigures'
+  | 'name'
+  | 'named'
+/** the element kinds the engine makes (ElKind, a unit's piece): instrument/instrument.ts elementKindOf's (a tie `space`, a
+ *  forced break `break`, marks/marks.ts MARK_CLASSES', `other`), a figure text's (locate/figure-lines.ts: code, math, cite, ref,
+ *  symbol), a block name's (bundle/names.ts PERSON_KIND), and a nested unit's mark as locate/geometry.ts reads it (`note-mark`) */
+export type KnownElKind =
+  | 'space'
+  | 'break'
+  | 'math'
+  | 'display'
+  | 'cite'
+  | 'ref'
+  | 'eqref'
+  | 'code'
+  | 'url'
+  | 'footnote'
+  | 'macro'
+  | 'number'
+  | 'other'
+  | 'symbol'
+  | 'person'
+  | 'note-mark'
+/** the classes the engine draws an element by (El.kind on A, ElKind: instrument/layer1.ts phClass's and instrument/instrument.ts
+ *  phClass2's: a paper's own text macro `umacro`) */
+export type KnownElClass = 'cite' | 'num' | 'display' | 'other' | 'symbol' | 'macro' | 'umacro' | 'space' | 'zero'
+/** a face's change as the engine reads it of a paper's macro or a figure text's run (locate/facts.ts changeOf): its role, its
+ *  weight and its slant where each differs from the face around it, joined by `-` */
+type FaceRole = 'serif' | 'sans' | 'mono'
+type FaceWeight = 'bold' | 'medium'
+type FaceSlant = 'italic' | 'upright'
+type FaceChange =
+  | FaceRole
+  | FaceWeight
+  | FaceSlant
+  | `${FaceRole}-${FaceWeight}`
+  | `${FaceRole}-${FaceSlant}`
+  | `${FaceWeight}-${FaceSlant}`
+  | `${FaceRole}-${FaceWeight}-${FaceSlant}`
+/** the span styles the engine makes (SpanKind): a group's command's (instrument/instrument.ts SPAN_STYLES, locate/ink.ts
+ *  groupStyleOf: bold, italic, mono, sc, link, colour, underline; `other` for any other group) and a figure text's run's face
+ *  change (locate/ink.ts, `colour` where none) */
+export type KnownSpanKind = 'bold' | 'italic' | 'mono' | 'sc' | 'link' | 'colour' | 'underline' | 'other' | FaceChange
+
 export type Piece =
   | { t: 'text'; s: string }
   | {

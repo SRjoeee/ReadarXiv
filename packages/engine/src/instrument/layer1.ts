@@ -137,7 +137,9 @@ const RULE = /^\s*\\rule\b/
 const ZERO =
   /^(?:\\(?:begingroup|endgroup|bgroup|egroup|footnotesize|scriptsize|tiny|small|normalsize|large|Large|LARGE|huge|Huge|selectfont|hline|centering|raggedright|par|bf|it|rm|em|sf|tt|sc|bfseries|itshape|rmfamily|mdseries|upshape|protect|toprule|midrule|bottomrule|smallskip|medskip|bigskip|vfill|hfill|null|arraystretch|clearpage|newpage|thanks|xspace|noalign|cr|strut)\b\*?|\\(?:v|h)space\*?\{[^}]*\}|\\fontsize\{[^}]*\}\{[^}]*\}|\\label\{[^}]*\}|\\c?line\{[^}]*\}|\\(?:v|h)skip\s*[-\d.]+\s*[a-z]*|\\setlength\{[^}]*\}\{[^}]*\}|\\arraystretch\{[^}]*\}|\\renewcommand.*|\\addlinespace(?:\[[^\]]*\])?|\\specialrule\{[^}]*\}\{[^}]*\}\{[^}]*\}|\\cmidrule(?:\[[^\]]*\])?(?:\([^)]*\))?\{[^}]*\}|\\rule(?:\[[^\]]*\])?\{0(?:\.0*)?[a-z]*\}\{[^}]*\}|\\arrayrulecolor\{[^}]*\}|\\includegraphics\*?(?:\[[^\]]*\])?\{(?:[^{}]|\{[^{}]*\})*\})$/
 // (a control space is a backslash and any white space, a tab or a line's end as well as a space: rules/tex-kernel.mjs counts
-// all three, and \<newline> read as 'zero' drew nothing where the original has a space: "vs.\<newline>answer")
+// all three, and \<newline> read as 'zero' drew nothing where the original has a space: "vs.\<newline>answer"). The spaces:
+// TeX's control space and latex.ltx's ~, \,, \;, \:, \\, \quad, \qquad, \enspace, \thinspace; article.cls's \and; the
+// conference styles' author separators \And and \AND (neurips_2026.sty's, iclr2026_conference.sty's, acl.sty's \def)
 const SPACE = /^(?:~|\\,|\\;|\\:|\\\s|\\quad|\\qquad|\\\\(?:\[[^\]]*\])?|\\And|\\and|\\AND|\\enspace|\\thinspace)$/
 /** a citation: latex.ltx's \\cite, natbib.sty's \\citep, \\citet, \\citealp, \\citealt, \\citeauthor, \\citeyear, biblatex's
  *  \\parencite and \\textcite (its styles' \\DeclareCiteCommand, numeric.cbx's) and \\autocite (biblatex.sty's) */

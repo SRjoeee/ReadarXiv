@@ -8,7 +8,7 @@
 // labels' measures. TeX's own measure of a line where its paragraph states one is the phase's second step, measures.ts's.
 // Phase 10, rooms: each member's room under and after its lines. Reads the index and the record's `members` (their
 // travelling ink, phase 9's end marks among it) and `units`; writes the members' rooms.
-import type { El, Ink, Label, Line, Piece, Room } from '@readarxiv/format'
+import type { El, Ink, KnownElClass, KnownElKind, Label, Line, Piece, Room } from '@readarxiv/format'
 import type { Doc, DocGlyph } from '../doc.ts'
 import { ROLE, type TexFrame } from '../instrument.ts'
 import {
@@ -37,9 +37,17 @@ import { gapsOf } from './gaps.ts'
 import { field, INKED_CLASSES, type Member, ON_ROW, piecesOf, standsOn, travellingInk, type Work } from './work.ts'
 
 /** an element kind whose glyphs are a reading of it: its text is stated */
-const TEXT_KINDS = new Set(['cite', 'ref', 'eqref', 'url', 'number', 'footnote', 'macro'])
+const TEXT_KINDS = new Set<string>([
+  'cite',
+  'ref',
+  'eqref',
+  'url',
+  'number',
+  'footnote',
+  'macro',
+] satisfies readonly KnownElKind[])
 /** the classes the typesetter draws as the page's text (drawnAs L2:1757: a citation, a reference, a macro) */
-const TEXT_CLASSES = new Set(['cite', 'num', 'macro', 'umacro'])
+const TEXT_CLASSES = new Set<string>(['cite', 'num', 'macro', 'umacro'] satisfies readonly KnownElClass[])
 const LABEL_KIND: Record<string, Label['kind']> = {
   caption: 'float',
   heading: 'head',

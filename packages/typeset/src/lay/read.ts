@@ -20,7 +20,7 @@
 // A name leading the unit (U.lead) is handed in, set from the name the part binds to it (lay/lead.ts). What the part does not
 // state yet is passed as today does without it, each named where it is read: a rendering's runs of one fill and its faked
 // small capitals, a colour piece's run.
-import type { El, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
+import type { El, KnownElClass, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.ts'
 import { measure } from '../breaker/measure.ts'
@@ -39,7 +39,15 @@ import { type Rect, rectKey } from '../util.ts'
 type Line = Placed['lines'][number]
 const KEPT = 1
 /** the classes that draw ink of their own (TEX:18 VISIBLE), the text macros (TEX:21) */
-const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
+const VISIBLE = new Set<string>([
+  'cite',
+  'num',
+  'other',
+  'macro',
+  'umacro',
+  'display',
+  'symbol',
+] satisfies readonly KnownElClass[])
 const MACRO_CLASSES = new Set(['macro', 'umacro'])
 
 /** a row's unit as today's rules read it (rows.mjs unitOf): its kind, the paper's title flag, its state and its pieces in the

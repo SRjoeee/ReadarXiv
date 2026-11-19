@@ -206,7 +206,13 @@ const PUNCT = '.,;:!?'
 const MOVED: ReadonlySet<string | undefined> = new Set(PUNCT)
 /** the classes whose commands the probe asks about: a package may look past their closing brace (a paper's macro has its
  *  opening mark alone (LOOKS_AHEAD), but one that reads nothing past its arguments, which the probe asks about too) */
-const ASKED: ReadonlySet<string | null> = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
+const ASKED: ReadonlySet<string | null> = new Set([
+  'cite',
+  'ref',
+  'eqref',
+  'url',
+  'footnote',
+] satisfies readonly MarkClass[])
 /** the commands asked about at most, a paper; and of the paper's macros that read nothing past their arguments, apart (a
  *  paper may set its every number by one: 2610.21098 calls 316), each source at most COMPLETE_SRC_MAX long. Counts of
  *  commands: COMPLETE_PROBE_MAX is past that paper's 316, PROBE_MAX is unmeasured */
@@ -2266,7 +2272,7 @@ export function classNamesTex(texts: readonly string[]): string {
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
  *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
  *  alternation and the prefilter from it, so the two cannot drift. Each a macro our TeX defines: \axtpma, \axtpmm, \axtpm,
- *  \axthpk, \axttg and \axthmark LAYOUT_TEX's, \axtnma and \axtnmb NAMES_TEX's */
+ *  \axthpk, \axttg and \axthmark LAYOUT_TEX's, \axtnma and \axtnmb NAMES_TEX's (held to them by tests/mirrors.test.ts) */
 export const UNMARK_CS = ['axtpma', 'axtpmm', 'axtpm', 'axthpk', 'axttg', 'axthmark', 'axtnma', 'axtnmb'] as const
 
 /** a babel name's marks as a pass writes them into the aux and the lists \@starttoc reads (NAMES_TEX: `\protect \axtnma {<key>}`

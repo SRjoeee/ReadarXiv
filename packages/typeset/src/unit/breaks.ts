@@ -7,7 +7,7 @@
 // paragraph's line TeX's paragraph point (El.opens, SpanAt.opens, and a paragraph's first word, Placed.paras: `paraPieces` cuts
 // the row at the sentence start paired with it, else directly after the element it stands after, Placed.parasAfter); the
 // translation's order decides the rest, as today's.
-import type { El, Placed, SpanAt } from '@readarxiv/format'
+import type { El, KnownElClass, Placed, SpanAt } from '@readarxiv/format'
 import { firstWordAt, projectionOf, type Sentences, startsInProjection, worded } from '../lay/lit.ts'
 import { type Rect, rectKey } from '../util.ts'
 
@@ -46,7 +46,15 @@ export type Break = { next: number; room: number | null; pitch: number | null; p
 /** layout/file.mjs:272 PH_FLAG */
 export const PH_FLAG = Object.freeze({ EMPTY: 16, LOST: 32, TEXT: 64, JOINED: 128, OUTSIDE: 256 })
 /** v0's placeholder classes that draw ink of their own (TEX:18) */
-const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
+const VISIBLE = new Set<string>([
+  'cite',
+  'num',
+  'other',
+  'macro',
+  'umacro',
+  'display',
+  'symbol',
+] satisfies readonly KnownElClass[])
 
 // ---- break-room.mjs: TeX's room after a forced break
 /** a frame's pitch: the median of its own lines' gaps, the mean of the two middles (break-room.mjs:8 pitchOf) */

@@ -34,7 +34,7 @@
 // off its own text alone: a group whose text is all another scope's (a declaration's run, a named group) is drawn in that
 // scope's face, and one stated on it too would be applied twice (`{\em …}`: the stated italic, then the switch's toggle).
 // Votes of glyphs and inequalities, no threshold.
-import type { Piece, Style } from '@readarxiv/format'
+import type { KnownSpanKind, Piece, Style } from '@readarxiv/format'
 import { lcs } from '../align/myers.ts'
 import { classifyFont, fold, mostOf, type StyleGlyph, styleOf, unitSize } from './facts.ts'
 
@@ -60,7 +60,7 @@ const WORK_PER_LETTER = 256
 /** the group styles whose command names no face (the group table's, ink.ts groupStyleOf: a link, a colour piece, an
  *  underline, any other command or a bare group); every other names one (bold, italic, mono, small capitals, or what a paper's
  *  macro was read to change, marks/faces.ts) */
-const NO_FACE = new Set(['other', 'link', 'colour', 'underline'])
+const NO_FACE = new Set<string>(['other', 'link', 'colour', 'underline'] satisfies readonly KnownSpanKind[])
 /** whether a group style (the group table's, or a paper's macro's read face) names a face */
 export const namesFace = (style: string): boolean => !NO_FACE.has(style)
 

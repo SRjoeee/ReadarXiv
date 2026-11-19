@@ -77,6 +77,7 @@
 //      drawn over it), no pieces (nothing is sent), its glyphs in no group (the wrap and its ledger as before). A display TeX set
 //      (its region, pageInk's `regions`) is one block whatever its lines' places, its number with it (CHANGED).
 // Pure arithmetic; an original module (no port statement).
+import type { KnownElKind } from '@readarxiv/format'
 import type { InkRegion } from '../ink.ts'
 import { unitClass } from './content-classes.ts'
 import { accentTexts } from './accents.ts'
@@ -234,7 +235,7 @@ export const UNIT_FLAG = Object.freeze({
 })
 /** the kinds the instrument states where today's classOf named none: `other`, and a tie's `space` and a forced break's `break`
  *  (both INVISIBLE to today's classOf; stated since lane fig-cut, 2026-11-10) */
-const NONE = new Set(['other', 'space', 'break'])
+const NONE = new Set<string>(['other', 'space', 'break'] satisfies readonly KnownElKind[])
 /** a piece's class by the kind the instrument states of it (an element's kind, `other` where it names none), and of an ink unit's
  *  own placeholder (its kept run's characters, phSource: `$…$` or `\url{…}`) what today's classOf (layout/marks.mjs:72-94) answers
  *  for those two forms: a formula of no character `$$`, DISPLAY (translate/mt.mjs:89), which phSource never writes (a run has a

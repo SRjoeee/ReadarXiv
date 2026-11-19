@@ -1636,6 +1636,8 @@ export function splitInkOf(
   units.forEach((unit, u) => {
     const P = unit?.pieces ?? []
     if (twice.has(u)) return
+    // (a piece's own points by the suffix our marked TeX writes them with: marks/marks.ts's `\axtpma{…a}`, `\axtpmm{…a}` and
+    // `\axthpk{…a}` an opening, `\axtpm{…b}` a closing, `\axttg{…g}` a trailing macro's group's end: OWN_POINT)
     const point = (k: number) => ['a', 'b', 'g'].some((x) => at.has(`p${u}.${k}${x}`) || at.has(`n${u}.${k}${x}`))
     // (glyphs the reading may take: no unit's, or the unit's own text, which own.mjs gives what stands between its points)
     const mine = (p: number, g: number) => {

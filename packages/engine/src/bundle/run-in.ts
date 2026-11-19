@@ -25,21 +25,21 @@
 //     cutter reads as two sentences, is no title and its sentence);
 // and the group's text ends with no closing mark of its own (Unicode's Terminal_Punctuation or a dash, past closing brackets and
 // quotes) and states no `stop` (a macro's own `{\bf #1.}`): a title so ended, or followed by its colon, is separated already.
-import type { Piece } from '@readarxiv/format'
+import type { KnownElKind, KnownSpanKind, Piece } from '@readarxiv/format'
 import { opensAfter } from '@readarxiv/text'
 import { standInOf } from '../instrument/language.ts'
 
 /** an element in a projection the sentence cutter reads */
 const OBJECT = '\ufffc'
 /** the group styles that set no face (format's SpanKind) */
-const NO_FACE = new Set(['colour', 'link', 'underline', 'other'])
+const NO_FACE = new Set<string>(['colour', 'link', 'underline', 'other'] satisfies readonly KnownSpanKind[])
 /** a mark a text ends with that closes it: Unicode's Terminal_Punctuation (a full stop, a colon, a semicolon, a comma, …) or a
  *  dash, read past closing brackets and quotes */
 const CLOSING = /[\p{Terminal_Punctuation}\p{Pd}]$/u
 const CLOSERS = /[\p{Pe}\p{Pf}"']+$/u
 /** the elements that may stand between the title and its sentence's first word, none of them text: a tie, a citation, a note's
  *  mark (a nested unit is a note) */
-const BETWEEN = new Set(['space', 'cite', 'note-mark', 'footnote'])
+const BETWEEN = new Set<string>(['space', 'cite', 'note-mark', 'footnote'] satisfies readonly KnownElKind[])
 
 type Span = Extract<Piece, { t: 'span' }>
 /** the unit's pieces flat, in order, each at its offset in the unit's projection (its text, each element and nested unit one

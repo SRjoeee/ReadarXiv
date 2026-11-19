@@ -6,9 +6,11 @@
 // each language's left and right hyphenation minimums are babel's; the heads and references are TeX Live's (heads.ts,
 // refs.ts). The other fields are the rule set's own values.
 
+/** the fit's knobs a script orders (ScriptRules.order) */
+export type FitKnob = 'track' | 'borrow' | 'lead' | 'shrink'
 /** a script's fields: the fit's, the breaking's, the cells', the faces' (rules/layout.mjs SCRIPT_FIELDS) */
 export type ScriptRules = {
-  order: readonly ('track' | 'borrow' | 'lead' | 'shrink')[]
+  order: readonly FitKnob[]
   leadBase: number
   leadFloor: number
   /** a script whose class states its line pitch in ems of a block's own size (jlreq's 1.7 for Japanese): the leading the fit starts
