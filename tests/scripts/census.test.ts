@@ -820,11 +820,8 @@ describe('the history reading (DEFINITIONS.history)', () => {
       "// the coordinator's R7: the network down",
       '// a design-performance item (Q7)',
       '// its lane cuts them by its own limits alone',
-      '// (docs/route/orphan-text.md stage 5)',
       '// evened by a size step in the first round',
       '// R1 of PDF-READER §18.72: no ordinary word',
-      '// a page\'s figure texts (the content class `figures`, docs/route/orphan-text.md',
-      '// stage 5), each drawn in its translation',
     ])
     expect(told).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
   })
@@ -857,5 +854,80 @@ describe('the history reading (DEFINITIONS.history)', () => {
       '// decided 2026-10-07 beside it',
     ])
     expect(told).toEqual([2])
+  })
+})
+
+describe("the history reading: this repository's own names, a third party's files (DEFINITIONS.history)", () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'census-names-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('package.json', JSON.stringify({ name: 'e4', dependencies: { libx: '1.0.0' } }))
+    put('.gitignore', 'node_modules\n')
+    // a dependency's distribution: its build files, one of whose names this repository also holds (tools/lib.mjs)
+    put('node_modules/libx/package.json', JSON.stringify({ name: 'libx' }))
+    put('node_modules/libx/build/lib.worker.mjs', 'export {}\n')
+    put('node_modules/libx/build/lib.mjs', 'export {}\n')
+    put('tools/lib.mjs', 'export {}\n')
+    // this repository's documents: a label given right after a bold rule, a part of it named, a table of stages
+    put(
+      'docs/DESIGN.md',
+      [
+        '# Design',
+        '## 16. The prepare',
+        '**The marked compile is the pass loop** (Q1, the lab design): the files carried in (`carried`, Q1\'s option (i)).',
+        '**A marked request that dies is asked once more, reduced** (Q2; `reduce`).',
+        '**Over the 88** (stage 1a, a lane of the lab): every object the same.',
+        '',
+      ].join('\n'),
+    )
+    put(
+      'docs/route/notes.md',
+      ['## 7. Versions, stages', '', '| Stage | Scope |', '|---|---|', '| 1 (built) | the ledger |', '| 2 (built) | ink units |', '| 5 (built) | figure text |', ''].join('\n'),
+    )
+    // a file that cites both documents, and one that cites none
+    put(
+      'packages/p/src/a.ts',
+      [
+        "// the pass loop (DESIGN §16's Q1)",
+        '// asked once more without the optional classes (Q2)',
+        '// carried into pass 1 (option (i) of Q1)',
+        '// a folio: stage 2 brackets them (notes.md §7)',
+        "// a folio: the lab plan's stage 3 (notes.md §7)",
+        "// the worker's Glyph (lib.worker.mjs:32428-32439): the library's contract",
+        '// a line rectangle (tex.mjs:269 texRects)',
+        "// the run (Q7, the lab's performance design)",
+        "// the old reader's parse (lib.mjs:12)",
+        '// (docs/route/notes.md stage 5)',
+        "// a page's figure texts (the content class `figures`, docs/route/notes.md",
+        '// stage 5), each drawn in its translation',
+        '// a gate, which must count none (stage 1a fails a paper with one; DESIGN §16)',
+        'export const a = 1',
+        '',
+      ].join('\n'),
+    )
+    put('packages/p/src/b.ts', ['// the pass loop (Q1, convergeThenMark)', '// built for the right pane first (stage 2, deliverable 7)', 'export const b = 1', ''].join('\n'))
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    execFileSync('git', ['add', '-A'], { cwd: root })
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const told = async (path: string) => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const h = scanTree('engine', root, ENGINE_PROFILE).files.get(path)!.history!
+    return [...new Set([...h.todays, ...h.dated, ...h.named, ...Object.values(h.forms).flat()])].sort((a, b) => a - b)
+  }
+  it('reads no name a document of this repository defines in a file that cites it, and every other as before', async () => {
+    // Q1, Q2 and Q1's option (i) are DESIGN's labels, stages 2 and 5 rows of notes.md's table of stages (a stage named on the
+    // line after the document's path too): this file cites both. Stage 3 and Q7 are no document's; a file that cites neither
+    // document reads Q1 and stage 2 as the lab's. A stage named after a bold heading (DESIGN's stage 1a) is the lab's, cited
+    expect((await told('packages/p/src/a.ts')).filter(l => l <= 5 || l >= 8)).toEqual([5, 8, 9, 13])
+    expect(await told('packages/p/src/b.ts')).toEqual([1, 2])
+  })
+  it("reads no file a dependency distributes, cited by its line, as the old engine's; one this repository holds too stays", async () => {
+    // lib.worker.mjs is libx's alone; tex.mjs is no dependency's; lib.mjs is libx's and this repository's (tools/lib.mjs)
+    expect((await told('packages/p/src/a.ts')).filter(l => l >= 6 && l <= 9)).toEqual([7, 8, 9])
   })
 })
