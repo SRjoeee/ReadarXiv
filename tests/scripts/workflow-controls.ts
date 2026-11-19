@@ -82,9 +82,17 @@ export function controlsOf(ci: string): Control[] {
     c('forms', 'an anchor', inReader('    env: &shared\n      CI: "1"\n')),
     c('forms', 'a merge of an alias', inReader('    env:\n      <<: *shared\n')),
     c('forms', 'a tag', once('    timeout-minutes: 30\n', '    timeout-minutes: !!int "30"\n')),
+    // a line led by `#` inside a block scalar is the scalar's text, not a YAML comment: GitHub reads its expressions (in a script,
+    // before the shell sees a comment there)
+    c('secrets', "an expression in a script's shell comment", asScript(`run: |\n          # ${EXPR('github.event.pull_request.title')}\n          node packages/reader/e2e/run.mjs`)),
+    c('secrets', "a secret in a script's shell comment", asScript(`run: |\n          # ${EXPR('secrets.ANY')}\n          node packages/reader/e2e/run.mjs`)),
+    c('secrets', "a secret in a step's environment's value written as a block, its line led by #", asScript(`run: node packages/reader/e2e/run.mjs\n        env:\n          NOTE: |\n            # ${EXPR('secrets.ANY')}`)),
+    c('secrets', "a secret in an action's input written as a block, its line led by #", once('          node-version: 22\n', `          node-version: 22\n          note: |\n            # ${EXPR('secrets.ANY')}\n`)),
     // the two browser jobs hold nothing
     c('browser jobs', 'a variable by the bracket form', inReader(`    env:\n      X: ${EXPR("vars['ANY']")}\n`)),
     c('browser jobs', "the job's token by the bracket form", inReader(`    env:\n      X: ${EXPR("github['token']")}\n`)),
+    c('browser jobs', "a variable in a job's environment's value written as a block, its line led by #", inReader(`    env:\n      X: |\n        # ${EXPR("vars['ANY']")}\n`)),
+    c('browser jobs', "the job's token in an if written as a block, its line led by #", asScript(`run: node packages/reader/e2e/run.mjs\n        if: |\n          # ${EXPR('github.token')}\n          true`)),
     c('browser jobs', "the job's token, the context in capitals", inReader(`    env:\n      X: ${EXPR('GITHUB.TOKEN')}\n`)),
   ]
 }

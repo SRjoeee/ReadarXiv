@@ -5,9 +5,32 @@
 // indentation, a scalar in another style, an anchor, an alias, a tag, an escape, the bracket form or another case of a context) is
 // itself a violation, never a pass, so that no valid spelling a reader skips can carry what its rule refuses.
 
-/** a workflow's lines that are not comments: what GitHub reads (a comment after a value stays: `uses:`'s version) */
-export const codeOf = (yml: string) => yml.split('\n').filter(l => !/^\s*#/.test(l)).join('\n')
 const indentOf = (l: string) => l.length - l.trimStart().length
+/**
+ * A workflow's lines but its YAML comments: what GitHub reads (a comment after a value stays: `uses:`'s version). A line led by
+ * `#` is a YAML comment only outside a scalar's text: below a key or a sequence's entry with a value on its line (a block scalar's
+ * `|` or `>`, or a plain or quoted scalar going on), every line deeper than that key is the value's own, whatever it begins with.
+ * In a script it is a shell comment, which GitHub reads for its expressions before the shell reads it; in an environment's value,
+ * an action's input or an `if:`, it is text GitHub reads all the same. Such a line is kept, and every reader below reads it
+ */
+export function codeOf(yml: string): string {
+  const out: string[] = []
+  /** the column of the key whose value's text the lines deeper than it are, or -1 outside any */
+  let owner = -1
+  for (const l of yml.split('\n')) {
+    if (owner >= 0 && (l.trim() === '' || indentOf(l) > owner)) {
+      out.push(l)
+      continue
+    }
+    owner = -1
+    if (/^\s*#/.test(l)) continue
+    out.push(l)
+    // (a key or an entry with a value on its line, the value no comment: the lines deeper than its key are that value's)
+    const m = /^(\s*)(- )?(?:([^\s#'"][^:]*?|"[^"]*"|'[^']*'):(?=\s|$))?\s*(.*)$/.exec(l)
+    if (m && m[4] !== '' && !m[4]!.startsWith('#') && (m[3] !== undefined || m[2])) owner = m[1]!.length + (m[2] && m[3] !== undefined ? 2 : 0)
+  }
+  return out.join('\n')
+}
 /** an expression's and a quoted scalar's text taken out of a line (each quoted scalar left as '' so that the line keeps its shape) */
 const bare = (l: string) => l.replace(/\$\{\{.*?\}\}/g, '').replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, "''")
 

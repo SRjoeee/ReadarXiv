@@ -27,8 +27,10 @@ of `.github/workflows`, with what is particular to the rules gate's workflows an
 `tests/scripts/rules-workflows.test.ts`. No YAML parser: the files are held to the one plain form they are written in, and every
 reader fails closed on form. A spelling of YAML or of an expression it does not read is itself a violation, never a pass: a quoted
 key, a flow mapping, a key at another indentation, a script in double quotes (YAML reads its escapes before GitHub reads its
-expressions), an anchor, an alias, a merge, a tag, an escape, a step at another indentation (rule 0, `forms`). Each rule is shown to
-refuse what it is for in every spelling that could carry it (`tests/scripts/workflow-controls.ts`: 48 controls).
+expressions), an anchor, an alias, a merge, a tag, an escape, a step at another indentation (rule 0, `forms`). A line led by `#`
+inside a scalar's text (a script's shell comment, a line of a value written as a block) is that text, not a YAML comment: GitHub
+reads its expressions, and every rule reads it. Each rule is shown to
+refuse what it is for in every spelling that could carry it (`tests/scripts/workflow-controls.ts`: 54 controls).
 
 1. **GitHub's runners alone.** Every job has exactly one `runs-on:` naming a hosted image (`ubuntu-latest`, `ubuntu-24.04`) as a
    plain value at the job's level; a flow sequence, an expression, a block sequence, a quoted key or an alias is refused, and no
