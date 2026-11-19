@@ -365,7 +365,7 @@ function wholeOf(content: readonly Piece[]): Set<string> {
   }
 }
 
-/** a bibliography's entries' kinds (the references' class, packages/engine content-classes.mjs UNIT_CLASS: a \\bibitem's, an
+/** a bibliography's entries' kinds (the references' class, packages/engine locate/content-classes.ts UNIT_CLASS: a \\bibitem's, an
  *  entry's names, a biblatex entry's ink): no reference is asked for their groups, a venue's italics and BibTeX's case-protecting
  *  braces, sent only under the References toggle and never measured (4,673 of the 6,242 groups over the 88 papers, 161,000 of
  *  their 200,000 characters; docs/DESIGN.md §16) */

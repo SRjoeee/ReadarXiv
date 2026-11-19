@@ -1,5 +1,5 @@
-// Microsoft Edge's free translation endpoint, written from its measured behaviour (translation dossier §16,
-// ext-providers-config §16) as the owner's own code. No key. It keeps markers, not tags; it answers each text with its own
+// Microsoft Edge's free translation endpoint, written from its measured behaviour (DESIGN §8.3)
+// as our own code. No key. It keeps markers, not tags; it answers each text with its own
 // sentence lengths (`sentLen`, unrequested, usable on white-space-collapsed text: 60/60 counts matched); it refuses over
 // 50,000 characters a request with a plain-text 400; throughput comes from concurrency (2,000-character requests, 8 in
 // flight: 23 k characters/s, no 429 in 30); from Cloudflare it refuses a request with no browser User-Agent, which the

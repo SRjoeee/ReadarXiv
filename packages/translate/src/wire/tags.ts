@@ -89,8 +89,8 @@ const B_CLOSE = /<\/b\s*>/y
  * 65 places of 13,233 zh spans in the lab's Google store, and translated a span's words out of their sentence ("the {order}
  * we take" -> 命令, "each of the {m} coordinates" -> 米); written as a `<span>`, the dots were gone in 61 of 61 units and those
  * words read in their sentences (顺序, "m 个"); 3 of 122 units refused by the token contract (Google moved an element and
- * left its token as text: the next translator's). The element's tag is the shortest Google keeps whole (design-performance
- * Q5): of `<b>xn</b>`, `<b translate=no>xn</b>`, `<span translate=no>xn</span>` and `<span translate="no">xn</span>`, asked
+ * left its token as text: the next translator's). The element's tag is the shortest Google keeps whole (DESIGN
+ * §6.2): of `<b>xn</b>`, `<b translate=no>xn</b>`, `<span translate=no>xn</span>` and `<span translate="no">xn</span>`, asked
  * in that order over 280 units of five languages (measured 2026-11-13), the bare `<b>` lost 173 of 1,909 elements
  * (dropped, or merged into a word), `<b translate=no>` none, every class (a stop before an element, ellipses, lost stops, a
  * unit left as the source) as with `<span id="n" translate="no">`, the tag back as sent 1,909 of 1,909; asked again over
@@ -219,7 +219,7 @@ const sentProjection = (content: readonly Piece[]): string =>
 const sentLength = (content: readonly Piece[]): number => sentProjection(content).length
 
 /**
- * Rule 3 of the reduction design (8.11; contract.ts `silent`): what sets nothing is not in the sentence. The unit's pieces as
+ * DESIGN §6.2 (contract.ts `silent`): what sets nothing is not in the sentence. The unit's pieces as
  * the wire sends them, the markers wire's rule (markers.ts itemsOf): a piece that sets nothing beside one that sets something,
  * white space alone between them, rides in that one's tag (before the first such of a stretch, else after the one before
  * it), the white space between them with it, out of the wire; one with no such neighbour stays in the pieces, `silent`, for
@@ -877,7 +877,7 @@ export function readTags(raw: string, plan: TagsPlan): { content: OutPiece[]; at
   // (and no string of the tokens' form outside the elements more often than the unit's own text holds it, whatever its number:
   // a reply that moved an element to another word and left its token behind as text, or that wrote a number of the text in
   // the tokens' form, shows a reader our wire's artefact, and is unread as one with an element lost is; a paper's own `x1`
-  // reads as its text. Google's replies in lane stray-stop's fill: 1706.03762v7's Table 1 caption left `x1` behind,
+  // reads as its text. Google's replies: 1706.03762v7's Table 1 caption left `x1` behind,
   // 2610.40576v1 wrote its `50` as `x50`; counted in the text as read, the reply's and the wire's alike: tokensIn)
   const source = tokensIn(plan.wire, plan)
   for (const [token, n] of tokensIn(raw, plan)) if (n > (source.get(token) ?? 0)) return null

@@ -1,5 +1,5 @@
 // Chrome's built-in translator, over the `Translator` API object the host injects (the extension's background has it;
-// a test passes a fake). Written from its measured behaviour (ext-providers-config §16): `create()` needs a user gesture
+// a test passes a fake). Written from its measured behaviour (DESIGN §8.4): `create()` needs a user gesture
 // while the model is only `downloadable` (a chain's hand-over has none); the first download took 67 s with no progress,
 // `create()` 8.6 s with the model ready; `availability()` may never answer, so every probe is bounded; a shared session
 // takes no request's signal (one request's timeout would reject the session every other request waits on); the model

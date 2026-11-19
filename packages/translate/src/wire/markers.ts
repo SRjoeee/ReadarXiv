@@ -1,7 +1,6 @@
-// The markers wire, over typed pieces (Microsoft's free endpoint keeps no tag: tags 0 %, markers 98 %, translation dossier
-// §16). A unit goes out as plain text with its elements as markers `@a#`; what Microsoft does to markers is repaired here
-// and nowhere else. Restated from the measured facts the PDF engine's wire (mt.mjs) carries, now that the source reader
-// types each piece:
+// The markers wire, over typed pieces (Microsoft's free endpoint keeps no tag: tags 0 %, markers 98 %,
+// DESIGN §8.3). A unit goes out as plain text with its elements as markers `@a#`; what Microsoft does to markers is repaired here
+// and nowhere else. The measured facts it rests on, each piece typed by the source reader:
 // - each marker is a hard sentence boundary to the endpoint, so a span that is not `must` goes on no wire: its words join
 //   the sentence and its style may be lost (the decision: such a span may come back unstyled), and its head (accept.ts
 //   headLength: the elements before its first word, a declaration's place, `{\em all}`) is one marker that comes back in a
@@ -494,7 +493,7 @@ const CLOSER = '#(?:[ \\t]*#)*'
  *  width, followed by no letter of an id and no `#`: `@b形`). A marker without its `#` is read only where the wire holds no
  *  `#` of its own: there every other `#` of the reply is taken out as the marker's, elsewhere the one it lost may stand in
  *  the text, which a reader would see (`F# @a(#)` → `F# … (#)`; the HTML page's 20 fixture blocks with a `#` of their own,
- *  DESIGN §6.3's reason; stage 4b's slip check) */
+ *  DESIGN §6.3's reason) */
 function readerOf(hashFree: boolean, bare: number | null): RegExp {
   const closer = hashFree ? CLOSER : '#'
   if (bare === null || !hashFree) return new RegExp(`@@|@([a-z]+)${closer}`, 'g')
@@ -518,7 +517,7 @@ export const MARKER_ATOM = new RegExp(`@@|@[a-z]+(?:${CLOSER})?|${ENTITY}`, 'g')
 /** A reply → tokens, or null where it cannot be read: a marker unknown, doubled or lost, every word lost */
 export function readMarkers(text: string, plan: MarkersPlan, tolerant: boolean): Tok[] | null {
   // where the wire holds a `#` of its own, a `#` right after a marker is either Microsoft's doubled closer or the text's own
-  // moved beside it: which, nobody can tell, and either way a reader would see one `#` too many or too few (stage 4b). Not
+  // moved beside it: which, nobody can tell, and either way a reader would see one `#` too many or too few. Not
   // after a marker the wire itself follows with its text's `#` (`hashAfter`): there it is that `#`, as it went out (TeX's `\#`,
   // a character of the text, PDF-READER §18.30: `$k$\#`, `## Root Goal` after a list's mark; Microsoft gave back every
   // one of 114 text `#` of the 88 papers' 24 units holding one, in Chinese, Japanese and German)

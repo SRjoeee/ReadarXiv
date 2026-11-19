@@ -1,5 +1,5 @@
 // What both wires do to text: the escaping the free endpoints need, the entities read back, the code points no reader
-// sees. Restated from the measured facts (translation dossier §16): Microsoft's and Google's free endpoints run an HTML
+// sees. Restated from the measured facts (DESIGN §8.3): Microsoft's and Google's free endpoints run an HTML
 // aligner on every request, so a bare `<` or `&` fuses (`a < b and c > d` came back `<B和C> d`), and replies stay
 // HTML-encoded; Google sets zero width spaces inside words; a numeric entity past U+10FFFF must not throw.
 import type { Piece } from '../contract.ts'
@@ -30,7 +30,7 @@ export const ENTITY = '&(?:#[xX][0-9a-fA-F]+|#\\d+|amp|lt|gt|quot|apos|nbsp);'
 export const SAYS = /[\p{L}\p{N}]/u
 export const LETTER = /\p{L}/u
 
-/** what an element reads as to the sentence splitter, by its kind (mt.mjs splitContextOf, now typed): a note's mark belongs
+/** what an element reads as to the sentence splitter, by its kind: a note's mark belongs
  *  to the sentence before it; a citation too where it is set against it, else it opens the next (`… expensive. \citet{x}
  *  proposes …`: the splitter reads where it stands, @readarxiv/text `citation`); a reference is a number, a formula a word, a
  *  break a space */

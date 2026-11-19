@@ -1,4 +1,4 @@
-// The conformance suite any translator passes to be built (design-b §5.1): determinism of `write` and its behaviour digest,
+// The conformance suite any translator passes to be built: determinism of `write` and its behaviour digest,
 // a round trip on an echo endpoint, every mangled reply refused or unread and never a throw, sentences that reconstruct,
 // each fault mapped to its remedy through a scripted fetch, streams. Registered as vitest tests by the caller's test file.
 import { describe, expect, it } from 'vitest'

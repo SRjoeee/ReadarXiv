@@ -1,8 +1,7 @@
-// The chain (the translate decision): one object a host makes once, `chainOf(ports)`, which owns the queue, the
-// pacing, the cooldowns and the breaker of every translator it is handed; no module state. Carried from the server's chain
-// (its engines' order, its pacing gate, its breaker shared by every isolate, its egress, its store of answers) as the
-// decision's table says, with the PDF engine's loop (mt.mjs translateUnits) merged in: write, key, store read, requests cut by limits and
-// equal wires sent once, send, read, accept, fall through per unit, the re-ask, the runs floor.
+// The chain (DESIGN §8): one object a host makes once, `chainOf(ports)`, which owns the queue, the pacing, the cooldowns
+// and the breaker of every translator it is handed; no module state. It holds the engines' order, a pacing gate, a breaker
+// shared by every isolate, the egress and the store of answers, and takes each unit through write, key, store read,
+// requests cut by limits and equal wires sent once, send, read, accept, fall through per unit, the re-ask, the runs floor.
 import { ACCEPT_DIGEST, accept, asOut, hasLetter, validSentences } from './accept.ts'
 import {
   type Chain,
@@ -31,7 +30,7 @@ import { runsOf } from './runs.ts'
 import { sha256Hex } from './sha256.ts'
 import { wholeWordsOf } from './words.ts'
 
-// ---------------------------------------------------------------- the fixed policy (design-a §1.5; the server's chain and breaker)
+// ---------------------------------------------------------------- the fixed policy (DESIGN §8: the chain's and the breaker's)
 
 /** tries of a request a transient failure is worth, the first included (chain.ts `attempts`) */
 export const ATTEMPTS = 3
@@ -62,7 +61,7 @@ const STORE_READ_MS = 2_000
 const STORE_WRITE_MS = 5_000
 /** buffered store writes go out at this many entries, and at the end of a call */
 export const WRITE_EVERY = 200
-/** a stored value at most, in UTF-16 code units of the translator's raw reply (design-a §1.6). DESIGN §9 states the bound
+/** a stored value at most, in UTF-16 code units of the translator's raw reply. DESIGN §9 states the bound
  *  as 64 KiB; a ruling, unmeasured */
 const VALUE_MAX = 64 * 1024
 /** `supports` answers within this, ms, or the translator is passed over: the probes' deadline (DESIGN §8.5, `PROBE_MS`
@@ -163,7 +162,7 @@ const contextOfWire = (t: Translator, wire: string, context: PaperContext | unde
     return context
   }
 }
-/** the store key (design-a §1.6): `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->`, the context
+/** the store key: `t1|<translator identity>|<target>|<sha256 of the wire>|<context digest, or ->`, the context
  *  as a reply to the wire depends on it */
 export const keyOf = (t: Translator, target: Lang, wire: string, context?: PaperContext): string =>
   `${KEY_VERSION}|${t.identity}|${target}|${sha256Hex(wire)}|${t.context ? contextDigest(contextOfWire(t, wire, context)) : '-'}`
@@ -199,8 +198,8 @@ export function rowContextOf(
   )
 }
 
-/** What a row is keyed by besides unit id and target (DECISION: translators' identities and their behaviour digests plus
- *  the acceptance rule's digest, and the chain's own rules' digest): it moves only when an outcome could */
+/** What a row is keyed by besides unit id and target (translators' identities and their behaviour digests, the
+ *  acceptance rule's digest and the chain's own rules' digest: CLAUDE.md hard rule 4): it moves only when an outcome could */
 export async function identityOf(translators: readonly Translator[]): Promise<string> {
   const parts = translators.map((t) => [t.identity, t.digest, t.limits.reask])
   return sha256Hex(JSON.stringify([CHAIN_DIGEST, ACCEPT_DIGEST, parts])).slice(0, 32)
@@ -630,7 +629,7 @@ export function chainOf(ports: Ports = {}): Chain {
         gone.signal.removeEventListener('abort', cut)
       }
       const rest = todo.filter((_, i) => !delivered.has(i))
-      // a request that ended with units unanswered: the reply was short of them, asked once more (design-a: `reply`)
+      // a request that ended with units unanswered: the reply was short of them, asked once more (`reply`)
       if (!fault && rest.length)
         fault = new Fault('again', 'malformed', `${t.identity}: ${rest.length} of ${todo.length} units unanswered`, {
           tries: 2,

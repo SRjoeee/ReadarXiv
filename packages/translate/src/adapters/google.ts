@@ -1,5 +1,5 @@
-// Google Translate's web app endpoint (translateHtml), written from its measured behaviour (translation dossier §16,
-// ext-providers-config §16) as the owner's own code. The body is `[[items, from, to], 'wt_lib']` with the web app's
+// Google Translate's web app endpoint (translateHtml), written from its measured behaviour (DESIGN §8.3)
+// as our own code. The body is `[[items, from, to], 'wt_lib']` with the web app's
 // public client key (a third party's public constant, not a secret: CLAUDE.md rule 5); 150 items in 556 ms, 63 ms
 // median; tags kept 100 %. Its concurrency is 2, and a rate must never be the binding constraint (a token bucket of 2/s
 // once made a 216-block paper take 29.6 s).

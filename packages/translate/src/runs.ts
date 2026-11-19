@@ -1,7 +1,7 @@
-// The runs floor (design-a §1.2 invariant 4): a unit no translator rebuilt is cut into its text stretches, each sent
+// The runs floor: a unit no translator rebuilt is cut into its text stretches, each sent
 // through the whole chain as a unit with no element, and put back between the elements, which stay where the source has
 // them. A span that is not `must` is no edge (its words are its sentence's: cut there, a styled word came back alone,
-// word salad, mt.mjs runsOf), its head kept in a copy of it as on the markers wire (accept.ts headLength: `{\em all}`'s
+// word salad), its head kept in a copy of it as on the markers wire (accept.ts headLength: `{\em all}`'s
 // `\em`, which loose holds to the unit's end); a `must` span is rebuilt around its own stretches. An element that sets nothing
 // (`silent`), and a head of such elements alone, is no edge either (cut there, `exam\-ple` went as two stretches): as on the
 // markers wire, it stands at the front of its innermost kept group (the unit, a `must` span) where nothing of the group came
