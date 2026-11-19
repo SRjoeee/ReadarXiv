@@ -47,8 +47,8 @@ export function flowsAndTies(w: Work): void {
   // (whether something of the page stays on a shared row between the member before's end there and the next one's first text:
   // a shown glyph of A whose advance's middle stands between the two, on the row (its baseline within ON_ROW of the row's size of
   // the row's), the next member's own label among them, which goes
-  // with it (ownLabelOnRow, RUN:1623). Placed.join's kept: the next member is not laid from the first one's end, where something
-  // else stays there, and the first one's text on the row ends where TeX's did (keptAfter, RUN:1596))
+  // with it. Placed.join's kept: the next member is not laid from the first one's end, where something
+  // else stays there, and the first one's text on the row ends where TeX's did)
   const keptOn = (a: Line, b: Line, size: number) => {
     const pg = inkA.pages[a[0] - 1]
     if (!pg || b[0] !== a[0]) return false
@@ -136,7 +136,7 @@ export function flowsAndTies(w: Work): void {
   const bracketBetween = (lo: number, hi: number) => brackets.some((g) => g > lo && g <= hi)
   // (a member of the instrument's whose first glyph TeX set right after another's last, on that one's last row, stands after it,
   // whatever their order among the units: the front end numbers the units it cut out of what was one unit after every other
-  // unit of the source (latex-front.mjs `later`: no unit's number moves), an author block's names after an \and among them.
+  // unit of the source (source/latex-front.ts `later`: no unit's number moves), an author block's names after an \and among them.
   // 2611.00342v1 p1, IJCAI: the second name's unit came after the body's, the body was taken for the member before it, and the
   // first name kept a flow of its own, laid centred on its original's middle, a hole before the next. The member before on B:
   // the one whose last glyph is the last an instrument unit owns before its first (what stands between is no unit's, or made on
@@ -281,13 +281,13 @@ export function flowsAndTies(w: Work): void {
       })
     for (const ords of sets.values()) if (ords.length > 1) ties.push({ rule: 'size', ords })
     // (the members of one flow: one paragraph of TeX's, a member's first line the one before's last, on its baseline after its
-    // end, no paragraph end between them — a paragraph the front end cut at a float set inside it (2608.16117v1 p19, the
-    // checkpoint's free-9: one part laid at its size, the other shrunk), a run-in head and its paragraph — laid at one size)
+    // end, no paragraph end between them — a paragraph the front end cut at a float set inside it (2608.16117v1 p19: apart,
+    // one part would keep its size and the other shrink), a run-in head and its paragraph — laid at one size)
     for (const ords of flows) if (ords.length > 1) ties.push({ rule: 'size', ords: [...ords] })
   }
   // (a name that leads a unit stands before it in its flow, the unit's join its separation from the name (the joint, the unit's
-  // label, kept between): design-a's `bound`, set only with the member after it. Where the unit's first line on A is not the
-  // name's line (its page, its baseline within leadAt's 0.5 pt, from the name's end on), the name keeps its own flow, bound to a
+  // label, kept between): Placed.bound, set only with the member after it. Where the unit's first line on A is not the
+  // name's line (its page, its baseline within leadNames' 0.5 pt, from the name's end on), the name keeps its own flow, bound to a
   // member its part does not hold after it. (No column read: B's stream told it, and a name's short line is given the column its
   // own extent falls in, the left of a one-column page's, 2610.18513v1 p21.) No size tie: the name is drawn at its unit's size)
   for (const n of members) {

@@ -1,4 +1,4 @@
-// The units no source unit is, made on arXiv's page (design §4.3): the running heads
+// The units no source unit is, made on arXiv's page (PDF-READER §19.10): the running heads
 // and feet, contents and lists, notes and orphan text, a biblatex entry's lines (ink units), the kept blocks, and the text inside a
 // figure (figure texts), cut and kinded by the ink makers — ledgerOf, inkUnitsOf, keptUnitsOf and figureUnitsOf (ledger.ts,
 // ink-units.ts, figure-text.ts) — run over A's page in place of
@@ -95,15 +95,15 @@ export interface InkInput {
    *  as one that owns no glyph of A has none (the ink units' rule 8, inkUnitsOf `unplaced`) */
   released?: ReadonlySet<number> | undefined
   /** the faces the document sets at one pitch (facts.ts fixedFacesOf), where Rule 1 keeps such text: a figure's run goes into
-   *  or out of none of them (figure-text.mjs figureUnitsOf `fixed`, PDF-READER §18.22) */
+   *  or out of none of them (figure-text.ts figureUnitsOf `fixed`, PDF-READER §18.22) */
   fixed?: ReadonlySet<string> | null | undefined
   /** each A page's annotations as PDF.js gives them (LocateOptions.annotations): a link over part of an ink unit's text is a
-   *  group of it (inkUnitsOf `links`, F32) */
+   *  group of it (inkUnitsOf `links`, PDF-READER §19.10) */
   annotations?: readonly (readonly unknown[] | null)[] | undefined
 }
 
 /**
- * Each page's link annotations as the ink units read them (InkLink, F32): the open of a group whose source names the
+ * Each page's link annotations as the ink units read them (InkLink, PDF-READER §19.10): the open of a group whose source names the
  * annotation's target, `\href{<its address, TeX's specials escaped>}{` or `\hyperlink{<its destination's name>}{`, and the glyphs
  * of the page (`pages`, the ink units' own) it holds by glyph point. Only where the part reads that source back as the
  * annotation's target (linkTargetOf, compared as the typesetter compares two: an address in the WHATWG parser's form), so that the
@@ -171,14 +171,14 @@ export interface InkStats {
   }
 }
 
-/** the units made on A, in the bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
- *  `ins.units.length` on (an echo's index, of a source unit or of an ink unit before it, in that one list) */
 /** a line on A the engine reads as a display's formula (a ledger line of the class math at least half of whose glyphs TeX set in a
  *  display, not in its text mode): [page, x0, bottom, x1, top, baseline, display] — what the lab's stage reads a display's ink
  *  by; `display` the display's number on its page (its region's index among the page's displays as carried onto A), so
  *  that the lab tells a display's lines apart from another's (lab/pdf/prepare-back/display-pieces.mjs) */
 export type DisplayLine = [number, number, number, number, number, number, number]
 
+/** the units made on A, in the bundle's order (ink units, kept blocks, figure texts: those drawn first), their indices from
+ *  `ins.units.length` on (an echo's index, of a source unit or of an ink unit before it, in that one list) */
 export function inkOf(o: InkInput): {
   made: Made[]
   stats: InkStats
@@ -226,7 +226,7 @@ export function inkOf(o: InkInput): {
     const g = B.pages[p]!.glyphs[b - (m.offB[p] as number)]!
     return { form: g.form, fid: g.fid }
   }
-  // (each page's glyphs A's Doc's, its raw page for the rest: the back half reads A with its raw glyphs let go, lane mem-front)
+  // (each page's glyphs A's Doc's, its raw page for the rest: the back half reads A with its raw glyphs let go)
   const pages: TodayPage[] = inkA.pages.map((pg, i) =>
     pageOf(pg.view, o.raws[i] ?? null, pg.glyphs, carried[i]!, turnedOwned[i]!, (j) => formOf(i, j), turnedForm[i]!),
   )
@@ -315,7 +315,7 @@ export function inkOf(o: InkInput): {
   // ---- in this order: the figure texts of what no unit owns, the ledger with them
   // owned, the ink units, their claims, then the kept blocks of what is left
   // (the block's ink is no figure's text, though TeX drew it in the picture its title is in: a framed title box. Nor is arXiv's
-  // ink, a level glyph with no partner on B on a page our compile sets; the ledger reads it as before, free: inside a unit our
+  // ink, a level glyph with no partner on B on a page our compile sets; the ledger reads it free: inside a unit our
   // compile set it makes that unit a content difference (locate.ts), and a line of it alone in a form is the class `figures`)
   const figOwn = own.glyphs.map((row, i) => {
     const block = framed?.page === i
@@ -429,7 +429,7 @@ export function inkOf(o: InkInput): {
       ...(align ? { align } : {}),
     }
     // (its text and placeholders' glyphs as its claim set them; a placeholder's its first element's, there being no points to tell
-    // them apart: the adapter's rule, pipeline/instrument.mjs:375-379)
+    // them apart)
     const first = firstEl(content)
     const x: Made = { unit, text: [], ph: [], phId: first, turned: [], textBoxes: [], elBoxes: [] }
     // (its label's glyphs, which its claim gave its text's group: a source unit's label is a role of its own, its group `.l`,
@@ -518,11 +518,11 @@ export function inkOf(o: InkInput): {
     return t ? (t.why === 'crowded' ? 1 : 0) : fig.units[k]!.why ? 1 : 0
   }
   const figOrder = [...fig.units.keys()].filter((k) => !taken.has(k)).sort((a, b) => whyOf(a) - whyOf(b) || a - b)
-  // (each figure text's set, its size tie (the labels of one group, PDF-READER §18.54): the set figure-text.ts gave
-  // its line (setsOf: its column, its baseline); a text the paragraph path lays (figureTextOf: lines joined,
-  // an element, a label) stands among the labels of its lines' sets, which it joins into one: one member, drawn at one size. One
-  // kept as the original's (its why: a formula, code, a script, a double, a decorated word) is laid by no path and keeps a set
-  // of its own)
+  // (each figure text's set, the part's size tie, which the typesetter reads for no size: each figure text is sized by its own
+  // width (PDF-READER §19.12, §18.54). It is the set figure-text.ts gave its line (setsOf: its column, its baseline); a text the
+  // paragraph path lays (figureTextOf: lines joined, an element, a label) stands among the labels of its lines' sets, which it
+  // joins into one, itself one member of it. One kept as the original's (its why: a formula, code, a script, a double, a
+  // decorated word) is laid by no path and keeps a set of its own)
   const setRoot = new Map<number, number>()
   const setOf = (k: number): number => {
     let s = fig.units[k]!.set ?? k
@@ -698,7 +698,7 @@ function roomOfText(t: FigureText): { under?: number; over?: number } {
  * from its ink (its class `other`, a code one `literal`, its glyphs' text its copy), its glyphs and its boxes (a ground's, a
  * decoration's) its own. Laid by the paragraph path (it states no own text, locate): its room the line's, from its first run's
  * room before to its last run's after; in `set`, the set of the labels its lines stand among, whose size tie holds it with the
- * labels S.figures sets (one size a group); one kept as the original's, a set of its own
+ * labels S.figures sets (a tie no size reads: PDF-READER §19.12); one kept as the original's, a set of its own
  */
 function figureTextOf(
   t: FigureText,
@@ -791,7 +791,7 @@ function figureTextOf(
   const x1 = Math.max(...all.map((g) => G[g]!.x1))
   const x0 = G[all[0]!]!.x0
   // (a paragraph, F3: laid in its lines as a body paragraph is, its room the facts pass's (its lines' sides, below it): none of
-  // a line's free line along its run; a line alone, as before. One the container step made of a path's rows has the path's
+  // a line's free line along its run; a line alone has it. One the container step made of a path's rows has the path's
   // inside across as its room beside its lines (§18.36), stated as a line's free line is, from its rows' extent: the facts pass
   // takes it as Room.side, never the column's)
   const across = t.para && t.container?.side
@@ -948,7 +948,7 @@ function figureRuns(
   s: string,
   { stream, own }: { stream: readonly FigureGlyph[]; own: readonly StyleGlyph[] },
 ): { content: Piece[]; styles: [string, Style][] } {
-  // (a run's key its face and its fill: TeX's line in a picture goes on over another colour (figure-text.mjs texLine: the link's
+  // (a run's key its face and its fill: TeX's line in a picture goes on over another colour (figure-text.ts texLine: the link's
   // colour of an address after its label), whose group states its fill where it is not the text's, black included; a figure text
   // a plotting program sets is of one fill, as its run was)
   const fillKey = (f: number | undefined) => (f !== undefined && f > 0 ? f : 0)
@@ -1357,11 +1357,11 @@ export function contentOf(pieces: readonly TodayPiece[]): Piece[] {
   // (its run-in labels `must`, as the source units': marks/run-ins.ts)
   return runIns(stack.length ? stack[0]!.outer : level)
 }
-/** an ink unit's colour group's open as its rule writes it (today/ink-units.mjs groupsOf: the fill its glyphs hold), in xcolor's
+/** an ink unit's colour group's open as its rule writes it (ink-units.ts groupsOf: the fill its glyphs hold), in xcolor's
  *  HTML model, which names a colour by its red, green and blue, two hexadecimal digits each */
 const HTML_COLOUR = /^\\textcolor\[HTML\]\{([0-9A-Fa-f]{6})\}\{$/
-/** each group's command, the fill its colour group's run is set in, and a link group's target, by its open piece's id
- *  (pipeline/instrument.mjs:187-219 commandOf, spansOf, ported). A source unit's colour group states the fill TeX set its run in,
+/** each group's command, the fill its colour group's run is set in, and a link group's target, by its open piece's id.
+ *  A source unit's colour group states the fill TeX set its run in,
  *  read off the marked compile's log; an ink unit has no log, and its colour group's source names that fill itself, the one its
  *  glyphs hold on A: stated so, as a source unit's (2609.36054v2 p1's grey e-mails, drawn in their note's black with none) */
 export function spansOf(pieces: readonly TodayPiece[]): [string, SpanClass][] {

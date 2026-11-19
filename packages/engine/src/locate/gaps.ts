@@ -2,8 +2,7 @@
 // (Room.sep): read from what the marked compile states (Instrument.tex: each heading's \@startsection skips, the paper's float,
 // caption and footnote separations, each paragraph's \parskip; marks/channels.ts) and from what stands under the member on A
 // (the next member's line under its last one, and the float each is of by B's brackets). Phase 10 (rooms), read-only: it reads
-// the members' lines, measures and columns (phases 6, 8) and B's points. The compile move's B1 (the display design's F12, 2c's
-// F-last and F-sep, 2d's rule 2 facts, F40's form 1).
+// the members' lines, measures and columns (phases 6, 8) and B's points (PDF-READER §18.76).
 import type { Line, Room } from '@readarxiv/format'
 import type { GlueName, Instrument } from '../instrument.ts'
 import { r2 } from './lines.ts'

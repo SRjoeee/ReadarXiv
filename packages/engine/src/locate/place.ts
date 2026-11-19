@@ -145,7 +145,7 @@ export function place(
   // and set none). They are no ink of A: its ink of the unit is the glyphs A set, whole, nothing between them another's or
   // none's, and the unit is located from them; its translation reads its source, those characters with it. A run at the
   // unit's start or end, or one whose neighbours' partners stand apart on A, is no such statement (a line A set elsewhere
-  // that no block move paired): a content difference, the unit the original's, as before)
+  // that no block move paired): a content difference, the unit the original's)
   const prevPaired = new Int32Array(list.length).fill(-1)
   for (let i = 0, last = -1; i < list.length; i++) {
     prevPaired[i] = last
@@ -271,7 +271,7 @@ export function place(
   // round, which no El states. They stay A's ink where they stand (HELD), and so does a label they cut from the unit's text,
   // the glyphs of no unit TeX set between them: 2610.37818v1 p14, sub-caption (a), which has no unit, given to (b)'s, "(a)" its
   // label and "Dark rim band" an element of no piece; read as (b)'s text its line ran over (a), (a)'s English was erased with
-  // nothing drawn there, and "(a)" drawn before "(b)" (the checkpoint's measure-4))
+  // nothing drawn there, and "(a)" drawn before "(b)")
   const sortedRoles = [...roleAt].sort((x, y) => x[0] - y[0])
   const loose = sortedRoles.filter(([, [role, k]]) => role === ROLE.element && k < 0).map(([a]) => a)
   if (loose.length) {

@@ -1,7 +1,7 @@
-// locate(instrument, inkA, mapping): every unit the instrument owns, on arXiv's page (design §4.1, §4.2's Located, §4.3).
+// locate(instrument, inkA, mapping): every unit the instrument owns, on arXiv's page (ARCHITECTURE.md's Located).
 //
 // - A unit is LOCATED where every glyph it owns on B has a partner on A (or is a line-end hyphen a `hyphen` hunk holds, or lies
-//   off its page), and every rule and image it owns pairs with A's (S1d). No partial credit, no threshold; a unit that is not
+//   off its page), and every rule and image it owns pairs with A's. No partial credit, no threshold; a unit that is not
 //   located stays the original's, with the cause: `content difference: <class>` (the hunk class that holds its first
 //   unmatched glyph, B's and A's glyphs differing there; or a rule, an image, a turned glyph with no partner), `no ink` (the
 //   instrument gives it none), or the instrument's own why.
@@ -15,7 +15,7 @@
 //   the ink makers where A's pages are given (ink.ts: ink units, kept blocks, figure texts, of A's glyphs no source unit owns, B's
 //   marks carried onto A); then the units born on A (born.ts) from the glyphs B never printed that no ink maker takes. Flows: members that share a TeX line, consecutive in the stream. Ties: a table's cells; a
 //   figure's set. Links: A's annotations, each owned by the element or the text its rectangle lies over.
-// - Groups (design §4.5): per member and page, `<ord>.<page>.t` its text (and a name's or figure text's word), `.e` its
+// - Groups: per member and page, `<ord>.<page>.t` its text (and a name's or figure text's word), `.e` its
 //   travelling elements, `.l` its label; a display, a kept block and what is not located are in no group.
 import type { Mapping } from '../align/align.ts'
 import type { Doc } from '../doc.ts'
@@ -41,7 +41,7 @@ export { urlBreaks } from './geometry.ts'
 export { TEXT_NAMES } from './page-units.ts'
 export type { Place } from './work.ts'
 
-// ---- the facts of each located member read off the page for the typesetter (stage 1a-2: facts-pass.ts)
+// ---- the facts of each located member read off the page for the typesetter (facts-pass.ts)
 function facts(w: Work, owned: Owned): void {
   const { ins, inkA, m, unitB, roleB, pieceB, pageA, framesA } = w.ix
   const { members, units } = w

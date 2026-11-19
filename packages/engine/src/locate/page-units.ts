@@ -51,7 +51,7 @@ export function unitsMadeOnA(w: Work, claims: Claims, o: LocateOptions): void {
       released: new Set(members.filter((mem) => mem.cause === SET_AGAIN).map((mem) => mem.unit)),
       artefact: figureArtefact,
       fixed: artefacts ? fixedFaces : null,
-      // (A's link annotations: one over part of an ink unit's text a group of it, F32)
+      // (A's link annotations: one over part of an ink unit's text a group of it, PDF-READER §19.10)
       annotations: o.annotations,
     })
     displays.push(...dl)

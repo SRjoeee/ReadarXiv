@@ -63,7 +63,7 @@ export interface Member {
   smallCaps?: Map<string, number>
   /** the elements (by piece id) whose glyphs TeX set on the baseline of the lines they stand on, one baseline a line and no rule or
    *  image among their ink, read for every class (geometry.ts, `level`'s reading for a class of text): what the bundle states an
-   *  element's text on its line by (format's el `text`, F10); no part carries it */
+   *  element's text on its line by (format's el `text`, PDF-READER §18.47); no part carries it */
   onBase?: Set<string>
   labelAt?: Label
   /** where its label stands on none of its lines: TeX's measure for the label's own line (columnsAndMeasures), what its alignment
@@ -89,20 +89,20 @@ export interface Member {
   /** the name that leads it, by its ord: its glyphs are its lead's, no ink beside its first line */
   leader?: number
   /** a babel name's counter TeX set after it on its line, where it leads no unit (IEEEtran's "APPENDIX A", "Appendix A:" in a
-   *  contents list: Word.counter): its A glyphs, those of its occurrence after its end point on B (marks.mjs `n<occ>.<key>.e`;
-   *  the wrap gives them the name's group, own.mjs, names.mjs counterAfter) */
+   *  contents list: Word.counter): its A glyphs, those of its occurrence after its end point on B
+   *  (marks/marks.ts `n<occ>.<key>.e`; the wrap gives them the name's group, own/own.ts, marks/names.ts counterAfter) */
   counterA?: number[]
   counter?: [string, Ink]
   /** its first and last glyph on B (global), -1 for none */
   bFirst: number
   bLast: number
-  /** the class's marks after its text (C20) */
+  /** the class's marks after its text */
   tail?: [string, Style][]
-  /** the groups TeX opened a paragraph at inside it (C13, C15: SpanAt.opens), by their open piece's id: that paragraph's first
-   *  line */
+  /** the groups TeX opened a paragraph at inside it (SpanAt.opens, PDF-READER §18.66), by their open piece's id: that paragraph's
+   *  first line */
   spanOpens?: Map<string, number>
   /** paragraphs TeX opened inside it where a group the instrument wrote as its content stood (InstrumentUnit.passed): none is
-   *  stated, and stage 1a fails the paper (Located.stats.opensLost) */
+   *  stated, and lab/pdf/prepare-back/run.mjs fails the paper (Located.stats.opensLost) */
   opensLost?: number
   /** paragraph ends of B inside it (its glyphs on both sides) that state no point (no SpanAt.opens, no El.opens, no forced break,
    *  no first word, no region): where an open or an element stands where the next paragraph begins in the source, and where
@@ -133,7 +133,7 @@ export interface Member {
   /** its groups whose command names no face and whose own text TeX set in a face other than the face around it, read off its
    *  glyphs on A (group-style.ts; SpanAt.style where the instrument states none): each one's open piece id and style */
   spanFaces?: [string, Style][]
-  /** the facts it carries as read off A's geometry, not stated by TeX (stage 1b states them) */
+  /** the facts it carries as read off A's geometry, not stated by TeX */
   read: string[]
   /** its alignment read centred by its own block (facts.ts centredByBlock, a single line's stack): read again on TeX's line once
    *  the flows say which members share it (the row's) */
@@ -171,8 +171,8 @@ export interface Located {
   groups: { glyphs: (string | null)[]; boxes: (string | null)[]; turned: (string | null)[] }[]
   /** groups that are figure texts' (the wrap writes their runs inside a form in the form) */
   figureGroups: Set<string>
-  /** what the ownership's check finds (ownership.ts): each glyph whose owner and the members' lists disagree, and a fixed
-   *  member's glyph in a group; read by the package's tests (none found) and the lab's stage 1a (`ownership/<id>.json`) */
+  /** what the ownership's check finds (ownership.ts): each glyph whose owner and the members' lists disagree, and a fixed member's
+   *  glyph in a group; read by the package's tests (none found) and lab/pdf/prepare-back/run.mjs (`ownership/<id>.json`) */
   disagreements: Disagreement[]
   /** the lines on A the units made there read as a display's formula (ink.ts DisplayLine), where A's pages were given: what the
    *  lab's stage states a unit absent from the candidate by (lab/pdf/prepare-back/stated.mjs) */
@@ -193,7 +193,7 @@ export interface Located {
     /** the source units kept as artefacts (Rule 1, PDF-READER §18.22), and whether the paper's body face is one of one pitch */
     artefacts?: { units: number; bodyFixed: boolean; groups?: number; read?: number }
     /** paragraphs TeX opened inside a unit where a group the instrument wrote as its content stood (InstrumentUnit.passed), no
-     *  group left to state it on (SpanAt.opens): a gate, which must count none (stage 1a fails a paper with one) */
+     *  group left to state it on (SpanAt.opens): a gate (lab/pdf/prepare-back/run.mjs fails a paper with one) */
     opensLost?: number
     /** paragraph ends of B inside a unit that state no point, by what stands where the next paragraph begins in the source: an
      *  open or an element (`anchored`: a gate, which must count none) or plain text (`plain`: no anchor exists for it) */
@@ -369,7 +369,7 @@ export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
   const outsidePiece = new Set((ins.outside ?? []).map((x) => `${x.unit}|${x.piece}`))
   // (an ink unit's elements of no kept run of its (inkOf: each element its own run's; an echoed unit's that sets nothing, for which
   // the ink unit has no run): none of their own, as the instrument's `empty` states it of a source unit's piece; by unit and
-  // piece. One whose run's glyphs another unit owns is not found, as before)
+  // piece. One whose run's glyphs another unit owns is not found)
   const jointPiece = new Set<string>()
   const pageA = new Int32Array(NA)
   inkA.pages.forEach((pg, p) => {
@@ -473,7 +473,7 @@ export function open(ins: Instrument, inkA: Doc, m: Mapping): Work {
   }
 }
 
-/** the kinds of the author block's units (latex-front.mjs AUTHOR_KINDS: its names and its places) */
+/** the kinds of the author block's units (source/latex-front.ts AUTHOR_KINDS: its names and its places) */
 export const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 /** the classes of an element the typesetter draws from the ink TeX set for it (its reading's VISIBLE, a symbol aside: drawn from
  *  its source where it has no ink): one of no ink states which of three it is, TeX set nothing for it (El.text ''), it stands
@@ -498,8 +498,8 @@ export const lettersIn = (t: string): number => (t.normalize('NFKD').match(/[\p{
 
 /** Each index of lo..hi with no partner that stands between two with one, with `pv` the last paired index before it and `nx` the
  * first after it. One walk: `pv` is the last paired index passed, `nx` found once for the whole run of unpaired indices it ends,
- * so each index is read at most twice (linear in the span; a walk back and forth from each unpaired index is quadratic in its run:
- * PR #620's finding 1, and the same walk in the units made on A) */
+ * so each index is read at most twice (linear in the span; a walk back and forth from each unpaired index is quadratic in its run;
+ * the units made on A walk alike, page-units.ts) */
 export function eachBetweenPaired(
   lo: number,
   hi: number,

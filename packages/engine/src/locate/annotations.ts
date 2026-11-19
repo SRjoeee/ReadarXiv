@@ -1,7 +1,7 @@
 // A's link annotations as PDF.js gives them (getAnnotations), read: a link's target, its rectangle and the boxes its glyph
 // points are read in, and the glyphs of a page it holds by glyph point (PDF.js's overlaidText rule). One reading for the two
 // that take it: the links (links.ts, phase 15 of locate), each owned by the member that owns most of its glyphs, and the ink
-// units' link groups (ink.ts inkLinksOf, F32), so that a link an ink unit groups holds the glyphs locate owns it by.
+// units' link groups (ink.ts inkLinksOf, PDF-READER §19.10), so that a link an ink unit groups holds the glyphs locate owns it by.
 import { r2 } from './lines.ts'
 
 /** an annotation as PDF.js gives it (getAnnotations), what the links read of it */

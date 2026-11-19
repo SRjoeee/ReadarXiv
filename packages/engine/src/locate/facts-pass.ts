@@ -1,4 +1,4 @@
-// The facts of every located member read on A after its lines (stage 1a-2; facts.ts holds each reading): its elements' kept
+// The facts of every located member read on A after its lines (facts.ts holds each reading): its elements' kept
 // state, fill, the original's mark after a display or on a held line, a forced break's line and room, a paragraph TeX opened
 // at an element; its label's parts; the class's tail; its lines' PINNED and SHORTSKIP flags; the room beside its lines and a
 // cell's band; its alignment where TeX did not state it. Each fact read rather than stated by TeX is named in `read`.
@@ -307,7 +307,7 @@ export function factsOf(input: FactsInput): void {
 }
 
 /**
- * Each table cell's room in its column (Room.column; the owner's decision, docs/PDF-READER.md §18.13), once every member's facts
+ * Each table cell's room in its column (Room.column, docs/PDF-READER.md §18.13), once every member's facts
  * are read (its band and its side): locate/columns.ts over each table's located cells, each its first column and span, its
  * class (InstrumentUnit.cell.boxed), what TeX set of it on its page (its lines' advances and its elements' ink on their
  * baselines, as the typesetter's own room of a cell reads it) and its Room.side, and what stands on the table's band on each
@@ -494,7 +494,7 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
       }
     }
     // (its own brackets: its first and last glyphs where they are a pair of them, "[" "]" around a citation's numbers:
-    // the stated half of T12, which a translation that brackets it takes)
+    // the brackets a translation that brackets it takes)
     const pair = bracketsOf(gs)
     if (pair) {
       const [b0, b1] = pair
@@ -503,7 +503,7 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
       el.brackets = [box(b0), box(b1)]
     }
     if (el.kind === 'display') {
-      // (the original's first mark after it: the member's own next glyph in the stream, a display's aside (D10))
+      // (the original's first mark after it: the member's own next glyph in the stream, a display's aside)
       const last = Math.max(...(mem.els.get(id) ?? [-1]))
       if (last >= 0)
         for (const a of [...mem.text].sort((x, y) => x - y))
@@ -514,8 +514,8 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
       continue
     }
     if (el.ink.length && !el.keep) {
-      // (its ink on a held line (KEPT, D11): kept with it, and the line's own next mark after it; one outside the unit's
-      // lines is kept by locate (B11 OUTSIDE). Its line the one its ink stands on, across and along: a line of the other
+      // (its ink on a held line (KEPT): kept with it, and the line's own next mark after it; one outside the unit's
+      // lines is kept by locate (geometry.ts). Its line the one its ink stands on, across and along: a line of the other
       // column at its height is none of its, 2610.20595v1 p9 ord 55's formulas beside a display row KEPT in the left column)
       const on = el.ink.map((k) =>
         mem.lines.findIndex(
@@ -554,8 +554,8 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
   // - else it lies in the window of B's stream between the two, with each group of the window. Where the marked compile set its
   //   points where TeX ended a line at a forced break (`kb<n>`, STATEMENTS_TEX's BREAKS_TEX: after \@gnewline's \unskip, past the
   //   line's last glyph) and the window holds as many as breaks, each break's line is the one of the unit's last glyph before its
-  //   point, in order (the compile move's F35: 2608.25210v2 t196, a break at the end of a full line after a line TeX wrapped,
-  //   which no count of line ends tells); else, as before the point: every forced break ends a line
+  //   point, in order (PDF-READER §18.77: 2608.25210v2 t196, a break at the end of a full line after a line TeX wrapped,
+  //   which no count of line ends tells); else, without the points: every forced break ends a line
   //   and a group one of its own, so where the window's lines end there as often as it holds groups, TeX ended each at one of
   //   them, in order (a paragraph's end TeX states there among them: in a centred or ragged block LaTeX's `\\` is
   //   \@centercr, which ends a paragraph, 2610.30034v1's title, 2608.25210v2 t8); else, in a unit TeX states it set centred
@@ -693,10 +693,10 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
 function readOpens(fx: FactsIndex, r: MemberReading): void {
   const { ins, m, unitB, roleB, pieceB, ends, gA } = fx
   const { mem, unit, lineOf } = r
-  // (a paragraph TeX opened inside the unit (C13, C15): a paragraph end of B's between its glyphs, its first line on A the line
+  // (a paragraph TeX opened inside the unit: a paragraph end of B's between its glyphs, its first line on A the line
   // of the unit's next glyph. The source side and B's side of the end are read by the same facts. What bounds a window is a
   // piece TeX set ink for in this compile: its glyphs on B, the unit's, an element's (an element's own, or a nested unit's mark,
-  // which the instrument owns as its piece's: pipeline/instrument.mjs), whatever its class; a piece TeX set none for here
+  // which the instrument owns as its piece's: instrument/instrument.ts), whatever its class; a piece TeX set none for here
   // (`\medbreak`, `\noindent`, a footnote whose mark it set elsewhere) bounds nothing, as B's run holds no glyph of it. Each side
   // of the end is met by what stands there (sideB, sideOf: one rule, both directions): where the unit's glyph next to the end
   // is a piece's and no letter or digit stands between, by that piece itself (a footnote's mark ending the paragraph before, an
@@ -705,8 +705,8 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
   // after it) begins B's after it. TeX opened the paragraph at the group so met on both sides, one group
   // alone (SpanAt.opens: the outermost of those opened together), else at the element B's next glyph opens, where its side
   // before is met too (El.opens). An end inside a piece's own glyphs opened none at it. One at no group's open and no element,
-  // before the member's first placed word, is none inside its text (2a's case i). Else it is
-  // stated by what else holds its place (design-display 2a's order): a forced break that ended the line before (El.ends); a
+  // before the member's first placed word, is none inside its text (PDF-READER §18.69). Else it is
+  // stated by what else holds its place (in §18.69's order): a forced break that ended the line before (El.ends); a
   // region (a display ends the paragraph before, or the line before or its own is held: a block of its own already); its first
   // word alone. Every point but a region's states its first word too where the member places it on the paragraph's line
   // (Placed.paras: a group or an element is a carrier a translator's reply can drop, PDF-READER §18.69).
@@ -816,7 +816,7 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
       for (const b of fx.boxes(u[0])) if (!own.boxes.has(`${u[0]}|${b.j}`) && between(b.y1, b.x0, b.x1)) return false
       return true
     }
-    // (the paragraph's first word (design-display 2a, F1): the first of the member's placed words (Placed.words, sentences.ts
+    // (the paragraph's first word (PDF-READER §18.69): the first of the member's placed words (Placed.words, sentences.ts
     // wordAt: a word by its first glyph on A, the opening marks set against it included; an element's by any glyph of its) that
     // TeX set from glyph `from` of B's stream on, past the unit's glyphs of no letter or digit and its label's, on the line TeX
     // opened the paragraph on; none where a glyph of the unit's spelling a letter or digit comes first that begins no placed word
@@ -834,7 +834,7 @@ function readOpens(fx: FactsIndex, r: MemberReading): void {
       }
       return undefined
     }
-    // (the member's first placed word on B: an end before it is no point inside its text (design-display 2a, case i): the glyphs
+    // (the member's first placed word on B: an end before it is no point inside its text (PDF-READER §18.69): the glyphs
     // before it are no word of the unit's source, a stop of the entry before that the unit's marks hold, its label set as text)
     let wordB = -1
     if (mem.wordAt)
@@ -1006,7 +1006,7 @@ function readTail(fx: FactsIndex, r: MemberReading): void {
   // -- the class's tail: its own text after its last letter, digit or element glyph, all on its last line
   if (unit) {
     // (a display's glyphs among them: a unit that ends with a display has no tail after its text before it)
-    // (its end mark aside, END: ink TeX pushed past the text, no part of it, as before it was claimed; and its trail, TRAIL: ink
+    // (its end mark aside, END: ink TeX pushed past the text, no part of it, though its member's; and its trail, TRAIL: ink
     // TeX set after its text, no part of it, the comma before 2608.16117v1's "19104," its class's tail, §18.59)
     const elGlyphs = [...mem.els].flatMap(([id, l]) => (id === END || id === TRAIL ? [] : l))
     const seq = [...mem.text, ...elGlyphs].sort((x, y) => x - y)
@@ -1079,7 +1079,7 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
     f = []
     const o = m.offA[p - 1] as number
     // (a glyph nothing of which is shown, wholly outside its clip or at an alpha of 0, is no ink beside it: 1706.03762v7 p13's
-    // heading, whose side stopped at a figure's title clipped out of its form, the checkpoint's measure-9)
+    // heading, whose side would stop at a figure's title clipped out of its form)
     inkA.pages[p - 1]!.glyphs.forEach((g, j) => {
       const c = owned.member(o + j)
       if (isInk(g) && !g.unseen && c !== mem.ord && c !== mem.leader)
@@ -1110,7 +1110,7 @@ function readRoom(fx: FactsIndex, r: MemberReading): void {
   // the free line from its room before its box to its room after; and the stroke under its text, which a translation reaching
   // it is crowded by. A turned one's is stated with its run (Placed.run: its first glyph's origin, its box's length along its
   // direction, its room before and after along it; its line is its box on the page, which tells none of them), its side the
-  // side of its box as before: a new name for the new fact, so that a typesetter of before reads the fields it knows alike)
+  // side of its box, as a line's: a new name for the new fact, so that a typesetter reading no `run` reads the rest alike)
   const fig = unit?.figure
   if (fig && fig.x !== undefined && fig.length !== undefined && fig.before !== undefined && fig.after !== undefined) {
     if (!fig.dir) mem.room.side = [r2(fig.x - fig.before), r2(fig.x + fig.length + fig.after)]
@@ -1165,7 +1165,7 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
   const { blockOf, column, linesOn } = fx
   const { mem, unit, own, sizeOf } = r
   // -- its alignment, where TeX did not state it (a cell's: its column's class or its own paragraph's, marks/channels.ts
-  // readAlign): the maker's reading (MAKE:2121-2135); a single-line cell by its column
+  // readAlign): read off its lines (facts.ts alignOf); a single-line cell by its column
   if (unit && unit.align !== 'c' && unit.align !== 'l' && unit.align !== 'r') {
     const labelX0 = mem.labelAt && mem.labelAt.ink[0] === mem.lines[0]?.[0] ? mem.labelAt.ink[1] : undefined
     // (a cell is read by its column's cells alone, never by the page's column)
@@ -1174,9 +1174,9 @@ function readAlign(fx: FactsIndex, r: MemberReading): void {
     // everything TeX set on that line within its measure, the member's own ink, its label, the end mark a fill pushed (its `~$`
     // element), another member's line on its baseline (a run-in head before it); PDF-READER §18.77: 2610.40645v1 p19's
     // proof, "Proof of Corollary 3.8." on its row and amsthm's box at its end, its words alone read
-    // centred under F13's measure. The row only keeps TeX's word: a row of other members' ink whose hull happens to stand about
+    // centred under its measure. The row only keeps TeX's word: a row of other members' ink whose hull happens to stand about
     // the middle is no centring (a theorem's head beside its first line, 2608.11084v1 p13; a list item's label and its last line,
-    // 2608.27210v1 p2). A line nothing told is read by its own ink as before: a running head's title beside its page number on
+    // 2608.27210v1 p2). A line nothing told is read by its own ink (alignOf): a running head's title beside its page number on
     // one baseline is two members, not one row)
     if (a === 'c' && unit.align === 'j' && own.length === 1 && !unit.cell)
       if (alignOf([rowOf(fx, mem, own[0]![0], labelX0)], sizeOf, blockOf, unit.align, undefined) !== 'c') a = 'j'

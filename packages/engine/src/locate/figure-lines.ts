@@ -3,9 +3,9 @@
 // holds a run set in a face of one pitch and words of another one figure text whose runs of one pitch are its elements (F0:
 // "Project Page:" and its address, a title and its path), a line whose every word stands between glyphs of one pitch kept whole
 // (code: Rule 1's inside-a-line, read on the line); and each crowded text's ink (roomOf's `met`) judged by its relation to the
-// text, the owner's reformulation of the no-touch rule: its own, a decoration of a stretch of its glyphs (a frame, a fill, a rule;
+// text (the relation reading, PDF-READER §18.26): its own, a decoration of a stretch of its glyphs (a frame, a fill, a rule;
 // a doubled copy), a container round all of it, or other ink: no ink keeps the text the original's but its own double, the same
-// string drawn again a little off it (step 2, the owner's ruling, PDF-READER §18.36). Pure arithmetic over a page's glyphs and
+// string drawn again a little off it (PDF-READER §18.36). Pure arithmetic over a page's glyphs and
 // boxes;
 // every measure the figure reading's, in its size: RUN_DY, RUN_GAP, SPACE_GAP, DRAW_BAND.
 import {
@@ -184,7 +184,7 @@ export function figureLinesOf(
     // page's lines read whole whatever texts a path's rows made of them, held `decoration` with its label, none kept for another
     // reason touched. The reading refuses to join such lines on a guess, since a wrong join damages a translation; a hold risks
     // only a line left the original's, so the pairing too weak to join is enough to hold. The author's phrase as a unit (the
-    // figure-text research's P1) replaces this pairing when it comes, §18.61)
+    // PDF's paragraph marks and a list's items) replaces this pairing when it comes, §18.61)
     const own = new Set(out.flatMap((t) => (t.why === 'decoration' ? t.ks : [])))
     if (own.size) {
       const textAtK = new Map(out.flatMap((t) => t.ks.map((k) => [k, t] as const)))
@@ -227,7 +227,7 @@ export function figureLinesOf(
  * ends at a join and starts again), `pairs` the pairs of lines it tests, `scripts` the pairs the script join tests (F1's, inside
  * each pass that joins nothing), `votes` the glyphs a line's size and baseline are voted over, `faces` the glyphs read for a
  * formula's (mathGlyph: a face's name and a character), `ends` a paragraph's line ends in a hyphen read against the document's
- * text (F3), `boxed` the closed paths whose box holds two units or more (figure-text.mjs containersOf, F3's container step) and
+ * text (F3), `boxed` the closed paths whose box holds two units or more (figure-text.ts containersOf, F3's container step) and
  * `interior` the points read against a closed path's inside, there and in the relation reading. The speed of the prepare's locate where figures are many: 2609.19644v1's
  * included pages
  */
@@ -243,7 +243,7 @@ export type LinesWork = {
   /** the figure texts kept as the original's, by why: drawn twice (`double`: its string again on its page, a little off it), F1's
    *  torn formula (`torn`), a run crowded by figureUnitsOf with no ink met (`today`), a line of code or of formulas kept whole
    *  (`code`, `formula`), one the engine cannot draw as it was set (`script`: setApart), one a word of which a decoration holds
-   *  (`decoration`, §18.61); and `inked`, the texts laid over ink their room met (step 2: no ink but its own double keeps a text) */
+   *  (`decoration`, §18.61); and `inked`, the texts laid over ink their room met (§18.36: only its own double keeps a text) */
   kept?: Record<'double' | 'torn' | 'today' | 'code' | 'formula' | 'script' | 'decoration' | 'inked', number>
 }
 let W: LinesWork | null = null
@@ -268,7 +268,7 @@ const NOTE_DIGITS = /^[0-9,]+$/u
  * engine's hundredth of a point; the row's text size its largest, where a line of prose's is its most frequent), at most
  * LaTeX's script ratio of that size (SCRIPT_RATIO: a plotting program's face a hundredth smaller is none), a note mark aside; or a spacing accent or a combining mark set over another of its
  * glyphs (its ink's middle across inside that glyph's ink, its ink above it) that TeX's \accent did not set over its letter
- * (accents.mjs accentOver, which joins a text accent to its letter: Física stays a word), its elements' glyphs too (a formula's
+ * (accents.ts accentOver, which joins a text accent to its letter: Física stays a word), its elements' glyphs too (a formula's
  * hat over its μ, laid as two crops one after the other: 2610.20947v1 p3). Its own glyphs alone: a neighbour's smaller text in
  * its band is no script of its (2602.23285v2 p9). 2610.22214v1 p4's "a_mn x_n = b_m", drawn "amn xn = bm"
  */
@@ -601,7 +601,7 @@ function linesOf(
         return x === null ? u : u === null ? x : Math.min(u, x)
       }, null)
     const taken = new Set<number>()
-    // ---- F3's container step: the lines a closed path holds alone (figure-text.mjs containersOf), two or more, a node's label
+    // ---- F3's container step: the lines a closed path holds alone (figure-text.ts containersOf), two or more, a node's label
     // (below), every one a line of words: one text, its lines top to bottom, centred, its room the path's inside (roomIn)
     for (const h of fig.holds ?? []) {
       if (h.p !== p) continue
@@ -717,7 +717,7 @@ function linesOf(
       // mirrored on the other (2608.06701v1 p2's bubbles; no geometric fact tells a box hugging its rows from one text was wrapped
       // into, 99 of 2610.37668v1's 103 value overlays read forced too). The sentence goes on: the row above ends in TeX's or a
       // word's hyphen (lineEnd), or this row's first letter, after any punctuation it opens with, is lower case ("… to inspect
-      // the"); a capital, a digit or a symbol begins a row of its own, a value under a value, a list's next statement, as today,
+      // the"); a capital, a digit or a symbol begins a row of its own, a value under a value, a list's next statement,
       // and a script without case never joins. A box may so hold several paragraphs; a row alone stays its own text. A row that
       // opens an item begins a text of its own, its marker its label, as a list's item does outside a path (2608.06701v1 p1's plan
       // box, items 1 to 4 each wrapped over its rows); whether a row opens one or not, the wrap rule joins the rows under it)
@@ -1634,7 +1634,7 @@ function torn(
  * contiguous stretch of its glyphs and of no other glyph: a frame round a citation, a chip's fill; a rule of horizontal segments
  * alone under or through such a stretch; a doubled copy, a glyph of the same character over one of its own within half its size
  * across), a container (a closed shape, every segment's end met by another, holding every glyph of it, their ink strictly
- * inside), or other ink, which keeps none (step 2, the owner's ruling: a translation in its right place is the goal, ordinary
+ * inside), or other ink, which keeps none (PDF-READER §18.36: a translation in its right place is the goal, ordinary
  * text with ink about it is translated; another text's glyph in its room neither: the translation stands where this text stands,
  * as the original's rows stand beside each other; a text drawn twice is kept apart, doubledOf). A decoration of a stretch is that
  * stretch's element, carrying it (a framed citation an element, never translated); of all of it, hidden with its text; a copy
@@ -1753,7 +1753,7 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
         )
       continue
     }
-    // (a tone under part of the text that holds no stretch of its words whole: its ground, crowding nothing, as before)
+    // (a tone under part of the text that holds no stretch of its words whole: its ground, crowding nothing)
     if (it.ground) continue
     if (
       held.length === textGs.length &&
@@ -1789,7 +1789,7 @@ function judge(ft: FigureText, items: readonly TodayMet[], glyphs: readonly G[])
         continue
       }
     }
-    // (step 2, the owner's ruling: ink that is no text never keeps a figure text: a line or a shape about it, an arrow across it, a
+    // (PDF-READER §18.36: ink that is no text never keeps a figure text: a line or a shape about it, an arrow across it, a
     // legend's sample beside it, an icon in its node; the translation is laid in the text's own place, inside its container where
     // the reading found one, within its own room otherwise. Another text's glyph alone keeps it (above))
     inked = true

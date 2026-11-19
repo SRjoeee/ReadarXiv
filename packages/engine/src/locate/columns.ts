@@ -1,4 +1,4 @@
-// A table column's box on arXiv's page (Room.column; the owner's decision, docs/PDF-READER.md §18.13): the left
+// A table column's box on arXiv's page (Room.column, docs/PDF-READER.md §18.13): the left
 // and right edge of what TeX set in one column of one tabular, every entry's. Its unit cells are the members the source walk
 // placed in that grid column (InstrumentUnit.cell: its table, row, first column and span), their glyphs the ownership's; an
 // entry no unit is (a number, a formula alone, a cell of fewer than two letters) has no mark, no owner and no grid place, and
@@ -22,7 +22,7 @@
 //   paragraph's \hsize, which no glyph shows) or whose template is not LaTeX's (no class) has none;
 // - a cell spanning columns (\multicolumn) is no entry of a single column's box; its box is the union of those it spans where
 //   each has one, its class setting it there. One wider than that union widened its last column (TeX gives the excess to the
-//   last column it spans): that column's entries no longer tell its width, and neither it nor the spanning cell has a box;
+//   last column it spans): that column's entries do not tell its width, and neither it nor the spanning cell has a box;
 // - a table set over several pages (a longtable's) takes its columns from all of them where every column with a box on two of
 //   them stands at its class's edge or middle on each, else each page's from its own.
 // What is not read: a column of no unit cell, an entry of free ink spanning columns of which one has no unit cell (a dash over
@@ -77,7 +77,7 @@ export interface FreeWord {
  * sets every entry of an l, c or r column on the column's one edge or middle exactly (the template's \hfil), and the part states
  * positions on its hundredth; what stands between is what TeX counts in an entry's box and no glyph's advance shows (a formula's
  * italic correction, an advance against its TFM width) and an element's ink past its advance, which an entry's extent takes in.
- * Measured over the columns of two unit cells or more of one class on the round's 90 bundles (lane cell-col): 572 of 608 equal to
+ * Measured over the columns of two unit cells or more of one class in 90 bundles: 572 of 608 equal to
  * the hundredth, 12 apart by 0.1 to 0.5 (an element's ink against an advance, a centred cell of several lines), 2 by 0.5 to 0.75,
  * 22 by over 2 (cells the source walk placed in another column than TeX's). Its reason: docs/PDF-READER.md §18.13, a column
  * whose entries do not line up is no column of TeX's

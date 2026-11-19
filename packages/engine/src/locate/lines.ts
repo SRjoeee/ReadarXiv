@@ -1,4 +1,4 @@
-// A unit's lines, cut in its own glyph run in stream order by one rule (design §4.1, "geometry is A's"; spike S1 §2): the next
+// A unit's lines, cut in its own glyph run in stream order by one rule (its geometry A's own, ARCHITECTURE.md): the next
 // glyph starts a line where it leaves the line's baseline band (half a size about the baseline its body glyphs so far share)
 // and jumps back left of the glyph before it, or far on to its right (two sizes), or its ink more than one and a half sizes up
 // or down (a column's top: no script is that far); and wherever the page changes; two lines so cut one after the other on one baseline,
@@ -28,7 +28,7 @@ export interface CutLine {
  * outline paints something, whatever Unicode its font maps it to: TeX's math extension pieces where their font maps no Unicode
  * are blank to PDF.js (CMEX10's "}" of \big, its code 9, read as U+0009; its bar's extension, code 12, as U+000C; a Bigg "(",
  * code 32, as U+0020; OT1's stroke of an "Ł", CMR10's code 32): 1,515 glyphs of the 88 papers' pages, every one drawn by its
- * outline, and none of their 6.0 M page glyphs paints nothing (a font's space would: its outline empty, ink.mjs's top = bottom
+ * outline, and none of their 6.0 M page glyphs paints nothing (a font's space would: its outline empty, ink.ts's top = bottom
  * and ix0 = ix1 at its origin). Read by its Unicode, the brace of 2610.30034v1 p4 t60 stood on no line and in no box of its
  * element, erased with the element's group and never drawn again. Inside a form XObject the glyphs are an included figure's,
  * read as figure-text.ts reads them, a blank one a word space: there the outline is no reading of what PDF.js draws
@@ -49,17 +49,17 @@ export const r2 = (v: number): number => {
   return Object.is(r, -0) ? 0 : r
 }
 
-/** a line's body glyphs: within this share of its size (MAKE:72) */
+/** a line's body glyphs: within this share of its size */
 const BODY = 0.15
 /**
  * A line's size: the median of its main glyphs'
  * sizes (the upper one of an even count), its main glyphs those within PART_MAIN of its largest size where they set at least
  * MAINS_SHARE of its characters (a line of words with a large formula sign is the line of its words), else all of them; to a
- * hundredth, at most SIZE_MAX. The typesetter draws a line's band by it (texRects); its fonts' boxes are its top and bottom
+ * hundredth, at most SIZE_MAX. The typesetter draws a line's band by it (lay/adapt.ts); its fonts' boxes are its top and bottom
  */
 const PART_MAIN = 0.85
 const MAINS_SHARE = 0.25
-/** a line's size at most, PDF units: the layout file's bound on a line's size (layout/file.mjs SIZE_MAX); unmeasured */
+/** a line's size at most, PDF units; unmeasured */
 const SIZE_MAX = 200
 export function lineSize(gs: readonly DocGlyph[]): number {
   if (!gs.length) return 0

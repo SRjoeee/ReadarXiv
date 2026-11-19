@@ -19,15 +19,15 @@ import { BRACKET, CALL, type Member, ON_ROW, UNIT_MARK, type Work } from './work
 // text. Decided by what TeX set, never by a symbol's name or shape: what TeX shipped in B's stream after the member's end point,
 // glyphs and boxes alike, up to the next unit's ink (the walk below), every piece of it with a partner on A, free there, within
 // the member's last line's box and together on its band (as Room.stays reads ink beside a line: facts.ts staysOf), wholly after
-// its last glyph (half a point, pinnedOf's), and its box's right edge at that line's measure end (CENTRE: the maker's
+// its last glyph (half a point, pinnedOf's), and its box's right edge at that line's measure end (CENTRE: the facts pass's
 // flush-right reading, a line of the page's head or foot and a label's own line read so, facts-pass.ts): TeX pushed it there,
 // and the paragraph ends with it (nothing of no unit's after it before the next unit's ink, on this page or at the next
 // page's body's head). Over the 88 papers of r19: 251 of the 263 marks Room.stays stated at a source unit's last line's
-// measure end, none else. Claimed by the member as its
-// element END, of no piece, in its travelling group `.e` (erased with the unit's elements, drawn as a crop at the
-// translation's end, El.end; `trail` too, so that a typesetter of before draws it after the translation's end), and no stay of
+// measure end, none else. Claimed by the member as its element END, of no piece, in its travelling group `.e` (erased
+// with the unit's elements, drawn as a crop at the translation's end, El.end; `trail` too, so that a typesetter that reads
+// no El.end draws it after the translation's end), and no stay of
 // any member's. Not a mark TeX set after a space (2608.25210v2's `example`, `$\square$` 2.24 pt after the text: no push), nor
-// one past a line's end that is no measure's (2610.40394v1's six, the part's measure its column's): both stay as before. Not
+// one past a line's end that is no measure's (2610.40394v1's six, the part's measure its column's): both remain stays. Not
 // the author's own mark written in the text (`\qed`, `\hfill $\square$`: an element of the unit's): the same reading of its
 // ink (the unit's last piece, after the line's other glyphs, at its measure's end) states as many of the units whose last
 // element TeX set after a word space on a full last line, a reference's year, a caption's formula (34 of them on the first 47
@@ -103,7 +103,7 @@ export function endMarks(w: Work, claims: Claims): void {
       // glyph another member holds on A (an ink unit made of it), is the paragraph's own going on, no mark pushed to its end: a
       // reference whose unit holds its authors alone, its year and title after them on its line and the next, an ink unit's
       // (2610.11256v1's apacite entries, 2610.16663v1's two); and the next heading's number no unit owns (2610.16663v1 p55
-      // t277, its box left a stay as before)
+      // t277, its box left a stay)
       const owner = ins.boxes[p]?.unit
       const glyphs: number[] = []
       const boxes: [number, number, number, number][] = []

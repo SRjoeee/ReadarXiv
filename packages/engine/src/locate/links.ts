@@ -70,7 +70,7 @@ export function linksOnA(w: Work, owned: Owned, o: LocateOptions): void {
       }
       // (the characters of the glyphs under it, its glyph points' in their order: the annotation's own (Link.text, which the
       // typesetter's placeText finds among a piece's drawn characters where PDF.js's overlaidText is not read: the server reading
-      // skips it, pdf-lite.mjs's text guard)
+      // skips it, compile/pdf-lite.ts's text guard)
       const text = pts.map((a) => pg.glyphs[a - off]!.u).join('')
       const border = borderOf(an)
       out.push({

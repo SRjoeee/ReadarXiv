@@ -1,5 +1,5 @@
-// Each line's measure as TeX set it, where its paragraph states one that is not its frame (the compile move's C3: the display
-// design's F13): a list's \parshape (\@totalleftmargin, \linewidth), wrapfig's shape, a \hangindent, a \leftskip or \rightskip
+// Each line's measure as TeX set it, where its paragraph states one that is not its frame (PDF-READER §18.77): a list's
+// \parshape (\@totalleftmargin, \linewidth), wrapfig's shape, a \hangindent, a \leftskip or \rightskip
 // of some natural size, read into the line's m0..m1 (Line[7], Line[8]) over the frame's measure columnsAndMeasures gave it.
 // Phase 8's second step (locate.ts), right after the frames' measures (geometry.ts frameMeasures): it reads the instrument's
 // statements (Instrument.tex.measures, by the serial of each paragraph's end; Instrument.tex.paras, each unit's paragraph by
@@ -39,7 +39,7 @@ export function lineShape(s: ParaMeasure, k: number): [indent: number, length: n
  * the line or there is none (no paragraph without a point, one TeX ended after a box, can stand between them; B's order is not
  * TeX's where a class sets paragraphs in a box before others: REVTeX's abstract, set before \maketitle's title and authors and
  * shown after them, lost its measure to the frame's in six papers of the corpus under the first condition alone); (iii) every
- * other line, and a unit TeX ended in an \hbox or stated nothing for, takes none (its frame's, as before F13). B's "first end
+ * other line, and a unit TeX ended in an \hbox or stated nothing for, takes none (its frame's). B's "first end
  * after the line" alone took the next paragraph's measure for a paragraph that ends in a box (amsthm's QED box) and counted its
  * lines as the next one's: 2610.40645v1 p19's proof read as the next section heading's \hangindent. The pairing alone took a
  * paragraph that is not the line's in two ways, which (i)'s bounds turn away: a unit whose paragraph a display ended (TeX breaks

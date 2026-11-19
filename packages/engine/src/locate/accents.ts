@@ -2,9 +2,9 @@
 // A spacing accent TeX set as a glyph of its own, and its letter: one rule for every reading of text off a page's glyphs. TeX's
 // \accent (OT1's, every Computer Modern text font's) sets the accent, moves back over it and sets the letter (or sets the letter
 // and the accent over it), so a font's map reads the two apart: "F´ısica" for Física, "Cande`s" for Candès, "PE´REZ" for PÉREZ
-// (2610.20716v1, 2610.35877v1, 2610.20285v1). The reader joins them on the page's text items (layer-proto/layer2.mjs
-// joinAccents); the prepare on our page's glyphs (the ink units' words, layout/ink-units.mjs; the figures' runs,
-// layout/figure-text.mjs), which this module tells. Imports nothing; an original module (no port statement).
+// (2610.20716v1, 2610.35877v1, 2610.20285v1). The ink units' words (ink-units.ts) and the text locate reads off A's glyphs
+// (facts.ts joinAccents) join them, and a figure text's accent so set is none set apart (figure-lines.ts setApart), each by
+// the rule this module tells. Imports nothing; an original module (no port statement).
 
 /** a glyph as this module reads one (accentOver): its Unicode, font, size, its advance along its line (x0, x1), its baseline
  *  across (y) and its ink's top */

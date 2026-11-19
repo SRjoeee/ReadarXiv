@@ -24,12 +24,12 @@ export function claimTrails(w: Work, claims: Claims): void {
   // no other unit's between, each on the member's line (its box meeting the last glyph's across: a raised mark is, which a
   // row's baseline rule, ON_ROW, is not) and no word's gap (WORD_GAP, the ink units' word rule) after the one before; a mark TeX
   // set past a skip (an \hspace, a \hfill: a proof's QED box) is none of it, and stays (Room.stays)
-  // A run TeX states (latex-front.mjs \axtcall: the point `<i>c` the marked compile sets before each author's call, the command
+  // A run TeX states (marks.ts \axtcall: the point `<i>c` the marked compile sets before each author's call, the command
   // or the \and that opens unit i's block, where TeX sets it on a line): an author's member owns what stands on its last line
   // between its end mark and the next author's call, before any unit's mark or bracket, whatever the gap (ICML's \, before its
   // marks, 0.17 em, past WORD_GAP: the marks were left behind its name's translation), and nothing past it, which the next
-  // author's lead is (own.mjs MR 5); a row of another line there (1706.03762v7's e-mails, under each place before NeurIPS'
-  // \And) is none of it, the original's where TeX set it as before (taken, the place was laid on two lines at 8.97 pt). The last of such calls, an author whose own call is stated with no call after it, owns what
+  // author's lead is (own/own.ts MR 5); a row of another line there (1706.03762v7's e-mails, under each place before NeurIPS'
+  // \And) is none of it, left the original's where TeX set it (taken, the place was laid on two lines at 8.97 pt). The last of such calls, an author whose own call is stated with no call after it, owns what
   // stands on its last line before the paragraph TeX ends after it (Instrument.tex.paragraphEnds), no unit's mark between: the
   // end of the list its calls make (ICML's last name, "Zuo Bai 2 †"); a row of another line before that end (an e-mail a class
   // sets under the last name in its tabular) is none of it, and the glue rule below reads the run. Where no call is stated (a
