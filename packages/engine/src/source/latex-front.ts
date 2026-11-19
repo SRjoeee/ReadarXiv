@@ -4270,8 +4270,8 @@ function olderUnits(s: string, from: number, to: number, b: Builder, ctx: Ctx): 
   sb.flush()
   return topUnits(out).map((u): [number, number] => [u.start, u.end])
 }
-/** a key of an affiliation's values whose value is no prose: a postcode */
-const CODE_KEY = /^(?:postcode|postalcode|zipcode|zip)$/i
+/** a key of an affiliation's values whose value is no prose: a postcode, elsarticle.cls's `postcode` (its \affiliation's keys) */
+const CODE_KEY = /^postcode$/i
 /** an affiliation written as keys and values (elsarticle's \\affiliation[a]{organization={Department of X}, city={Paris},
  *  country={France}}, which the class prints one value after another): each value with a word in it a unit of places of its
  *  own, its marks inside the value's braces, where the class keeps the value's tokens as they are; the keys, the separators,

@@ -194,8 +194,9 @@ describe('the tracked form', () => {
     expect(t.rules[`packages/engine/src/locate/rules::(top)::DECIDES`]?.runs).toEqual({ corpus: [9, 7, 2] })
     expect(t.rules[`packages/engine/src/locate/rules::(top)::FOLDED_READ`]).toMatchObject({ runs: { corpus: [2, 2, 0] }, reads: { corpus: 1 }, folds: 1 })
     expect(t.rules[`packages/engine/src/locate/rules::(top)::LIST`]).toMatchObject({ kind: 'list', size: 3, hits: [3, 0, 0] })
-    // (a list whose entries are exempt or not judged: its hits decide nothing, and are left in the full record)
-    expect(t.rules[`packages/engine/src/locate/rules::(top)::DEFINED`]?.hits).toBeUndefined()
+    // (a list whose entries are exempt: its hits remove none of them, and are kept, the census's reading of its recorded cases)
+    expect(t.rules[`packages/engine/src/locate/rules::(top)::DEFINED`]).toMatchObject({ hits: [1, 0, 0] })
+    expect(l.rules[`packages/engine/src/locate/rules::(top)::DEFINED`]?.removeEntries).toBeUndefined()
     expect(t.rules[`packages/engine/src/locate/rules::(top)::BY_TEST`]?.tests).toEqual({ false: { 'a.test.ts': [0] } })
     expect(t.rules[`packages/engine/src/locate/rules::(top)::PAPER`]?.cites).toEqual({ flag: 'paper', papers: ['2401.00001v1'] })
     const text = trackedText(t)
@@ -326,6 +327,97 @@ describe("a list defined by its recorded cases: every entry hit in the rule ledg
     expect(classes(c)).toMatchObject({ KINDS: 'listed', MORE: 'listed' })
     expect(c.trees.NOW.debt.lists.headline).toEqual({ listed: 3, defined: 1 })
     expect((await census({ today: null, now: scan() })).trees.NOW.debt.lists.headline).toEqual({ listed: 3, defined: 1 })
+  })
+})
+
+describe('a list part cited, part recorded: each entry its comment does not name hit in the recording', () => {
+  let dir = ''
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'axt-rules-mixed-'))
+    const write = (p: string, t: string) => {
+      mkdirSync(dirname(join(dir, p)), { recursive: true })
+      writeFileSync(join(dir, p), t)
+    }
+    write('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    write(
+      'packages/engine/src/index.ts',
+      [
+        '// (a module of four lists: the first comment of a file is its header, no declaration\'s)',
+        '',
+        "// Black and Heavy: weights of TeX Live's Fontname weight.map; the other entries recorded cases",
+        'export const BOLD = /(?:Bold|Black|Heavy|Semi)/',
+        "// cmmi and cmsy: TeX's font names; the other entries recorded cases",
+        "export const MATH = new Set(['cmmi', 'cmsy', 'msam', 'eufm'])",
+        "// Bold, Black and Heavy: weights of TeX Live's Fontname weight.map; the other entries recorded cases",
+        'export const ALL = /(?:Bold|Black|Heavy)/',
+        "// tabularx.sty's",
+        "export const CITED = new Set(['tabular', 'longtable', 'tabu'])",
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: (p: string) => p.startsWith('packages/engine/src/') })]
+  const row = (entries: string[], hits: number[]) => ({ kind: 'list', verdict: 'decides', size: entries.length, entriesDigest: digestOf(entries), hits })
+  const classes = (c: Awaited<ReturnType<typeof census>>) =>
+    Object.fromEntries(c.trees.NOW.debt.lists.list.map((l: { name: string | null; class: string }) => [l.name, l.class]))
+  const rulesLedger = {
+    recorded: { commit: 'c0ffee' },
+    rules: {
+      'packages/engine/src/index::(top)::BOLD#1': row(['Bold', 'Black', 'Heavy', 'Semi'], [5, 0, 0, 2]),
+      // (eufm: neither named nor hit)
+      'packages/engine/src/index::(top)::MATH#1': row(['cmmi', 'cmsy', 'msam', 'eufm'], [0, 3, 1, 0]),
+      'packages/engine/src/index::(top)::ALL#1': row(['Bold', 'Black', 'Heavy'], [5, 0, 0]),
+      'packages/engine/src/index::(top)::CITED#1': row(['tabular', 'longtable', 'tabu'], [0, 0, 0]),
+    },
+  }
+  it('reads a list whose comment cites a definition for the entries it names, and the recording hit every other, apart', async () => {
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    expect(classes(c)).toEqual({ BOLD: 'mixed', MATH: 'listed', ALL: 'defined', CITED: 'defined' })
+    expect(c.trees.NOW.debt.lists.headline).toEqual({ mixed: 1, listed: 1, defined: 2 })
+  })
+  it('reads no recorded cases with no ledger: a list that says its other entries are recorded cases is listed', async () => {
+    expect((await census({ today: null, now: scan() })).trees.NOW.debt.lists.headline).toEqual({ listed: 2, defined: 2 })
+  })
+})
+
+describe('a plural in -s of an entry its comment names, read as named where the comment says so', () => {
+  let dir = ''
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'axt-rules-plural-'))
+    const write = (p: string, t: string) => {
+      mkdirSync(dirname(join(dir, p)), { recursive: true })
+      writeFileSync(join(dir, p), t)
+    }
+    write('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    write(
+      'packages/engine/src/index.ts',
+      [
+        '// (a module of two lists: the first comment of a file is its header, no declaration\'s)',
+        '',
+        "// Eqn and Tab: Wiktionary's eqn. and fancyref.sty's Tab.; a plural in -s of an abbreviation named here is its plural; the",
+        '// entries not named here are judged by recorded cases',
+        "export const PART = new Set(['Eqn', 'Eqns', 'Tab', 'Tabs', 'Rem'])",
+        "// Eqn and Tab: Wiktionary's eqn. and fancyref.sty's Tab.; the entries not named here are judged by recorded cases",
+        "export const BARE = new Set(['Eqn', 'Eqns', 'Tab', 'Rem'])",
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+  const scan = () => [scanTree('engine', dir, ENGINE_PROFILE, { nodes: (p: string) => p.startsWith('packages/engine/src/') })]
+  const row = (entries: string[], hits: number[]) => ({ kind: 'list', verdict: 'decides', size: entries.length, entriesDigest: digestOf(entries), hits })
+  it('reads Eqns and Tabs as named by Eqn and Tab where the comment says a plural is its singular, not where it does not', async () => {
+    const rulesLedger = {
+      recorded: { commit: 'c0ffee' },
+      rules: {
+        'packages/engine/src/index::(top)::PART#1': row(['Eqn', 'Eqns', 'Tab', 'Tabs', 'Rem'], [0, 0, 0, 0, 4]),
+        'packages/engine/src/index::(top)::BARE#1': row(['Eqn', 'Eqns', 'Tab', 'Rem'], [0, 0, 0, 4]),
+      },
+    }
+    const c = await census({ today: null, now: scan(), rulesLedger })
+    const classes = Object.fromEntries(c.trees.NOW.debt.lists.list.map((l: { name: string | null; class: string }) => [l.name, l.class]))
+    expect(classes).toEqual({ PART: 'mixed', BARE: 'listed' })
   })
 })
 

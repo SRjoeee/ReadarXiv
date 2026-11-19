@@ -4,7 +4,7 @@
 // ink; where today's rule had a threshold that only guarded its re-derivation of ownership, ownership answers instead and the
 // threshold is gone; a threshold that is a typographic fact stays, named, with its source. File:line: today's engine at
 // 065c1d973 (`L2` layer-proto/layer2.mjs, `RUN` run.mjs, `TEX` tex.mjs, `MAKE` layout/make.mjs).
-import type { Ink, Line, Piece, Style } from '@readarxiv/format'
+import type { Ink, KnownElKind, Line, Piece, Style } from '@readarxiv/format'
 import { bareFontName as bare, readFontName as classifyFont, type FontNameClass } from '@readarxiv/text'
 import type { DocGlyph } from '../doc.ts'
 import { glyphWith } from '../glyph.ts'
@@ -324,7 +324,14 @@ export function fillOfGlyphs(gs: readonly DocGlyph[]): number | undefined {
 /** the most marks a class sets after a unit's text (amsthm's note ")."; a run-in head's "."; a style's stop after an entry):
  *  today's TAIL_MAX (L2:1577), a fact of the classes */
 export const TAIL_MAX = 3
-const SENTENCE_KINDS = new Set(['stop', 'comma', 'semi', 'colon', 'excl', 'quest'])
+const SENTENCE_KINDS = new Set<string>([
+  'stop',
+  'comma',
+  'semi',
+  'colon',
+  'excl',
+  'quest',
+] satisfies readonly MarkKind[])
 /** the text a unit's source writes in its text pieces, its groups' too (no element's source) */
 export function sourceText(content: readonly Piece[]): string {
   let out = ''
@@ -581,8 +588,10 @@ export function bracketsOf(gs: readonly DocGlyph[]): [DocGlyph, DocGlyph] | null
   return tg.length > 2 && b0 && b1 && PAIRS[b0.u] === b1.u ? [b0, b1] : null
 }
 
-/** a mark's kind (today's markKind L2:2363) */
-export function markKind(ch: string): string {
+/** the kinds of punctuation markKind names */
+export type MarkKind = 'stop' | 'comma' | 'semi' | 'colon' | 'excl' | 'quest' | 'close'
+/** a mark's kind (today's markKind L2:2363), or the character itself where it is none of them */
+export function markKind(ch: string): MarkKind | string {
   if (/^[.\u3002\uFF0E\uFF61]$/u.test(ch)) return 'stop'
   if (/^[,\u3001\uFF0C\uFF64]$/u.test(ch)) return 'comma'
   if (/^[;\uFF1B]$/u.test(ch)) return 'semi'
@@ -621,9 +630,9 @@ function textEndMarks(s: string): { marks: string[]; stopped: boolean } {
   }
   return { marks, stopped: false }
 }
-/** the element kinds that set no ink (today's phClass `zero`, `space`; the adapter's `space` a tie, `break` a forced line break):
- *  passed over at a unit's end */
-const INKLESS_KINDS = new Set(['zero', 'space', 'break', 'other'])
+/** the element kinds that set no ink (instrument.ts elementKindOf's: a tie's `space`, a forced break's `break`, and `other`,
+ *  an element no class names): passed over at a unit's end */
+const INKLESS_KINDS = new Set<string>(['space', 'break', 'other'] satisfies readonly KnownElKind[])
 /** the marks a unit's source writes at its end, after its last letter, digit or element (today's sourceEndMarks L2:1608):
  *  null where a symbol element stands among them (its ink is among the page's marks there, as many as its source does not
  *  tell) */

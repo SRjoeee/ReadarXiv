@@ -117,15 +117,27 @@ export const ENGLISH_FAMILIES: readonly EnglishFamily[] = Object.freeze([
 ])
 const SERIF_DESIGN = new Set<string>(ENGLISH_FAMILIES)
 
-// style words: URW's Medi(um) is its bold, and its Regu, Ital and Obli abbreviations; Medium spelled out is not bold
+// style words: URW's Medi(um) is its bold, and its Regu, Ital and Obli abbreviations; Medium spelled out is not bold. The bold
+// words are weights of TeX Live's Fontname scheme (fonts/map/fontname/weight.map: Bold, Black, Demi, Heavy, Semibold,
+// ExtraBold), and SemiBold as PostScript names spell it (archivo's ArchivZero.map: Archiv0-SemiBold)
 const BOLD = /(?:Bold|Bol(?![a-z])|Black|Heavy|Demi|Semibold|SemiBold|ExtraBold|Medi(?![a-z]))/
-const ITALIC = /(?:Italic|Ital(?![a-z])|Ita(?![a-z])|Oblique|Obli(?![a-z])|Slant|Inclined|Kursiv|It$)/
-// small capitals, by a name's words: a face named for them (SmallCaps, Caps, Capitals) or with an SC suffix
+// the slant words: Italic, Kursiv and Oblique variants of TeX Live's Fontname scheme (fonts/map/fontname/variant.map), Slant
+// and It in PostScript names (algolrevived's AlgolRevived-Slanted, sourcesanspro's SourceSansPro-It)
+const ITALIC = /(?:Italic|Ital(?![a-z])|Ita(?![a-z])|Oblique|Obli(?![a-z])|Slant|Kursiv|It$)/
+// small capitals, by a name's words: a face named for them (SmallCaps, Caps, Capitals) or with an SC suffix: SmallCaps a variant
+// of TeX Live's Fontname scheme (fonts/map/fontname/variant.map), Caps and Capitals in PostScript names (lm's
+// LMRomanCaps10-Regular, bookhands' Bookhands-Square-Capitals)
 const CAPS = /(?:SmallCaps|Caps|Capitals|[a-z]SC$|-SC$|-Sc$)/
 // a name no table holds: its class guessed from its words, mono's first (a typewriter's or a code face's), then sans's, then
-// math's; a name with none of them is a serif's
+// math's; a name with none of them is a serif's. Mono's words, monospaced faces' names: Courier, Typewriter, Consol (Consolas)
+// and Monaco faces of TeX Live's Fontname scheme (fonts/map/fontname/typeface.map), Mono and Code in PostScript names (lm's
+// LMMono10-Regular, cascadia-code's CascadiaCode-Bold), Fixed in a font file's (almfixed.otf, ALM Fixed), and Menlo, Apple's
+// (Apple Support's page "Fonts included with macOS Monterey" names it among the faces macOS installs)
 const MONO_WORD = /(?:Mono|Courier|Typewriter|Consol|Code|Menlo|Monaco|Fixed)/i
-// (sans's words: Sans, Gothic, a grotesque's, and sans families' own names)
+// (sans's words: Sans, Gothic, a grotesque's, and sans families' own names: Arial, Verdana, Calibri, Tahoma, Futura, Avenir,
+// Univers and Frutiger faces of TeX Live's Fontname scheme (fonts/map/fontname/typeface.map), Grotesk (its AkzidenzGrotesk),
+// Helvet (its HelveticaNeue) and Gothic (its URWGothicL) there too; Sans in PostScript names (lm's LMSans8-Regular); Segoe in
+// PDF.js's standard_fonts.js getNonStdFontMap, which reads SegoeUISymbol as Helvetica)
 const SANS_WORD = /(?:Sans|Gothic|Grotesk|Arial|Helvet|Verdana|Calibri|Segoe|Tahoma|Futura|Avenir|Univers|Frutiger)/i
 // (math's words: a math face's, a symbol face's, a dingbat face's)
 const MATH_WORD = /(?:Math|Symbol|Dingbat)/i

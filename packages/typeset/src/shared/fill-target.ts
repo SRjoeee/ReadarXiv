@@ -1,6 +1,7 @@
 // S.fill.target (design-b §1.5): a page's fill target, its own leading held within the band of the anchor (§3.3). Ported from
 // engine 065c1d973 run.mjs: pageTarget RUN:329-345, BODY_KINDS RUN:235-236. Its voters are stated by the part (the units
 // begun on the page and those running on to it, PassFacts / design-a §1.3), each with its fill leading at its fit (S.fill.leads).
+import type { KnownKind } from '@readarxiv/format'
 import { median } from '../util.ts'
 
 /** a voter: a unit laid on the page, its kind, whether it was refused, its fill leading and its fitted lines */
@@ -9,7 +10,7 @@ export type Voter = { kind: string; refused?: boolean; fillLead: number | null |
 export type FillTarget = { target: number | null; own: number | null; anchor: number | null; body: boolean }
 
 /** the page's body units: those its fill's target reads first and its one size grows (RUN:236) */
-export const BODY_KINDS: readonly string[] = Object.freeze(['para', 'abstract', 'list', 'item'])
+export const BODY_KINDS: readonly string[] = Object.freeze(['para', 'abstract'] satisfies readonly KnownKind[])
 
 /**
  * S.fill.target: the median fill leading of the units begun on the page that tell one with two lines or more, body units

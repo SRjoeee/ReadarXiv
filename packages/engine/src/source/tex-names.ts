@@ -41,7 +41,9 @@ export const GENERATED_COMMANDS = Object.freeze([
   'Autoref',
 ])
 /** the targets whose names do not inflect (no plural, no case): an English plural or lower-case form reads as its type's one
- *  name there */
+ *  name there. Each is a language of one plural category, `other`, in Unicode CLDR's plural rules (Intl.PluralRules reads
+ *  them; tests/typeset/tex-names.test.ts holds it) whose names table was read so; the converse is not claimed: a language of
+ *  one plural category is not one of these until its names table is read so */
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
 /** the babel names (the layout rules' labels, by key) a counter type reads in a target that neither cleveref nor ctex
  *  names: a float's, an appendix's (article.cls's \figurename, \tablename, \appendixname, as babel's captions) */
