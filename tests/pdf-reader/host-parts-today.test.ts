@@ -18,6 +18,11 @@ describe('the extension page\'s parts of the chrome', () => {
     expect(extensionParts({ controller, store: own, embedded: false }).reason('no-key')).toBe(en.REASON['no-key'])
     expect(extensionParts({ controller, store: own, embedded: false }).reason('network')).toBe(en.REASON.network)
   })
+  it('the translator the service menu names (slots.tsx askedFirst): the stored one, which the page\'s chain answering today\'s reader\'s calls asks first, whoever picked it', () => {
+    const store = configStore(DEFAULT_CONFIG)
+    const asked = [DEFAULT_CONFIG, { ...DEFAULT_CONFIG, provider: 'google-web', providerChosen: true }].map(c => store.askedFirst(c))
+    expect(asked).toEqual(['microsoft', 'google-web'])
+  })
   it('the probes\' hook gets the controller as the probes read it, with the settings, and the session', () => {
     const store = configStore(DEFAULT_CONFIG)
     const hook = vi.fn()
