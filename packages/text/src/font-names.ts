@@ -1,4 +1,4 @@
-// Today's reader's reading of a PDF font's name (engine 065c1d973 layer-proto/fonts.mjs classifyFont), held once: its family
+// The reading of a PDF font's name, held once: its family
 // (serif, sans, mono, math), weight, slant and small capitals by the name's words, and the Latin design whose face the reader
 // draws it in. The prepare reads the first four of each glyph's font (engine locate/facts.ts classifyFont), the typesetter all
 // of them of a part's fonts (typeset breaker/font-names.ts classifyFont) and the first three of a figure's (typeset

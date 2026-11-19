@@ -32,7 +32,7 @@ export interface Face {
  * its group (our CSS family is `axt-` and the group, but for the four FAMILY_NAME renames), its CSS weight and style, its size correction, its licence (an
  * SPDX expression, or a LicenseRef-) and its web status — `ofl` and `gfl` (GUST) served as their licences let, `notice`
  * served with its licence's notice, `gpl` served with the notice and the full file as the subsets' source, `review`
- * decided by the maintainer for the web (spec §8: served on the maintainer's word of 2026-10-06, as the gpl faces are).
+ * decided by the maintainer for the web (spec §8: served, as the gpl faces are).
  * scripts/font-roles.py reads this table too: it measures each file (font-coverage.ts), so keep one row a line, the
  * columns separated by spaces; the licence is every column between the size and the web status.
  *
@@ -280,7 +280,7 @@ export const LETTERS: Readonly<Record<string, string>> = {
   es: `${LATIN}ÁÉÍÑÓÚÜáéíñóúü¡¿`,
   pt: `${LATIN}ÃÕÁÂÀÇÉÊÍÓÔÚÜãõáâàçéêíóôúü`,
   ru: `${CYRILLIC}Ёё`,
-  // (the languages of the owner's ruling of 2026-10-29; Indonesian, Malay and Bulgarian need none beyond their script's)
+  // (RULES_SCHEMA 9's targets, docs/PDF-READER.md §11.10; Indonesian, Malay and Bulgarian need none beyond their script's)
   it: `${LATIN}ÀÈÉÌÍÎÒÓÙÚàèéìíîòóùú`,
   nl: `${LATIN}ÁÉÍÓÚÄËÏÖÜÈáéíóúäëïöüè`,
   pl: `${LATIN}ĄĆĘŁŃÓŚŹŻąćęłńóśźż`,
