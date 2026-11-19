@@ -52,8 +52,10 @@
 // them). A unit whose band meets other ink inside its box — another glyph's, a stroke's segment widened by its half line width,
 // a fill's edge, an image's or a shading's box —, but a fill that holds the whole band (a node's fill, the plot's background), is
 // `crowded`: a translation there could cover that ink, so it stays the original's. Ink is what the page shows: a glyph wholly
-// outside the clip in force and any paint at an alpha of 0 (pageInk's `unseen`) are none, neither a label's nor its crowding, and
-// nor is what an opaque fill painted over it before the text covers (pageInk's `opaque`: a gridline under an annotation's box). A
+// outside the clip in force, a glyph an opaque fill painted after it covers whole, and any paint at an alpha of 0 (pageInk's
+// `unseen`) are none, neither a label's nor its crowding (a word a label's box is painted over is no label), and nor is what an
+// opaque fill painted over it before the text covers along the text's band (pageInk's `opaque`: a gridline under an annotation's
+// box). A
 // stroke painted before the text that crosses the band only below its baseline (a gridline under a legend entry's descenders) is
 // under the text, as a ground is: it crowds nothing and ends no free line, and the unit carries its depth (`under`), which the
 // typesetter's fit does not read: width is its only test (PDF-READER §19.12).
@@ -839,8 +841,8 @@ export function figureUnitsOf(
       // and translated. Counted under the caps as any run, so that where they fall moves with no judgment of a run's, and a column's
       // edge it tells others as any run does)
       if (r.code) continue
-      // (a run its clip cuts, or its page's edge, whole or in part, or one painted at an alpha of 0, is not shown whole: no text a
-      // translation could stand for)
+      // (a run its clip cuts, or its page's edge, whole or in part, one painted at an alpha of 0, or one a glyph of which an opaque
+      // fill painted after it covers whole, is not shown whole: no text a translation could stand for)
       if (r.clipped || gs.some((x) => offPage(x.ox, x.oy) || offPage(x.ex, x.ey))) {
         stats.clipped++
         continue
@@ -1556,7 +1558,8 @@ const angleOf = (f: Frame): number => {
 /**
  * A unit's room on its page: whether other ink lies inside its box's band (`crowded`), and its anchor (`start`, `centre`, `end`)
  * by the figure's lines right before and after it along its baseline. Other ink, what the page shows (pageInk's `unseen` none of
- * it: a glyph wholly outside the clip in force, any paint at an alpha of 0): every level glyph not the run's (its outline's
+ * it: a glyph wholly outside the clip in force or covered whole by an opaque fill painted after it, any paint at an alpha of 0):
+ * every level glyph not the run's (its outline's
  * box), every turned glyph's box but the run's own, an image's or a shading's box that does not hold the whole band, and a
  * figure's path by its lines where pageInk kept them (`shapes`: a stroke's segments widened by half its line width, a fill's
  * edges; a fill that holds the band, edges clear of it, is its background), else by its box, which a frame or a fill behind the

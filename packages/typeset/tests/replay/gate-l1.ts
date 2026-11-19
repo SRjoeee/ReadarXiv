@@ -383,6 +383,25 @@ export function differences(a: unknown, b: unknown, path = '', out: string[] = [
 let rules: { targets: Record<string, { params: Raw }> } | null = null
 const r2 = (v: unknown) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v)
 
+/**
+ * A store's Results as the product's chain reads them: an ok Result whose content the caller's acceptance rule refuses, judged
+ * over its unit, is no row (the chain lays no reading the rule refuses: it asks its next translator, or leaves the unit the
+ * original's); every Result as it is where no rule is given, or its unit is none of the paper's
+ */
+export function acceptedRows(
+  results: ReadonlyMap<string, Row>,
+  units: ReadonlyMap<string, Unit>,
+  accept: ((unit: Unit, content: readonly OutPiece[]) => boolean) | undefined,
+): ReadonlyMap<string, Row> {
+  if (!accept) return results
+  const out = new Map<string, Row>()
+  for (const [id, r] of results) {
+    const u = units.get(id)
+    if (r.ok && u && !accept(u, r.content)) continue
+    out.set(id, r)
+  }
+  return out
+}
 /** a door row's pieces (a translated text, or a source piece by its index) as the translation package's Result holds a row:
  *  its texts (a source's text piece by its text), the source's elements (and nested units) by id, its groups as spans of
  *  their content; null where a piece is no source piece */
@@ -655,9 +674,10 @@ export function gateL1Pair(
       number,
       { todays: readonly number[]; plan: readonly ({ t: 'today'; i: number } | { t: 'el'; id: string })[] }
     >
-    /** whether the entry is given a member's door row (its runner's judgement by the translate package's rule, which this
-     *  package may not import): one refused is no row, the unit left the original's, as the chain makes no row of a reading
-     *  that says nothing */
+    /** whether a stored row is given, the runner's and the entry's alike (the caller's judgement by the translate package's
+     *  acceptance rule, which this package may not import): one refused is no row, the unit left the original's, as the
+     *  product's chain lays no reading the rule refuses (it asks its next translator, or leaves the unit the original's): a door
+     *  row, a joined one, a name's, a store's Result */
     accept?: (unit: Unit, content: readonly OutPiece[]) => boolean
     /** the reads gate (what a page reads is what it waits for, docs/PDF-READER.md §19.15): with `entry`, each page laid again by
      *  layPage under each of these reading options (a name, and the unit kinds its toggles leave the original's: Rules.leave,
@@ -768,8 +788,8 @@ export function gateL1Pair(
   const views = viewsOf(paper)
   // (the reading from the part: the door's rows, the paper's designs and roles from its part's fonts, the label's names)
   const part0 = bundle.parts.values().next().value
-  // (the rows: a store's Results where the caller gives them, else today's door rows)
-  const results = o.reading === 'part' ? (o.results ?? null) : null
+  // (the rows: a store's Results where the caller gives them, each the rule refuses no row, else today's door rows)
+  const results = o.reading === 'part' && o.results ? acceptedRows(o.results, bundle.units, o.accept) : null
   const doors = o.reading === 'part' && !results ? doorRows(pair) : null
   const doorById = new Map<string, NonNullable<ReturnType<typeof doorRows>> extends Map<number, infer R> ? R : never>()
   if (doors)
@@ -901,6 +921,8 @@ export function gateL1Pair(
     }
     return { content, by }
   }
+  /** whether a row's content is given for unit `src`: the caller's rule (`accept`), every row where none is given */
+  const takes = (src: Unit, content: readonly OutPiece[]) => !o.accept || o.accept(src, content)
   /** a member's door row as the translation package's Result holds it, in the unit's own pieces: the door's, or today's row
    *  said in v2's unit where the two hold its kept runs otherwise; null where a piece is no source piece */
   const rowOf = (
@@ -912,7 +934,7 @@ export function gateL1Pair(
     if (t) return keptRow(row, t, src)
     const source = sourcePieces(todayUnitOf(src).content)
     const content = outOfDoor(row[1], source)
-    if (!content || (o.accept && !o.accept(src, content))) return null
+    if (!content || !takes(src, content)) return null
     // (the sentences today laid, where the prepare marks the unit lit by sentence: as a translator is asked for them)
     const sentences = src.sentences ? doorSentences(row, source) : undefined
     return { content, ...(sentences ? { sentences } : {}) }
@@ -927,7 +949,7 @@ export function gateL1Pair(
       const src = bundle.units.get(id)
       if (!row || !src || !(row[2] === 'whole' || row[2] === 'partial')) continue
       const content = outOfDoor(row[1], sourcePieces(src.content))
-      if (content) nameRows.set(id, { id, ok: true, by: String(row[3]), content })
+      if (content && takes(src, content)) nameRows.set(id, { id, ok: true, by: String(row[3]), content })
     }
   // (a store's Results: every ok one, the paper's names' among them)
   if (results) for (const [id, r] of results) if (r.ok) nameRows.set(id, r)
@@ -1033,6 +1055,12 @@ export function gateL1Pair(
         stop('the reading: a row piece no source piece is')
         continue
       }
+      // (a row the rule refuses, the unit left the original's as the entry leaves it: a door row, a joined one; a store's Result
+      // refused is none already, acceptedRows)
+      if (!takes(src, content)) {
+        stop('the reading: a row the acceptance rule refuses')
+        continue
+      }
       const pieces =
         process.env.AXT_GATE_SOURCE && row && !jr
           ? (row[1].map((q) =>
@@ -1114,7 +1142,11 @@ export function gateL1Pair(
       m: mm,
       before: x.before,
       after: x.after,
-      afterOpen: !!(nextUnit?.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as Raw | undefined)?.ok,
+      // (the member after it laid: on a store's rows, its unit has a Result the store gives (acceptedRows), as the entry opens a
+      // follower its rows set; on the door's, today's admission of its unit, which read the door's rows)
+      afterOpen: results
+        ? typeof x.after?.text === 'string' && !!results.get(x.after.text)?.ok
+        : !!(nextUnit?.slots.find((s) => s.by === 'U.admit' && s.round === 0)?.value as Raw | undefined)?.ok,
       R,
       measure: (measure ?? (c.P as Raw).measure) as never,
       patterns: (c.P as Raw).patterns as never,
@@ -1199,7 +1231,8 @@ export function gateL1Pair(
       // (a member holding several of today's: theirs in its order, joinedRow)
       if (joinedOf.has(ord) && typeof x.m.text === 'string' && !byId.has(x.m.text)) {
         const jr = joinedRow(ord)
-        if (jr) {
+        const src = bundle.units.get(x.m.text)
+        if (jr && (!src || takes(src, jr.content))) {
           byId.set(x.m.text, { id: x.m.text, ok: true, by: jr.by, content: jr.content })
           said.add(x.m.text)
         }

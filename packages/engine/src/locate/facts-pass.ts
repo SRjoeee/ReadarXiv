@@ -520,7 +520,7 @@ function readElements(fx: FactsIndex, r: MemberReading): void {
       // own lines where one is there; a line of the other column on that baseline is none of its. A line whose box its ink only
       // meets is none of its either: a display row KEPT over the text line a formula taller than its text stands on, the row's
       // fonts' box reaching down into the formula's (2610.21765v1 p9 ord 143, by 0.03 pt): read as its line, the formula's
-      // ink stays and its crop is laid on its text line, drawn twice. PDF-READER §18.98)
+      // ink stays and its crop is laid on its text line, drawn twice. PDF-READER §18.99)
       const on = el.ink.map((k) => {
         const at = (l: Line) =>
           l[0] === k[0] && Math.abs(l[4] - k[5]) < ON_BASE && Math.min(k[3], l[3]) > Math.max(k[1], l[2])
@@ -1041,7 +1041,7 @@ function readLineFlags(fx: FactsIndex, r: MemberReading): void {
   for (const a of leader?.text ?? []) aside.add(a)
   // (and its own end mark's (El.end): drawn at its translation's end, it moves with it, no ink that stays on its last line's
   // band. Taken for one, it takes off the floor that keeps that line a leading over the next paragraph, and the walk lays the
-  // line lower, onto that paragraph (2610.21884v1 p25 ord 199, its proof's square). PDF-READER §18.99)
+  // line lower, onto that paragraph (2610.21884v1 p25 ord 199, its proof's square). PDF-READER §18.100)
   for (const [id, el] of mem.elements) if (el.end) for (const a of mem.els.get(id) ?? []) aside.add(a)
   // (its block: the run of its lines on one page and column, each under the one before, which the line before and the line
   // after share with it pairwise: the runs cut once, each run's span read once, one pass over the lines)

@@ -57,7 +57,7 @@ export const INVARIANTS = [
   {
     id: 'I8',
     says: 'the text layer of a laid page reads the translation in reading order',
-    gap: "on 2610.40394v1-zh p4 five figure labels are two members each over one another (the label's word and a word its box covers on arXiv's page, translated with it), and the text layer reads the label's own translation at the page's end, the five held to their record (text-order.json); its fix after the launch / before the launch: the coordinator's ruling of 2026-11-19",
+    gap: null,
   },
   {
     id: 'I9',
@@ -1179,7 +1179,7 @@ export const GATES = [
       exists('the hyphenation patterns (AXT_HYPH)', process.env.AXT_HYPH ?? ''),
     ],
     steps: ctx => [listStep(ctx), { cmd: ['node', 'lab/release-check/text-order.mjs', `--bundles=${bundlesDir(ctx)}`, `--rows=${runRowsDir(ctx)}`, `--papers=${corpusList(ctx)}`], slot: 'run' }],
-    // (the members out of order stand (INVARIANTS I8's gap): held to their record, text-order.json, textOrderJudge)
+    // (a member read out of order is held to its record, text-order.json, textOrderJudge: none stands there now)
     judge: (ctx, steps) => textOrderJudge(steps.at(-1).text, textOrderRecord(ctx.root)),
   },
   // today's reader, the way back until the cut-over deletes it: a build of its own (a default build carries the rebuilt reader,

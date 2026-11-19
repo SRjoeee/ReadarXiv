@@ -37,9 +37,8 @@ const { bundlesLine, headsFor } = await import('../../packages/typeset/tests/rep
 const { L1_BUNDLES_DIR } = await import('../../packages/typeset/tests/replay/l1.ts')
 const { tableMetrics } = await import('../../packages/typeset/src/metrics/table.ts')
 const { layered, servedMetrics } = await import('./served-metrics.mjs')
-const { accept: acceptReading } = await import('../../packages/translate/src/accept.ts')
+const { rowJudge } = await import('./gate-rows.mjs')
 const { CLASS_DEFAULTS, leftKinds } = await import('../../packages/reader/src/compose/classes.ts')
-const { unitInOf } = await import('../../packages/translate/src/bundle.ts')
 const { ADDED_HEADING, apartOf, runApart } = await import('./added.mjs')
 const { paintedOf } = await import('./painted.mjs')
 
@@ -86,24 +85,11 @@ const LEAVE = new Map([
 ])
 const reads = new Map([...LEAVE.keys()].map((k) => [k, { pages: 0, reads: 0, outside: 0, outsidePages: 0, ex: [] }]))
 const entry = { paras: { stated: new Map(), anchor: new Map(), opened: 0, onTexLine: 0, off: [], offBy: new Map(), notLaid: new Map(), openedEx: [], noneEx: [] }, crossLay: { units: 0, twice: 0, head: [], other: [] }, alike: 0, differ: 0, ex: [], ms: [], names: new Map(), links: new Map(), linkEx: new Map(), figures: new Map(), lit: { laid: 0, lines: 0, boxes: 0, apart: 0, empty: 0 }, cover: { members: 0, pieces: 0, faults: new Map(), ex: new Map(), byPair: new Map() } }
-/** Whether the entry is given a door row. The rows are today's stored replies in today's reading; one that says nothing (the
- *  chain's rule, accept.ts: no letter or digit where the unit has a letter, 'empty') is no translation of its unit under any
- *  reading, and the chain makes no row of it whatever its translator: the entry is given none and leaves the unit the
- *  original's (given it, the entry hid the unit's text and drew nothing: three table cells of two pack pairs, I10's "right
- *  missing sentence"). A row the rule's other clauses refuse (a span lost, emptied or set otherwise than the unit nests it; an
- *  id, a span named by today's numbering; its length) the chain would ask again of the next translator; the door holds no
- *  other reply of its unit and the row still says its translation: given as it is, as the parity lays it on both sides,
- *  and counted by why (over the 123 pairs with round 8 B5's parts: 229 by a span, 6 by an id, 1 by its length) */
-const judged = new Map(), unsaid = []
+/** Whether a stored row is given, the runner's and the entry's alike, a door row or a store's Result: the product's acceptance rule
+ *  judges it, a row it refuses for any reason no row (gate-rows.mjs, rowJudge) */
+const judge = rowJudge()
 let judging = ''
-const accept = (unit, content) => {
-  const r = acceptReading(unitInOf(unit), content)
-  if (r.ok) return true
-  judged.set(r.why, (judged.get(r.why) ?? 0) + 1)
-  if (r.why !== 'empty') return true
-  unsaid.push(`${judging} ${unit.kind} ${unit.id.slice(0, 8)}`)
-  return false
-}
+const accept = (unit, content) => judge.takes(judging, unit, content)
 /** I10's counts (cover.ts) over the pairs: each fault's count by key, its examples, each pair's faults */
 const addCover = (pair, c) => {
   const C = entry.cover
@@ -384,7 +370,10 @@ if (ENTRY) {
   console.log(`the entry's figure texts (S.figures over the part), by turn and state: ${[...entry.figures].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}`)
   console.log(`the entry's boxes (Laid.lit): ${entry.lit.laid} members laid with lines, ${entry.lit.lines} lines, ${entry.lit.boxes} boxes on the right; panes' entries apart ${entry.lit.apart}; nothing on the right ${entry.lit.empty}`)
   const C = entry.cover, faults = [...C.faults.values()].reduce((a, b) => a + b, 0)
-  console.log(`the entry's rows that say nothing (the chain's 'empty', accept.ts), given as no row: ${unsaid.length}${unsaid.length ? `: ${unsaid.join(' | ')}` : ''}; held to its other clauses, given as they are: ${[...judged].filter(([k]) => k !== 'empty').map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}`)
+  const withheld = judge.withheld()
+  const byWhy = new Map()
+  for (const x of withheld) byWhy.set(x.why, (byWhy.get(x.why) ?? 0) + 1)
+  console.log(`the rows the acceptance rule refuses (accept.ts), each withheld as the product's chain withholds it, its unit left the original's: ${withheld.length}${withheld.length ? ` (${[...byWhy].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(', ')}): ${withheld.map((x) => `${x.pair} ${x.kind} ${x.id.slice(0, 8)} ${x.why}`).join(' | ')}` : ''}`)
   console.log(`I10, the sentence cover (cover.ts): ${C.members} member-pages lit, ${C.pieces} pieces; ${faults} faults${faults ? ':' : ''}`)
   for (const [k, n] of [...C.faults].sort((a, b) => b[1] - a[1])) console.log(`  ${n} ${k}: ${(C.ex.get(k) ?? []).join(' | ')}`)
   for (const [pair, line] of C.byPair) console.log(`  ${pair}: ${line}`)

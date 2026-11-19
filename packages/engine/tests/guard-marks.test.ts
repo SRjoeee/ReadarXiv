@@ -165,3 +165,41 @@ describe("every reader of the guard reads every mark of ours (marks.ts MARK_CS, 
     ).toEqual(new Set([3]))
   })
 })
+
+describe("a paper's own error beside what the marking writes around a mark keys as the unmarked original's", () => {
+  // (an error whose line of input is `input` up to its place, TeX reading an argument that shows unit 3's mark: read as ours,
+  // the context names unit 3; read as the paper's own, none)
+  const log = (input: string, rest = '') =>
+    `! Undefined control sequence.\n<argument> \\axtmark {3s}Words \n${' '.repeat('<argument> \\axtmark {3s}Words '.length)}\nl.7 ${input}\n${' '.repeat(`l.7 ${input}`.length)}${rest}\n\n`
+  const ownOf = (input: string, rest = '') => ownErrors(log(input, rest))
+
+  it("the \\protect the marking writes before a front unit's mark", () => {
+    // (an author block whose head is a paper's macro, its error at that macro: the head mark robust, `\protect\axthpk`)
+    const marked = log('\\author{\\protect\\axthpk{p1.0a}\\myname', '{} \\leavevmode\\axtmark{1s}Lee\\axtend{1e}}')
+    expect(contextUnits(marked, 9)).toEqual(new Set([3]))
+    expect(contextUnits(marked, 9, ownOf('\\author{\\myname', '{} Lee}'))).toEqual(new Set())
+    // (a footnote's call in an author block, `\protect\axtpma` before it)
+    const call = log('Ann Lee\\protect\\axtpma{n1.2a}\\thanks', '{A note.}\\axtend{1e}')
+    expect(contextUnits(call, 9)).toEqual(new Set([3]))
+    expect(contextUnits(call, 9, ownOf('Ann Lee\\thanks', '{A note.}'))).toEqual(new Set())
+  })
+
+  it("a babel name's marks, as a style's literal name holds them and as TeX writes them through a file", () => {
+    const literal = log('\\section*{\\axtnma{ref}References\\axtnmb{ref}}\\foo')
+    expect(contextUnits(literal, 9)).toEqual(new Set([3]))
+    expect(contextUnits(literal, 9, ownOf('\\section*{References}\\foo'))).toEqual(new Set())
+    const written = log('\\contentsline {section}{\\protect \\axtnma {ref}References\\protect \\axtnmb {ref}}\\foo')
+    expect(contextUnits(written, 9, ownOf('\\contentsline {section}{References}\\foo'))).toEqual(new Set())
+  })
+
+  it("a paper's own \\protect beside a mark of ours stays the paper's", () => {
+    // (the paper's \protect\cite, a placeholder whose opening mark the marking writes before the prefix: in a body unit, and in a
+    // front unit, robust, ours before the paper's)
+    const body = log('Words \\axtpma{p3.2a}\\protect\\cite', '{x}\\axtpm{p3.2b}.')
+    expect(contextUnits(body, 9, ownOf('Words \\protect\\cite', '{x}.'))).toEqual(new Set())
+    expect(contextUnits(body, 9, ownOf('Words \\cite', '{x}.'))).toEqual(new Set([3]))
+    const front = log('Ann Lee \\protect\\axtpma{p1.2a}\\protect\\cite', '{x}')
+    expect(contextUnits(front, 9, ownOf('Ann Lee \\protect\\cite', '{x}'))).toEqual(new Set())
+    expect(contextUnits(front, 9, ownOf('Ann Lee \\cite', '{x}'))).toEqual(new Set([3]))
+  })
+})

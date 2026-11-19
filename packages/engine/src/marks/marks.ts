@@ -23,6 +23,7 @@ import {
   lastTexLog,
   markUnits,
   NO_ARG_COMMANDS,
+  START_LEAD,
 } from '../source/latex-front.ts'
 import { textless } from '../source/arg-roles.ts'
 import { symbolText } from '../source/text-symbols.ts'
@@ -2294,6 +2295,22 @@ export const MARK_CS = [
   'axtcall',
   'axtbrname',
 ] as const
+/** a babel name's marks around its own text: NAMES_TEX's wrapper writes them, and literalNames into a style's literal name */
+const NAME_CS = ['axtnma', 'axtnmb'] as const
+/** a front unit's marks' lead, right before each (layoutMarking `lead`): robust where a class stores the unit's text with
+ *  \protected@xdef. TeX writes the same before a babel name's mark it writes through a file (NAMES_TEX: `\protect\axtnma`) */
+const ROBUST_LEAD = '\\protect'
+/** a control word as a pattern matches it: its backslash escaped */
+const literal = (cs: string): string => cs.replace(/\\/g, '\\\\')
+/** every mark of ours with its argument (MARK_CS, NAME_CS), and what is written right before one as part of it: a start mark's
+ *  START_LEAD, a mark's ROBUST_LEAD. Only right before a mark: a paper's own \leavevmode or \protect anywhere else is the paper's */
+const OURS = new RegExp(
+  String.raw`${literal(START_LEAD)}\s*(?=\\axtmark(?![A-Za-z@]))|${literal(ROBUST_LEAD)}\s*(?=\\(?:${[...MARK_CS, ...NAME_CS].join('|')})(?![A-Za-z@]))|\\(?:${[...MARK_CS, ...NAME_CS].join('|')})\s*\{[^{}]*\}`,
+  'g',
+)
+/** a text TeX wrote or read with every mark of ours taken out (OURS): what is left is the paper's own (compile/guard.ts compares a
+ *  marked compile's error with the unmarked original's by it) */
+export const withoutOurMarks = (text: string): string => text.replace(OURS, '')
 
 /** the control sequences \axt@unmark takes out of a title's copy, each with its argument: the marks a heading or a caption
  *  can carry (\axtpma, \axtpmm, \axtpm, \axthpk, \axttg, \axthmark) and a babel name's (\axtnma, \axtnmb). One list: UNMARK_TEX builds the regex's
@@ -2965,7 +2982,7 @@ export function layoutMarking(
   const index = new Map(units.map((u, i) => [u, i]))
   const own = (u: Unit): UnitMark => {
     const i = index.get(u)
-    if (u.kind === 'cell') return { start: `\\leavevmode\\axtmark{t${i}s}`, end: `\\axtend{t${i}e}` }
+    if (u.kind === 'cell') return { start: `${START_LEAD}\\axtmark{t${i}s}`, end: `\\axtend{t${i}e}` }
     // (a front heading too, a class's command whose text it hands elsewhere as well — ICML's \\icmltitle, set in a box the class
     // measures and never ships, in its running head and in the PDF's title —: a heading's marks set nothing in the output
     // routine's heads, are gobbled in a PDF string and written to no file (the gate, LAYOUT_TEX), set no destination in a box
@@ -2990,7 +3007,7 @@ export function layoutMarking(
     // note the title sets —, where \axtpma, which a moving argument's copy must not carry, takes its argument off; with
     // \protect before it, it is stored as it is and set where the note is: 2610.20484's \texttt and 2610.11256's \href in a
     // \thanks were LOST, their marks gone)
-    const lead = front(u) ? '\\protect' : ''
+    const lead = front(u) ? ROBUST_LEAD : ''
     let last: Piece | null = null,
       gap = false,
       beforePrefix: Piece | null = null,

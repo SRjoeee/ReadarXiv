@@ -15,7 +15,7 @@ import { isMemoryError } from '../memory.ts'
 import { lastTexLog, latin1, latin1Bytes, texText } from '../source/latex-front.ts'
 import { texErrors, unitsAtErrors } from './tex-errors.ts'
 import { END_TEX } from './tex.ts'
-import { duplicatesIn, MARK_CS } from '../marks/marks.ts'
+import { duplicatesIn, MARK_CS, withoutOurMarks } from '../marks/marks.ts'
 import type { Fsys, SourceUnit } from '../source/latex-front.ts'
 import type { TexError, UnitLines } from './tex-errors.ts'
 import type { PdfLike } from './base.ts'
@@ -509,11 +509,10 @@ export function firstError(log: string | null | undefined): string | null {
   return `${lines[k]}${at ? ` (${at.trim().slice(0, 60)})` : ''}`.slice(0, 160)
 }
 
-/** the marks of ours a log's context may show, taken out before an error is compared with the unmarked original's: each
- *  mark with its argument (MARK_CS), and the \leavevmode a unit's start mark comes with */
-const OUR_MARKS = new RegExp(String.raw`\\leavevmode\s*(?=\\axtmark\b)|\\(?:${MARK_CS.join('|')})\s*\{[^{}]*\}`, 'g')
 const CONTEXT = 12
-const skeleton = (s: string): string => s.replace(OUR_MARKS, '').replace(/[^\x21-\x7e]/g, '')
+/** a line of a log as the unmarked original's would read: every mark of ours and what is written right before one taken out
+ *  (marks/marks.ts withoutOurMarks), its white space and its characters past ASCII too */
+const skeleton = (s: string): string => withoutOurMarks(s).replace(/[^\x21-\x7e]/g, '')
 /** an error's identity whatever marks stand around it: its message and the text right before and after its place */
 const errorKey = (e: TexError): string =>
   `${e.message}|${skeleton(e.before).slice(-CONTEXT)}|${skeleton(e.after).slice(0, CONTEXT)}`
