@@ -236,7 +236,7 @@ describe("the prepare's corpus, as the round's stage 1a runs it", () => {
 
 describe('the gates retired', () => {
   it('names each with its date, its reason and the gates that hold its question now, none of them still run', () => {
-    expect(RETIRED.map(r => r.id)).toEqual(['typeset-parts', 'typeset-replays'])
+    expect(RETIRED.map(r => r.id)).toEqual(['typeset-parts', 'typeset-replays', 'layout-marks-gate'])
     const ids = GATES.map(g => g.id)
     for (const r of RETIRED) {
       expect(ids).not.toContain(r.id)
@@ -248,6 +248,9 @@ describe('the gates retired', () => {
     // today's lay is the display gate over every pair)
     expect(RETIRED.find(r => r.id === 'typeset-parts')?.by).toEqual(['reader-parts'])
     expect(RETIRED.find(r => r.id === 'typeset-replays')?.by).toEqual(['display-wide'])
+    // (the layout marks' corpus check, never a gate of gates.mjs, retired in lab/pdf/README.md: what a moved line could cost a
+    // reader is counted against arXiv's PDF by the prepare's proofs and the differential)
+    expect(RETIRED.find(r => r.id === 'layout-marks-gate')?.by).toEqual(['prepare', 'prepare-diff'])
   })
 
   it('lists them in the report', () => {

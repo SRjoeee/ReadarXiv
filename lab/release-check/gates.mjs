@@ -244,7 +244,7 @@ export const TARGETS = [
     value: n => n.gplReachedNow != null && `reached now ${n.gplReachedNow}, after the cut-over ${n.gplReachedAfter}; ported files left after it ${n.gplFilesAfter}`,
     met: n => (n.partial ? null : n.gplReachedAfter === 0 && n.gplFilesAfter === 0),
   },
-  { id: 'tiers', measure: 'Tiers that run on a pull request', baseline: "unit tests, the gate's model tier", target: 'every pull-request tier of §4.9', from: null, why: 'planned in lab/release-check/CI.md; the workflows are not written yet' },
+  { id: 'tiers', measure: 'Tiers that run on a pull request', baseline: "unit tests, the gate's model tier", target: 'every pull-request tier of §4.9', from: null, why: "the fast tier on GitHub's runners (.github/workflows/ci.yml: check, reader, extension; lab/release-check/CI.md), shown by a pull request's run; the full and release tiers read the lab's data and run on the maintainer's machine by hand, recorded with the commit, never from this public repository's workflows" },
 ]
 
 // ---------------------------------------------------------------- reading a gate's output
@@ -1169,6 +1169,14 @@ export const RETIRED = [
     retired: '2026-11-13',
     by: ['display-wide'],
     why: "the six replays (lab/typeset/replay-*.mjs) compare the typesetter's internal passes with today's recorded ones: every ruling since 2026-11-08 would have to be taught to four replay readers that the cut-over deletes, and a pass that differs is not a difference a reader sees (at 13216ac44 fit and display failed on one pair, a crop box the tap does not record; at round B14's head emit read 13 differing and 9 thrown). Their point, a comparison with today's lay wider than 22 pairs, is the display gate over every pair of the stored rows (display-wide), which asks the owner's own question with his rulings encoded and survives the cut-over",
+  },
+  {
+    // (never a gate of this file: the lab's corpus check of today's layout marks, lab/pdf/spikes/layout-marks-gate.mjs, retired in
+    // lab/pdf/README.md on 2026-11-13 and named here since 2026-11-19 so that the report and --only say why)
+    id: 'layout-marks-gate',
+    retired: '2026-11-13',
+    by: ['prepare', 'prepare-diff'],
+    why: "it asked whether the layout marks move a line of the marked compile against the same compile without them, by TeX's own boxes, over 113 papers one Docker compile at a time. The rebuilt reader draws over arXiv's own bytes: a line the marks move in the marked compile moves no glyph a reader sees, and what it could cost (a unit not located on arXiv's page, or drawn otherwise) is counted against arXiv's PDF at the head's marks by the prepare's corpus gates: the proofs on every page (prepare: I1 (a), I2 (c′)) and the units lost against the frozen baseline (prepare-diff). Its record (lab/pdf/records/layout-marks.json, 2026-10-08) and its accepted causes predate every marks change of rounds B8 to B15: at round RB1 every page of the five papers it ran failed, at the base as at the head, rows and TeX traces identical between them, so re-recording (about 4 hours of the only Docker slot) would write a failing verdict for every paper and fail every run after it, unless its judge were taught today's marks. What it alone held, a moved line named by its cause before it costs a located unit, is held for a change to the marks by the small documents of lab/pdf/spikes/layout-marks-cases.mjs, run natively. The script and its judgements stay readable until the cut-over deletes today's engine, whose back half it reads",
   },
 ]
 
