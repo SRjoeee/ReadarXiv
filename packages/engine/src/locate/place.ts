@@ -7,17 +7,10 @@ import type { Piece } from '@readarxiv/format'
 import { HUNK, hunkName } from '../align/align.ts'
 import { isImage, isPath } from '../doc.ts'
 import { ROLE } from '../instrument.ts'
-import { TEXT_SYMBOLS } from '../source/tables.ts'
+import { symbolText } from '../source/text-symbols.ts'
 import { cutLines, isInk } from './lines.ts'
 import type { Claims, Ink } from './ownership.ts'
 import { eachBetweenPaired, INKED_CLASSES, lettersIn, type Member, piecesOf, type Work } from './work.ts'
-
-/** a LaTeX text symbol's character (\S, \%, alone or before `{}`), by the kernel's table (source/tables.ts TEXT_SYMBOLS),
- *  read here so that the back half needs nothing of the front half but the table */
-const symbolText = (src: string): string | null => {
-  const m = /^(\\(?:[A-Za-z]+|[%&#$_{}]))(?:\{\})?$/.exec(src)
-  return m && Object.hasOwn(TEXT_SYMBOLS, m[1] as string) ? (TEXT_SYMBOLS[m[1] as string] as string) : null
-}
 
 export const empty = ({ members }: Work, u: number, kind: string, id: string): Member => ({
   ord: members.length,
