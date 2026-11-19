@@ -599,4 +599,5 @@ release of engine 065c1d973: on a paper staging prepared, the catalog and every 
 rows by the release's own translation code over Microsoft's keyless endpoint, today's prepare dump and reader dump by the
 baseline's tools, the tap's ledgers and metrics by its pass 1. It is lab-data's `refactor-2026-11/baseline/added/`, read through a
 root of links (added.mjs `addedEnv`: the set's folders hold their own files and the added pairs' side by side) so that no folder
-another tool walks whole changes. A round's bundles must hold the added papers (the chain's list of 90 papers).
+another tool walks whole changes; each run makes a root of its own and removes it when it ends (`dropAdded`), so that two runs
+at once never read or remove each other's. A round's bundles must hold the added papers (the chain's list of 90 papers).
