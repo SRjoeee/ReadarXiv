@@ -1,7 +1,7 @@
-// A title its author sets in the line at a paragraph's opening with no mark after it (the display design's F40,
-// docs/PDF-READER.md §18.85: one character's width after the title): `\noindent\textbf{Global Matching}
+// A title its author sets in the line at a paragraph's opening with no mark after it (docs/PDF-READER.md §18.85: one
+// character's width after the title): `\noindent\textbf{Global Matching}
 // We leverage …` (2111.09276v1 pp5-6). TeX keeps such a title apart from its sentence by its face and an interword space; a
-// translation into a script that writes no spaces between its words ran the two together. The engine states the fact on the
+// translation into a script that writes no spaces between its words runs the two together. The engine states the fact on the
 // group (the part's SpanAt.runin, bundle.ts placedOf) and the typesetter sets the script's separation after it (packages/typeset
 // breaker/tokens.ts); no translator is told it: the wire is the same, and a reply is read as before.
 //
