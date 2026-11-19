@@ -8833,12 +8833,13 @@ own), each part carrying its pages' cell rules (`rules`).
   etoc depth tag whose end mark TeX wrote into the contents inside a `\csname` (ten errors, 36 pages to arXiv's 34),
   2610.21288's `\appendixname` wrapped by the babel names' marks under revtex4-2 and the appendix package (the job aborted).
   The guard reads our marks by their names wherever TeX writes our source back — an error's line of input and the levels of
-  context above it, a file a pass writes and reads back, a class's verbatim copy —, every reader by one list (`marks.ts`
-  `MARK_CS`): every control sequence of ours the marked source carries with a unit's name, `\axtmark`, `\axtend`, `\axtlines`,
-  `\axtpma`, `\axtpmm`, `\axtpm`, a head macro's `\axthpk`, a trailing macro's `\axttg`, `\axthmark`, `\axtcolour`, an author's
-  call `\axtcall` and backref's list `\axtbrname`; `tests/mirrors.test.ts` holds it to the marked original's TeX, every macro of
-  ours that TeX defines either in it or naming no unit (the babel names' marks, read apart; the first pass's asks, which no pass
-  the guard reads carries). A name the list lacks is a mark the guard does not see: a paper's own error beside it keys apart
+  context above it, a file a pass writes and reads back, a class's verbatim copy —, every reader by one list
+  (`packages/engine/src/marks/marks.ts` `MARK_CS`): every control sequence of ours the marked source carries with a unit's
+  name, `\axtmark`, `\axtend`, `\axtlines`, `\axtpma`, `\axtpmm`, `\axtpm`, a head macro's `\axthpk`, a trailing macro's
+  `\axttg`, `\axthmark`, `\axtcolour`, an author's call `\axtcall` and backref's list `\axtbrname`;
+  `packages/engine/tests/mirrors.test.ts` holds it to the marked original's TeX, every macro of ours that TeX defines either in
+  it or naming no unit (the babel names' marks, read apart; the first pass's asks, which no pass the guard reads carries), and
+  `packages/engine/tests/guard-marks.test.ts` every reader to every name. A name the list lacks is a mark the guard does not see: a paper's own error beside it keys apart
   from the unmarked original's and is read as ours, and one written by name into a file, or a copy cut inside one, goes
   unseen. Each check holds for any paper:
   - *Before the compile, in the mark probe* (PIPELINE 43): where a unit of the main file stands in its preamble, the probe sets
