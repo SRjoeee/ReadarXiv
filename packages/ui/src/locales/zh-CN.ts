@@ -37,7 +37,7 @@ const S = {
   loading: '页面加载中', // S-P-03d
   rows: {
     service: '翻译服务', // S-P-10
-    language: '译为', // S-P-20 (the owner, 2026-11-03: the home page's word; 目标语言 until then)
+    language: '译为', // S-P-20: the home page's word
     prompt: '提示词', // S-P-47
     highlight: '对照高亮', // S-P-80
     highlightTitle: '悬停时高亮对应句子；仅译文模式下停留可查看原文', // S-P-81
@@ -190,7 +190,7 @@ const O = {
   /** §6.2: deleting is undone, not confirmed — the row gives way to this for 5 s */
   undo: { deleted: (name: string) => `已删除「${name}」`, undo: '撤销' },
   /** One sentence for a failed save anywhere on the page (a schema error's JSON or anything else thrown by the
-   * caller's save must never reach the reader): a service's connection, a glossary row (fix round 1, item 1) */
+   * caller's save must never reach the reader): a service's connection, a glossary row */
   saveFailed: '保存失败，请再试一次',
   /** §6.4: 外观 */
   appearance: {
@@ -233,10 +233,10 @@ const O = {
     addSource: '添加原文',
     remove: (n: number) => `删除第 ${n} 行`,
     paste: '可以直接粘贴多行「原文, 译文」，会自动拆成多行',
-    /** today's reasons without their line numbers: the row itself says it */
+    /** a row's reasons, without its line number: the row itself says it (S-O-63) */
     issue: { emptySource: '原文为空', emptyTarget: '译文为空' },
     tooBig: '术语表太长，超出上限后没有保存；请减少条目或缩短内容',
-    /** beside O.saveFailed, once a write is refused (fix round 1, item 1) */
+    /** beside O.saveFailed, once a write is refused */
     retry: '重试',
   },
   services: {
@@ -323,7 +323,7 @@ const O = {
     classesAside: '只对 PDF 对照生效',
     /** The names of the profiles shipped with the extension (`BUILT_IN_STYLES` / `BUILT_IN_HIGHLIGHTS`): they are ours,
      *  not the reader's writing, so they follow the interface language; once the reader renames one, the reader's name shows.
-     *  A band's name here is not its stored one since 2026-11-03 (the stored names stay, `BUILT_IN_HIGHLIGHTS`) */
+     *  A band's name here is not its stored one (the stored names stay, `BUILT_IN_HIGHLIGHTS`) */
     builtInStyles: { follow: '与原文相同', green: '绿色', blue: '蓝色', amber: '琥珀', muted: '淡一档', blur: '模糊' },
     builtInHighlights: { 'soft-green': '浅绿', sand: '浅黄', sky: '浅蓝' },
     previewSource: PREVIEW_SOURCE,
@@ -348,7 +348,7 @@ const O = {
     tokens: { targetLanguage: '目标语言', input: '原文', paperTitle: '论文标题', abstract: '摘要', sectionTitle: '章节标题', glossary: '术语表' },
     /** What a copy of a built-in prompt is called */
     copyOf: (name: string) => `${name}（副本）`,
-    /** The names of the two prompts shipped with the extension, by id (the maintainer, 2026-09-28: in the interface's language) */
+    /** The names of the two prompts shipped with the extension, by id (S-O-61c: in the interface's language) */
     builtInNames: { default: '默认', 'precision-rewrite': '精准改写' },
     /** The descriptions of the two prompts shipped with the extension, by id */
     builtIn: {
@@ -392,35 +392,35 @@ const R = {
   sync: '同步滚动', // S-R-06
   zoom: { out: '缩小', in: '放大', value: '缩放比例', width: '适合宽度', page: '适合页面', actual: '实际大小' }, // S-R-07
   options: { name: '阅读选项', color: '高亮颜色', appearance: '外观', light: '浅色', dark: '深色', system: '跟随系统', dim: '深色时调暗页面' }, // S-R-08
-  // S-R-27 (the owner's words, 2026-10-25; 作者信息 the whole author block, 2026-10-30): the reading options' "What to translate",
+  // S-R-27 (作者信息 the whole author block): the reading options' "What to translate",
   // its heading and its rows in the order they are listed; the settings page's group too (S-O-56)
   classes: { name: '翻译范围', figures: '图中文字', tables: '表中文字', heads: '页眉页脚', references: '参考文献', names: '作者信息' },
   download: { name: '下载', translation: '译文 PDF', original: '原文 PDF' }, // S-R-09
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11
   fold: { expand: '展开', collapse: '收起' }, // S-R-02a: the contents' folds, in their tooltips
-  // S-R-25 (the owner's words, 2026-10-17): a layer's link with no text under it, named by where it goes and said to screen
+  // S-R-25: a layer's link with no text under it, named by where it goes and said to screen
   // readers; `site` is the address's host, `address` the mail address
   linkName: { internal: '本文中的其他位置', site: (site: string) => `打开 ${site}`, email: (address: string) => `发邮件给 ${address}`, fallback: '链接' },
   pageName: (side: 'original' | 'translation', n: number): string => `${R.display[side]} · 第 ${n} 页`, // S-R-11a: a page's name, said to screen readers; the number is a parameter, which a language places as it does its own numbers
   status: {
     loading: '正在加载', // S-R-12
     translating: '正在翻译',
-    preparing: '正在准备', // S-R-23 (the owner's words, 2026-11-03; 正在准备 PDF 对照 from 2026-10-17): said to screen readers while the paper's layer is prepared; the progress line shows it
+    preparing: '正在准备', // S-R-23: said to screen readers while the paper's layer is prepared; the progress line shows it
     close: '关闭', // S-R-15: a notice's close button
     unsupported: (language: string) => `PDF 对照暂不支持${spacedAfterCjk(language)}`, // S-R-13: the language's own name, spaced from the Chinese unless it is Han, kana or hangul (§1 rule 9)
     chooseLanguage: '选择语言',
     narrow: '窗口较窄，暂只显示译文', // S-R-14, after S-P-74
     rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
-    noPdf: '这篇论文暂不支持 PDF 翻译', // S-R-17: no source, or nothing typeset (the maintainer, 2026-09-26)
+    noPdf: '这篇论文暂不支持 PDF 翻译', // S-R-17: no source, or nothing typeset
     useHtml: '改用 HTML 翻译', // S-R-18: the capsule's action, where the paper has an HTML version
-    notNow: 'PDF 对照暂时无法加载', // S-R-24 (the owner's words, 2026-10-17): our server out of reach; the original stays, with a retry and the HTML version
+    notNow: 'PDF 对照暂时无法加载', // S-R-24: our server out of reach; the original stays, with a retry and the HTML version
     limited: 'PDF 对照请求过于频繁，请稍后再试', // S-R-26: our server's limit (a 429), its own words since the run stops asking by itself (#88 E5); with the same retry and HTML version
     noPaper: '找不到这篇论文', // S-R-20: an address that names no paper
     goToArxiv: '前往 arXiv', // S-R-20's action
     unreadable: '设置读取失败，当前使用默认设置', // S-R-21: the note while the settings cannot be read, as S-O-02 words it
     unreadableHint: '设置读取失败', // S-R-21: the tooltip's second thought on a control that needs them
-    facesLost: '部分字体加载失败，请刷新页面重试', // S-R-28 (the owner's words, 2026-11-19): a face the translation is set in could not be had; the website's too
+    facesLost: '部分字体加载失败，请刷新页面重试', // S-R-28: a face the translation is set in could not be had; the website's too
   },
 }
 

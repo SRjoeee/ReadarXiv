@@ -72,13 +72,13 @@ export const ROLES = {
   'card-shadow': { light: '0 0 0 0.5px $n-4, 0 1px 2px oklch(0 0 0 / 0.03)', dark: '0 0 0 0.5px oklch(1 0 0 / 0.06)' },
   /** the one primary action's fill, and a switch that is on (the popup's, the settings page's): arXiv's red to the eye,
    *  another value — #B31925, ΔE OK 0.0097 from arXiv's #B31B1B, turned 3° towards the logo's red; #CB3438 in dark
-   *  (the maintainer, 2026-09-28, round 8). The logo keeps its own red, #AA142D */
+   *  (UI.md §5). The logo keeps its own red, #AA142D */
   brand: { light: 'oklch(0.493 0.186 24.5)', dark: 'oklch(0.559 0.188 24.5)' },
   'on-brand': 'oklch(1 0 0)',
   /** words on the brand told apart from its words by a lighter white and their weight (P0's paper id, §5.4): 85 % white
    *  in light (5.25:1), white in dark, where 85 % read 4.11:1 */
   'on-brand-2': { light: 'oklch(1 0 0 / 0.85)', dark: 'oklch(1 0 0)' },
-  /** a shortcut label on the brand (the maintainer, 2026-09-26: round 2's light label) */
+  /** a shortcut label on the brand, a light chip (UI.md §5) */
   'brand-chip': { light: 'oklch(1 0 0 / 0.18)', dark: 'oklch(1 0 0 / 0.08)' },
   success: { light: 'oklch(0.62 0.14 150)', dark: 'oklch(0.72 0.14 150)' },
   /** a search hit, behind the words */
@@ -87,8 +87,8 @@ export const ROLES = {
   'tip-bg': 'oklch(0.22 0.01 255)',
   'tip-ink': 'oklch(0.96 0 0)',
   'tip-ink-2': 'oklch(0.74 0.01 255)',
-  /** the tooltip's shadow, one in both themes as its ground is (Part 3, Task 21; the floating button's tooltips take it
-   *  from the shadow root's sheet in Part 6) */
+  /** the tooltip's shadow, one in both themes as its ground is (UI.md §5; the floating button's tooltips take it
+   *  from the shadow root's sheet) */
   'tip-shadow': '0 4px 12px oklch(0 0 0 / 0.2)',
 } as const satisfies Record<string, Value>
 

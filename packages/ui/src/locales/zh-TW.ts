@@ -1,6 +1,6 @@
 // Traditional Chinese, as Taiwan writes it: Taiwan's own words for an interface (設定, 預設, 連結, 載入, 搜尋, 支援, 快取,
 // 匯入, 復原, 視窗, 分頁, 擴充功能…), never a character conversion of the Simplified pack, which would keep the mainland's
-// words in Traditional characters (the glossary of 2026-11-04, §K; tests/ui/locales.test.ts holds it).
+// words in Traditional characters (UI.md §1; tests/ui/locales.test.ts holds it).
 // Same register as the Simplified pack: a state is a noun, a button a verb, and an error says what happened and what to
 // do; full-width punctuation, 「」 for quotes, a space between Chinese and Latin text or digits (UI.md §1).
 // Typed against the Chinese pack: a key missing here does not compile. Copy ids are in docs/UI.md §3.

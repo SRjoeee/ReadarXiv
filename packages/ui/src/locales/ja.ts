@@ -1,6 +1,6 @@
 // Japanese. The platforms' own words for an interface (Chrome's first, then Apple's and Microsoft's: 設定, 既定, 拡張機能,
 // 元に戻す, 再試行, ビューア…), and the product's register: a button is a noun or 〜を + a verb (再試行, リンクをコピー), a
-// state 〜中 (翻訳中), a sentence です・ます, no apology and no exclamation mark (the glossary of 2026-11-04, §J).
+// state 〜中 (翻訳中), a sentence です・ます, no apology and no exclamation mark (UI.md §1).
 // Full-width 、。「」; a half-width space between Japanese and a Latin word (arXiv で, PDF を), none between Japanese and
 // digits (3件, 12段落); a text ends in 。 where the Chinese one does (UI.md §1, the Japanese line). A name set into a
 // sentence is spaced by ./spacing, which knows whether it begins or ends in Latin.

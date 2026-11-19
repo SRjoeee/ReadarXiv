@@ -1,6 +1,6 @@
 // The switch (the reader's design, §4.1; every surface's since the redesign's §2.3): 28 × 17, the track ink when on and
 // ink-3 when off (the harness's n-5 read 1.5:1 against the chrome); on the popup and the settings page the brand when on,
-// its thumb white, by their own sheets (the maintainer, 2026-09-28); named by its row's words. Out of reach it is greyed
+// its thumb white, by their own sheets (UI.md §5); named by its row's words. Out of reach it is greyed
 // and presses nothing, but stays a stop (aria-disabled, not `disabled`: the browser's would take its tooltip), and
 // `why` is the tooltip then, beside its name (the reader, S-R-21)
 import { useTip } from './tip.tsx'

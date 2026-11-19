@@ -1,6 +1,6 @@
 // Korean. The platforms' own words for an interface (Chrome's first, then Apple's and Microsoft's: 설정, 기본, 확장 프로그램,
 // 실행 취소, 다시 시도, 뷰어…), and the product's register: a sentence in 합니다체 (~습니다), a request ~하세요, a state, a
-// label or a button ending in a noun (번역 중, 링크 복사됨, 다시 시도) (the glossary of 2026-11-04, §J).
+// label or a button ending in a noun (번역 중, 링크 복사됨, 다시 시도) (UI.md §1).
 // Half-width punctuation with a space after it, no space before a parenthesis, “ ” for quotes; a sentence ending in
 // ~습니다 or ~하세요 takes a full stop even alone, a noun ending none (UI.md §1, the Korean line). **No particle follows
 // a name set into a sentence**: 을/를, 이/가, 은/는, (으)로 depend on the name's last sound, which a template cannot know,

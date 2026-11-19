@@ -1,6 +1,6 @@
 // A menu's rows (the reader's design, §6.7; the redesign's design, §5.3; UI.md §4): 30 px, an 8 px radius, the name at
 // the row's start, a hint after it and the chosen one's check at the row's very end, in a slot every row of a choice
-// keeps, so that a new choice moves nothing else (the maintainer, 2026-10-25); the list's behaviour is the shared one
+// keeps, so that a new choice moves nothing else; the list's behaviour is the shared one
 // (ui/menu-nav.ts). A listbox of options (a choice among values), or a menu of radios (the zoom) or of plain items (the
 // download). Moved from the reader
 // (pdf-reader/ui/ReaderMenu.tsx) for the extension's pages, which add these and change no row the reader draws: two
@@ -35,7 +35,7 @@ import { Icon } from './Icon.tsx'
  *
  * The distances are read off the drawing and counted in the layout: a rect carries every scroll between the row and the
  * box, but also the popover's scale while it grows in (pop-in, from 0.97), which `scrollTop` does not count — read as
- * they were, the scroll as a list opened fell short and left its chosen row below the box (Task 110c). So each is
+ * they were, the scroll as a list opened fell short and left its chosen row below the box. So each is
  * divided by the box's drawn height over its layout height, 1 once the popover is still. Offsets would ignore the scale,
  * but Chrome's `offsetTop` ignores every scroll too, so the popover's distance to a row in the scrolled list would have
  * to be rebuilt from each scroller between them
@@ -60,7 +60,7 @@ function reveal(row: Element | null | undefined, stop: Element) {
 /**
  * Whether the primary pointer is a finger (a phone, a tablet), followed as it changes: there a search field that takes the
  * focus as the menu opens raises the on-screen keyboard over half the list, so the list takes it instead, as a menu
- * with no search does, and the field waits for a tap (the owner, 2026-11-03: the search stays, no keyboard on opening).
+ * with no search does, and the field waits for a tap (PDF-READER §6.7: the search stays, no keyboard on opening).
  * The primary pointer, `(pointer: coarse)`, and not `(any-hover: none)` or `(any-pointer: coarse)`: those answer for
  * every input the device has, so a phone with a stylus that hovers (an S Pen) or a paired mouse reads as able to hover
  * and would get the keyboard, and a laptop with a touch screen, whose keyboard is in front of it, would lose the focus
