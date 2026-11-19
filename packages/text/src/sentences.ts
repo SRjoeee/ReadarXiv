@@ -1,6 +1,6 @@
 // Sentence cuts for engines that report none of their own (Google, Chrome's built-in translator): where each sentence after
 // the first begins, in a unit's plain projection (its text, each element one U+FFFC character). Restated from the
-// extension's splitter (src/core/sentences, the owner's code, measured against Microsoft's own boundaries over 60 blocks:
+// extension's splitter (src/core/sentences, our own code, measured against Microsoft's own boundaries over 60 blocks:
 // 98.4 % precision, 100 % outside bibliographies; under-splitting only), over typed elements instead of a wire's
 // placeholders: what an element reads as is the caller's word (`standIn`), not a guess from TeX. The splitter cut a wire whose
 // white space was collapsed; a projection carries its source's own, which is read here as that source reads it (`running`).

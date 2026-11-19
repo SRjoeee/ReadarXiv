@@ -4,8 +4,7 @@
 // style and script (LATIN_GROUPS, OTHER_GROUPS, CM_TEXT), the letters a target is set in (LETTER_SETS), and the readings
 // over them that keep nothing between calls (styled, capsLetters, ownSmallCaps). The engine's role table re-exports them at
 // its old path (packages/engine/src/fonts/font-roles.ts: the roles a target draws in, the face a run takes, canDrawIn); the
-// typesetter's B.faces reads them (typeset breaker/faces.ts, data/faces.ts). Moved whole from the engine's font-roles.ts,
-// the typesetter's copies (data/faces.ts FACES, HOLDS and SMCP, breaker/faces.ts's tables) gone with it.
+// typesetter's B.faces reads them (typeset breaker/faces.ts, data/faces.ts), which keep no copy of these tables.
 import { HOLDS, SMCP } from './font-letters.ts'
 
 export type FaceId = string
