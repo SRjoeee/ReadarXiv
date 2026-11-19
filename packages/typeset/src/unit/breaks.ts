@@ -1,6 +1,5 @@
-// U.breaks (design-b §1.5): where the unit's forced breaks and the paragraphs TeX set of a group end its lines, paired with
-// the row in the translation's order (T19, T20), and the maps the blocks and the tokens read of them, with the kept lines in
-// runs (T21's inputs: C12, C14-C18). Ported from engine 065c1d973: finishUnit's maps L2:1484-1525, break-room.mjs's pitch.
+// U.breaks: where the unit's forced breaks and the paragraphs TeX set of a group end its lines, paired with the row in the
+// translation's order, and the maps the blocks and the tokens read of them, with the kept lines in runs.
 // What the part states is paired by `statedBreaks` (the layPage's reading): each break's line and room TeX's (El.ends), each
 // paragraph's line TeX's paragraph point (El.opens, SpanAt.opens, and a paragraph's first word, Placed.paras: `paraPieces` cuts
 // the row at the sentence start paired with it, else directly after the element it stands after, Placed.parasAfter); the
@@ -9,10 +8,9 @@ import type { El, KnownElClass, Placed, SpanAt } from '@readarxiv/format'
 import { firstWordAt, projectionOf, type Sentences, startsInProjection, worded } from '../lay/lit.ts'
 import { type Rect, rectKey } from '../util.ts'
 
-/** a placeholder row of the layout file (file.d.mts LayoutPh): its kind, flags (layout/file.mjs PH_FLAG) and segments (stride
- *  6: page, x0, baseline, x1, top, bottom) */
+/** a placeholder row of the layout file: its kind, flags and segments (stride 6: page, x0, baseline, x1, top, bottom) */
 type LayoutPh = { kind: string; flags: number; segs: readonly number[] }
-/** the layout file's unit as the breaks read it (file.d.mts LayoutUnit) */
+/** the layout file's unit as the breaks read it */
 export type LayoutUnit = {
   lines: readonly number[]
   frames: readonly number[]
@@ -41,7 +39,7 @@ export type V0Piece =
  *  next line opens another frame), and whether it is a group's paragraph */
 export type Break = { next: number; room: number | null; pitch: number | null; paragraph?: true }
 
-/** v0's placeholder classes that draw ink of their own (TEX:18) */
+/** v0's placeholder classes that draw ink of their own */
 const VISIBLE = new Set<string>([
   'cite',
   'num',
@@ -52,8 +50,8 @@ const VISIBLE = new Set<string>([
   'symbol',
 ] satisfies readonly KnownElClass[])
 
-// ---- break-room.mjs: TeX's room after a forced break
-/** a frame's pitch: the median of its own lines' gaps, the mean of the two middles (break-room.mjs:8 pitchOf) */
+// ---- TeX's room after a forced break
+/** a frame's pitch: the median of its own lines' gaps, the mean of the two middles */
 function pitchOf(gaps: readonly number[]): number | null {
   const g = gaps.filter((v) => v > 0).sort((a, b) => a - b)
   return g.length ? (g[(g.length - 1) >> 1]! + g[g.length >> 1]!) / 2 : null
@@ -85,7 +83,7 @@ export type MapsInput = {
 }
 
 /**
- * finishUnit's maps over the row's breaks (L2:1484-1525): the kept lines in runs (regions), a break whose next line opens
+ * The maps over the row's breaks: the kept lines in runs (regions), a break whose next line opens
  * another frame a region of its own before that line (`breakAt`), one inside a frame its frame's pitch on its next line
  * (`joinAt`), a paragraph's first line a block of its own (`paraAt`); each resolved piece's region or break, and a piece at
  * which TeX opened a paragraph (a group's open, or an element: drawn, the text before it ending its block) its region
@@ -178,8 +176,7 @@ type StatedFacts = {
 }
 
 /**
- * U.breaks' pairing over what TeX states (design-a §1.1: El.ends, El.opens, SpanAt.opens), in the translation's order (T19,
- * T20):
+ * U.breaks' pairing over what TeX states (El.ends, El.opens, SpanAt.opens), in the translation's order:
  * - forced breaks: the row's breaks (the elements the part states forced breaks, El.brk: `\\`, \newline, LaTeX's \break, a grid
  *   cell's row-ending macro, as the engine reads them; no source is read) in groups (one after the other, nothing drawn between
  *   them), a group between two texts a break (one the translation sets at its start or its end, or next to a display, none);
@@ -220,7 +217,7 @@ export function statedBreaks(
     const g = gaps.get(frameOf[j]!) ?? gaps.set(frameOf[j]!, []).get(frameOf[j]!)!
     g.push(L[j]![4] - L[j + 1]![4])
   }
-  // forced breaks, in groups in the row's order (TEX:125-137): the elements the part states forced breaks (El.brk), whatever
+  // forced breaks, in groups in the row's order: the elements the part states forced breaks (El.brk), whatever
   // source the piece carries
   type Group = { members: number[]; before: string | null; after: string | null }
   const groups: Group[] = []
@@ -279,7 +276,7 @@ export function statedBreaks(
       const room = pitch === null ? null : stated
       for (const i of members) out.set(i, { next: j + 1, room, pitch })
     }
-  // paragraphs TeX opened at a group or an element (TEX:222-255)
+  // paragraphs TeX opened at a group or an element
   const forcedNext = new Set([...out.values()].map((b) => b.next))
   const said = (p: V0Piece) => p.t === 'text' && /\S/.test(p.s ?? '')
   const open = (i: number, j: number | undefined) => {
@@ -322,10 +319,10 @@ export const clsOf = (pieces: readonly V0Piece[], els: ReadonlyMap<string, El>):
     return el ? (el.sym ? 'symbol' : el.kind) : 'zero'
   })
 
-/** a paragraph TeX opened inside a member's text, stated by its first word (design-display 2a): the offset of that word in the
- *  unit's source projection (what Row.sentences.src counts in) and the index in Placed.lines of the line TeX opened it on. One at
- *  a line a stronger fact also states (a group's open, an element) is read only where the row does not hold that fact between
- *  its texts (a group the reply dropped) */
+/** a paragraph TeX opened inside a member's text, stated by its first word (docs/PDF-READER.md §18.69): the offset of that
+ *  word in the unit's source projection (what Row.sentences.src counts in) and the index in Placed.lines of the line TeX opened
+ *  it on. One at a line a stronger fact also states (a group's open, an element) is read only where the row does not hold that
+ *  fact between its texts (a group the reply dropped) */
 type ParaPoint = readonly [offset: number, line: number]
 /** the member's paragraph points (the part's `paras`, which packages/format's Placed carries once the engine states it),
  *  ascending; none where its part states none (a part made before) */
@@ -376,9 +373,9 @@ export function pairing(
 }
 
 /**
- * The member's row pieces with its paragraph points cut into them (design-display 2a): a point on a line no stronger fact the
- * row holds opens (a group's open or an element between its texts, a forced break: statedBreaks) is paired with a sentence
- * start of the row (`pairing`), and a piece of the typesetter's own (`par`) stands in the translation where that sentence
+ * The member's row pieces with its paragraph points cut into them (docs/PDF-READER.md §18.69): a point on a line no stronger
+ * fact the row holds opens (a group's open or an element between its texts, a forced break: statedBreaks) is paired with a
+ * sentence start of the row (`pairing`), and a piece of the typesetter's own (`par`) stands in the translation where that sentence
  * begins: before the piece that holds its first character and before the groups opened right there, a text piece cut in two.
  * Where no sentence start pairs it and its part names the element its first word stands directly after in the source (the one
  * that ended the paragraph before, Placed.parasAfter: cas-sc's `\sep`, which is `\par`), it is paired with THAT element: the

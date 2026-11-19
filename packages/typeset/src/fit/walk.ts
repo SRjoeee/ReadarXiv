@@ -1,7 +1,6 @@
-// X.walk (design-b §1.5, T31): the fit's states, from the most natural, each knob taken to its bound before the next, and a
-// unit laid at the first state at which every token is placed. Ported from engine 065c1d973 layer2.mjs L2:4040-4134
-// (statesOf, sameState, sharedStates, layoutUnit2; moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript),
-// held by the walk's, the chain's and the fill's replays on the corpus. The `borrow` knob: a block's lines laid on into
+// X.walk: the fit's states, from the most natural, each knob taken to its bound before the next, and a unit laid at the
+// first state at which every token is placed (statesOf, sameState, sharedStates, layoutUnit2), held by the walk's, the
+// chain's and the fill's replays on the corpus. The `borrow` knob: a block's lines laid on into
 // the room under its last line, before its leading and its size (docs/PDF-READER.md §18.11, borrowing bounded by TeX's
 // facts: so that a page's body keeps one size); the room is TeX's (lay/adapt.ts), stated on each block (`free`).
 import { type Broken, breakLines, kernOf, lineExtent, SQUEEZE, tokW } from '../breaker/break.ts'
@@ -29,7 +28,7 @@ export const PAST_FOOT = 1.5
 
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
 function* statesOf(P: FitParams, blocks: readonly FitBlock[], s: number): Generator<FitState> {
-  // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
+  // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back; down from it)
   const t0 = P.cjk ? (P.trackStart ?? 0) : 0
   // (capScale: the most its lines' room between the rules over and under them leaves it, cellBands: never above)
   const top = Math.min(1, P.capScale ?? 1)
@@ -408,10 +407,10 @@ function fitLays(tokens: readonly Token[], blocks: readonly FitBlock[], s: numbe
 }
 /**
  * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped (which the
- * host never draws: run.mjs fitFurther).
+ * host never draws: fitFurther takes it on).
  * `s`: the original's size (PDF units). Returns { lines, f, s, scale, state, knob, clipped, lostChars, chars, tried }.
  * `failed`: the parameters of a fit of the same tokens on the same blocks that set them at none of its states, strictly or
- * run past a kept region (a clipped layoutUnit2), which differ from P only in what statesOf reads (run.mjs fitFurther's step
+ * run past a kept region (a clipped layoutUnit2), which differ from P only in what statesOf reads (fitFurther's step
  * below the floor: `floor`): the states the two fits share have been laid already, so this fit goes on from the first state of
  * its own. Null where it has no state of its own
  */

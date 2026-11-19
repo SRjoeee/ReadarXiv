@@ -1,4 +1,4 @@
-// Laid.lit (design-a §1.2; docs/PDF-READER.md §17): what each pane lights of a member on a page, per sentence, from the same
+// Laid.lit (docs/PDF-READER.md §17): what each pane lights of a member on a page, per sentence, from the same
 // boxes on both panes' terms. A member lights by sentence where its row carries its sentences (Row.sentences: where each
 // sentence after the first begins in the unit's source projection and in its translation's, the translator's own cuts) and
 // its part places its words on A (Placed.words, which the prepare states for a unit lit by sentence, Unit.sentences): each
@@ -10,7 +10,7 @@
 //   its label where it is drawn anew and the babel name it is led by widening its first sentence's row (a label or a lead
 //   with no row of its own widens its unit's row);
 // - on the right, as drawn: its laid lines' tokens (D.sentences' tokenBox), each in the sentence its start falls in (a text
-//   token's place in the translation, one of no place of its own its neighbour's: words.mjs addUnitWords), the sentence's
+//   token's place in the translation, one of no place of its own its neighbour's, as addUnitWords places it), the sentence's
 //   start its first word's, from the opening brackets and quotes set against it; and the lines it keeps where they stand (a
 //   held line: its ink stays), in the sentence they stand in on A;
 // - an element, one piece on both panes, in one sentence on both (sentenceMap, the one place that decides it): the one its ink
@@ -288,7 +288,7 @@ function cutOnA(m: Placed, page: number, keep: (l: Line) => boolean, starts: rea
 }
 
 /**
- * Each place a row's pieces take in the translation's plain text (words.mjs pieceOffsets: every piece that is no text a
+ * Each place a row's pieces take in the translation's plain text (every piece that is no text a
  * space, white space one, trimmed: the text the tokens' `at` count in, breaker/tokens.ts), and each offset of the
  * translation's projection there (Row.sentences.tr counts in it: text pieces as the row writes them, each element one
  * character, a group's edges none). Null where a text's shown form cannot be read back character by character
@@ -373,7 +373,7 @@ function shownIndex(p: TextPiece, sh: string): number[] | null {
  *  id: a crop of its ink or its text) and whether it is a label's crop */
 type Placed_ = { line: number; box: Box; place: number; el?: string; label?: true }
 /** the member's laid tokens on `page`, in its text's order, each with a place: its own (a text token's `at`), its piece's (an
- *  element drawn as a crop or as text), else the token's before it, else after it (words.mjs addUnitWords) */
+ *  element drawn as a crop or as text), else the token's before it, else after it, as addUnitWords places them */
 function tokensOn(
   L: Layout,
   page: number,
@@ -488,7 +488,7 @@ function rowsBySentence(tokens: readonly (Placed_ & { s: number })[], n: number)
   return out
 }
 
-/** the sentence of the token beside a box on its band (words.mjs placeBeside: a kept character at its neighbour's place) */
+/** the sentence of the token beside a box on its band (placeBeside: a kept character at its neighbour's place) */
 function besideOf(tokens: readonly (Placed_ & { s: number })[], [x0, y0, x1, y1]: Box): number {
   const x = (x0 + x1) / 2,
     y = (y0 + y1) / 2
@@ -564,8 +564,7 @@ export function litLaid(
     els,
     label: m.label ? { ink: [m.label.ink], drawn: relabelled } : null,
     fixed: m.fixed ?? 0,
-    // (the elements' group as the entry decides it: one the translation omits is drawn nowhere else, its ink stays and lights,
-    // #626's review)
+    // (the elements' group as the entry decides it: one the translation omits is drawn nowhere else, its ink stays and lights)
     elementsOff: !!(o.off & 2),
   })
   const displays = shown.filter((s) => s.kind === 'display')
@@ -647,10 +646,10 @@ function withBreaks(
  * The translator's sentence cuts with each sentence that holds no word of the source joined to its neighbour on both panes:
  * the one before it, the next where it is the first. Such a sentence holds no word at an offset in it (Placed.words): what a
  * translator cuts off after a unit's last stop, a citation, a reference's DOI, URL or back-reference list, a display. Its start
- * has no word placed on A, and the whole unit lit whole for it (startsOnA): the lab's 8 units by default and 78 with every switch
- * on that today pairs by sentence were all such, or a translation's sentence with no token drawn (bySentence's `unlaid`: an
- * element moved past the translation's last stop), joined the same way (the feature list's F1). Joined, the other sentences stay
- * the translator's pairs, and the one joined lights with its neighbour on both panes (lane hl-display's record: a cut stands on both
+ * has no word placed on A, and the whole unit lit whole for it (startsOnA): of the lab's units so lit whole that are lit by
+ * sentence otherwise, 8 by default and 78 with every switch on, every one was such, or a translation's sentence with no token
+ * drawn (bySentence's `unlaid`: an element moved past the translation's last stop), joined the same way. Joined, the other
+ * sentences stay the translator's pairs, and the one joined lights with its neighbour on both panes (a cut stands on both
  * panes or on neither). A paragraph point pairs with these cuts (unit/breaks.ts paraPieces)
  */
 export function worded(

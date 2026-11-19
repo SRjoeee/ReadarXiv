@@ -1,4 +1,4 @@
-// What laying a page waits for (design-a §1.4 "one state per call"): the rows its members are set from that are not in while
+// What laying a page waits for (one state per call): the rows its members are set from that are not in while
 // more may come. Made before any work, in O(members) map reads: a part's every member names its row by `text` (a unit's id;
 // a generated word, a babel name, names none). The paper's own names (`paper.names`: the words a head and a generated
 // reference read where no package names them) are waited for where drawn: a member whose facts can draw one (drawsName)

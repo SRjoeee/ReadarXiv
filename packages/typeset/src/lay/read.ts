@@ -1,14 +1,14 @@
-// The reading (design-b §1.6 L5) and the tokens (L7) of a part's member, from what the part states: the composition of the
-// rules run before a unit is set (its reading, its breaks, its label, its tokens and their widths), each fed the facts the
-// prepare states rather than a reading of the page's characters:
+// The reading (L5) and the tokens (L7) of a part's member, from what the part states: the composition of the rules run
+// before a unit is set (its reading, its breaks, its label, its tokens and their widths), each fed the facts the prepare
+// states rather than a reading of the page's characters:
 // - each element's reading (U.elements' ElementReading) from its El: its class (`kind`, 'symbol' where it states a
-//   `sym`), its ink as its rendering's segments (a layout file's segments today: texParts renderings, renderingOf), its text
-//   (`text`, the glyphs' reading; none where a glyph has no Unicode, `nu`), its copy text (`copy`, texToText2), a symbol's
-//   drawing (`sym`), a footnote's mark (`mark`), kept where it stands (`keep`: a display, ink outside the unit's lines);
-// - drawnAs (L2:1757) over a rendering whose source knows its ink (a segment's box, `box.top` set): a crop of the box, or the
+//   `sym`), its ink as its rendering's segments, its text (`text`, the glyphs' reading; none where a glyph has no Unicode,
+//   `nu`), its copy text (`copy`, texToText2), a symbol's drawing (`sym`), a footnote's mark (`mark`), kept where it stands
+//   (`keep`: a display, ink outside the unit's lines);
+// - drawnAs over a rendering whose source knows its ink (a segment's box, `box.top` set): a crop of the box, or the
 //   page's text for a citation, a reference, a macro and a formula over lines;
-// - U.breaks over what TeX states (El.ends, El.opens, SpanAt.opens: statedBreaks, in the translation's order) and finishUnit's
-//   maps over them and the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
+// - U.breaks over what TeX states (El.ends, El.opens, SpanAt.opens: statedBreaks, in the translation's order) and its maps
+//   (breakMaps) over them and the lines the elements keep; U.marks' facts (origAfter, heldAfter) from El.after;
 // - U.label over the label's parts (Label.name, num, punct) as its glyphs;
 // - the unit's base style, its size and its colour from Style, the faces' design from the font's name (classifyFont,
 //   breaker/font-names.ts), the paper's designs and English family from Part.paper.faces (paperOf: its fonts tallied by the
@@ -16,9 +16,9 @@
 // - U.rename over the resolutions drawn as the page's text: a generated reference's or a citation's note's names in the
 //   target's (the rules' reference names, babel's, the paper's own name units'), where the reader draws labels anew;
 // - the tail from Placed.tail; B.tokens and B.measure over Metrics.
-// A name leading the unit (U.lead) is handed in, set from the name the part binds to it (lay/lead.ts). What the part does not
-// state yet is passed as today does without it, each named where it is read: a rendering's runs of one fill and its faked
-// small capitals, a colour piece's run.
+// A name leading the unit (U.lead) is handed in, set from the name the part binds to it (lay/lead.ts). Where the part states
+// no fact for a reading, the reading goes without it, as named where it is read: a rendering's runs of one fill and its
+// faked small capitals, a colour piece's run.
 import type { El, KnownElClass, OutPiece, Placed, Piece, SpanAt } from '@readarxiv/format'
 import { type CjkFaces, faceOf, ownSmallCaps, type Roles, rolesFor } from '../breaker/faces.ts'
 import { classifyFont, familyOfFonts } from '../breaker/font-names.ts'
@@ -37,7 +37,7 @@ import { type Rect, rectKey } from '../util.ts'
 
 type Line = Placed['lines'][number]
 const KEPT = 1
-/** the classes that draw ink of their own (TEX:18 VISIBLE), the text macros (TEX:21) */
+/** the classes that draw ink of their own, and the text macros */
 const VISIBLE = new Set<string>([
   'cite',
   'num',
@@ -192,7 +192,7 @@ function lineOfInk(L: LineKeys, k: readonly number[], kept: boolean | null = nul
 
 /** an El's ink as a layout file's segments (stride 6: page, x0, baseline, x1, top, bottom) */
 const segsOf = (el: El): number[] => el.ink.flatMap((k) => [k[0], k[1], k[5], k[3], k[4], k[2]])
-/** the box a rendering's segments make (renderingOf TEX:364) */
+/** the box a rendering's segments make */
 const boxOf = (S: readonly number[]) => {
   const n = S.length / 6
   const at = (q: number, f: number) => S[6 * q + f]!
@@ -208,7 +208,7 @@ const boxOf = (S: readonly number[]) => {
   }
 }
 
-/** drawnAs (L2:1757) over a rendering whose source knows its ink (its box): a formula over lines as its crops, the page's text
+/** drawnAs over a rendering whose source knows its ink (its box): a formula over lines as its crops, the page's text
  *  for a citation, a reference, a macro and a formula over lines, else a crop of its box; its copy text the source's. A mark
  *  (`mark`: readingsOf's) on one line is a crop of its box whatever its class */
 function drawnAs(
@@ -264,7 +264,7 @@ function readingsOf(
       return
     }
     if (p.t !== 'ph' && p.t !== 'nested') return
-    // (a nested unit's mark, placeholdersOf L2:1066: a footnote mark's, drawn from its source as '*' where no ink is found)
+    // (a nested unit's mark: a footnote mark's, drawn from its source as '*' where no ink is found)
     const nested = p.t === 'nested'
     const el = els.get(String(p.k))
     const cls = el?.kind ?? 'zero'
@@ -278,16 +278,16 @@ function readingsOf(
     const ink = el?.ink ?? []
     const S = el ? segsOf(el) : []
     const onKept = ink.length > 0 && ink.every((q) => lineOfInk(L, q, true) !== null)
-    // (texParts' fixed, TEX:487-495: a text macro of no ink drawn as nothing (inklessOf), one of the classes that draw ink
-    // TeX set none for (emptyOf, EMPTY), ink outside the unit's lines left where it stands (OUTSIDE))
+    // (fixed: a text macro of no ink drawn as nothing, one of the classes that draw ink TeX set none for (EMPTY), ink outside
+    // the unit's lines left where it stands (OUTSIDE))
     let fixed: Res | null = null
     // (a text macro whose glyphs are the unit's text, its text stated (El.text, the probe's): drawn as that text, the
-    // rendering its glyphs make among the unit's characters; with none, nothing, inklessOf)
+    // rendering its glyphs make among the unit's characters; with none, nothing)
     const textOnly = MACRO_CLASSES.has(cls) && !!el && !el.ink.length && el.text !== undefined && el.text !== ''
     // (an element of no ink, of a class drawn from its ink, read by the one of three the part states (format's El): TeX set
     // nothing for it, El.text '' (its two points hold no glyph, its probe said it sets none: 2610.19159v1's
     // `\trajectoryMark{}`), drawn as nothing, proven; TeX set it before the unit's start, outside the unit's text, El.keep,
-    // drawn as nothing and its ink, never erased, left where it stands (texParts' OUTSIDE); neither, its ink was not found:
+    // drawn as nothing and its ink, never erased, left where it stands (OUTSIDE); neither, its ink was not found:
     // drawn as nothing, its glyphs may have been erased with the text group and never drawn again (2608.06007v1 p10's \sys,
     // "TensorCast"; 2608.25210v2 p7's algorithm under one line; 2402.10294v1's reference [1] without its year), so the unit is
     // unproven, left the original's whole)
@@ -337,7 +337,7 @@ function readingsOf(
     // (a URL drawn as its one line's crop: where TeX's url package may break it, El.breaks, which the breaker reads)
     const drawn =
       drawn0?.mode === 'crop' && !drawn0.parts && el?.breaks?.length ? { ...drawn0, breaks: el.breaks } : drawn0
-    // (its rendering without its own brackets, where it stands in them with a letter or a digit inside: unbracketed L2:1365)
+    // (its rendering without its own brackets, where it stands in them with a letter or a digit inside: unbracketed)
     let inner: ElementReading['inner'] = null
     if (
       gap &&
@@ -450,7 +450,7 @@ function headOf(m: Placed, designs: PaperReading['designs']): HeadParts | null {
   }
 }
 
-/** what the tokens set before the translation (RUN:2196): a name's lead (ReadInput.lead, lay/lead.ts), else the label drawn anew,
+/** what the tokens set before the translation: a name's lead (ReadInput.lead, lay/lead.ts), else the label drawn anew,
  *  its parts in their styles, or its words in its first glyph's (an opening bracket at its end glued: gap 0) */
 function leadOf(lb: UnitLabel | undefined): { parts: { text: string; st: TStyle }[]; gap?: number } | null {
   if (lb?.parts)
@@ -508,7 +508,7 @@ type ReadOut = {
 }
 
 /** L5 and L7 of a member: its reading and its tokens, from the part and the row; no width is taken (B.cover asks its faces'
- *  readiness first, then `measured` takes the widths: a face not loaded is never measured, PR #620's re-review) */
+ *  readiness first, then `measured` takes the widths: a face not loaded is never measured) */
 export function readMember(i: ReadInput): ReadOut {
   const { m, unit, paper } = i
   const pieces = unit.pieces
@@ -537,7 +537,7 @@ export function readMember(i: ReadInput): ReadOut {
     resolved: new Set(res.keys()),
   })
   for (const [k, x] of br.marks) Object.assign(res.get(k)!, x)
-  // U.rename: the names cleveref and \autoref generate in its references, and a citation's note's, in the target's (RUN:2026)
+  // U.rename: the names cleveref and \autoref generate in its references, and a citation's note's, in the target's
   if (i.labels && i.refs)
     for (const [k, x] of rename(res, i.refs, i.labels.words ?? null, i.labels.names ?? null))
       (res.get(k) as Res & { rename?: typeof x }).rename = x

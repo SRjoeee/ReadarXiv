@@ -1,10 +1,8 @@
-// U.marks (design-b §1.5, T16, T17): the marks no line starts with that the translation sets where the original's line
-// shows none (after a display, whose line opens with none; after a held line's own mark, the one it shows), dropped; and the
-// class's own marks after the unit's text (Placed.tail) set in place of the translation's of their kinds at its end. Today
-// both are decided inside tokensOf2, as the tokens are made: B.tokens calls these where today does, and its answer carries
-// the decisions (`MarksTrace`, the tap's U.marks slot: `{ drops: [kind, before, after], tail: [marks, merged] }`). Ported
-// from engine 065c1d973 layer2.mjs: the dropped closure L2:2669-2680, droppedHeld L2:2379-2391, markKind L2:2363-2372, the
-// tail merge L2:2845-2878 (the tail's characters then pushed by B.tokens).
+// U.marks: the marks no line starts with that the translation sets where the original's line shows none (after a display,
+// whose line opens with none; after a held line's own mark, the one it shows), dropped; and the class's own marks after the
+// unit's text (Placed.tail) set in place of the translation's of their kinds at its end. Both are decided as the tokens are
+// made: B.tokens calls these (breaker/tokens.ts), and its answer carries the decisions (`MarksTrace`, the tap's U.marks
+// slot: `{ drops: [kind, before, after], tail: [marks, merged] }`); the tail's characters are then pushed by B.tokens.
 //
 // Its inputs (U.elements' and the part's facts): a display's resolution and the mark the original sets after it
 // (`origAfter` ← El / Line), a held line's marks (`heldAfter`, `heldMarks`), the class's tail and the unit's own marks there
@@ -22,7 +20,7 @@ export type MarksTrace = {
   tail: [marks: number, merged: number] | null
 }
 
-/** the kind a mark no line may start with is, across scripts (L2:2363 markKind) */
+/** the kind a mark no line may start with is, across scripts */
 function markKind(ch: string): string {
   if (/^[.\u3002\uff0e\uff61]$/u.test(ch)) return 'stop'
   if (/^[,\u3001\uff0c\uff64]$/u.test(ch)) return 'comma'
@@ -33,8 +31,8 @@ function markKind(ch: string): string {
   if (/^[)\]}\uff09\uff3d\uff5d\u3009\u300b\u300d\u300f\u3011\u3015\u3017\u3019\u301b’”]$/u.test(ch)) return 'close'
   return ch
 }
-/** the text after a placeholder kept on its held line, without the leading marks that stand for one the line shows after it
- *  (L2:2379 droppedHeld) */
+/** the text after a placeholder kept on its held line, without the leading marks that stand for one the line shows
+ *  after it */
 export function droppedHeld(s: string, held: readonly string[]): string {
   const left = held.map(markKind)
   let t = s,
@@ -52,7 +50,7 @@ export function droppedHeld(s: string, held: readonly string[]): string {
 }
 
 /** the first text after a display or a held line's mark, its leading marks dropped (a display's: every one no line starts
- *  with, unless the original sets one after it); a drop noted in `trace` (L2:2669 dropped) */
+ *  with, unless the original sets one after it); a drop noted in `trace` */
 export function dropMarks(s: string, after: MarksAfter, trace?: MarksTrace): string {
   const held = !!after.held
   let t = s
@@ -70,7 +68,7 @@ export function dropMarks(s: string, after: MarksAfter, trace?: MarksTrace): str
 
 /** the class's tail set in place of the translation's marks of its kinds at the unit's end: those marks taken off the last
  *  tokens (as many of each kind as the tail sets, less the unit's own there), spaces before them dropped; how many were
- *  taken. The tail's own characters are then pushed by B.tokens (L2:2845-2878) */
+ *  taken. The tail's own characters are then pushed by B.tokens */
 export function mergeTail(tokens: Token[], tail: readonly { ch: string }[], tailOwn: readonly string[] | null): number {
   const left = new Map<string, number>()
   for (const c of tail) left.set(markKind(c.ch), (left.get(markKind(c.ch)) ?? 0) + 1)

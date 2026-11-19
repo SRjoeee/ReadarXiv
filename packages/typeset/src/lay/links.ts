@@ -1,4 +1,4 @@
-// Page.links (design-a §1.2: the page's links as drawn, moved with their pieces, else at A's boxes; D.links, design-b §1.6 E1):
+// Page.links (the page's links as drawn, moved with their pieces, else at A's boxes; D.links):
 // A's annotations on the page (Part.links), each with the member and the piece that holds it as the prepare states them
 // (locate's ownership: the member that owns more than half of the glyphs under it, within it the element that does, else its
 // text), placed so (emit/links.ts placeUnit):
@@ -33,7 +33,7 @@
 // never at its box, which is its own page's (`away`); a member's link groups are paired with its annotations of all its pages,
 // so that each of its pages pairs them alike: an annotation is drawn on the page its group is set on, and on no other.
 // A member's annotations are taken in their order on A (inReading), which is the order TeX set them in, never in the part's
-// list's, which is the PDF's annotation array's (two groups listed right to left opened each other's address, #626's review).
+// list's, which is the PDF's annotation array's (there two groups listed right to left would open each other's address).
 // Each link drawn names the member that owns it (its third field), so that a reader leaving that member the original's puts its
 // links back at A's boxes (composer.ts held()), and carries its own annotation's border on A (its fourth, Link.border: a moved
 // link keeps it whatever box it is drawn over; the annotations one record is drawn for share it, placeUnit joining or pairing
@@ -69,8 +69,8 @@ type DrawnWhole = { m: Placed; off: number; drawn: readonly Page['links'][number
 /** a link group's command, as the breaker tags its tokens (LINK_OPEN): \url's with \href's (hyperref.sty's \href, \hyperref,
  *  \hyperlink and \url) */
 const LINK_CMD = /^(?:href|hyperref|hyperlink|url)$/
-/** an element's command that sets a reference to a destination in the paper, or a group's (links.mjs REF_SRC, by the command
- *  the part states, El.cmd): latex.ltx's \ref and \pageref; amsmath.sty's \eqref; hyperref.sty's \autoref, \hyperref,
+/** an element's command that sets a reference to a destination in the paper, or a group's (by the command the part states,
+ *  El.cmd): latex.ltx's \ref and \pageref; amsmath.sty's \eqref; hyperref.sty's \autoref, \hyperref,
  *  \hyperlink and thmtools' \Autoref (thm-autoref.sty); cleveref.sty's \cref, \Cref, \crefrange, \Crefrange, \cpageref,
  *  \Cpageref, \labelcref; nameref.sty's \nameref, \Nameref; varioref.sty's \vref, \Vref; subcaption.sty's \subref */
 const REF_CMD =
@@ -94,7 +94,7 @@ const kindOf = (to: Link['to']): LinkKind => {
 /** an element's command that sets a citation, by the command the part states (El.cmd): natbib's and biblatex's citation
  *  commands are named so, \nocite sets nothing */
 const CITE_CMD = /^(?![Nn]ocite)[A-Za-z]*[Cc]ite[A-Za-z]*\*?$/
-/** the kind an element's link is of by its source (links.mjs linkKindOf, by the command and the nested mark the part states): a
+/** the kind an element's link is of by its source (by the command and the nested mark the part states): a
  *  footnote's mark, a reference, a citation (hyperref names its destination cite.<key>; the part states no key, so a citation is
  *  told by its command and paired by the order tier, as a reference is); null for any other */
 const elKindOf = (e: { cmd?: string; nested?: 1 }): 'note' | 'internal' | 'cite' | null =>
@@ -354,7 +354,7 @@ export function linksOf(
       const e = els.get(id)
       // (its ink stays where it stands, however it is drawn: a display, kept by the part or in place by the reading, or the
       // member's elements' group on (none moved, or a group the add-on could not part, Placed.fixed) on the annotation's own page,
-      // which the translation may set the element off: the original's anchor stays with it, #626's review)
+      // which the translation may set the element off: the original's anchor stays with it)
       const stays = (i: number) => !e || !!e.keep || e.kind === 'display' || kept.has(id) || !(offOn(pageOf(i)) & 2)
       for (const i of owns.filter(stays)) atBox(i, 'kept')
       const is = owns.filter((i) => !stays(i))
@@ -368,10 +368,10 @@ export function linksOf(
         // (over the characters it is drawn as: each annotation over its own characters among them where the part states them
         // (Link.text, PDF.js's overlaidText: placeText), the piece's annotations in one group, so that one search, moving
         // forward only, takes them in their order on A whatever their targets (the same text twice, two works: each its own
-        // occurrence, #631's review); where it does not (a part made before), the annotations of one target over their whole,
+        // occurrence); where it does not (a part made before), the annotations of one target over their whole,
         // those of two or more targets none, not told apart)
         // (a mark TeX set as written that the part reads as one word, its copy holding no white space (a URL, a DOI: the engine
-        // joins its lines, lane url-join), whose annotations name one target: TeX's line break split one link into an annotation
+        // joins its lines), whose annotations name one target: TeX's line break split one link into an annotation
         // a line, and the translation draws the word whole: one link over its whole drawing, `word`)
         const word =
           !!e?.literal && !!e.copy && !/\s/u.test(e.copy) && new Set(is.map((i) => key(list[i]!.to))).size === 1
@@ -399,7 +399,7 @@ export function linksOf(
       const oneTarget = (rs: number[][]) =>
         rs.length > 0 && rs.every((r) => key(list[r[0]!]!.to) === key(list[rs[0]![0]!]!.to))
       // (annotations with groups in their orders: each annotation an occurrence where they are as many as the groups (two links
-      // to one address one after the other are one run of one target, #626's review), else each run of one target a group (a
+      // to one address one after the other are one run of one target), else each run of one target a group (a
       // link TeX broke over lines is one run), else one group takes all of one target; placed where the group is drawn, on
       // whichever page of the member that is)
       const inOrder = (as: number[], gs: readonly number[], tier: string): boolean => {
@@ -462,8 +462,8 @@ export function linksOf(
       tokenBand(t as never, (line.seg as { f: number } | undefined) ?? L, line.baseline)
     // (a piece drawn as text is searched over the member's laid lines on all its pages, its annotations of all its pages in
     // their order on A, one search moving forward only: each takes its own occurrence wherever the translation sets it, and
-    // every page of the member finds the same; searched among what one page draws alone, a page's occurrence took the
-    // annotation of an occurrence another page draws, #631's review. A crop, a pair and a whole drawing are placed over what
+    // every page of the member finds the same; searched among what one page draws alone, a page's occurrence would take the
+    // annotation of an occurrence another page draws. A crop, a pair and a whole drawing are placed over what
     // the page draws of them. The records of this page are kept, in the groups' order)
     const asText = groups.filter((g) => g.to.draw === 'text')
     const placed = [

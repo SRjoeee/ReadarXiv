@@ -1,6 +1,6 @@
-// S.fill.leads (design-b §1.5, E30): a unit's fill leadings as its lay ends: the loosest leading from its fitted one up to
-// its top at which its fitted state still sets it whole as the page fill lays it, else the loosest closer one. The layout
-// found, which the page's fill reuses, is a field of the unit, `fillLaid` (design-b §1.5: FillLeads.laid).
+// S.fill.leads: a unit's fill leadings as its lay ends: the loosest leading from its fitted one up to its top at which its
+// fitted state still sets it whole as the page fill lays it, else the loosest closer one. The layout found, which the page's
+// fill reuses, is a field of the unit, `fillLaid`.
 import { footFloorOf } from '../breaker/slots.ts'
 import { layoutAt } from '../fit/at.ts'
 import { keepsPages } from '../fit/runs.ts'
@@ -40,7 +40,7 @@ type FrameLeads = { leads: (number | undefined)[]; last: number }
  * it at the size it is set at, × its original's pitch (1: the original's own pitch, P.fillLead null; the looser of that and
  * P.fillLeadRel × the original's pitch scaled by the fit's size, where the script has one); `fillLead`, the
  * loosest leading from its fitted one up to the top at which its fitted state still sets it whole as the page fill lays it
- * (its last line no lower than a leading over the next line of its column, layer2.mjs footFloorAt: its last baseline on its
+ * (its last line no lower than a leading over the next line of its column, footFloorAt: its last baseline on its
  * frame's last but where that would leave the gap under it tighter than its lines); where its fitted one does not, the
  * loosest closer one, down to the original's pitch (null where that state does not set it again). Set on the unit as it is laid (afterLay), so that the fill leading a page's pass reads of a unit
  * running on to it from a page before no longer depends on whether that page's pass has run (the 1b design, §2.1 C1). Not
@@ -72,7 +72,7 @@ function fillLeadsOf(p: FillUnit, P: FillRules): void {
   // search from the top is the reference, and the halving drew the same on every fixture. So for the tracking and size)
   p.fitLines = p.layout.lines.length
   const st = p.layout.state
-  // (as the page fill lays it, its last line no lower than a leading over the next line of its column: layer2.mjs footFloorAt.
+  // (as the page fill lays it, its last line no lower than a leading over the next line of its column: footFloorAt.
   // A state that sets it so sets it without the floor too, which only takes slots off its last frame's foot: the fitted state
   // is laid again only where that one does not set it)
   const lo = st.lead,

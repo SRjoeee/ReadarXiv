@@ -1,5 +1,5 @@
-// B.cuts (design-b §1.5, T23): a unit over its frame breaks cut at its frames' shares (docs/PDF-READER.md §18.9: frames
-// fill as TeX does), and the page-break tokens set before the cuts.
+// B.cuts: a unit over its frame breaks cut at its frames' shares (docs/PDF-READER.md §18.9: frames fill as TeX does), and
+// the page-break tokens set before the cuts.
 import { kinsokuOf, noStart } from './script.ts'
 import { originalLines } from '../unit/decor.ts'
 import type { FitBlock, FitParams, LaidLine, Tokens } from '../fit/types.ts'

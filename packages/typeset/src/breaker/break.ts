@@ -1,4 +1,4 @@
-// B.break (design-b §1.5, T22): a unit's tokens broken into the slots of a state, TeX's \lineskip rule settled between
+// B.break: a unit's tokens broken into the slots of a state, TeX's \lineskip rule settled between
 // lines, a word cut or hyphenated where it must be, a CJK line squeezed to take its group. Its measures are the call's
 // (`P.measure`, `m`), its patterns `P.patterns`.
 import { textless } from './cuts.ts'
@@ -62,9 +62,6 @@ type EndMark = NonNullable<Token['endMark']>
 /** a URL's crop cut at a break point, its head and its tail (urlCut's) */
 type UrlCut = NonNullable<ReturnType<typeof urlCut>>
 
-/**
- * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
- * kind the file's crops exempt (tex.mjs cropsOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's
 /** a token cut in two by the breaker, its head: no kern of its own (the kern stays after the word's tail) */
 const headOfCut = <E extends object>(t: BreakToken, extra: E): BreakToken & E => {
   if (!t.kernW) return { ...t, ...extra }
@@ -147,10 +144,10 @@ const urlCut = (t: BreakToken, room: number, scale: number, least: boolean) => {
     tail: { ...t, crop: tail, cw: rect[2] - at[0], glue: false, asp: false, of },
   }
 }
-/** the explicit glue after a token at size f (tokensOf2 kernOn's `kernW`, at 100 px), an advance its laid item holds apart from
+/** the explicit glue after a token at size f (B.tokens' kernOn's `kernW`, at 100 px), an advance its laid item holds apart from
  *  its width (`kern`) */
 const kernOf = (t: Pick<Token, 'kernW'>, f: number): number => ((t.kernW ?? 0) * f) / 100
-/** a token's own width at size f: no kern after it (tokensOf2 kernOn's `kernW`), which its item holds apart (kernOf) */
+/** a token's own width at size f: no kern after it (B.tokens' kernOn's `kernW`), which its item holds apart (kernOf) */
 /** what tokW reads of a token: the breaker's and the walk's (fit/walk.ts fitLays' bound) */
 type Measured = Pick<Token, 'cw' | 'space' | 'w100' | 'cls' | 's'> & { crop?: unknown }
 const tokW = (t: Measured, f: number, st: FitState, scale: number): number => {
@@ -176,11 +173,11 @@ const SQUEEZE = 0.02
  * spacing), and the line is set as before; the squeeze is for the lines a group left letter-spaced
  */
 const STRETCH_MIN = 0.05
-/** whether an item continues the word of the item before it (tokensOf2's pushText: a piece after a break point inside a word,
+/** whether an item continues the word of the item before it (B.tokens' pushText: a piece after a break point inside a word,
  *  `brk` — a URL's after its `/`, `.`, `-`, a compound's after its hyphen —, or a run of one case of a word, `cont`): the gap
  *  before it is a break point with no glue, as TeX's url package sets one (\Urlmuskip 0mu: a penalty) and as TeX sets every
  *  word, so no CJK line's slack or squeeze goes into it (placeItems, squeezeTakes). 2608.25210v2 p17: a URL whose line ends
- *  are joins (lane url-join), cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/". And an
+ *  are joins, cut at its break points, was letter-spaced to the measure, 1.9-2.7 pt after each "/". And an
  *  element set right after the one before it, nothing between in the source or the row (`tight`, tokens.ts): one word as TeX set it
  *  (2111.09276v1 p1, two highlights of one word drawn apart by the line's slack) */
 const inWord = (it: ItemOf): boolean => !!(it.t.brk || it.t.cont || it.t.tight)
@@ -226,8 +223,8 @@ const squeezable = <I extends ItemOf>(
  * room by its ink: every line the breaker sets, justified, centred or flush (groupOf, stretchOf, placeItems), and a figure
  * text on its anchor (S.figures)
  */
-/** whether a character is a mark no line opens with: UAX 14's (no-start.mjs, the one table the layer gate's lineStartPunct reads
- *  too) or the target's rules' (P.noStart: CJK's small kana and prolonged sound mark, its closing quotes, the per cent sign) */
+/** whether a character is a mark no line opens with: UAX 14's (script.ts noStart) or the target's rules' (P.noStart: CJK's
+ *  small kana and prolonged sound mark, its closing quotes, the per cent sign) */
 const noLineStart = (P: Pick<FitParams, 'noStart' | 'noEnd'>): ((ch: string) => boolean) => {
   const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
   return (ch) => noStart(ch) || kinsoku.starts(ch)
@@ -241,7 +238,7 @@ const hangOf = (it: EdgeMark, compress: number): number =>
  * No line the breaker opens starts with a mark UAX 14 or the target's rules keep from a line's start (`barred`): such a
  * mark stays with the group before it, across a space too, unless that group with it is longer than a line by itself
  * (the break the glue alone allows), or a token cut by its characters would leave one at the head of its tail (the cut
- * moves back before it). A line TeX's own break opens (`newline`, `blockTo`) is tokensOf2's: its `dropped`.
+ * moves back before it). A line TeX's own break opens (`newline`, `blockTo`) is B.tokens': its `dropped`.
  */
 function breakLines(
   tokensIn: readonly Token[],
@@ -265,9 +262,8 @@ function breakLines(
   let li = 0,
     i = 0
   const half = 0.5 * f
-  // (the marks no line opens with: a character UAX 14 keeps from a line's start, no-start.mjs, the one table the layer
-  // gate's lineStartPunct reads too, or one the target's rules do, P.noStart: CJK's small kana and prolonged sound mark,
-  // its closing quotes, the per cent sign; `barred`, a token that opens with one)
+  // (the marks no line opens with: a character UAX 14 keeps from a line's start, or one the target's rules do, P.noStart:
+  // CJK's small kana and prolonged sound mark, its closing quotes, the per cent sign; `barred`, a token that opens with one)
   const barredChar = noLineStart(P)
   const barred = (t: BreakToken) => !t.space && typeof t.s === 'string' && t.s !== '' && barredChar(t.s)
   // (a word wider than its line cut by its characters, each a grapheme, what a reader sees as one character: a letter and the
@@ -299,7 +295,7 @@ function breakLines(
   // (the line in hand: null until the first open(); every read is inside a closure that runs after it, `settle` reading it with `?.`)
   let line = null as unknown as Line
   // (`past`: how many of the unit's kept regions the text has passed before the line's first item, the walk's own count
-  // (`consumed`, below): where the page's word table writes a region's kept lines, words.mjs, in the text's order whatever
+  // (`consumed`, below): where the page's word table writes a region's kept lines, in the text's order whatever
   // slot the text after a display stands on)
   // (`slotOf`: each line's slot, which a line laid again from its first token opens on again: the page breaks' fallback, strand)
   const slotOf = new Map<Line, Slot>()
@@ -674,7 +670,7 @@ function breakLines(
   // (`squeezed`). The gaps close no further than the tracking floor, trackMin: the squeeze and the unit's tracking together
   // never set two characters nearer than the fit's tightest state does. Never a centred line, nor one placeItems sets as
   // Latin text; nor at a tracking above the one the fit set the unit at (`fitTrack`, laidOut's), which only the page fill
-  // sets (run.mjs fillPage: a unit short of its frame letter-spaced to fill it), whose lines the squeeze would take back
+  // sets (fillPage: a unit short of its frame letter-spaced to fill it), whose lines the squeeze would take back
   const squeezes = !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)
   const gapSqueeze = Math.max(0, Math.min(SQUEEZE, st.track - (P.trackMin ?? 0))) * f
   /** the stretch a gap the line in hand is justified by if it is closed here: its trailing spaces and its last kern dropped
@@ -729,7 +725,7 @@ function breakLines(
   // and the walk goes on from the line it lays again)
   for (;;) {
     while (i < tokens.length && li < slots.length && !stop) {
-      // a forced break of TeX's inside a frame (tokensOf2's `newline`): the laid line ends there (a line it finds empty, the
+      // a forced break of TeX's inside a frame (B.tokens' `newline`): the laid line ends there (a line it finds empty, the
       // text before it having filled the last, is no line of its own, as TeX's break at a full line's end sets none), and
       // TeX's room after it, in pitches (`room`), is left before the next line, the later slots of the ended line's flow
       // pushed down by it as TeX's rule pushes them (pushDown): the room is wherever the translation sets the break, and
@@ -1002,7 +998,7 @@ function breakLines(
           line.x += cut.head.cw * scale
           setToken(i, cut.tail)
         } else if (t0.ownLabel && lines.length === 1 && li + 1 < slots.length) {
-          // (a unit's own label carried to its first line's start (run.mjs ownLabelOnRow), on a shared line that holds it and not
+          // (a unit's own label carried to its first line's start, on a shared line that holds it and not
           // its first word: never alone at the line's end (2610.21098v1 p2's "(2)", the end of the line before its item's text).
           // The line is left as a sliver is (slotsAt), and the unit opens on its next)
         } else {

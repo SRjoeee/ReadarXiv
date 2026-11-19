@@ -7,7 +7,7 @@
 
 /** the fit's knobs a script orders (ScriptRules.order) */
 export type FitKnob = 'track' | 'borrow' | 'lead' | 'shrink'
-/** a script's fields: the fit's, the breaking's, the cells', the faces' (rules/layout.mjs SCRIPT_FIELDS) */
+/** a script's fields: the fit's, the breaking's, the cells', the faces' */
 export type ScriptRules = {
   order: readonly FitKnob[]
   leadBase: number

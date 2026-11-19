@@ -1,19 +1,16 @@
-// B.faces (design-b §1.5, G2, A4): the face a run of the translation is set in, by the role table (faces are the role
-// table's only, docs/PDF-READER.md §18.1): a CJK run in its target's CJK family by weight (its slant a shear, CJK_SLANT_DEG, docs/PDF-READER.md
-// §18.1); a Latin run in its design's group, math in the math face, small capitals
-// in Latin Modern's caps face where the design is Computer Modern's or none; the nearest style of the group that holds the
-// target's letters; with its fallbacks and its size correction. Ported from engine 065c1d973: rules/font-roles.mjs
-// rolesFor :340-356, faceFor :432-444, styled :403-414, alphabetOf :386-396, LATIN_GROUPS / OTHER_GROUPS / CM_TEXT :358-367,
-// LETTERS :370-382, capsLetters :418, ownSmallCaps :423, LATIN_FALLBACKS :331, CJK_GROUPS :190; layer-proto/fonts.mjs
-// roleFaceOf :89-100 (faceOf :388 with the role table set), CJK_SLANT_DEG :83; rules/script.mjs scriptOf :11. The catalogue
-// (each face's family, weight, style, size, letters, smcp) and the role table's groups, the letters a target is set in and the
-// readings over them that keep nothing (styled, capsLetters, ownSmallCaps) are @readarxiv/text's, held once for the engine's
-// role table and this (data/faces.ts gives the catalogue's four fields the typesetter reads).
+// B.faces: the face a run of the translation is set in, by the role table (faces are the role table's only,
+// docs/PDF-READER.md §18.1): a CJK run in its target's CJK family by weight (its slant a shear, CJK_SLANT_DEG,
+// docs/PDF-READER.md §18.1); a Latin run in its design's group, math in the math face, small capitals in Latin Modern's caps
+// face where the design is Computer Modern's or none; the nearest style of the group that holds the target's letters; with
+// its fallbacks and its size correction. The catalogue (each face's family, weight, style, size, letters, smcp) and the
+// role table's groups, the letters a target is set in and the readings over them that keep nothing (styled, capsLetters,
+// ownSmallCaps) are @readarxiv/text's, held once for the engine's role table and this (data/faces.ts gives the
+// catalogue's four fields the typesetter reads).
 //
 // alphabetOf and scriptOf are cached by their argument (pure functions of a language tag; computed each call they were a
 // third of the typesetter's main-thread time while a paper was scrolled, measured 2026-11-12), each by a cache of its own
 // (TAGS_CACHED), so rolesFor and faceFor, which read them, stay here beside the engine's. Its inputs: the target, the
-// paper's English family (A3, read off page 1) and the target's CJK family (the rule set's `cjkFaces`) ←
+// paper's English family (read off page 1) and the target's CJK family (the rule set's `cjkFaces`) ←
 // Rules.faces, built by rulesFor.
 import {
   ALPHABETS,
@@ -33,7 +30,7 @@ export { capsLetters, ownSmallCaps } from '@readarxiv/text'
 
 /** the slant of a CJK italic run, degrees: the body's own face sheared (docs/PDF-READER.md §18.1) */
 export const CJK_SLANT_DEG = 13
-/** the roles a target draws in (font-roles.mjs rolesFor) */
+/** the roles a target draws in (rolesFor) */
 export type Roles = Readonly<{
   target: string
   family: string
@@ -69,7 +66,7 @@ function byTag<T>(f: (tag: string) => T): (tag: string) => T {
 /** the script a BCP 47 tag is written in: its likely script (Intl.Locale's maximize), cached by the tag */
 export const scriptOf = byTag((lang: string): string | undefined => new Intl.Locale(lang).maximize().script)
 
-/** what a target draws in, for a paper's English family and the target's CJK family (font-roles.mjs:340 rolesFor) */
+/** what a target draws in, for a paper's English family and the target's CJK family */
 export function rolesFor(target: string, family: string, cjkFaces: CjkFaces): Roles {
   const script = scriptOf(target)
   let cjk: Roles['cjk'] = null
@@ -90,7 +87,7 @@ export const alphabetOf = byTag((target: string): string => {
   return Object.hasOwn(LETTERS, language) ? language : scriptOf(target) === 'Cyrl' ? 'Cyrl' : 'Latn'
 })
 
-/** the face a run is drawn in (font-roles.mjs:432 faceFor) */
+/** the face a run is drawn in */
 function faceFor(roles: Roles, run: Run): string | null {
   const c = roles.cjk
   if (run.script === 'cjk' && c) return run.bold ? c.bold : c.body
@@ -109,7 +106,7 @@ function faceFor(roles: Roles, run: Run): string | null {
 }
 
 /** B.faces: the face a run of style `st` and script class `cls` is set in, with its fallbacks, its slant and its size
- *  correction (fonts.mjs:89 roleFaceOf) */
+ *  correction */
 export function faceOf(roles: Roles, st: TStyle, cls: 'cjk' | 'latin'): Face {
   const run: Run = {
     script: cls,

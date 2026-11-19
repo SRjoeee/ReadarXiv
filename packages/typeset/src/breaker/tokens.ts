@@ -1,27 +1,24 @@
-// B.tokens (design-b §1.5): a unit's row as the breaker's tokens, unmeasured, each in the face it is set in (T39, E21):
-// the style stack over the row's groups and switches, script chunks (cut between grapheme clusters, docs/PDF-READER.md §18.93),
-// glue, the line-break marks, UAX 14's kept pairs,
-// CJK–Latin autospace, punctuation's compression, hyphenation's language, the layer's own small capitals, TeX's explicit glue
-// as kerns, crops, the control tokens (a forced break's newline, a kept region's blockTo), the marks dropped after a display or
-// a held line's mark and the class's tail marks (U.marks' decisions, T16, T17: unit/marks.ts, called where today decides them,
-// its trace in the answer), the spaces a spaceless script does not set and those beside a full-width mark's blank side, and
-// each token's place in the unit's plain text (the word table's). Ported from engine 065c1d973 layer2.mjs: tokensOf2
-// L2:2524-2890, baseOf L2:2253-2297, STYLE_CMDS and applyCmd L2:2106-2122, glueOf L2:2394-2416, spacelessEdge L2:2417-2430, selfCaps / plainOf / upperOf / caseRuns L2:2448-2483, renameRuns
-// L2:1309-1320, cropPartsOf L2:1875-1878, LINK_OPEN L2:2245, hexOf L2:4569.
+// B.tokens: a unit's row as the breaker's tokens, unmeasured, each in the face it is set in: the style stack over the
+// row's groups and switches, script chunks (cut between grapheme clusters, docs/PDF-READER.md §18.93), glue, the line-break
+// marks, UAX 14's kept pairs, CJK–Latin autospace, punctuation's compression, hyphenation's language, the layer's own small
+// capitals, TeX's explicit glue as kerns, crops, the control tokens (a forced break's newline, a kept region's blockTo), the
+// marks dropped after a display or a held line's mark and the class's tail marks (U.marks' decisions: unit/marks.ts, called
+// as the tokens are made, its trace in the answer), the spaces a spaceless script does not set and those beside a full-width
+// mark's blank side, and each token's place in the unit's plain text (the word table's).
 //
-// What it reads, and the field each comes from once the part states it (until then the tap's recorded values):
-// - `unit`: the row's pieces in the translation's order (rows.mjs unitOf), its kind and title ← Row + Placed.kind / flags
+// What it reads, and the part's field each comes from (the replays hand it the tap's recorded values):
+// - `unit`: the row's pieces in the translation's order, its kind and title ← Row + Placed.kind / flags
 // - `resolved`: the unit's reading: the elements' resolutions (U.elements, U.breaks' marks, U.rename's names, U.marks' facts),
 //   `measured` (the base style and pieces' colours its glyphs hold ← TeX's font state, Placed.style / spans), `capsRatio`
 //   (Style.sc), `orig.size` (Style.size), `openBreaks` / `referenced` (U.breaks), `tail` / `tailOwn` (Placed.tail)
 // - `colourOf`, `fillOf`: a group's run's fill (a colour piece's, TeX's log; any other's, a link's, its glyphs' on A where it is
 //   not the fill around it) and an element's (A's glyphs) ← SpanAt.colour, El.colour, El.style.fill
-// - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (its page characters today, the tap's);
+// - `fills`, `smallCaps`: each rendering's runs of one fill and its faked small capitals (El.fills; the tap's in the replays);
 //   a rendering's own weight, slant and small capitals, faked in TeX's case at their share or its face's, ride on its
 //   resolution (`st` ← El.style, lay/read.ts)
 // - `cls2`: each piece's class ← El.kind; `spacedSource`: the source writes CJK with spaces between ← a unit fact
 // - `faces`: B.faces' answers (faceOf over the role table and the paper's family) and whether a face has small capitals
-// - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's (A3)
+// - `P`: the rule set's fields resolved for the target (Rules.breaking, Rules.fit); `designs`: the paper's
 import type { KnownElKind } from '@readarxiv/format'
 import { cjkLeadRe, clustersOf, fullWidthPunctOf, kinsokuOf, keptPair, markOf, noStart, SPACELESS } from './script.ts'
 import { drawnText, plainTracker, shown, type TextPiece, transformMap } from './text.ts'
@@ -193,13 +190,13 @@ type Tokens = { tokens: Token[]; base: TStyle; marks: MarksTrace }
 const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
 /** a fill not told (layout/fills.mjs UNKNOWN) */
 const UNKNOWN = -1
-/** a link group's open: \href's, \hyperref's and \hyperlink's (L2:2245), and \url's, which the prepare reads as a link group
- *  too (locate/ink.ts SPAN_STYLES): its tokens tagged with the group, so that its annotation is paired with its drawing (#626's
- *  review: a paragraph's \url beside its text lost its link) */
+/** a link group's open: \href's, \hyperref's and \hyperlink's, and \url's, which the prepare reads as a link group too
+ *  (locate/ink.ts SPAN_STYLES): its tokens tagged with the group, so that its annotation is paired with its drawing (else a
+ *  paragraph's \url beside its text loses its link) */
 const LINK_OPEN = /^\\(?:href|hyperref|hyperlink|url)(?![A-Za-z])/
 
 type Designs = TokensInput['designs']
-/** the style commands, each with what it sets (L2:2107 STYLE_CMDS): latex.ltx's \textbf, \bfseries, \textmd, \mdseries, \emph,
+/** the style commands, each with what it sets: latex.ltx's \textbf, \bfseries, \textmd, \mdseries, \emph,
  *  \em, \textit, \itshape, \textsl, \slshape, \textup, \upshape, \textsc, \scshape, \texttt, \ttfamily, \textsf, \sffamily,
  *  \textrm, \rmfamily; article.cls's \bf, \it, \sl, \sc, \tt, \sf, \rm; fontmath.ltx's \mathbf and \mathit; amsbsy.sty's
  *  \boldsymbol; url.sty's \url and \path; listings.sty's \lstinline; and \code, a paper's own (its cases the rule ledger's) */
@@ -252,7 +249,7 @@ const BETWEEN = new Set<string>(['space', 'cite', 'note-mark', 'footnote'] satis
 const GROUP_ITALIC = 1,
   GROUP_BOLD = 2,
   GROUP_CAPS = 4
-/** a string's UTF-16 code units that are no white space (L2:2289 nonSpace). The comparisons below are ECMAScript's `\s`, its
+/** a string's UTF-16 code units that are no white space. The comparisons below are ECMAScript's `\s`, its
  *  WhiteSpace and LineTerminator code points (ECMA-262's White Space and Line Terminators: U+0009-U+000D, U+0020, U+00A0,
  *  U+FEFF and the Space_Separator code points U+1680, U+2000-U+200A, U+202F, U+205F, U+3000; U+2028, U+2029): the same 25
  *  of the 65,536 code units as `/\s/` under Unicode 17 */
@@ -343,7 +340,7 @@ export function baseOf(unit: TokensInput['unit'], base: TStyle): TStyle {
   return out
 }
 
-/** a length TeX reads as a dimension, in PDF units (L2:2394-2399) */
+/** a length TeX reads as a dimension, in PDF units */
 const DIMEN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(pt|bp|mm|cm|in|pc|dd|cc|sp|em)$/
 const BP: Record<string, number> = {
   pt: 72 / 72.27,
@@ -367,8 +364,7 @@ const KERNS: Record<string, number> = {
   '\\;': 5 / 18,
 }
 const SKIPS: Record<string, number> = { '\\quad': 1, '\\qquad': 2 }
-/** a placeholder's source that is explicit glue, as TeX sets it: { em } or { bp }, and whether a line may break at it
- *  (L2:2406 glueOf) */
+/** a placeholder's source that is explicit glue, as TeX sets it: { em } or { bp }, and whether a line may break at it */
 export function glueOf(src: string): { em?: number; bp?: number; brk: boolean } | null {
   if (Object.hasOwn(KERNS, src)) return { em: KERNS[src]!, brk: false }
   if (Object.hasOwn(SKIPS, src)) return { em: SKIPS[src]!, brk: true }
@@ -382,7 +378,7 @@ export function glueOf(src: string): { em?: number; bp?: number; brk: boolean } 
 }
 
 const SPACELESS_QUOTES = /[“”‘’—…·]/u
-/** a token whose edge is a character a spaceless script sets no space beside (L2:2426 spacelessEdge) */
+/** a token whose edge is a character a spaceless script sets no space beside */
 const spacelessEdge = (t: Token | null, end: boolean) => {
   if (t?.cls !== 'cjk' || typeof t.s !== 'string' || !t.s) return false
   const cps = [...t.s],
@@ -412,7 +408,7 @@ const markBlankEdge = (t: Token | null, end: boolean, cjkFace: (t: Token) => boo
  * curly quote in the target's CJK face): an ordinary space before it is not set, whatever stands before it, as none is after a
  * closing mark (markBlankEdge) or between two characters of a spaceless script (a CJK character, a space, a full stop). The
  * mark carries its own blank half; the space before it is an engine's (Google sets one after an element before the text's own
- * full stop or comma in every such place of lane stray-stop's probe), never a CJK writer's. xeCJK and ctex keep this one case, a typed space between a
+ * full stop or comma in every such place a probe asked it), never a CJK writer's. xeCJK and ctex keep this one case, a typed space between a
  * Latin letter or a formula and a full-width closing mark (xeCJK.sty 3.10.4 :3886 `\xeCJK_Boundary_and_FullRight:N`; measured
  * with ctexart 2.6.4: a CJK word, Q, a space and the ideographic full stop 46.84 pt against 43.33 without the space), where it is an author's keystroke; here it is not set
  * (docs/PDF-READER.md §18.18). A half-width mark keeps the space before it in every target
@@ -423,7 +419,7 @@ const markBarredStart = (t: Token | null, cjkFace: (t: Token) => boolean, barred
   return fullWidthPunctOf(ch, cjkFace(t)) !== null && barred(ch)
 }
 
-/** a target's capitals: its language's case mapping, the root's where it names none a locale reads (L2:2454 upperOf) */
+/** a target's capitals: its language's case mapping, the root's where it names none a locale reads */
 export function upperOf(to: string): (s: string) => string {
   let loc = 'und'
   if (typeof to === 'string' && to)
@@ -435,7 +431,7 @@ export function upperOf(to: string): (s: string) => string {
 }
 const MARKS = /^\p{M}$/u,
   CAPITAL = /^\p{Lu}$/u
-/** `s` in runs of one case as the layer draws its small capitals (L2:2472 caseRuns) */
+/** `s` in runs of one case as the layer draws its small capitals */
 export function caseRuns(
   s: string,
   ratio: number,
@@ -455,7 +451,7 @@ export function caseRuns(
   }
   return out.map(({ src, k, at: a, n }) => ({ s: k === 1 ? src : upper(src), k, at: a, n }))
 }
-/** a rendering's runs with the names a package generated in it in the target's (L2:1309 renameRuns) */
+/** a rendering's runs with the names a package generated in it in the target's */
 function renameRuns<R extends { text: string }>(
   runs: readonly R[],
   rename: readonly [number, number, string][],
@@ -475,7 +471,7 @@ function renameRuns<R extends { text: string }>(
   }
   return out
 }
-/** a crop resolution as its readers take it, one a part (L2:1875 cropPartsOf) */
+/** a crop resolution as its readers take it, one a part */
 function cropPartsOf(r: TRes): Record<string, unknown>[] {
   if (!r.parts) return [r]
   return r.parts.map((q, i) => ({
@@ -490,7 +486,7 @@ function cropPartsOf(r: TRes): Record<string, unknown>[] {
   }))
 }
 
-/** B.tokens: the unit's row as tokens, unmeasured, each in its face (L2:2524 tokensOf2) */
+/** B.tokens: the unit's row as tokens, unmeasured, each in its face */
 export function tokens(i: TokensInput): Tokens {
   const { unit, resolved, to, designs, P, lead } = i
   const faceOf = (st: TStyle, cls: 'cjk' | 'latin') => i.faces.of(st, cls)
@@ -515,7 +511,7 @@ export function tokens(i: TokensInput): Tokens {
   const minWord = P.hyphenation.minWord
   const cjkLead = cjkLeadRe(cjkQuotes)
   const kinsoku = kinsokuOf(P.noStart, P.noEnd)
-  /** a character no line opens with: UAX 14's (no-start.mjs) or the target's rules' (P.noStart): break.ts `barred`'s */
+  /** a character no line opens with: UAX 14's (script.ts noStart) or the target's rules' (P.noStart): break.ts `barred`'s */
   const barredChar = (ch: string) => noStart(ch) || kinsoku.starts(ch)
   const lastIsSpace = () => tokens.length > 0 && !!tokens.at(-1)!.space
   /** the space tokens a chunk of white space made that holds more than ordinary collapsible white space (space, tab, line
@@ -588,7 +584,7 @@ export function tokens(i: TokensInput): Tokens {
       // (the chunk walked by its grapheme clusters, what a reader sees as one character (UAX #29: script.ts clustersOf, its code
       // points where none joins another), each classed by its first code point: a run that breaks between its characters is cut
       // between clusters, never inside one: a decomposed Hangul syllable, a kana and its voiced mark, a character and its
-      // variation selector stay one token, measured whole (PR #649's review). Each part's offset its first unit's, as before)
+      // variation selector stay one token, measured whole. Each part's offset its first unit's, as before)
       for (const ch of clustersOf(chunk)) {
         const cls = cjkLead.test(ch) ? 'cjk' : 'latin'
         if (cls === 'cjk' && !keepAll) {

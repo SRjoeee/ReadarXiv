@@ -9,8 +9,7 @@
 // original's, `unfit`). A translation is fitted and anchored by its ink, as every line the breaker sets: a full-width mark's
 // blank half at its edge (`blank1`, B.break leadOf and hangOf) is no part of the line it needs, and stands past its anchor's
 // edge (set by its advance, a centred label ending with a closing mark stood a quarter em off its original's middle, a
-// right-aligned one half an em short of its end). Ported from engine 065c1d973 layer-proto/figure-fit.mjs (lineOf, fitFigure,
-// sameAsSource).
+// right-aligned one half an em short of its end).
 
 /** a figure unit as the fit reads it: its box's length along its run, its size, its anchor, its room before and after its box */
 export type FitFigure = {
@@ -31,7 +30,7 @@ const lineOf = (f: FitFigure) => {
 }
 
 /**
- * Where a translation is drawn (figure-fit.mjs fitFigure): at the factor its width needs of its line, 1 where it is no wider;
+ * Where a translation is drawn: at the factor its width needs of its line, 1 where it is no wider;
  * null where that factor is under `floor` (or it has no width, size or box). Its `width1` is its advance at size 1, `blank1`
  * the blank halves at its edges, before its ink and after it (none where not given): its ink, its advance less them, is what
  * it needs of its line and what its anchor places

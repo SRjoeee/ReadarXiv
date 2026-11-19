@@ -1,8 +1,6 @@
-// U.elements (design-b §1.5) and the rules it composes: U.render (each element's mode by its class and its stated
-// rendering, D2, D9), U.leadMark (T11: a mark the unit starts with that the page shows before its first line is kept),
-// U.brackets (T12: a rendering in its own brackets drawn without them where the translation brackets it itself). Ported from
-// engine 065c1d973: resolvePlaceholders L2:1382-1465 (its control flow, in the row's order), bracketed L2:1943-1956,
-// placeholdersOf L2:1062-1069, cropsOf TEX:404-435 (which resolution, in the row's order), prepareUnit L2:1031, 1041-1042, 1476.
+// U.elements and the rules it composes: U.render (each element's mode by its class and its stated rendering), U.leadMark (a
+// mark the unit starts with that the page shows before its first line is kept), U.brackets (a rendering in its own brackets
+// drawn without them where the translation brackets it itself), each placeholder resolved in the row's order.
 //
 // What it reads of each element is its reading, whatever the row (`ElementReading`): what the element's facts set it to in
 // each case the row decides. The part states it as the element's El: `fixed` ← El.keep / El.text / an empty El.ink (EMPTY,
@@ -25,7 +23,7 @@ export type Gap = {
   held?: readonly string[]
   n: number
 }
-/** a placeholder's resolution (layer2.d.mts Resolved): how it is drawn */
+/** a placeholder's resolution: how it is drawn */
 export type Res = {
   mode: 'none' | 'symbol' | 'kept' | 'crop' | 'orig-text' | 'cite-map' | 'source'
   text: string
@@ -112,10 +110,10 @@ type Elements = {
   unproven: number
 }
 
-/** a placeholder's class as the renderings are kept (L2:1328 renderingClass) */
+/** a placeholder's class as the renderings are kept */
 const renderingClass = (c: string) => (c === 'macro' || c === 'umacro' || c === 'display' ? 'other' : c)
 
-/** U.brackets: whether the translation sets brackets round piece k itself (L2:1943 bracketed) */
+/** U.brackets: whether the translation sets brackets round piece k itself */
 export function bracketed(pieces: readonly V0Piece[], cls2: readonly (string | null)[], k: number): boolean {
   const textAt = (from: number, step: number): string | null => {
     for (let q = from; q >= 0 && q < pieces.length; q += step) {
@@ -135,7 +133,7 @@ export function bracketed(pieces: readonly V0Piece[], cls2: readonly (string | n
 
 const bracketShaped = (t: string) => /^[([]/.test(t) && /[)\]]$/.test(t)
 
-/** U.elements: each placeholder of the row resolved, in the row's order (L2:1382 resolvePlaceholders, TEX:404 cropsOf) */
+/** U.elements: each placeholder of the row resolved, in the row's order */
 export function elements(i: ElementsInput): Elements {
   const { pieces, cls2, readings, shown } = i
   const out = new Map<number, Res>()
@@ -223,8 +221,8 @@ export function elements(i: ElementsInput): Elements {
   return { resolutions: out, keep: [...new Set([...(keep ?? []), ...i.touched])], unproven }
 }
 
-/** the file's crops over the resolutions, in their order: the first placeholder the file cannot draw, or -1 (TEX:404 cropsOf;
- *  its answer is U.admit's `unproven`, T4) */
+/** the file's crops over the resolutions, in their order: the first placeholder the file cannot draw, or -1 (its answer is
+ *  U.admit's `unproven`) */
 function crops(res: Map<number, Res>, readings: ReadonlyMap<number, ElementReading>, shown: number): number {
   const cropped = (r: Res, S: readonly number[]) => {
     if (r.cls === 'display' || !S.length) return false

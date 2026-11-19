@@ -1,17 +1,14 @@
-// S.names (design-b §1.6 L3, T9, T28, G15; the ruling of D1a I4: babel names wherever TeX identified them): each babel name
-// the file locates on a page (Abstract, References, Contents, …) set in the target's word for it, at the original's size,
-// weight and slant, its left edge kept or, centred, its centre, shrunk into the room on its line to the script's last floor at
-// most (floorMin), else left the original's (`unfit`). A name that leads a unit (RUN_IN) is that unit's lead (U.lead): its word
-// and style handed on. Ported from engine 065c1d973 run.mjs paintNames RUN:1355-1425 (counterOf RUN:1353), layer2.mjs
-// nameInTarget L2:1205-1210, nameStyleOf L2:1220-1228 (SMALL_CAPS_SHARE L2:808, cased L2:816), nameRuns and nameScriptRuns
-// L2:4755-4777 (SMALL_CAPS_RATIO L2:812, selfCaps L2:2448), runsWidth L2:4779. Without its paint (the hiding, the markup, the
-// text layer and the word table: the reader's, D.*): it returns what is drawn and where.
+// S.names (babel names wherever TeX identified them): each babel name the file locates on a page (Abstract, References,
+// Contents, …) set in the target's word for it, at the original's size, weight and slant, its left edge kept or, centred,
+// its centre, shrunk into the room on its line to the script's last floor at most (floorMin), else left the original's
+// (`unfit`). A name that leads a unit (RUN_IN) is that unit's lead (U.lead): its word and style handed on. It paints nothing
+// (the hiding, the markup, the text layer and the word table are the reader's, D.*): it returns what is drawn and where.
 //
-// Its facts are the name's row of the file (lane L1: a member of kind 'name', its Word, its line) and what today reads off the
-// page's characters around it: the name's own characters (`nameChars`: its text, its size and small capitals, its style; L1's
-// Word and Style), the counter TeX set after it (`counterOf`: L1's Word.counter), and the room its line leaves it (`nameRoom`:
-// the next characters either side; L1's Room.side). Those readings are ported here too, over a page's characters, so that the
-// replay reads them as today does; the decision (`setName`) takes their answers.
+// Its facts are the name's row of the file (a member of kind 'name', its Word, its line) and what is read around it: the
+// name's own characters (`nameChars`: its text, its size and small capitals, its style; the part's Word and Style), the
+// counter TeX set after it (`counterOf`: the part's Word.counter), and the room its line leaves it (`nameRoom`: the next
+// characters either side; the part's Room.side). Those readings over a page's characters are here too, for the replay of a
+// recorded run, which reads them so; the decision (`setNameOf`) takes their answers or the part's.
 import { cover } from '../breaker/cover.ts'
 import { fontString } from '../breaker/measure.ts'
 import { cjkLeadRe, clustersOf } from '../breaker/script.ts'
@@ -58,15 +55,15 @@ export type PageChar = {
   [more: string]: unknown
 }
 
-/** a capital set at this share of a name's largest letter or less is a faked small capital (L2:808) */
+/** a capital set at this share of a name's largest letter or less is a faked small capital */
 const SMALL_CAPS_SHARE = 0.9
-/** the share of the size small capitals the layer draws itself are set at (L2:812) */
+/** the share of the size small capitals the layer draws itself are set at */
 const SMALL_CAPS_RATIO = 0.8
 const cased = (ch: string) => ch.toLowerCase() !== ch.toUpperCase()
 
 // ---------------------------------------------------------------- the readings of the page around a name
 
-/** the name's own characters: those whose middle stands within its box, on its baseline (RUN:1360) */
+/** the name's own characters: those whose middle stands within its box, on its baseline */
 export const nameChars = (nm: NameRow, chars: readonly PageChar[]): PageChar[] =>
   chars.filter(
     (c) =>
@@ -76,10 +73,10 @@ export const nameChars = (nm: NameRow, chars: readonly PageChar[]): PageChar[] =
       Math.abs(c.yb - nm.baseline) < 0.3 * nm.size,
   )
 /** the characters of a name's row that are the counter TeX set after it, as the maker found it: those whose middle stands
- *  within the counter's width at the row's end (RUN:1353 counterOf) */
+ *  within the counter's width at the row's end */
 export const counterOf = (chars: readonly PageChar[], nm: NameRow): PageChar[] =>
   nm.counter > 0 ? chars.filter((c) => (c.x0 + c.x1) / 2 > nm.x1 - nm.counter) : []
-/** a name's size and whether it is set in faked small capitals, read off its characters (L2:1220 nameStyleOf) */
+/** a name's size and whether it is set in faked small capitals, read off its characters */
 export function nameStyleOf(chars: readonly PageChar[] | null, name: NameRow): { size: number; small: boolean } {
   const letters = (chars ?? []).filter((c) => c.size > 0 && /\S/.test(c.ch ?? '') && c.st?.fam !== 'math')
   if (!letters.length) return { size: name.size, small: false }
@@ -94,7 +91,7 @@ export function nameStyleOf(chars: readonly PageChar[] | null, name: NameRow): {
   return { size: rest.length ? median(rest.map((c) => c.size)) : name.size, small: small.size > 0 }
 }
 /** its room on its line: its TeX column's text edges, or the next characters of the line either side (a quarter of an em
- *  clear), never narrower than its own box (RUN:1394-1402) */
+ *  clear), never narrower than its own box */
 export function nameRoom(
   nm: NameRow,
   chars: readonly PageChar[],
@@ -114,7 +111,7 @@ export function nameRoom(
 // ---------------------------------------------------------------- the word
 
 /** the target's word for a name, in capitals where the class changed its case; null where the target has none (an empty one
- *  keeps the original's) or the word is the original's already (L2:1205 nameInTarget) */
+ *  keeps the original's) or the word is the original's already */
 export function nameInTarget(
   name: Pick<NameRow, 'key' | 'capitals'>,
   own: string,
@@ -132,7 +129,7 @@ type NameRun = { s: string; k: number; face: Face }
 /** a name's word as the layer draws it: its first run's face, its runs, what is drawn */
 type NameDrawn = { face: Face; runs: NameRun[]; text: string }
 
-/** a name's word in `face` (L2:4755 nameRuns): its runs of one case where the layer draws the face's small capitals itself */
+/** a name's word in `face`: its runs of one case where the layer draws the face's small capitals itself */
 export function nameRuns(
   text: string,
   face: Face,
@@ -144,7 +141,7 @@ export function nameRuns(
   const runs = caseRuns(text, SMALL_CAPS_RATIO, upperOf(to)).map((r) => ({ s: r.s, k: r.k }))
   return { face: { ...face, caps: false }, runs, text: runs.map((r) => r.s).join('') }
 }
-/** a name's word in its runs by script, each in its face (L2:4767 nameScriptRuns): its CJK characters in the target's CJK face,
+/** a name's word in its runs by script, each in its face: its CJK characters in the target's CJK face,
  *  every other in the Latin one */
 export function nameScriptRuns(
   text: string,
@@ -169,7 +166,7 @@ export function nameScriptRuns(
   }
   return { face: runs[0]?.face ?? faceOf('latin'), runs, text: runs.map((r) => r.s).join('') }
 }
-/** a word's width at size 1 (L2:4779 runsWidth): each run's in its face at its share */
+/** a word's width at size 1: each run's in its face at its share */
 export const runsWidth = (d: NameDrawn, metrics: Metrics): number =>
   d.runs.reduce((a, r) => a + (metrics.advance(fontString(r.face ?? d.face, 100), 100, r.s) / 100) * r.k, 0)
 
@@ -196,7 +193,7 @@ export type NameInput = {
   /** the name's group: its ink can be hidden (a name whose group the document does not hold stays the original's) */
   shown: boolean
   /** what TeX set before the word on its line that is the name's own and moves with it, from its start to the word's: its label,
-   *  the number a class set right before a heading it sets itself, and the space after it (Placed.label, own.mjs MR 6c). A
+   *  the number a class set right before a heading it sets itself, and the space after it (Placed.label). A
    *  centred name is centred whole, that width before its word; one kept at its left edge keeps the number where it stands */
   before?: number
 }

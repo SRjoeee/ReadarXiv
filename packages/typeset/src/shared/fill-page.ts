@@ -1,4 +1,4 @@
-// S.fill.page (design-b §1.5, T33): a page's fill over the units begun on it, each spread over its frame at the page's target
+// S.fill.page: a page's fill over the units begun on it, each spread over its frame at the page's target
 // leading, tracked where it stays short, and the page's one size where every body unit is short. Its target is
 // S.fill.target's, its settling S.settle's, the layout S.fill.leads found the unit's field `fillLaid`, the shared row's ink
 // ends measured by the unit's own measure (`p.P.measure`); an optional `trace` is told what the
@@ -120,13 +120,12 @@ export function fillPage(
 ): FillTarget | null {
   const { band, track, size } = P.adaptiveFill
   const r3 = (x: number) => Math.round(x * 1000) / 1000
-  // (a unit whose last row the next unit's first continues on a shared line, laid from where its fit ended there (`share`,
-  // layer2.mjs shareOf), is filled only where that stays so: no leading, tracking or size that sets its text there further
-  // right, sets text there where its fit left the row free, or moves its line there off the baseline the next unit's first
-  // line was set on (the fit's, `at`). Its fill leading is still its fit's, which the page's target
-  // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own. Each try is
-  // settled (settleLayout: a cell's lines in their bands) before anything is read of it, as the fit's share was: the row is
-  // kept as it is drawn)
+  // (a unit whose last row the next unit's first continues on a shared line, laid from where its fit ended there (`share`),
+  // is filled only where that stays so: no leading, tracking or size that sets its text there further right, sets text
+  // there where its fit left the row free, or moves its line there off the baseline the next unit's first line was set on
+  // (the fit's, `at`). Its fill leading is still its fit's, which the page's target reads (fillLeadsOf); the page's one size
+  // is chosen as for any page, and a unit it would move there keeps its own. Each try is settled (settleLayout: a cell's lines
+  // in their bands) before anything is read of it, as the fit's share was: the row is kept as it is drawn)
   const free = (p: FillLaid, st: FitState) => {
     const l = layoutAt(p.tokens, p.blocks, p.s, p.P, st)
     if (l.clipped || (p.parent && !keepsPages(p.layout.lines, l.lines, p.tokens, !!st.share))) return null
@@ -250,9 +249,8 @@ export function fillPage(
     filled.push({ p, st, l, full, tracked, untracked })
     trace?.unit(p, { lead, same: !!same, short, full, tracked })
   }
-  // (the runs of a unit split by its displays (`parent`, run.mjs layoutRuns) keep one tracking, as their fit does
-  // (layer2.mjs layoutRuns): each the least any of its unit's runs on the page takes, a run the pass does not track taking
-  // none; its leading still its own)
+  // (the runs of a unit split by its displays (`parent`) keep one tracking, as their fit does (layoutRuns): each the least
+  // any of its unit's runs on the page takes, a run the pass does not track taking none; its leading still its own)
   const least = new Map<FillLaid, number>()
   for (const q of units)
     if (q.parent)
@@ -371,7 +369,7 @@ export function fillPage(
 }
 
 /**
- * The room the gap over a unit's first line lacks where the paragraph over it cannot end higher (the owner on staging,
+ * The room the gap over a unit's first line lacks where the paragraph over it cannot end higher (docs/PDF-READER.md §18.11,
  * 2610.20967v1-zh p4): a paragraph over a column or page break whose last line stands alone on the first and only line TeX
  * set in its last frame (TeX's widow), the unit's first line the next line TeX set in that column. The gap under a paragraph
  * follows its own leading, and its own is the whole paragraph's (docs/PDF-READER.md §18.11): a frame of one line

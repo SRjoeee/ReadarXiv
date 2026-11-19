@@ -1,7 +1,6 @@
 // Hyphenation for the breaker (B.break): Liang's patterns (TeX's own, served as data: Rules.breaking.hyphenation) and, for
-// Russian, Khmelev's syllable rules; the fewest letters before and after a break the layout rules' (babel's). Ported from
-// engine 065c1d973 layer-proto/hyph.mjs: hyphenationOf :68-82, breakPoints :88-96, liang :98-126, russian :128-142. No
-// module state (a cache by word would change no answer): breakPoints computes its answers each call.
+// Russian, Khmelev's syllable rules; the fewest letters before and after a break the layout rules' (babel's). No module
+// state (a cache by word would change no answer): breakPoints computes its answers each call.
 // Fetching the patterns (loadHyphenation) is the host's.
 
 /** a language's patterns as breakPoints reads them */
@@ -9,7 +8,7 @@ export type Patterns = { pats: Map<string, number[]>; exceptions: Map<string, st
 /** babel's fewest letters before and after a break */
 export type Mins = { left: number; right: number }
 
-/** patternsOfTex's { patterns, exceptions } as breakPoints reads them (hyph.mjs:68 hyphenationOf) */
+/** patternsOfTex's { patterns, exceptions } as breakPoints reads them */
 export function hyphenationOf(j: { patterns: readonly string[]; exceptions: readonly string[] }): Patterns {
   const pats = new Map<string, number[]>()
   for (const p of j.patterns) {
@@ -29,7 +28,7 @@ export function hyphenationOf(j: { patterns: readonly string[]; exceptions: read
   return { pats, exceptions, maxLen: Math.max(...[...pats.keys()].map((k) => k.length)) }
 }
 
-/** the offsets into `word` where it may break (hyph.mjs:88 breakPoints) */
+/** the offsets into `word` where it may break */
 export function breakPoints(
   word: string,
   lang: string,
@@ -74,7 +73,7 @@ const V = 'аеёиоуыэюя'
 const C = 'бвгджзклмнпрстфхцчшщ'
 const Z = 'йъь'
 const cls = (ch: string) => (V.includes(ch) ? 'g' : C.includes(ch) ? 's' : Z.includes(ch) ? 'x' : 'o')
-/** Khmelev's rules: x-ll, g-gl, gs-sg, sg-sg, gs-ssg, gss-ssg (l any letter), never leaving one letter (hyph.mjs:131) */
+/** Khmelev's rules: x-ll, g-gl, gs-sg, sg-sg, gs-ssg, gss-ssg (l any letter), never leaving one letter */
 function russian(word: string): number[] {
   const w = word.toLowerCase()
   if (w.length < 4 || /[^а-яё]/.test(w)) return []

@@ -1,4 +1,4 @@
-// One member's lay from its setting and tokens (design-b §1.6, layFlow's F2-F8, the round's `out`, L9): its fit's walk over
+// One member's lay from its setting and tokens (layFlow's F2-F8, the round's `out`, L9): its fit's walk over
 // its frame breaks (X.cut with X.walk inside), laid again on its lead's row where it fell lower (S.onLeadRetry), a numbered
 // heading on its last lines (X.numbered), a run-in head over its follower's first row (S.overFollower), its further steps
 // where clipped (X.further) else its runs (X.runs), a CJK cell settled into its bands (S.settle), the row it leaves its

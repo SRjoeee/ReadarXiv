@@ -1,7 +1,6 @@
-// S.share (design-b §1.5, E29): the shared row as a unit's layout leaves it (where its text and its ink end there), and
-// whether a layout keeps it (keepsShare, read by S.fill.page). Ported from engine 065c1d973 layer2.mjs L2:4321-4424 (onShare,
-// inkEndOf, shareOf, keepsShare; moved first as JavaScript by lab/typeset/move-fit.mjs, now TypeScript), held by the chain's
-// and the fill's replays on the corpus. Its ink measures are the call's (`m`).
+// S.share: the shared row as a unit's layout leaves it (where its text and its ink end there), and whether a layout keeps it
+// (keepsShare, read by S.fill.page), held by the chain's and the fill's replays on the corpus. Its ink measures are the
+// call's (`m`).
 import type { FitMeasure } from '../breaker/measure.ts'
 import { charsOf } from '../breaker/script.ts'
 import type { FitBlock, LaidLine, Layout } from '../fit/types.ts'
@@ -122,8 +121,8 @@ export function shareOf(
 /** whether a layout of a unit keeps its shared row as the unit's fit left it (shareOf): its text there ending no further
  *  right, nor its ink (`ink`, which the next unit is laid from), none there where the fit set none, and the line that ends
  *  furthest there on the baseline the fit set it at (`at`), so that the next unit on the row, laid from the fit's ink and on its
- *  baseline, stays clear of it and on its line (run.mjs fillPage). True with no share, and with one no next unit is laid from
- *  (`kept`: something stays between the two on the row, run.mjs keptAfter, and the unit's own line there ends where TeX's did,
+ *  baseline, stays clear of it and on its line (fillPage). True with no share, and with one no next unit is laid from
+ *  (`kept`: something stays between the two on the row, keptAfter, and the unit's own line there ends where TeX's did,
  *  its slot's `stop`) */
 export function keepsShare(share: Share | null | undefined, layout: Layout, m: FitMeasure): boolean {
   if (!share || share.kept) return true

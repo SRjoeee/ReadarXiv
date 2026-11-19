@@ -1,4 +1,4 @@
-// S.figures over the part (design-b §1.6 L4; shared/figures.ts): a page's figure texts, each drawn in its
+// S.figures over the part (shared/figures.ts): a page's figure texts, each drawn in its
 // translation where it says something its source does not, in the faces of its style, each at the size its own width needs, on
 // its original's baseline from its anchor's edge into the free line beside its box, by its ink as the breaker sets every line (a
 // full-width mark's blank half at its edge past the anchor's edge, as its face draws it, and its target's compressMax), the original's
@@ -92,7 +92,7 @@ export function figuresOf(
     if (m.why) why.set(m.ord, m.why)
     else if (kept) why.set(m.ord, 'kept')
     else if (stays) why.set(m.ord, 'kind')
-    // (a row that failed: its reason kept, as the entry's contentOf keeps it, #631's review; S.figures fits no set over it)
+    // (a row that failed: its reason kept, as the entry's contentOf keeps it; S.figures fits no set over it)
     else if (row && !row.ok) why.set(m.ord, row.why.kind)
     else {
       const size = m.style.size

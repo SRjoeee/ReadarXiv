@@ -1,4 +1,4 @@
-// The ledger's values (design-b §1.7, the tap's slots: the tap's spec §3): a layout summarized as the tap summarizes it,
+// The ledger's values (the tap's slots): a layout summarized as the tap summarizes it,
 // so that a run's trace is compared with the tap's recorded ledger slot by slot. Numbers as JSON prints them, a non-finite
 // one as its string (the tap's rule).
 import type { FitState, Layout } from '../fit/types.ts'

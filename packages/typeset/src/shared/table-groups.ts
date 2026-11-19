@@ -9,14 +9,14 @@
 // rows (\multirow) its column's. A table whose cells state no grid place (a part made before) is one group, as before.
 //
 // No group is decided here by what its cells say: which of a table's cells are language is the engine's, a fact of each text
-// (Unit.kept: R1, R2 and the paper's names blocks, R4, PDF-READER §18.72), and a kept unit is laid as any kept unit is. The column
-// rule of engine 065c1d973's groups.mjs (a column at least NAMES_SHARE of whose cells came back from the translator as they went
-// kept whole) is not ported: a translator's reply decides nothing here.
+// (Unit.kept: R1, R2 and the paper's names blocks, R4, PDF-READER §18.72), and a kept unit is laid as any kept unit is. No
+// column is kept whole because enough of its cells came back from the translator as they went: a translator's reply decides
+// nothing here.
 
 /** a cell's grid place: its row, its first column, the columns it spans, 1 a header's (Placed.cell) */
 type CellPlace = readonly [row: number, col: number, span: number, head: 0 | 1]
 
-/** a cell's group in its table (groups.mjs groupOf): `h` the header's cells, `c<col>` a column's, `c<col>+<span>` the cells
+/** a cell's group in its table: `h` the header's cells, `c<col>` a column's, `c<col>+<span>` the cells
  *  spanning the same columns */
 const groupKey = (at: CellPlace): string => (at[3] ? 'h' : `c${at[1]}${at[2] > 1 ? `+${at[2]}` : ''}`)
 

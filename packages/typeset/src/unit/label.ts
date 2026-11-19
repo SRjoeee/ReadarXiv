@@ -1,18 +1,17 @@
-// U.label (design-b §1.5): a float's label in the target's name (T26) and a theorem-like head's (T27), each with the
-// original's number and punctuation, and the label the unit is then laid with. Ported from engine 065c1d973: labelInTarget
-// L2:1184-1195, spacedText L2:1230-1235, headLabelInTarget L2:1245-1259 (not its refusal of a babel name's head, L2:1274), the run's choice RUN:2029-2036,
-// rules/tex-names.mjs headName :60-63, colourOfStyle L2:2909, hexOf L2:4569. A head is named from the parts its part states
-// (Label.name, num, punct, as TeX set them; docs/PDF-READER.md §18.39), never by a pattern over its text: one that takes a
-// single capital before a number's first dot misses "Corollary VI.2" (2610.21312v1).
+// U.label: a float's label in the target's name and a theorem-like head's, each with the original's number and
+// punctuation, and the label the unit is then laid with (a head that is a babel name whole is relabelled as any:
+// headLabelInTarget). A head is named from the parts its part states (Label.name, num, punct, as TeX set them;
+// docs/PDF-READER.md §18.39), never by a pattern over its text: one that takes a single capital before a number's first dot
+// misses "Corollary VI.2" (2610.21312v1).
 //
-// Its inputs, and the field each comes from once lane L1 states it (until then the tap's recorded values):
-// - `label`: the label the class set before the unit's first line, its glyphs (prepareUnit's) ← Placed.label (Label: kind,
+// Its inputs, and the field each comes from:
+// - `label`: the label the class set before the unit's first line, its glyphs ← Placed.label (Label: kind,
 //   ink, name, num, punct, their styles)
 // - `head`: a theorem-like head's parts ← Placed.label's name, num and punct, each one glyph of its ink with its text and
 //   style
 // - `relabels`: the unit's label group exists and the wrap does not keep the label as the original's ← Placed.fixed (bit 4)
 // - `words`: babel's names in the target (Rules.words); `heads`: translator's dictionary's head names in the target
-//   (rules/tex-names.json, a data file of Rules); `names`: the paper's own name units' translations (A6, other rows)
+//   (data/rules/heads.ts, a data file of Rules); `names`: the paper's own name units' translations (other rows)
 import type { OwnNames } from './rename.ts'
 
 /** a glyph of a label as the rule reads it: its character, its extent, its size and its font state */
@@ -61,8 +60,8 @@ export type LabelInput = {
 }
 type Labelled = { relabel: string | null; head: HeadLabel | null; label: UnitLabel | undefined }
 
-/** a float's label in the target's name, its number and punctuation the original's; null where it keeps the original's
- *  (L2:1184 labelInTarget). Where its part states its float's type (`float`: one form a paper, docs/PDF-READER.md §18.11),
+/** a float's label in the target's name, its number and punctuation the original's; null where it keeps the original's.
+ *  Where its part states its float's type (`float`: one form a paper, docs/PDF-READER.md §18.11),
  *  by the type: a figure's or a table's in the rules' word, its glyphs after its name as TeX printed them, any number ("A1",
  *  "S3", "I"); any other type's (an algorithm's, a sub-figure's) the original's, and one whose parts do not hold its every
  *  glyph or state no number. Else by its spelling */
@@ -99,7 +98,7 @@ export function labelInTarget(
   return `${name} ${m[2]}${punct}`
 }
 
-/** a label's glyphs as its text: a space where two stand a fifth of their size apart (L2:1230 spacedText) */
+/** a label's glyphs as its text: a space where two stand a fifth of their size apart */
 export function spacedText(chars: readonly Glyph[]): string {
   const cs = [...(chars ?? [])].filter((c) => /\S/.test(c.ch ?? '')).sort((a, b) => a.x0 - b.x0)
   let out = ''
@@ -110,7 +109,7 @@ export function spacedText(chars: readonly Glyph[]): string {
   return out
 }
 
-/** a head's name in the target: translator's dictionary's, else the paper's own name unit's (tex-names.mjs:60 headName) */
+/** a head's name in the target: translator's dictionary's, else the paper's own name unit's */
 function headName(english: string, heads: LabelInput['heads'], names: LabelInput['names']): string | null {
   if (!heads) return null
   if (Object.hasOwn(heads, english) && heads[english]) return heads[english]!
@@ -118,11 +117,11 @@ function headName(english: string, heads: LabelInput['heads'], names: LabelInput
   return typeof w === 'string' && w.trim() ? w.trim() : null
 }
 const hexOf = (rgb: number) => `#${rgb.toString(16).padStart(6, '0')}`
-/** a glyph's fill as a style's colour (L2:2909 colourOfStyle) */
+/** a glyph's fill as a style's colour */
 const colourOfStyle = (st: Glyph['st']) =>
   Number.isInteger(st?.fill) && st!.fill! >= 0 ? { color: st!.fill! > 0 ? hexOf(st!.fill!) : undefined } : {}
 
-/** a theorem-like head's label as the target names it, in its parts' styles (L2:1245 headLabelInTarget): its name in the
+/** a theorem-like head's label as the target names it, in its parts' styles: its name in the
  *  target's word (the rules' head names, else the paper's own name unit's), its number and its punctuation as TeX printed them,
  *  a space before the punctuation where it stands apart (spacedText's reading); null for a head of no name and a name nothing
  *  names in the target. An unnumbered head whose name ends in its own stop, a style that
@@ -134,8 +133,8 @@ export function headLabelInTarget(
 ): Omit<HeadLabel, 'chars'> | null {
   const chars = [head.name, head.num, head.punct].filter((c): c is Glyph => !!c)
   // (a head that is a babel name whole, "Proof.", is relabelled as any: its glyphs are the label's own, a babel name the names
-  // path draws being a member of its own, never inside another member's label; the port's refusal of it (L2:1274, for production's
-  // name group that a label's drawing never hid) left SIAM's `\newtheorem{proof}{Proof}` heads English, 2610.20266v1, 2610.20285v1)
+  // path draws being a member of its own, never inside another member's label; refused (where a label's drawing never hid the
+  // name's group), SIAM's `\newtheorem{proof}{Proof}` heads stayed English, 2610.20266v1, 2610.20285v1)
   if (!head.name || !head.whole) return null
   const english = head.name.ch.replace(/\s+/g, ' ').trim()
   if (!/^\p{L}/u.test(english)) return null
@@ -161,7 +160,7 @@ export function headLabelInTarget(
   return { text: drawn, parts, open: /[([]\s*$/.test(drawn) }
 }
 
-/** U.label: the unit's label in the target where the reader draws it anew, and the label it is laid with (RUN:2029-2036) */
+/** U.label: the unit's label in the target where the reader draws it anew, and the label it is laid with */
 export function label(i: LabelInput): Labelled {
   const relabel = i.labels && i.relabels ? labelInTarget(i.label, i.words, i.captions, i.to) : null
   const read =

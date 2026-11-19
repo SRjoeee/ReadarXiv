@@ -1,15 +1,15 @@
-// S.rowStart (design-b §1.5, E18, T34): a unit whose first row TeX set on the line another unit's last row ends (a shared
-// line, need.mjs rowLeadOf: a run-in heading's text, a paragraph's part after the float that split it) starts where that
-// unit's translation's ink ends on the row, the original's separation after it (`start`), on that unit's baseline where its
-// text there stands off TeX's (`startY`), and flows on from that unit's last line where it ended above the row (`onLead`,
-// `flowX`); its own label on the row goes with it (`rowLabel`). It stays where TeX set it where that unit is the original's,
-// or something of the page stands between the two on the row. Ported from engine 065c1d973 run.mjs RUN:2152-2183.
+// S.rowStart: a unit whose first row TeX set on the line another unit's last row ends (a shared line: a run-in heading's
+// text, a paragraph's part after the float that split it) starts where that unit's translation's ink ends on the row, the
+// original's separation after it (`start`), on that unit's baseline where its text there stands off TeX's (`startY`), and
+// flows on from that unit's last line where it ended above the row (`onLead`, `flowX`); its own label on the row goes with
+// it (`rowLabel`). It stays where TeX set it where that unit is the original's, or something of the page stands between the
+// two on the row.
 //
 // Its inputs: the shared row (Placed.join: the unit before's last row), the unit's first block as U.decor left it and
 // whether its label is carried (U.decor), the unit before's verdict and its share of the row (S.share), its blocks (the one
-// that holds the row: flowX); and two page facts lane L1 states: the unit's own label on the row (ownLabelOnRow RUN:1623,
-// the file's label row: Placed.join, the label) and whether a character of the page stays between the two on the row
-// (keptBetween RUN:1592: Placed.join kept).
+// that holds the row: flowX); and two page facts the part states: the unit's own label on the row (the file's label row:
+// Placed.join, the label) and whether a character of the page stays between the two on the row (keptBetween: Placed.join's
+// kept).
 import type { FitBlock } from '../fit/types.ts'
 import type { Share } from './share.ts'
 
@@ -21,7 +21,7 @@ type RowStartInput = {
   carried: boolean
   /** the unit before: whether it is left the original's, and its share of the row */
   lead: { refused: boolean; share: Share | null } | null
-  /** the unit's own label row on the shared row (ownLabelOnRow's [kind, page, x0, baseline, x1, top, bottom]), or null */
+  /** the unit's own label row on the shared row ([kind, page, x0, baseline, x1, top, bottom]), or null */
   ownLabel: readonly number[] | null
   /** a character of the page stands on the row between the unit before's end and `x` (keptBetween) */
   keptBetween: (x: number) => boolean
@@ -74,7 +74,7 @@ export function lineRoom(
 export const lineShift = (align: RowLine['align'], line: Pick<RunRow, 'x0' | 'x1'>, lo: number, hi: number): number =>
   align === 'r' ? line.x1 - hi : align === 'l' ? line.x0 - lo : (line.x0 + line.x1) / 2 - (lo + hi) / 2
 
-/** S.rowStart: sets the first block's start, startY, onLead and flowX where the unit is laid from the row (RUN:2152) */
+/** S.rowStart: sets the first block's start, startY, onLead and flowX where the unit is laid from the row */
 export function rowStart(i: RowStartInput): RowStart {
   const row = i.row,
     b = i.b0

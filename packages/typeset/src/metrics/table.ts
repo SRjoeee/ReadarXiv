@@ -1,8 +1,8 @@
-// The table adapter of Metrics (design-b §4 `recordedMetrics`, design-a §4 `tableMetrics`): every measure answered from a
-// table of measures made at 100 px, as a canvas makes them (each run measured at 100 px and scaled). The tap writes one
-// such table per (paper, target): every first measure of a (canvas font, text) of the run it records (the tap's spec §5,
-// `metrics/<pair>.metrics.json.gz`), so that a replay in Node measures the recorded run's exact widths. A measure the
-// table lacks is a failure of the replay, never a guess: it throws MissingMeasure.
+// The table adapter of Metrics (`tableMetrics`): every measure answered from a table of measures made at 100 px, as a
+// canvas makes them (each run measured at 100 px and scaled). The tap writes one such table per (paper, target): every
+// first measure of a (canvas font, text) of the run it records (`metrics/<pair>.metrics.json.gz`), so that a replay in
+// Node measures the recorded run's exact widths. A measure the table lacks is a failure of the replay, never a guess: it
+// throws MissingMeasure.
 import type { FaceId, Metrics } from '../types.ts'
 
 /** a table of measures at 100 px: [face, text, width, ink ascent, ink descent], and [face, text, ink right] */

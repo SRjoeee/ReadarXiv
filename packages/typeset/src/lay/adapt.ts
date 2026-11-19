@@ -1,13 +1,13 @@
-// The adapter (design-b §1.6 L6, stage one): a part's member (lane L1's Placed) made the composition's prepared member, its
-// setting through the ported unit rules from the facts the part states: U.blocks (blocks2 over the member's lines: each Line
-// a rectangle and its line facts, KEPT lines kept, TeX's \lineskip, where TeX's forced breaks and the paragraphs it opened
-// end its lines: U.breaks' maps, the reading's), U.decor (decorBefore and decorAfter: the alignment
-// stated, the label's ink, the room beside its lines Room.side, the row kept after it, the displays set with the short
-// skip), U.params (the size the style states, the edges its lines' PINNED flags and Room.next state, a CJK cell's bands over
-// the page's rules), and, within its flow, the shared row it starts on and the row it leaves (Placed.join, the members before
-// and after it). The reading and the tokens (L5, L7: U.elements to U.marks, B.tokens to B.measure) are not adapted here yet:
-// the caller hands them in (`Reading`), the gate's runner the recorded ones (the tap's), so that a difference the runner
-// finds is a fact of the setting's. A member the stage does not set says why (`stop`), never silently.
+// The adapter: a part's member (Placed) made the composition's prepared member, its setting through the unit rules from the
+// facts the part states: U.blocks (blocks2 over the member's lines: each Line a rectangle and its line facts, KEPT lines
+// kept, TeX's \lineskip, where TeX's forced breaks and the paragraphs it opened end its lines: U.breaks' maps, the
+// reading's), U.decor (decorBefore and decorAfter: the alignment stated, the label's ink, the room beside its lines
+// Room.side, the row kept after it, the displays set with the short skip), U.params (the size the style states, the edges
+// its lines' PINNED flags and Room.next state, a CJK cell's bands over the page's rules), and, within its flow, the shared
+// row it starts on and the row it leaves (Placed.join, the members before and after it). The reading and the tokens
+// (U.elements to U.marks, B.tokens to B.measure) are not adapted here: the caller hands them in (`Reading`), the gate's
+// runner the recorded ones (the tap's), so that a difference the runner finds is a fact of the setting's. A member the
+// stage does not set says why (`stop`), never silently.
 import type { Placed } from '@readarxiv/format'
 import { classifyFont } from '../breaker/font-names.ts'
 import { wordSegmenter, wordsOf } from '../breaker/words.ts'
@@ -128,7 +128,7 @@ function cellExtent(l: Line, m: Placed): [number, number] {
 }
 /**
  * A table cell's room in its column (Room.column: its column's box widened by the column's share of the blank beside it, never
- * past its own side; the owner's decisions, docs/PDF-READER.md §18.13, and for a cell of several lines §18.75): the room each of
+ * past its own side; docs/PDF-READER.md §18.13, and for a cell of several lines §18.75): the room each of
  * its lines is laid in, in its column's alignment (its class: Placed.align; a cell of several lines its box so, its lines in the
  * box by Placed.inner: FitBlock.box), at the largest size not over the original's that fits every line, the same room at every
  * size (no step down in its own ink's width first, no room opening only where it is clipped at its floor: X.further's 'widen').
@@ -392,7 +392,7 @@ export function adapt(i: AdaptInput): Adapted {
   // (a label on a line of its own is laid as a row of its own (entry.ts labelRowOf): no line of the member's starts at it)
   const ownRow = !!m.label && m.label.line === undefined && m.label.align !== undefined
   const label = ownRow ? null : labelOf(m, i.reading.labelDrawn)
-  // (a label drawn anew is the first line's: its rectangle starts at the label, RUN:2039-2041. But a label TeX hung beside its
+  // (a label drawn anew is the first line's: its rectangle starts at the label. But a label TeX hung beside its
   // text, every text line of the member starting at one x past the label's end and the label at the measure's start (the
   // caption package's `hang`, \hangindent its label box's width, the label and its separator: 2609.36054v2 p3's "Figure 1." at
   // 47, its text's lines at 95.61, 3.94 pt after it), hangs its text by TeX's own rule at the drawn label's width: the label at
@@ -701,8 +701,7 @@ export function adapt(i: AdaptInput): Adapted {
               : null,
           keptBetween: () => !!m.join![1],
           x: lines[0]![2],
-          // (its label's crop, where the tokens are its own: RUN:2215-2224, the crop as a carried label's, set by the row's
-          // baseline)
+          // (its label's crop, where the tokens are its own: the crop as a carried label's, set by the row's baseline)
           ...(i.reading.own && label
             ? {
                 label: {
@@ -718,7 +717,7 @@ export function adapt(i: AdaptInput): Adapted {
       : undefined
   const fl = after?.lines[0]
   // (a label carried to its first line's start: its own ink's crop before the unit's own tokens, the line's own glyphs'
-  // baselines its own: RUN:2225-2238)
+  // baselines its own)
   let tokens = seg ? wordsOf(i.reading.tokens, seg) : i.reading.tokens
   if (i.reading.own && decor.carried && label && blocks[0]) {
     const own = lines

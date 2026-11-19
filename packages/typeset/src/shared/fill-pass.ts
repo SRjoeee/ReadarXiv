@@ -1,7 +1,7 @@
-// S.fill.page's pass (design-b §1.6 L10): page f's fill over the units laid on it, those begun on f filled (a unit laid in
-// runs a run at a time, then joined as one again and settled), those running on to f from a page before voting only. Ported
-// from engine 065c1d973 run.mjs fillPass RUN:2365-2394, without its records (the gate's) and its paint (the reader's): it
-// returns what each unit filled took. The fill itself is fillPage's (fill-page.ts).
+// S.fill.page's pass: page f's fill over the units laid on it, those begun on f filled (a unit laid in runs a run at a
+// time, then joined as one again and settled), those running on to f from a page before voting only. It records nothing
+// (the gate's) and paints nothing (the reader's): it returns what each unit filled took. The fill itself is fillPage's
+// (fill-page.ts).
 import { joinRuns } from '../fit/runs.ts'
 import type { FitBlock, Layout } from '../fit/types.ts'
 import type { Token } from '../breaker/tokens.ts'
@@ -20,7 +20,7 @@ type Filled = {
   runs?: (number | null | undefined)[]
 }
 
-/** S.fill.page on page `pg`: `laid`, every unit laid with a line on it, in the order they were laid (RUN:2365 fillPass) */
+/** S.fill.page on page `pg`: `laid`, every unit laid with a line on it, in the order they were laid */
 export function fillPass(
   pg: number,
   laid: readonly PassUnit[],
@@ -54,7 +54,7 @@ export function fillPass(
     settleLayout(p, p.layout)
     filled.push({ p, target: t, fillLead: p.fillLead, runs: (p.runs ?? []).map((q) => q.fillLead) })
   }
-  // (the layouts the fill leadings found are the pass's alone: dropped for every unit on the page, RUN:2394 dropFillLaid)
+  // (the layouts the fill leadings found are the pass's alone: dropped for every unit on the page)
   for (const p of laid) {
     delete p.fillLaid
     for (const q of p.runs ?? []) delete q.fillLaid
