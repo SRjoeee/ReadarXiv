@@ -72,16 +72,15 @@ export interface PaperStore {
   clear(): Promise<void>
 }
 
-// (digestOf, copyOf and within are the old reader's store's too: layer-store.ts imports them)
 const hexOf =(b: ArrayBuffer) => { let s = ''; for (const x of new Uint8Array(b)) s += x.toString(16).padStart(2, '0'); return s }
 /** the SHA-256 of bytes, in hex */
-export async function digestOf(bytes: Uint8Array): Promise<string> {
+async function digestOf(bytes: Uint8Array): Promise<string> {
   return hexOf(await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>))
 }
 /** bytes as a buffer of their own (a view's bytes copied out of the buffer it stands in) */
-export const copyOf = (b: Uint8Array): ArrayBuffer => b.slice().buffer as ArrayBuffer
+const copyOf = (b: Uint8Array): ArrayBuffer => b.slice().buffer as ArrayBuffer
 /** a promise's answer, or `miss` once `ms` have gone by (its late answer let go) */
-export function within<T, M>(p: Promise<T>, ms: number, miss: M): Promise<T | M> {
+function within<T, M>(p: Promise<T>, ms: number, miss: M): Promise<T | M> {
   return new Promise(resolve => {
     const t = setTimeout(() => resolve(miss), ms)
     p.then(v => { clearTimeout(t); resolve(v) }, () => { clearTimeout(t); resolve(miss) })
