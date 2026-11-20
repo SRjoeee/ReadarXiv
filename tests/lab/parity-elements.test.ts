@@ -86,3 +86,38 @@ describe('elements: a glyph its font maps to no character is no script (M2)', ()
     expect(d).toMatchObject({ worse: true, v2: { value: 'element 12: its scripts or sizes set flat as text', off: 1 } })
   })
 })
+
+describe("elements: today's element of v2's is the same occurrence of its source, whatever its piece number (M3)", () => {
+  // (a paragraph with three marks of one macro: v2's part numbers its pieces 7, 11, 41, today's prepare 7, 41, 71, so v2's
+  // piece 41 is the third mark and today's piece 41 the second: 2610.21547v1 p17's `\cls{circle}`, the 7th of v2's piece 41
+  // and the 5th of today's. The third mark's ink stands on the next page on both)
+  const src = '\\mark{circle}'
+  const els = [
+    ['7', 'other', [[100, 600, 106, 606, 601]], 1, 1, 0, 0, 0, src],
+    ['11', 'other', [[200, 600, 206, 606, 601]], 1, 1, 0, 0, 0, src],
+    ['41', 'other', [], 1, 1, 0, 0, 0, src],
+  ]
+  const para = { ord: 237, kind: 'para', lines: [factLine(72, 540, 601)], els }
+  const seg = (page: number, x0: number) => ({ page, x0, x1: x0 + 6, baseline: 601, top: 606, bottom: 600 })
+  const today = (third: number) => ({
+    ord: 237,
+    kind: 'para',
+    text: 'marks ￼ and ￼ and ￼',
+    lines: [{ page: N, x0: 72, x1: 540, baseline: 601, top: 609, bottom: 599, size: 9.96 }],
+    pieces: [7, 41, 71].map((k) => ({ k, kind: 'ph', src })),
+    elements: [
+      { k: 7, kind: 'macro', segs: [seg(N, 100)], flags: [] },
+      { k: 41, kind: 'macro', segs: [seg(N, 200)], flags: [] },
+      { k: 71, kind: 'macro', segs: [seg(third, 72)], flags: [] },
+    ],
+  })
+  const drawn = { units: [{ id: 237, lines: [drawnLine(72, 540, 601, '标记 ￼ 和 ￼ 和')] }] }
+  const runs = [run(72, 540, 601, 9.96, 'marks and and')]
+  it("v2's third mark, on the next page on both, is not today's second mark drawn on this page", () => {
+    expect(elements(measure(para, rec({ runs, v2: drawn }), [today(N + 1)]))).toEqual([])
+  })
+  it('the third mark drawn as nothing where today finds its ink on this page is still missing', () => {
+    const [d] = elements(measure(para, rec({ runs, v2: drawn }), [today(N)]))
+    expect(d).toMatchObject({ unit: 't237 para', worse: true, v2: { value: 'element 41: drawn as nothing where TeX set ink', off: 1 } })
+  })
+})

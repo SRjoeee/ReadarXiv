@@ -470,13 +470,17 @@ export function measureFidelity(c) {
   // id where today's placeholder there is that source (a unit joined by its id, the same pieces), or where the part states no
   // source; else today's placeholder of that source, the same occurrence (a unit whose content moved, stage 1a's (o) or (k) by
   // group: today's `\%` a placeholder v2 writes as text, each piece after it numbered otherwise; round 8 B8, 1810.04805 p4 t47,
-  // v2's \citet read as today's \ref two pieces on); none where today's unit holds no such placeholder)
+  // v2's \citet read as today's \ref two pieces on); none where today's unit holds no such placeholder. The same piece id is
+  // today's element only where it is the same occurrence of that source too: the two prepares number a unit's pieces each its
+  // own way, and two numbers that happen to name one source can name two of its occurrences (2610.21547v1 p17 t237: v2's piece
+  // 41 the 7th `\cls{circle}`, today's 41 the 5th, set a page apart))
   const todayElementOf = (tu, k, src, rank) => {
     if (!tu) return undefined
     const flat = (x) => (x ?? '').replace(/\s+/g, ' ').trim()
+    const same = (tu.pieces ?? []).filter((q) => q.kind === 'ph' && flat(q.src) === flat(src))
     const at = tu.pieces?.find((p) => String(p.k) === k)
-    if (src == null || flat(at?.src) === flat(src)) return tu.elements?.find((e) => String(e.k) === k)
-    const p = (tu.pieces ?? []).filter((q) => q.kind === 'ph' && flat(q.src) === flat(src))[rank]
+    if (src == null || (flat(at?.src) === flat(src) && same.indexOf(at) === rank)) return tu.elements?.find((e) => String(e.k) === k)
+    const p = same[rank]
     return p ? tu.elements?.find((e) => e.k === p.k) : undefined
   }
   // ---------------- elements: an element drawn otherwise than the original sets it: its pieces apart that TeX set on one line,
