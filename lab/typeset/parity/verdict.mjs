@@ -259,7 +259,7 @@ export const SAYS = {
   cross: "the original's room kept: a laid line across a vertical rule of arXiv's page or over another unit's box (none on the original)",
   gap: "a run-in follower's start against its head's end, against the original's separation",
   turn: "a unit TeX set turned (a figure's rotated text) drawn upright (the original's, and today's, turned)",
-  stretch: 'the spacing kept: a line\'s word space past 1 em or letter gap past 0.25 em (the original\'s none), by how much',
+  stretch: 'the spacing kept: a line\'s word space past 1 em or letter gap past 0.25 em (the original\'s none), by how much; the gap TeX\'s infinite glue opens (\\hfill, \\hfil: the line\'s free room) none',
   style: "a unit's share of bold and of slanted characters against the original's style (its TeX font state)",
   pixels: "the page outside every unit's box against arXiv's page: device pixels off it",
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",

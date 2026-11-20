@@ -9084,7 +9084,9 @@ the count flush right; the typesetter read `\hfill` as no glue, and drew the two
   the glue adds no width, and a line with no room left sets nothing more. `\hspace{\fill}` is not read: the part states its
   argument as no source the lay can read.
 - **Reach** (the record's prepare of the 90 pairs' papers): 2610.40576v1's nine cells, and 2610.40394v1's six paragraphs ending
-  `\hfill$\square$`, whose box is then set at the line's right end where TeX sets it.
+  `\hfill$\square$`, whose box is then set at the line's right end where TeX sets it. The display gate reads the gap the glue
+  opens as the glue's, the line's free room, never a stretched word space (`lab/typeset/parity/README.md`, `stretch`: the run
+  the glue places is marked by the parity's lay); a line's other gaps are read as before.
 - **Versions**: lay only; no stored object moves (PIPELINE, TRANSLATE, LAYOUT and the digests stay).
 
 ## 19. The engine's contract
