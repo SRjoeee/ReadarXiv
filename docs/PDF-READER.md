@@ -6215,7 +6215,12 @@ put-back places no group holding an element (packages/translate groups.ts), and 
   run-in rule reads such a group as one a switch opens (`{\bf Remark:}` stays `must`, `run-ins.ts`); a face that fills a
   bibliography field rides it as before (§18.38). The typesetter reads the group's command as it reads `\emph{`'s: `\em{` toggles
   from the face around it as TeX's `\em` does, and counts in the base style's majority (`tokens.ts` baseOf) as the switch inside
-  the group did. Stage 1a's statement (o) reads the switch out of today's unit (`stated.mjs`; the acceptance list's `characters`
+  the group did. The old font commands set what LaTeX defines them to set, a group's command or a switch alike: article.cls's
+  `\DeclareOldFontCommand{\bf}{\normalfont\bfseries}{\mathbf}`, and `\it`, `\sl`, `\sc`, `\tt`, `\sf`, `\rm` so, `\normalfont`
+  first, then their one series, shape or family, never added to the face around them (`tokens.ts` STYLE_CMDS, `\normalfont`'s
+  family read as the paper's serif, as `\textnormal`'s is): `\emph{\bf …}` is bold upright, `{\it …}` in bold text medium
+  italic, `\textbf{\emph{…}}` bold italic as before. Read as adding to the face around them, 2610.19282v1's eight captions
+  `\emph{{\bf Title.} …}` drew their bold titles bold and slanted. Stage 1a's statement (o) reads the switch out of today's unit (`stated.mjs`; the acceptance list's `characters`
   entry already holds the clause). A note mark glued after a name (`\textdagger`, 2610.42112v1's author block) is no face switch
   and stays an element: the earlier attempt that wrote the kernel's whole symbol table as text lost that block's person (lane
   style-wire B, never merged), and a test holds it.

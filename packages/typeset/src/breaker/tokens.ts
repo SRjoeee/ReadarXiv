@@ -199,21 +199,35 @@ type Designs = TokensInput['designs']
 /** the style commands, each with what it sets: latex.ltx's \textbf, \bfseries, \textmd, \mdseries, \emph,
  *  \em, \textit, \itshape, \textsl, \slshape, \textup, \upshape, \textsc, \scshape, \texttt, \ttfamily, \textsf, \sffamily,
  *  \textrm, \rmfamily; article.cls's \bf, \it, \sl, \sc, \tt, \sf, \rm; fontmath.ltx's \mathbf and \mathit; amsbsy.sty's
- *  \boldsymbol; url.sty's \url and \path; listings.sty's \lstinline; and \code, a paper's own (its cases the rule ledger's) */
+ *  \boldsymbol; url.sty's \url and \path; listings.sty's \lstinline; and \code, a paper's own (its cases the rule ledger's).
+ *  The old ones are LaTeX's own: article.cls's \DeclareOldFontCommand{\bf}{\normalfont\bfseries}{\mathbf}, and \it, \sl, \sc,
+ *  \tt, \sf, \rm alike, \normalfont first, then their one series, shape or family, never added to the face around them
+ *  (`\emph{\bf …}` is bold upright, `{\it …}` in bold text medium italic: 2610.19282v1's captions were drawn bold italic) */
+const normalOf = (s: TStyle, d: Designs): TStyle => ({
+  ...s,
+  fam: 'serif',
+  bold: false,
+  italic: false,
+  caps: false,
+  design: d.serif,
+})
 const STYLE_CMDS: [RegExp, (s: TStyle, d: Designs) => TStyle][] = [
-  [/^\\(?:textbf|bf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true })],
+  [/^\\bf\b/, (s, d) => ({ ...normalOf(s, d), bold: true })],
+  [/^\\(?:it|sl)\b/, (s, d) => ({ ...normalOf(s, d), italic: true })],
+  [/^\\sc\b/, (s, d) => ({ ...normalOf(s, d), caps: true })],
+  [/^\\tt\b/, (s, d) => ({ ...normalOf(s, d), fam: 'mono', design: d.mono })],
+  [/^\\sf\b/, (s, d) => ({ ...normalOf(s, d), fam: 'sans', design: d.sans })],
+  [/^\\rm\b/, normalOf],
+  [/^\\(?:textbf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true })],
   [/^\\(?:textmd|mdseries)\b/, (s) => ({ ...s, bold: false })],
   [/^\\(?:emph|em)\b/, (s) => ({ ...s, italic: !s.italic })],
-  [/^\\(?:textit|it|itshape|textsl|sl|slshape|mathit)\b/, (s) => ({ ...s, italic: true })],
+  [/^\\(?:textit|itshape|textsl|slshape|mathit)\b/, (s) => ({ ...s, italic: true })],
   [/^\\(?:textup|upshape)\b/, (s) => ({ ...s, italic: false })],
-  [/^\\(?:textsc|sc|scshape)\b/, (s) => ({ ...s, caps: true })],
-  [/^\\(?:texttt|tt|ttfamily|url|path|code|lstinline)\b/, (s, d) => ({ ...s, fam: 'mono', design: d.mono })],
-  [/^\\(?:textsf|sf|sffamily)\b/, (s, d) => ({ ...s, fam: 'sans', design: d.sans })],
-  [/^\\(?:textrm|rm|rmfamily)\b/, (s, d) => ({ ...s, fam: 'serif', design: d.serif })],
-  [
-    /^\\(?:textnormal|normalfont)\b/,
-    (s, d) => ({ ...s, fam: 'serif', bold: false, italic: false, caps: false, design: d.serif }),
-  ],
+  [/^\\(?:textsc|scshape)\b/, (s) => ({ ...s, caps: true })],
+  [/^\\(?:texttt|ttfamily|url|path|code|lstinline)\b/, (s, d) => ({ ...s, fam: 'mono', design: d.mono })],
+  [/^\\(?:textsf|sffamily)\b/, (s, d) => ({ ...s, fam: 'sans', design: d.sans })],
+  [/^\\(?:textrm|rmfamily)\b/, (s, d) => ({ ...s, fam: 'serif', design: d.serif })],
+  [/^\\(?:textnormal|normalfont)\b/, normalOf],
 ]
 const applyCmd = (src: string | undefined, s: TStyle, d: Designs): TStyle | null => {
   for (const [re, f] of STYLE_CMDS) if (re.test(src as string)) return f(s, d)

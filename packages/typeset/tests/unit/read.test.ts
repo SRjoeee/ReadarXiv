@@ -337,3 +337,68 @@ describe('the reading from the part', () => {
     expect(bt.find((t) => t.s === 'gilt.')!.st!.bold).toBe(false)
   })
 })
+
+describe("the old font commands are LaTeX's own: \\normalfont, then their one series, shape or family (article.cls)", () => {
+  // (article.cls: \DeclareOldFontCommand{\bf}{\normalfont\bfseries}{\mathbf}, and \it, \sl, \sc, \tt, \sf, \rm alike. Read as
+  // adding their attribute to the face around them, 2610.19282v1's `\emph{\bf Model parameters.}` was drawn bold italic where TeX
+  // sets it bold upright)
+  type Tok = { s?: string; st?: { bold?: boolean; italic?: boolean } }
+  const tokensOf = (o: Partial<Placed>, content: Parameters<typeof rowPieces>[1]) => {
+    const m = member(o)
+    return read(m, rowPieces(m, content)).tokens as unknown as Tok[]
+  }
+  const styleOf = (toks: Tok[], s: string) => {
+    const st = toks.find((t) => t.s === s)!.st!
+    return { bold: !!st.bold, italic: !!st.italic }
+  }
+  it('`\\emph{\\bf x}` is bold upright', () => {
+    const toks = tokensOf(
+      {
+        style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' },
+        spans: [['1', { cmd: 'emph' }]],
+        els: [['2', { kind: 'zero', ink: [], cmd: 'bf', bare: 1 }]],
+      },
+      [
+        {
+          t: 'span',
+          id: '1',
+          content: [
+            { t: 'el', id: '2' },
+            { t: 'text', s: 'Modellparameter.' },
+          ],
+        },
+      ],
+    )
+    expect(styleOf(toks, 'Modellparameter.')).toEqual({ bold: true, italic: false })
+  })
+  it('`{\\it x}` inside bold text is italic and not bold, the text around it bold', () => {
+    const toks = tokensOf(
+      { style: { role: 'serif', size: 10, bold: 1, design: 'NimbusRomNo9L-Medi' }, spans: [['1', { cmd: 'it' }]] },
+      [
+        { t: 'text', s: 'Der Satz ' },
+        { t: 'span', id: '1', content: [{ t: 'text', s: 'Annalen' }] },
+        { t: 'text', s: ' gilt hier.' },
+      ],
+    )
+    expect(styleOf(toks, 'Annalen')).toEqual({ bold: false, italic: true })
+    expect(styleOf(toks, 'Satz')).toEqual({ bold: true, italic: false })
+    expect(styleOf(toks, 'hier.')).toEqual({ bold: true, italic: false })
+  })
+  it('`\\textbf{\\emph{x}}` stays bold italic: the new commands add to the face around them, as before', () => {
+    const toks = tokensOf(
+      {
+        spans: [
+          ['1', { cmd: 'textbf' }],
+          ['2', { cmd: 'emph' }],
+        ],
+      },
+      [
+        { t: 'text', s: 'Ein Satz ' },
+        { t: 'span', id: '1', content: [{ t: 'span', id: '2', content: [{ t: 'text', s: 'betont' }] }] },
+        { t: 'text', s: ' hier.' },
+      ],
+    )
+    expect(styleOf(toks, 'betont')).toEqual({ bold: true, italic: true })
+    expect(styleOf(toks, 'Satz')).toEqual({ bold: false, italic: false })
+  })
+})
