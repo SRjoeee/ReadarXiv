@@ -1871,6 +1871,21 @@ hyperref sets it (`lab/pdf/reader-fixtures/make.mjs`: an `\href` group, a `\ref`
 annotation over a bare word of a unit's text, which no group or element of the unit takes and the typesetter drops as above
 (`unmatched`, lane laid-links, 2026-11-13).
 
+On the rebuilt reader a link over a piece the translation draws as text is laid over its own characters among those drawn
+(`packages/typeset` `emit/links.ts` `placeText`), each drawn line of them a box:
+
+- **At any depth of a run of placed characters** (`tooDeep`). A box that starts deep inside a run that flows from its start
+  (the browser draws its characters by their own advances from the run's start) could stand off its glyphs by the drift
+  gathered before it, `DRIFT_BOUND` (0.06) of its distance from the start, and a wrong link is worse than none: where that
+  drift reaches half the first character's width the link is not laid. A run whose characters are each drawn at their own
+  place (a run of single CJK characters: `TextRun.chars`, the item's `dx`, the reader's SVG `x` a character) gathers none, and
+  a link in it is laid however deep it stands. 2610.22197v1-zh p18's "Figure 7", drawn in Chinese at the end of a line of 38
+  placed characters, was dropped (0.06 × 456 pt against half of 12.33 pt). Over the 90 pairs of the display gate's record
+  (release-c3, 2026-11-20) the guard refused 67 annotations so, on 32 pages of 2 papers (65 of 2610.22197v1-zh's references,
+  and twice 2307.16209v1-zh's `\href` drawn in Chinese, its pair's range), every one laid now; today's reader drops 66 of
+  them by the same guard. No link laid before is lost or moved, and nothing else of any page moves (the lay of the 90 pairs,
+  lane c4-overlay).
+
 ### 11.10 The extension's run on the layer
 
 `session/run.ts` `startRun(view, paper, host)` is the extension's run of a paper (Stage 5 Task 9; the shared reader view's

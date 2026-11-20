@@ -291,6 +291,69 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(box[0]).toBeCloseTo(runs[0]!.x + (4 * f) / 2, 6)
     expect(box[2]).toBeGreaterThanOrEqual(runs[0]!.x + ((4 + doi.length) * f) / 2 - 1e-6)
   })
+  it('lays a link deep in a run of characters each drawn at its own place: such a run gathers no drift (a CJK line)', () => {
+    // (a reference the translation sets at the end of a long line of CJK characters, all of one face: one run of single
+    // characters, each drawn at its own x (display.ts `chars`, the item's `dx`). The drift guard is for a run that flows from
+    // its start, whose advances a browser may draw apart from the layout's; here none gathers, and the link was dropped
+    // (2610.22197v1-zh p18's "Figure 7" in Chinese)
+    const zh = rulesFor('zh')
+    const m = member({
+      lines: [
+        [1, 0, 72, 540, 700, 707, 698, 72, 540, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 540, 0, 10],
+      ],
+      els: [
+        ['5', { kind: 'cite', ink: [[1, 150, 698, 170, 707, 700]], text: '图七', style: { role: 'serif', size: 10 } }],
+      ],
+    })
+    const rz = row([
+      { t: 'text', s: '这是一段很长的中文句子，它把后面的引用推到这一行很深的地方，' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: '之后还有。' },
+    ])
+    const link: Link = { box: [150, 697, 170, 708], to: { dest: '"cite.x"' }, owner: [0, '5'], text: '图七' }
+    const fates: LinkFate[] = []
+    const p = layPage(part(m, [link]), rowsOf([rz]), zh, metrics(), { linkFates: fates })
+    // (its characters in one run of placed characters, far enough into it that a flowing run's guard would refuse them)
+    const runs = p.members[0]!.lines.flatMap(([, , , it]) => it).filter((it) => 'face' in it && it.s.includes('图七'))
+    expect(runs).toHaveLength(1)
+    const run = runs[0] as Extract<Item, { face: unknown }> & { dx?: number[] }
+    expect(run.dx?.length).toBe([...run.s].length)
+    const at = run.x + run.dx![[...run.s].indexOf('图')]!
+    const f = p.members[0]!.fit!.size
+    expect(0.06 * (at - run.x)).toBeGreaterThan(f / 4)
+    expect(fates).toEqual(['text'])
+    const [box, to] = only(p)
+    expect(to).toEqual(link.to)
+    expect(box[0]).toBeCloseTo(at, 6)
+  })
+  it('still refuses a link deep in a run that flows from its start (a long Latin word glued to the piece)', () => {
+    // (the drift guard as before: a run whose characters a browser draws by its own advances from the run's start may carry a
+    // glyph across the box's edge deep into it, and a wrong link is worse than none)
+    const m = member({
+      lines: [
+        [1, 0, 72, 540, 700, 707, 698, 72, 540, 0, 10],
+        [1, 0, 72, 300, 688, 695, 686, 72, 540, 0, 10],
+      ],
+      els: [
+        ['5', { kind: 'cite', ink: [[1, 150, 698, 170, 707, 700]], text: 'XYZ', style: { role: 'serif', size: 10 } }],
+      ],
+    })
+    const rl = row([
+      { t: 'text', s: 'Ein Donaudampfschifffahrtsgesellschaftskapitaensmuetzenband' },
+      { t: 'el', id: '5' },
+      { t: 'text', s: ' bitte.' },
+    ])
+    const link: Link = { box: [150, 697, 170, 708], to: { dest: '"cite.x"' }, owner: [0, '5'], text: 'XYZ' }
+    const fates: LinkFate[] = []
+    const p = layPage(part(m, [link]), rowsOf([rl]), rules, metrics(), { linkFates: fates })
+    const runs = p.members[0]!.lines.flatMap(([, , , it]) => it).filter((it) => 'face' in it && it.s.includes('XYZ'))
+    expect(runs).toHaveLength(1)
+    expect((runs[0] as { dx?: number[] }).dx).toBeUndefined()
+    expect(runs[0]!.s.indexOf('XYZ')).toBeGreaterThan(20)
+    expect(fates).toEqual(['unplaced'])
+    expect(p.links).toEqual([])
+  })
   it('lays each target of a piece drawn as text over its own characters where the part states them (Link.text)', () => {
     // (an author-year citation of two works drawn as the page's text: today's placeText finds each annotation's characters, its
     // overlaidText, among the drawn ones; a part made before states none, and the two are not told apart)

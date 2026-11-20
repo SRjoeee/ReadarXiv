@@ -315,7 +315,13 @@ function spanOf(line: LaidLine, e0: D, e1: D, edge: Edge, pad: number) {
   }
   return { x0, x1 }
 }
+/** whether a range's part on a line starts so deep inside a run that flows from its start that the drift the run gathers before
+ *  it (DRIFT_BOUND x its distance from the run's start) could carry a glyph across its box's edge: against half its first
+ *  character's width. A run whose characters are each drawn at their own place (TextRun `chars`: the drawing sets each one's x,
+ *  display.ts `dx`) gathers none: never so (2610.22197v1-zh p18, "Figure 7" in Chinese at the end of a line of 38 placed
+ *  characters) */
 function tooDeep(line: LaidLine, e0: D, edge: Edge) {
+  if (e0.run.chars) return false
   const start = edge(line, e0.run, 0),
     x0 = edge(line, e0.run, e0.at),
     w0 = edge(line, e0.run, e0.end) - x0
