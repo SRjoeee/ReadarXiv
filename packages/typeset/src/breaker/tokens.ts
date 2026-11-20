@@ -204,13 +204,8 @@ const UNKNOWN = -1
 const LINK_OPEN = /^\\(?:href|hyperref|hyperlink|url)(?![A-Za-z])/
 
 type Designs = TokensInput['designs']
-/** the style commands, each with what it sets: latex.ltx's \textbf, \bfseries, \textmd, \mdseries, \emph,
- *  \em, \textit, \itshape, \textsl, \slshape, \textup, \upshape, \textsc, \scshape, \texttt, \ttfamily, \textsf, \sffamily,
- *  \textrm, \rmfamily; article.cls's \bf, \it, \sl, \sc, \tt, \sf, \rm; fontmath.ltx's \mathbf and \mathit; amsbsy.sty's
- *  \boldsymbol; url.sty's \url and \path; listings.sty's \lstinline; and \code, a paper's own (its cases the rule ledger's).
- *  The old ones are LaTeX's own: article.cls's \DeclareOldFontCommand{\bf}{\normalfont\bfseries}{\mathbf}, and \it, \sl, \sc,
- *  \tt, \sf, \rm alike, \normalfont first, then their one series, shape or family, never added to the face around them
- *  (`\emph{\bf …}` is bold upright, `{\it …}` in bold text medium italic: 2610.19282v1's captions were drawn bold italic) */
+/** latex.ltx's \normalfont: the document's serif, upright, medium, no small capitals, which \textnormal sets and each old
+ *  font command first */
 const normalOf = (s: TStyle, d: Designs): TStyle => ({
   ...s,
   fam: 'serif',
@@ -219,6 +214,13 @@ const normalOf = (s: TStyle, d: Designs): TStyle => ({
   caps: false,
   design: d.serif,
 })
+/** the style commands, each with what it sets: latex.ltx's \textbf, \bfseries, \textmd, \mdseries, \emph,
+ *  \em, \textit, \itshape, \textsl, \slshape, \textup, \upshape, \textsc, \scshape, \texttt, \ttfamily, \textsf, \sffamily,
+ *  \textrm, \rmfamily; article.cls's \bf, \it, \sl, \sc, \tt, \sf, \rm; fontmath.ltx's \mathbf and \mathit; amsbsy.sty's
+ *  \boldsymbol; url.sty's \url and \path; listings.sty's \lstinline; and \code, a paper's own (its cases the rule ledger's).
+ *  The old ones are LaTeX's own: article.cls's \DeclareOldFontCommand{\bf}{\normalfont\bfseries}{\mathbf}, and \it, \sl, \sc,
+ *  \tt, \sf, \rm alike, \normalfont first (normalOf), then their one series, shape or family, never added to the face around
+ *  them (`\emph{\bf …}` is bold upright, `{\it …}` in bold text medium italic: 2610.19282v1's captions were drawn bold italic) */
 const STYLE_CMDS: [RegExp, (s: TStyle, d: Designs) => TStyle][] = [
   [/^\\bf\b/, (s, d) => ({ ...normalOf(s, d), bold: true })],
   [/^\\(?:it|sl)\b/, (s, d) => ({ ...normalOf(s, d), italic: true })],

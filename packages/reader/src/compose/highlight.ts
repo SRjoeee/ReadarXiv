@@ -329,7 +329,7 @@ export type PaneMember = {
  * it across (another member's box on the pane, a display: a block of its own), so that the pads of two blocks meet at most
  * halfway between them. A page's leading is its body's: on 2610.19274v1-zh p34, a double-spaced body (rows 18 pt apart) made it
  * 8.87 pt, and the caption set single-spaced over a table (its rows 5.47 apart) was padded so under its last row, over the
- * upper half of the table's header labels 2 pt under it; today's reader pads a unit by its own lines (2.75 there)
+ * upper half of the table's header labels 2 pt under it, where its own rows' half leading is 2.75
  */
 export function padsOf(pane: readonly PaneMember[], ord: number, pageLead: number): Pads {
   const me = pane.find((m) => m.ord === ord)
