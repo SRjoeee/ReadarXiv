@@ -29,6 +29,7 @@ import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { launchWithReader } from './lib/extension.mjs'
 import { RESOLVER_WALL, routeTable } from './lib/route-table.mjs'
+import { settles, stallWatch } from './lib/settles.mjs'
 import { loadFixture, segOf, v2Api } from './lib/v2-api.mjs'
 import { seedService } from './options-page.mjs'
 
@@ -128,9 +129,20 @@ await worker.evaluate(async () => { const { config } = await chrome.storage.loca
 const pageErrors = []
 const track = page => { page.on('pageerror', e => pageErrors.push(`${page.url().slice(0, 60)}: ${e.message}`)); return page }
 const extensionPage = async (path = 'options.html') => { const page = track(await context.newPage()); await page.goto(`chrome-extension://${id}/${path}`); return page }
-const readerState = page => page.evaluate(() => window.__reader.controller.getState())
-const sessionState = page => page.evaluate(() => { const s = window.__reader.reader.state(); return { original: s.original.s, layer: s.layer.s, rows: s.rows.s, display: s.view.display, prefs: s.prefs, crashed: s.crashed } })
-const probe = page => page.evaluate(() => window.__reader.probe())
+/** each page's last answers to the reads below, when and in short (a stall's report says which reader was where) */
+const lastRead = new WeakMap()
+const keep = (page, kind, value, short) => { lastRead.set(page, { ...lastRead.get(page), [kind]: { at: Date.now(), ...short(value) } }); return value }
+const readerState = page => page.evaluate(() => window.__reader.controller.getState()).then(s => keep(page, 'reader', s, r => ({ phase: r.phase, display: r.display, left: r.sides?.left?.pages, failure: r.failure })))
+const sessionState = page => page.evaluate(() => { const s = window.__reader.reader.state(); return { original: s.original.s, layer: s.layer.s, rows: s.rows.s, display: s.view.display, prefs: s.prefs, crashed: s.crashed } }).then(s => keep(page, 'session', s, r => ({ original: r.original, layer: r.layer, rows: r.rows, display: r.display })))
+const probe = page => page.evaluate(() => window.__reader.probe()).then(p => keep(page, 'probe', p, r => ({ laid: r.laidPages })))
+/** what the script knows of a stall without the pages: our server's last asks, the echo service's counts, each named page's
+ *  last answers (`lastRead`) */
+const known = named => {
+  const ago = at => `${((Date.now() - at) / 1000).toFixed(1)} s ago`
+  const asks = api.requests.slice(-6).map(r => `${r.method} ${r.path.slice(0, 70)} ${ago(r.at)}`).join(', ')
+  const reads = Object.entries(named).map(([name, page]) => `${name} ${JSON.stringify(Object.fromEntries(Object.entries(lastRead.get(page) ?? {}).map(([k, { at, ...v }]) => [k, { ...v, read: ago(at) }])))}`).join('; ')
+  return `our server's last asks: ${asks || 'none'}; the echo service: ${echo.seen.post} asks, ${echo.seen.refused} refused; each reader's last read: ${reads}`
+}
 async function openReader(query = {}) {
   const page = track(await context.newPage())
   await page.goto(readerUrl({ live: '1', paper: PAPER, ...query }))
@@ -484,13 +496,17 @@ try {
   // ----------------------------------------------------------------------------------------------------- reader settings
   section('reader settings: the display and the sync follow the extension\'s settings and are written back')
   {
+    // (the section's readers watched from its start, for the bound at its end (lib/settles.mjs stallWatch): a debugger on each
+    // reader it opens, and the browser's trace in a ring buffer, both ready before a thread can stick. They run in this section
+    // alone: what they cost in time could also hide a stall, and the section is where three hosted runs stood)
+    const stall = await stallWatch({ context, worker, extensionDir: EXT, origin: `chrome-extension://${id}` })
     const settle = page => page.waitForTimeout(700)
     const patch = (page, change) => page.evaluate(p => window.__reader.controller.patchSettings(c => {
       const out = { ...c }
       for (const [k, v] of Object.entries(p)) out[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...c[k], ...v } : v
       return out
     }), change)
-    const open = async (query = {}) => { const page = await openReader(query); await paperOpened(page); return page }
+    const open = async (query = {}) => { const page = await openReader(query); await stall.watch(page); await paperOpened(page); return page }
     const display = async page => (await readerState(page)).display
     const chosen = async (page, shown) => { await page.evaluate(d => window.__reader.controller.setDisplay(d), shown); await settle(page) }
     const becomes = async (name, read, expected, change, page) => {
@@ -589,12 +605,36 @@ try {
     const asked1 = await readerState(e)
     check('asked to translate: the translated display the mode names, the original let go', asked1.display === 'translation' && asked1.settings.pdfReader.original === false, `${asked1.display}, original ${asked1.settings.pdfReader.original}`)
     control('a reader that is not asked to translate opens in the original the settings leave on', { ok: plain.display === 'translation', detail: `${plain.display}, original ${plain.settings.pdfReader.original}` })
-    await patch(e, { mode: 'side', pdfReader: { original: false, sync: true }, reading: { openIn: 'new-tab' } })
-    for (const page of [a, b, c, e]) await page.close()
+    // (each await from here to the next section's header bounded, failing the run with its name and the watch's report
+    // (lib/settles.mjs): three hosted runs of round c4 printed the check above and then nothing for 43 minutes, until the job's
+    // limit cancelled them. An extension page whose main thread does not come back holds an evaluate on any of them for good)
+    const readers = { a, b, c, e }
+    // (each step's time, and the one that stands named with when it was sent: "closing e", the steps before it beside it)
+    const took = []
+    const stalled = (what, at) => () => stall.report(readers, () => `the step: ${what}; the steps before it: ${took.join(', ') || 'none'}; ${known(readers)}`, note, { what, at })
+    const timed = async (what, step) => { const at = Date.now(); const value = await settles(what, step, { tell: stalled(what.replace(/^reader (\w) closed$/, 'closing $1'), at), tellMs: 120_000 }); took.push(`${what} in ${Date.now() - at} ms`); return value }
+    // (a reader is closed only once it shows the configuration storage holds, its document complete: a reader whose language
+    // reads stale when its settings land reloads itself rather than land them (src/shared/surface-config.ts `read`,
+    // `reloadWhenFree`), and a close sent while an extension page reloaded itself was lost on the hosted runner, the tab never
+    // closed (round c4). Its surface's landed configuration is the product's own word that the last write reached it. The
+    // settings are put back after the closes, through the extension's worker, when no reader is open to react to them)
+    const inStorage = await worker.evaluate(() => chrome.storage.local.get('config').then(r => r.config))
+    const want = { mode: inStorage.mode, original: inStorage.pdfReader.original, sync: inStorage.pdfReader.sync, openIn: inStorage.reading.openIn, target: inStorage.targetLanguage }
+    const shows = page => page.waitForFunction(w => {
+      const s = window.__reader?.controller?.getState().settings
+      return document.readyState === 'complete' && !!s && s.mode === w.mode && s.pdfReader.original === w.original && s.pdfReader.sync === w.sync && s.reading.openIn === w.openIn && s.targetLanguage === w.target
+    }, want, { timeout: 15_000 }).then(() => true, () => false)
+    for (const [name, page] of Object.entries(readers)) {
+      if (!(await timed(`reader ${name} shows the stored settings`, () => shows(page)))) note(`reader ${name} did not show the stored settings in 15 s: closed as it is`)
+      await timed(`reader ${name} closed`, () => page.close())
+    }
+    await timed('the settings put back (through the extension\'s worker, no reader open)', () => setConfig({ mode: 'side', pdfReader: { original: false, sync: true }, reading: { openIn: 'new-tab' } }))
+    note(`the readers' end: ${took.join(', ')}`)
+    await stall.end()
   }
 
   // -------------------------------------------------------------------------------- the reader on the layer (part 2)
-  await import('./reader-v2-layer.mjs').then(m => m.layerChecks({ context, worker, id, api, fixture, PAPER, PV, TITLE, LINK, echo, guard, asked, pageErrors, track, extensionPage, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, setPdfAnswer: a => { pdfAnswer = a }, section, check, control, note, sleep, SHOTS }))
+  await settles('the layer\'s checks loaded', () => import('./reader-v2-layer.mjs')).then(m => m.layerChecks({ context, worker, id, api, fixture, PAPER, PV, TITLE, LINK, echo, guard, asked, pageErrors, track, extensionPage, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, setPdfAnswer: a => { pdfAnswer = a }, section, check, control, note, sleep, SHOTS }))
 
   // -------------------------------------------------------------------------------------------- what the run did not do
   section('what the run did not do')

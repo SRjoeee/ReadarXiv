@@ -101,20 +101,27 @@ describe('locate', () => {
     expect([...L.born.values()].map((b) => b.content)).toEqual([[text('a supplement page of its own')]])
     expect(L.members.at(-1)).toMatchObject({ kind: 'inkorphan', located: true, unit: -1 })
   })
-  it('parts two lines B never printed into two units born on A where the second stands farther below the first than a block holds', () => {
-    // (born.ts BLOCK_DY: the same two lines, the second 100 pt under the first, far past 1.75 of their size)
+  it('makes two units born on A where a line stands farther under the one before than 1.75 of its size: a heading and its paragraph', () => {
+    // (a page B never printed, at 10 pt: a heading at 700 and its paragraph's two lines at 678 and 666. LaTeX's \section sets
+    // 2.3ex and a \baselineskip between a heading and its paragraph's first line, 22 pt here, past 1.75 sizes (17.5): a block
+    // of its own; the paragraph's second line 12 pt under its first, within them: one block)
     const A = docOf([
       pages[0]!,
       pages[1]!,
       {
         lines: [
-          { text: 'a supplement page', x: 80, y: 700 },
-          { text: 'of its own', x: 80, y: 600 },
+          { text: 'A supplement', y: 700 },
+          { text: 'its first line', y: 678 },
+          { text: 'and its second', y: 666 },
         ],
       },
     ])
     const L = locate(ins, A, align(B, A))
-    expect([...L.born.values()].map((b) => b.content)).toEqual([[text('a supplement page')], [text('of its own')]])
+    expect([...L.born.values()].map((b) => b.content)).toEqual([
+      [text('A supplement')],
+      [text('its first line and its second')],
+    ])
+    expect(L.members.slice(-2).map((m) => m.kind)).toEqual(['inkorphan', 'inkorphan'])
   })
   it('makes no unit born of a glyph shown inside a form: a figure’s text is the figure reading’s alone, the rest born as before', () => {
     // (a page B never printed: a row of a figure's axis numbers in its form, 40 pt apart, and a line of text outside it under
@@ -2650,6 +2657,48 @@ describe('the element classes the part states', () => {
     expect(els.get('2')).toMatchObject({ ink: [], text: '' })
     expect(els.get('3')).toMatchObject({ ink: [], text: '' })
     expect(els.get('4')!.text).toBeUndefined()
+    expect(els.get('4')!.keep).toBeUndefined()
+  })
+
+  it('states a symbol and a space TeX set before the unit’s start as its edge, El.keep; a symbol inside its text as before', () => {
+    // (PDF-READER §18.83: a typed bullet that opens a hand-made list's item, `\noindent\textbullet\ The …`, is the unit's edge,
+    // its ink the original's, kept as the label; a symbol after the first word is the text's, drawn as before)
+    const B = docOf([{ lines: ['The bound holds in every case.'] }])
+    const content = [
+      { t: 'el' as const, id: '0', kind: 'other', src: '\\noindent' },
+      { t: 'el' as const, id: '1', kind: 'macro', src: '\\textbullet' },
+      { t: 'el' as const, id: '2', kind: 'other', src: '\\ ' },
+      text('The bound holds in every case'),
+      { t: 'el' as const, id: '4', kind: 'macro', src: '\\textdagger' },
+      text('.'),
+    ]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [
+          ['0', { cls: 'zero' }],
+          ['1', { cls: 'symbol', sym: ['•'] }],
+          ['2', { cls: 'space', copy: ' ' }],
+          ['4', { cls: 'symbol', sym: ['†'] }],
+        ],
+      },
+    ]
+    const ins = {
+      ...instrumentOf(B, units, [[0]]),
+      outside: [
+        { unit: 0, piece: '0' },
+        { unit: 0, piece: '1' },
+        { unit: 0, piece: '2' },
+      ],
+    }
+    const L = locate(ins, B, align(B, B))
+    const els = new Map(L.members.find((m) => m.unit === 0)!.elements)
+    expect(els.get('1')).toMatchObject({ ink: [], keep: 1 })
+    expect(els.get('2')).toMatchObject({ ink: [], keep: 1 })
+    // (a class that draws nothing gains nothing; a symbol inside the text is drawn from its symbol as before)
+    expect(els.get('0')!.keep).toBeUndefined()
     expect(els.get('4')!.keep).toBeUndefined()
   })
 

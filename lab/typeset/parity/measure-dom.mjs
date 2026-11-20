@@ -33,15 +33,39 @@ function sizeRuns(cs) {
   return out
 }
 
+/**
+ * The runs TeX's infinite glue places on a laid page's members, [ord, rank]: a member's text items in its lines' order, a crop
+ * none (the reader's painter, packages/reader/src/compose/paint.ts svgOf, draws one <tspan> each, in that order, under the
+ * member's `g`), each that the parity's lay marks `glue` (hook.mjs: the item after a token holding Token.fill, §18.104)
+ */
+export function glueRunsOf(members) {
+  const out = []
+  for (const m of members ?? []) {
+    if (m.state !== 'laid' || !m.lines?.length) continue
+    let rank = 0
+    for (const [, , , items] of m.lines)
+      for (const it of items) {
+        if ('src' in it) continue
+        if (it.glue) out.push([m.ord, rank])
+        rank++
+      }
+  }
+  return out
+}
+
 /** whether a <text> is slanted by its own transform (a skewX, the readers' oblique run) */
 const skewed = (t) => /skewX\(\s*-?[1-9]/.test(t.getAttribute('transform') ?? '')
 
 /**
  * Each group's lines as drawn. `attr` the group's attribute (its unit's number), `view` the page's view box [x0, y0, x1, y1]
  * in PDF units, `k` the SVG's user units a PDF unit (its viewBox's x origin the view's), `crops` [group, x0, y0, x1, y1] the
- * places crops stand (PDF units), which no gap is read across.
+ * places crops stand (PDF units), which no gap is read across. `glues` [group, run]: the runs TeX's infinite glue places, each
+ * by its group and its rank among the group's <tspan>s (the typesetter's text items in order, a crop none: v2page/main.ts
+ * glueRunsOf): the gap before such a run is the glue's, the line's free room (`\hfill`, `\hfil`: TeX gives it all of it), no
+ * word space and no letter gap.
  */
-export function linesOfSvg(svg, attr, view, k, crops = []) {
+export function linesOfSvg(svg, attr, view, k, crops = [], glues = []) {
+  const glued = new Set(glues.map(([g, j]) => `${g}:${j}`))
   const out = []
   const X = (x) => view[0] + x / k
   const Y = (y) => view[3] - y / k
@@ -51,6 +75,8 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
     const raw = g.getAttribute(attr) ?? ''
     const id = /^\d+$/.test(raw) ? Number(raw) : raw
     const chars = []
+    // (each <tspan>'s rank in the group, in document order: the painter's one a text item)
+    let rank = 0
     for (const t of g.querySelectorAll('text')) {
       const slant = skewed(t)
       // (the text's user space into the SVG's: its own transform and its parents')
@@ -64,6 +90,8 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
         // (a run placed at its own x: what stands before it is the typesetter's glue, its first character a word's start)
         const run = `${text}:${i}`,
           placed = span.getAttribute('x') !== null
+        // (a run TeX's infinite glue places: the gap before it is the glue's)
+        const infinite = glued.has(`${id}:${rank++}`)
         const n = span.getNumberOfChars()
         const cs = getComputedStyle(span)
         const weight = Number.parseInt(cs.fontWeight, 10) || 400
@@ -107,6 +135,7 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
             fill: cs.fill,
             run,
             placed,
+            ...(infinite ? { infinite } : {}),
           })
         }
         i += n
@@ -132,7 +161,9 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
       const size = letters.length ? Math.max(...letters) : sizes.length ? sizes[sizes.length >> 1] : (cs[0]?.size ?? 0)
       // (the widest gaps: between consecutive drawn characters, a space between them a word space, and so a run placed at its
       // own x (the typesetter's glue before it: a lead's word, its label, the text after them, set apart with no space
-      // character), none a letter gap; a crop standing between them, or a hidden stand-in, no gap at all)
+      // character), none a letter gap; a crop standing between them, or a hidden stand-in, no gap at all; and none before a run
+      // TeX's infinite glue places (`glues`): that is the line's free room, all of it, as TeX sets it (the typesetter's
+      // Token.fill, §18.104), never a stretched word space)
       let word = 0,
         letter = 0,
         prev = null,
@@ -149,7 +180,8 @@ export function linesOfSvg(svg, attr, view, k, crops = []) {
         if (prev) {
           const gap = c.x0 - prev.x1
           const cropBetween = mine.some((q) => q[1] < c.x0 && q[3] > prev.x1 && q[2] < y + size && q[4] > y - 0.3 * size)
-          if (!cropBetween && size > 0) {
+          const glueBefore = c.infinite && c.run !== prev.run
+          if (!cropBetween && !glueBefore && size > 0) {
             const em = gap / size
             const boundary = CJK.test(prev.ch) !== CJK.test(c.ch)
             const glue = c.placed && c.run !== prev.run

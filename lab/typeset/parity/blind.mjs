@@ -17,7 +17,7 @@
 // verdict.mjs's measurePage calls measureBlind with the page's drawing and its judging helpers; measure.mjs reads each paper's
 // facts once (originalFacts off arXiv's PDF, keptFacts over the drawing's glyphs and both readers' lines of their units).
 import { CLASS_DEFAULTS } from '../../../packages/reader/src/compose/classes.ts'
-import { ACCENT, KEPT_SHARE, runsIn, SCRIPT_SIZE } from './fidelity.mjs'
+import { ACCENT, KEPT_SHARE, read, runsIn, SCRIPT_SIZE } from './fidelity.mjs'
 
 /** a script stands off its line's baseline: TeX shifts one by its math font's sub1 at the least (a subscript alone; cmsy10's
  *  fontdimen 16, 0.15 em: 2610.30034v1 p7's S_J 1.49 pt under its 9.96 pt line), read at half of it, far above the readings'
@@ -67,9 +67,7 @@ function within(a, b) {
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
 
 // ---------------------------------------------------------------- scripts
-/** the characters a reader reads in a run (letters, digits, marks, punctuation, symbols): a glyph PDF.js maps to no text (a
- *  private-use or a control character: a rule's piece, a delimiter's segment, 2610.10069v1 p12) is none */
-const read = (s) => [...String(s ?? '')].filter((ch) => /[\p{L}\p{N}\p{M}\p{P}\p{S}]/u.test(ch)).length
+// (the characters a reader reads in a run: fidelity.mjs `read`, which the elements measure reads by too)
 
 /**
  * The original's scripts in a unit's lines on the page: the runs of arXiv's glyphs (render.mjs's PDF.js runs [x0, y0, x1, y1,

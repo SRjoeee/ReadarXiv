@@ -138,6 +138,36 @@ describe('a page measured from what each side drew', () => {
     const asOriginal = measure(v2Of(), boxed({ today: { shownOriginal: true }, v2: { linkBoxes: A.map((b) => [...b.slice(0, 5), 1]) } }, A))
     expect(asOriginal.measures.links).toMatchObject({ original: 2, today: 2, v2: 2 })
   })
+  it("a side's anchors of one target join one link only one right after the other in its own order (M5)", () => {
+    // (2307.16209v1 p30: on one line two references to equation (2.1) and a reference to a section, then on the next line a third
+    // to equation (2.1). A's four annotations: the first two one right after the other, one link; three links. Each side lists
+    // its anchors in its reading order (the reader's compose/links.ts; production's records): the section's anchor stands between
+    // the second and the third, which are two links, though on lines one under the other. Counted by target and line alone, v2's
+    // three anchors of (2.1) were one link, and v2 missed one)
+    const A = [
+      ['#"eq.1"', 240, 346.8, 270, 360.2, 1],
+      ['#"eq.1"', 305, 346.8, 334, 360.2, 1],
+      ['#"sec.5"', 258, 328.1, 278, 342.2, 1],
+      ['#"eq.1"', 506, 328.9, 535, 342.2, 1],
+    ]
+    const boxed = (o: object) => ({ ...rec(o), original: { links: A.length, linkBoxes: A } })
+    const line1 = [
+      ['#eq.1', 186, 675, 236, 692],
+      ['#eq.1', 266, 675, 316, 692],
+      ['#sec.5', 544, 675, 575, 692],
+    ]
+    const third = ['#eq.1', 144, 707, 190, 724]
+    const all = measure(v2Of(), boxed({ today: { linkBoxes: [...line1, third] }, v2: { linkBoxes: [...line1, third] } }))
+    expect(worse(all)).toEqual([])
+    expect(all.measures.links).toMatchObject({ original: 3, today: 3, v2: 3 })
+    // (the third drawn nowhere: a link missing still; and a link a side breaks over two lines, its two pieces one right after the
+    // other in its order, is one)
+    const lost = measure(v2Of(), boxed({ today: { linkBoxes: [...line1, third] }, v2: { linkBoxes: line1 } }))
+    expect(worse(lost)).toEqual(['links'])
+    expect(lost.measures.links).toMatchObject({ original: 3, today: 3, v2: 2 })
+    const broken = measure(v2Of(), boxed({ today: { linkBoxes: [...line1, third] }, v2: { linkBoxes: [...line1, ['#eq.1', 560, 675, 580, 692], third] } }))
+    expect(broken.measures.links).toMatchObject({ v2: 3 })
+  })
   it("a unit over two pages counts its links over them: a translation that moves a linked word to the page before loses none", () => {
     // (2610.20484v1 t62, a theorem over pages 6 and 7: its link to equation (8) stands on A on page 7's first line; v2's shorter
     // translation draws that word, and its anchor, on page 6, today on page 7. Counted page by page, v2 missed one on page 7 and
@@ -239,6 +269,121 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       expect(highlights(measure(fig(missLeft), rec({ v2: v2Fig })))).toMatchObject([{ unit: 'p50 figure', worse: true }])
       const short = { right: [[box(100, 118, 300)]], left: [[box(100, 140, 300)]] }
       expect(highlights(measure(fig(short), rec({ v2: v2Fig })))).toMatchObject([{ unit: 'p50 figure', worse: true }])
+    })
+  })
+  describe("a drawn line is covered where its ink stands: a line of CJK characters alone under the em box's foot, no lower (M6)", () => {
+    // (2501.14787v1 p8 t55, a 14.35 pt heading of CJK characters alone: the typesetter boxes a CJK token by its face's em box,
+    // 0.12 of the size under the baseline (emit/sentences.ts CJK_DESC), and no CJK ink goes lower; the band read 0.2 under
+    // missed the box by 1.15 pt at the foot)
+    const s = 14.35
+    const cjk = (text: string) => ({ units: [{ id: 50, lines: [drawnLine(100, 240, 300, text, s)] }] })
+    const heading = (bottom: number) => {
+      const b = [99.5, 300 + bottom * s, 240.5, 300 + 0.88 * s]
+      return v2Of({ members: [{ ord: 50, state: 'laid', lines: [], lit: { left: [[[99.5, 297, 240.5, 313]]], right: [[b]], own: [] } }], facts: [{ ord: 50, kind: 'heading', align: 'l', style: { size: s }, lines: [factLine(100, 240, 300, s)] }] })
+    }
+    it("CJK characters alone, boxed by the em box: covered", () => {
+      expect(highlights(measure(heading(-0.12), rec({ v2: cjk('\u5165\u95e8\uff1a\u77e9\u9635\u4e0e\u5411\u91cf\u79ef\u89c4\u5219') })))).toEqual([])
+    })
+    it('a box short of the line, or a line with a character that reaches lower (a Latin descender), boxed so: not covered', () => {
+      expect(highlights(measure(heading(0.1), rec({ v2: cjk('\u5165\u95e8\uff1a\u77e9\u9635\u4e0e\u5411\u91cf\u79ef\u89c4\u5219') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
+      expect(highlights(measure(heading(-0.12), rec({ v2: cjk('\u5165\u95e8\uff1aMatrix \u89c4\u5219') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
+    })
+  })
+  describe("a unit of today's that is two members of v2's (the join by pieces): both members' boxes read (M6)", () => {
+    // (2608.27728v1 p3 t172: today's one unit "1: train 2: input…", v2's two members, each lit by its own box; the measure read
+    // one member's boxes for the group's lines and called the other's line unlit)
+    const lit = (y: number) => ({ left: [[[71, y - 2, 301, y + 9]]], right: [[[71, y - 2, 301, y + 9]]], own: [] })
+    const group = (litB: object) => ({
+      pages: { [N]: { members: [{ ord: 21, state: 'laid', lines: [], lit: lit(400) }, { ord: 22, state: 'laid', lines: [], lit: litB }], links: [] } },
+      facts: { [N]: { members: [{ ord: 21, kind: 'para', align: 'l', style: { size: 10 }, lines: [factLine(72, 300, 400)] }, { ord: 22, kind: 'para', align: 'l', style: { size: 10 }, lines: [factLine(72, 300, 380)] }], links: 0 } },
+      today: {},
+    })
+    const page = rec({
+      today: { units: [{ id: 20, lines: [line(400), line(380)] }], lit: [20], litBoxes: { 20: { right: [[71, 378, 301, 409]], left: [[71, 378, 301, 409]] } } },
+      v2: { units: [{ id: 21, lines: [line(400)] }, { id: 22, lines: [line(380)] }], lit: [21, 22] },
+    })
+    const prep = [{ ord: 20, kind: 'para', lines: [{ page: N, x0: 72, x1: 300, baseline: 400, top: 408, bottom: 398, size: 10 }, { page: N, x0: 72, x1: 300, baseline: 380, top: 388, bottom: 378, size: 10 }] }]
+    const of = (litB: object) =>
+      measurePage('p-zh', group(litB), page, { prepByOrd: new Map(prep.map((u) => [u.ord, u])), todayOf: new Map(), turned: new Set(), led: new Map(), top: new Set(), pieceGroups: [{ today: [20], members: [21, 22], pages: { 21: [N], 22: [N] } }] })
+    it('each member lit by its own box: no line unlit', () => {
+      expect(highlights(of(lit(380)))).toEqual([])
+    })
+    it('a member whose line no box lights is still unlit', () => {
+      expect(highlights(of({ left: [[[71, 378, 301, 389]]], right: [], own: [] }))).toMatchObject([{ unit: 't20 para', worse: true }])
+    })
+  })
+  describe("a unit's lines in two columns on one baseline, read as one drawn line: covered a column at a time (M6)", () => {
+    // (2608.06007v1 p1 t8: a paragraph that runs from the foot of the left column to the head of the right, its two lines there
+    // on one baseline; measure-dom reads a unit's characters a baseline at a time, one line from the left column's start to the
+    // right column's end, and the gutter between them, which none of its ink stands in nor any box lights, read unlit)
+    const frame = { columns: [[72, 300], [312, 540]], block: [72, 540] }
+    // (its lines on A: the foot of the left column, the head of the right)
+    const inTwo = [factLine(72, 300, 120), factLine(312, 540, 700)]
+    const across = (right: number[][], lines = inTwo) =>
+      measurePage(
+        'p-zh',
+        v2Of({ members: [{ ord: 8, state: 'laid', lines: [], lit: { left: [[[71, 117, 301, 129], [311, 697, 541, 709], [71, 397, 541, 409]]], right: [right], own: [] } }], facts: [{ ord: 8, kind: 'para', align: 'j', style: { size: 10 }, lines }] }),
+        rec({ v2: { units: [{ id: 8, lines: [{ ...line(400), x0: 72, x1: 540 }] }], lit: [8] } }),
+        { prepByOrd: new Map(), todayOf: new Map(), turned: new Set(), led: new Map(), top: new Set(), frame },
+      )
+    it('each column part lit by its box: covered', () => {
+      expect(highlights(across([[71, 397, 301, 409], [311, 397, 541, 409]]))).toEqual([])
+    })
+    it('a column part no box lights, or the gutter of a line set across it on A (a title): still unlit', () => {
+      expect(highlights(across([[71, 397, 301, 409]]))).toMatchObject([{ unit: 'p8 para', worse: true }])
+      expect(highlights(across([[71, 397, 301, 409], [311, 397, 541, 409]], [factLine(72, 540, 400)]))).toMatchObject([{ unit: 'p8 para', worse: true }])
+    })
+  })
+  describe("a unit's lit shape over the name that leads it on A (a proof's \"Proof.\") fills no other block (M6)", () => {
+    // (2610.21377v1 p35: the babel name "Proof." a member of its own, bound to the proof it leads (Placed.bound); the translation
+    // begins with the name in the target's word and is lit whole, its shape on arXiv's page over the name's line too, which is the proof's own lead)
+    const fills = (o: { led?: Record<number, number>; heading?: boolean }) =>
+      measurePage(
+        'p-zh',
+        v2Of({
+          members: [{ ord: 31, state: 'laid', lines: [], lit: { left: [[[71, 485, 541, 521]]], right: [[[71, 485, 541, 509]]], own: [] } }],
+          facts: [
+            { ord: 30, kind: o.heading ? 'heading' : 'name', align: 'l', style: { size: 10 }, lines: [o.heading ? factLine(72, 300, 512) : factLine(72, 100, 500)] },
+            { ord: 31, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(105, 540, 500), factLine(72, 540, 488)] },
+          ],
+        }),
+        rec({ v2: { units: [{ id: 31, lines: [line(500), line(488)] }], lit: [31] } }),
+        { prepByOrd: new Map(), todayOf: new Map(), turned: new Set(), led: new Map(Object.entries(o.led ?? {}).map(([f, h]) => [Number(f), h])), top: new Set() },
+      )
+    const filledBlocks = (p: { diffs: { flag: string; what?: string }[] }) => highlights(p).filter((d) => /fill or bridge/.test((d as { what?: string }).what ?? ''))
+    it('the name its unit is led by: its own, no other block', () => {
+      expect(filledBlocks(fills({ led: { 31: 30 } }))).toEqual([])
+    })
+    it('a line of another unit under the shape (a heading not leading it, or the name with no bond stated): another block', () => {
+      expect(filledBlocks(fills({ heading: true }))).toMatchObject([{ unit: 'p31 para', worse: true }])
+      expect(filledBlocks(fills({}))).toMatchObject([{ unit: 'p31 para', worse: true }])
+    })
+  })
+  describe("a lit row's pads are the reader's own, whatever the reader states them as (M13)", () => {
+    // (the reader pads a row over and under: by the page's half leading, or, where it states padsOf, by its member's own leading,
+    // never past half the room to the next block. The measure reads the reader's function, never a model of its own: a member
+    // of one row is padded by the page's half leading either way. Here a paragraph of rows 4 pt apart makes it 2 pt)
+    const body = { ord: 40, state: 'laid', lines: [], lit: { left: [[[71, 600, 301, 608], [71, 588, 301, 596], [71, 576, 301, 584]]], right: [[[71, 600, 301, 608], [71, 588, 301, 596], [71, 576, 301, 584]]], own: [] } }
+    const v2With = (lit: object, extra: object[] = []) =>
+      v2Of({
+        members: [body, { ord: 41, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }, ...extra],
+        facts: [
+          { ord: 40, kind: 'para', align: 'j', style: { size: 6 }, lines: [factLine(72, 300, 601, 6), factLine(72, 300, 589, 6), factLine(72, 300, 577, 6)] },
+          { ord: 41, kind: 'heading', align: 'l', style: { size: 10 }, lines: [factLine(72, 300, 400)] },
+          { ord: 42, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(72, 300, 300)], els: [['3', 'display', [[100, 352, 250, 372, 360]], 1, 0, 0, 1, 0]] },
+        ],
+      })
+    const page = (lines = [line(400)]) => rec({ v2: { units: [{ id: 41, lines }], lit: [41] } })
+    const covers = (p: { diffs: { flag: string; what?: string }[] }) => highlights(p).filter((d) => !/fill or bridge/.test((d as { what?: string }).what ?? ''))
+    const fills = (p: { diffs: { flag: string; what?: string }[] }) => highlights(p).filter((d) => /fill or bridge/.test((d as { what?: string }).what ?? ''))
+    it("a one-row member's box 1 pt short of its line, padded by the page's half leading (2 pt): covered", () => {
+      expect(covers(measure(v2With({ right: [[[71, 399, 301, 407]]], left: [[[71, 397, 301, 409]]] }), page()))).toEqual([])
+    })
+    it('a row left uncovered is still unlit', () => {
+      expect(covers(measure(v2With({ right: [[[71, 399, 301, 407]]], left: [[[71, 397, 301, 409]]] }), page([line(400), line(380)])))).toMatchObject([{ unit: 'p41 heading', worse: true }])
+    })
+    it('a lit shape that covers the block below (a display) still fills it', () => {
+      expect(fills(measure(v2With({ right: [[[71, 397, 301, 409]], [[71, 340, 301, 396]]], left: [[[71, 397, 301, 409]]] }), page()))).toMatchObject([{ unit: 'p41 heading', worse: true }])
     })
   })
   describe('a figure text both translate, matched by its original box (today has no highlight on figure texts)', () => {
