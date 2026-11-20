@@ -401,13 +401,19 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   }
   // (the members v2 drew, by ord: a group's parts each judged by it, below)
   const drawnMembers = new Set()
+  // (the member each of v2's drawn lines is of: a joined group's lines are read as one unit's, but the block measure judges each
+  // of v2's against its own member's original lines and Room, fidelity.mjs)
+  const memberOfLine = new WeakMap()
   const drawn = (units, crops, keyOf, side) => {
     const out = new Map()
     for (const u of units) {
       if (!u.lines.some((l) => l.n > 0)) continue
       const ls = withCrops(u, crops)
       const key = keyOf(u.id)
-      if (side === 'v2') drawnMembers.add(u.id)
+      if (side === 'v2') {
+        drawnMembers.add(u.id)
+        for (const l of ls) memberOfLine.set(l, u.id)
+      }
       cropRows[side].set(key, (cropRows[side].get(key) ?? 0) + rowsApart(u, crops, ls))
       out.set(key, out.has(key) ? [...out.get(key), ...ls] : ls)
     }
@@ -1176,6 +1182,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       const o = orig.get(key)
       return o?.part === null || o?.part === undefined ? null : (v2.pages?.[n]?.members ?? []).find((m) => m.ord === o.part && m.fit)
     },
+    // (the member a line of v2's drawing is of, and that member's Page member with its fit: the block measure judges a joined
+    // group's line by its own member's facts)
+    memberOf: (line) => memberOfLine.get(line),
+    laidMember: (ord) => (v2.pages?.[n]?.members ?? []).find((m) => m.ord === ord && m.fit),
     groups: groups ?? [],
     keptByGroup: keptByGroup ?? new Set(),
     // (today's ords of the cells a rule's mark keeps or no row serves: no group's state, the coordinator's rulings of 2026-11-10)

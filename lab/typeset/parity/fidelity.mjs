@@ -368,15 +368,27 @@ export function measureFidelity(c) {
   // the unit's lowest original line on the page whose column (TeX's measure) it meets, the space below its own last line
   // there: a line over another of its own original lines in its column (laid on from the unit before over the rows it left,
   // beside a float TeX set inside the paragraph: 2608.16117v1 p17 t57, p19 t59) borrows nothing under its last. A run the
-  // part states no room under, no judgement (no TeX fact to judge by); one with no separation stated, its bottom alone
+  // part states no room under, no judgement (no TeX fact to judge by); one with no separation stated, its bottom alone. A joined
+  // group (verdict.mjs pieceGroups: a unit of today's cut into members of v2's) is its members' facts together, each original
+  // line with its own member's Room: a line of v2's judged against its own member's lines (v2 lays each member in its own
+  // block, so a member's line past its own room nears the next member's text), a line of today's (one unit over the group's
+  // rows) against all of them
   const borrowed = { today: new Map(), v2: new Map() }
   const pastLines = { today: new Map(), v2: new Map() }
   const roomOf = (key) => {
     const o = orig.get(key)
-    const m = o?.part !== null && o?.part !== undefined ? c.facts.get(o.part) : null
-    if (!m?.lines?.length || /figure/.test(o.kind ?? '')) return null
-    const runs = new Map((m.room?.runs ?? []).map(([j, ink, foot]) => [j, { ink, foot }]))
-    return { lines: m.lines.map((l, j) => ({ j, y: l[4], m0: Math.min(l[7], l[2]), m1: Math.max(l[8], l[3]), kept: l[9] & 1 })).filter((l, j) => m.lines[j][0] === n), runs, sep: m.room?.sep }
+    if (!o || /figure/.test(o.kind ?? '')) return null
+    const lines = [],
+      runs = new Map()
+    for (const ord of o.parts ?? []) {
+      const m = c.facts.get(ord)
+      if (!m?.lines?.length) continue
+      for (const [j, ink, foot] of m.room?.runs ?? []) runs.set(`${ord}:${j}`, { ink, foot })
+      m.lines.forEach((l, j) => {
+        if (l[0] === n) lines.push({ j: `${ord}:${j}`, ord, y: l[4], m0: Math.min(l[7], l[2]), m1: Math.max(l[8], l[3]), kept: l[9] & 1, sep: m.room?.sep })
+      })
+    }
+    return lines.length || runs.size ? { lines, runs } : null
   }
   for (const [side, M] of [['today', T], ['v2', V]])
     for (const [key, ls] of M) {
@@ -384,11 +396,15 @@ export function measureFidelity(c) {
       if (!r?.runs.size) continue
       let k = 0
       for (const l of flat(ls)) {
-        const column = r.lines.filter((o) => o.m1 > l.x0 && o.m0 < l.x1)
+        const own = side === 'v2' ? c.memberOf?.(l) : undefined
+        const byOwn = own !== undefined && r.lines.some((o) => o.ord === own)
+        const mine = byOwn ? r.lines.filter((o) => o.ord === own) : r.lines
+        const column = mine.filter((o) => o.m1 > l.x0 && o.m0 < l.x1)
         const over = column.length && column.every((o) => o.y > l.y + NEAR.room) ? column.sort((a, b) => a.y - b.y)[0] : null
         const run = over && r.runs.get(over.j)
         if (!run) continue
-        const free = r.sep === undefined ? run.foot : Math.min(run.foot, run.ink - r.sep)
+        const sep = over.sep
+        const free = sep === undefined ? run.foot : Math.min(run.foot, run.ink - sep)
         const past = over.y - Math.max(0, free) - l.y
         if (!(past > NEAR.room)) continue
         // (the borrow past TeX's text block bottom, the owner's ruling of 2026-11-12: a last line under the bottom by no more than
@@ -397,15 +413,15 @@ export function measureFidelity(c) {
         // state to read) where it is within the bound. Past the bound, nearer the next ink, or a v2 line no state names: as before)
         const below = over.y - run.foot - l.y,
           toInk = l.y - (over.y - run.ink)
-        const sepKept = r.sep === undefined || toInk >= r.sep - NEAR.room
+        const sepKept = sep === undefined || toInk >= sep - NEAR.room
         const bound = c.pastFoot ?? 0
-        const stated = side === 'v2' ? (c.laidOf?.(key)?.fit?.over ?? 0) : bound
+        const stated = side === 'v2' ? ((byOwn ? c.laidMember?.(own) : c.laidOf?.(key))?.fit?.over ?? 0) : bound
         if (sepKept && stated > 0 && below <= Math.min(stated, bound) + NEAR.room) continue
         k++
         // (each such line: how far under TeX's text block bottom it stands, and how far over the next ink's baseline, the room's
         // separation beside: the owner's ruling Fm reads them, rulings.mjs)
-        ;(pastLines[side].get(key) ?? pastLines[side].set(key, []).get(key)).push({ below: r2(below), toInk: r2(toInk), sep: r.sep ?? null })
-        fault(side, 'block', r.sep !== undefined && run.ink - r.sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
+        ;(pastLines[side].get(key) ?? pastLines[side].set(key, []).get(key)).push({ below: r2(below), toInk: r2(toInk), sep: sep ?? null })
+        fault(side, 'block', sep !== undefined && run.ink - sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
       }
       borrowed[side].set(key, k)
     }
