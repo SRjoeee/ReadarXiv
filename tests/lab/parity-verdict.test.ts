@@ -334,6 +334,31 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       expect(highlights(across([[71, 397, 301, 409], [311, 397, 541, 409]], [factLine(72, 540, 400)]))).toMatchObject([{ unit: 'p8 para', worse: true }])
     })
   })
+  describe("a unit's lit shape over the name that leads it on A (a proof's \"Proof.\") fills no other block (M6)", () => {
+    // (2610.21377v1 p35: the babel name "Proof." a member of its own, bound to the proof it leads (Placed.bound); the translation
+    // begins with "证明." and is lit whole, its shape on arXiv's page over the name's line too, which is the proof's own lead)
+    const fills = (o: { led?: Record<number, number>; heading?: boolean }) =>
+      measurePage(
+        'p-zh',
+        v2Of({
+          members: [{ ord: 31, state: 'laid', lines: [], lit: { left: [[[71, 485, 541, 521]]], right: [[[71, 485, 541, 509]]], own: [] } }],
+          facts: [
+            { ord: 30, kind: o.heading ? 'heading' : 'name', align: 'l', style: { size: 10 }, lines: [o.heading ? factLine(72, 300, 512) : factLine(72, 100, 500)] },
+            { ord: 31, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(105, 540, 500), factLine(72, 540, 488)] },
+          ],
+        }),
+        rec({ v2: { units: [{ id: 31, lines: [line(500), line(488)] }], lit: [31] } }),
+        { prepByOrd: new Map(), todayOf: new Map(), turned: new Set(), led: new Map(Object.entries(o.led ?? {}).map(([f, h]) => [Number(f), h])), top: new Set() },
+      )
+    const filledBlocks = (p: { diffs: { flag: string; what?: string }[] }) => highlights(p).filter((d) => /fill or bridge/.test(d.what ?? ''))
+    it('the name its unit is led by: its own, no other block', () => {
+      expect(filledBlocks(fills({ led: { 31: 30 } }))).toEqual([])
+    })
+    it('a line of another unit under the shape (a heading not leading it, or the name with no bond stated): another block', () => {
+      expect(filledBlocks(fills({ heading: true }))).toMatchObject([{ unit: 'p31 para', worse: true }])
+      expect(filledBlocks(fills({}))).toMatchObject([{ unit: 'p31 para', worse: true }])
+    })
+  })
   describe('a figure text both translate, matched by its original box (today has no highlight on figure texts)', () => {
     it('v2 without boxes: equal', () => {
       expect(highlights(measure(fig({}), rec({ today: todayFig, v2: v2Fig }), prepFig))).toEqual([])

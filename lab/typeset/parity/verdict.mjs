@@ -1419,8 +1419,11 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const lits = ords.map((o) => laidV2.get(o)?.lit).filter((lit) => lit && !lit.dir)
     if (!lits.length) continue
     const name = `${key} ${facts.get(ords[0])?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
-    // (another unit's lines: none of the key's own members', which the join by pieces makes one unit)
-    const onA = [...displaysHere, ...linesOnA.filter((b) => !ords.includes(b.ord))]
+    // (another unit's lines: none of the key's own members', which the join by pieces makes one unit, nor the run-in that leads
+    // one of them or follows it (`led`: a bound name's lead, Placed.join), whose text its translation says: a proof's "Proof.",
+    // which the translation's "证明." begins with, 2610.21377v1 p35)
+    const own = new Set([...ords, ...ords.map((o) => led?.get(o)).filter((o) => o !== undefined), ...[...(led ?? new Map())].filter(([, h]) => ords.includes(h)).map(([f]) => f)])
+    const onA = [...displaysHere, ...linesOnA.filter((b) => !own.has(b.ord))]
     const tb = litT.has(key) ? rec.today.litBoxes[key.slice(1)] : null
     const tShapes = (side) => (!tb ? [] : tb.by ? (tb[`${side}By`] ?? []) : [tb[side] ?? []])
     const dt = filled(tShapes('left'), onA) + filled(tShapes('right'), displaysHere)
