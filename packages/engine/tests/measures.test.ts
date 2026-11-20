@@ -456,5 +456,25 @@ describe('a paragraph set at an \hsize no column has (a box’s): placed by the 
   it('a lone line with no sibling of its width: no wider measure than itself, so that it is never widened past its ink', () => {
     const [one] = measuredOf([['z'.repeat(12), 0]], [[1, 0]], [{ para: 1, ...box }], [[0, 1]])
     expect(one).toEqual([[100, 172]])
+    // (a line TeX set overfull past the frame: its own extent, never wider than the frame's measure)
+    const [over] = measuredOf([['z'.repeat(80), 0]], [[1, 0]], [{ para: 1, ...box }], [[0, 1]])
+    expect(over).toEqual([[100, 540]])
+  })
+  it('a line TeX set overfull in a box fills nothing: the box placed by a line that fills it (2610.19159v1 p45’s)', () => {
+    const [one] = measuredOf(
+      [
+        ['x'.repeat(50), 0],
+        ['x'.repeat(60), 0],
+        ['x'.repeat(20), 0],
+      ],
+      [[1, 2]],
+      [{ para: 1, ...box }],
+      [[0, 1]],
+    )
+    expect(one).toEqual([
+      [100, 400],
+      [100, 400],
+      [100, 400],
+    ])
   })
 })

@@ -178,10 +178,11 @@ export function paragraphMeasures(w: Work): void {
  * the page's own lines TeX set at that \hsize there, as today's reader read a column from the page's lines. The lines of one page
  * whose paragraphs state the same \hsize, gathered where their extents meet (one box; two of one width side by side stay two),
  * each extent its ink widened by what TeX's statement puts between its ink and its measure (its line's indent and \leftskip on
- * the left, \rightskip and the shape's length short of \hsize on the right): where their spread is that \hsize within INK_EDGE
- * (a line TeX filled stands among them), the box's left is the spread's, and each line's measure is the box's, as a column's is.
- * Where no such lines stand (every line of the box short of its measure: a single line, a ragged box), the paragraph has no
- * wider measure than its own lines on the page: their extent, so that a single line is never widened past itself. Left at its
+ * the left, \rightskip and the shape's length short of \hsize on the right): the box's left is their leftmost, and where a line
+ * TeX filled stands among them (its extent's right at that left and the \hsize, within INK_EDGE; one TeX set overfull, past
+ * its measure, fills nothing), each line's measure is the box's, as a column's is. Where no such line stands (every line of the
+ * box short of its measure: a single line, a ragged box), the paragraph has no wider measure than its own lines on the page
+ * (their extent, never wider than its frame's), so that a single line is never widened past itself. Left at its
  * frame's, every line of 2610.19159v1's mdframed boxes stated the page's text block, 70.87..524.41, past the box's text edge
  * (511.66) and over its rule (523.88): a single line the typesetter widened to it ran its last glyph onto the rule
  */
@@ -208,10 +209,9 @@ function boxMeasures(boxed: readonly Boxed[]): void {
     }
     for (const box of boxes) {
       const left = Math.min(...box.map((z) => z.e[0])),
-        right = Math.max(...box.map((z) => z.e[1])),
         hsize = box[0]!.x.s.hsize,
         size = Math.max(...box.map((z) => z.x.l[10] ?? 0)) || 10
-      if (Math.abs(right - left - hsize) > INK_EDGE * size) continue
+      if (!box.some((z) => Math.abs(z.e[1] - left - hsize) <= INK_EDGE * size)) continue
       for (const { x } of box) {
         const [indent, length] = lineShape(x.s, x.k)
         x.l[7] = r2(left + indent + x.s.leftskip)
@@ -220,7 +220,7 @@ function boxMeasures(boxed: readonly Boxed[]): void {
       }
     }
   }
-  // (no wider than its own lines: by paragraph and page, their ink's extent)
+  // (no wider than its own lines: by paragraph and page, their ink's extent, inside its frame's measure)
   const own = new Map<string, Boxed[]>()
   for (const x of boxed) {
     if (placed.has(x)) continue
@@ -231,8 +231,8 @@ function boxMeasures(boxed: readonly Boxed[]): void {
     const x0 = Math.min(...xs.map((x) => x.l[2])),
       x1 = Math.max(...xs.map((x) => x.l[3]))
     for (const { l } of xs) {
-      l[7] = r2(x0)
-      l[8] = r2(x1)
+      l[7] = r2(Math.max(x0, l[7]))
+      l[8] = r2(Math.min(x1, l[8]))
     }
   }
 }
