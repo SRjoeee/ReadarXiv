@@ -85,6 +85,13 @@ export async function launchWithReader({ profile = 'reader', extension = BUILD, 
   }
   context.once('close', () => { if (!closing) removeTemporary() })
   const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'))
+  // (the browser's own interface language, which the worker keeps, beside the one stated: where they differ, a page closed can
+  // leave its sibling extension pages in the browser's own and a reader page reload itself (chromium.mjs): said, so that a run on
+  // such a machine knows its world is not the one stated)
+  if (language) {
+    const own = await worker.evaluate(() => chrome.i18n.getUILanguage()).catch(() => null)
+    if (own && own !== language) console.log(`NOTE the browser's own interface language is ${own}, the pages' ${language}: a page closed can leave its sibling extension pages in ${own} (tests/e2e/lib/chromium.mjs)`)
+  }
   const id = new URL(worker.url()).host, base = `chrome-extension://${id}/pdf-reader.html`
   return { context, worker, id, readerUrl: query => `${base}?${typeof query === 'string' ? query : new URLSearchParams(query)}` }
 }
