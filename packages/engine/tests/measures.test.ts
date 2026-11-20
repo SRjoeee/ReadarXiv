@@ -64,12 +64,12 @@ const plain = { hsize: 468, hangindent: 0, hangafter: 1, leftskip: 0, rightskip:
 /** lines each [text, unit], one under the other; TeX's ends with a point on B (`ends`: [serial, the line it ends after]); the
  *  statements `measures` and the units' paragraphs by TeX's order (`paras`: [unit, serial]); the members' lines' measures */
 function measuredOf(
-  lines: [string, number][],
+  lines: [string, number, number?][],
   ends: [number, number][],
   measures: Measure[],
   paras: [number, number][],
 ) {
-  const B: Doc = docOf([{ lines: lines.map(([text], i) => ({ text, x: 100, y: 700 - 12 * i })) }])
+  const B: Doc = docOf([{ lines: lines.map(([text, , x], i) => ({ text, x: x ?? 100, y: 700 - 12 * i })) }])
   const n = (k: number) => lines.slice(0, k).reduce((t, [x]) => t + x.length, 0)
   B.pages[0]!.marks = {
     paras: [],
@@ -459,6 +459,23 @@ describe('a paragraph set at an \hsize no column has (a box’s): placed by the 
     // (a line TeX set overfull past the frame: its own extent, never wider than the frame's measure)
     const [over] = measuredOf([['z'.repeat(80), 0]], [[1, 0]], [{ para: 1, ...box }], [[0, 1]])
     expect(over).toEqual([[100, 540]])
+  })
+  it('the box’s left is where its unindented lines start: a glyph protruded left of them moves it not', () => {
+    // (2610.19159v1 p41: one line's first glyph at 82.43, the box's lines at 83.62; placed at the leftmost, the box's right
+    // stood 1.2 pt short of its lines' ends)
+    const [one] = measuredOf(
+      [
+        ['x'.repeat(50), 0],
+        ['x'.repeat(50), 0, 99],
+        ['x'.repeat(50), 0],
+        ['x'.repeat(20), 0, 106],
+      ],
+      [[1, 3]],
+      [{ para: 1, ...box }],
+      [[0, 1]],
+    )
+    expect(one.map((l) => l[0])).toEqual([100, 100, 100, 100])
+    expect(one.map((l) => l[1])).toEqual([400, 400, 400, 400])
   })
   it('a line TeX set overfull in a box fills nothing: the box placed by a line that fills it (2610.19159v1 p45’s)', () => {
     const [one] = measuredOf(

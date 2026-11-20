@@ -7637,8 +7637,10 @@ bytes it was.
     (`measureKept`: a measure that is not the full `\hsize`, or an `\hsize` no page's frame has, its block's or a column's);
     kept for the shapes alone, a box's plain paragraph was dropped and its lines kept the frame's measure. Those lines of one page, gathered where their extents meet (one box;
     two of one width side by side stay two), each extent its ink widened by what TeX's statement puts between its ink and its
-    measure (its indent and `\leftskip`, its `\rightskip` and its shape's length short of `\hsize`): the box's left is their
-    leftmost, and where a line TeX filled stands among them (its extent's right at that left and the `\hsize`, within 0.25 em
+    measure (its indent and `\leftskip`, its `\rightskip` and its shape's length short of `\hsize`): the box's left is where
+    its unindented lines start (the median start of those within 0.25 em of the leftmost: a glyph microtype protrudes stands a
+    fraction of an em left of them, 2610.19159v1 p41's at 82.43 where the box's lines start at 83.62), and where a line TeX
+    filled stands among them (its extent's right at that left and the `\hsize`, within 0.25 em
     of their size, the typesetter's ONE_EDGE, §18.94; a line TeX set overfull runs past it and fills nothing: 2610.19159v1
     p45's box holds one to 575.98) every line's measure is the box's, as a column's is. Where no such line stands (each line of
     the box short of its measure: a single line, a ragged box), the paragraph has no wider measure than its own lines on the

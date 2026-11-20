@@ -178,8 +178,9 @@ export function paragraphMeasures(w: Work): void {
  * the page's own lines TeX set at that \hsize there, as today's reader read a column from the page's lines. The lines of one page
  * whose paragraphs state the same \hsize, gathered where their extents meet (one box; two of one width side by side stay two),
  * each extent its ink widened by what TeX's statement puts between its ink and its measure (its line's indent and \leftskip on
- * the left, \rightskip and the shape's length short of \hsize on the right): the box's left is their leftmost, and where a line
- * TeX filled stands among them (its extent's right at that left and the \hsize, within INK_EDGE; one TeX set overfull, past
+ * the left, \rightskip and the shape's length short of \hsize on the right): the box's left is where its unindented lines start,
+ * the median start of those within INK_EDGE of the leftmost (a glyph microtype protrudes stands a fraction of an em left of it,
+ * 2610.19159v1 p41's at 82.43 where the box's lines start at 83.62), and where a line TeX filled stands among them (its extent's right at that left and the \hsize, within INK_EDGE; one TeX set overfull, past
  * its measure, fills nothing), each line's measure is the box's, as a column's is. Where no such line stands (every line of the
  * box short of its measure: a single line, a ragged box), the paragraph has no wider measure than its own lines on the page
  * (their extent, never wider than its frame's), so that a single line is never widened past itself. Left at its
@@ -208,9 +209,14 @@ function boxMeasures(boxed: readonly Boxed[]): void {
       else boxes.push([y])
     }
     for (const box of boxes) {
-      const left = Math.min(...box.map((z) => z.e[0])),
-        hsize = box[0]!.x.s.hsize,
-        size = Math.max(...box.map((z) => z.x.l[10] ?? 0)) || 10
+      const hsize = box[0]!.x.s.hsize,
+        size = Math.max(...box.map((z) => z.x.l[10] ?? 0)) || 10,
+        least = Math.min(...box.map((z) => z.e[0]))
+      const starts = box
+        .map((z) => z.e[0])
+        .filter((x) => x <= least + INK_EDGE * size)
+        .sort((a, b) => a - b)
+      const left = starts[(starts.length - 1) >> 1]!
       if (!box.some((z) => Math.abs(z.e[1] - left - hsize) <= INK_EDGE * size)) continue
       for (const { x } of box) {
         const [indent, length] = lineShape(x.s, x.k)
