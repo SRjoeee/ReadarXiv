@@ -7626,11 +7626,33 @@ bytes it was.
   its one line then centred; 2411.13093v4 p14's and 2608.15016v1 p2's one-line captions read as a hung paragraph's later line,
   2608.16745v1 p7's and 2610.19860v1 p5's (in no paragraph at all) as the next paragraph's. Its rank TeX's
   line number (B's order, a row two members share one line), its box at the left edge of its frame's column whose width is the
-  paragraph's `\hsize` (else the text block of that width; a minipage's, a `\parbox`'s or a p column's paragraph states none:
-  where its box stands TeX's statement does not say), shifted by the line's `\parshape` indent (its last entry past it) or its
+  paragraph's `\hsize` (else the text block of that width; a paragraph of another `\hsize`, a minipage's, a `\parbox`'s,
+  mdframed's, where TeX's statement does not say where its box stands: below), shifted by the line's `\parshape` indent (its last entry past it) or its
   `\hangindent` (after `\hangafter` lines, or the first `|\hangafter|`; a negative one hangs on the right), from `\leftskip`'s
   natural size to its length less `\rightskip`'s. A display inside the paragraph counts three lines to TeX's shape: where the
   shape varies by line, the lines after a held row state none. A table cell, a figure text and a name keep their measure.
+  - **A box's paragraph** (`locate/measures.ts` boxMeasures; lane c4-boxes, the coordinator's ruling 2 of 2026-11-20): a
+    paragraph TeX set at an `\hsize` no column of its frame has is placed by the page's own lines set at that `\hsize`, as
+    today's reader read a column from the page's lines. The instrument keeps its statement though it states no shape
+    (`measureKept`: a measure that is not the full `\hsize`, or an `\hsize` no page's frame has, its block's or a column's);
+    kept for the shapes alone, a box's plain paragraph was dropped and its lines kept the frame's measure. Each line's extent
+    is its ink widened by what TeX's statement puts between its ink and its measure (its indent and `\leftskip`, its
+    `\rightskip` and its shape's length short of `\hsize`). The starts of the lines of one page and one `\hsize`, gathered
+    within 0.25 em of their size (the typesetter's ONE_EDGE, §18.94), each give a left, the median of its own (a glyph microtype
+    protrudes stands a fraction of an em left of the edge: 2610.19159v1 p41's at 82.43, the box's lines at 83.62); a box stands at
+    a left where a line that starts in it ends at that left and the `\hsize`, within that: TeX filled it (a box of two-line
+    paragraphs, each first line indented and each last short, takes its left from the last lines and its end from the first:
+    2610.19159v1 p36; two of one width side by side stay two). A paragraph of that `\hsize` is the box's where at least half of
+    its lines on the page stand in it (a line TeX set overfull runs past it and goes with its paragraph: 2610.19159v1 p45's to
+    575.98), and every line's measure is the box's, as a column's is. Any other (no line fills its box: a single line, a ragged box, subcaptions centred in
+    their minipages: 2608.16117v1 p18's three, one centred across the other two, were first read as one box) has no wider
+    measure than its own lines on the page, their ink's extent, never wider than its frame's: the safe end, a single line then
+    never widened past itself. Left at its frame's, every line of
+    2610.19159v1's mdframed boxes stated the page's text block, 70.87..524.41, past the box's text edge (511.66) and over its
+    rule (523.88), and the typesetter's widening of a single line (`unit/decor.ts` widen, its column `Line[7..8]`) ran the
+    line's last glyph onto the rule (p19, p36, p43, p46; 27 lines of the paper laid to 524.41). The fuller form, not built:
+    the marked compile states where each paragraph's measure starts (a position point at LaTeX's `para/begin`, the indent box
+    set aside), so that no ink is read and a box no line fills is placed too.
   - What moves: every line of a list item, a quotation, a bibliography entry (lists: `\parshape 1 \@totalleftmargin
     \linewidth`), a wrapped paragraph, a hung or skipped one, gains TeX's measure where it had its column's; with it a single
     line's room to widen into (the typesetter's `sideOf`, a name's), the alignment read of a one-line item (facts.ts alignOf reads
@@ -7930,6 +7952,17 @@ where it stands as a mark.
   list, each `\textbullet The …`). A first reading made every symbol of the table the edge there, §18.30's eleven with them, and
   moved 72 units in 24 papers whose cell or paragraph opens with `\#`, `\%`, `\$` or `\textbar` ("# layers", "$/1M tokens"),
   each a unit sent whole before, to an edge and a shorter text: the statement put them back.
+- **The edge is drawn once, by the original's ink** (`locate/geometry.ts`, the element's statement; `lay/read.ts`, its reading;
+  lane c4-boxes, the coordinator's ruling 1 of 2026-11-20). A symbol or a space of no ink that TeX set before the unit's start
+  point (the instrument's `outside`: `\textbullet` and the `\ ` after it) is stated El.keep, as a piece of a class drawn from
+  its ink is; its glyph is the member's label, kept, and the lay draws the kept symbol or space as nothing, in place. Stated as
+  a symbol to draw, the lay drew "• " from its `sym` at the text's start beside the bullet that stayed: every item of
+  2610.19159v1's hand-made lists read "• •" (89 members on 27 pages of the display gate's 90 pairs: 2610.19159v1-ja 44,
+  -zh 44, and 2610.21924v1-zh p1's `\textsuperscript{*}` before "Corresponding author", its label's star and a full-size one).
+  A symbol inside the text, after its first word, has no El.keep and is drawn from its symbol as before; a label that is a
+  number has no element before the start and is laid as before. Today's reader carried the run `\smallskip \noindent
+  \textbullet\ ` as one marker, the bullet the unit's text, erased and drawn once from the marker. What moves: the parts (an
+  El.keep on those elements), no unit and no row.
 - **The lab's differential reads the same** (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`): today's TeX of a
   unit as the candidate writes it, each symbol a character where `textSymbolHere` reads it so over the pieces before it, from
   TEXT_CHARACTERS; it held a copy of §18.30's eleven, which stated a unit with another symbol of the table by a weaker reading or
@@ -11288,8 +11321,25 @@ headings whose translation ends a line over their shared row (2610.20808v1 p26's
 does not measure, their text now on that line after the original's separation. A drawing rule, no version (§18.3).
 
 **A group TeX set as a paragraph of its own (2026-11-06; the release sweep of e4be8723, its item 2).** The front end ends a unit
-where the source ends a paragraph (a blank line, `\par`), never inside a command's argument; so a box a command makes of its
-argument under a paragraph's text is the same unit as that text. 2608.25210v2 p3's prompts are such units (55 to 57): an item's
+where the source ends a paragraph (a blank line, `\par`, or one of TeX's vertical commands once the unit's text has begun:
+below), never inside a command's argument; so a box a command makes of its argument under a paragraph's text is the same unit as
+that text.
+
+**A vertical command ends the paragraph it meets (lane c4-boxes, the coordinator's ruling 3 of 2026-11-20).** In horizontal mode
+TeX inserts `\par` before a vertical command and reads the command again in vertical mode (the TeXbook, chapter 25, "Summary of
+horizontal mode", ⟨vertical command⟩; tex.web §1094, `head_for_vmode`): `\vskip` and its forms `\vfil`, `\vfill`, `\vss`,
+`\vfilneg`, `\hrule`, `\unvbox`, `\unvcopy`, `\halign`, `\end` and `\dump`. The source reader (`source/latex-front.ts`
+VERTICAL_COMMANDS) ends the unit at the first nine where its text has begun (its first word come, as the start mark reads it),
+as at `\par`; the command is read again as the next unit's head, which the start mark passes over, its ink the original's.
+TeX's `\end` is LaTeX's `\@@end` (latex.ltx makes `\end` an environment's, which the walk reads as one) and `\dump` no
+document's. LaTeX's `\vspace` is none (in a paragraph a `\vadjust`), nor `\\`, `\newline` or `\vadjust`: they stay
+inside it. Before the unit's text has begun nothing ends (the rules over a title stay its head); a name the paper defines is
+its own command. Read inside the unit, 2610.21765v1 p3's protocol box, `{\bf Protocol for QRE - Odd $N$-cycle} \vspace{0.2cm}
+\hrule \vspace{0.2cm} \textbf{Procedure}` with no blank line, was one unit of two of TeX's paragraphs, the rule between them an
+element of its text: drawn as an inline crop on the second line, it pushed "Procedure" to the line's far end and shrank the title
+(today's reader found no ink for the rule and left the unit English). Over the lab's 245 papers' units (the chain's dumps at
+afd529329) the rule cuts 8 units of 3 papers (2608.18502v1 5, 2610.21765v1 2, 2610.21106v1 1): `\vskip` 6, `\hrule` 2; 7 with
+text after the command, 1 with none (its trailing rule no piece of it). The cut units take new ids, their rows asked again. 2608.25210v2 p3's prompts are such units (55 to 57): an item's
 text, "response_equal_llm.: [sentence_1] and [sentence_2] are placeholders for two test sentences.", then `\mypython{…}`, the
 prompt in a frame at 7.97 pt where the item is 8.97, its lines 8.3 pt further in. Laid as one paragraph, one block of all its
 lines, the translation ran on from the item's short last line to the column's edge, over the frame's top border and past its right

@@ -104,6 +104,51 @@ describe('the reading from the part', () => {
     expect(read(member({ els: [['0', { kind: 'symbol', ink: [], sym: ['%'] }]] }), pieces).unproven).toBe(-1)
     expect(read(member({ els: [['0', { kind: 'zero', ink: [] }]] }), pieces).unproven).toBe(-1)
   })
+  it('draws a typed bullet set before the unit’s start once: the label’s ink kept, its symbol and its space drawn as nothing', () => {
+    // (PDF-READER §18.83: a hand-made list's item, `\\noindent\\textbullet\\ The …`; the bullet's glyph the member's label, kept
+    // as the original's, and its two elements El.keep. Drawn from its symbol, the item read "• •": 2610.19159v1's 44 items)
+    const bullet = {
+      ink: [1, 72, 700, 75.2, 704.2, 700],
+      kind: 'number',
+      line: 0,
+      punct: ['•', [1, 72, 700, 75.2, 704.2, 700]],
+      style: { role: 'serif', size: 10, design: 'NimbusRomNo9L-Regu' },
+    } as unknown as NonNullable<Placed['label']>
+    const lines: Placed['lines'] = [[1, 0, 77.5, 300, 700, 707, 698, 72, 300, 0, 10]]
+    const pieces = [
+      { t: 'ph', src: '\\textbullet', k: 0 } as V0Piece,
+      { t: 'ph', src: '\\ ', k: 1 } as V0Piece,
+      { t: 'text', tr: true, s: 'Die Schranke gilt.' } as V0Piece,
+    ]
+    const els: Placed['els'] = [
+      ['0', { kind: 'symbol', ink: [], sym: ['•'], keep: 1 }],
+      ['1', { kind: 'space', ink: [], copy: ' ', keep: 1 }],
+    ]
+    const got = read(member({ label: bullet, lines, els }), pieces)
+    expect(got.resolutions.get(0)).toMatchObject({ mode: 'none', text: '', inPlace: true })
+    expect(got.resolutions.get(1)).toMatchObject({ mode: 'none', text: '', inPlace: true })
+    const words = (got.tokens as unknown as { s?: string }[]).flatMap((t) => (t.s?.trim() ? [t.s] : []))
+    expect(words).toEqual(['Die', 'Schranke', 'gilt.'])
+    // (a symbol the author wrote inside the text, after its first word: no El.keep, drawn from its symbol as before)
+    const inText = read(member({ label: bullet, lines, els: [['1', { kind: 'symbol', ink: [], sym: ['§'] }]] }), [
+      { t: 'text', tr: true, s: 'Siehe ' } as V0Piece,
+      { t: 'ph', src: '\\S', k: 1 } as V0Piece,
+      { t: 'text', tr: true, s: ' 3.' } as V0Piece,
+    ])
+    expect(inText.resolutions.get(1)).toMatchObject({ mode: 'symbol', text: '§' })
+    // (a numbered item, its label "1." kept and nothing of the label's in its text: its text alone, as before)
+    const one = {
+      ...bullet,
+      punct: undefined,
+      num: ['1.', [1, 72, 700, 80, 707, 700]],
+    } as unknown as NonNullable<Placed['label']>
+    const numbered = read(member({ label: one, lines }), [{ t: 'text', tr: true, s: 'Die Schranke gilt.' } as V0Piece])
+    expect((numbered.tokens as unknown as { s?: string }[]).flatMap((t) => (t.s?.trim() ? [t.s] : []))).toEqual([
+      'Die',
+      'Schranke',
+      'gilt.',
+    ])
+  })
   it('draws a paper’s own macro whose span the instrument states empty as nothing, its unit read', () => {
     // (2610.19159v1's `\\trajectoryMark{}`, which sets nothing for an empty argument: the marked compile's two points around it hold
     // no glyph, the part's El.text '' with no ink, TeX set none; texParts' inklessOf, drawn as nothing and proven, where an El of

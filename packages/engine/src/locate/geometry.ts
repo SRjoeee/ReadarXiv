@@ -654,6 +654,12 @@ export function lineGeometry(w: Work, owned: Owned): void {
           mem.told.add(id)
         }
       }
+      // (a symbol or a space of no ink TeX set before the unit's start point, outside its text (the instrument's `outside`): the
+      // unit's edge the start mark passes over, its ink the original's, kept with the label (PDF-READER §18.83), El.keep, drawn
+      // as nothing. Stated as a symbol to draw, it was drawn beside the bullet that stays: 2610.19159v1's 44 items of a
+      // hand-made list, `\noindent\textbullet\ The …`, read "• •")
+      else if (!ink.length && (stated === 'symbol' || stated === 'space') && outsidePiece.has(`${mem.unit}|${id}`))
+        el.keep = 1
       mem.elements.push([id, el])
     }
     // its trail (phase 2, trails.ts): an element of no piece, its ink a crop's, its text its glyphs'

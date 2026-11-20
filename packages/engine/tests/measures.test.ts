@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import type { Doc } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
+import { measureKept } from '../src/locate/measures.ts'
 import { docOf } from './helpers/doc.ts'
 import { locate } from './helpers/locate.ts'
 
@@ -63,12 +64,12 @@ const plain = { hsize: 468, hangindent: 0, hangafter: 1, leftskip: 0, rightskip:
 /** lines each [text, unit], one under the other; TeX's ends with a point on B (`ends`: [serial, the line it ends after]); the
  *  statements `measures` and the units' paragraphs by TeX's order (`paras`: [unit, serial]); the members' lines' measures */
 function measuredOf(
-  lines: [string, number][],
+  lines: [string, number, number?][],
   ends: [number, number][],
   measures: Measure[],
   paras: [number, number][],
 ) {
-  const B: Doc = docOf([{ lines: lines.map(([text], i) => ({ text, x: 100, y: 700 - 12 * i })) }])
+  const B: Doc = docOf([{ lines: lines.map(([text, , x], i) => ({ text, x: x ?? 100, y: 700 - 12 * i })) }])
   const n = (k: number) => lines.slice(0, k).reduce((t, [x]) => t + x.length, 0)
   B.pages[0]!.marks = {
     paras: [],
@@ -380,7 +381,181 @@ describe('a paragraph’s measure as TeX sets its lines (F13)', () => {
     }
     // (a paragraph whose \hsize is the text block's, a two-column float's: placed at the block's left)
     expect(measuresOf([{ para: 1, ...plain, shape: [[20, 400]] }], two)[0]![0]).toEqual([92, 492])
-    // (a minipage's paragraph: its \hsize 300, where it stands on the page TeX's statement does not say)
-    expect(measuresOf([{ para: 1, ...plain, hsize: 300, shape: [[20, 200]] }])[0]![0]).toEqual([72, 540])
+    // (a minipage's paragraph: its \hsize 300, where it stands on the page TeX's statement does not say, and no line of the page
+    // set at that width fills it: no wider measure than its own lines, their ink's extent; never its frame's)
+    expect(measuresOf([{ para: 1, ...plain, hsize: 300, shape: [[20, 200]] }])[0]![0]).toEqual([100, 202])
+  })
+})
+
+describe('a paragraph set at an \hsize no column has (a box’s): placed by the page’s lines set at that width (the coordinator’s ruling 2 of 2026-11-20)', () => {
+  const box = { ...plain, hsize: 300 }
+  it('a paragraph in a framed box narrower than its column: the box’s measure where its lines’ spread is its \hsize', () => {
+    // (2610.19159v1's mdframed boxes: every line stated the page's text block, 72..540 here, a single line widened onto the
+    // box's rule; a box at 100 of \hsize 300, a paragraph of two full lines and a short last one, and a one-line paragraph
+    // after it in the same box)
+    const [one, two] = measuredOf(
+      [
+        ['x'.repeat(50), 0],
+        ['x'.repeat(50), 0],
+        ['x'.repeat(20), 0],
+        ['y'.repeat(12), 1],
+      ],
+      [
+        [1, 2],
+        [2, 3],
+      ],
+      [
+        { para: 1, ...box },
+        { para: 2, ...box },
+      ],
+      [
+        [0, 1],
+        [1, 2],
+      ],
+    )
+    expect(one).toEqual([
+      [100, 400],
+      [100, 400],
+      [100, 400],
+    ])
+    // (the lone line takes the box's measure from its sibling's lines: it may widen to the box's edge, never past it)
+    expect(two).toEqual([[100, 400]])
+  })
+  it('a paragraph of its column’s own width as before', () => {
+    const [one] = measuredOf(
+      [
+        ['x'.repeat(50), 0],
+        ['x'.repeat(20), 0],
+      ],
+      [[1, 1]],
+      [{ para: 1, ...plain }],
+      [[0, 1]],
+    )
+    expect(one).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+  })
+  it('the instrument keeps a box’s statement of no shape: an \\hsize no page’s frame has; a column’s full width as before', () => {
+    const frames = [
+      {
+        block: [72, 540],
+        columns: [
+          [72, 300],
+          [312, 540],
+        ],
+      },
+    ]
+    expect(measureKept({ ...plain, hsize: 228 }, frames)).toBe(false)
+    expect(measureKept({ ...plain, hsize: 468 }, frames)).toBe(false)
+    expect(measureKept({ ...plain, hsize: 428.03 }, frames)).toBe(true)
+    expect(measureKept({ ...plain, hsize: 228, leftskip: 10 }, frames)).toBe(true)
+    // (no frame stated: nothing to tell a box's width from, as before)
+    expect(measureKept({ ...plain, hsize: 428.03 }, [null])).toBe(false)
+  })
+  it('a lone line with no sibling of its width: no wider measure than itself, so that it is never widened past its ink', () => {
+    const [one] = measuredOf([['z'.repeat(12), 0]], [[1, 0]], [{ para: 1, ...box }], [[0, 1]])
+    expect(one).toEqual([[100, 172]])
+    // (a line TeX set overfull past the frame: its own extent, never wider than the frame's measure)
+    const [over] = measuredOf([['z'.repeat(80), 0]], [[1, 0]], [{ para: 1, ...box }], [[0, 1]])
+    expect(over).toEqual([[100, 540]])
+  })
+  it('the box’s left is where its unindented lines start: a glyph protruded left of them moves it not', () => {
+    // (2610.19159v1 p41: one line's first glyph at 82.43, the box's lines at 83.62; placed at the leftmost, the box's right
+    // stood 1.2 pt short of its lines' ends)
+    const [one] = measuredOf(
+      [
+        ['x'.repeat(50), 0],
+        ['x'.repeat(50), 0, 99],
+        ['x'.repeat(50), 0],
+        ['x'.repeat(20), 0, 106],
+      ],
+      [[1, 3]],
+      [{ para: 1, ...box }],
+      [[0, 1]],
+    )
+    expect(one!.map((l) => l[0])).toEqual([100, 100, 100, 100])
+    expect(one!.map((l) => l[1])).toEqual([400, 400, 400, 400])
+  })
+  it('a box of two-line paragraphs, each first line indented and each last short: its left from the last lines, its end from the first', () => {
+    // (2610.19159v1 p36: no line of the box both starts at its edge and fills it; a one-line heading in it takes its measure)
+    const [one, two, head] = measuredOf(
+      [
+        ['x'.repeat(48), 0, 112],
+        ['x'.repeat(10), 0],
+        ['y'.repeat(48), 1, 112],
+        ['y'.repeat(14), 1],
+        ['z'.repeat(5), 2, 103],
+      ],
+      [
+        [1, 1],
+        [2, 3],
+        [3, 4],
+      ],
+      [
+        { para: 1, ...box },
+        { para: 2, ...box },
+        { para: 3, ...box },
+      ],
+      [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+      ],
+    )
+    expect(one).toEqual([
+      [100, 400],
+      [100, 400],
+    ])
+    expect(two).toEqual([
+      [100, 400],
+      [100, 400],
+    ])
+    expect(head).toEqual([[100, 400]])
+  })
+  it('boxes of one width side by side stay two; a paragraph standing in neither is no box’s (2608.16117v1 p18’s subcaptions)', () => {
+    // (two boxes of \hsize 150, at 100 and 260, each filled by its line; a third paragraph of that width centred across the two)
+    const [a, b, c] = measuredOf(
+      [
+        ['a'.repeat(25), 0, 100],
+        ['b'.repeat(25), 1, 260],
+        ['c'.repeat(20), 2, 200],
+      ],
+      [
+        [1, 0],
+        [2, 1],
+        [3, 2],
+      ],
+      [
+        { para: 1, ...plain, hsize: 150 },
+        { para: 2, ...plain, hsize: 150 },
+        { para: 3, ...plain, hsize: 150 },
+      ],
+      [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+      ],
+    )
+    expect(a).toEqual([[100, 250]])
+    expect(b).toEqual([[260, 410]])
+    expect(c).toEqual([[200, 320]])
+  })
+  it('a line TeX set overfull in a box fills nothing: the box placed by a line that fills it (2610.19159v1 p45’s)', () => {
+    const [one] = measuredOf(
+      [
+        ['x'.repeat(50), 0],
+        ['x'.repeat(60), 0],
+        ['x'.repeat(20), 0],
+      ],
+      [[1, 2]],
+      [{ para: 1, ...box }],
+      [[0, 1]],
+    )
+    expect(one).toEqual([
+      [100, 400],
+      [100, 400],
+      [100, 400],
+    ])
   })
 })

@@ -33,6 +33,7 @@ import {
 import { groupFacts } from '../marks/faces.ts'
 import { holdsLetter } from '../locate/figure-lines.ts'
 import { linkTargetOf, unicodeOf } from '../locate/ink.ts'
+import { measureKept } from '../locate/measures.ts'
 import { ownersOf, ROLE } from '../instrument.ts'
 import { readPdf } from '../read.ts'
 import { runIns } from '../marks/run-ins.ts'
@@ -2440,9 +2441,10 @@ export async function instrumentOf({
   const whole = readWhole(lastTexLog(log))
   const bodySides = [...readBodies(lastTexLog(log))].map(([n, b]): [number, 0 | 1 | 2] => [n, b.side])
   const paras = [...readParas(lastTexLog(log))]
-  // (each paragraph's measure as TeX breaks it, STATEMENTS_TEX's AXT-MEASURE: those that are not the full \hsize)
+  // (each paragraph's measure as TeX breaks it, STATEMENTS_TEX's AXT-MEASURE: those that are not the full \hsize, and those of an
+  // \hsize no page's frame has, a box's: locate/measures.ts measureKept)
   const measures = [...readMeasures(lastTexLog(log))]
-    .filter(([, x]) => x.shape || x.hangindent !== 0 || x.leftskip !== 0 || x.rightskip !== 0)
+    .filter(([, x]) => measureKept(x, frames))
     .map(([para, x]) => ({ para, ...x }))
   // (each placeholder's two points `p<u>.<k>a` and `p<u>.<k>b`, u the unit's index, k its piece's: where the element begins
   // and ends in B's stream)

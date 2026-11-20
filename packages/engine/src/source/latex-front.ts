@@ -3085,10 +3085,7 @@ const joinSkips = <Q extends SourcePiece<WalkFile>>(a: TextPiece, b: TextPiece, 
  */
 export function textSymbolHere(char: string, before: readonly PieceLike[]): boolean {
   if (char.charCodeAt(0) < 0x80) return true
-  const begun = before.some(
-    (p) => (p.t === 'text' && /\S/.test(p.s ?? '')) || (p.t === 'ph' && firstWordPiece(p.src ?? '')),
-  )
-  if (!begun) return false
+  if (!textBegun(before)) return false
   if (!NOTE_MARKS.has(char)) return true
   for (let k = before.length - 1; k >= 0; k--) {
     const p = before[k]!
@@ -3099,6 +3096,28 @@ export function textSymbolHere(char: string, before: readonly PieceLike[]): bool
 }
 /** a piece as textSymbolHere reads one: its kind, its text, its source */
 type PieceLike = { t: string; s?: string; src?: string }
+/** whether a unit's text has begun after the pieces `before`: its first word come, as the start mark reads it (a text piece, or a
+ *  placeholder that is a first word, firstWordPiece) */
+const textBegun = (before: readonly PieceLike[]) =>
+  before.some((p) => (p.t === 'text' && /\S/.test(p.s ?? '')) || (p.t === 'ph' && firstWordPiece(p.src ?? '')))
+/**
+ * TeX's vertical commands: in horizontal mode TeX inserts \par before each and reads it again in vertical mode (the TeXbook,
+ * chapter 25, "Summary of horizontal mode", ⟨vertical command⟩; tex.web §1094, head_for_vmode): \vskip and its forms \vfil,
+ * \vfill, \vss, \vfilneg; \hrule; \unvbox, \unvcopy; \halign; \end, \dump. TeX's \end is LaTeX's \@@end (latex.ltx
+ * redefines \end as an environment's, which the walk reads as one) and \dump no document's, so the walk's are the first nine.
+ * LaTeX's \vspace is none (a \vadjust in a paragraph), nor \\, \newline, \vadjust: they stay inside it
+ */
+const VERTICAL_COMMANDS: ReadonlySet<string> = new Set([
+  'vskip',
+  'vfil',
+  'vfill',
+  'vss',
+  'vfilneg',
+  'hrule',
+  'unvbox',
+  'unvcopy',
+  'halign',
+])
 class Builder<F extends WalkFile = WalkFile> {
   declare file: F
   declare units: SourceUnit<F>[]
@@ -5691,6 +5710,12 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       if (m) e += m[0].length
     }
     endText()
+    // (a vertical command where the unit's text has begun ends the paragraph TeX is setting, as \par does (VERTICAL_COMMANDS):
+    // the unit ends before it, and it is read again as the next one's head, which the start mark passes over, its ink the
+    // original's. Read inside the unit, 2610.21765v1 p3's `{\bf Protocol …} \vspace{…} \hrule \vspace{…} \textbf{Procedure}` was one
+    // unit of two of TeX's paragraphs, the rule between them drawn as an inline element of its translation; before the text, as
+    // the rules over that title, nothing ends. A name the paper defines is its own command)
+    if (VERTICAL_COMMANDS.has(name) && !ctx.macros.has(name) && textBegun(b.cur?.pieces ?? [])) b.flush()
     b.ph(s.slice(i, e), i, e)
     // a command with a letter name eats the following spaces in TeX; keep them with it
     i = e
