@@ -3490,7 +3490,11 @@ and the next paragraph's first line stays on TeX's baseline, so the gap stayed t
 2610.20967v1 page 4, a one-line continuation 10.41 pt over a paragraph spread to 13.43 and under one spread to 14.78, in a
 paper with no `\parskip` whose original reads evenly. Where the paragraph over it cannot end higher, the paragraph under it
 starts lower by what the gap lacks, within its own lines, at the loosest leading of its first frame that still sets it
-(`headOf`, the page fill's `head`); where its own lines leave no room, it stays as TeX set it. Today's reader and every round
+(`headOf`, the page fill's `head`); where its own lines leave no room, it stays as TeX set it. Its first line stays in its
+first block: a first block of one line (a double-spaced paragraph, each of its lines a block of its own) has no room within
+it, and the head would set that line under the block's foot and the text on the next block, a whole pitch lower and off its
+indent (2610.19274v1-zh pages 37 and 44: 28.89 pt, the indent's 17.56 lost); such a paragraph stays as TeX set it
+(`fill-page.ts`, the head pass's `own`). Today's reader and every round
 before set the gap at the pitch. Over the 22 parity pairs six paragraphs move so, default and toggles on alike (2610.20967v1
 page 4 unit 85, 4.37 pt lower, its leading 1.29 to 1.23). Those first lines leave TeX's baseline by 0.7 to 6.9 pt, which the
 parity check's anchor measure reads as farther from the original than today's on five pages: this rule and B′ (a first line

@@ -3,6 +3,9 @@
 // its room, by the page's evening (§18.57: the fit's knobs, TeX's room under it among them) or by a fit that borrowed room under
 // its lines, is no room of the page's: the page keeps the original's size, as production's page fill keeps it (the coordinator's
 // ruling of 2026-11-20 on round c4's parity class "body grown above the original").
+// And the head pass (§18.11, "A paragraph's leading is the whole paragraph's"): a paragraph under a widow line starts lower by
+// what the gap lacks only within its own lines; where its first block holds one line (a double-spaced paragraph, each line its
+// own block) there is no room, and it stays as TeX set it.
 import type { Placed, Row } from '@readarxiv/format'
 import { describe, expect, it } from 'vitest'
 import { layPage } from '../../src/lay/entry.ts'
@@ -76,5 +79,51 @@ describe("the page's one size grows only where every body paragraph has room by 
     const [a, m, b] = column([4, 2, 4], [120, 82, 120], room, 40, 15)
     expect([m!.borrowed, m!.evened, m!.lines.length]).toEqual([1, undefined, 2])
     expect([a!.size, m!.size, b!.size]).toEqual([10, 10, 10])
+  })
+})
+
+describe('the head pass moves a first line only within its own lines (§18.11)', () => {
+  /** a paragraph over a column break, its last line alone at the second column's top (TeX's widow, 700); under it a paragraph
+   *  double-spaced at a pitch of 24, each line its own block, its first line indented 15 pt, `chars` characters long */
+  const widow = (chars: number) => {
+    const flow: Placed[] = [
+      {
+        ord: 0,
+        kind: 'para',
+        text: ids[0]!,
+        lead: 12,
+        style: st,
+        align: 'j',
+        lines: Array.from({ length: 4 }, (_, j) => at(700 - 12 * j)),
+        room: { below: 17, next: 17 },
+      },
+      {
+        ord: 1,
+        kind: 'para',
+        text: ids[1]!,
+        lead: 12,
+        style: st,
+        align: 'j',
+        lines: [...Array.from({ length: 4 }, (_, j) => at(647 - 12 * j)), at(700, 320, 548)],
+        room: { below: 24, next: 24 },
+      },
+      {
+        ord: 2,
+        kind: 'para',
+        text: ids[2]!,
+        lead: 24,
+        style: st,
+        align: 'j',
+        lines: Array.from({ length: 5 }, (_, j) => at(676 - 24 * j, j === 0 ? 335 : 320, 548)),
+        room: { below: 200, next: 212 },
+      },
+    ]
+    return lay(flow, [60, 165, chars])[2]!
+  }
+  it('keeps the first line of a paragraph whose first block holds one line on TeX’s baseline, at its indent', () => {
+    // (the paragraph over it, spread past its pitch in its frame before, ends on a line alone at the column's top: the gap under
+    // it lacks room, but the paragraph under it has no room within its first block of one line; it stays as TeX set it)
+    const m = widow(120)
+    expect(m.lines[0]).toEqual([676, 335])
   })
 })

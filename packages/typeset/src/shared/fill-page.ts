@@ -347,8 +347,14 @@ export function fillPage(
       floor = Math.max(1, P.leadFloor ?? 1)
     const K = Math.ceil((L0 - floor) / 0.01 - 1e-9),
       L = (k: number) => (k >= K ? floor : r3(L0 - k * 0.01))
-    const l0 = at(f.p, withLead(L0))
-    const found = l0 ? { k: 0, l: l0 } : K > 0 ? closerLead(K, (k) => at(f.p, withLead(L(k))), null) : null
+    // (within its own lines: a layout whose first line left the unit's first block, a block of one line its head set under its
+    // foot, is none; where every leading is so, it stays as its fill laid it, as TeX set it, §18.11)
+    const own = (st: FitState) => {
+      const l = at(f.p, st)
+      return l && l.lines[0]?.block === 0 ? l : null
+    }
+    const l0 = own(withLead(L0))
+    const found = l0 ? { k: 0, l: l0 } : K > 0 ? closerLead(K, (k) => own(withLead(L(k))), null) : null
     if (!found) continue
     f.st = withLead(L(found.k))
     f.l = found.l
