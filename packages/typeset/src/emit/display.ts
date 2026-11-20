@@ -128,7 +128,10 @@ export function lineRuns(line: LaidLine, L: Layout): LineRun[] {
     }
     const r = run as unknown as TextRun
     if (n === items.length - 1 && t.cls === 'latin' && !t.hyphenated) r.text += ' '
-    else if (n < items.length - 1 && !r.chars && (it.kern ?? 0) >= COPY_SPACE_EM * LS.f) r.text += ' '
+    else if (n < items.length - 1 && !r.chars && ((it.kern ?? 0) >= COPY_SPACE_EM * LS.f || t.fill)) r.text += ' '
+    // (TeX's infinite glue after it, Token.fill: the line's room stands there (B.place), so what follows is a run of its own at
+    // its own place, never glued to this one; a word run copies a space, as for wide explicit glue)
+    if (n < items.length - 1 && t.fill) flush()
   })
   flush()
   return out

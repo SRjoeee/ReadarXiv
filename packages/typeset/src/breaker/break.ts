@@ -62,10 +62,10 @@ type EndMark = NonNullable<Token['endMark']>
 /** a URL's crop cut at a break point, its head and its tail (urlCut's) */
 type UrlCut = NonNullable<ReturnType<typeof urlCut>>
 
-/** a token cut in two by the breaker, its head: no kern of its own (the kern stays after the word's tail) */
+/** a token cut in two by the breaker, its head: no kern or infinite glue of its own (they stay after the word's tail) */
 const headOfCut = <E extends object>(t: BreakToken, extra: E): BreakToken & E => {
-  if (!t.kernW) return { ...t, ...extra }
-  const { kernW: _w, kernEnd: _end, ...rest } = t
+  if (!t.kernW && !t.fill) return { ...t, ...extra }
+  const { kernW: _w, kernEnd: _end, fill: _fill, ...rest } = t
   return { ...rest, ...extra }
 }
 /**

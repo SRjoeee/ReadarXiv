@@ -51,6 +51,10 @@ export type Face = {
   id?: string
   ids?: string[]
 }
+/** infinite glue at a place: its order (fil 1, fill 2) and how many of that order (a higher order there takes a lower's place) */
+export type Fill = readonly [order: 1 | 2, n: number]
+/** a fill with one more of order `o` (TeX's: only the highest order stretches) */
+const fillWith = (f: Fill | undefined, o: 1 | 2): Fill => (!f || o > f[0] ? [o, 1] : o === f[0] ? [o, f[1] + 1] : f)
 /** a token (layer2.d.mts Token): a run of one face, a space, a crop, or a control token */
 export type Token = {
   s?: string
@@ -88,6 +92,10 @@ export type Token = {
   kernEm?: number
   kernW?: number
   kernEnd?: true
+  /** TeX's infinite glue after it (glueOf's `fill`): its order and how many of that order, the line's free room set there
+   *  (B.place); `fillLead`, the same before it, where it is the unit's first token */
+  fill?: Fill
+  fillLead?: Fill
   newline?: number
   room?: number
   blockTo?: number
@@ -199,21 +207,35 @@ type Designs = TokensInput['designs']
 /** the style commands, each with what it sets: latex.ltx's \textbf, \bfseries, \textmd, \mdseries, \emph,
  *  \em, \textit, \itshape, \textsl, \slshape, \textup, \upshape, \textsc, \scshape, \texttt, \ttfamily, \textsf, \sffamily,
  *  \textrm, \rmfamily; article.cls's \bf, \it, \sl, \sc, \tt, \sf, \rm; fontmath.ltx's \mathbf and \mathit; amsbsy.sty's
- *  \boldsymbol; url.sty's \url and \path; listings.sty's \lstinline; and \code, a paper's own (its cases the rule ledger's) */
+ *  \boldsymbol; url.sty's \url and \path; listings.sty's \lstinline; and \code, a paper's own (its cases the rule ledger's).
+ *  The old ones are LaTeX's own: article.cls's \DeclareOldFontCommand{\bf}{\normalfont\bfseries}{\mathbf}, and \it, \sl, \sc,
+ *  \tt, \sf, \rm alike, \normalfont first, then their one series, shape or family, never added to the face around them
+ *  (`\emph{\bf …}` is bold upright, `{\it …}` in bold text medium italic: 2610.19282v1's captions were drawn bold italic) */
+const normalOf = (s: TStyle, d: Designs): TStyle => ({
+  ...s,
+  fam: 'serif',
+  bold: false,
+  italic: false,
+  caps: false,
+  design: d.serif,
+})
 const STYLE_CMDS: [RegExp, (s: TStyle, d: Designs) => TStyle][] = [
-  [/^\\(?:textbf|bf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true })],
+  [/^\\bf\b/, (s, d) => ({ ...normalOf(s, d), bold: true })],
+  [/^\\(?:it|sl)\b/, (s, d) => ({ ...normalOf(s, d), italic: true })],
+  [/^\\sc\b/, (s, d) => ({ ...normalOf(s, d), caps: true })],
+  [/^\\tt\b/, (s, d) => ({ ...normalOf(s, d), fam: 'mono', design: d.mono })],
+  [/^\\sf\b/, (s, d) => ({ ...normalOf(s, d), fam: 'sans', design: d.sans })],
+  [/^\\rm\b/, normalOf],
+  [/^\\(?:textbf|bfseries|mathbf|boldsymbol)\b/, (s) => ({ ...s, bold: true })],
   [/^\\(?:textmd|mdseries)\b/, (s) => ({ ...s, bold: false })],
   [/^\\(?:emph|em)\b/, (s) => ({ ...s, italic: !s.italic })],
-  [/^\\(?:textit|it|itshape|textsl|sl|slshape|mathit)\b/, (s) => ({ ...s, italic: true })],
+  [/^\\(?:textit|itshape|textsl|slshape|mathit)\b/, (s) => ({ ...s, italic: true })],
   [/^\\(?:textup|upshape)\b/, (s) => ({ ...s, italic: false })],
-  [/^\\(?:textsc|sc|scshape)\b/, (s) => ({ ...s, caps: true })],
-  [/^\\(?:texttt|tt|ttfamily|url|path|code|lstinline)\b/, (s, d) => ({ ...s, fam: 'mono', design: d.mono })],
-  [/^\\(?:textsf|sf|sffamily)\b/, (s, d) => ({ ...s, fam: 'sans', design: d.sans })],
-  [/^\\(?:textrm|rm|rmfamily)\b/, (s, d) => ({ ...s, fam: 'serif', design: d.serif })],
-  [
-    /^\\(?:textnormal|normalfont)\b/,
-    (s, d) => ({ ...s, fam: 'serif', bold: false, italic: false, caps: false, design: d.serif }),
-  ],
+  [/^\\(?:textsc|scshape)\b/, (s) => ({ ...s, caps: true })],
+  [/^\\(?:texttt|ttfamily|url|path|code|lstinline)\b/, (s, d) => ({ ...s, fam: 'mono', design: d.mono })],
+  [/^\\(?:textsf|sffamily)\b/, (s, d) => ({ ...s, fam: 'sans', design: d.sans })],
+  [/^\\(?:textrm|rmfamily)\b/, (s, d) => ({ ...s, fam: 'serif', design: d.serif })],
+  [/^\\(?:textnormal|normalfont)\b/, normalOf],
 ]
 const applyCmd = (src: string | undefined, s: TStyle, d: Designs): TStyle | null => {
   for (const [re, f] of STYLE_CMDS) if (re.test(src as string)) return f(s, d)
@@ -364,8 +386,13 @@ const KERNS: Record<string, number> = {
   '\\;': 5 / 18,
 }
 const SKIPS: Record<string, number> = { '\\quad': 1, '\\qquad': 2 }
-/** a placeholder's source that is explicit glue, as TeX sets it: { em } or { bp }, and whether a line may break at it */
-export function glueOf(src: string): { em?: number; bp?: number; brk: boolean } | null {
+/** TeX's infinite glue by its order (tex.web §150: fil 1, fill 2): latex.ltx's \hfil, \hskip 0pt plus 1fil, and \hfill,
+ *  \hskip 0pt plus 1fill. No natural width; the line's free room is set at it (B.place placeItems) */
+const FILLS: Record<string, 1 | 2> = { '\\hfil': 1, '\\hfill': 2 }
+/** a placeholder's source that is explicit glue, as TeX sets it: { em } or { bp }, or infinite glue's order (`fill`), and
+ *  whether a line may break at it */
+export function glueOf(src: string): { em?: number; bp?: number; fill?: 1 | 2; brk: boolean } | null {
+  if (Object.hasOwn(FILLS, src)) return { fill: FILLS[src]!, brk: true }
   if (Object.hasOwn(KERNS, src)) return { em: KERNS[src]!, brk: false }
   if (Object.hasOwn(SKIPS, src)) return { em: SKIPS[src]!, brk: true }
   const m = /^\\(hspace\*?|hskip|kern)\s*(?:\{\s*([^{}]*?)\s*\}|([^{}\\]*?))\s*$/.exec(src)
@@ -525,8 +552,14 @@ export function tokens(i: TokensInput): Tokens {
   let runinId: unknown = null
   /** the paper's own horizontal space laid after such a title, in kernW's units (100 an em of the line's size) */
   let runinOwn = 0
+  /** infinite glue before the unit's first token (fillOn), set on that token */
+  let fillLead: Fill | undefined
   const push = (t: Token) => {
     const prev = tokens.at(-1)
+    if (fillLead && !t.space && t.newline === undefined && t.blockTo === undefined) {
+      t.fillLead = fillLead
+      fillLead = undefined
+    }
     if (noBreakNext && !t.space) t.glue = true
     noBreakNext = false
     afterHead = false
@@ -725,6 +758,14 @@ export function tokens(i: TokensInput): Tokens {
     if (!g.brk) noBreakNext = true
     if (afterRunin) runinOwn += 100 * em
   }
+  // (TeX's infinite glue, glueOf's `fill`: on the token before it (Token.fill), or before the unit's first token on that token
+  // (Token.fillLead); none after a forced break or a block, as TeX discards glue at a line's start)
+  const fillOn = (o: 1 | 2) => {
+    while (tokens.at(-1)?.space) tokens.pop()
+    const t = tokens.at(-1)
+    if (!t) fillLead = fillWith(fillLead, o)
+    else if (t.newline === undefined && t.blockTo === undefined) t.fill = fillWith(t.fill, o)
+  }
   // (a script that writes no spaces between its words: Chinese and Japanese, never Korean, which breaks between its characters
   // and writes them (`spaced`), nor the alphabets (keepAll), nor a source that writes its CJK with spaces between (spacedSource))
   const spaceless = !keepAll && !P.spaced && !i.spacedSource
@@ -868,7 +909,8 @@ export function tokens(i: TokensInput): Tokens {
     if (p.t === 'ph') {
       const glue = glueOf(p.src)
       if (glue) {
-        kernOn(glue)
+        if (glue.fill) fillOn(glue.fill)
+        else kernOn(glue)
         return
       }
       const sw = applyCmd(p.src, style(), designs)

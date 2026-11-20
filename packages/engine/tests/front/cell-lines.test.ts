@@ -165,6 +165,33 @@ describe("a paper's row-ending macro inside a grid cell is a forced break of the
   })
 })
 
+describe('\\tabularnewline ends a row as `\\\\` does (latex.ltx and array.sty: \\let\\tabularnewline\\\\ in a tabular)', () => {
+  // (written bare, it was a placeholder inside the cell before it: the header's last cell and the next row's first were one
+  // unit, "remark" and "derivative", whose translation the lay then flowed over both rows by width)
+  const rows = (end: string) =>
+    unitsOf(
+      '',
+      `\\begin{tabular}{|c|c|}\n\\hline\nname & remark${end}\n\\hline\n\\hline\nderivative & the change of a function${end}\n\\hline\nintegral & the area under it${end}[2pt]\n\\hline\n\\end{tabular}`,
+    )
+      .filter((u) => u.kind === 'cell')
+      .map((u) => [u.cell?.row, u.cell?.col, words(u)])
+  const cells = [
+    [0, 0, 'name'],
+    [0, 1, 'remark'],
+    [1, 0, 'derivative'],
+    [1, 1, 'the change of a function'],
+    [2, 0, 'integral'],
+    [2, 1, 'the area under it'],
+  ]
+  it('two rows parted by it are two rows of cells, each cell a unit of its own, an optional room after it its own', () =>
+    expect(rows('\\tabularnewline')).toEqual(cells))
+  it('the same table with `\\\\` reads the same, as before', () => expect(rows(' \\\\')).toEqual(cells))
+  it('outside a table it is no break and ends no unit, as before', () => {
+    const us = unitsOf('', 'The running text goes on \\tabularnewline and on in one paragraph.')
+    expect(us.filter((u) => u.kind === 'para').map(words)).toEqual([PROSE, 'The running text goes on and on in one paragraph.'])
+  })
+})
+
 describe('LaTeX’s \\break is a forced break of its unit’s text, as `\\\\` and \\newline are', () => {
   it('states \\break a forced break, its element a break; a macro whose name begins so none', () => {
     // (the coordinator's ruling 4 of 2026-11-16: 2608.03841v2's amsart addresses, `\hfill\break\indent`, the marked compile

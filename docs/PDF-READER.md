@@ -3559,7 +3559,13 @@ table's label in the target's word everywhere, the number as printed. Where the 
 (`Label.float`, LaTeX's `\@captype`), a figure's or a table's label takes the rules' word and keeps every glyph after its
 name as TeX printed it, any number ("A1", "S3", "I"); any other type's (an algorithm's, a sub-figure's) stays the
 original's, as does one whose parts do not hold its every glyph or that states no number
-(`packages/typeset/src/unit/label.ts` `labelInTarget`).
+(`packages/typeset/src/unit/label.ts` `labelInTarget`). The type is the one TeX numbers and names the caption by where its
+`\caption` runs: its float environment's, `\captionof`'s first argument, and caption.sty's `\captionsetup{type=…}` for the
+rest of its environment or group (its `type` option sets `\@captype`; one with an optional argument, `\captionsetup[figure]{…}`,
+sets a type's own options, never the type). The type is the caption's alone: the environment's body is read as before, so an
+algorithm set in a wrapfigure under `\captionsetup{type=algorithm}` (2608.27728v1 p3) has its label kept as an algorithm's,
+"Algorithm 1:", where it was read as a figure's and drawn with the figure's word, and its body stays what the front end reads it as, no
+pseudocode (`packages/engine/src/source/latex-front.ts`, the walk's `captionsetup`).
 
 **A heading set in fewer lines than the original's stands on its last ones; a title and the front matter keep their
 top.** The owner's ruling of 2026-10-19, restored this day: the room a shorter translation of a heading frees falls above
@@ -6209,7 +6215,12 @@ put-back places no group holding an element (packages/translate groups.ts), and 
   run-in rule reads such a group as one a switch opens (`{\bf Remark:}` stays `must`, `run-ins.ts`); a face that fills a
   bibliography field rides it as before (§18.38). The typesetter reads the group's command as it reads `\emph{`'s: `\em{` toggles
   from the face around it as TeX's `\em` does, and counts in the base style's majority (`tokens.ts` baseOf) as the switch inside
-  the group did. Stage 1a's statement (o) reads the switch out of today's unit (`stated.mjs`; the acceptance list's `characters`
+  the group did. The old font commands set what LaTeX defines them to set, a group's command or a switch alike: article.cls's
+  `\DeclareOldFontCommand{\bf}{\normalfont\bfseries}{\mathbf}`, and `\it`, `\sl`, `\sc`, `\tt`, `\sf`, `\rm` so, `\normalfont`
+  first, then their one series, shape or family, never added to the face around them (`tokens.ts` STYLE_CMDS, `\normalfont`'s
+  family read as the paper's serif, as `\textnormal`'s is): `\emph{\bf …}` is bold upright, `{\it …}` in bold text medium
+  italic, `\textbf{\emph{…}}` bold italic as before. Read as adding to the face around them, 2610.19282v1's eight captions
+  `\emph{{\bf Title.} …}` drew their bold titles bold and slanted. Stage 1a's statement (o) reads the switch out of today's unit (`stated.mjs`; the acceptance list's `characters`
   entry already holds the clause). A note mark glued after a name (`\textdagger`, 2610.42112v1's author block) is no face switch
   and stays an element: the earlier attempt that wrote the kernel's whole symbol table as text lost that block's person (lane
   style-wire B, never merged), and a test holds it.
@@ -7385,7 +7396,13 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   wherever it asks (`forcedBreak`: the element's kind `break` and `El.brk`, the class of a break, which draws no ink, the facts
   pass's line and rows, the start mark's box, the marking, the run-in labels); today's reader reads its own patterns of the
   source. Over the 89 papers and 2611.03953v2, the holdout's 36 and the third set's 119 no cell holds such a call: two papers
-  define such a macro (2610.21924v1, 2610.40576v1), every one of their 44 calls at a row's end.
+  define such a macro (2610.21924v1, 2610.40576v1), every one of their 44 calls at a row's end. `\tabularnewline` written
+  bare is `\\` in a table (latex.ltx's and array.sty's `\let\tabularnewline\\` in a tabular) and ends the grid's row as `\\`
+  does, its optional room with it: the walk ends the cell's unit there as the grid ends the cell (outside a table, and inside a
+  box a grid cell holds, it is read as before). Read as a placeholder, it ran the next row's first cell on into the cell before
+  it: 2501.14787v1's table of seven `\tabularnewline` rows held six units of two cells each (the header's "remark" with the
+  next row's "derivative"), whose one translation the lay flowed over both rows by width; read as the row's end, they are twelve
+  cells, and the last row's cell sheds the row end and rule after it (13 units of the 90 pairs' papers new, none other moved).
 - **The names rules read the whole text**: R1 and R2 (`instrument/language.ts`) read a forced break as a space, so a cell is kept
   only where no token of any of its lines is a word; R4 reads it as one text cell of one unit, its key its content (the break an
   element of it, as a cell's `\hline` is).
@@ -8991,6 +9008,27 @@ The released reader draws each as the original sets it.
 - **Versions**: PIPELINE moves (Placed.lines, their columns, measures and pins, El.ink boxes and rooms of the members that hold
   such a formula: the parts, the prepare dumps), raised by the round's integration. TRANSLATE stays (no unit's text moves:
   no new unit id), LAYOUT stays (no mark moves), the rule file stays.
+
+### 18.104 TeX's infinite glue takes a line's free room (2026-11-20)
+
+A cell `Teacher segment \hfill tokens 0--4,096` (2610.40576v1 pp17-19, nine such cells) sets its heading at the cell's left and
+the count flush right; the typesetter read `\hfill` as no glue, and drew the two as one run, the count set against the heading.
+
+- **The rule** (`packages/typeset/src/breaker/tokens.ts` glueOf, `breaker/place.ts` placeItems). latex.ltx's `\hfill` (`\hskip
+  0pt plus 1fill`) and `\hfil` (`plus 1fil`), as the part states them (an element's bare command), are TeX's infinite glue of
+  order 2 and 1: no natural width, on the token before them (Token.fill; before a unit's first token, on that token,
+  Token.fillLead; none after a forced break or a block, where TeX discards glue). A line's free room, all of it, goes to the glue
+  of the highest order on it, shared by how many of that order (tex.web §656: only the highest order stretches); the line's own
+  fil glue counts at order 1 (LaTeX's `\@flushglue` and `\parfillskip`: a centred line's two, a flush right line's left one, a
+  ragged or last line's right one), so `A \hfill B` sets B at the right end in any of them and `A \hfil B` in a centred cell
+  shares the room in thirds. A glue on a line's last item is TeX's at a break: discarded. The drawing sets what follows a glue as a
+  run of its own at its place (`emit/display.ts` lineRuns), never glued to the word before it, which a reply may set with no
+  space beside the glue's placeholder. The breaker and the fit are as they were:
+  the glue adds no width, and a line with no room left sets nothing more. `\hspace{\fill}` is not read: the part states its
+  argument as no source the lay can read.
+- **Reach** (the record's prepare of the 90 pairs' papers): 2610.40576v1's nine cells, and 2610.40394v1's six paragraphs ending
+  `\hfill$\square$`, whose box is then set at the line's right end where TeX sets it.
+- **Versions**: lay only; no stored object moves (PIPELINE, TRANSLATE, LAYOUT and the digests stay).
 
 ## 19. The engine's contract
 
