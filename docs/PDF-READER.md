@@ -11251,8 +11251,25 @@ headings whose translation ends a line over their shared row (2610.20808v1 p26's
 does not measure, their text now on that line after the original's separation. A drawing rule, no version (§18.3).
 
 **A group TeX set as a paragraph of its own (2026-11-06; the release sweep of e4be8723, its item 2).** The front end ends a unit
-where the source ends a paragraph (a blank line, `\par`), never inside a command's argument; so a box a command makes of its
-argument under a paragraph's text is the same unit as that text. 2608.25210v2 p3's prompts are such units (55 to 57): an item's
+where the source ends a paragraph (a blank line, `\par`, or one of TeX's vertical commands once the unit's text has begun:
+below), never inside a command's argument; so a box a command makes of its argument under a paragraph's text is the same unit as
+that text.
+
+**A vertical command ends the paragraph it meets (lane c4-boxes, the coordinator's ruling 3 of 2026-11-20).** In horizontal mode
+TeX inserts `\par` before a vertical command and reads the command again in vertical mode (the TeXbook, chapter 25, "Summary of
+horizontal mode", ⟨vertical command⟩; tex.web §1094, `head_for_vmode`): `\vskip` and its forms `\vfil`, `\vfill`, `\vss`,
+`\vfilneg`, `\hrule`, `\unvbox`, `\unvcopy`, `\halign`, `\end` and `\dump`. The source reader (`source/latex-front.ts`
+VERTICAL_COMMANDS) ends the unit at the first nine where its text has begun (its first word come, as the start mark reads it),
+as at `\par`; the command is read again as the next unit's head, which the start mark passes over, its ink the original's.
+TeX's `\end` is LaTeX's `\@@end` (latex.ltx makes `\end` an environment's, which the walk reads as one) and `\dump` no
+document's. LaTeX's `\vspace` is none (in a paragraph a `\vadjust`), nor `\\`, `\newline` or `\vadjust`: they stay
+inside it. Before the unit's text has begun nothing ends (the rules over a title stay its head); a name the paper defines is
+its own command. Read inside the unit, 2610.21765v1 p3's protocol box, `{\bf Protocol for QRE - Odd $N$-cycle} \vspace{0.2cm}
+\hrule \vspace{0.2cm} \textbf{Procedure}` with no blank line, was one unit of two of TeX's paragraphs, the rule between them an
+element of its text: drawn as an inline crop on the second line, it pushed "Procedure" to the line's far end and shrank the title
+(today's reader found no ink for the rule and left the unit English). Over the lab's 245 papers' units (the chain's dumps at
+afd529329) the rule cuts 8 units of 3 papers (2608.18502v1 5, 2610.21765v1 2, 2610.21106v1 1): `\vskip` 6, `\hrule` 2; 7 with
+text after the command, 1 with none (its trailing rule no piece of it). The cut units take new ids, their rows asked again. 2608.25210v2 p3's prompts are such units (55 to 57): an item's
 text, "response_equal_llm.: [sentence_1] and [sentence_2] are placeholders for two test sentences.", then `\mypython{…}`, the
 prompt in a frame at 7.97 pt where the item is 8.97, its lines 8.3 pt further in. Laid as one paragraph, one block of all its
 lines, the translation ran on from the item's short last line to the column's edge, over the frame's top border and past its right
