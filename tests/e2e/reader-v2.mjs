@@ -29,6 +29,7 @@ import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { launchWithReader } from './lib/extension.mjs'
 import { RESOLVER_WALL, routeTable } from './lib/route-table.mjs'
+import { settles, stallReport } from './lib/settles.mjs'
 import { loadFixture, segOf, v2Api } from './lib/v2-api.mjs'
 import { seedService } from './options-page.mjs'
 
@@ -589,12 +590,16 @@ try {
     const asked1 = await readerState(e)
     check('asked to translate: the translated display the mode names, the original let go', asked1.display === 'translation' && asked1.settings.pdfReader.original === false, `${asked1.display}, original ${asked1.settings.pdfReader.original}`)
     control('a reader that is not asked to translate opens in the original the settings leave on', { ok: plain.display === 'translation', detail: `${plain.display}, original ${plain.settings.pdfReader.original}` })
-    await patch(e, { mode: 'side', pdfReader: { original: false, sync: true }, reading: { openIn: 'new-tab' } })
-    for (const page of [a, b, c, e]) await page.close()
+    // (each await from here to the next section's header bounded, failing the run with its name and what the browser says then
+    // (lib/settles.mjs): three hosted runs of round c4 printed the check above and then nothing for 43 minutes, until the job's
+    // limit cancelled them. An extension page whose main thread does not come back holds an evaluate on any of them for good)
+    const stalled = () => stallReport({ context, worker })
+    await settles('the settings put back (patch on reader e)', () => patch(e, { mode: 'side', pdfReader: { original: false, sync: true }, reading: { openIn: 'new-tab' } }), { tell: stalled })
+    for (const [name, page] of Object.entries({ a, b, c, e })) await settles(`reader ${name} closed`, () => page.close(), { tell: stalled })
   }
 
   // -------------------------------------------------------------------------------- the reader on the layer (part 2)
-  await import('./reader-v2-layer.mjs').then(m => m.layerChecks({ context, worker, id, api, fixture, PAPER, PV, TITLE, LINK, echo, guard, asked, pageErrors, track, extensionPage, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, setPdfAnswer: a => { pdfAnswer = a }, section, check, control, note, sleep, SHOTS }))
+  await settles('the layer\'s checks loaded', () => import('./reader-v2-layer.mjs')).then(m => m.layerChecks({ context, worker, id, api, fixture, PAPER, PV, TITLE, LINK, echo, guard, asked, pageErrors, track, extensionPage, readerState, sessionState, probe, openReader, paperOpened, laid, setConfig, clearPaperStore, setPdfAnswer: a => { pdfAnswer = a }, section, check, control, note, sleep, SHOTS }))
 
   // -------------------------------------------------------------------------------------------- what the run did not do
   section('what the run did not do')
