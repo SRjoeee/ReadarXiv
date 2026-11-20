@@ -7391,7 +7391,12 @@ cell is laid in the cell's room in its column, so that no cell is drawn smaller 
   wherever it asks (`forcedBreak`: the element's kind `break` and `El.brk`, the class of a break, which draws no ink, the facts
   pass's line and rows, the start mark's box, the marking, the run-in labels); today's reader reads its own patterns of the
   source. Over the 89 papers and 2611.03953v2, the holdout's 36 and the third set's 119 no cell holds such a call: two papers
-  define such a macro (2610.21924v1, 2610.40576v1), every one of their 44 calls at a row's end.
+  define such a macro (2610.21924v1, 2610.40576v1), every one of their 44 calls at a row's end. `\tabularnewline` written
+  bare is `\\` in a table (latex.ltx's and array.sty's `\let\tabularnewline\\` in a tabular) and ends the grid's row as `\\`
+  does, its optional room with it: the walk ends the cell's unit there as the grid ends the cell (outside a table, and inside a
+  box a grid cell holds, it is read as before). Read as a placeholder, it ran the next row's first cell on into the cell before
+  it: 2501.14787v1's two tables of `\tabularnewline` rows held seven units of two cells each (the header's "remark" with the
+  next row's "derivative"), whose one translation the lay flowed over both rows by width.
 - **The names rules read the whole text**: R1 and R2 (`instrument/language.ts`) read a forced break as a space, so a cell is kept
   only where no token of any of its lines is a word; R4 reads it as one text cell of one unit, its key its content (the break an
   element of it, as a cell's `\hline` is).

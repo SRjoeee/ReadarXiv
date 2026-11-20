@@ -5558,7 +5558,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
     }
-    if (name === '\\') {
+    // (\\tabularnewline is `\\\\` in a table, latex.ltx's and array.sty's \\let\\tabularnewline\\\\ there: the end of the grid's row,
+    // as the grid reads it (tableGrid), the cell's unit ends with it. Anywhere else it is read as any command, as before)
+    if (name === '\\' || (name === 'tabularnewline' && b.cellMode && !inGridCell(b, s, i))) {
       const { args, end: e } = argsAfter(s, end, 1)
       const stop = args[0]?.kind === 'opt' ? e : end
       endText()
