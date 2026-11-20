@@ -7930,6 +7930,17 @@ where it stands as a mark.
   list, each `\textbullet The …`). A first reading made every symbol of the table the edge there, §18.30's eleven with them, and
   moved 72 units in 24 papers whose cell or paragraph opens with `\#`, `\%`, `\$` or `\textbar` ("# layers", "$/1M tokens"),
   each a unit sent whole before, to an edge and a shorter text: the statement put them back.
+- **The edge is drawn once, by the original's ink** (`locate/geometry.ts`, the element's statement; `lay/read.ts`, its reading;
+  lane c4-boxes, the coordinator's ruling 1 of 2026-11-20). A symbol or a space of no ink that TeX set before the unit's start
+  point (the instrument's `outside`: `\textbullet` and the `\ ` after it) is stated El.keep, as a piece of a class drawn from
+  its ink is; its glyph is the member's label, kept, and the lay draws the kept symbol or space as nothing, in place. Stated as
+  a symbol to draw, the lay drew "• " from its `sym` at the text's start beside the bullet that stayed: every item of
+  2610.19159v1's hand-made lists read "• •" (89 members on 27 pages of the display gate's 90 pairs: 2610.19159v1-ja 44,
+  -zh 44, and 2610.21924v1-zh p1's `\textsuperscript{*}` before "Corresponding author", its label's star and a full-size one).
+  A symbol inside the text, after its first word, has no El.keep and is drawn from its symbol as before; a label that is a
+  number has no element before the start and is laid as before. Today's reader carried the run `\smallskip \noindent
+  \textbullet\ ` as one marker, the bullet the unit's text, erased and drawn once from the marker. What moves: the parts (an
+  El.keep on those elements), no unit and no row.
 - **The lab's differential reads the same** (stage 1a's statement (o), `lab/pdf/prepare-back/stated.mjs`): today's TeX of a
   unit as the candidate writes it, each symbol a character where `textSymbolHere` reads it so over the pieces before it, from
   TEXT_CHARACTERS; it held a copy of §18.30's eleven, which stated a unit with another symbol of the table by a weaker reading or

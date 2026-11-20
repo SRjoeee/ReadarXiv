@@ -291,7 +291,12 @@ function readingsOf(
     // drawn as nothing, its glyphs may have been erased with the text group and never drawn again (2608.06007v1 p10's \sys,
     // "TensorCast"; 2608.25210v2 p7's algorithm under one line; 2402.10294v1's reference [1] without its year), so the unit is
     // unproven, left the original's whole)
-    if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
+    // (a symbol or a space of no ink TeX set before the unit's start, El.keep: the unit's edge, its ink the original's, kept
+    // with the label (a hand-made list's typed bullet, PDF-READER §18.83): drawn as nothing, in place. Drawn from its symbol, it
+    // stood beside the bullet that stays, "• •")
+    if (el?.keep && !ink.length && (cls === 'symbol' || cls === 'space'))
+      fixed = { mode: 'none', text: '', proof: true, inPlace: true }
+    else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
       fixed =
         el?.text === ''
           ? { mode: 'none', text: '', proof: true, ...(MACRO_CLASSES.has(cls) ? {} : { empty: true as const }) }

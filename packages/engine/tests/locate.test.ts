@@ -2638,6 +2638,48 @@ describe('the element classes the part states', () => {
     expect(els.get('4')!.keep).toBeUndefined()
   })
 
+  it('states a symbol and a space TeX set before the unit’s start as its edge, El.keep; a symbol inside its text as before', () => {
+    // (PDF-READER §18.83: a typed bullet that opens a hand-made list's item, `\noindent\textbullet\ The …`, is the unit's edge,
+    // its ink the original's, kept as the label; a symbol after the first word is the text's, drawn as before)
+    const B = docOf([{ lines: ['The bound holds in every case.'] }])
+    const content = [
+      { t: 'el' as const, id: '0', kind: 'other', src: '\\noindent' },
+      { t: 'el' as const, id: '1', kind: 'macro', src: '\\textbullet' },
+      { t: 'el' as const, id: '2', kind: 'other', src: '\\ ' },
+      text('The bound holds in every case'),
+      { t: 'el' as const, id: '4', kind: 'macro', src: '\\textdagger' },
+      text('.'),
+    ]
+    const units: InstrumentUnit[] = [
+      {
+        id: unitId('para', content),
+        kind: 'para',
+        content,
+        classes: [
+          ['0', { cls: 'zero' }],
+          ['1', { cls: 'symbol', sym: ['•'] }],
+          ['2', { cls: 'space', copy: ' ' }],
+          ['4', { cls: 'symbol', sym: ['†'] }],
+        ],
+      },
+    ]
+    const ins = {
+      ...instrumentOf(B, units, [[0]]),
+      outside: [
+        { unit: 0, piece: '0' },
+        { unit: 0, piece: '1' },
+        { unit: 0, piece: '2' },
+      ],
+    }
+    const L = locate(ins, B, align(B, B))
+    const els = new Map(L.members.find((m) => m.unit === 0)!.elements)
+    expect(els.get('1')).toMatchObject({ ink: [], keep: 1 })
+    expect(els.get('2')).toMatchObject({ ink: [], keep: 1 })
+    // (a class that draws nothing gains nothing; a symbol inside the text is drawn from its symbol as before)
+    expect(els.get('0')!.keep).toBeUndefined()
+    expect(els.get('4')!.keep).toBeUndefined()
+  })
+
   it('writes each element with its source’s class, copy text, a symbol’s drawing and a footnote’s mark (the instrument’s)', () => {
     const B = docOf([{ lines: ['see the result'] }])
     const content = [text('see '), { t: 'el' as const, id: '1', kind: 'cite', src: '\\cite{a}' }, text(' the result')]
