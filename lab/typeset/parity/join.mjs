@@ -91,6 +91,33 @@ export function candidateKeptElements(paper, dumps = L1_DUMPS) {
   }
   return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ink.has(d)).map(([d, m]) => [m, ink.get(d)])
 }
+/**
+ * The units the candidate's prepare made no member of the part for, each with its statement (its dump's units of state
+ * `unlaid`, not `replaced`: { kind, why }, "unlocated: text past its source"), by today's ord. A unit with no member has no
+ * Page, no facts and no join of v2's: this is what states it. Each joined to the one unit of today's (`today`, today's prepare
+ * dump's units: { ord, kind, pieces }) no member is joined to (`joined`, today's ords), of its kind, whose words are its words
+ * (wordsOf over each piece's text or source, sameWords: one front end reads as an element what the other reads as text,
+ * 2610.40576v1 t240's `\dots`), one to one: a unit two of today's say alike, or one of today's two say, joins none. Empty
+ * where lab-data holds no dump
+ */
+export function candidateUnlaid(paper, today, joined = new Set(), dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`)
+  if (!existsSync(f)) return new Map()
+  const wordsOfPieces = (ps) => wordsOf((ps ?? []).map((p) => (p.kind === 'text' ? p.s : ` ${p.src ?? ''} `)))
+  const unlaid = JSON.parse(readFileSync(f, 'utf8'))
+    .units.filter((u) => !u.replaced && u.state === 'unlaid')
+    .map((u) => ({ kind: u.kind, why: u.why ?? null, words: wordsOfPieces(u.pieces) }))
+    .filter((u) => u.words.length)
+  const free = (today ?? []).filter((t) => !joined.has(t.ord)).map((t) => ({ ord: t.ord, kind: t.kind, words: wordsOfPieces(t.pieces) }))
+  const said = (u, t) => u.kind === t.kind && sameWords(u.words, t.words)
+  const out = new Map()
+  for (const u of unlaid) {
+    const ts = free.filter((t) => said(u, t))
+    if (ts.length !== 1 || unlaid.filter((v) => said(v, ts[0])).length !== 1) continue
+    out.set(ts[0].ord, { kind: u.kind, why: u.why })
+  }
+  return out
+}
 /** the members the candidate's prepare keeps for their text set wholly in a face of one pitch (candidateKept's 'pitch') */
 export const candidatePitch = (paper, dumps = L1_DUMPS) => candidateKept(paper, 'pitch', dumps)
 /** the members the candidate's prepare keeps as a line of e-mail addresses (candidateKept's 'address') */
@@ -405,9 +432,21 @@ export function piecesJoin(bundle, prepared, todayOf) {
   // box, `\makecell{`, stands round its rows, and today's unit a row holds none of it), today's alike both times: two say the
   // same where either reading does)
   const same = (a, b) => sameWords(a.words, b.words) || sameWords(a.bare, b.bare)
-  /** the run from `start` of `list`, consecutive in its order, each on a page `one` stands on, two or more, whose words are its;
-   *  none where its first alone says them (one member or unit is no group of pieces, whatever the one-to-one join left of it:
-   *  a run that goes on past it adds only words a tenth may hide, 2611.03953v2-zh p8's paragraph and the merged cell after it) */
+  /** whether each unit of `run` says words of `one`'s: the run's words in common with it fewer without that unit's, read either
+   *  way (`words`, `bare`). A unit whose words the tenth's tolerance alone takes says none of them: 2610.21084v1 p1's three author
+   *  units (7 words) before the abstract (87), joined to v2's abstract member, which holds none of the names */
+  const each = (run, one) =>
+    run.every((x, i) =>
+      ['words', 'bare'].some((w) => {
+        const all = run.flatMap((y) => y[w])
+        const rest = run.flatMap((y, j) => (j === i ? [] : y[w]))
+        return lcs(one[w], all) > lcs(one[w], rest)
+      }),
+    )
+  /** the run from `start` of `list`, consecutive in its order, each on a page `one` stands on, two or more, whose words are its,
+   *  each of its units saying some of them (`each`); none where its first alone says them (one member or unit is no group of
+   *  pieces, whatever the one-to-one join left of it: a run that goes on past it adds only words a tenth may hide, 2611.03953v2-zh
+   *  p8's paragraph and the merged cell after it), nor where one of its units says none of them */
   const runOf = (one, list, start, taken) => {
     const run = []
     const got = { words: [], bare: [] }
@@ -417,7 +456,7 @@ export function piecesJoin(bundle, prepared, todayOf) {
       run.push(x)
       got.words = [...got.words, ...x.words]
       got.bare = [...got.bare, ...x.bare]
-      if (same(got, one)) return run.length >= 2 ? run : null
+      if (same(got, one)) return run.length >= 2 && each(run, one) ? run : null
     }
     return null
   }

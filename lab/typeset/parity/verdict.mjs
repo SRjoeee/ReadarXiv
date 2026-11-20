@@ -8,7 +8,11 @@ import { bare, judgeJoined, joinedOf, mathDrawn, measureFidelity, mutualBest as 
 import { measureBlind, raisedOver } from './blind.mjs'
 import { unitClass } from '../../../packages/engine/src/locate/content-classes.ts'
 import { litColumn, paintedEntries } from './paint.mjs'
-import { halfLeadingOf } from '../../../packages/reader/src/compose/highlight.ts'
+// (the reader's highlight module whole: the measure reads each pad by the function the reader states for it, padsOf where it
+// states one, M13 below)
+import * as readerHighlight from '../../../packages/reader/src/compose/highlight.ts'
+
+const { halfLeadingOf } = readerHighlight
 import { sentencesPaired } from './sentences.mjs'
 
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
@@ -260,7 +264,7 @@ export const SAYS = {
   pixels: "the page outside every unit's box against arXiv's page: device pixels off it",
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's; a size tie's (one paragraph) at its smallest member's, against today's smallest over the same members",
-  links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's on one line or on lines one under the other one link) against the original's link annotations (one target's one right after the other one link: TeX's annotation a line of a link it broke): how many are missing",
+  links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's one right after the other in the side's own order, on one line or on lines one under the other, one link) against the original's link annotations (one target's one right after the other one link: TeX's annotation a line of a link it broke): how many are missing",
   borders: "the links drawn with a border (the anchors each side drew with one) against the original's link annotations PDF.js draws a border round: how many are missing",
   highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's; a unit on two pages or more, over them (linesPass)",
@@ -286,40 +290,28 @@ export const SAYS = {
  * or over two under two. So:
  * - A's annotations (annotation 1: as PDF.js lists them, also the annotation layer of a page a side shows as arXiv's): those of
  *   one target one right after the other are one link.
- * - The anchors a side drew (in its own order, not TeX's): one target's anchors on one line, or on lines one under the other
- *   (their vertical gap under the lower of their heights: no line of theirs fits between), are one link. An anchor of no height
- *   is a link of its own.
- * (Lenient: a target cited twice with no other link between counts once on A, a target on lines one under the other once on a
- * side; a side's count above A's is never a link missing)
+ * - The anchors a side drew, in its own order (its reading order: the reader lists its anchors by the text they stand over,
+ *   compose/links.ts; production its link records, a link it breaks over lines one anchor): one target's anchors one right after
+ *   the other, on one line or on lines one under the other (their vertical gap under the lower of their heights: no line of
+ *   theirs fits between), are one link: a link a side breaks over lines draws its pieces in a row. Two anchors of one target
+ *   with another link between are two, wherever they stand (2307.16209v1 p30: two references to an equation and one to a
+ *   section on one line, a third to the equation opening the next; read by target and line alone, the three of the equation
+ *   were one link). An anchor of no height is a link of its own.
+ * (Lenient: a target cited twice with no other link between counts once on A, and once on a side where the two stand on one
+ * line or on lines one under the other; a side's count above A's is never a link missing)
  */
 export function linksOf(boxes) {
   let n = 0,
     prev = null
-  const by = new Map()
   for (const [to, , y0, , y1, annotation] of boxes) {
-    if (annotation) {
-      if (to !== prev) n++
-      prev = to
-      continue
-    }
-    prev = null
-    if (!by.has(to)) by.set(to, [])
-    by.get(to).push({ lo: Math.min(y0, y1), hi: Math.max(y0, y1) })
-  }
-  for (const list of by.values()) {
-    const sized = list.filter((b) => b.hi > b.lo).sort((a, b) => a.lo - b.lo)
-    n += list.length - sized.length
-    // (sorted by their lower edges, a box joins the link before it where it meets that link's highest box by the rule: chained)
-    let hi = -Infinity,
-      h = 0
-    for (const b of sized) {
-      const bh = b.hi - b.lo
-      if (b.lo - hi >= Math.min(h, bh)) n++
-      if (b.hi > hi) {
-        hi = b.hi
-        h = bh
-      }
-    }
+    const lo = Math.min(y0, y1),
+      hi = Math.max(y0, y1)
+    const joins =
+      prev !== null &&
+      prev.to === to &&
+      (annotation ? prev.annotation : !prev.annotation && hi > lo && prev.hi > prev.lo && Math.max(lo, prev.lo) - Math.min(hi, prev.hi) < Math.min(hi - lo, prev.hi - prev.lo))
+    if (!joins) n++
+    prev = { to, lo, hi, annotation: !!annotation }
   }
   return n
 }
@@ -1288,6 +1280,15 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const litT = new Set(rec.today.lit.map((id) => `t${id}`))
   const figBoth = figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n)
   const ordOfKey = new Map(rec.v2.units.map((u) => [keyOfPart(u.id), u.id]))
+  // (every member of a key, in the drawing's order: a unit of today's the join by pieces makes several members of v2's is lit by
+  // each member's own boxes, its original's lines theirs together; read by one member alone, the other's lines stood unlit,
+  // 2608.27728v1 p3 t172, t174)
+  const ordsOfKey = new Map()
+  for (const u of rec.v2.units) {
+    const k = keyOfPart(u.id)
+    if (!ordsOfKey.has(k)) ordsOfKey.set(k, [])
+    if (!ordsOfKey.get(k).includes(u.id)) ordsOfKey.get(k).push(u.id)
+  }
   // (the highlight as the reader sees it: a drawn line by its ink (a CJK opening mark's blank first half, a closing mark's blank
   // second half, no ink), each side's boxes as its reader paints them: today's as its shapes paint them (today/entry.mjs
   // litBoxes), v2's Laid.lit and its kept ink's boxes padded as the reader's highlight.ts paints them, PAINT_PAD beside and
@@ -1296,27 +1297,71 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // `band`))
   const leadOf = (side) => halfLeadingOf((v2.pages[n]?.members ?? []).map((m) => (m.lit?.dir ? [] : (m.lit?.[side] ?? []))))
   const halfLead = { right: leadOf('right'), left: leadOf('left') }
-  /** v2's boxes of a member on a side as its reader paints them (its sentences' and its kept ink's) */
-  // (a turned member's boxes are in its run's frame, Laid.lit's dir: first the page's box each stands in, then the paint)
-  const paintedV2 = (lit, side) =>
-    [...(lit?.[side] ?? []).flat(), ...(lit?.own ?? []).flatMap(([, b]) => b)]
+  // (each member's pads over and under its rows on a pane as the reader computes them, read from the reader's own function:
+  // padsOf where the reader states one (its member's own leading, never past half the room to the next block: the reader's
+  // compose/highlight.ts from round c4's highlight fix), else the page's half leading, the one pad the reader paints every row
+  // with; a number, or a box's [under, over], as the reader's paintRows takes either. Never a second model of the reader's
+  // padding: what it states, the measure reads)
+  const paneOf = (side) => (v2.pages[n]?.members ?? []).filter((m) => m.lit && !m.lit.dir).map((m) => ({ ord: m.ord, per: m.lit[side] ?? [], own: m.lit.own ?? [] }))
+  const panes = { right: paneOf('right'), left: paneOf('left') }
+  const padsMemo = new Map()
+  const padsOn = (ord, side) => {
+    const k = `${side}:${ord}`
+    if (!padsMemo.has(k)) padsMemo.set(k, typeof readerHighlight.padsOf === 'function' ? readerHighlight.padsOf(panes[side], ord, halfLead[side]) : halfLead[side])
+    return padsMemo.get(k)
+  }
+  const padOf = (pads, b) => (typeof pads === 'number' ? [pads, pads] : pads(b))
+  /** v2's boxes of a member (`ord`) on a side as its reader paints them (its sentences' and its kept ink's) */
+  // (a turned member's boxes are in its run's frame, Laid.lit's dir: first the page's box each stands in, then the paint, by the
+  // page's half leading, as the reader pads a turned member)
+  const paintedV2 = (lit, side, ord) => {
+    const pads = lit?.dir ? halfLead[side] : padsOn(ord, side)
+    return [...(lit?.[side] ?? []).flat(), ...(lit?.own ?? []).flatMap(([, b]) => b)]
       .map((b) => (lit?.dir ? pageBoxOf(b, lit.dir) : b))
-      .map((b) => [b[0] - PAINT_PAD, b[1] - halfLead[side], b[2] + PAINT_PAD, b[3] + halfLead[side]])
+      .map((b) => {
+        const [under, over] = lit?.dir ? [halfLead[side], halfLead[side]] : padOf(pads, b)
+        return [b[0] - PAINT_PAD, b[1] - under, b[2] + PAINT_PAD, b[3] + over]
+      })
+  }
   /** the original's lines of part member `ord` on this page, as boxes (the part's line boxes on A) */
   const origBoxes = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
+  /** a drawn line's band a column at a time where it stands in two or more of the paper's columns and its unit's lines on A each
+   *  in one (a unit's lines in two columns on one baseline, which measure-dom reads as one line: the gutter between holds none of
+   *  its ink, 2608.06007v1 p1 t8); a unit set across the gutter on A (a title) is read whole */
+  const colsOf = frame?.columns ?? []
+  const colAt = (x) => colsOf.findIndex((c) => x >= c[0] - 2 && x <= c[1] + 2)
+  const inColumns = (b, left) => {
+    const a = colAt(b.x0),
+      z = colAt(b.x1)
+    if (a < 0 || z <= a || !left.length || !left.every((o) => colAt(o.x0) >= 0 && colAt(o.x0) === colAt(o.x1))) return [b]
+    return colsOf.slice(a, z + 1).map((c) => ({ ...b, x0: Math.max(b.x0, c[0]), x1: Math.min(b.x1, c[1]) }))
+  }
   /** how many of a unit's drawn lines (`ls`) and original lines (`left`) a side's boxes (`rb` right, `lb` left) leave uncovered */
-  const missOf = (ls, left, rb, lb) => ({ r: ls.map(inkOf).map(band).filter((b) => !covered(b, rb)).length, of: ls.length, l: left.filter((b) => !covered(b, lb)).length, ofL: left.length })
+  const missOf = (ls, left, rb, lb) => ({
+    r: ls
+      .map(inkOf)
+      .map(inkBand)
+      .filter((b) => !inColumns(b, left).every((q) => covered(q, rb))).length,
+    of: ls.length,
+    l: left.filter((b) => !covered(b, lb)).length,
+    ofL: left.length,
+  })
   const says = (m) => `${m.r} of ${m.of} drawn, ${m.l} of ${m.ofL} original lines not covered`
   const todays = [...T.keys()].filter((k) => V.has(k) && litT.has(k))
   const hl = { todays: todays.length, todayMissed: 0, v2Missed: 0, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
   for (const key of todays) {
-    const ord = ordOfKey.get(key)
+    const ords = ordsOfKey.get(key)
+    const ord = ords[0]
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
-    const left = origBoxes(ord)
+    const left = ords.flatMap(origBoxes)
     const tb = rec.today.litBoxes[key.slice(1)] ?? { right: [], left: [] }
-    const vb = laidV2.get(ord)?.lit
     const t = missOf(T.get(key), left, tb.right, tb.left),
-      v = missOf(V.get(key), left, paintedV2(vb, 'right'), paintedV2(vb, 'left'))
+      v = missOf(
+        V.get(key),
+        left,
+        ords.flatMap((o) => paintedV2(laidV2.get(o)?.lit, 'right', o)),
+        ords.flatMap((o) => paintedV2(laidV2.get(o)?.lit, 'left', o)),
+      )
     const dt = t.r + t.l,
       dv = v.r + v.l
     if (dt) {
@@ -1331,18 +1376,18 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       diff('highlight', name, "lines its sentence boxes leave uncovered: its drawn lines (right), its original's (left)", 0, { value: says(t), off: dt }, { value: says(v), off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
   }
   for (const [key, ls] of V) {
-    const ord = ordOfKey.get(key)
+    const ords = ordsOfKey.get(key)
+    const ord = ords[0]
     const fig = figBoth.get(ord)
     if (T.has(key) ? litT.has(key) : fig !== undefined && litT.has(`t${fig}`)) continue
     const both = T.has(key) || fig !== undefined
     if (T.has(key)) hl.unlit++
     else if (both) hl.figures++
     else hl.alone++
-    const lit = laidV2.get(ord)?.lit
-    const rb = paintedV2(lit, 'right'),
-      lb = paintedV2(lit, 'left')
+    const rb = ords.flatMap((o) => paintedV2(laidV2.get(o)?.lit, 'right', o)),
+      lb = ords.flatMap((o) => paintedV2(laidV2.get(o)?.lit, 'left', o))
     if (!rb.length && !lb.length) continue
-    const m = missOf(ls, origBoxes(ord), rb, lb)
+    const m = missOf(ls, ords.flatMap(origBoxes), rb, lb)
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
     if (!m.r && !m.l) {
       if (both) {
@@ -1392,17 +1437,25 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   hl.fillsToday = 0
   hl.fillsV2 = 0
   for (const key of new Set([...todays, ...V.keys()])) {
-    const ord = ordOfKey.get(key)
-    const lit = laidV2.get(ord)?.lit
-    if (!lit || lit.dir) continue
-    const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
-    const onA = [...displaysHere, ...linesOnA.filter((b) => b.ord !== ord)]
+    const ords = ordsOfKey.get(key) ?? []
+    const lits = ords.map((o) => [o, laidV2.get(o)?.lit]).filter(([, lit]) => lit && !lit.dir)
+    if (!lits.length) continue
+    const name = `${key} ${facts.get(ords[0])?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
+    // (another unit's lines: none of the key's own members', which the join by pieces makes one unit, nor the run-in that leads
+    // one of them or follows it (`led`: a bound name's lead, Placed.join), whose text its translation says: a proof's "Proof.",
+    // which the translation begins with in the target's word, 2610.21377v1 p35)
+    const own = new Set([...ords, ...ords.map((o) => led?.get(o)).filter((o) => o !== undefined), ...[...(led ?? new Map())].filter(([, h]) => ords.includes(h)).map(([f]) => f)])
+    const onA = [...displaysHere, ...linesOnA.filter((b) => !own.has(b.ord))]
     const tb = litT.has(key) ? rec.today.litBoxes[key.slice(1)] : null
     const tShapes = (side) => (!tb ? [] : tb.by ? (tb[`${side}By`] ?? []) : [tb[side] ?? []])
     const dt = filled(tShapes('left'), onA) + filled(tShapes('right'), displaysHere)
-    const dv =
-      filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA, litColumn(lit, 'left')) +
-      filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere, litColumn(lit, 'right'))
+    const dv = lits.reduce(
+      (s, [o, lit]) =>
+        s +
+        filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, padsOn(o, 'left')), onA, litColumn(lit, 'left')) +
+        filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, padsOn(o, 'right')), displaysHere, litColumn(lit, 'right')),
+      0,
+    )
     hl.fillsToday += dt
     hl.fillsV2 += dv
     if (dt) fault('today', 'highlight', `${name}: its highlight fills or bridges ${dt} other blocks (a display, another unit's line)`)
@@ -2161,11 +2214,25 @@ function covered(b, boxes, tol = NEAR.positionMin) {
   return true
 }
 
+/** a CJK character (its punctuation and the full-width forms among them), whose ink stays inside its face's em box: 0.12 of the
+ *  size under the baseline (the typesetter's box of a CJK token, packages/typeset/src/emit/sentences.ts CJK_DESC) */
+const CJK_INK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
 function band(l) {
   // (a turned line's band as a level line's, turned with it (measure-dom's `band`); a raw file before it, its box)
   if (l.rot && l.band) return { x0: l.band[0], y0: l.band[1], x1: l.band[2], y1: l.band[3] }
   if (l.rot) return { x0: l.x0, x1: l.x1, y0: l.y0, y1: l.y1 }
   return { x0: l.x0, x1: l.x1, y0: l.y - 0.2 * l.size, y1: l.y + 0.8 * l.size }
+}
+/** the band of a drawn line the highlight must cover: its ink's (band's), a line's ink reaching 0.2 of its size under its
+ *  baseline, a Latin descender's; a line of CJK characters alone no lower than their em box's foot, 0.12 of it: read 0.2 under,
+ *  a 14.35 pt heading's band missed the em box its sentence is boxed by by 1.15 pt, 2501.14787v1 p8 t55. A crop's stand-in, or
+ *  any other character, keeps 0.2 (the other measures that read `band`, `cross` and the figure groups' matching, read it as
+ *  they did) */
+function inkBand(l) {
+  const b = band(l)
+  if (l.rot) return b
+  const chars = [...String(l.text ?? '')].filter((c) => /\S/u.test(c))
+  return chars.length && chars.every((c) => CJK_INK.test(c)) ? { ...b, y0: l.y - 0.12 * l.size } : b
 }
 function median(a) {
   const s = a.filter((v) => Number.isFinite(v)).sort((x, y) => x - y)
