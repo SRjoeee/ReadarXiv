@@ -96,6 +96,9 @@ export type Token = {
    *  (B.place); `fillLead`, the same before it, where it is the unit's first token */
   fill?: Fill
   fillLead?: Fill
+  /** its `fill` stands before TeX's `\break`, a penalty, which discards nothing before it: on the line that break ends, where
+   *  the placement keeps it (B.place fillsOf) */
+  fillStays?: true
   newline?: number
   room?: number
   blockTo?: number
@@ -925,13 +928,23 @@ export function tokens(i: TokensInput): Tokens {
     }
     const r = resolved.get(k)
     if (!r) return
+    // (the infinite glue standing before a forced break: TeX's `\break`, \penalty-\@M, discards nothing before it (TeX
+    // discards the glue a line breaks at, and what follows a break), so it stays on the line it ends (Token.fillStays); LaTeX's
+    // `\\` and `\newline` take it away first (latex.ltx's \@gnewline and \@centercr: \unskip, then `\hfil\break` or \par), and
+    // a cell's row end (its template's \unskip): the placement discards it there, as a glue on a line's last item)
+    const stays = () => {
+      const t = tokens.at(-1)
+      if (p.t === 'ph' && p.src === '\\break' && t?.fill) t.fillStays = true
+    }
     if (r.brk && r.room !== undefined) {
       while (tokens.at(-1)?.space) tokens.pop()
+      stays()
       if (tokens.at(-1)?.newline !== r.brkAt) tokens.push({ newline: r.brkAt!, room: r.room, w100: 0 })
       return
     }
     if (r.brk && r.region !== undefined && resolved.referenced?.has(r.region)) {
       while (tokens.at(-1)?.space) tokens.pop()
+      stays()
       if (tokens.at(-1)?.blockTo !== r.region) tokens.push({ blockTo: r.region, w100: 0, brk: true })
       return
     }

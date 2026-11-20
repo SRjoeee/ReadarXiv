@@ -9069,13 +9069,20 @@ the count flush right; the typesetter read `\hfill` as no glue, and drew the two
   of the highest order on it, shared by how many of that order (tex.web §656: only the highest order stretches); the line's own
   fil glue counts at order 1 (LaTeX's `\@flushglue` and `\parfillskip`: a centred line's two, a flush right line's left one, a
   ragged or last line's right one), so `A \hfill B` sets B at the right end in any of them and `A \hfil B` in a centred cell
-  shares the room in thirds. A glue on a line's last item is TeX's at a break: discarded. The drawing sets what follows a glue as a
+  shares the room in thirds. A glue on a line's last item is discarded where TeX discards it: at a break the line chose there
+  (TeX discards the glue it breaks at), at the unit's end (`\par` takes the last glue), and before LaTeX's `\\` and `\newline`
+  (latex.ltx's `\@gnewline` and `\@centercr` begin with `\unskip`), a cell's row end alike. Before TeX's `\break`
+  (`\penalty-\@M`, the part's forced break whose command is `break`) it stays on the line (Token.fillStays: a break at a
+  penalty discards nothing before it): `A \hfil B \hfill\break C` sets B after A at its spacing, the room after it, and a
+  centred or flush right line ending `\hfill\break` stands at the left, as TeX sets them (compiled: `\showbox` reads "glue set
+  178.75fill" there, "89.37fil" with `\\`, B mid-room). The drawing sets what follows a glue as a
   run of its own at its place (`emit/display.ts` lineRuns), never glued to the word before it, which a reply may set with no
   space beside the glue's placeholder. The breaker and the fit are as they were:
   the glue adds no width, and a line with no room left sets nothing more. `\hspace{\fill}` is not read: the part states its
   argument as no source the lay can read.
 - **Reach** (the record's prepare of the 90 pairs' papers): 2610.40576v1's nine cells, and 2610.40394v1's six paragraphs ending
-  `\hfill$\square$`, whose box is then set at the line's right end where TeX sets it. The display gate reads the gap the glue
+  `\hfill$\square$`, whose box is then set at the line's right end where TeX sets it; no unit there holds infinite glue before
+  a forced break (none holds `\break`). The display gate reads the gap the glue
   opens as the glue's, the line's free room, never a stretched word space (`lab/typeset/parity/README.md`, `stretch`: the run
   the glue places is marked by the parity's lay); a line's other gaps are read as before.
 - **Versions**: lay only; no stored object moves (PIPELINE, TRANSLATE, LAYOUT and the digests stay).
