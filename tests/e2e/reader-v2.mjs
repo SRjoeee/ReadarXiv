@@ -609,9 +609,12 @@ try {
     // (lib/settles.mjs): three hosted runs of round c4 printed the check above and then nothing for 43 minutes, until the job's
     // limit cancelled them. An extension page whose main thread does not come back holds an evaluate on any of them for good)
     const readers = { a, b, c, e }
-    const stalled = () => stall.report(readers, () => known(readers), note)
-    await settles('the settings put back (patch on reader e)', () => patch(e, { mode: 'side', pdfReader: { original: false, sync: true }, reading: { openIn: 'new-tab' } }), { tell: stalled, tellMs: 90_000 })
-    for (const [name, page] of Object.entries(readers)) await settles(`reader ${name} closed`, () => page.close(), { tell: stalled, tellMs: 90_000 })
+    // (each step's time, and the one that stands named with when it was sent: "closing e", a, b and c's closes beside it)
+    const took = []
+    const stalled = (what, at) => () => stall.report(readers, () => `the step: ${what}; the steps before it: ${took.join(', ') || 'none'}; ${known(readers)}`, note, { what, at })
+    const timed = async (what, step) => { const at = Date.now(); await settles(what, step, { tell: stalled(what.replace(/^reader (\w) closed$/, 'closing $1'), at), tellMs: 120_000 }); took.push(`${what} in ${Date.now() - at} ms`) }
+    await timed('the settings put back (patch on reader e)', () => patch(e, { mode: 'side', pdfReader: { original: false, sync: true }, reading: { openIn: 'new-tab' } }))
+    for (const [name, page] of Object.entries(readers)) await timed(`reader ${name} closed`, () => page.close())
     await stall.end()
   }
 

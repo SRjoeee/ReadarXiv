@@ -20,6 +20,6 @@ export declare function traceStall(events: readonly Record<string, unknown>[], o
 /** the watch over a section whose readers may stick (see settles.mjs) */
 export declare function stallWatch(o: { context: unknown; worker: unknown; extensionDir: string; origin: string }): Promise<{
   watch(page: unknown): Promise<void>
-  report(named: Record<string, unknown>, known: () => string, print: (line: string) => void): Promise<string>
+  report(named: Record<string, unknown>, known: () => string, print: (line: string) => void, step?: { what: string; at: number } | null): Promise<string>
   end(): Promise<void>
 }>

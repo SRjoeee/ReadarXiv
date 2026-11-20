@@ -160,6 +160,39 @@ export async function stallWatch({ context, worker, extensionDir, origin }) {
   const scripts = new Map()
   let trace = null
   const browser = context.browser?.()
+  // ---- what happens from the section's start, with its time: the browser's target events, each watched page's own (its
+  // navigations, loads, close, crash, its DevTools session's detach), every dialog, the requests in flight
+  const t0 = Date.now()
+  const short = url => String(url ?? '').replace(/^chrome-extension:\/\/[a-z]+\//, '').slice(0, 90)
+  const seen = []
+  const log = (what, page = null) => { seen.push({ t: Date.now(), what, page }); if (seen.length > 600) seen.shift() }
+  const targetOf = new Map()
+  // (a dialog logged, then dismissed as Playwright dismisses one nobody listens for: the run behaves as without the watch)
+  const onDialog = d => { log(`dialog ${d.type()} "${d.message().slice(0, 80)}"`, d.page()); d.dismiss().catch(() => undefined) }
+  context.on('dialog', onDialog)
+  const inFlight = new Map()
+  const asker = r => { try { return r.serviceWorker() ? 'the service worker' : short(r.frame().url()) } catch { return 'a page' } }
+  const onRequest = r => inFlight.set(r, { t: Date.now(), url: r.url(), from: asker(r) })
+  const onDone = r => inFlight.delete(r)
+  context.on('request', onRequest)
+  context.on('requestfinished', onDone)
+  context.on('requestfailed', onDone)
+  let targets = null
+  if (browser) {
+    try {
+      targets = await browser.newBrowserCDPSession()
+      for (const ev of ['Target.targetCreated', 'Target.targetDestroyed', 'Target.targetInfoChanged', 'Target.targetCrashed', 'Target.detachedFromTarget']) {
+        targets.on(ev, e => {
+          const id = e.targetId ?? e.targetInfo?.targetId
+          const info = e.targetInfo ? ` ${e.targetInfo.type} ${short(e.targetInfo.url)}${e.targetInfo.attached ? ' attached' : ''}` : ''
+          log(`${ev.replace('Target.', '')} ${String(id).slice(0, 8)}${info}${e.status ? ` status ${e.status}` : ''}`, targetOf.get(id) ?? null)
+        })
+      }
+      await within(targets.send('Target.setDiscoverTargets', { discover: true }), 5000)
+    } catch {
+      targets = null
+    }
+  }
   if (browser) {
     try {
       const s = await browser.newBrowserCDPSession()
@@ -237,14 +270,39 @@ export async function stallWatch({ context, worker, extensionDir, origin }) {
     for (const s of sessions.values()) await within(s.detach(), 3000)
     sessions.clear()
     scripts.clear()
+    context.off('dialog', onDialog)
+    context.off('request', onRequest)
+    context.off('requestfinished', onDone)
+    context.off('requestfailed', onDone)
+    if (targets) await within(targets.detach(), 3000)
+    targets = null
+  }
+  /** each named page as the browser has it now: open or closed, its address, its document's state and visibility (3 s) */
+  async function pagesNow(named) {
+    return Promise.all(Object.entries(named).map(async ([name, p]) => {
+      if (p.isClosed()) return `${name} closed`
+      const doc = await within(p.evaluate(() => ({ ready: document.readyState, visible: document.visibilityState, url: location.href })), 3000)
+      return `${name} ${typeof doc === 'string' ? doc : `${doc.ready}, ${doc.visible}, ${short(doc.url)}`} (target ${String([...targetOf].find(([, q]) => q === p)?.[0] ?? '?').slice(0, 8)})`
+    }))
   }
   return {
     async watch(page) {
       try {
+        // (the page's own events, kept: its navigations of the main frame, loads, close and crash)
+        page.on('framenavigated', f => { if (f === page.mainFrame()) log(`navigated to ${short(f.url())}`, page) })
+        page.on('domcontentloaded', () => log('domcontentloaded', page))
+        page.on('load', () => log('load', page))
+        page.on('close', () => log('close (Playwright\'s event)', page))
+        page.on('crash', () => log('crashed', page))
         const s = await context.newCDPSession(page)
         const known = new Map()
         scripts.set(page, known)
         s.on('Debugger.scriptParsed', e => { if (e.url) known.set(e.scriptId, e.url) })
+        s.on('Inspector.detached', e => log(`Inspector.detached ${e.reason}`, page))
+        s.on('Inspector.targetCrashed', () => log('Inspector.targetCrashed', page))
+        const info = await within(s.send('Target.getTargetInfo'), 3000)
+        if (info?.targetInfo?.targetId) targetOf.set(info.targetInfo.targetId, page)
+        await s.send('Inspector.enable').catch(() => undefined)
         await s.send('Runtime.enable')
         await s.send('Debugger.enable')
         await s.send('Debugger.setBreakpointsActive', { active: false })
@@ -253,11 +311,20 @@ export async function stallWatch({ context, worker, extensionDir, origin }) {
         // (a page gone before it was watched: nothing to report of it)
       }
     },
-    /** the whole account printed (`print` a line at a time), one line returned for the run's failure. (The pages' answers are
-     *  read before any pause is asked: a pause asked of a page whose thread runs no JavaScript of its own waits for its next
-     *  statement, which would be that evaluate's) */
-    async report(named, known, print) {
+    /** the whole account printed (`print` a line at a time), one line returned for the run's failure. `step`: the step that
+     *  stands and when it was sent (ms since the epoch), for the events after it. (The pages' answers are read before any pause
+     *  is asked: a pause asked of a page whose thread runs no JavaScript of its own waits for its next statement, which would be
+     *  that evaluate's) */
+    async report(named, known, print, step = null) {
+      const nameOf = p => Object.entries(named).find(([, q]) => q === p)?.[0] ?? (p ? short(p.url()) : 'the browser')
+      const rel = t => `+${((t - t0) / 1000).toFixed(2)} s`
+      if (step) print(`stall: the step: ${step.what}, sent at ${rel(step.at)} of the section (${((Date.now() - step.at) / 1000).toFixed(1)} s ago)`)
       print(`stall: what the script knows: ${known()}`)
+      print(`stall: the pages now: ${(await pagesNow(named)).join('; ')}`)
+      print(`stall: dialogs since the section's start: ${seen.filter(e => e.what.startsWith('dialog')).map(e => `${rel(e.t)} ${nameOf(e.page)} ${e.what}`).join('; ') || 'none'}`)
+      print(`stall: requests in flight: ${[...inFlight.values()].map(r => `${short(r.url)} from ${r.from}, ${((Date.now() - r.t) / 1000).toFixed(1)} s`).join('; ') || 'none'}`)
+      for (const [name, p] of Object.entries(named)) print(`stall: ${name}'s events: ${seen.filter(e => e.page === p).map(e => `${rel(e.t)} ${e.what}`).join(', ') || 'none seen'}`)
+      if (step) print(`stall: every event since the step was sent: ${seen.filter(e => e.t >= step.at).map(e => `${rel(e.t)} ${nameOf(e.page)}: ${e.what}`).join('; ') || 'none'}`)
       print(`stall: the browser: ${await stallReport({ context, worker })}`)
       const said = await stacks(named, print)
       for (const s of said) print(`stall: ${s}`)
