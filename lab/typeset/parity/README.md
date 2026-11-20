@@ -180,7 +180,7 @@ other as text; a member's read with its groups' opens and closes and without the
 row holding none of the box round them, `\makecell{`); a member joins the run of today's units, two or more, consecutive in
 today's order, whose words together are its own; on a page both stand on, each in one group at most. A run whose first alone
 says the other's words is none (one member, one unit: no group of pieces; going on past it only adds words a tenth may hide, as a
-paragraph the one-to-one join left took the merged cell after it, 2611.03953v2-zh p8). Each group is one unit to every measure (keyed by its first unit
+paragraph the one-to-one join left took the merged cell after it, 2611.03953v2-zh p8), and so is a run one of whose units says none of the other's words (the run's words in common with it no fewer without that unit's: a unit the tenth's tolerance alone takes, as three author units of 7 words before the abstract's 87 were joined to v2's abstract, 2610.21084v1 p1). Each group is one unit to every measure (keyed by its first unit
 of today's): each side's lines of it together, the original's facts its members' together; a member of it v2 leaves the
 original's by a rule a ruling covers shows the original's ink, its lines counted on v2's side as rows apart, as a unit's
 element kept as a crop is. `shown` reads a group's parts: the unit of today is shown where each part of it is translated in a

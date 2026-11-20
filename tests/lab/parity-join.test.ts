@@ -553,4 +553,22 @@ describe("a unit of today cut into several members of v2, and several of today's
   it('states with each group the pages each member stands on: those the part states a line of it on, not those whose parts carry it', () => {
     expect(piecesJoin(brokenPart, [broken], new Map())).toEqual([{ today: [40], members: [20, 21], pages: { 20: [1], 21: [2] } }])
   })
+  // (M9, 2610.21084v1 p1: today's three author units (7 words) and the abstract (87 words) before v2's abstract member, which
+  // holds none of the names; the run's 94 words within a tenth of the member's, the names' all among the tenth: the three were
+  // joined to v2's abstract, and the toggles measure read v2's translated abstract as the names drawn translated. Every unit of
+  // a run says words of the other side's: one whose words the tenth's tolerance alone takes is none of it)
+  const abstract = Array.from({ length: 87 }, (_, k) => `term${k}`).join(' ')
+  const namesPart = bundle({ 1: [member(596, 'para', H, { lines: [[1]] })] }, [{ id: H, kind: 'para', content: text(`${abstract} extra1 extra2`) }])
+  const author = (ord: number, names: string) => ({ ord, kind: 'author', lines: [{ page: 1 }], pieces: [{ kind: 'text', s: names }] })
+  const front = [author(1, 'Ann Bee, Cy'), author(2, 'Dee Eve'), author(3, 'Fay Gus'), { ...today(4, 1, abstract), kind: 'abstract' }]
+  it('joins no unit to a run whose words the tolerance alone takes: author units before the abstract are none of v2\'s abstract (M9)', () => {
+    expect(piecesJoin(namesPart, front, new Map())).toEqual([])
+  })
+  it("still joins a run whose short unit's words the other side holds: a lead of three words before a box", () => {
+    const lead = bundle({ 1: [member(30, 'para', H, { lines: [[1]] }), member(31, 'para', P, { lines: [[1]] })] }, [
+      { id: H, kind: 'para', content: text('For example consider:') },
+      { id: P, kind: 'para', content: text(abstract) },
+    ])
+    expect(piecesJoin(lead, [today(30, 1, `For example consider: ${abstract}`)], new Map())).toEqual([{ today: [30], members: [30, 31], pages: { 30: [1], 31: [1] } }])
+  })
 })

@@ -432,9 +432,21 @@ export function piecesJoin(bundle, prepared, todayOf) {
   // box, `\makecell{`, stands round its rows, and today's unit a row holds none of it), today's alike both times: two say the
   // same where either reading does)
   const same = (a, b) => sameWords(a.words, b.words) || sameWords(a.bare, b.bare)
-  /** the run from `start` of `list`, consecutive in its order, each on a page `one` stands on, two or more, whose words are its;
-   *  none where its first alone says them (one member or unit is no group of pieces, whatever the one-to-one join left of it:
-   *  a run that goes on past it adds only words a tenth may hide, 2611.03953v2-zh p8's paragraph and the merged cell after it) */
+  /** whether each unit of `run` says words of `one`'s: the run's words in common with it fewer without that unit's, read either
+   *  way (`words`, `bare`). A unit whose words the tenth's tolerance alone takes says none of them: 2610.21084v1 p1's three author
+   *  units (7 words) before the abstract (87), joined to v2's abstract member, which holds none of the names */
+  const each = (run, one) =>
+    run.every((x, i) =>
+      ['words', 'bare'].some((w) => {
+        const all = run.flatMap((y) => y[w])
+        const rest = run.flatMap((y, j) => (j === i ? [] : y[w]))
+        return lcs(one[w], all) > lcs(one[w], rest)
+      }),
+    )
+  /** the run from `start` of `list`, consecutive in its order, each on a page `one` stands on, two or more, whose words are its,
+   *  each of its units saying some of them (`each`); none where its first alone says them (one member or unit is no group of
+   *  pieces, whatever the one-to-one join left of it: a run that goes on past it adds only words a tenth may hide, 2611.03953v2-zh
+   *  p8's paragraph and the merged cell after it), nor where one of its units says none of them */
   const runOf = (one, list, start, taken) => {
     const run = []
     const got = { words: [], bare: [] }
@@ -444,7 +456,7 @@ export function piecesJoin(bundle, prepared, todayOf) {
       run.push(x)
       got.words = [...got.words, ...x.words]
       got.bare = [...got.bare, ...x.bare]
-      if (same(got, one)) return run.length >= 2 ? run : null
+      if (same(got, one)) return run.length >= 2 && each(run, one) ? run : null
     }
     return null
   }
