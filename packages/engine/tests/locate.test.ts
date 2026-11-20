@@ -101,6 +101,28 @@ describe('locate', () => {
     expect([...L.born.values()].map((b) => b.content)).toEqual([[text('a supplement page of its own')]])
     expect(L.members.at(-1)).toMatchObject({ kind: 'inkorphan', located: true, unit: -1 })
   })
+  it('makes two units born on A where a line stands farther under the one before than 1.75 of its size: a heading and its paragraph', () => {
+    // (a page B never printed, at 10 pt: a heading at 700 and its paragraph's two lines at 678 and 666. LaTeX's \section sets
+    // 2.3ex and a \baselineskip between a heading and its paragraph's first line, 22 pt here, past 1.75 sizes (17.5): a block
+    // of its own; the paragraph's second line 12 pt under its first, within them: one block)
+    const A = docOf([
+      pages[0]!,
+      pages[1]!,
+      {
+        lines: [
+          { text: 'A supplement', y: 700 },
+          { text: 'its first line', y: 678 },
+          { text: 'and its second', y: 666 },
+        ],
+      },
+    ])
+    const L = locate(ins, A, align(B, A))
+    expect([...L.born.values()].map((b) => b.content)).toEqual([
+      [text('A supplement')],
+      [text('its first line and its second')],
+    ])
+    expect(L.members.slice(-2).map((m) => m.kind)).toEqual(['inkorphan', 'inkorphan'])
+  })
   it('makes no unit born of a glyph shown inside a form: a figure’s text is the figure reading’s alone, the rest born as before', () => {
     // (a page B never printed: a row of a figure's axis numbers in its form, 40 pt apart, and a line of text outside it under
     // them; the ink makers not run (no pages given), so that the born maker is all that could take either)
