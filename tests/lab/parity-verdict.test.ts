@@ -312,6 +312,28 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       expect(highlights(of({ left: [[[71, 378, 301, 389]]], right: [], own: [] }))).toMatchObject([{ unit: 't20 para', worse: true }])
     })
   })
+  describe("a unit's lines in two columns on one baseline, read as one drawn line: covered a column at a time (M6)", () => {
+    // (2608.06007v1 p1 t8: a paragraph that runs from the foot of the left column to the head of the right, its two lines there
+    // on one baseline; measure-dom reads a unit's characters a baseline at a time, one line from the left column's start to the
+    // right column's end, and the gutter between them, which none of its ink stands in nor any box lights, read unlit)
+    const frame = { columns: [[72, 300], [312, 540]], block: [72, 540] }
+    // (its lines on A: the foot of the left column, the head of the right)
+    const inTwo = [factLine(72, 300, 120), factLine(312, 540, 700)]
+    const across = (right: number[][], lines = inTwo) =>
+      measurePage(
+        'p-zh',
+        v2Of({ members: [{ ord: 8, state: 'laid', lines: [], lit: { left: [[[71, 117, 301, 129], [311, 697, 541, 709], [71, 397, 541, 409]]], right: [right], own: [] } }], facts: [{ ord: 8, kind: 'para', align: 'j', style: { size: 10 }, lines }] }),
+        rec({ v2: { units: [{ id: 8, lines: [{ ...line(400), x0: 72, x1: 540 }] }], lit: [8] } }),
+        { prepByOrd: new Map(), todayOf: new Map(), turned: new Set(), led: new Map(), top: new Set(), frame },
+      )
+    it('each column part lit by its box: covered', () => {
+      expect(highlights(across([[71, 397, 301, 409], [311, 397, 541, 409]]))).toEqual([])
+    })
+    it('a column part no box lights, or the gutter of a line set across it on A (a title): still unlit', () => {
+      expect(highlights(across([[71, 397, 301, 409]]))).toMatchObject([{ unit: 'p8 para', worse: true }])
+      expect(highlights(across([[71, 397, 301, 409], [311, 397, 541, 409]], [factLine(72, 540, 400)]))).toMatchObject([{ unit: 'p8 para', worse: true }])
+    })
+  })
   describe('a figure text both translate, matched by its original box (today has no highlight on figure texts)', () => {
     it('v2 without boxes: equal', () => {
       expect(highlights(measure(fig({}), rec({ today: todayFig, v2: v2Fig }), prepFig))).toEqual([])

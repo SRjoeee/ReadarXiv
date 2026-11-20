@@ -1301,8 +1301,27 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       .map((b) => [b[0] - PAINT_PAD, b[1] - halfLead[side], b[2] + PAINT_PAD, b[3] + halfLead[side]])
   /** the original's lines of part member `ord` on this page, as boxes (the part's line boxes on A) */
   const origBoxes = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
+  /** a drawn line's band a column at a time where it stands in two or more of the paper's columns and its unit's lines on A each
+   *  in one (a unit's lines in two columns on one baseline, which measure-dom reads as one line: the gutter between holds none of
+   *  its ink, 2608.06007v1 p1 t8); a unit set across the gutter on A (a title) is read whole */
+  const colsOf = frame?.columns ?? []
+  const colAt = (x) => colsOf.findIndex((c) => x >= c[0] - 2 && x <= c[1] + 2)
+  const inColumns = (b, left) => {
+    const a = colAt(b.x0),
+      z = colAt(b.x1)
+    if (a < 0 || z <= a || !left.length || !left.every((o) => colAt(o.x0) >= 0 && colAt(o.x0) === colAt(o.x1))) return [b]
+    return colsOf.slice(a, z + 1).map((c) => ({ ...b, x0: Math.max(b.x0, c[0]), x1: Math.min(b.x1, c[1]) }))
+  }
   /** how many of a unit's drawn lines (`ls`) and original lines (`left`) a side's boxes (`rb` right, `lb` left) leave uncovered */
-  const missOf = (ls, left, rb, lb) => ({ r: ls.map(inkOf).map(band).filter((b) => !covered(b, rb)).length, of: ls.length, l: left.filter((b) => !covered(b, lb)).length, ofL: left.length })
+  const missOf = (ls, left, rb, lb) => ({
+    r: ls
+      .map(inkOf)
+      .map(band)
+      .filter((b) => !inColumns(b, left).every((q) => covered(q, rb))).length,
+    of: ls.length,
+    l: left.filter((b) => !covered(b, lb)).length,
+    ofL: left.length,
+  })
   const says = (m) => `${m.r} of ${m.of} drawn, ${m.l} of ${m.ofL} original lines not covered`
   const todays = [...T.keys()].filter((k) => V.has(k) && litT.has(k))
   const hl = { todays: todays.length, todayMissed: 0, v2Missed: 0, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
