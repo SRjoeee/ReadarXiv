@@ -380,7 +380,63 @@ describe('a paragraph’s measure as TeX sets its lines (F13)', () => {
     }
     // (a paragraph whose \hsize is the text block's, a two-column float's: placed at the block's left)
     expect(measuresOf([{ para: 1, ...plain, shape: [[20, 400]] }], two)[0]![0]).toEqual([92, 492])
-    // (a minipage's paragraph: its \hsize 300, where it stands on the page TeX's statement does not say)
-    expect(measuresOf([{ para: 1, ...plain, hsize: 300, shape: [[20, 200]] }])[0]![0]).toEqual([72, 540])
+    // (a minipage's paragraph: its \hsize 300, where it stands on the page TeX's statement does not say, and no line of the page
+    // set at that width fills it: no wider measure than its own lines, their ink's extent; never its frame's)
+    expect(measuresOf([{ para: 1, ...plain, hsize: 300, shape: [[20, 200]] }])[0]![0]).toEqual([100, 202])
+  })
+})
+
+describe('a paragraph set at an \hsize no column has (a box’s): placed by the page’s lines set at that width (the coordinator’s ruling 2 of 2026-11-20)', () => {
+  const box = { ...plain, hsize: 300 }
+  it('a paragraph in a framed box narrower than its column: the box’s measure where its lines’ spread is its \hsize', () => {
+    // (2610.19159v1's mdframed boxes: every line stated the page's text block, 72..540 here, a single line widened onto the
+    // box's rule; a box at 100 of \hsize 300, a paragraph of two full lines and a short last one, and a one-line paragraph
+    // after it in the same box)
+    const [one, two] = measuredOf(
+      [
+        ['x'.repeat(50), 0],
+        ['x'.repeat(50), 0],
+        ['x'.repeat(20), 0],
+        ['y'.repeat(12), 1],
+      ],
+      [
+        [1, 2],
+        [2, 3],
+      ],
+      [
+        { para: 1, ...box },
+        { para: 2, ...box },
+      ],
+      [
+        [0, 1],
+        [1, 2],
+      ],
+    )
+    expect(one).toEqual([
+      [100, 400],
+      [100, 400],
+      [100, 400],
+    ])
+    // (the lone line takes the box's measure from its sibling's lines: it may widen to the box's edge, never past it)
+    expect(two).toEqual([[100, 400]])
+  })
+  it('a paragraph of its column’s own width as before', () => {
+    const [one] = measuredOf(
+      [
+        ['x'.repeat(50), 0],
+        ['x'.repeat(20), 0],
+      ],
+      [[1, 1]],
+      [{ para: 1, ...plain }],
+      [[0, 1]],
+    )
+    expect(one).toEqual([
+      [72, 540],
+      [72, 540],
+    ])
+  })
+  it('a lone line with no sibling of its width: no wider measure than itself, so that it is never widened past its ink', () => {
+    const [one] = measuredOf([['z'.repeat(12), 0]], [[1, 0]], [{ para: 1, ...box }], [[0, 1]])
+    expect(one).toEqual([[100, 172]])
   })
 })

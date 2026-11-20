@@ -7626,11 +7626,25 @@ bytes it was.
   its one line then centred; 2411.13093v4 p14's and 2608.15016v1 p2's one-line captions read as a hung paragraph's later line,
   2608.16745v1 p7's and 2610.19860v1 p5's (in no paragraph at all) as the next paragraph's. Its rank TeX's
   line number (B's order, a row two members share one line), its box at the left edge of its frame's column whose width is the
-  paragraph's `\hsize` (else the text block of that width; a minipage's, a `\parbox`'s or a p column's paragraph states none:
-  where its box stands TeX's statement does not say), shifted by the line's `\parshape` indent (its last entry past it) or its
+  paragraph's `\hsize` (else the text block of that width; a paragraph of another `\hsize`, a minipage's, a `\parbox`'s,
+  mdframed's, where TeX's statement does not say where its box stands: below), shifted by the line's `\parshape` indent (its last entry past it) or its
   `\hangindent` (after `\hangafter` lines, or the first `|\hangafter|`; a negative one hangs on the right), from `\leftskip`'s
   natural size to its length less `\rightskip`'s. A display inside the paragraph counts three lines to TeX's shape: where the
   shape varies by line, the lines after a held row state none. A table cell, a figure text and a name keep their measure.
+  - **A box's paragraph** (`locate/measures.ts` boxMeasures; lane c4-boxes, the coordinator's ruling 2 of 2026-11-20): a
+    paragraph TeX set at an `\hsize` no column of its frame has is placed by the page's own lines set at that `\hsize`, as
+    today's reader read a column from the page's lines. Those lines of one page, gathered where their extents meet (one box;
+    two of one width side by side stay two), each extent its ink widened by what TeX's statement puts between its ink and its
+    measure (its indent and `\leftskip`, its `\rightskip` and its shape's length short of `\hsize`): where their spread is
+    that `\hsize` within 0.25 em of their size (the typesetter's ONE_EDGE, §18.94: a line TeX filled stands among them), the
+    box's left is the spread's and every line's measure the box's, as a column's is. Where no such lines stand (each line of
+    the box short of its measure: a single line, a ragged box), the paragraph has no wider measure than its own lines on the
+    page, their ink's extent: the safe end, a single line then never widened past itself. Left at its frame's, every line of
+    2610.19159v1's mdframed boxes stated the page's text block, 70.87..524.41, past the box's text edge (511.66) and over its
+    rule (523.88), and the typesetter's widening of a single line (`unit/decor.ts` widen, its column `Line[7..8]`) ran the
+    line's last glyph onto the rule (p19, p36, p43, p46; 27 lines of the paper laid to 524.41). The fuller form, not built:
+    the marked compile states where each paragraph's measure starts (a position point at LaTeX's `para/begin`, the indent box
+    set aside), so that no ink is read and a box no line fills is placed too.
   - What moves: every line of a list item, a quotation, a bibliography entry (lists: `\parshape 1 \@totalleftmargin
     \linewidth`), a wrapped paragraph, a hung or skipped one, gains TeX's measure where it had its column's; with it a single
     line's room to widen into (the typesetter's `sideOf`, a name's), the alignment read of a one-line item (facts.ts alignOf reads
