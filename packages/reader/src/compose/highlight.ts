@@ -122,7 +122,7 @@ export function columnOf(
 /** what cuts a shape's rows into outlines: the page's boxes lit on the pane and the column its member spans there */
 export type Cut = { others: readonly Box[]; column: readonly [number, number] }
 /** a row a shape paints (PDF units, y up): `box` its extent across and its band, padded above and below (paintRows' `lead`: one
- *  half leading, or each box's pads, padsOf) and met with the row next to it at the middle of their pads' overlap; `own` the
+ *  half leading, or each box's pads, padsOf) and met with the row next to it where their pads overlap (meetOf); `own` the
  *  extent of the shape's boxes it paints; `apart` where it begins an outline of its own */
 export type PaintRow = { box: Box; own: Box; apart: boolean }
 
@@ -131,9 +131,24 @@ export const sharesBand = (boxes: readonly Box[]): boolean =>
   boxes.some((a, i) => boxes.some((b, j) => j > i && Math.min(a[3], b[3]) > Math.max(a[1], b[1])))
 
 /**
- * The rows a shape paints (PDF units, y up): the union of its boxes, never part of one. Two rows one over the other meet at the
- * middle of their pads' overlap, so that they touch, and one outline joins them where they meet across, the room between them
- * painted, unless another block stands between them (apartRows, with `cut`). Boxes on one band (their own extents overlapping up
+ * Where two of a shape's rows one over the other meet, their pads overlapping (PDF units, y up): the middle of the overlap
+ * (`foot`, the upper row's padded foot; `head`, the lower one's padded head), held in the gap between their own boxes (`ownFoot`,
+ * the upper box's foot; `ownHead`, the lower one's head), so that each lit row covers its own box whole and neither is painted
+ * past its own pad: the point lies inside both pads, the overlap and the gap always sharing one. Two rows padded alike meet
+ * at the middle of that gap. The middle of the padded edges alone, where two rows' pads differ (a row's pad cut on one side by
+ * a block near it, padsOf), lies inside the less padded one's box when the gap is narrower than the other's pad: boxes 1
+ * apart, the upper one unpadded under, the lower padded 5 over, would meet 2 over the upper box's foot, that strip neither
+ * painted nor hit (docs/PDF-READER.md §17.9)
+ */
+function meetOf(foot: number, head: number, ownFoot: number, ownHead: number): number {
+  return Math.min(ownFoot, Math.max(ownHead, (foot + head) / 2))
+}
+
+/**
+ * The rows a shape paints (PDF units, y up): the union of its boxes, never part of one. Two rows one over the other meet where
+ * their pads overlap (meetOf: in the gap between their own boxes), so that they touch, and one outline joins them where they
+ * meet across, the room between them painted, unless another block stands between them (apartRows, with `cut`). The reader's
+ * paint and hit test read these rows, and so do the lab's models of the paint. Boxes on one band (their own extents overlapping up
  * and down) are never met: the union is cut into bands at every box's head and foot, each band's boxes one row where they meet
  * across (a row and the number TeX set beside it; two lines whose fonts' boxes overlap) and a row each where they stand apart
  * (a sentence's runs either side of another sentence's element, a line in the next column); a row joins the outline whose last
@@ -154,12 +169,12 @@ export function paintRows(boxes: readonly Box[], lead: number | Pads, cut?: Cut)
       return { box: [b[0], b[1] - under, b[2], b[3] + over], own: b, apart: !!apart[i] }
     })
     for (let i = 1; i < rows.length; i++) {
-      const p = (rows[i - 1] as PaintRow).box,
-        q = (rows[i] as PaintRow).box
-      if (q[3] > p[1]) {
-        const mid = (q[3] + p[1]) / 2
-        p[1] = mid
-        q[3] = mid
+      const p = rows[i - 1] as PaintRow,
+        q = rows[i] as PaintRow
+      if (q.box[3] > p.box[1]) {
+        const at = meetOf(p.box[1], q.box[3], p.own[1], q.own[3])
+        p.box[1] = at
+        q.box[3] = at
       }
     }
     return rows
@@ -185,8 +200,8 @@ export function paintRows(boxes: readonly Box[], lead: number | Pads, cut?: Cut)
     for (const [a, b] of runs) pieces.push({ own: [a, lo, b, hi], band })
     band++
   }
-  // (each padded by its pads (half the leading); two of two bands met at the middle of their own gap where their pads overlap,
-  // never into either: next to each other from the top, and next to each other in an outline)
+  // (each padded by its pads (half the leading); two of two bands met where their pads overlap (meetOf), never into either:
+  // next to each other from the top, and next to each other in an outline)
   const pads = pieces.map((p) => padOf(p.own))
   const head0 = pieces.map((p, i) => p.own[3] + (pads[i] as readonly [number, number])[1]),
     foot0 = pieces.map((p, i) => p.own[1] - (pads[i] as readonly [number, number])[0])
@@ -196,9 +211,9 @@ export function paintRows(boxes: readonly Box[], lead: number | Pads, cut?: Cut)
     const a = pieces[u] as (typeof pieces)[number],
       b = pieces[l] as (typeof pieces)[number]
     if (a.band === b.band || (head0[l] as number) <= (foot0[u] as number)) return
-    const mid = (b.own[3] + a.own[1]) / 2
-    foot[u] = Math.max(foot[u] as number, mid)
-    head[l] = Math.min(head[l] as number, mid)
+    const at = meetOf(foot0[u] as number, head0[l] as number, a.own[1], b.own[3])
+    foot[u] = Math.max(foot[u] as number, at)
+    head[l] = Math.min(head[l] as number, at)
   }
   for (let i = 1; i < pieces.length; i++) meet(i - 1, i)
   for (const [u, a] of pieces.entries())
@@ -493,39 +508,13 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     for (let n = 1; n <= panes.right.pages; n++) if (composer.page(n)?.members.some((m) => m.ord === ord)) out.push(n)
     return out
   }
-  /** the rows of a shape (paintRows: the union of its boxes, never part of one) in the page's CSS px at its scale now, in its own
-   *  frame (a turned page's layer is turned with it), padded beside; with `cut` (the page's boxes on the pane and the column of
-   *  the shape's member), each row apart from the one above it where another block stands between them in that column
-   *  (apartRows: an outline of its own) */
+  /** the rows of a shape (paintRows: the union of its boxes, never part of one, met where their pads overlap) in the page's CSS
+   *  px at its scale now, in its own frame (a turned page's layer is turned with it), padded beside; with `cut` (the page's boxes
+   *  on the pane and the column of the shape's member), each row apart from the one above it where another block stands between
+   *  them in that column (apartRows: an outline of its own). The rows the lab's models read, the page's box of each: what is
+   *  painted and hit is theirs */
   function rowsOf(side: Side, n: number, boxes: Box[], lead: number | Pads, cut?: Cut, pad = PAD) {
     const out: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[] = []
-    if (!sharesBand(boxes)) {
-      // (no two boxes on one band: the rows met in the page's CSS px, as they always were, paintRows' rule for them stated in PDF
-      // units for the lab's readers of the paint)
-      const sorted = [...boxes].sort((p, q) => q[3] - p[3])
-      const kept: Box[] = []
-      for (const b of sorted) {
-        const [under, over] = typeof lead === 'number' ? [lead, lead] : lead(b)
-        const r = panes.boxOf(side, n, [b[0], b[1] - under, b[2], b[3] + over], { upright: true })
-        if (!r) continue
-        kept.push(b)
-        out.push({ x0: r.left - pad, x1: r.left + r.width + pad, y0: r.top, y1: r.top + r.height })
-      }
-      if (cut)
-        apartRows(kept, cut.others, cut.column).forEach((a, i) => {
-          if (a) (out[i] as (typeof out)[number]).apart = true
-        })
-      for (let i = 1; i < out.length; i++) {
-        const p = out[i - 1] as (typeof out)[number],
-          q = out[i] as (typeof out)[number]
-        if (q.y0 < p.y1) {
-          const mid = (q.y0 + p.y1) / 2
-          p.y1 = mid
-          q.y0 = mid
-        }
-      }
-      return out
-    }
     for (const row of paintRows(boxes, lead, cut)) {
       const r = panes.boxOf(side, n, row.box, { upright: true })
       if (!r) continue

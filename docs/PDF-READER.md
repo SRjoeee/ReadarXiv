@@ -2904,6 +2904,18 @@ within noise.
   neighbour stands nearer (1,056 pages); 20,897 of them on the right pane, where a translation's members are laid at leadings
   of their own. A member whose own spacing is its page's and that stands no nearer another block than that paints as before.
   The lay is untouched: Laid.lit's boxes are the typesetter's as before, and no stored object moves.
+  Two rows one over the other whose pads overlap meet at the middle of the overlap, held in the gap between their own boxes
+  (`compose/highlight.ts` `meetOf`, stated once in `paintRows` for both of its cases, rows and bands, and read by the paint,
+  the hit test, the reader gate's I11 and the parity's paint model alike), so that a lit row covers its own box whole and
+  neither is painted past its own pad: the two always share a point. A row's pads being its own, cut on one side by a block
+  near it, two rows may carry different pads, and met at the middle of their padded edges alone, the less padded row was met
+  inside its own box where the gap was narrower than the other's pad (the review of pull request #657: boxes 1 pt apart, the
+  upper one unpadded under, the lower one padded 5 over, met 2 pt over the upper box's foot, that strip neither painted nor
+  hit); the hit test met its rows in CSS px by the same rule, a second statement of it, now gone. Two rows padded alike meet
+  at the middle of their gap, as before. Over release-c4's lay of the 90 pairs (both panes, every shape painted by the
+  reader's rows before and after): of 307,144 rows none left part of its box unlit before or after and none is painted past
+  its pads; 8 rows move, by at most 0.44 pt, each in a shape with two boxes on one band, whose bands met at the middle of their
+  gap and now at the middle of their pads' overlap (2610.19860v1-zh p13, 2610.20716v1-zh p21, both panes).
 - **A sentence of no word joins its neighbour on both panes** (lit.ts `worded`, `bySentence`): a translator cuts off a sentence
   that holds no word of the source (no word of Placed.words in it: a citation after a unit's last stop, a reference's DOI, URL
   or back-reference list, a display), or one of whose translation nothing is drawn as text (an element moved past the

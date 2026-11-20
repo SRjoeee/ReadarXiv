@@ -3,7 +3,7 @@
 // (one upright page 600 × 800 at scale 1: a PDF unit a CSS px, y down) and of the composer (one laid Page).
 import { describe, expect, it } from 'vitest'
 import type { Composer } from '../src/compose/composer.ts'
-import { createHighlight, PAD } from '../src/compose/highlight.ts'
+import { createHighlight, PAD, type Pads, paintRows } from '../src/compose/highlight.ts'
 import type { Box, Page } from '../src/compose/page.ts'
 import type { Panes } from '../src/panes/panes.ts'
 import type { Clock } from '../src/stack/clock.ts'
@@ -636,6 +636,105 @@ describe('a member’s rows are padded by its own leading, never past half the r
     const { top, foot } = edges(shape)
     expect(top).toBeCloseTo(770 + 9, 6)
     expect(foot).toBeCloseTo(648 - 9, 6)
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+})
+
+describe('two rows of a shape whose pads differ meet in the gap between their own boxes, never inside one', () => {
+  // (a row's pads are its member's own, cut on one side by a block that stands near it (padsOf): two rows one over the other
+  // may carry different pads. Met at the middle of their padded edges, the upper row's foot was raised into its own box where
+  // the gap between the two is narrower than the lower one's pad: boxes 1 apart, the upper one unpadded under, the lower one
+  // padded 5 over: met at 22, two points over the upper box's foot at 20, that strip of it neither painted nor hit)
+  const upper: Box = [50, 20, 150, 30]
+  const lower: Box = [0, 9, 50, 19]
+  const padsBy =
+    (u: readonly [number, number], l: readonly [number, number]): Pads =>
+    (b) =>
+      b[1] >= 20 ? u : l
+  it('meets two rows padded alike at the middle of the gap between their boxes, as before', () => {
+    const [a, b] = paintRows([lower, upper], padsBy([5, 5], [5, 5]))
+    expect([a!.box[1], b!.box[3]]).toEqual([19.5, 19.5])
+  })
+  it('meets two rows padded otherwise inside the gap: each covers its own box whole, neither past its own pad', () => {
+    const [a, b] = paintRows([lower, upper], padsBy([0, 5], [5, 5]))
+    // (the middle of their padded edges, 22, held to the gap 19-20: the upper row's foot its box's own, unpadded as its pads say,
+    // the lower row's head 1 over its box, inside its pad of 5; the two touching)
+    expect(a!.box[1]).toBe(20)
+    expect(b!.box[3]).toBe(20)
+    expect(b!.box[1]).toBe(4)
+    expect(a!.box[3]).toBe(35)
+  })
+  it('meets two bands of a shape padded otherwise at one point inside the gap between them (boxes on one band)', () => {
+    // (a row and a short box beside it on its band, 22-28, and a row 1 under it: the bands' union cut at every head and foot;
+    // the band over the gap, 20-22, unpadded under, the row under it padded 5 over: they meet at the gap's top, 20, where
+    // the lower one's head stood at the gap's middle, 19.5, a strip between the two in no row)
+    const boxes: Box[] = [
+      [0, 20, 100, 30],
+      [100, 22, 120, 28],
+      [0, 9, 100, 19],
+    ]
+    const rows = paintRows(boxes, padsBy([0, 5], [5, 5]))
+    const over = rows.find((r) => r.own[1] === 20)!,
+      under = rows.find((r) => r.own[3] === 19)!
+    expect([over.box[1], under.box[3]]).toEqual([20, 20])
+  })
+  // (on a pane: a member's six rows, the first two 1 apart, the rest 10 (its own half leading 5), and another member's box
+  // standing on the first row's foot beside the second row (so the first row is unpadded under it), the page 800 high)
+  const rows: Box[] = [
+    [50, 620, 150, 630],
+    [0, 609, 50, 619],
+    [0, 589, 300, 599],
+    [0, 569, 300, 579],
+    [0, 549, 300, 559],
+    [0, 529, 300, 539],
+  ]
+  const near: Box = [100, 610, 150, 620]
+  const pane: Page = {
+    page: 1,
+    wait: { rows: [], faces: [] },
+    links: [],
+    members: [
+      { ord: 1, page: 1, state: 'laid', off: 1, lines: [], lit: { left: [rows], right: [rows], own: [] } },
+      { ord: 2, page: 1, state: 'laid', off: 1, lines: [], lit: { left: [[near]], right: [[near]], own: [] } },
+    ],
+  }
+  /** the corners of each outline a shape's band paints, in the page's CSS px (shapePath: each outline `M` … `Z`, a corner the
+   *  control point of its `Q`) */
+  const outlinesOf = (el: Element): [number, number][][] => {
+    const s = (el as HTMLElement).style
+    const d = el.querySelector('path')?.getAttribute('d') ?? ''
+    return d
+      .split('Z')
+      .filter((x) => x.trim())
+      .map((x) =>
+        [...x.matchAll(/Q(-?[\d.]+) (-?[\d.]+)/g)].map(
+          (m) => [Number(m[1]) + parseFloat(s.left), Number(m[2]) + parseFloat(s.top)] as [number, number],
+        ),
+      )
+  }
+  const inside = ([x, y]: [number, number], poly: [number, number][]) => {
+    let n = false
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i]!,
+        [xj, yj] = poly[j]!
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) n = !n
+    }
+    return n
+  }
+  it('paints and hits the first row’s box whole on both panes, its foot over the other member’s box', () => {
+    const { els, hl } = setUp(pane)
+    // (a point of the first row's box half a point over its foot: in its lower strip)
+    const p: [number, number] = [120, H - 620.5]
+    hl.light({ id: 1, s: -1 })
+    for (const side of ['left', 'right'] as const) {
+      const outlines = [...els[side].querySelectorAll('.axt-hl')].flatMap(outlinesOf)
+      expect(
+        outlines.some((o) => inside(p, o)),
+        `${side}: painted`,
+      ).toBe(true)
+      expect(hl.at(side, ...p), `${side}: hit`).toEqual({ id: 1, s: -1 })
+    }
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
