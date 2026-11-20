@@ -8911,6 +8911,54 @@ released reader leaves all of it as the original draws it.
 - **Versions**: PIPELINE 108 (which units there are). TRANSLATE stays (no wire is serialised or read otherwise: units leave),
   LAYOUT stays (no mark moves, the marks digest with it), the rule file stays (the typesetter reads nothing new).
 
+### 18.103 A line of TeX's holds the formula TeX set in it (the coordinator's ruling of 2026-11-20)
+
+The release tier's display gate on 2610.21026v1-zh (round c3): page 6's paragraph with a rate `O((…)/T + (max{…} ln²…)/T^{…})`
+in big delimiters left English ("cannot fit"); page 18's theorem drew a line of its translation over its own `cases` formula;
+page 7's theorem two fit steps small, a line starting 45 pt in under the formula; 2610.22299v1 p3's eleven-column matrix
+squashed and drawn twice; three formulas drawn raised, lowered or apart (2610.21765v1 p9, 2610.18513v1 p48, 2610.21026v1 p20).
+The released reader draws each as the original sets it.
+
+- **Why.** The prepare cuts a member's lines from its glyphs in stream order (`packages/engine` locate/lines.ts `cutLines`,
+  over its text and its inline elements, geometry.ts): a glyph begins a line where it leaves the line's band and jumps back,
+  far on, or more than one and a half sizes up or down. A formula's parts do all three: a script of a numerator 16.9 pt over
+  the baseline, a `cases`' condition after its column's gap, a row back left under the row above, a delimiter's top piece
+  (its origin at its top) 29 pt over the line's text, a line that opens with a numerator whose denominator comes back under it.
+  Each began a line: one line of TeX's stated as 6, 8 or 109. The lay reads every Line as a slot and every El.ink box as a
+  line TeX broke the formula on: the paragraph's room cut into pieces (unfit), a translation's line on a piece's slot under
+  the formula, the page read as two columns by its pieces in each half (geometry.ts columnsAndMeasures) so that TeX's
+  \lineskip settle, which reads one flow, never pushed it; a formula cut into crops set side by side or off their baseline.
+  Before 2026-11-08 a glyph whose ink met the line's ink so far was the line's; that commit read the crossing against the
+  line's own text band alone, for an item's indented line of TEXT beside a formula TeX smashed over it
+  (`packages/engine/tests/today-facts.test.ts`), which cut these formulas too. The released reader's maker states such a
+  formula one segment of the line both its marks stand on: TeX broke no line between them.
+- **The rule** (`cutLines`, told by lineGeometry which glyphs are a formula's: its elements', the rest the unit's text). The cut
+  in stream order stays as it was; after it, two lines cut one after the other on one page are one line of TeX's where TeX
+  could not have set them as two. TeX sets a formula inside its line, its parts shifted up and down within the line's box: two
+  whose inks meet, ONE OF THEM A FORMULA'S GLYPHS ALONE (no glyph of the unit's text), are one, joined again with the line
+  before while they are one (a delimiter's top piece meets the line it stands on only with the pieces under it). TeX never
+  sets two lines on one baseline over or beside each other: two on one baseline that cross, or stand nearer than the cut's own
+  far (two sizes), are one. And a line's baseline is the one its text's body glyphs share where it holds text, a formula's
+  rows aside. Two lines of text are never joined by their inks: TeX stacks a paragraph's lines box under box, and two boxes
+  touching meet in ink by the hundredths their glyphs stand past them (a subscript over the next line's superscript, 0.03 pt,
+  2608.12606v1 p15), as does a line of text beside ink TeX smashed over it (the 2026-11-08 case). No number is added (the
+  two sizes are the cut's own); untold (every other caller: a held line, a born unit, the text alone), only the baseline rule
+  reads further than before.
+- **Over the 245 papers** (the chain from the stored compiles, every object against the line's; no paper compiled again): 31
+  papers' objects move (79 parts, 31 heads, prepare dumps and located files), no units file, add-on or ownership: no unit
+  comes, goes or changes its text. 51 members' lines on 57 pages: 37 members a line of TeX's cut and now one (every one looked
+  at on the original: fractions opening a line, a numerator's raised exponent, inline `cases` and matrices, an overbrace's or
+  an underbrace's label, a big delimiter's pieces, an accent over its nucleus in a figure's legend); 14 a baseline moved to its
+  text's (11 by a hundredth, the text's and a formula's glyphs a hundredth apart; two figure texts by 0.26 and 0.31 pt; a
+  figure's formula whose exponent outvoted its words, 5.38 pt, its held piece another glyph of the same element). No two lines
+  of TeX's read as one. Four pages are read as one column again (`columnsAndMeasures`: the cut pieces stood on both halves),
+  23 members' columns, measures and pins with them; two members' separation class follows (2501.14787v1 p67 textfloatsep for
+  dbltextfloatsep; 2610.22299v1 p3's paragraph its parskip). Elements newly unfound, members newly refused, alignments
+  changed, lines with a measure narrower than their ink: 0.
+- **Versions**: PIPELINE moves (Placed.lines, their columns, measures and pins, El.ink boxes and rooms of the members that hold
+  such a formula: the parts, the prepare dumps), raised by the round's integration. TRANSLATE stays (no unit's text moves:
+  no new unit id), LAYOUT stays (no mark moves), the rule file stays.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

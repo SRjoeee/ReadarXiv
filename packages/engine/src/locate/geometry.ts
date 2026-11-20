@@ -125,7 +125,11 @@ export function lineGeometry(w: Work, owned: Owned): void {
     // (a kept block of a display TeX set: its rows by the display rule, as a unit's display's (rows.ts), its rules with them: the
     // text line rule cut display (4) of 2111.09276v1 p5 after its number's "(", 13.7 pt over its second row's baseline, which
     // stayed on that row's line as a script, its "4)" a line of its own: §17.9)
-    const cut = unit?.display ? rowsOf(inline, atA, boxesOf_(mem.textBoxes)) : cutLines(inline, atA)
+    // (the unit's text and its inline elements, a formula's glyphs told apart from its text: lines.ts cutLines)
+    const ownText = new Set(mem.text)
+    const cut = unit?.display
+      ? rowsOf(inline, atA, boxesOf_(mem.textBoxes))
+      : cutLines(inline, atA, (a) => !ownText.has(a))
     // (the lines whose ink stays, KEPT, in their place in the stream: a display's rows; and a held line, the glyphs inside its
     // span on A that B printed and no unit owns: the lines its source does not write (ownership says it, never a share of
     // the source's words))
