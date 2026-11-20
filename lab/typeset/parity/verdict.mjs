@@ -286,40 +286,28 @@ export const SAYS = {
  * or over two under two. So:
  * - A's annotations (annotation 1: as PDF.js lists them, also the annotation layer of a page a side shows as arXiv's): those of
  *   one target one right after the other are one link.
- * - The anchors a side drew (in its own order, not TeX's): one target's anchors on one line, or on lines one under the other
- *   (their vertical gap under the lower of their heights: no line of theirs fits between), are one link. An anchor of no height
- *   is a link of its own.
- * (Lenient: a target cited twice with no other link between counts once on A, a target on lines one under the other once on a
- * side; a side's count above A's is never a link missing)
+ * - The anchors a side drew, in its own order (its reading order: the reader lists its anchors by the text they stand over,
+ *   compose/links.ts; production its link records, a link it breaks over lines one anchor): one target's anchors one right after
+ *   the other, on one line or on lines one under the other (their vertical gap under the lower of their heights: no line of
+ *   theirs fits between), are one link: a link a side breaks over lines draws its pieces in a row. Two anchors of one target
+ *   with another link between are two, wherever they stand (2307.16209v1 p30: two references to an equation and one to a
+ *   section on one line, a third to the equation opening the next; read by target and line alone, the three of the equation
+ *   were one link). An anchor of no height is a link of its own.
+ * (Lenient: a target cited twice with no other link between counts once on A, and once on a side where the two stand on one
+ * line or on lines one under the other; a side's count above A's is never a link missing)
  */
 export function linksOf(boxes) {
   let n = 0,
     prev = null
-  const by = new Map()
   for (const [to, , y0, , y1, annotation] of boxes) {
-    if (annotation) {
-      if (to !== prev) n++
-      prev = to
-      continue
-    }
-    prev = null
-    if (!by.has(to)) by.set(to, [])
-    by.get(to).push({ lo: Math.min(y0, y1), hi: Math.max(y0, y1) })
-  }
-  for (const list of by.values()) {
-    const sized = list.filter((b) => b.hi > b.lo).sort((a, b) => a.lo - b.lo)
-    n += list.length - sized.length
-    // (sorted by their lower edges, a box joins the link before it where it meets that link's highest box by the rule: chained)
-    let hi = -Infinity,
-      h = 0
-    for (const b of sized) {
-      const bh = b.hi - b.lo
-      if (b.lo - hi >= Math.min(h, bh)) n++
-      if (b.hi > hi) {
-        hi = b.hi
-        h = bh
-      }
-    }
+    const lo = Math.min(y0, y1),
+      hi = Math.max(y0, y1)
+    const joins =
+      prev !== null &&
+      prev.to === to &&
+      (annotation ? prev.annotation : !prev.annotation && hi > lo && prev.hi > prev.lo && Math.max(lo, prev.lo) - Math.min(hi, prev.hi) < Math.min(hi - lo, prev.hi - prev.lo))
+    if (!joins) n++
+    prev = { to, lo, hi, annotation: !!annotation }
   }
   return n
 }

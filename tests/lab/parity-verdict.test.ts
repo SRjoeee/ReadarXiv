@@ -138,6 +138,36 @@ describe('a page measured from what each side drew', () => {
     const asOriginal = measure(v2Of(), boxed({ today: { shownOriginal: true }, v2: { linkBoxes: A.map((b) => [...b.slice(0, 5), 1]) } }, A))
     expect(asOriginal.measures.links).toMatchObject({ original: 2, today: 2, v2: 2 })
   })
+  it("a side's anchors of one target join one link only one right after the other in its own order (M5)", () => {
+    // (2307.16209v1 p30: on one line two references to equation (2.1) and a reference to a section, then on the next line a third
+    // to equation (2.1). A's four annotations: the first two one right after the other, one link; three links. Each side lists
+    // its anchors in its reading order (the reader's compose/links.ts; production's records): the section's anchor stands between
+    // the second and the third, which are two links, though on lines one under the other. Counted by target and line alone, v2's
+    // three anchors of (2.1) were one link, and v2 missed one)
+    const A = [
+      ['#"eq.1"', 240, 346.8, 270, 360.2, 1],
+      ['#"eq.1"', 305, 346.8, 334, 360.2, 1],
+      ['#"sec.5"', 258, 328.1, 278, 342.2, 1],
+      ['#"eq.1"', 506, 328.9, 535, 342.2, 1],
+    ]
+    const boxed = (o: object) => ({ ...rec(o), original: { links: A.length, linkBoxes: A } })
+    const line1 = [
+      ['#eq.1', 186, 675, 236, 692],
+      ['#eq.1', 266, 675, 316, 692],
+      ['#sec.5', 544, 675, 575, 692],
+    ]
+    const third = ['#eq.1', 144, 707, 190, 724]
+    const all = measure(v2Of(), boxed({ today: { linkBoxes: [...line1, third] }, v2: { linkBoxes: [...line1, third] } }))
+    expect(worse(all)).toEqual([])
+    expect(all.measures.links).toMatchObject({ original: 3, today: 3, v2: 3 })
+    // (the third drawn nowhere: a link missing still; and a link a side breaks over two lines, its two pieces one right after the
+    // other in its order, is one)
+    const lost = measure(v2Of(), boxed({ today: { linkBoxes: [...line1, third] }, v2: { linkBoxes: line1 } }))
+    expect(worse(lost)).toEqual(['links'])
+    expect(lost.measures.links).toMatchObject({ original: 3, today: 3, v2: 2 })
+    const broken = measure(v2Of(), boxed({ today: { linkBoxes: [...line1, third] }, v2: { linkBoxes: [...line1, ['#eq.1', 560, 675, 580, 692], third] } }))
+    expect(broken.measures.links).toMatchObject({ v2: 3 })
+  })
   it("a unit over two pages counts its links over them: a translation that moves a linked word to the page before loses none", () => {
     // (2610.20484v1 t62, a theorem over pages 6 and 7: its link to equation (8) stands on A on page 7's first line; v2's shorter
     // translation draws that word, and its anchor, on page 6, today on page 7. Counted page by page, v2 missed one on page 7 and
