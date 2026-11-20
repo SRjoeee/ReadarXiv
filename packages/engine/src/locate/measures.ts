@@ -177,12 +177,14 @@ export function paragraphMeasures(w: Work): void {
  * where TeX's statement does not say where its box stands (the coordinator's ruling 2 of 2026-11-20, lane c4-boxes): placed by
  * the page's own lines TeX set at that \hsize there, as today's reader read a column from the page's lines. Each line's extent is
  * its ink widened by what TeX's statement puts between its ink and its measure (its line's indent and \leftskip on the left,
- * \rightskip and the shape's length short of \hsize on the right). A box stands where a line TeX filled stands (its extent as
- * wide as the \hsize, within INK_EDGE): those of one page and one \hsize whose starts lie within INK_EDGE of each other are one
- * box (two of one width side by side stay two), its left their median start (a glyph microtype protrudes stands a fraction of an
- * em left of the box's edge: 2610.19159v1 p41's at 82.43, the box's lines at 83.62). A paragraph of that \hsize is the box's where
- * more than half of its lines on the page stand in it (their extents inside it, INK_EDGE aside; a line TeX set overfull runs past
- * it and goes with its paragraph: 2610.19159v1 p45's to 575.98), and each of its lines' measure is the box's, as a column's is.
+ * \rightskip and the shape's length short of \hsize on the right). The lines' starts of one page and one \hsize, gathered within
+ * INK_EDGE, each give a left, the median of its own (a glyph microtype protrudes stands a fraction of an em left of the box's
+ * edge: 2610.19159v1 p41's at 82.43, the box's lines at 83.62); a box stands at a left where a line that starts in it ends at that
+ * left and the \hsize, within INK_EDGE: TeX filled it (a box of two-line paragraphs, each first line indented and each last
+ * short, has its left from the last lines and its end from the first: 2610.19159v1 p36; two of one width side by side stay
+ * two). A paragraph of that \hsize is the box's where at least half of its lines on the page stand in it (their extents inside
+ * it, INK_EDGE aside; a line TeX set overfull runs past it and goes with its paragraph: 2610.19159v1 p45's to 575.98), and each
+ * of its lines' measure is the box's, as a column's is.
  * Any other (no line fills its box: a single line, a ragged box, subcaptions centred in their minipages) has no wider measure
  * than its own lines on the page, their extent, never wider than its frame's, so that a single line is never widened past
  * itself: three subcaptions of 2608.16117v1 p18, one centred across the other two, were read as one box. Left at its frame's,
@@ -204,26 +206,27 @@ function boxMeasures(boxed: readonly Boxed[]): void {
   for (const g of groups.values()) {
     const hsize = g[0]!.x.s.hsize,
       tol = INK_EDGE * (Math.max(...g.map((z) => z.x.l[10] ?? 0)) || 10)
-    // (the boxes: the starts of the lines that fill one, gathered within INK_EDGE, each box's left their median)
-    const starts = g
-      .filter((z) => Math.abs(z.e[1] - z.e[0] - hsize) <= tol)
-      .map((z) => z.e[0])
-      .sort((a, b) => a - b)
+    // (the boxes: the lines' starts gathered within INK_EDGE, each the median of its own; a box where a line of the \hsize that
+    // starts in it ends at its left and the \hsize, TeX's filled line)
+    const starts = g.map((z) => z.e[0]).sort((a, b) => a - b)
     const lefts: number[] = []
     for (let a = 0; a < starts.length; ) {
       let b = a
       while (b + 1 < starts.length && starts[b + 1]! - starts[a]! <= tol) b++
-      lefts.push(starts[(a + b) >> 1]!)
+      const L = starts[(a + b) >> 1]!
+      if (g.some((z) => z.e[0] >= L - tol && Math.abs(z.e[1] - L - hsize) <= tol)) lefts.push(L)
       a = b + 1
     }
     if (!lefts.length) continue
-    // (each paragraph the box most of its lines stand in)
+    // (each paragraph the box at least half of its lines stand in, the one most of them stand in)
     const byPara = new Map<number, { x: Boxed; e: [number, number] }[]>()
     for (const z of g) (byPara.get(z.x.n) ?? byPara.set(z.x.n, []).get(z.x.n)!).push(z)
     for (const zs of byPara.values()) {
-      const left = lefts.find(
-        (L) => zs.filter((z) => z.e[0] >= L - tol && z.e[1] <= L + hsize + tol).length * 2 > zs.length,
-      )
+      const fits = (L: number) => zs.filter((z) => z.e[0] >= L - tol && z.e[1] <= L + hsize + tol).length
+      const left = lefts.reduce<number | undefined>((best, L) => {
+        if (fits(L) * 2 < zs.length) return best
+        return best === undefined || fits(L) > fits(best) ? L : best
+      }, undefined)
       if (left === undefined) continue
       for (const { x } of zs) {
         const [indent, length] = lineShape(x.s, x.k)

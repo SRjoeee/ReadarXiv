@@ -477,6 +477,42 @@ describe('a paragraph set at an \hsize no column has (a box’s): placed by the 
     expect(one!.map((l) => l[0])).toEqual([100, 100, 100, 100])
     expect(one!.map((l) => l[1])).toEqual([400, 400, 400, 400])
   })
+  it('a box of two-line paragraphs, each first line indented and each last short: its left from the last lines, its end from the first', () => {
+    // (2610.19159v1 p36: no line of the box both starts at its edge and fills it; a one-line heading in it takes its measure)
+    const [one, two, head] = measuredOf(
+      [
+        ['x'.repeat(48), 0, 112],
+        ['x'.repeat(10), 0],
+        ['y'.repeat(48), 1, 112],
+        ['y'.repeat(14), 1],
+        ['z'.repeat(5), 2, 103],
+      ],
+      [
+        [1, 1],
+        [2, 3],
+        [3, 4],
+      ],
+      [
+        { para: 1, ...box },
+        { para: 2, ...box },
+        { para: 3, ...box },
+      ],
+      [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+      ],
+    )
+    expect(one).toEqual([
+      [100, 400],
+      [100, 400],
+    ])
+    expect(two).toEqual([
+      [100, 400],
+      [100, 400],
+    ])
+    expect(head).toEqual([[100, 400]])
+  })
   it('boxes of one width side by side stay two; a paragraph standing in neither is no box’s (2608.16117v1 p18’s subcaptions)', () => {
     // (two boxes of \hsize 150, at 100 and 260, each filled by its line; a third paragraph of that width centred across the two)
     const [a, b, c] = measuredOf(

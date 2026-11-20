@@ -7637,13 +7637,14 @@ bytes it was.
     (`measureKept`: a measure that is not the full `\hsize`, or an `\hsize` no page's frame has, its block's or a column's);
     kept for the shapes alone, a box's plain paragraph was dropped and its lines kept the frame's measure. Each line's extent
     is its ink widened by what TeX's statement puts between its ink and its measure (its indent and `\leftskip`, its
-    `\rightskip` and its shape's length short of `\hsize`). A box stands where a line TeX filled stands (its extent as wide as
-    the `\hsize` within 0.25 em of the lines' size, the typesetter's ONE_EDGE, §18.94): such lines of one page and one
-    `\hsize` whose starts lie within that of each other are one box (two of one width side by side stay two), its left their
-    median start (a glyph microtype protrudes stands a fraction of an em left of the edge: 2610.19159v1 p41's at 82.43, the
-    box's lines at 83.62). A paragraph of that `\hsize` is the box's where more than half of its lines on the page stand in it
-    (a line TeX set overfull runs past it and goes with its paragraph: 2610.19159v1 p45's to 575.98), and every line's measure
-    is the box's, as a column's is. Any other (no line fills its box: a single line, a ragged box, subcaptions centred in
+    `\rightskip` and its shape's length short of `\hsize`). The starts of the lines of one page and one `\hsize`, gathered
+    within 0.25 em of their size (the typesetter's ONE_EDGE, §18.94), each give a left, the median of its own (a glyph microtype
+    protrudes stands a fraction of an em left of the edge: 2610.19159v1 p41's at 82.43, the box's lines at 83.62); a box stands at
+    a left where a line that starts in it ends at that left and the `\hsize`, within that: TeX filled it (a box of two-line
+    paragraphs, each first line indented and each last short, takes its left from the last lines and its end from the first:
+    2610.19159v1 p36; two of one width side by side stay two). A paragraph of that `\hsize` is the box's where at least half of
+    its lines on the page stand in it (a line TeX set overfull runs past it and goes with its paragraph: 2610.19159v1 p45's to
+    575.98), and every line's measure is the box's, as a column's is. Any other (no line fills its box: a single line, a ragged box, subcaptions centred in
     their minipages: 2608.16117v1 p18's three, one centred across the other two, were first read as one box) has no wider
     measure than its own lines on the page, their ink's extent, never wider than its frame's: the safe end, a single line then
     never widened past itself. Left at its frame's, every line of
