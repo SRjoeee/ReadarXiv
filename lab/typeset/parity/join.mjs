@@ -91,6 +91,33 @@ export function candidateKeptElements(paper, dumps = L1_DUMPS) {
   }
   return (JSON.parse(readFileSync(g, 'utf8')).dumpOrds ?? []).filter(([d]) => ink.has(d)).map(([d, m]) => [m, ink.get(d)])
 }
+/**
+ * The units the candidate's prepare made no member of the part for, each with its statement (its dump's units of state
+ * `unlaid`, not `replaced`: { kind, why }, "unlocated: text past its source"), by today's ord. A unit with no member has no
+ * Page, no facts and no join of v2's: this is what states it. Each joined to the one unit of today's (`today`, today's prepare
+ * dump's units: { ord, kind, pieces }) no member is joined to (`joined`, today's ords), of its kind, whose words are its words
+ * (wordsOf over each piece's text or source, sameWords: one front end reads as an element what the other reads as text,
+ * 2610.40576v1 t240's `\dots`), one to one: a unit two of today's say alike, or one of today's two say, joins none. Empty
+ * where lab-data holds no dump
+ */
+export function candidateUnlaid(paper, today, joined = new Set(), dumps = L1_DUMPS) {
+  const f = join(dumps, `${paper}.prepare.json`)
+  if (!existsSync(f)) return new Map()
+  const wordsOfPieces = (ps) => wordsOf((ps ?? []).map((p) => (p.kind === 'text' ? p.s : ` ${p.src ?? ''} `)))
+  const unlaid = JSON.parse(readFileSync(f, 'utf8'))
+    .units.filter((u) => !u.replaced && u.state === 'unlaid')
+    .map((u) => ({ kind: u.kind, why: u.why ?? null, words: wordsOfPieces(u.pieces) }))
+    .filter((u) => u.words.length)
+  const free = (today ?? []).filter((t) => !joined.has(t.ord)).map((t) => ({ ord: t.ord, kind: t.kind, words: wordsOfPieces(t.pieces) }))
+  const said = (u, t) => u.kind === t.kind && sameWords(u.words, t.words)
+  const out = new Map()
+  for (const u of unlaid) {
+    const ts = free.filter((t) => said(u, t))
+    if (ts.length !== 1 || unlaid.filter((v) => said(v, ts[0])).length !== 1) continue
+    out.set(ts[0].ord, { kind: u.kind, why: u.why })
+  }
+  return out
+}
 /** the members the candidate's prepare keeps for their text set wholly in a face of one pitch (candidateKept's 'pitch') */
 export const candidatePitch = (paper, dumps = L1_DUMPS) => candidateKept(paper, 'pitch', dumps)
 /** the members the candidate's prepare keeps as a line of e-mail addresses (candidateKept's 'address') */

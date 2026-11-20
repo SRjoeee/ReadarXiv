@@ -791,9 +791,14 @@ export const RULINGS = [
       const today = new Set(d.asOriginal?.today ?? []),
         v2 = new Set(d.asOriginal?.v2 ?? [])
       const cells = d.cells ?? []
+      // (a cell the prepare made no member of, no Page lays and v2's join does not reach: its state the candidate's own statement
+      // of it (its dump's unit `unlaid`, the state its `why` names: "unlocated: text past its source", 2610.40576v1 p17 t240),
+      // the original's by itself)
       const memberOf = (key) => {
         const ord = cellOrd(key, x)
-        return ord === null ? null : { kind: x.member(ord)?.kind, m: x.laid(ord) }
+        if (ord !== null) return { kind: x.member(ord)?.kind, m: x.laid(ord) }
+        const s = x.unlaid(key)
+        return s ? { kind: s.kind, m: { state: String(s.why ?? '').split(':')[0] } } : null
       }
       const left = cells.filter((k) => v2.has(k)),
         laid = cells.filter((k) => !v2.has(k))
@@ -813,7 +818,7 @@ export const RULINGS = [
       const v2 = new Set(d.asOriginal?.v2 ?? [])
       const left = (d.cells ?? []).filter((k) => v2.has(k)),
         laid = (d.cells ?? []).filter((k) => !v2.has(k))
-      const states = [...new Set(left.map((k) => x.laid(cellOrd(k, x))?.state))]
+      const states = [...new Set(left.map((k) => x.laid(cellOrd(k, x))?.state ?? String(x.unlaid(k)?.why ?? '').split(':')[0]))]
       return `its cells ${left.join(', ')} the original's by themselves (${states.join(', ')}), ${laid.join(', ')} laid; today withheld the group for them`
     },
   },
@@ -1057,7 +1062,7 @@ function inPlaceKept(ord, x) {
  * laid (n -> Page), `unsqueezed` the lay with no CJK line squeezed (n -> ord -> lines), `todayCut` and `todayWhy` today's dumps'
  *  facts by a unit's key (WB, CT)
  */
-export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = null, todayWhy = null }, recount) {
+export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = null, todayWhy = null, unlaidOf = null }, recount) {
   // (each unit's line count over the paper's pages: today's drawn, v2's laid, and with no CJK line squeezed)
   const todayLines = new Map()
   for (const p of pages) for (const u of p.units ?? []) if (typeof u.sides?.today?.lines === 'number') todayLines.set(u.key, (todayLines.get(u.key) ?? 0) + u.sides.today.lines)
@@ -1092,6 +1097,9 @@ export function rulingsPass(pages, { recOf, v2, laid, unsqueezed, todayCut = nul
       // (CT: why today's reader leaves a unit (its key, today's ord) the original's, its reader dump's notLaid or left `why`; none
       // where the caller states nothing)
       todayWhy: (key) => todayWhy?.(key) ?? null,
+      // (a unit the candidate's prepare made no member of, by its key (today's ord): its dump's statement { kind, why }, join.mjs
+      // candidateUnlaid; none where the caller states nothing)
+      unlaid: (key) => unlaidOf?.(key) ?? null,
       member: (ord) => facts.get(ord) ?? Object.values(v2.facts ?? {}).flatMap((f) => f.members ?? []).find((m) => m.ord === ord),
       squeezeSaved: (u) => {
         if (!unsqueezed) return false
