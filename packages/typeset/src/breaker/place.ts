@@ -112,12 +112,13 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams, scale: number): 
       line.x0 +
       (fills ? fillLeft : line.centred ? Math.max(0, slack) / 2 : line.mode === 'right' ? Math.max(0, slack) : 0)
     line.items.forEach((it, n) => {
-      x += (it.asp ?? 0) + (fills?.at[n]![0] ?? 0)
+      const glue = fills?.at[n]
+      x += (it.asp ?? 0) + (glue?.[0] ?? 0)
       it.x = x + (it.shift ?? 0)
       x +=
         it.w +
         (it.kern ?? 0) +
-        (fills?.at[n]![1] ?? 0) +
+        (glue?.[1] ?? 0) +
         (it.t.space && n > kt ? perSpace : 0) +
         (n < line.items.length - 1 && !inWord(line.items[n + 1]!) && n + 1 > kt ? perGap : 0)
     })
