@@ -192,6 +192,41 @@ describe('rule debt', () => {
     ])
   })
 
+  it("reads POSIX, a manual page named in its manual, Node's documents and a test that holds a list to its writer as a definition; a call written in a comment is none", () => {
+    const f = factsOf(
+      'src/engine/system.ts',
+      [
+        // (a comment that opens the file is the file's)
+        'const A = 1',
+        "// the error numbers POSIX names (IEEE Std 1003.1, <errno.h>), as Node names them in an error's code",
+        "const ERRORS = ['ENOTDIR', 'EEXIST', 'EISDIR']",
+        "// the namespaces the probe reads, by their names under /proc/<pid>/ns (Linux's namespaces(7))",
+        "const SPACES = ['pid', 'net', 'mnt']",
+        "// (Node's child_process `stdio`, one entry a descriptor)",
+        "const STDIO = ['ignore', 'pipe', 'pipe']",
+        '// the limits the jail names: tests/jail-limits.test.ts holds the list to them',
+        "const LIMITS = ['wall', 'cpu', 'time']",
+        '// the rows f(2) and x(1) give',
+        "const CALLS = ['first', 'second', 'third']",
+        '// as FontInfo#readString(3) reads them',
+        "const READS = ['name', 'face', 'size']",
+        '// kill(2) takes these',
+        "const SIGNALS = ['TERM', 'KILL', 'STOP']",
+        '',
+      ].join('\n'),
+    )
+    expect(f.lists?.map((l) => [l.name, l.class, l.cites])).toEqual([
+      ['ERRORS', 'defined', 'POSIX'],
+      ['SPACES', 'defined', "Linux's namespaces(7"],
+      ['STDIO', 'defined', "Node's child_process"],
+      ['LIMITS', 'defined', 'tests/jail-limits.test.ts holds'],
+      // (a call's argument is no manual's section, nor is a page named without its manual)
+      ['CALLS', 'listed', null],
+      ['READS', 'listed', null],
+      ['SIGNALS', 'listed', null],
+    ])
+  })
+
   it("counts no rules registry's citations as a name list, whatever their strings' lengths; a registry's other lists are lists", () => {
     // (a registry declared as rule entries: each entry's `ports` cites the code it carries; its `owns` and `reads` are lists as
     // any are; the same `ports` array outside a registry, or in an array of another type, is a list too)
@@ -741,6 +776,45 @@ describe('a template of closed types is closed', () => {
     const c = await census({ today: null, now: [scanTree('engine', root, ENGINE_PROFILE)] })
     expect(c.trees.NOW.debt.vocabularies.list.map((x) => [x.name, x.by])).toEqual([['FACED', 'declared of Change']])
     expect(c.trees.NOW.debt.lists.list.map((x) => x.name)).toEqual(['LOOSE'])
+  })
+})
+
+// A list inside an `as const` object is a vocabulary where a product type is read off the object (an event's columns, typed
+// by `(typeof SCHEMA)[kind][field][number]`); the same object with no type read off it, or not `as const`, holds lists.
+describe("a list of an `as const` object a type is read off", () => {
+  let root = ''
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'axt-census-nested-'))
+    const put = (path: string, text: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+    put('packages/engine/package.json', JSON.stringify({ name: '@x/engine', type: 'module', exports: { '.': './src/index.ts' } }))
+    put(
+      'packages/engine/src/index.ts',
+      [
+        'export const SCHEMA = {',
+        "  ask: { fields: ['kind', 'ask', 'reason'] },",
+        "  end: { fields: ['kind', 'end', 'tester'] },",
+        '} as const',
+        "export type AskField = (typeof SCHEMA)['ask']['fields'][number]",
+        "export const LOOSE = { cols: ['alpha', 'beta', 'gamma'] } as const",
+        "export const PLAIN = { cols: ['one', 'two', 'three'] }",
+        "export type PlainCol = (typeof PLAIN)['cols'][number]",
+        'export const pick = (f: AskField, p: PlainCol): boolean => f.length > 0 && p.length > 0 && LOOSE.cols.length > 0',
+        '',
+      ].join('\n'),
+    )
+  })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  it("reads a list of an `as const` object a product type is read off as a vocabulary; one nothing reads a type off, or of an object not `as const`, a list", async () => {
+    const { ENGINE_PROFILE } = await import('../../lab/release-check/census-profile.mjs')
+    const c = await census({ today: null, now: [scanTree('engine', root, ENGINE_PROFILE)] })
+    expect(c.trees.NOW.debt.vocabularies.list.map((x) => [x.name, x.by])).toEqual([
+      ['SCHEMA', 'a type read off its object'],
+      ['SCHEMA', 'a type read off its object'],
+    ])
+    expect(c.trees.NOW.debt.lists.list.map((x) => x.name).sort()).toEqual(['LOOSE', 'PLAIN'])
   })
 })
 
