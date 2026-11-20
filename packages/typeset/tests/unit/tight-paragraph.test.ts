@@ -78,9 +78,8 @@ describe('a paragraph tighter than its page takes the fit’s own knobs, one siz
     const [a, m, b] = page([4, 8, 4], [60, 250, 60], room, 28)
     expect(m!.lines.length).toBe(6)
     expect(m!.lead).toBeGreaterThanOrEqual(1.617)
-    // (every body unit of the page now short of its frame in the band, the page's one size grows as its rule has it, the evened
-    // unit with it: 2610.21924v1-zh p3 and four pages more of the corpus)
-    expect([m!.size, a!.size, b!.size]).toEqual([10.25, 10.25, 10.25])
+    // (its room is the evening's, not its own: the page's one size does not grow, §18.11, its neighbours' room as it is)
+    expect([m!.size, a!.size, b!.size]).toEqual([10, 10, 10])
     // (its last line into the room under its block's last baseline, 563, no lower than the room's bound, 535)
     expect(m!.lines.at(-1)!).toBeLessThan(563)
     expect(m!.lines.at(-1)!).toBeGreaterThanOrEqual(535 - 0.05)
