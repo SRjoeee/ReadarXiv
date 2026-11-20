@@ -61,6 +61,10 @@ export const SCRIPT_SIZE = 0.85
 export const LEAD_SHARE = 0.05
 /** an accent set apart (TeX's \accent: a modifier symbol or letter, or a combining mark, alone in its run) is no script */
 export const ACCENT = /^[\p{Sk}\p{Lm}\p{M}\s]+$/u
+/** the characters a reader reads in a run (letters, digits, marks, punctuation, symbols): a glyph PDF.js maps to no text (a
+ *  private-use or a control character: a rule's piece, a delimiter's segment, 2610.10069v1 p12; an accent its font maps to no
+ *  character, PDF.js giving the glyph's code, "\x01", 2610.21376v1 p9's "é") is none, no script a drawn text could carry */
+export const read = (s) => [...String(s ?? '')].filter((ch) => /[\p{L}\p{N}\p{M}\p{P}\p{S}]/u.test(ch)).length
 /** a letter of any script, cased or not (Unicode L) */
 const LETTER = /^\p{L}$/u
 /** a text by its letters and digits, case aside: what a drawn text and its source are compared by (`groups`, `shown`) */
@@ -140,10 +144,10 @@ export function mathDrawn(lines, math = []) {
   return out
 }
 
-/** whether an element's glyphs on A (the runs in its ink's boxes) stand on two baselines or at two sizes: scripts a flat text
- *  cannot carry */
+/** whether an element's glyphs on A (the runs in its ink's boxes that hold a character a reader reads, `read`) stand on two
+ *  baselines or at two sizes: scripts a flat text cannot carry */
 export function scriptedOf(runs, boxes) {
-  const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]))
+  const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]) && read(r[7]))
   if (rs.length < 2) return false
   const big = Math.max(...rs.map((r) => r[5]))
   const bases = rs.map((r) => r[4])
@@ -543,7 +547,7 @@ export function measureFidelity(c) {
   // p2 t14's \approach, faked small capitals v2 draws at the original's two sizes, today flat)
   const scripted = { today: new Map(), v2: new Map() }
   const pend = (side, key, unit, k, boxes) => {
-    const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]))
+    const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]) && read(r[7]))
     const id = `${key}\u0000${rs.map((r) => r[7]).join('')}`
     if (!scripted[side].has(id)) scripted[side].set(id, { key, unit, rs, ks: [] })
     scripted[side].get(id).ks.push(k)
