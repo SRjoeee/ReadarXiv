@@ -2050,6 +2050,18 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
   unaffected: the lighting reads the pointer's place, not its target. A host whose PDF.js gives no builder draws the page as
   before, with none. A page shown as the original's (no layout, refused parts, a page over arXiv's PDF) is never committed, so it
   gets no layer of ours: PDF.js's own is there.
+- **Off screen, skipped** (`packages/reader` styles.ts). Every text layer the reader holds, PDF.js's on the left's pages and on
+  the right's original pages and the laid pages' own, is `content-visibility: auto`: while it is off screen the browser skips
+  its style and layout. Chromium lays out again every text node in the layout tree at each change of the document's fonts, and
+  late in a paper's first scroll the text layers are 94 % of that tree, on both readers alike (2610.21026v1 in Chinese, half and
+  three quarters of the way: 27.7k and 26.2k of 29.4k and 28.0k nodes; production's 28.9k and 27.6k), most of them on left
+  pages far from the view, which PDF.js's viewer keeps drawn (its ten page views: 13.4k and 13.9k nodes); the right's far laid
+  pages are out of the tree already (their keep, §11.8). Lane frames-3's census, 2026-11-20. A text layer paints nothing (its
+  glyphs are transparent) and its box is its own (PDF.js's `inset: 0` and `overflow: clip`; a laid page's `contain: strict`,
+  sized by the frame), so one skipped draws nothing less and moves no box, and needs no intrinsic size. The browser lays it out
+  again as it comes near the view, and as the browser's find, a selection or the focus reaches it: unlike a kept page's, a far
+  page's words stay found and selectable. Nothing in the reader reads a box inside a text layer (the sync, the stack and the
+  panes read page boxes). A browser without `content-visibility` (Safari before 18) lays them all, as before.
 - **Cost** (`lab/pdf/spikes/text-layer-cost.mjs`, `lab/pdf/records/text-layer.md`, Chromium 153, real pages, a synthetic full,
   half or no translation of them): the engine's step at most 1.2 ms a page (budget 3 ms), the host's build, its append and a
   forced layout at most 4.0 ms (budget 5 ms), at most 361 nodes (budget 2000), on 2602.23285v2 pp6-9 (977 items on p7, the
