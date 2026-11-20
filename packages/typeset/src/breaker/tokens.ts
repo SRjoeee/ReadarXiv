@@ -93,7 +93,7 @@ export type Token = {
   kernW?: number
   kernEnd?: true
   /** TeX's infinite glue after it (glueOf's `fill`): its order and how many of that order, the line's free room set there
-   *  (B.place); `fillLead`, the same before it, where it is the unit's first token */
+   *  (B.place); `fillLead`, the same before it, where it is the unit's first item, whatever its kind */
   fill?: Fill
   fillLead?: Fill
   /** its `fill` stands before TeX's `\break`, a penalty, which discards nothing before it: on the line that break ends, where
@@ -557,14 +557,10 @@ export function tokens(i: TokensInput): Tokens {
   let runinId: unknown = null
   /** the paper's own horizontal space laid after such a title, in kernW's units (100 an em of the line's size) */
   let runinOwn = 0
-  /** infinite glue before the unit's first token (fillOn), set on that token */
+  /** infinite glue before the unit's first token (fillOn), set on that token once the list is made */
   let fillLead: Fill | undefined
   const push = (t: Token) => {
     const prev = tokens.at(-1)
-    if (fillLead && !t.space && t.newline === undefined && t.blockTo === undefined) {
-      t.fillLead = fillLead
-      fillLead = undefined
-    }
     if (noBreakNext && !t.space) t.glue = true
     noBreakNext = false
     afterHead = false
@@ -763,8 +759,9 @@ export function tokens(i: TokensInput): Tokens {
     if (!g.brk) noBreakNext = true
     if (afterRunin) runinOwn += 100 * em
   }
-  // (TeX's infinite glue, glueOf's `fill`: on the token before it (Token.fill), or before the unit's first token on that token
-  // (Token.fillLead); none after a forced break or a block, as TeX discards glue at a line's start)
+  // (TeX's infinite glue, glueOf's `fill`: on the token before it (Token.fill), or, while the list holds none, gathered for the
+  // unit's first token (Token.fillLead, set once the list is made); none after a forced break or a block, as TeX discards glue
+  // at a line's start)
   const fillOn = (o: 1 | 2) => {
     while (tokens.at(-1)?.space) tokens.pop()
     const t = tokens.at(-1)
@@ -1075,6 +1072,15 @@ export function tokens(i: TokensInput): Tokens {
     }
   }
   while (tokens.at(-1)?.space) tokens.pop()
+  // (the infinite glue before the unit's first item is that item's, whatever its kind and whichever way it entered the list: a
+  // text, a formula's crop, a script; the first token that takes room, past a forced break's newline or a block's mark, which
+  // take none (B.place reads it on the unit's first line's first item). Given only to a token of text, a cell
+  // `\hfill $x$ text` set it on the text after the formula, which no line's first item is: the formula stood at the cell's
+  // start)
+  const first = fillLead
+    ? tokens.find((t) => !t.space && t.newline === undefined && t.blockTo === undefined)
+    : undefined
+  if (first) first.fillLead = fillLead
   // (a space is not set between two characters of a spaceless script, nor beside a full-width mark's blank side whatever
   // stands on its other side (markBlankEdge), nor before a full-width mark no line opens with whatever stands before it
   // (markBarredStart; an ordinary space alone): a space after its head (`keep`) and one in a monospaced run are the text's)

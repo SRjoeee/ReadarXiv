@@ -256,3 +256,76 @@ describe('the infinite glue before a forced break: TeX’s \\break keeps it, LaT
     expect(runs(m!, 1)[0]!.s).toBe(long)
   })
 })
+
+// The infinite glue before a unit's first item (TeX's: the glue at a paragraph's or a cell's start, before what it sets first)
+// is that item's, whatever its kind: a text, a formula drawn as its crop from the original's ink, a script. Given only to a
+// token of text, a cell `\hfill $x$ text` set its glue on the text after the formula, which the placement reads on a line's
+// first item alone: the formula stood at the cell's left edge, the text after it.
+describe('the infinite glue before a unit’s first item is that item’s, whatever its kind', () => {
+  /** a formula drawn as its crop: its ink on A, 20 pt wide on the line's baseline */
+  const MATH = {
+    kind: 'math' as const,
+    ink: [[1, 150, 700, 170, 707, 698]] as [number, number, number, number, number, number][],
+  }
+  /** each drawn item of a member's line: a crop (`#`) or a run's text, and its extent */
+  const itemsOf = (m: Laid, j = 0) =>
+    (m.lines[j]![3] as { s?: string; x: number; w?: number; src?: number[]; size?: number }[])
+      .filter((it) => it.src || it.s?.trim())
+      .map((it) =>
+        it.src
+          ? { s: '#', x0: it.x, x1: it.x + it.w! }
+          : { s: it.s!.trim(), x0: it.x, x1: it.x + (it.size ?? 10) * 0.5 * [...it.s!.trimEnd()].length },
+      )
+  it('`\\hfill`, a formula, text: the formula and the text after it set at the line’s right end', () => {
+    const [m] = layOf(
+      [
+        member(0, 'cell', 'l', [
+          ['1', HFILL],
+          ['2', MATH],
+        ]),
+      ],
+      rowsOf({
+        0: [
+          { t: 'el', id: '1' },
+          { t: 'el', id: '2' },
+          { t: 'text', s: ' Token' },
+        ],
+      }),
+    )
+    const [crop, text] = itemsOf(m!)
+    expect([crop!.s, text!.s]).toEqual(['#', 'Token'])
+    expect(near(text!.x1, 372)).toBe(true)
+    // (the formula right before the text, a space between them, far from the cell's left edge)
+    expect(crop!.x0 > 72 + 200).toBe(true)
+    expect(text!.x0 - crop!.x1 > 0 && text!.x0 - crop!.x1 < 10).toBe(true)
+  })
+  it('`\\hfill` and text: the text at the line’s right end, as before', () => {
+    const [m] = layOf(
+      [member(0, 'cell', 'l', [['1', HFILL]])],
+      rowsOf({
+        0: [
+          { t: 'el', id: '1' },
+          { t: 'text', s: ' rechts' },
+        ],
+      }),
+    )
+    const r = runs(m!)
+    expect(r.map((x) => x.s)).toEqual(['rechts'])
+    expect(near(r[0]!.x1, 372)).toBe(true)
+  })
+  it('a formula first, no glue: set at the line’s start, the text after it, as before', () => {
+    const [m] = layOf(
+      [member(0, 'cell', 'l', [['2', MATH]])],
+      rowsOf({
+        0: [
+          { t: 'el', id: '2' },
+          { t: 'text', s: ' rechts' },
+        ],
+      }),
+    )
+    const [crop, text] = itemsOf(m!)
+    expect([crop!.s, text!.s]).toEqual(['#', 'rechts'])
+    expect(crop!.x0 < 72 + 1).toBe(true)
+    expect(text!.x1 < 372 - 100).toBe(true)
+  })
+})
