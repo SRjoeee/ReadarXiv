@@ -84,6 +84,61 @@ describe('floatTypes: each caption’s float type, LaTeX’s \\@captype there', 
       ['A caption no float holds here.', null],
     ])
   })
+  it('is caption.sty’s \\captionsetup{type=…} for the rest of its environment or group; other options and a type’s own options change nothing', () => {
+    // (caption.sty: the `type` option is \setcaptiontype, \caption@settype setting \@captype: the counter and the name the label
+    // prints. An algorithm set in a wrapfigure so, its caption labelled "Algorithm 1:", was read as a figure's and relabelled with
+    // the figure's word)
+    expect(
+      types(
+        doc(
+          [
+            '\\begin{wrapfigure}{r}{0.5\\columnwidth}\\captionsetup{type=algorithm}\\caption{The steps of the search.}\\end{wrapfigure}',
+            '\\begin{wrapfigure}{r}{0.5\\columnwidth}\\caption{A figure set in the text.}\\end{wrapfigure}',
+            '\\begin{figure}\\captionsetup{font=small,labelfont=bf}\\caption{A figure with smaller captions.}\\end{figure}',
+            '\\begin{figure}\\captionsetup[figure]{name=Fig.}\\caption{A figure that renames its own type.}\\end{figure}',
+            '\\begin{center}\\captionsetup{type=table, position=top}\\caption{A table set in the text.}\\end{center}',
+            '\\begin{figure}{\\captionsetup{type=table}}\\caption{A figure after a group that set another type.}\\end{figure}',
+            '\\caption{A caption no float holds after them.}',
+          ].join('\n\n'),
+          '\\usepackage{wrapfig}\n\\usepackage{caption}\n\\usepackage{algorithm}',
+        ),
+      ),
+    ).toEqual([
+      ['The steps of the search.', 'algorithm'],
+      ['A figure set in the text.', 'figure'],
+      ['A figure with smaller captions.', 'figure'],
+      ['A figure that renames its own type.', 'figure'],
+      ['A table set in the text.', 'table'],
+      ['A figure after a group that set another type.', 'figure'],
+      ['A caption no float holds after them.', null],
+    ])
+  })
+  it('changes the caption’s type alone: the body of the environment is read as before, no pseudocode of it', () => {
+    // (TeX's \@captype numbers and names the caption; it sets nothing of the float's body, which stays a figure's: the units of
+    // an algorithm float's body are its pseudocode, a wrapfigure's are not, whatever its caption's type)
+    const paper = openPaper(
+      new Map([
+        [
+          'main.tex',
+          enc(
+            doc(
+              [
+                'The text before the wrapped algorithm goes on here.',
+                '\\begin{wrapfigure}{r}{0.5\\columnwidth}\\captionsetup{type=algorithm}\\caption{Distil the teacher}\\par Draw the samples of the student and score them\\end{wrapfigure}',
+              ].join('\n\n'),
+              '\\usepackage{wrapfig}\n\\usepackage{caption}\n\\usepackage{algorithm}',
+            ),
+          ),
+        ],
+      ]),
+    ) as unknown as { units: Unit[] }
+    const facts = unitFactsOf(paper as never)
+    expect(paper.units.map((u, i) => [u.kind, textOf(u), facts.float.get(i) ?? null, facts.kept.has(i)])).toEqual([
+      ['para', 'The text before the wrapped algorithm goes on here.', null, false],
+      ['caption', 'Distil the teacher', 'algorithm', false],
+      ['para', 'Draw the samples of the student and score them', null, false],
+    ])
+  })
 })
 
 describe('subfigure.sty’s \\subfigure and \\subtable: the caption a sub-caption unit, the body walked', () => {

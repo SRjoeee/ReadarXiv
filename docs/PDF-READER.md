@@ -3559,7 +3559,13 @@ table's label in the target's word everywhere, the number as printed. Where the 
 (`Label.float`, LaTeX's `\@captype`), a figure's or a table's label takes the rules' word and keeps every glyph after its
 name as TeX printed it, any number ("A1", "S3", "I"); any other type's (an algorithm's, a sub-figure's) stays the
 original's, as does one whose parts do not hold its every glyph or that states no number
-(`packages/typeset/src/unit/label.ts` `labelInTarget`).
+(`packages/typeset/src/unit/label.ts` `labelInTarget`). The type is the one TeX numbers and names the caption by where its
+`\caption` runs: its float environment's, `\captionof`'s first argument, and caption.sty's `\captionsetup{type=…}` for the
+rest of its environment or group (its `type` option sets `\@captype`; one with an optional argument, `\captionsetup[figure]{…}`,
+sets a type's own options, never the type). The type is the caption's alone: the environment's body is read as before, so an
+algorithm set in a wrapfigure under `\captionsetup{type=algorithm}` (2608.27728v1 p3) has its label kept as an algorithm's,
+"Algorithm 1:", where it was read as a figure's and drawn with the figure's word, and its body stays what the front end reads it as, no
+pseudocode (`packages/engine/src/source/latex-front.ts`, the walk's `captionsetup`).
 
 **A heading set in fewer lines than the original's stands on its last ones; a title and the front matter keep their
 top.** The owner's ruling of 2026-10-19, restored this day: the room a shorter translation of a heading frees falls above

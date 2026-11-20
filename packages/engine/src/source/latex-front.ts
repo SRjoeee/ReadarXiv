@@ -4306,6 +4306,12 @@ function frontValues(s: string, from: number, to: number, b: Builder, ctx: Ctx) 
  *  table ends the paragraph before the command and is walked as an environment's body is, the command's own source left
  *  as it stands (\\IfFileExists{…}{\\begin{figure}…}{}, whose caption stayed in English: 2608.28697) */
 function walkArgs(s: string, i: number, end: number, walked: readonly CallArg[], b: Builder, ctx: Ctx) {
+  // (each argument a group of TeX's: a caption type its \\captionsetup sets ends with it)
+  const groupType = b.captype
+  walkArgsIn(s, i, end, walked, b, ctx)
+  b.captype = groupType
+}
+function walkArgsIn(s: string, i: number, end: number, walked: readonly CallArg[], b: Builder, ctx: Ctx) {
   // content given as an optional argument is set apart from the paragraph: \\twocolumn[…], ICML's title block and a
   // CVPR teaser's figure across the page's top
   if (walked.some((a) => a.shape === '[' || holdsBlock(s.slice(a.start + 1, a.end - 1)))) {
@@ -4658,9 +4664,12 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
       endText()
+      // (a group is TeX's: a caption type its \\captionsetup sets ends with it)
+      const groupType = b.captype
       const id = b.open('{', i)
       walk(s, i + 1, e - 1, b, ctx)
       b.close(id, '}', e)
+      b.captype = groupType
       i = e
       continue
     }
@@ -5582,6 +5591,18 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       b.ph(s.slice(i, call.end), i, call.end)
       i = call.end
       continue
+    }
+    // caption.sty's \\captionsetup{…type=<t>…}: its `type` option (\\setcaptiontype, whose \\caption@settype sets \\@captype) is the
+    // type of the captions after it in its environment or group, the counter they step and the name their label prints, as
+    // \\captionof's first argument is (`b.captype`); the body around it is read as before, and the command is kept as any other
+    // below. One with an optional argument (\\captionsetup[figure]{…}) sets a type's own options, never the type
+    if (name === 'captionsetup') {
+      const opt = argsAfter(s, end, 1).args[0]
+      const ty =
+        opt?.kind === 'req'
+          ? /(?:^|,)\s*type\*?\s*=\s*([a-z][a-z0-9]*)\s*(?=,|$)/.exec(s.slice(opt.start + 1, opt.end - 1))
+          : null
+      if (ty) b.captype = ty[1]
     }
     // any other command: its arguments as the role table reads them (commandArgs) — its text and a box's content among
     // them walked (walkArgs), the rest kept with it —, or with every adjacent argument where the table does not know it
