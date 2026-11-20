@@ -26,7 +26,7 @@ import { frameOf, labelsPass } from './fidelity.mjs'
 import { candidateUnlaid, piecesJoin } from './join.mjs'
 import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
-import { coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linesPass, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
+import { bordersPass, coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linesPass, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
 import { cutBeforeBoundary, rulingsOf, rulingsPass } from './rulings.mjs'
 
 /** why a unit is laid with a fresh row (fresh.mjs freshNeeds' causes), as the sheet says it (lane parity-fresh) */
@@ -243,6 +243,11 @@ for (const [pair, raw] of drawn) {
   )
   // (a unit's links counted over the pages it spans, its text and its links moved over a page break by a translation: verdict.mjs
   // linksPass; the pages' owners of links dropped once counted)
+  // (and its link borders likewise, read before linksPass drops the pages' links: verdict.mjs bordersPass)
+  bordersPass(
+    mine.filter((p) => !p.error),
+    recount,
+  )
   linksPass(
     mine.filter((p) => !p.error),
     recount,
@@ -298,6 +303,7 @@ for (const [pair, raw] of drawn) {
     const drawnAgain = again.filter((q) => q && !q.error)
     pastRoomPass(drawnAgain, recount)
     sharePass(drawnAgain, recount)
+    bordersPass(drawnAgain, recount)
     linksPass(drawnAgain, recount)
     stylePass(drawnAgain, recount)
     linesPass(drawnAgain, recount)

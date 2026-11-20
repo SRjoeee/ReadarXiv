@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Placed } from '@readarxiv/format'
 // @ts-expect-error — a plain node module of the lab
-import { coverageOf, linksPass, measurePage, recount as recountOf, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
+import { bordersPass, coverageOf, linksPass, measurePage, recount as recountOf, staleOf, unmeasuredOf, verdictOf } from '../../lab/typeset/parity/verdict.mjs'
 // @ts-expect-error — a plain node module of the lab
 import { labelsPass } from '../../lab/typeset/parity/fidelity.mjs'
 import { rowLinesOf } from '../../packages/typeset/src/lay/adapt.ts'
@@ -212,6 +212,49 @@ describe('a page measured from what each side drew', () => {
     linksPass(lost, recountOf)
     expect(linksOn(lost)).toEqual([[true], []])
   })
+  it("a unit over two pages counts its link borders over them: a citation the translation moves to the next page loses none (M5)", () => {
+    // (2608.27728v1 t57 over pages 10 and 11: every annotation and anchor bordered (hyperref's boxes); v2's translation draws one
+    // of the unit's citations on page 11 that A sets on page 10. Counted page by page, v2 missed a border on page 10)
+    const k = 96 / 72
+    const px = (x0: number, y0: number, x1: number, y1: number, o = [0, 0]) => [o[0]! + x0 * k, o[1]! + (792 - y1) * k, o[0]! + x1 * k, o[1]! + (792 - y0) * k]
+    const v2Rect = [25, 17, 816, 1056]
+    const f = {
+      pages: { 10: { members: [{ ord: 57, state: 'laid', lines: [] }], links: [] }, 11: { members: [{ ord: 57, state: 'laid', lines: [] }], links: [] } },
+      facts: {
+        10: { members: [{ ord: 57, kind: 'para', align: 'j', style: { size: 10 }, lines: [[10, 0, 72, 300, 100, 108, 98, 72, 300, 0, 10]] }], links: 0 },
+        11: { members: [{ ord: 57, kind: 'para', align: 'j', style: { size: 10 }, lines: [[11, 0, 72, 300, 700, 708, 698, 72, 300, 0, 10]] }], links: 0 },
+      },
+      today: { 57: { today: 57 } },
+    }
+    const cite = (side: string, x0: number, y: number, to: string) => [side === 'a' ? `#"${to}"` : `#${to}`, ...(side === 'a' ? [x0, y - 1, x0 + 7, y + 8, 1] : px(x0, y - 1, x0 + 7, y + 8, side === 'v' ? v2Rect : [0, 0]))]
+    const pageOf = (n: number, y: number, a: string[], t: string[], v: string[], bordered = { a: a.length, t: t.length, v: v.length }) =>
+      measurePage(
+        'p-zh',
+        f,
+        {
+          page: n,
+          view: [0, 0, 612, 792],
+          original: { links: a.length, linkBoxes: a.map((to, i) => cite('a', 80 + 20 * i, y, to)), bordered: bordered.a },
+          today: { units: [{ id: 57, lines: [{ ...line(y, 10), x0: 72, x1: 300 }] }], figures: [], names: [], crops: [], links: 0, linksDrawn: t.length, linkBoxes: t.map((to, i) => cite('t', 80 + 20 * i, y, to)), bordersDrawn: bordered.t, lit: [], litBoxes: {} },
+          v2: { committed: true, units: [{ id: 57, lines: [{ ...line(y, 10), x0: 72, x1: 300 }] }], crops: [], links: 0, linksDrawn: v.length, linkBoxes: v.map((to, i) => cite('v', 80 + 20 * i, y, to)), bordersDrawn: bordered.v, lit: [], rect: v2Rect },
+          px: {},
+        },
+        { prepByOrd: new Map(), todayOf: new Map([[57, 57]]), turned: new Set(), led: new Map(), top: new Set() },
+      )
+    const bordersOn = (ps: { diffs: { flag: string; worse: boolean }[] }[]) => ps.map((p) => p.diffs.filter((d) => d.flag === 'borders').map((d) => d.worse))
+    const pass = (ps: Parameters<typeof bordersPass>[0]) => {
+      bordersPass(ps, recountOf)
+      linksPass(ps, recountOf)
+      return ps
+    }
+    const moved = () => [pageOf(10, 100, ['c1', 'c2', 'c3'], ['c1', 'c2', 'c3'], ['c1', 'c2']), pageOf(11, 700, ['c4'], ['c4'], ['c3', 'c4'])]
+    expect(bordersOn(moved())).toEqual([[true], []])
+    expect(bordersOn(pass(moved()))).toEqual([[], []])
+    // (one of the unit's citations drawn nowhere: a border missing, on its first page)
+    expect(bordersOn(pass([pageOf(10, 100, ['c1', 'c2', 'c3'], ['c1', 'c2', 'c3'], ['c1', 'c2']), pageOf(11, 700, ['c4'], ['c4'], ['c4'])]))).toEqual([[true], []])
+    // (a page whose anchors are bordered in part, which the drawing states by a count alone: the unit left as measured)
+    expect(bordersOn(pass([pageOf(10, 100, ['c1', 'c2', 'c3'], ['c1', 'c2', 'c3'], ['c1', 'c2']), pageOf(11, 700, ['c4', 'c5'], ['c4', 'c5'], ['c3', 'c4', 'c5'], { a: 1, t: 1, v: 2 })]))).toEqual([[true], []])
+  })
   it("link borders are the anchors each side drew with one, against the original's annotations PDF.js draws one round", () => {
     // (hyperref's boxes: three bordered annotations; v2 drawing its anchors with none is worse, whatever its links; a drawing of
     // before the borders were read judges none)
@@ -350,7 +393,7 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
         rec({ v2: { units: [{ id: 31, lines: [line(500), line(488)] }], lit: [31] } }),
         { prepByOrd: new Map(), todayOf: new Map(), turned: new Set(), led: new Map(Object.entries(o.led ?? {}).map(([f, h]) => [Number(f), h])), top: new Set() },
       )
-    const filledBlocks = (p: { diffs: { flag: string; what?: string }[] }) => highlights(p).filter((d) => /fill or bridge/.test(d.what ?? ''))
+    const filledBlocks = (p: { diffs: { flag: string; what?: string }[] }) => highlights(p).filter((d) => /fill or bridge/.test((d as { what?: string }).what ?? ''))
     it('the name its unit is led by: its own, no other block', () => {
       expect(filledBlocks(fills({ led: { 31: 30 } }))).toEqual([])
     })
