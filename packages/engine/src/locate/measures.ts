@@ -17,6 +17,21 @@ const EDGES = 0.02
  *  ONE_EDGE (PDF-READER §18.94), what a line's ink start or end differs from the measure TeX states for it by (a side bearing,
  *  microtype's protrusion: of 190,155 lines over the 245 papers, the ink of 175,833 within 0.125 em, q0.9999 0.211 em) */
 const INK_EDGE = 0.25
+/**
+ * Whether the instrument keeps a paragraph's statement (STATEMENTS_TEX's AXT-MEASURE) for this phase: a measure that is not the
+ * full \hsize (a \parshape, a \hangindent, a \leftskip or \rightskip), or an \hsize no page's frame has, its text block's or a
+ * column's (a box's paragraph: a minipage's, a \parbox's, mdframed's, which boxMeasures places). A paragraph of its column's
+ * full width states nothing its frame does not. Kept for the shapes alone, a box's paragraph of no shape was dropped and its
+ * lines kept the frame's measure: 2610.19159v1's mdframed paragraphs, the page's text block, over the box's rule
+ */
+export function measureKept(
+  s: ParaMeasure,
+  frames: readonly ({ block: readonly number[]; columns: readonly (readonly number[])[] } | null | undefined)[],
+): boolean {
+  if (s.shape?.length || s.hangindent !== 0 || s.leftskip !== 0 || s.rightskip !== 0) return true
+  const widths = frames.flatMap((f) => (f ? [f.block[1]! - f.block[0]!, ...f.columns.map((c) => c[1]! - c[0]!)] : []))
+  return widths.length > 0 && widths.every((w) => Math.abs(w - s.hsize) > EDGES)
+}
 /** a stated line whose paragraph's \hsize no column of its frame has (a box's: a minipage, a \parbox, mdframed): its line k of
  *  the paragraph n TeX states `s` */
 type Boxed = { l: Line; s: ParaMeasure; k: number; n: number }

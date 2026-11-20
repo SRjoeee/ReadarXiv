@@ -7633,7 +7633,9 @@ bytes it was.
   shape varies by line, the lines after a held row state none. A table cell, a figure text and a name keep their measure.
   - **A box's paragraph** (`locate/measures.ts` boxMeasures; lane c4-boxes, the coordinator's ruling 2 of 2026-11-20): a
     paragraph TeX set at an `\hsize` no column of its frame has is placed by the page's own lines set at that `\hsize`, as
-    today's reader read a column from the page's lines. Those lines of one page, gathered where their extents meet (one box;
+    today's reader read a column from the page's lines. The instrument keeps its statement though it states no shape
+    (`measureKept`: a measure that is not the full `\hsize`, or an `\hsize` no page's frame has, its block's or a column's);
+    kept for the shapes alone, a box's plain paragraph was dropped and its lines kept the frame's measure. Those lines of one page, gathered where their extents meet (one box;
     two of one width side by side stay two), each extent its ink widened by what TeX's statement puts between its ink and its
     measure (its indent and `\leftskip`, its `\rightskip` and its shape's length short of `\hsize`): where their spread is
     that `\hsize` within 0.25 em of their size (the typesetter's ONE_EDGE, §18.94: a line TeX filled stands among them), the

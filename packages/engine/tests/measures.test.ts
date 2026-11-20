@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { align } from '../src/align/align.ts'
 import type { Doc } from '../src/doc.ts'
 import { type Instrument, type InstrumentUnit, ownersOf, ROLE } from '../src/instrument.ts'
+import { measureKept } from '../src/locate/measures.ts'
 import { docOf } from './helpers/doc.ts'
 import { locate } from './helpers/locate.ts'
 
@@ -434,6 +435,23 @@ describe('a paragraph set at an \hsize no column has (a box’s): placed by the 
       [72, 540],
       [72, 540],
     ])
+  })
+  it('the instrument keeps a box’s statement of no shape: an \\hsize no page’s frame has; a column’s full width as before', () => {
+    const frames = [
+      {
+        block: [72, 540],
+        columns: [
+          [72, 300],
+          [312, 540],
+        ],
+      },
+    ]
+    expect(measureKept({ ...plain, hsize: 228 }, frames)).toBe(false)
+    expect(measureKept({ ...plain, hsize: 468 }, frames)).toBe(false)
+    expect(measureKept({ ...plain, hsize: 428.03 }, frames)).toBe(true)
+    expect(measureKept({ ...plain, hsize: 228, leftskip: 10 }, frames)).toBe(true)
+    // (no frame stated: nothing to tell a box's width from, as before)
+    expect(measureKept({ ...plain, hsize: 428.03 }, [null])).toBe(false)
   })
   it('a lone line with no sibling of its width: no wider measure than itself, so that it is never widened past its ink', () => {
     const [one] = measuredOf([['z'.repeat(12), 0]], [[1, 0]], [{ para: 1, ...box }], [[0, 1]])
