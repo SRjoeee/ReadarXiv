@@ -21,7 +21,12 @@ const metrics: Metrics = {
 const zh = rulesFor('zh')
 const st = { role: 'serif' as const, size: 10, design: 'NimbusRomNo9L-Regu' }
 const ids = ['b', 'c', 'd', 'e'].map((c) => c.repeat(64))
-const row = (id: string, n: number): Row => ({ id, ok: true, by: 'test', content: [{ t: 'text', s: '\u6587'.repeat(n) }] })
+const row = (id: string, n: number): Row => ({
+  id,
+  ok: true,
+  by: 'test',
+  content: [{ t: 'text', s: '\u6587'.repeat(n) }],
+})
 const at = (y: number, x0 = 72, x1 = 300): Placed['lines'][number] => [1, 0, x0, x1, y, y + 7, y - 2, x0, x1, 0, 10]
 const lay = (flow: Placed[], chars: number[]) => {
   const by = new Map(chars.map((c, i) => [ids[i]!, row(ids[i]!, c)]))
