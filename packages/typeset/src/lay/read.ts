@@ -77,10 +77,12 @@ export function sourcePieces(content: readonly Piece[]): V0Piece[] {
 /** the source a rule reads of an element, made of what the part states of it (El: its glue, its command and whether its
  *  source is that command alone, a forced break, a citation's note, its identity): every test the rules make of a source
  *  (glueOf, FORCED_BREAK, the style commands' and GENERATED_REF's names, CITE_NOTE, a declaration's /^\\[A-Za-z]+$/, the
- *  macros learnt by their source) answers on it as on the source itself */
+ *  macros learnt by their source) answers on it as on the source itself. A forced break is `\\` (LaTeX's `\\` and its forms,
+ *  `\newline`, which is `\\`, and a cell's row end), but TeX's `\break` where the part states it so (El.cmd, El.bare): a
+ *  penalty, which takes no glue before it as `\\` does (B.tokens) */
 export function srcOfEl(id: string, el: El | undefined): string {
   if (!el) return `{=${id}}`
-  if (el.brk) return '\\\\'
+  if (el.brk) return el.cmd === 'break' && el.bare ? '\\break' : '\\\\'
   if (el.glue) return `\\${el.glue[2] ? 'hskip' : 'kern'} ${el.glue[0]}${el.glue[1]}`
   if (el.cmd !== undefined && el.bare) return `\\${el.cmd}`
   const key = `{=${el.same ?? id}}`

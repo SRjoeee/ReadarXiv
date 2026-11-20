@@ -44,11 +44,35 @@ const part = (ms: Placed[]): Part => ({
 })
 const layOf = (ms: Placed[], rows: Rows) => layPage(part(ms), rows, rulesFor('de'), metrics()).members
 /** each run of a member's first drawn line: its text and its extent at the size it is drawn at */
-const runs = (m: Laid) =>
-  (m.lines[0]![3] as { s?: string; x: number; size?: number }[])
+const runs = (m: Laid, j = 0) =>
+  (m.lines[j]![3] as { s?: string; x: number; size?: number }[])
     .filter((r) => r.s)
-    .map((r) => ({ s: r.s!.trim(), x0: r.x, x1: r.x + (r.size ?? 10) * 0.5 * [...r.s!.trimEnd()].length }))
+    .map((r) => ({
+      s: r.s!.trim(),
+      x0: r.x,
+      x1: r.x + (r.size ?? 10) * 0.5 * [...r.s!.trimEnd()].length,
+      f: r.size ?? 10,
+    }))
 const near = (a: number, b: number) => Math.abs(a - b) < 0.01
+/** TeX's \break (\penalty-\@M) as the part states it: a forced break (El.brk) whose source is that command alone (El.cmd,
+ *  El.bare), TeX's first line ending there (El.ends); LaTeX's `\\`, stated a forced break with no command */
+const BREAK = {
+  kind: 'zero' as const,
+  ink: [],
+  cmd: 'break',
+  bare: 1 as const,
+  brk: 1 as const,
+  ends: [0, 0] as [number, number],
+}
+const NEWLINE = { kind: 'space' as const, ink: [], brk: 1 as const, ends: [0, 0] as [number, number] }
+/** a member of two lines at size 10 from 72 to 372 (baselines 700 and 688), its kind and alignment, its elements */
+const twoLines = (kind: string, align: Placed['align'], els: Placed['els']): Placed => ({
+  ...member(0, kind, align, els),
+  lines: [
+    [1, 0, 72, 372, 700, 707, 698, 72, 372, 0, 10],
+    [1, 0, 72, 372, 688, 695, 686, 72, 372, 0, 10],
+  ],
+})
 
 describe('TeX’s infinite glue sets what follows it at the line’s right end', () => {
   it('`A \\hfill B` in a cell: A at the start, B ending at the right end', () => {
@@ -134,5 +158,101 @@ describe('TeX’s infinite glue sets what follows it at the line’s right end',
     const r = runs(m!)
     expect(near(r[0]!.x0, 72)).toBe(true)
     expect(r.at(-1)!.x1 < 372 - 100).toBe(true)
+  })
+})
+
+// The glue standing at a line's end (TeX's line_break: a break at glue takes that glue, a break at a penalty discards nothing
+// before it). TeX's \break is a penalty: the \hfill before it stays on the line and takes its room. LaTeX's `\\` and \newline
+// take the glue before them away first (latex.ltx's \@gnewline and \@centercr: `\unskip`), and \par its last glue, as a break
+// the line chose at the glue does: those are discarded as before. What TeX sets, compiled (\showbox, our own text):
+// `A \hfil B \hfill\break C` "glue set 178.75fill" (B after A at its spacing), with `\\` "glue set 89.37fil" (B mid-room).
+describe('the infinite glue before a forced break: TeX’s \\break keeps it, LaTeX’s `\\\\` takes it away', () => {
+  const abc = (brk: typeof BREAK | typeof NEWLINE, align: Placed['align'], fil = true) => {
+    const els: NonNullable<Placed['els']> = [
+      ['2', HFILL],
+      ['3', brk],
+    ]
+    if (fil) els.unshift(['1', HFIL])
+    return layOf(
+      [twoLines('para', align, els)],
+      rowsOf({
+        0: [
+          { t: 'text', s: 'links ' },
+          ...(fil ? [{ t: 'el' as const, id: '1' }] : []),
+          { t: 'text', s: ' Mitte ' },
+          { t: 'el', id: '2' },
+          { t: 'el', id: '3' },
+          { t: 'text', s: ' rechts' },
+        ],
+      }),
+    )[0]!
+  }
+  // (each run's extent at its drawn size; a space half of it: "links " is the first run and the space after it)
+  const sp = (r: ReturnType<typeof runs>) => r[0]!.f / 2
+  it('`A \\hfil B \\hfill\\break C`: the \\hfill of the higher order takes the room, B set after A at its natural spacing', () => {
+    const m = abc(BREAK, 'j')
+    const r = runs(m)
+    expect(r.map((x) => x.s)).toEqual(['links', 'Mitte'])
+    expect(near(r[0]!.x0, 72)).toBe(true)
+    expect(near(r[1]!.x0, r[0]!.x1 + sp(r))).toBe(true)
+    expect(near(runs(m, 1)[0]!.x0, 72)).toBe(true)
+  })
+  it('`A \\hfil B \\hfill\\\\ C`: \\\\ took the \\hfill away and set its own \\hfil, B mid-room as before', () => {
+    const r = runs(abc(NEWLINE, 'j'))
+    expect(r.map((x) => x.s)).toEqual(['links', 'Mitte'])
+    const gap = r[1]!.x0 - (r[0]!.x1 + sp(r))
+    expect(gap > 100).toBe(true)
+    expect(near(gap, 372 - r[1]!.x1)).toBe(true)
+  })
+  it('a centred line ending `\\hfill\\break`: set flush left, the fill winning over \\centering’s own fil glue', () => {
+    const m = abc(BREAK, 'c', false)
+    const r = runs(m)
+    expect(near(r[0]!.x0, 72)).toBe(true)
+    expect(near(r[1]!.x0, r[0]!.x1 + sp(r))).toBe(true)
+    // (the line after it centred)
+    const n = runs(m, 1)
+    expect(near(n[0]!.x0 - 72, 372 - n[0]!.x1)).toBe(true)
+  })
+  it('a centred line ending `\\hfill\\\\`: \\@centercr’s \\unskip took it away, the line centred as before', () => {
+    const r = runs(abc(NEWLINE, 'c', false))
+    expect(r[0]!.x0 > 72 + 100).toBe(true)
+    expect(near(r[0]!.x0 - 72, 372 - r.at(-1)!.x1)).toBe(true)
+  })
+  it('a flush right line ending `\\hfill\\break`: set flush left; with `\\\\` flush right as before', () => {
+    expect(near(runs(abc(BREAK, 'r', false))[0]!.x0, 72)).toBe(true)
+    expect(near(runs(abc(NEWLINE, 'r', false)).at(-1)!.x1, 372)).toBe(true)
+  })
+  it('the unit’s last line ending `\\hfill` (\\par takes it): discarded, the centred line centred as before', () => {
+    const [m] = layOf(
+      [member(0, 'para', 'c', [['1', HFILL]])],
+      rowsOf({
+        0: [
+          { t: 'text', s: 'links Mitte ' },
+          { t: 'el', id: '1' },
+        ],
+      }),
+    )
+    const r = runs(m!)
+    expect(r[0]!.x0 > 72 + 100).toBe(true)
+    expect(near(r[0]!.x0 - 72, 372 - r.at(-1)!.x1)).toBe(true)
+  })
+  it('a break the line chose at an `\\hfill`: the glue discarded there, the centred line centred as before', () => {
+    // (the word after the glue, 250 pt, fits no line with "aaaa bbbb cccc" before it: the line breaks at the glue)
+    const long = 'x'.repeat(50)
+    const [m] = layOf(
+      [twoLines('para', 'c', [['1', HFILL]])],
+      rowsOf({
+        0: [
+          { t: 'text', s: 'aaaa bbbb cccc ' },
+          { t: 'el', id: '1' },
+          { t: 'text', s: ` ${long}` },
+        ],
+      }),
+    )
+    const r = runs(m!)
+    expect(r.map((x) => x.s).join(' ')).toBe('aaaa bbbb cccc')
+    expect(r[0]!.x0 > 72 + 50).toBe(true)
+    expect(near(r[0]!.x0 - 72, 372 - r.at(-1)!.x1)).toBe(true)
+    expect(runs(m!, 1)[0]!.s).toBe(long)
   })
 })

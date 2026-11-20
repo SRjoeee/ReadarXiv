@@ -12,13 +12,16 @@ import type { Token } from './tokens.ts'
 type EndMark = NonNullable<Token['endMark']>
 
 /** a line's infinite glue (Token.fill, Token.fillLead): the highest order on it, and how many of that order stand before and
- *  after each item; null where it holds none. A glue after the line's last item is none (TeX discards glue at a break), one
- *  before an item only where it is the unit's first (`first`, the unit's first line) */
+ *  after each item; null where it holds none. A glue after the line's last item is none where the line ends at a break it
+ *  chose there or at the unit's end (TeX discards the glue a line breaks at, \par the last), or at LaTeX's `\\` or `\newline`
+ *  (their \unskip takes it); one standing before TeX's `\break`, a penalty, stays (Token.fillStays: a break at a penalty
+ *  discards nothing before it), so `A \hfil B \hfill\break` sets B after A at its spacing and a centred line ending
+ *  `\hfill\break` stands at the left. One before an item only where it is the unit's first (`first`, the unit's first line) */
 function fillsOf(line: LaidLine, first: boolean): { order: number; at: [number, number][] } | null {
   const last = line.items.length - 1
   const of = (n: number) => [
     n === 0 && first ? line.items[n]!.t.fillLead : undefined,
-    n < last ? line.items[n]!.t.fill : undefined,
+    n < last || line.items[n]!.t.fillStays ? line.items[n]!.t.fill : undefined,
   ]
   const order = Math.max(0, ...line.items.flatMap((_, n) => of(n).map((f) => f?.[0] ?? 0)))
   if (!order) return null
@@ -79,7 +82,8 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams, scale: number): 
     // (TeX's infinite glue on the line, Token.fill after an item and Token.fillLead before the unit's first: the line's free room,
     // all of it, at the glue of the highest order there, shared by how many (tex.web §656: only the highest order stretches); the
     // line's own fil glue counted at order 1, LaTeX's \@flushglue and \parfillskip: a centred line's \leftskip and \rightskip, a
-    // flush right line's \leftskip, a ragged or last line's right one. A glue on a line's last item is TeX's at a break: none)
+    // flush right line's \leftskip, a ragged or last line's right one. A glue on a line's last item is TeX's at a break: none,
+    // but before TeX's \break, which keeps it: fillsOf)
     const fills = slack > 0 ? fillsOf(line, line === lines[0]) : null
     let fillLeft = 0
     if (fills) {
