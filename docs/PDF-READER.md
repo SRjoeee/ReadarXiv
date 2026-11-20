@@ -2883,8 +2883,9 @@ within noise.
   (rows 17-18 pt apart), it was 8.87 pt on p34's left pane, and the caption set single-spaced over a table (rows 5.47 apart:
   its own 2.73) was padded 8.87 under its last row, over the upper half of the table's header labels 2 pt under it; p50's
   cell over the cell under it, p59's paragraph to its neighbour's middle. The hit test reads the same pads (what is painted is
-  what is hit), and so does the reader gate's I11 (`lab/typeset/painted.mjs`); the parity's paint model
-  (`lab/typeset/parity/paint.mjs`, `verdict.mjs`) still reads the page's half leading. Over the display gate's record
+  what is hit), and so does the reader gate's I11 (`lab/typeset/painted.mjs`), and the parity's paint model
+  (`lab/typeset/parity/paint.mjs`, `verdict.mjs` padsOn: the reader's own `padsOf` where the reader states it, else the page's
+  half leading). Over the display gate's record
   (release-c3's lay of the 90 pairs, both panes, each shape painted by the reader's own rows before and after): of 307,548
   rows, 23,161 move by more than 1 pt on 1,617 pages of the 90 pairs (7,103 member-panes; at most 9.46 pt), 13,519 grown
   where a member's own spacing is wider than its page's lower quartile (981 pages) and 9,688 shrunk where it is narrower or a
