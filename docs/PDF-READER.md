@@ -8927,6 +8927,25 @@ released reader leaves all of it as the original draws it.
 - **Versions**: PIPELINE 108 (which units there are). TRANSLATE stays (no wire is serialised or read otherwise: units leave),
   LAYOUT stays (no mark moves, the marks digest with it), the rule file stays (the typesetter reads nothing new).
 
+### 18.103 TeX's infinite glue takes a line's free room (2026-11-20)
+
+A cell `Teacher segment \hfill tokens 0--4,096` (2610.40576v1 pp17-18, nine such cells) sets its heading at the cell's left and
+the count flush right; the typesetter read `\hfill` as no glue, and drew the two as one run, the count set against the heading.
+
+- **The rule** (`packages/typeset/src/breaker/tokens.ts` glueOf, `breaker/place.ts` placeItems). latex.ltx's `\hfill` (`\hskip
+  0pt plus 1fill`) and `\hfil` (`plus 1fil`), as the part states them (an element's bare command), are TeX's infinite glue of
+  order 2 and 1: no natural width, on the token before them (Token.fill; before a unit's first token, on that token,
+  Token.fillLead; none after a forced break or a block, where TeX discards glue). A line's free room, all of it, goes to the glue
+  of the highest order on it, shared by how many of that order (tex.web §656: only the highest order stretches); the line's own
+  fil glue counts at order 1 (LaTeX's `\@flushglue` and `\parfillskip`: a centred line's two, a flush right line's left one, a
+  ragged or last line's right one), so `A \hfill B` sets B at the right end in any of them and `A \hfil B` in a centred cell
+  shares the room in thirds. A glue on a line's last item is TeX's at a break: discarded. The breaker and the fit are as they were:
+  the glue adds no width, and a line with no room left sets nothing more. `\hspace{\fill}` is not read: the part states its
+  argument as no source the lay can read.
+- **Reach** (the record's prepare of the 90 pairs' papers): 2610.40576v1's nine cells, and 2610.40394v1's six paragraphs ending
+  `\hfill$\square$`, whose box is then set at the line's right end where TeX sets it.
+- **Versions**: lay only; no stored object moves (PIPELINE, TRANSLATE, LAYOUT and the digests stay).
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

@@ -11,6 +11,19 @@ import type { Token } from './tokens.ts'
 /** the unit's end mark's distances (Token.endMark) */
 type EndMark = NonNullable<Token['endMark']>
 
+/** a line's infinite glue (Token.fill, Token.fillLead): the highest order on it, and how many of that order stand before and
+ *  after each item; null where it holds none. A glue after the line's last item is none (TeX discards glue at a break), one
+ *  before an item only where it is the unit's first (`first`, the unit's first line) */
+function fillsOf(line: LaidLine, first: boolean): { order: number; at: [number, number][] } | null {
+  const last = line.items.length - 1
+  const of = (n: number) => [
+    n === 0 && first ? line.items[n]!.t.fillLead : undefined,
+    n < last ? line.items[n]!.t.fill : undefined,
+  ]
+  const order = Math.max(0, ...line.items.flatMap((_, n) => of(n).map((f) => f?.[0] ?? 0)))
+  if (!order) return null
+  return { order, at: line.items.map((_, n) => of(n).map((f) => (f?.[0] === order ? f[1] : 0)) as [number, number]) }
+}
 /** each line's items placed: justified where the slack is within the caps (CJK per gap, but none inside a word: gapsOf,
  *  spaces per space), else left aligned; the unit's last line left aligned, and so a line TeX's own break ends (breakLines' `ends`: the part of a
  *  paragraph before a display, which TeX ends with \parfillskip, and a forced break, \\'s \hfil\break), its spacing the
@@ -63,7 +76,25 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams, scale: number): 
         slack = 0
       }
     }
-    if (slack < 0 && spaces.length)
+    // (TeX's infinite glue on the line, Token.fill after an item and Token.fillLead before the unit's first: the line's free room,
+    // all of it, at the glue of the highest order there, shared by how many (tex.web §656: only the highest order stretches); the
+    // line's own fil glue counted at order 1, LaTeX's \@flushglue and \parfillskip: a centred line's \leftskip and \rightskip, a
+    // flush right line's \leftskip, a ragged or last line's right one. A glue on a line's last item is TeX's at a break: none)
+    const fills = slack > 0 ? fillsOf(line, line === lines[0]) : null
+    let fillLeft = 0
+    if (fills) {
+      const own: [number, number] =
+        fills.order > 1 || line.mode === 'just'
+          ? [0, 0]
+          : line.mode === 'centred'
+            ? [1, 1]
+            : line.mode === 'right'
+              ? [1, 0]
+              : [0, 1]
+      const unit = slack / (own[0] + own[1] + fills.at.reduce((a, [b, c]) => a + b + c, 0))
+      fillLeft = own[0] * unit
+      fills.at = fills.at.map(([b, c]) => [b * unit, c * unit])
+    } else if (slack < 0 && spaces.length)
       perSpace = slack / spaces.length // shrunk spaces (never past spaceMin by the breaking)
     else if (line.mode === 'just' && slack > 0) {
       if (latinish) {
@@ -77,13 +108,16 @@ function placeItems(lines: LaidLine[], f: number, P: FitParams, scale: number): 
       }
     }
     if (line.mode === 'last' && slack < 0 && !spaces.length) slack = 0
-    let x = line.x0 + (line.centred ? Math.max(0, slack) / 2 : line.mode === 'right' ? Math.max(0, slack) : 0)
+    let x =
+      line.x0 +
+      (fills ? fillLeft : line.centred ? Math.max(0, slack) / 2 : line.mode === 'right' ? Math.max(0, slack) : 0)
     line.items.forEach((it, n) => {
-      x += it.asp ?? 0
+      x += (it.asp ?? 0) + (fills?.at[n]![0] ?? 0)
       it.x = x + (it.shift ?? 0)
       x +=
         it.w +
         (it.kern ?? 0) +
+        (fills?.at[n]![1] ?? 0) +
         (it.t.space && n > kt ? perSpace : 0) +
         (n < line.items.length - 1 && !inWord(line.items[n + 1]!) && n + 1 > kt ? perGap : 0)
     })
