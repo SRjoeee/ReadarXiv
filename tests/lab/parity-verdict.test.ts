@@ -271,6 +271,24 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       expect(highlights(measure(fig(short), rec({ v2: v2Fig })))).toMatchObject([{ unit: 'p50 figure', worse: true }])
     })
   })
+  describe("a drawn line is covered where its ink stands: a line of CJK characters alone under the em box's foot, no lower (M6)", () => {
+    // (2501.14787v1 p8 t55, a 14.35 pt heading of CJK characters alone: the typesetter boxes a CJK token by its face's em box,
+    // 0.12 of the size under the baseline (emit/sentences.ts CJK_DESC), and no CJK ink goes lower; the band read 0.2 under
+    // missed the box by 1.15 pt at the foot)
+    const s = 14.35
+    const cjk = (text: string) => ({ units: [{ id: 50, lines: [drawnLine(100, 240, 300, text, s)] }] })
+    const heading = (bottom: number) => {
+      const b = [99.5, 300 + bottom * s, 240.5, 300 + 0.88 * s]
+      return v2Of({ members: [{ ord: 50, state: 'laid', lines: [], lit: { left: [[[99.5, 297, 240.5, 313]]], right: [[b]], own: [] } }], facts: [{ ord: 50, kind: 'heading', align: 'l', style: { size: s }, lines: [factLine(100, 240, 300, s)] }] })
+    }
+    it("CJK characters alone, boxed by the em box: covered", () => {
+      expect(highlights(measure(heading(-0.12), rec({ v2: cjk('入门：矩阵与向量积规则') })))).toEqual([])
+    })
+    it('a box short of the line, or a line with a character that reaches lower (a Latin descender), boxed so: not covered', () => {
+      expect(highlights(measure(heading(0.1), rec({ v2: cjk('入门：矩阵与向量积规则') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
+      expect(highlights(measure(heading(-0.12), rec({ v2: cjk('入门：Matrix 规则') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
+    })
+  })
   describe('a figure text both translate, matched by its original box (today has no highlight on figure texts)', () => {
     it('v2 without boxes: equal', () => {
       expect(highlights(measure(fig({}), rec({ today: todayFig, v2: v2Fig }), prepFig))).toEqual([])

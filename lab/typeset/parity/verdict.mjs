@@ -260,7 +260,7 @@ export const SAYS = {
   pixels: "the page outside every unit's box against arXiv's page: device pixels off it",
   figures: "the figure texts drawn translated (each side's drawn groups): fewer than today's is a translation missing",
   size: "a unit's size against the original's; a size tie's (one paragraph) at its smallest member's, against today's smallest over the same members",
-  links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's on one line or on lines one under the other one link) against the original's link annotations (one target's one right after the other one link: TeX's annotation a line of a link it broke): how many are missing",
+  links: "the links a reader can follow on the page (the anchors each side drew, counted per target per drawn line: one target's one right after the other in the side's own order, on one line or on lines one under the other, one link) against the original's link annotations (one target's one right after the other one link: TeX's annotation a line of a link it broke): how many are missing",
   borders: "the links drawn with a border (the anchors each side drew with one) against the original's link annotations PDF.js draws a border round: how many are missing",
   highlight: "the units today highlights: the lines each side's sentence boxes leave uncovered (its drawn lines, its original's), v2's against today's; elsewhere v2's boxes that miss its drawn lines or its original's (none is no fault; covering boxes where today draws none are better)",
   'line-count': "a unit's line count on the page against the original's; a unit on two pages or more, over them (linesPass)",
@@ -2149,11 +2149,19 @@ function covered(b, boxes, tol = NEAR.positionMin) {
   return true
 }
 
+/** a CJK character (its punctuation and the full-width forms among them), whose ink stays inside its face's em box: 0.12 of the
+ *  size under the baseline (the typesetter's box of a CJK token, packages/typeset/src/emit/sentences.ts CJK_DESC) */
+const CJK_INK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-￯ー]/u
 function band(l) {
   // (a turned line's band as a level line's, turned with it (measure-dom's `band`); a raw file before it, its box)
   if (l.rot && l.band) return { x0: l.band[0], y0: l.band[1], x1: l.band[2], y1: l.band[3] }
   if (l.rot) return { x0: l.x0, x1: l.x1, y0: l.y0, y1: l.y1 }
-  return { x0: l.x0, x1: l.x1, y0: l.y - 0.2 * l.size, y1: l.y + 0.8 * l.size }
+  // (a line's ink reaches 0.2 of its size under its baseline, a Latin descender's; a line of CJK characters alone no lower
+  // than their em box's foot, 0.12 of it: read 0.2 under, a 14.35 pt heading's band missed the em box its sentence is boxed by
+  // by 1.15 pt, 2501.14787v1 p8 t55. A crop's stand-in, or any other character, keeps 0.2)
+  const chars = [...String(l.text ?? '')].filter((c) => /\S/u.test(c))
+  const under = chars.length && chars.every((c) => CJK_INK.test(c)) ? 0.12 : 0.2
+  return { x0: l.x0, x1: l.x1, y0: l.y - under * l.size, y1: l.y + 0.8 * l.size }
 }
 function median(a) {
   const s = a.filter((v) => Number.isFinite(v)).sort((x, y) => x - y)
