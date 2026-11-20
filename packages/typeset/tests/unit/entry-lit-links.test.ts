@@ -354,6 +354,45 @@ describe('Page.links: as drawn, moved with their pieces, else at A’s boxes', (
     expect(fates).toEqual(['unplaced'])
     expect(p.links).toEqual([])
   })
+  it('lays the annotations of one target over a piece whose drawing holds none of their texts as one link over its whole drawing', () => {
+    // (a reference TeX broke over two lines at a hyphen, "Fig-" and "ure 2", one target; the translation draws it whole in the
+    // target's words: neither annotation's text is found. As one annotation of one target is laid over its whole piece, so are
+    // the annotations of one target together: one link, 2610.22197v1-zh p11's "Figure 2" in Chinese; today dropped both)
+    const m = member({
+      els: [
+        [
+          '5',
+          {
+            kind: 'num',
+            cmd: 'cref',
+            ink: [[1, 150, 698, 170, 707, 700]],
+            text: 'Abb. 2',
+            style: { role: 'serif', size: 10 },
+          },
+        ],
+      ],
+    })
+    const two: Link[] = [
+      { box: [270, 697, 300, 708], to: { dest: '"figure.2"' }, owner: [0, '5'], text: 'Fig-' },
+      { box: [72, 685, 100, 696], to: { dest: '"figure.2"' }, owner: [0, '5'], text: 'ure2' },
+    ]
+    const fates: LinkFate[] = []
+    const p = layPage(part(m, two), rowsOf([r]), rules, metrics(), { linkFates: fates })
+    expect(fates).toEqual(['text', 'text'])
+    const [box, to] = only(p)
+    expect(to).toEqual({ dest: '"figure.2"' })
+    // (from the drawn piece's first character past its last: "Abb." and "2", five characters of half a size each at least)
+    const f = p.members[0]!.fit!.size
+    const run = p.members[0]!.lines.flatMap(([, , , it]) => it).find((it) => 'face' in it && it.s.includes('Abb.'))!
+    const start = run.x + ([...run.s].indexOf('A') * f) / 2
+    expect(box[0]).toBeCloseTo(start, 6)
+    expect(box[2] - box[0]).toBeGreaterThanOrEqual((5 * f) / 2 - 1e-6)
+    // (of two targets, none found: not told apart, none laid, as before)
+    const other: Link[] = [two[0]!, { ...two[1]!, to: { dest: '"figure.3"' } }]
+    const f2: LinkFate[] = []
+    expect(layPage(part(m, other), rowsOf([r]), rules, metrics(), { linkFates: f2 }).links).toEqual([])
+    expect(f2).toEqual(['unplaced', 'unplaced'])
+  })
   it('lays each target of a piece drawn as text over its own characters where the part states them (Link.text)', () => {
     // (an author-year citation of two works drawn as the page's text: today's placeText finds each annotation's characters, its
     // overlaidText, among the drawn ones; a part made before states none, and the two are not told apart)

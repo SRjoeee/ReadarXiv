@@ -1885,6 +1885,15 @@ On the rebuilt reader a link over a piece the translation draws as text is laid 
   and twice 2307.16209v1-zh's `\href` drawn in Chinese, its pair's range), every one laid now; today's reader drops 66 of
   them by the same guard. No link laid before is lost or moved, and nothing else of any page moves (the lay of the 90 pairs,
   lane c4-overlay).
+- **The annotations of one target over a piece whose drawing holds none of their texts are one link over its whole
+  drawing** (`Target.single`: the piece's annotations name one target). One annotation of a piece the translation draws in
+  other words than A's is laid so, and so are the annotations TeX split one link into at its line breaks: "Fig-" and "ure 2"
+  under the translation's Chinese for "Figure 2" (2610.22197v1-zh p11; p18's and p31's "equa-" "tion (21)"; 2610.21377v1-zh
+  p39's "As-" "sumption 2.5"), each told its target by more than the order alone, of one border. Annotations of two targets
+  or more none of whose texts is drawn are not told apart, and none is laid; where some of a piece's annotations are found,
+  each is laid over its own and the rest are not. Over the record's 90 pairs, 10 annotations on 5 pages of 2 papers, every
+  one laid now, 6 of which today's reader draws over its own "(Fig- ure 2)"; the 6 annotations of references of several
+  targets (a `\cref` of two figures) stay unlaid, as on both readers before. No link laid before is lost or moved.
 
 ### 11.10 The extension's run on the layer
 

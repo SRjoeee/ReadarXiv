@@ -39,6 +39,8 @@ export type Target = {
   keys?: string[]
   url?: string
   name?: string
+  /** the piece's annotations name one target (lay/links.ts): where none of their texts is found among its drawn characters,
+   *  they are one link over its whole drawing (placeText) */
   single?: boolean
   /** a word TeX set as written whose annotations name one target (lay/links.ts): one link over its whole drawing */
   word?: boolean
@@ -419,6 +421,7 @@ function placeText(
     return A.s ? { mode: 'letters' as const, A } : { mode: 'ink' as const, A: normed(own, INK) }
   }
   const isLetter = (j: number) => j >= 0 && j < Dc.length && LETTER.test(Dc[j]!.ch)
+  const missed: Group['annots'] = []
   sorted.forEach((c, n) => {
     const own = ownOf(c),
       { mode, A } = formOf(own)
@@ -450,8 +453,7 @@ function placeText(
       }
     }
     if (s0 < 0) {
-      if (annots.length === 1 && c.tier !== 'order' && to.single) found.push({ c, ds: 0, de: Dc.length - 1 })
-      else tried.push({ q: c.q, i: c.a.i, why: 'unplaced' })
+      missed.push(c)
       return
     }
     let ds = Fm.at[s0]!,
@@ -466,6 +468,20 @@ function placeText(
     found.push({ c, ds, de })
     from = de + 1
   })
+  // (none of them found: the piece whole where it names one target (`single`) and its annotations are of that one target and one
+  // border, each told it by more than the order alone: one annotation over a piece the translation draws in other words, or the
+  // annotations TeX split one link into at its line breaks, "Fig-" and "ure 2" under the Chinese for "Figure 2" (2610.22197v1-zh
+  // p11); else none)
+  const whole =
+    !found.length &&
+    !!to.single &&
+    missed.length > 0 &&
+    missed.every((c) => c.tier !== 'order' && sameTarget(c.a, missed[0]!.a) && sameBorder(c.a, missed[0]!.a))
+  if (whole) {
+    placeRanges([{ ds: 0, de: Dc.length - 1, annots: missed }], Dc, lines, edge, band, records, tried)
+    return
+  }
+  for (const c of missed) tried.push({ q: c.q, i: c.a.i, why: 'unplaced' })
   const merged: { ds: number; de: number; annots: Group['annots'] }[] = []
   for (const f of found) {
     const prev = merged.at(-1)
