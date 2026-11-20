@@ -7635,16 +7635,18 @@ bytes it was.
     paragraph TeX set at an `\hsize` no column of its frame has is placed by the page's own lines set at that `\hsize`, as
     today's reader read a column from the page's lines. The instrument keeps its statement though it states no shape
     (`measureKept`: a measure that is not the full `\hsize`, or an `\hsize` no page's frame has, its block's or a column's);
-    kept for the shapes alone, a box's plain paragraph was dropped and its lines kept the frame's measure. Those lines of one page, gathered where their extents meet (one box;
-    two of one width side by side stay two), each extent its ink widened by what TeX's statement puts between its ink and its
-    measure (its indent and `\leftskip`, its `\rightskip` and its shape's length short of `\hsize`): the box's left is where
-    its unindented lines start (the median start of those within 0.25 em of the leftmost: a glyph microtype protrudes stands a
-    fraction of an em left of them, 2610.19159v1 p41's at 82.43 where the box's lines start at 83.62), and where a line TeX
-    filled stands among them (its extent's right at that left and the `\hsize`, within 0.25 em
-    of their size, the typesetter's ONE_EDGE, §18.94; a line TeX set overfull runs past it and fills nothing: 2610.19159v1
-    p45's box holds one to 575.98) every line's measure is the box's, as a column's is. Where no such line stands (each line of
-    the box short of its measure: a single line, a ragged box), the paragraph has no wider measure than its own lines on the
-    page, their ink's extent, never wider than its frame's: the safe end, a single line then never widened past itself. Left at its frame's, every line of
+    kept for the shapes alone, a box's plain paragraph was dropped and its lines kept the frame's measure. Each line's extent
+    is its ink widened by what TeX's statement puts between its ink and its measure (its indent and `\leftskip`, its
+    `\rightskip` and its shape's length short of `\hsize`). A box stands where a line TeX filled stands (its extent as wide as
+    the `\hsize` within 0.25 em of the lines' size, the typesetter's ONE_EDGE, §18.94): such lines of one page and one
+    `\hsize` whose starts lie within that of each other are one box (two of one width side by side stay two), its left their
+    median start (a glyph microtype protrudes stands a fraction of an em left of the edge: 2610.19159v1 p41's at 82.43, the
+    box's lines at 83.62). A paragraph of that `\hsize` is the box's where more than half of its lines on the page stand in it
+    (a line TeX set overfull runs past it and goes with its paragraph: 2610.19159v1 p45's to 575.98), and every line's measure
+    is the box's, as a column's is. Any other (no line fills its box: a single line, a ragged box, subcaptions centred in
+    their minipages: 2608.16117v1 p18's three, one centred across the other two, were first read as one box) has no wider
+    measure than its own lines on the page, their ink's extent, never wider than its frame's: the safe end, a single line then
+    never widened past itself. Left at its frame's, every line of
     2610.19159v1's mdframed boxes stated the page's text block, 70.87..524.41, past the box's text edge (511.66) and over its
     rule (523.88), and the typesetter's widening of a single line (`unit/decor.ts` widen, its column `Line[7..8]`) ran the
     line's last glyph onto the rule (p19, p36, p43, p46; 27 lines of the paper laid to 524.41). The fuller form, not built:
