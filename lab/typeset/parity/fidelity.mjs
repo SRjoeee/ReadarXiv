@@ -570,10 +570,13 @@ export function measureFidelity(c) {
       if (cropped('v2', ord, boxes) || keptHere('v2', id)) continue
       // (with ink here and no crop cut from it, drawn as its text: its scripts flat where its glyphs on A have them; a literal
       // element (a URL, a code mark: TeX sets its characters as written, so it has no scripts) TeX broke over lines is drawn as
-      // its text by design, its glyphs on two baselines its lines', no scripts)
+      // its text by design, its glyphs on two baselines its lines', no scripts. Its glyphs are read a TeX line at a time, each
+      // of its ink's boxes alone (El.ink: one box a line, on that line's baseline): TeX sets a line's glyphs on its baseline, a
+      // script off it, and an element it broke over lines stands on its lines' baselines, which are no scripts: 2610.21084v1
+      // p30's citations over a cell's six lines)
       if (boxes.length) {
-        if (text === 1 && !raised && !literal && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]])))
-          pend('v2', key, ord, k, boxes.map((b) => [b[0], b[1], b[2], b[3]]))
+        if (text === 1 && !raised && !literal && runs)
+          for (const b of boxes) if (scriptedOf(runs, [[b[0], b[1], b[2], b[3]]])) pend('v2', key, ord, k, [[b[0], b[1], b[2], b[3]]])
         continue
       }
       // (with no ink here, drawn as nothing (typeset lay/read.ts: a visible class with no ink is none), but a symbol, drawn from
@@ -598,7 +601,8 @@ export function measureFidelity(c) {
       const id = `${key.slice(1)}:${e.k}`
       // (today's `url` and `code` elements are literal as v2's: no scripts to set flat)
       if (!boxes.length || LITERAL_KINDS.has(e.kind) || cropped('today', Number(key.slice(1)), boxes) || keptHere('today', id) || e.flags?.includes('RAISED') || e.flags?.includes('EMPTY')) continue
-      if (runs && scriptedOf(runs, boxes)) pend('today', key, Number(key.slice(1)), e.k, boxes)
+      // (a TeX line at a time, as v2's: today's segments are one a line, each on its baseline)
+      if (runs) for (const b of boxes) if (scriptedOf(runs, [b])) pend('today', key, Number(key.slice(1)), e.k, [b])
     }
   }
   for (const side of ['today', 'v2'])

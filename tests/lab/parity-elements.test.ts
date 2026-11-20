@@ -43,6 +43,32 @@ const measure = (m: Member, r: ReturnType<typeof rec>, prep: object[] = []) =>
 type Diff = { flag: string; unit?: string; worse?: boolean; v2: { value: unknown; off: number | null } }
 const elements = (p: { diffs: Diff[] }) => p.diffs.filter((d) => d.flag === 'elements')
 
+describe('elements: an element TeX broke over lines is read a line at a time (M1)', () => {
+  // (a cell whose citation TeX broke over two of its lines, one El.ink box a line, each on its own baseline 7.97 pt under the
+  // one before: 2610.21084v1 p30's cells, "(Name and Name, 2024)" over six lines)
+  const cite = ['4', 'cite', [[95.2, 577.2, 124.2, 584.2, 578.92], [75, 569.5, 134.9, 575.9, 570.95]], 2, 1, 0, 0, 0, '\\citep{ada2024,bo2024}']
+  const cell = { ord: 50, kind: 'cell', lines: [factLine(75, 134.9, 578.92, 6.97), factLine(75, 134.9, 570.95, 6.97)], els: [cite] }
+  const runs = [run(95.2, 124.2, 578.92, 6.97, '(Ada and Bo,'), run(75, 134.9, 570.95, 6.97, '2024; Cy et al., 2025)')]
+  it('a citation over two lines, each its line\'s baseline at the text\'s size, holds no script: none set flat', () => {
+    const drawn = [drawnLine(75, 134.9, 578.92, '方法 (Ada and Bo,', 6.97), drawnLine(75, 134.9, 570.95, '2024; Cy et al., 2025)', 6.97)]
+    expect(elements(measure(cell, rec({ runs, v2: { units: [{ id: 50, lines: drawn }] } })))).toEqual([])
+  })
+  it('a script in one of its lines drawn flat is still set flat (the defect the flag exists for)', () => {
+    // (the second line's "2025" set as a superscript, 6.97 pt over a 9.96 pt line: TeX's script; v2 draws it on the line)
+    const formula = ['6', 'math', [[75, 600, 160, 612, 602], [75, 586, 120, 598, 588]], 2, 1, 0, 0, 0, '$a + b^{2025}$']
+    const para = { ord: 51, kind: 'para', lines: [factLine(75, 300, 602), factLine(75, 300, 588)], els: [formula] }
+    const scripted = [run(75, 160, 602, 9.96, 'a +'), run(75, 85, 588, 9.96, 'b'), run(85, 100, 591.5, 6.97, '2025', 2)]
+    const flat = [drawnLine(75, 300, 602, '于是 a +'), drawnLine(75, 300, 588, 'b2025 成立')]
+    const [d] = elements(measure(para, rec({ runs: scripted, v2: { units: [{ id: 51, lines: flat }] } })))
+    expect(d).toMatchObject({ unit: 't51 para', worse: true, v2: { value: 'element 6: its scripts or sizes set flat as text', off: 1 } })
+    // (and on one line, the script beside its nucleus)
+    const one = ['7', 'math', [[75, 600, 120, 612, 602]], 1, 1, 0, 0, 0, '$x^{2}$']
+    const line = { ord: 52, kind: 'para', lines: [factLine(75, 300, 602)], els: [one] }
+    const [e] = elements(measure(line, rec({ runs: [run(75, 85, 602, 9.96, 'x'), run(85, 90, 605.5, 6.97, '2', 2)], v2: { units: [{ id: 52, lines: [drawnLine(75, 300, 602, '于是 x2 成立')] }] } })))
+    expect(e).toMatchObject({ worse: true, v2: { off: 1 } })
+  })
+})
+
 describe('elements: a glyph its font maps to no character is no script (M2)', () => {
   // (an accent set by \accent from a font whose encoding names no character for it: PDF.js gives its code, "\x01", 2.83 pt
   // under the line's baseline, inside a citation's box: 2610.21376v1 p9's "é" of a name)
