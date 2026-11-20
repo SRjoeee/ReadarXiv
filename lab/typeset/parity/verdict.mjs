@@ -1316,7 +1316,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const missOf = (ls, left, rb, lb) => ({
     r: ls
       .map(inkOf)
-      .map(band)
+      .map(inkBand)
       .filter((b) => !inColumns(b, left).every((q) => covered(q, rb))).length,
     of: ls.length,
     l: left.filter((b) => !covered(b, lb)).length,
@@ -2199,12 +2199,18 @@ function band(l) {
   // (a turned line's band as a level line's, turned with it (measure-dom's `band`); a raw file before it, its box)
   if (l.rot && l.band) return { x0: l.band[0], y0: l.band[1], x1: l.band[2], y1: l.band[3] }
   if (l.rot) return { x0: l.x0, x1: l.x1, y0: l.y0, y1: l.y1 }
-  // (a line's ink reaches 0.2 of its size under its baseline, a Latin descender's; a line of CJK characters alone no lower
-  // than their em box's foot, 0.12 of it: read 0.2 under, a 14.35 pt heading's band missed the em box its sentence is boxed by
-  // by 1.15 pt, 2501.14787v1 p8 t55. A crop's stand-in, or any other character, keeps 0.2)
+  return { x0: l.x0, x1: l.x1, y0: l.y - 0.2 * l.size, y1: l.y + 0.8 * l.size }
+}
+/** the band of a drawn line the highlight must cover: its ink's (band's), a line's ink reaching 0.2 of its size under its
+ *  baseline, a Latin descender's; a line of CJK characters alone no lower than their em box's foot, 0.12 of it: read 0.2 under,
+ *  a 14.35 pt heading's band missed the em box its sentence is boxed by by 1.15 pt, 2501.14787v1 p8 t55. A crop's stand-in, or
+ *  any other character, keeps 0.2 (the other measures that read `band`, `cross` and the figure groups' matching, read it as
+ *  they did) */
+function inkBand(l) {
+  const b = band(l)
+  if (l.rot) return b
   const chars = [...String(l.text ?? '')].filter((c) => /\S/u.test(c))
-  const under = chars.length && chars.every((c) => CJK_INK.test(c)) ? 0.12 : 0.2
-  return { x0: l.x0, x1: l.x1, y0: l.y - under * l.size, y1: l.y + 0.8 * l.size }
+  return chars.length && chars.every((c) => CJK_INK.test(c)) ? { ...b, y0: l.y - 0.12 * l.size } : b
 }
 function median(a) {
   const s = a.filter((v) => Number.isFinite(v)).sort((x, y) => x - y)
