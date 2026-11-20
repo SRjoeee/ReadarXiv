@@ -289,6 +289,29 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       expect(highlights(measure(heading(-0.12), rec({ v2: cjk('入门：Matrix 规则') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
     })
   })
+  describe("a unit of today's that is two members of v2's (the join by pieces): both members' boxes read (M6)", () => {
+    // (2608.27728v1 p3 t172: today's one unit "1: train 2: input…", v2's two members, each lit by its own box; the measure read
+    // one member's boxes for the group's lines and called the other's line unlit)
+    const lit = (y: number) => ({ left: [[[71, y - 2, 301, y + 9]]], right: [[[71, y - 2, 301, y + 9]]], own: [] })
+    const group = (litB: object) => ({
+      pages: { [N]: { members: [{ ord: 21, state: 'laid', lines: [], lit: lit(400) }, { ord: 22, state: 'laid', lines: [], lit: litB }], links: [] } },
+      facts: { [N]: { members: [{ ord: 21, kind: 'para', align: 'l', style: { size: 10 }, lines: [factLine(72, 300, 400)] }, { ord: 22, kind: 'para', align: 'l', style: { size: 10 }, lines: [factLine(72, 300, 380)] }], links: 0 } },
+      today: {},
+    })
+    const page = rec({
+      today: { units: [{ id: 20, lines: [line(400), line(380)] }], lit: [20], litBoxes: { 20: { right: [[71, 378, 301, 409]], left: [[71, 378, 301, 409]] } } },
+      v2: { units: [{ id: 21, lines: [line(400)] }, { id: 22, lines: [line(380)] }], lit: [21, 22] },
+    })
+    const prep = [{ ord: 20, kind: 'para', lines: [{ page: N, x0: 72, x1: 300, baseline: 400, top: 408, bottom: 398, size: 10 }, { page: N, x0: 72, x1: 300, baseline: 380, top: 388, bottom: 378, size: 10 }] }]
+    const of = (litB: object) =>
+      measurePage('p-zh', group(litB), page, { prepByOrd: new Map(prep.map((u) => [u.ord, u])), todayOf: new Map(), turned: new Set(), led: new Map(), top: new Set(), pieceGroups: [{ today: [20], members: [21, 22], pages: { 21: [N], 22: [N] } }] })
+    it('each member lit by its own box: no line unlit', () => {
+      expect(highlights(of(lit(380)))).toEqual([])
+    })
+    it('a member whose line no box lights is still unlit', () => {
+      expect(highlights(of({ left: [[[71, 378, 301, 389]]], right: [], own: [] }))).toMatchObject([{ unit: 't20 para', worse: true }])
+    })
+  })
   describe('a figure text both translate, matched by its original box (today has no highlight on figure texts)', () => {
     it('v2 without boxes: equal', () => {
       expect(highlights(measure(fig({}), rec({ today: todayFig, v2: v2Fig }), prepFig))).toEqual([])

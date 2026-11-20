@@ -1276,6 +1276,15 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const litT = new Set(rec.today.lit.map((id) => `t${id}`))
   const figBoth = figuresMatched(rec.today.figures ?? [], [...prepByOrd.values()], [...facts.values()], n)
   const ordOfKey = new Map(rec.v2.units.map((u) => [keyOfPart(u.id), u.id]))
+  // (every member of a key, in the drawing's order: a unit of today's the join by pieces makes several members of v2's is lit by
+  // each member's own boxes, its original's lines theirs together; read by one member alone, the other's lines stood unlit,
+  // 2608.27728v1 p3 t172, t174)
+  const ordsOfKey = new Map()
+  for (const u of rec.v2.units) {
+    const k = keyOfPart(u.id)
+    if (!ordsOfKey.has(k)) ordsOfKey.set(k, [])
+    if (!ordsOfKey.get(k).includes(u.id)) ordsOfKey.get(k).push(u.id)
+  }
   // (the highlight as the reader sees it: a drawn line by its ink (a CJK opening mark's blank first half, a closing mark's blank
   // second half, no ink), each side's boxes as its reader paints them: today's as its shapes paint them (today/entry.mjs
   // litBoxes), v2's Laid.lit and its kept ink's boxes padded as the reader's highlight.ts paints them, PAINT_PAD beside and
@@ -1298,13 +1307,19 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   const todays = [...T.keys()].filter((k) => V.has(k) && litT.has(k))
   const hl = { todays: todays.length, todayMissed: 0, v2Missed: 0, unlit: 0, figures: 0, alone: 0, wrong: 0, better: 0 }
   for (const key of todays) {
-    const ord = ordOfKey.get(key)
+    const ords = ordsOfKey.get(key)
+    const ord = ords[0]
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
-    const left = origBoxes(ord)
+    const left = ords.flatMap(origBoxes)
     const tb = rec.today.litBoxes[key.slice(1)] ?? { right: [], left: [] }
-    const vb = laidV2.get(ord)?.lit
+    const vbs = ords.map((o) => laidV2.get(o)?.lit)
     const t = missOf(T.get(key), left, tb.right, tb.left),
-      v = missOf(V.get(key), left, paintedV2(vb, 'right'), paintedV2(vb, 'left'))
+      v = missOf(
+        V.get(key),
+        left,
+        vbs.flatMap((vb) => paintedV2(vb, 'right')),
+        vbs.flatMap((vb) => paintedV2(vb, 'left')),
+      )
     const dt = t.r + t.l,
       dv = v.r + v.l
     if (dt) {
@@ -1319,18 +1334,19 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       diff('highlight', name, "lines its sentence boxes leave uncovered: its drawn lines (right), its original's (left)", 0, { value: says(t), off: dt }, { value: says(v), off: dv }, dv > dt, dv < dt ? 'v2' : 'today')
   }
   for (const [key, ls] of V) {
-    const ord = ordOfKey.get(key)
+    const ords = ordsOfKey.get(key)
+    const ord = ords[0]
     const fig = figBoth.get(ord)
     if (T.has(key) ? litT.has(key) : fig !== undefined && litT.has(`t${fig}`)) continue
     const both = T.has(key) || fig !== undefined
     if (T.has(key)) hl.unlit++
     else if (both) hl.figures++
     else hl.alone++
-    const lit = laidV2.get(ord)?.lit
-    const rb = paintedV2(lit, 'right'),
-      lb = paintedV2(lit, 'left')
+    const lits = ords.map((o) => laidV2.get(o)?.lit)
+    const rb = lits.flatMap((lit) => paintedV2(lit, 'right')),
+      lb = lits.flatMap((lit) => paintedV2(lit, 'left'))
     if (!rb.length && !lb.length) continue
-    const m = missOf(ls, origBoxes(ord), rb, lb)
+    const m = missOf(ls, ords.flatMap(origBoxes), rb, lb)
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
     if (!m.r && !m.l) {
       if (both) {
@@ -1380,17 +1396,22 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   hl.fillsToday = 0
   hl.fillsV2 = 0
   for (const key of new Set([...todays, ...V.keys()])) {
-    const ord = ordOfKey.get(key)
-    const lit = laidV2.get(ord)?.lit
-    if (!lit || lit.dir) continue
-    const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
-    const onA = [...displaysHere, ...linesOnA.filter((b) => b.ord !== ord)]
+    const ords = ordsOfKey.get(key) ?? []
+    const lits = ords.map((o) => laidV2.get(o)?.lit).filter((lit) => lit && !lit.dir)
+    if (!lits.length) continue
+    const name = `${key} ${facts.get(ords[0])?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
+    // (another unit's lines: none of the key's own members', which the join by pieces makes one unit)
+    const onA = [...displaysHere, ...linesOnA.filter((b) => !ords.includes(b.ord))]
     const tb = litT.has(key) ? rec.today.litBoxes[key.slice(1)] : null
     const tShapes = (side) => (!tb ? [] : tb.by ? (tb[`${side}By`] ?? []) : [tb[side] ?? []])
     const dt = filled(tShapes('left'), onA) + filled(tShapes('right'), displaysHere)
-    const dv =
-      filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA, litColumn(lit, 'left')) +
-      filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere, litColumn(lit, 'right'))
+    const dv = lits.reduce(
+      (s, lit) =>
+        s +
+        filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA, litColumn(lit, 'left')) +
+        filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere, litColumn(lit, 'right')),
+      0,
+    )
     hl.fillsToday += dt
     hl.fillsV2 += dv
     if (dt) fault('today', 'highlight', `${name}: its highlight fills or bridges ${dt} other blocks (a display, another unit's line)`)
