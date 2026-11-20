@@ -1871,6 +1871,30 @@ hyperref sets it (`lab/pdf/reader-fixtures/make.mjs`: an `\href` group, a `\ref`
 annotation over a bare word of a unit's text, which no group or element of the unit takes and the typesetter drops as above
 (`unmatched`, lane laid-links, 2026-11-13).
 
+On the rebuilt reader a link over a piece the translation draws as text is laid over its own characters among those drawn
+(`packages/typeset` `emit/links.ts` `placeText`), each drawn line of them a box:
+
+- **At any depth of a run of placed characters** (`tooDeep`). A box that starts deep inside a run that flows from its start
+  (the browser draws its characters by their own advances from the run's start) could stand off its glyphs by the drift
+  gathered before it, `DRIFT_BOUND` (0.06) of its distance from the start, and a wrong link is worse than none: where that
+  drift reaches half the first character's width the link is not laid. A run whose characters are each drawn at their own
+  place (a run of single CJK characters: `TextRun.chars`, the item's `dx`, the reader's SVG `x` a character) gathers none, and
+  a link in it is laid however deep it stands. 2610.22197v1-zh p18's "Figure 7", drawn in Chinese at the end of a line of 38
+  placed characters, was dropped (0.06 × 456 pt against half of 12.33 pt). Over the 90 pairs of the display gate's record
+  (release-c3, 2026-11-20) the guard refused 67 annotations so, on 32 pages of 2 papers (65 of 2610.22197v1-zh's references,
+  and twice 2307.16209v1-zh's `\href` drawn in Chinese, its pair's range), every one laid now; today's reader drops 66 of
+  them by the same guard. No link laid before is lost or moved, and nothing else of any page moves (the lay of the 90 pairs,
+  lane c4-overlay).
+- **The annotations of one target over a piece whose drawing holds none of their texts are one link over its whole
+  drawing** (`Target.single`: the piece's annotations name one target). One annotation of a piece the translation draws in
+  other words than A's is laid so, and so are the annotations TeX split one link into at its line breaks: "Fig-" and "ure 2"
+  under the translation's Chinese for "Figure 2" (2610.22197v1-zh p11; p18's and p31's "equa-" "tion (21)"; 2610.21377v1-zh
+  p39's "As-" "sumption 2.5"), each told its target by more than the order alone, of one border. Annotations of two targets
+  or more none of whose texts is drawn are not told apart, and none is laid; where some of a piece's annotations are found,
+  each is laid over its own and the rest are not. Over the record's 90 pairs, 10 annotations on 5 pages of 2 papers, every
+  one laid now, 6 of which today's reader draws over its own "(Fig- ure 2)"; the 6 annotations of references of several
+  targets (a `\cref` of two figures) stay unlaid, as on both readers before. No link laid before is lost or moved.
+
 ### 11.10 The extension's run on the layer
 
 `session/run.ts` `startRun(view, paper, host)` is the extension's run of a paper (Stage 5 Task 9; the shared reader view's
@@ -2849,6 +2873,24 @@ within noise.
   the measure reads a drawn line as the band 0.2 em under its baseline to 0.8 over it, a Latin line's: over 12.5 pt the 0.08 em
   between the two bottoms passes the measure's point, so on a page whose half leading is under that, a heading whose every
   pixel of ink is lit is read uncovered (t228 now stands 0.007 pt inside the point with its page's 0.155 pt).
+- **A member's rows are padded by its own leading, never past half the room to the next block** (2026-11-20, lane
+  c4-overlay; `compose/highlight.ts` `padsOf`): over and under each of its rows by half its own leading, the lower quartile of
+  the gaps between its own consecutive rows on the pane (none across a block between two of them, a display of its own or
+  another member's line: that parts its lines and is no space between them), as today's reader pads a unit by its own lines;
+  a member with no such gap (one row) takes the page's half leading above; and a row's pad over or under it stops at half the
+  room to the nearest other block that meets it across (another member's box on the pane, a display), so that two blocks'
+  pads meet at most halfway between them. The page's half leading is its body's: on 2610.19274v1-zh, set double-spaced
+  (rows 17-18 pt apart), it was 8.87 pt on p34's left pane, and the caption set single-spaced over a table (rows 5.47 apart:
+  its own 2.73) was padded 8.87 under its last row, over the upper half of the table's header labels 2 pt under it; p50's
+  cell over the cell under it, p59's paragraph to its neighbour's middle. The hit test reads the same pads (what is painted is
+  what is hit), and so does the reader gate's I11 (`lab/typeset/painted.mjs`); the parity's paint model
+  (`lab/typeset/parity/paint.mjs`, `verdict.mjs`) still reads the page's half leading. Over the display gate's record
+  (release-c3's lay of the 90 pairs, both panes, each shape painted by the reader's own rows before and after): of 307,548
+  rows, 23,161 move by more than 1 pt on 1,617 pages of the 90 pairs (7,103 member-panes; at most 9.46 pt), 13,519 grown
+  where a member's own spacing is wider than its page's lower quartile (981 pages) and 9,688 shrunk where it is narrower or a
+  neighbour stands nearer (1,056 pages); 20,897 of them on the right pane, where a translation's members are laid at leadings
+  of their own. A member whose own spacing is its page's and that stands no nearer another block than that paints as before.
+  The lay is untouched: Laid.lit's boxes are the typesetter's as before, and no stored object moves.
 - **A sentence of no word joins its neighbour on both panes** (lit.ts `worded`, `bySentence`): a translator cuts off a sentence
   that holds no word of the source (no word of Placed.words in it: a citation after a unit's last stop, a reference's DOI, URL
   or back-reference list, a display), or one of whose translation nothing is drawn as text (an element moved past the

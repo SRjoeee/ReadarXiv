@@ -372,15 +372,17 @@ export function linksOf(
         // those of two or more targets none, not told apart)
         // (a mark TeX set as written that the part reads as one word, its copy holding no white space (a URL, a DOI: the engine
         // joins its lines), whose annotations name one target: TeX's line break split one link into an annotation
-        // a line, and the translation draws the word whole: one link over its whole drawing, `word`)
-        const word =
-          !!e?.literal && !!e.copy && !/\s/u.test(e.copy) && new Set(is.map((i) => key(list[i]!.to))).size === 1
+        // a line, and the translation draws the word whole: one link over its whole drawing, `word`. A piece whose
+        // annotations name one target (`single`) and none of whose texts is drawn (the translation's words for a reference
+        // TeX broke at a hyphen) is one link over its whole drawing too: placeText)
+        const one = new Set(is.map((i) => key(list[i]!.to))).size === 1
+        const word = !!e?.literal && !!e.copy && !/\s/u.test(e.copy) && one
         if (word || is.every((i) => !!list[i]!.text))
           groups.push({
-            to: { k, draw: 'text', single: is.length === 1, ...(word ? { word: true } : {}) },
+            to: { k, draw: 'text', single: one, ...(word ? { word: true } : {}) },
             annots: is.map((i) => ({ ...annot(i), tier: tier(i) })),
           })
-        else if (new Set(is.map((i) => key(list[i]!.to))).size === 1) {
+        else if (one) {
           groups.push({ to: { k, draw: 'text', single: true }, annots: [{ ...annot(is[0]!), tier: tier(is[0]!) }] })
           for (const i of is.slice(1)) fate(i, 'text')
         } else for (const i of is) fate(i, 'targets')
