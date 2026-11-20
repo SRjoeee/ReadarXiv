@@ -9,8 +9,9 @@
 // there), which the outline would fill. A page that is not laid lights from A on both panes (the right mirrors the left). The
 // pointer lights, nothing else does: a click holds nothing.
 //
-// The shapes (docs/PDF-READER.md §17.3): one outline a shape (3 px corners), padded 3 px beside and half the page's leading
-// above and below; each shape in CSS pixels of the page as it was drawn, scaled with the page about its origin
+// The shapes (docs/PDF-READER.md §17.3, §17.9): one outline a shape (3 px corners), padded 3 px beside and above and below by
+// half its member's own leading (the page's for a member of one row), never past half the room to the next block (padsOf);
+// each shape in CSS pixels of the page as it was drawn, scaled with the page about its origin
 // (`scale: calc(var(--total-scale-factor) / s0)`), so that a zoom's steps and a pinch move it on the compositor with no layout
 // and no script (§10.1: percent positioning cost the page's layout every frame); the left's layer put back in the same task
 // where PDF.js's redraw removes it (§10.2). One look and one paint a frame, the pointer read before anything is written; a
@@ -23,7 +24,7 @@
 import type { Panes, Side } from '../panes/panes.ts'
 import type { Clock } from '../stack/clock.ts'
 import type { Composer } from './composer.ts'
-import type { Box, Laid, Page } from './page.ts'
+import type { Box, Page } from './page.ts'
 
 /** the pad beside a band, CSS px, its corners, and how long a point that lights nothing keeps what is lit */
 export const PAD = 3
@@ -120,9 +121,9 @@ export function columnOf(
 }
 /** what cuts a shape's rows into outlines: the page's boxes lit on the pane and the column its member spans there */
 export type Cut = { others: readonly Box[]; column: readonly [number, number] }
-/** a row a shape paints (PDF units, y up): `box` its extent across and its band, padded by half the leading above and below and
- *  met with the row next to it at the middle of their pads' overlap; `own` the extent of the shape's boxes it paints; `apart`
- *  where it begins an outline of its own */
+/** a row a shape paints (PDF units, y up): `box` its extent across and its band, padded above and below (paintRows' `lead`: one
+ *  half leading, or each box's pads, padsOf) and met with the row next to it at the middle of their pads' overlap; `own` the
+ *  extent of the shape's boxes it paints; `apart` where it begins an outline of its own */
 export type PaintRow = { box: Box; own: Box; apart: boolean }
 
 /** whether two of a shape's boxes stand on one band: their own extents overlap up and down */
@@ -143,13 +144,15 @@ export const sharesBand = (boxes: readonly Box[]): boolean =>
  * neither pane; over the corpus's laid pages 27 kept displays a pane, 7 and 2 sentences, 11 and 4 members lit whole cut so). A
  * shape of no two boxes on one band paints as before, row for row
  */
-export function paintRows(boxes: readonly Box[], lead: number, cut?: Cut): PaintRow[] {
+export function paintRows(boxes: readonly Box[], lead: number | Pads, cut?: Cut): PaintRow[] {
+  const padOf: Pads = typeof lead === 'number' ? () => [lead, lead] : lead
   if (!sharesBand(boxes)) {
     const sorted = [...boxes].sort((p, q) => q[3] - p[3])
     const apart = cut ? apartRows(sorted, cut.others, cut.column) : sorted.map(() => false)
-    const rows = sorted.map(
-      (b, i): PaintRow => ({ box: [b[0], b[1] - lead, b[2], b[3] + lead], own: b, apart: !!apart[i] }),
-    )
+    const rows = sorted.map((b, i): PaintRow => {
+      const [under, over] = padOf(b)
+      return { box: [b[0], b[1] - under, b[2], b[3] + over], own: b, apart: !!apart[i] }
+    })
     for (let i = 1; i < rows.length; i++) {
       const p = (rows[i - 1] as PaintRow).box,
         q = (rows[i] as PaintRow).box
@@ -182,14 +185,17 @@ export function paintRows(boxes: readonly Box[], lead: number, cut?: Cut): Paint
     for (const [a, b] of runs) pieces.push({ own: [a, lo, b, hi], band })
     band++
   }
-  // (each padded by half the leading; two of two bands met at the middle of their own gap where their pads overlap, never into
-  // either: next to each other from the top, and next to each other in an outline)
-  const head = pieces.map((p) => p.own[3] + lead),
-    foot = pieces.map((p) => p.own[1] - lead)
+  // (each padded by its pads (half the leading); two of two bands met at the middle of their own gap where their pads overlap,
+  // never into either: next to each other from the top, and next to each other in an outline)
+  const pads = pieces.map((p) => padOf(p.own))
+  const head0 = pieces.map((p, i) => p.own[3] + (pads[i] as readonly [number, number])[1]),
+    foot0 = pieces.map((p, i) => p.own[1] - (pads[i] as readonly [number, number])[0])
+  const head = [...head0],
+    foot = [...foot0]
   const meet = (u: number, l: number) => {
     const a = pieces[u] as (typeof pieces)[number],
       b = pieces[l] as (typeof pieces)[number]
-    if (a.band === b.band || b.own[3] + lead <= a.own[1] - lead) return
+    if (a.band === b.band || (head0[l] as number) <= (foot0[u] as number)) return
     const mid = (b.own[3] + a.own[1]) / 2
     foot[u] = Math.max(foot[u] as number, mid)
     head[l] = Math.min(head[l] as number, mid)
@@ -246,6 +252,30 @@ function halfLeading(page: Page, side: Side, committed: boolean): number {
   leads.set(page, m)
   return v
 }
+const panesBy = new WeakMap<Page, Map<string, PaneMember[]>>()
+const padsBy = new WeakMap<Page, Map<string, Pads>>()
+/** the pads of a member's rows on a pane of a page (padsOf over the page's members there but a turned one, its half leading
+ *  where the member has no gap of its own), once a Page */
+function padsFor(page: Page, side: Side, committed: boolean, ord: number): Pads {
+  const at = `${side}:${committed}`
+  const key = `${at}:${ord}`
+  const known = padsBy.get(page)?.get(key)
+  if (known) return known
+  const panes = panesBy.get(page) ?? new Map<string, PaneMember[]>()
+  panesBy.set(page, panes)
+  let pane = panes.get(at)
+  if (!pane) {
+    pane = page.members
+      .filter((m) => !m.lit.dir)
+      .map((m) => ({ ord: m.ord, per: side === 'right' && committed ? m.lit.right : m.lit.left, own: m.lit.own }))
+    panes.set(at, pane)
+  }
+  const v = padsOf(pane, ord, halfLeading(page, side, committed))
+  const m = padsBy.get(page) ?? new Map<string, Pads>()
+  m.set(key, v)
+  padsBy.set(page, m)
+  return v
+}
 /**
  * Half the lower quartile of the gaps between each member's consecutive rows on a pane, PDF units (`members`: each member's
  * boxes there, one entry a sentence): its rows whatever sentence each is of, the space between a member's lines being its
@@ -256,17 +286,75 @@ function halfLeading(page: Page, side: Side, committed: boolean): number {
  * overlap and make no gap. The parity's measure reads the paint with this function (lab/typeset/parity/verdict.mjs)
  */
 export function halfLeadingOf(members: readonly (readonly (readonly Box[])[])[]): number {
+  return halfOf(members.flatMap((entries) => gapsOf(entries)))
+}
+/** the gaps between a member's consecutive rows on a pane (its boxes there, one entry a sentence): each under twice the lower
+ *  row's height, two boxes on one row making none; and, where `blocks` are given, none across a block that stands between the
+ *  two (its middle between them, meeting either across: a display, another member's line), which is no space between lines */
+function gapsOf(entries: readonly (readonly Box[])[], blocks: readonly Box[] = []): number[] {
   const gaps: number[] = []
-  for (const entries of members) {
-    const ys = entries.flat().sort((a, b) => b[3] - a[3])
-    for (let i = 1; i < ys.length; i++) {
-      const g = (ys[i - 1] as Box)[1] - (ys[i] as Box)[3]
-      if (g >= 0 && g < 2 * ((ys[i] as Box)[3] - (ys[i] as Box)[1])) gaps.push(g)
-    }
+  const ys = entries.flat().sort((a, b) => b[3] - a[3])
+  const across = (o: Box, r: Box) => Math.min(o[2], r[2]) > Math.max(o[0], r[0])
+  for (let i = 1; i < ys.length; i++) {
+    const a = ys[i - 1] as Box,
+      b = ys[i] as Box
+    const g = a[1] - b[3]
+    if (!(g >= 0 && g < 2 * (b[3] - b[1]))) continue
+    if (blocks.some((o) => (o[1] + o[3]) / 2 < a[1] && (o[1] + o[3]) / 2 > b[3] && (across(o, a) || across(o, b))))
+      continue
+    gaps.push(g)
   }
+  return gaps
+}
+/** half the lower quartile of gaps, 0 for none */
+function halfOf(gaps: number[]): number {
   if (!gaps.length) return 0
   gaps.sort((a, b) => a - b)
   return (gaps[Math.floor((gaps.length - 1) / 4)] as number) / 2
+}
+
+/** a box's pads, PDF units: under it and over it */
+export type Pads = (b: Box) => readonly [under: number, over: number]
+/** a member of a pane as the paint reads it: its boxes there by sentence and its displays (Laid.lit's entries and `own`) */
+export type PaneMember = {
+  ord: number
+  per: readonly (readonly Box[])[]
+  own: readonly (readonly [string, readonly Box[]])[]
+}
+/**
+ * The pads over and under a member's rows on a pane (PDF units): half its own leading, the lower quartile of the gaps between
+ * its own consecutive rows (as halfLeadingOf reads a page's; none across a block between two of them, a display of its own
+ * or another member's line, which parts its lines and is no space between them), or `pageLead`, the page's on the pane, where
+ * it has none (a member of one row); and never past half the room to the nearest other block over or under the box that meets
+ * it across (another member's box on the pane, a display: a block of its own), so that the pads of two blocks meet at most
+ * halfway between them. A page's leading is its body's: on 2610.19274v1-zh p34, a double-spaced body (rows 18 pt apart) made it
+ * 8.87 pt, and the caption set single-spaced over a table (its rows 5.47 apart) was padded so under its last row, over the
+ * upper half of the table's header labels 2 pt under it; today's reader pads a unit by its own lines (2.75 there)
+ */
+export function padsOf(pane: readonly PaneMember[], ord: number, pageLead: number): Pads {
+  const me = pane.find((m) => m.ord === ord)
+  const others: Box[] = []
+  for (const m of pane) {
+    if (m.ord !== ord) for (const boxes of m.per) others.push(...boxes)
+    for (const [, boxes] of m.own) others.push(...boxes)
+  }
+  const gaps = me ? gapsOf(me.per, others) : []
+  const lead = gaps.length ? halfOf(gaps) : pageLead
+  const memo = new WeakMap<Box, readonly [number, number]>()
+  return (b) => {
+    const known = memo.get(b)
+    if (known) return known
+    let under = lead,
+      over = lead
+    for (const o of others) {
+      if (Math.min(o[2], b[2]) <= Math.max(o[0], b[0])) continue
+      if (o[1] >= b[3]) over = Math.min(over, (o[1] - b[3]) / 2)
+      else if (o[3] <= b[1]) under = Math.min(under, (b[1] - o[3]) / 2)
+    }
+    const out = [under, over] as const
+    memo.set(b, out)
+    return out
+  }
 }
 
 /**
@@ -409,7 +497,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
    *  frame (a turned page's layer is turned with it), padded beside; with `cut` (the page's boxes on the pane and the column of
    *  the shape's member), each row apart from the one above it where another block stands between them in that column
    *  (apartRows: an outline of its own) */
-  function rowsOf(side: Side, n: number, boxes: Box[], lead: number, cut?: Cut, pad = PAD) {
+  function rowsOf(side: Side, n: number, boxes: Box[], lead: number | Pads, cut?: Cut, pad = PAD) {
     const out: { x0: number; x1: number; y0: number; y1: number; apart?: boolean }[] = []
     if (!sharesBand(boxes)) {
       // (no two boxes on one band: the rows met in the page's CSS px, as they always were, paintRows' rule for them stated in PDF
@@ -417,7 +505,8 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
       const sorted = [...boxes].sort((p, q) => q[3] - p[3])
       const kept: Box[] = []
       for (const b of sorted) {
-        const r = panes.boxOf(side, n, [b[0], b[1] - lead, b[2], b[3] + lead], { upright: true })
+        const [under, over] = typeof lead === 'number' ? [lead, lead] : lead(b)
+        const r = panes.boxOf(side, n, [b[0], b[1] - under, b[2], b[3] + over], { upright: true })
         if (!r) continue
         kept.push(b)
         out.push({ x0: r.left - pad, x1: r.left + r.width + pad, y0: r.top, y1: r.top + r.height })
@@ -502,6 +591,8 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
         // (a figure text on its own lines' band alone: Laid.lit's `band`)
         const band = !!page.members.find((m) => m.ord === lit?.id)?.lit.band
         const lead = band ? 0 : halfLeading(page, side, committed)
+        // (a level member's rows padded by its own leading, never past half the room to the next block: padsOf)
+        const pads = band ? 0 : padsFor(page, side, committed, lit.id)
         const pad = band ? 0 : PAD
         const dir = dirOf(page, lit.id)
         // (a turned member's rows turned with its text: each a band of its own about its centre, at its run's angle, scaled with
@@ -526,7 +617,7 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
         const column = dir || !shapes.length ? null : columnOf(mine.per, mine.own)
         const cut = column ? { others: pageBoxes(page, side, committed), column } : undefined
         for (const boxes of dir ? [] : shapes) {
-          const rows = rowsOf(side, n, boxes, lead, cut, pad)
+          const rows = rowsOf(side, n, boxes, pads, cut, pad)
           if (!rows.length) continue
           const X0 = Math.min(...rows.map((r) => r.x0)),
             Y0 = Math.min(...rows.map((r) => r.y0))
@@ -589,8 +680,9 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     let best: Lit | null = null,
       least = Number.POSITIVE_INFINITY
     // (a turned member's rows hit as painted: the point turned back into each row's own frame; a figure text's on its band)
-    const inside = (lit: Laid['lit'], boxes: Box[]) => {
-      const dir = lit.dir,
+    const inside = (m: Page['members'][number], boxes: Box[]) => {
+      const lit = m.lit,
+        dir = lit.dir,
         l = lit.band ? 0 : lead,
         pad = lit.band ? 0 : PAD
       return dir
@@ -603,7 +695,9 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
               Math.abs(dx * Math.sin(a) + dy * Math.cos(a)) <= q.h / 2
             )
           })
-        : rowsOf(side, n, boxes, l, undefined, pad).some((q) => px >= q.x0 && px <= q.x1 && py >= q.y0 && py <= q.y1)
+        : rowsOf(side, n, boxes, lit.band ? 0 : padsFor(page, side, committed, m.ord), undefined, pad).some(
+            (q) => px >= q.x0 && px <= q.x1 && py >= q.y0 && py <= q.y1,
+          )
     }
     const take = (t: Lit, area: number) => {
       if (area < least) {
@@ -614,12 +708,12 @@ export function createHighlight(o: { panes: Panes; composer: Composer; clock: Cl
     for (const m of page.members) {
       const { per, own } = entriesOf(page, m.ord, side, committed)
       for (let s = 0; s < per.length; s++)
-        if (inside(m.lit, per[s] as Box[]))
+        if (inside(m, per[s] as Box[]))
           take({ id: m.ord, s: per.length > 1 && m.lit.left.length > 1 ? s : -1 }, areaOf(per))
       // (a display: a block of its own, its own area)
       for (const [key, boxes] of own) {
         const s = displayS(key)
-        if (s !== null && inside(m.lit, boxes)) take({ id: m.ord, s }, areaOf([boxes]))
+        if (s !== null && inside(m, boxes)) take({ id: m.ord, s }, areaOf([boxes]))
       }
     }
     return best

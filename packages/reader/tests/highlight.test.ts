@@ -520,7 +520,16 @@ describe('the half leading is read between a member’s rows, whatever sentence 
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })
-  it('reads no gap between two sentences that share a row (their boxes on one band)', () => {
+  it('pads a member of two rows or more by half its own leading where the page’s is another (as before where they agree)', () => {
+    // (the paragraph's own rows 6 pt apart: its half leading 3, the page's; a shape of it padded 3 over and under, as before)
+    const { els, hl } = setUp(page)
+    hl.light({ id: 4, s: 0 })
+    const shape = els.left.querySelector<HTMLElement>('.axt-hl')!
+    expect([shape.style.top, shape.style.height]).toEqual([`${H - 712 - 3}px`, `${12 + 2 * 3}px`])
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+  it('reads no gap between two sentences that share a row (their boxes on one band) (the page’s, for a member of one row)', () => {
     // (the paragraph's second and third sentences on one row: the gaps are still the 6 pt between its rows)
     const shared: Box[][] = [[[72, 700, 300, 712]], [[72, 682, 150, 694]], [[150, 682, 300, 694]]]
     const one: Page = {
@@ -531,6 +540,102 @@ describe('the half leading is read between a member’s rows, whatever sentence 
     hl.light({ id: 5, s: -1 })
     const shape = els.right.querySelector<HTMLElement>('.axt-hl')!
     expect(shape.style.top).toBe(`${H - 644 - 3}px`)
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+})
+
+describe('a member’s rows are padded by its own leading, never past half the room to the next block', () => {
+  // (2610.19274v1-zh p34: a double-spaced body, its rows 18 pt apart, makes the page's half leading 9 (the lower quartile of
+  // every member's gaps); a caption set single-spaced, rows 5.5 pt apart, was padded 9 under its last row, over the top half of
+  // the table's header labels set 2 pt under it. Here: the body's five rows, the caption's two, a header cell 2 pt under it)
+  const body: Box[][] = [
+    [
+      [72, 760, 540, 770],
+      [72, 732, 540, 742],
+      [72, 704, 540, 714],
+      [72, 676, 540, 686],
+      [72, 648, 540, 658],
+    ],
+  ]
+  const caption: Box[][] = [
+    [
+      [72, 600, 540, 609],
+      [72, 585.5, 300, 594.5],
+    ],
+  ]
+  const cell: Box = [80, 576, 120, 583.5]
+  const page: Page = {
+    page: 1,
+    wait: { rows: [], faces: [] },
+    links: [],
+    members: [
+      { ord: 1, page: 1, state: 'laid', off: 1, lines: [], lit: { left: body, right: body, own: [] } },
+      { ord: 2, page: 1, state: 'laid', off: 1, lines: [], lit: { left: caption, right: caption, own: [] } },
+      { ord: 3, page: 1, state: 'laid', off: 1, lines: [], lit: { left: [[cell]], right: [[cell]], own: [] } },
+    ],
+  }
+  const edges = (el: Element) => {
+    const s = (el as HTMLElement).style
+    const top = Number.parseFloat(s.top),
+      h = Number.parseFloat(s.height)
+    return { top: H - top, foot: H - (top + h) }
+  }
+  it('keeps a single-spaced caption’s shape off the block 2 pt under it on a double-spaced page, on both panes', () => {
+    const { els, hl } = setUp(page)
+    hl.light({ id: 2, s: -1 })
+    for (const side of ['left', 'right'] as const) {
+      const shape = els[side].querySelector('.axt-hl')!
+      const { top, foot } = edges(shape)
+      // (over its first row by half its own leading, 2.75; under its last by half the room to the cell, 1: never the page's 9)
+      expect(top).toBeCloseTo(609 + 2.75, 6)
+      expect(foot).toBeCloseTo(585.5 - 1, 6)
+      expect(foot).toBeGreaterThan((cell[1] + cell[3]) / 2)
+    }
+    // (hit where it is painted: a point a pad under its foot is the cell's or none, never the caption's)
+    expect(hl.at('left', 100, H - 584)).not.toEqual({ id: 2, s: -1 })
+    expect(hl.at('left', 100, H - 590)).toEqual({ id: 2, s: -1 })
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+  it('reads no leading of a member’s own across its display: two rows its display parts have no gap, the page’s pads them', () => {
+    // (a paragraph of two tall rows, inline formulas, its display between them: 36 pt between the rows is no space between lines;
+    // read as one, half of it would pad the paragraph 18 pt over its first row)
+    const rows: Box[][] = [
+      [
+        [72, 500, 300, 524],
+        [72, 440, 300, 464],
+      ],
+    ]
+    const display: Box = [100, 468, 280, 496]
+    const withDisplay: Page = {
+      ...page,
+      members: [
+        page.members[0]!,
+        {
+          ord: 6,
+          page: 1,
+          state: 'laid',
+          off: 1,
+          lines: [],
+          lit: { left: rows, right: rows, own: [['3', [display]]] },
+        },
+      ],
+    }
+    const { els, hl } = setUp(withDisplay)
+    hl.light({ id: 6, s: -1 })
+    const shape = els.left.querySelector('.axt-hl')!
+    expect(edges(shape).top).toBeCloseTo(524 + 9, 6)
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+  it('pads the double-spaced body by half its own leading, 9, where nothing stands nearer', () => {
+    const { els, hl } = setUp(page)
+    hl.light({ id: 1, s: -1 })
+    const shape = els.right.querySelector('.axt-hl')!
+    const { top, foot } = edges(shape)
+    expect(top).toBeCloseTo(770 + 9, 6)
+    expect(foot).toBeCloseTo(648 - 9, 6)
     hl.dispose()
     for (const el of Object.values(els)) el.remove()
   })

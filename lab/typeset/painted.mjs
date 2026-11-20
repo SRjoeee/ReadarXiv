@@ -4,15 +4,16 @@
 // owner's report of 2026-11-13 on 2111.09276v1 p5, display (4): its second row on neither pane), and no gate could see it. Here
 // each shape the reader paints of a member on a pane (each entry of Laid.lit's `left` or `right`, which the pointer lights alone
 // or, lit whole, every one; each display piece of its `own`) is painted by the reader's own rows and outlines (packages/reader
-// compose/highlight.ts paintRows, shapeOutlines: their corners before they are rounded) with the page's half leading on that pane
-// (halfLeadingOf) and the cut by the page's other boxes in the member's column (apartRows, columnOf), in the reader's CSS px at
+// compose/highlight.ts paintRows, shapeOutlines: their corners before they are rounded) with the member's pads on that pane
+// (padsOf: its own half leading, the page's (halfLeadingOf) for a member of one row, never past half the room to the next block)
+// and the cut by the page's other boxes in the member's column (apartRows, columnOf), in the reader's CSS px at
 // its scale of one (96/72 CSS px a point: its pad of 3 CSS px, its corners' radius, its corners merged within 0.01 px); and each
 // box of the shape is held inside the union of its outlines, to the drawing's own precision (the box less 0.01 CSS px a side, the
 // painter's: it merges two corners that near and writes its path to the hundredth), exactly so (the box cut at the outlines'
 // corners, every cell's middle inside one). A box of no area holds no ink and is
 // not read; a member set along a direction (a turned figure text, Laid.lit's `dir`) is painted box by box, each its own turned
 // band, and is counted apart. 0 boxes cut is the only passing value. Pure arithmetic over a Page; no DOM.
-import { columnOf, halfLeadingOf, PAD, paintRows, RADIUS, shapeOutlines } from '../../packages/reader/src/compose/highlight.ts'
+import { columnOf, halfLeadingOf, PAD, padsOf, paintRows, RADIUS, shapeOutlines } from '../../packages/reader/src/compose/highlight.ts'
 
 /** CSS px a point at the reader's scale of one, and the drawing's precision in them (highlight.ts cornersOf, shapePath's path) */
 const K = 96 / 72
@@ -59,13 +60,14 @@ export function paintedOf(page) {
     const members = page.members ?? []
     const lead = halfLeadingOf(members.map((m) => (m.lit.dir ? [] : m.lit[side])))
     const others = members.flatMap((m) => (m.lit.dir ? [] : [...m.lit[side].flat(), ...m.lit.own.flatMap(([, b]) => b)]))
+    const pane = members.filter((m) => !m.lit.dir).map((m) => ({ ord: m.ord, per: m.lit[side], own: m.lit.own }))
     for (const m of members) {
       if (m.lit.dir) {
         out.turned += m.lit[side].flat().length
         continue
       }
       const pad = m.lit.band ? 0 : PAD,
-        l = m.lit.band ? 0 : lead
+        l = m.lit.band ? 0 : padsOf(pane, m.ord, lead)
       const column = columnOf(m.lit[side], m.lit.own)
       const shapes = [
         ...m.lit[side].map((boxes, s) => ({ s, boxes })),

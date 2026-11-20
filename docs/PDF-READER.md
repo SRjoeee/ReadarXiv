@@ -2873,6 +2873,24 @@ within noise.
   the measure reads a drawn line as the band 0.2 em under its baseline to 0.8 over it, a Latin line's: over 12.5 pt the 0.08 em
   between the two bottoms passes the measure's point, so on a page whose half leading is under that, a heading whose every
   pixel of ink is lit is read uncovered (t228 now stands 0.007 pt inside the point with its page's 0.155 pt).
+- **A member's rows are padded by its own leading, never past half the room to the next block** (2026-11-20, lane
+  c4-overlay; `compose/highlight.ts` `padsOf`): over and under each of its rows by half its own leading, the lower quartile of
+  the gaps between its own consecutive rows on the pane (none across a block between two of them, a display of its own or
+  another member's line: that parts its lines and is no space between them), as today's reader pads a unit by its own lines;
+  a member with no such gap (one row) takes the page's half leading above; and a row's pad over or under it stops at half the
+  room to the nearest other block that meets it across (another member's box on the pane, a display), so that two blocks'
+  pads meet at most halfway between them. The page's half leading is its body's: on 2610.19274v1-zh, set double-spaced
+  (rows 17-18 pt apart), it was 8.87 pt on p34's left pane, and the caption set single-spaced over a table (rows 5.47 apart:
+  its own 2.73) was padded 8.87 under its last row, over the upper half of the table's header labels 2 pt under it; p50's
+  cell over the cell under it, p59's paragraph to its neighbour's middle. The hit test reads the same pads (what is painted is
+  what is hit), and so does the reader gate's I11 (`lab/typeset/painted.mjs`); the parity's paint model
+  (`lab/typeset/parity/paint.mjs`, `verdict.mjs`) still reads the page's half leading. Over the display gate's record
+  (release-c3's lay of the 90 pairs, both panes, each shape painted by the reader's own rows before and after): of 307,548
+  rows, 23,161 move by more than 1 pt on 1,617 pages of the 90 pairs (7,103 member-panes; at most 9.46 pt), 13,519 grown
+  where a member's own spacing is wider than its page's lower quartile (981 pages) and 9,688 shrunk where it is narrower or a
+  neighbour stands nearer (1,056 pages); 20,897 of them on the right pane, where a translation's members are laid at leadings
+  of their own. A member whose own spacing is its page's and that stands no nearer another block than that paints as before.
+  The lay is untouched: Laid.lit's boxes are the typesetter's as before, and no stored object moves.
 - **A sentence of no word joins its neighbour on both panes** (lit.ts `worded`, `bySentence`): a translator cuts off a sentence
   that holds no word of the source (no word of Placed.words in it: a citation after a unit's last stop, a reference's DOI, URL
   or back-reference list, a display), or one of whose translation nothing is drawn as text (an element moved past the
