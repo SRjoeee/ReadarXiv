@@ -136,14 +136,6 @@ ${DIMMED} .axt-hl-layer { mix-blend-mode: screen; }
 .axt-reader .axt-over > canvas.axt-crops { position: absolute; left: 0; top: 0; width: var(--axt-crops-w, 100%); height: var(--axt-crops-h, 100%); mix-blend-mode: darken; pointer-events: none; }
 .axt-reader .axt-over > .textLayer { contain: strict; }
 .axt-reader .axt-over > .textLayer[data-axt-frame] { width: var(--axt-frame-w, 100%) !important; height: var(--axt-frame-h, 100%) !important; }
-/* every text layer off screen skipped by style and layout (docs/PDF-READER.md §11.11, "Off screen, skipped"): PDF.js's on the
-   left's pages and on the right's original pages, and the laid pages'. Late in a paper's first scroll the text layers are 94 %
-   of what is laid out, most of it on left pages far from the view that PDF.js's viewer keeps drawn, and each change of the
-   document's fonts laid every one of them out again. A text layer paints nothing (its glyphs transparent) and its box is its
-   own (PDF.js's inset: 0 and overflow: clip; a laid page's contain: strict, sized by the frame), so one skipped draws nothing
-   less and moves no box: no intrinsic size is needed. The browser lays one out again as it comes near the view, and as its
-   find, a selection or the focus reaches it; a browser without content-visibility lays them all, as before */
-.axt-reader .textLayer { content-visibility: auto; }
 /* while a zoom's or a pinch's steps scale the pages by CSS (the stack marked scaling until TEXT_BACK_MS after they are drawn again),
    the laid pages' text layers are out of style and layout: each span's size is a calc of --total-scale-factor, which every step
    changes. They are sized once, as the steps end; a selection in them stays, and shows again with them */
