@@ -112,6 +112,23 @@ describe('TeX’s infinite glue sets what follows it at the line’s right end',
     expect(near(fill[0]!.x0, 72)).toBe(true)
     expect(near(fill.at(-1)!.x1, 372)).toBe(true)
   })
+  it('drawn as laid where no space stands beside it: the text after it a run of its own at its place, not glued to the word before', () => {
+    // (a reply may set the glue's placeholder between two words with no space: the word after it is drawn where the line sets it)
+    const [m] = layOf(
+      [member(0, 'cell', 'l', [['1', HFILL]])],
+      rowsOf({
+        0: [
+          { t: 'text', s: 'links' },
+          { t: 'el', id: '1' },
+          { t: 'text', s: 'rechts' },
+        ],
+      }),
+    )
+    const r = runs(m!)
+    expect(r.map((x) => x.s)).toEqual(['links', 'rechts'])
+    expect(near(r[0]!.x0, 72)).toBe(true)
+    expect(near(r[1]!.x1, 372)).toBe(true)
+  })
   it('a heading without it is laid as before, at its natural spacing', () => {
     const [m] = layOf([member(0, 'heading', 'l')], rowsOf({ 0: [{ t: 'text', s: 'Lehrerteil Token' }] }))
     const r = runs(m!)
