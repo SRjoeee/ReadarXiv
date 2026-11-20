@@ -109,7 +109,7 @@ describe('the versions a bundle names', () => {
     expect(CTAG).toBe(`b${BUNDLE}-j${PDFJS}`)
     expect(VTAG).toBe(`${CTAG}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const vtag = VTAG
-    expect(vtag).toBe('b3-j6.3.289-p109-l42-r26')
+    expect(vtag).toBe('b3-j6.3.289-p109-l43-r26')
     expect(bundleKey('1706.03762', 7)).toBe(`layer/1706.03762v7/${vtag}.json`)
     expect(bundleKey('hep-th/9901001', 1)).toBe(`layer/hep-th_9901001v1/${vtag}.json`)
     // (the web's own form of a version tag is stricter than a token of letters, digits and points)
