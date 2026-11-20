@@ -474,8 +474,8 @@ describe('a paragraph set at an \hsize no column has (a box’s): placed by the 
       [{ para: 1, ...box }],
       [[0, 1]],
     )
-    expect(one.map((l) => l[0])).toEqual([100, 100, 100, 100])
-    expect(one.map((l) => l[1])).toEqual([400, 400, 400, 400])
+    expect(one!.map((l) => l[0])).toEqual([100, 100, 100, 100])
+    expect(one!.map((l) => l[1])).toEqual([400, 400, 400, 400])
   })
   it('a line TeX set overfull in a box fills nothing: the box placed by a line that fills it (2610.19159v1 p45’s)', () => {
     const [one] = measuredOf(
