@@ -94,7 +94,8 @@ export function fillUnitsOf(begun: FillLaid[], continuing: FillLaid[]): FillUnit
  * running on to it), however the paper is opened. Each unit takes its fill leading, but never more than `band` over the
  * target, so that neighbouring paragraphs keep one line spacing. A CJK unit the band or its fill leading's top stops
  * short of its fill then takes tracking, up to `track` em; and where every body unit of the page is still short with
- * all of it, the page's body units take one size, the largest up to `size` x the original's at which every one of them
+ * all of it, by itself (none evened, none set by a fitted state that borrows room under its lines: §18.11), the page's body
+ * units take one size, the largest up to `size` x the original's at which every one of them
  * is still set whole: one size a page where it grows, never a unit's own (D grew each unit apart, and a page mixed 1.0
  * and 1.1); a unit the fit had to shrink keeps its own largest fitting size. A unit its fitted state does not set again
  * (the text run past a display) keeps its own fit. A float's member (`held`, docs/PDF-READER.md §18.90) is never laid looser
@@ -262,13 +263,16 @@ export function fillPage(
     f.st = l ? { ...f.untracked.st, track: r3(f.untracked.st.track + k * 0.01) } : f.untracked.st
     f.l = l ?? f.untracked.l
   }
-  // the page's one size where it grows: every body unit's, where none is full yet; the largest at which every one is still
-  // set whole, a step up at a time (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink
-  // keeps its own largest fitting size (docs/PDF-READER.md §18.49): setting the page's other body units at it left the
-  // alphabets' and Japanese's units short of their frames, the alphabets unable to spread past the original's pitch (paraGap
-  // 1.255 -> 1.708; full size 0.25 -> 0; Japanese 1.011 -> 1.289)
+  // the page's one size where it grows: every body unit's, where every one has room by itself (docs/PDF-READER.md §18.11):
+  // none full, none the page evened (its room the evening's knobs', §18.57) and none set by a fitted state that borrows room
+  // under its lines (its room TeX's blank under it, §18.37); the largest at which every one is still set whole, a step up at a
+  // time (a larger size sets no more), a unit that fails ending the try. A unit the fit had to shrink keeps its own largest
+  // fitting size (docs/PDF-READER.md §18.49): setting the page's other body units at it left the alphabets' and Japanese's
+  // units short of their frames, the alphabets unable to spread past the original's pitch (paraGap 1.255 -> 1.708; full size
+  // 0.25 -> 0; Japanese 1.011 -> 1.289)
   const grown = filled.filter((f) => BODY_KINDS.includes(f.p.unit.kind))
-  if (size > 1 && grown.length && grown.every((f) => !f.full)) {
+  const ownRoom = (f: (typeof grown)[number]) => !f.full && !even.has(f.p) && !(f.p.layout.state.borrow > 0)
+  if (size > 1 && grown.length && grown.every(ownRoom)) {
     const scaleOf = (k: number) => r3(1 + k * P.step)
     // (a unit of one line keeps its own size in the scripts that spread to fillLeadRel: it has no frame to spread over, so a
     // larger size only carries its ink past the original's line, over a rule or a neighbour's text that the size step cannot
@@ -343,8 +347,14 @@ export function fillPage(
       floor = Math.max(1, P.leadFloor ?? 1)
     const K = Math.ceil((L0 - floor) / 0.01 - 1e-9),
       L = (k: number) => (k >= K ? floor : r3(L0 - k * 0.01))
-    const l0 = at(f.p, withLead(L0))
-    const found = l0 ? { k: 0, l: l0 } : K > 0 ? closerLead(K, (k) => at(f.p, withLead(L(k))), null) : null
+    // (within its own lines: a layout whose first line left the unit's first block, a block of one line its head set under its
+    // foot, is none; where every leading is so, it stays as its fill laid it, as TeX set it, §18.11)
+    const own = (st: FitState) => {
+      const l = at(f.p, st)
+      return l && l.lines[0]?.block === 0 ? l : null
+    }
+    const l0 = own(withLead(L0))
+    const found = l0 ? { k: 0, l: l0 } : K > 0 ? closerLead(K, (k) => own(withLead(L(k))), null) : null
     if (!found) continue
     f.st = withLead(L(found.k))
     f.l = found.l

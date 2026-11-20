@@ -3490,7 +3490,11 @@ and the next paragraph's first line stays on TeX's baseline, so the gap stayed t
 2610.20967v1 page 4, a one-line continuation 10.41 pt over a paragraph spread to 13.43 and under one spread to 14.78, in a
 paper with no `\parskip` whose original reads evenly. Where the paragraph over it cannot end higher, the paragraph under it
 starts lower by what the gap lacks, within its own lines, at the loosest leading of its first frame that still sets it
-(`headOf`, the page fill's `head`); where its own lines leave no room, it stays as TeX set it. Today's reader and every round
+(`headOf`, the page fill's `head`); where its own lines leave no room, it stays as TeX set it. Its first line stays in its
+first block: a first block of one line (a double-spaced paragraph, each of its lines a block of its own) has no room within
+it, and the head would set that line under the block's foot and the text on the next block, a whole pitch lower and off its
+indent (2610.19274v1-zh pages 37 and 44: 28.89 pt, the indent's 17.56 lost); such a paragraph stays as TeX set it
+(`fill-page.ts`, the head pass's `own`). Today's reader and every round
 before set the gap at the pitch. Over the 22 parity pairs six paragraphs move so, default and toggles on alike (2610.20967v1
 page 4 unit 85, 4.37 pt lower, its leading 1.29 to 1.23). Those first lines leave TeX's baseline by 0.7 to 6.9 pt, which the
 parity check's anchor measure reads as farther from the original than today's on five pages: this rule and B′ (a first line
@@ -3537,7 +3541,16 @@ times), by a simpler method with the fewest lays, not held to the original's siz
 time from the original's, the first step a unit no longer holds ending it: a page that grows not at all, most of those that
 try, is tried once, where a halving search tries twice (`packages/typeset/src/shared/fill-page.ts`). Measured over the 22
 parity pairs: the page fill before grew 9 of the 344 pages (1.1 on six, 1.075, 1.05, 1.025); the step search gives every
-page the size the halving search gives, and growth's lays fall from 223 to 153 of about 89,400.
+page the size the halving search gives, and growth's lays fall from 223 to 153 of about 89,400. A page grows only where every
+body paragraph on it has room by itself: none the page's fill evened (§18.57: its room the evening's knobs') and none set by
+a fitted state that borrows room under its lines (§18.11's borrow, §18.37: its room TeX's blank under it); a page holding one
+keeps the original's size (`fill-page.ts`, the size step's `ownRoom`). That is how production's page fill reads a paragraph
+with no room of its own: over the tap's 123 ledgers it grows 4 of the 197 pages that hold a body paragraph whose fit
+borrowed. Over the display gate's 90 pairs it keeps at the original's size 31 body paragraphs on 22 pages of 8 papers that
+grew to 1.025-1.1 (the pages the gate read as larger than production's, 2501.14787v1-zh page 20 among them); on 4 of those
+pages production grows (2307.16209v1-zh pages 78 and 94, 2501.14787v1-zh page 88, 2608.16117v1-de page 25). Three of the
+paragraphs take a line fewer at the original's size: 2501.14787v1-zh page 20 unit 165 (7 to 6, production's 6) and
+2307.16209v1-zh page 78 units 258 and 259 (5 to 4, 11 to 10, where production grows them on 5 and 11).
 
 **A page's head and foot keep their size, a page number its end.** The owner's ruling: page numbers keep their size and
 are right-aligned. A unit of the page's head or foot (`inkheads`, `inknotes`) set on one line, a running head or a page
@@ -6298,7 +6311,8 @@ final lines are laid at still carries it as the evening took it (`fill-page.ts` 
 evened paragraph again after the evening, and two of its steps put a knob back. The head pass lays a paragraph under a widow line
 lower with no room borrowed (`headOf`, `borrow: 0`), so that one evened by TeX's room stated a room its lines no longer stood in
 (2610.20967v1-zh page 4, unit 85, the head pass's own page: `track` and `room` stated, `track` alone carried); the page's one size
-grown replaces the size step's scale. The tracking stays named: the fill's own tracking of a CJK paragraph still short of its
+never replaces the size step's scale, a page holding an evened paragraph keeping the original's size (§18.11). The tracking stays
+named: the fill's own tracking of a CJK paragraph still short of its
 frame adds its steps to the knob's, so the knob still moves the final lines. One with no knob carried states no evening. Over
 the 90 pairs on the door's rows (default toggles), that unit is the one statement the rule moves; nothing drawn moves. Nothing
 of the lay reads either; the
@@ -6308,10 +6322,10 @@ a line past the bottom is accepted only where the lay says it evened it so.
 **What it does** (the 90 pairs with stored rows, the borrow of §18.37 on; every body frame of two lines or more under its page's
 band floor: 1,468 on 871 pages, the same with the borrow off): 558 come into the band (the tracking alone 128, with the room 240,
 with a size step 190). 1810.04805v2 page 3 unit 30 ("we denote the number of layers"): 6 lines at 1.17 among 1.47, now 5 at
-9.75 pt and 1.41. The median range of a page's body leadings falls from 11.0 to 8.1 %; 562 members move on 474 pages, the 556
-evened and on five pages the page's one size, now that every body unit there is short of its frame (2610.21924v1 p3 among them):
-the growth rule as it is (the body 5 to 7.5 % larger, its line counts unchanged: the same behaviour as on any page that grows, no
-exception). Lays 4.8 % more layouts. No unit not evened gains a line or shrinks.
+9.75 pt and 1.41. The median range of a page's body leadings falls from 11.0 to 8.1 %; the 556 evened members move, on 474
+pages. A page holding an evened paragraph keeps the original's size: its room is the evening's, not its own, and the page's one
+size grows only where every body paragraph has room by itself (§18.11). Lays 4.8 % more layouts. No unit not evened gains a line
+or shrinks.
 
 **The pages where a tight paragraph stays beside one evened: left as they are (the coordinator's ruling of 2026-11-12, the owner
 having handed it to him).** On 12 pages with both rules (13 with the knobs alone) a paragraph that stays tight stands further

@@ -66,13 +66,14 @@ describe('the borrow past TeX’s text block bottom (§18.37)', () => {
     expect([on.state, on.fit?.size]).toEqual(['laid', 10])
     // (the bottom at 677: the third line at the pitch, 1 pt under it, the depth it needs, under the bound of 1.5)
     expect(on.lines.map(([y]) => y)).toEqual([700, 688, 676])
-    // (the page's fill lays it again at its own size and leading, never deeper: the page's one paragraph grown to 1.1)
+    // (the page's fill lays it again at its own size and leading, never deeper; the page's one size does not grow, its paragraph
+    // set on room it borrowed under its lines, no room of its own: §18.11)
     const filled = lay(member(), true)
-    expect(filled.fit!.size).toBe(11)
+    expect(filled.fit!.size).toBe(10)
     expect(filled.lines.map(([y]) => y)).toEqual([700, 688, 676])
   })
   it('states on its page member how deep under the bottom its lines went, the fill’s lay as the fit’s; nothing where none went', () => {
-    // (the third line 1 pt under the bottom at 677, with and without the page's fill (which grows it on the same lines); its
+    // (the third line 1 pt under the bottom at 677, with and without the page's fill (which lays it on the same lines); its
     // twin with no room past the bottom shrinks onto its two lines and states nothing; no fill evened either)
     for (const fill of [false, true]) {
       const on = lay(member(), fill)

@@ -168,6 +168,16 @@ export function passesOf(
     const toldOf = told
       ? { own: fin(told.own), anchor: fin(told.anchor), target: fin(told.target), body: !!told.body }
       : null
+    // (the page's one size grows only where every body unit has room by itself, none set by a fitted state that borrows room
+    // under its lines nor evened (docs/PDF-READER.md §18.11, the coordinator's ruling of 2026-11-20): a page holding one takes no
+    // size step. Where today's step grew nothing there (ok 0), the outcome is today's, the step's record alone apart)
+    const borrows = (p: PassUnit) =>
+      ((p.layout?.state?.borrow as number | undefined) ?? 0) > 0 ||
+      (p.runs ?? []).some((q) => ((q.layout?.state?.borrow as number | undefined) ?? 0) > 0)
+    const heldBack =
+      size === undefined &&
+      (pass.size as Raw | undefined)?.ok === 0 &&
+      laid.some((p) => p.pages[0] === pass.page && (borrows(p) || !!p.evened))
     let d =
       firstDifference(
         laid.filter((p) => p.pages[0] === pass.page).map((p) => p.id),
@@ -176,7 +186,7 @@ export function passesOf(
       ) ??
       firstDifference(toldOf, pass.told, 'told') ??
       firstDifference(units, pass.units, 'units') ??
-      firstDifference(size ?? null, pass.size ?? null, 'size') ??
+      firstDifference(size ?? null, heldBack ? null : (pass.size ?? null), 'size') ??
       firstDifference(
         filled.filter((f) => !untracked.has(f.id as number)),
         pass.filled ?? [],
