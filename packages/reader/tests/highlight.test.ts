@@ -3,7 +3,7 @@
 // (one upright page 600 × 800 at scale 1: a PDF unit a CSS px, y down) and of the composer (one laid Page).
 import { describe, expect, it } from 'vitest'
 import type { Composer } from '../src/compose/composer.ts'
-import { createHighlight, PAD, type Pads, paintRows } from '../src/compose/highlight.ts'
+import { createHighlight, PAD, type Pads, padsOf, paintRows } from '../src/compose/highlight.ts'
 import type { Box, Page } from '../src/compose/page.ts'
 import type { Panes } from '../src/panes/panes.ts'
 import type { Clock } from '../src/stack/clock.ts'
@@ -734,6 +734,56 @@ describe('two rows of a shape whose pads differ meet in the gap between their ow
         `${side}: painted`,
       ).toBe(true)
       expect(hl.at(side, ...p), `${side}: hit`).toEqual({ id: 1, s: -1 })
+    }
+    hl.dispose()
+    for (const el of Object.values(els)) el.remove()
+  })
+})
+
+describe('a display lit alone is padded as a block of its own: its member’s rows around it stop its pads halfway', () => {
+  // (a member's three rows, 110-130, 60-80 and 20-40, and its display at 95-105 between the first two: its own half leading 10,
+  // read between its rows (none across its display). The rows' pads stop halfway to the display, a block of its own; the
+  // display's, painted and hit alone, must stop halfway to the rows: padded by the leading alone, it was painted 85-115, five
+  // points over the paragraph's first row, and a point on that row's foot lit the display)
+  const rows: Box[] = [
+    [72, 110, 300, 130],
+    [72, 60, 300, 80],
+    [72, 20, 300, 40],
+  ]
+  const display: Box = [100, 95, 250, 105]
+  const pane = [{ ord: 1, per: [rows], own: [['3', [display]]] as [string, Box[]][] }]
+  it('stops the display’s pads halfway to its own member’s rows, as the rows’ stop halfway to it', () => {
+    const pads = padsOf(pane, 1, 1)
+    expect(pads(display)).toEqual([7.5, 2.5])
+    expect(pads(rows[0]!)).toEqual([2.5, 10])
+    expect(pads(rows[1]!)).toEqual([10, 7.5])
+  })
+  it('pads a display with no row of its member near it by the member’s own leading, as before', () => {
+    const far: Box = [100, 110, 250, 120]
+    const apart = [
+      { ord: 1, per: [[[72, 150, 300, 170], ...rows.slice(1)] as Box[]], own: [['3', [far]]] as [string, Box[]][] },
+    ]
+    expect(padsOf(apart, 1, 1)(far)).toEqual([10, 10])
+  })
+  it('paints the display lit alone off its paragraph’s rows and lights the row, not the display, on the row’s foot', () => {
+    const page: Page = {
+      page: 1,
+      wait: { rows: [], faces: [] },
+      links: [],
+      members: [
+        { ord: 1, page: 1, state: 'laid', off: 1, lines: [], lit: { left: [rows], right: [rows], own: pane[0]!.own } },
+      ],
+    }
+    const { els, hl } = setUp(page)
+    hl.light({ id: 1, s: -5 })
+    for (const side of ['left', 'right'] as const) {
+      const shape = els[side].querySelector<HTMLElement>('.axt-hl')!
+      const top = H - Number.parseFloat(shape.style.top),
+        foot = top - Number.parseFloat(shape.style.height)
+      expect([top, foot], side).toEqual([107.5, 87.5])
+      // (a point on the paragraph's first row, a point over its foot: the member's, not its display's)
+      expect(hl.at(side, 200, H - 111), side).toEqual({ id: 1, s: -1 })
+      expect(hl.at(side, 200, H - 100), side).toEqual({ id: 1, s: -5 })
     }
     hl.dispose()
     for (const el of Object.values(els)) el.remove()

@@ -342,9 +342,13 @@ export type PaneMember = {
  * or another member's line, which parts its lines and is no space between them), or `pageLead`, the page's on the pane, where
  * it has none (a member of one row); and never past half the room to the nearest other block over or under the box that meets
  * it across (another member's box on the pane, a display: a block of its own), so that the pads of two blocks meet at most
- * halfway between them. A page's leading is its body's: on 2610.19274v1-zh p34, a double-spaced body (rows 18 pt apart) made it
- * 8.87 pt, and the caption set single-spaced over a table (its rows 5.47 apart) was padded so under its last row, over the
- * upper half of the table's header labels 2 pt under it, where its own rows' half leading is 2.75
+ * halfway between them. A display of the member's own is such a block to its rows, and they to it: a box of one (inside the
+ * extent of its boxes: a box, or a band of them paintRows cuts) is painted and hit alone, so its pads stop halfway to the
+ * member's own rows as to any other block's; padded by the member's leading alone, a display 10 under one of its rows was
+ * painted 5 over that row's foot, and the pointer there lit the display. A page's leading is its body's: on 2610.19274v1-zh
+ * p34, a double-spaced body (rows 18 pt apart) made it 8.87 pt, and the caption set single-spaced over a table (its rows 5.47
+ * apart) was padded so under its last row, over the upper half of the table's header labels 2 pt under it, where its own rows'
+ * half leading is 2.75
  */
 export function padsOf(pane: readonly PaneMember[], ord: number, pageLead: number): Pads {
   const me = pane.find((m) => m.ord === ord)
@@ -355,13 +359,17 @@ export function padsOf(pane: readonly PaneMember[], ord: number, pageLead: numbe
   }
   const gaps = me ? gapsOf(me.per, others) : []
   const lead = gaps.length ? halfOf(gaps) : pageLead
+  // (the member's own rows, and the extent of each of its displays: what stands around a box of a display)
+  const rows = me ? me.per.flat() : []
+  const displays = (me?.own ?? []).flatMap(([, boxes]) => (boxes.length ? [extentOf(boxes)] : []))
   const memo = new WeakMap<Box, readonly [number, number]>()
   return (b) => {
     const known = memo.get(b)
     if (known) return known
     let under = lead,
       over = lead
-    for (const o of others) {
+    const near = rows.length && displays.some((d) => within(b, d)) ? [...others, ...rows] : others
+    for (const o of near) {
       if (Math.min(o[2], b[2]) <= Math.max(o[0], b[0])) continue
       if (o[1] >= b[3]) over = Math.min(over, (o[1] - b[3]) / 2)
       else if (o[3] <= b[1]) under = Math.min(under, (b[1] - o[3]) / 2)
@@ -371,6 +379,17 @@ export function padsOf(pane: readonly PaneMember[], ord: number, pageLead: numbe
     return out
   }
 }
+/** the extent of boxes: the least box that holds them all */
+function extentOf(boxes: readonly Box[]): Box {
+  return [
+    Math.min(...boxes.map((b) => b[0])),
+    Math.min(...boxes.map((b) => b[1])),
+    Math.max(...boxes.map((b) => b[2])),
+    Math.max(...boxes.map((b) => b[3])),
+  ]
+}
+/** whether a box stands inside another (a band paintRows cuts takes its edges from its boxes' own: inside exactly) */
+const within = (b: Box, d: Box) => b[0] >= d[0] && b[1] >= d[1] && b[2] <= d[2] && b[3] <= d[3]
 
 /**
  * One outline of a shape's rectangles stacked from the top (CSS pixels, y down): an SVG path, every corner rounded to `radius`

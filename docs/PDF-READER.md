@@ -2891,7 +2891,15 @@ within noise.
   another member's line: that parts its lines and is no space between them), as today's reader pads a unit by its own lines;
   a member with no such gap (one row) takes the page's half leading above; and a row's pad over or under it stops at half the
   room to the nearest other block that meets it across (another member's box on the pane, a display), so that two blocks'
-  pads meet at most halfway between them. The page's half leading is its body's: on 2610.19274v1-zh, set double-spaced
+  pads meet at most halfway between them. A display of the member's own is such a block to its rows and they are to it: a
+  display lit alone (Laid.lit's `own`, painted and hit on its own) stops its pads halfway to its own member's rows as to any
+  other block's (a box of it: one inside the extent of its boxes, a band paintRows cuts included). Padded by its member's
+  leading alone, a display 10 pt under one of its paragraph's rows was painted 5 pt over that row's foot, and the pointer
+  there lit the display (the review of pull request #657). Over release-c4's lay of the 90 pairs (both panes, 9,122
+  displays lit alone): 101 reached over 0.5 pt into a row of their own member (at most 5.59 pt, 64 pages, 100 of them on the
+  right pane: 2610.21026v1-zh p31, 2610.20285v1-zh p21, 2610.18513v1-zh p55 the most), and 90 did at the round's start, when
+  every row was padded by the page's half leading (566721e66); now none. 581 display rows shrink (at most 7.57 pt, on 293
+  pages), none grows, and no text row moves. The page's half leading is its body's: on 2610.19274v1-zh, set double-spaced
   (rows 17-18 pt apart), it was 8.87 pt on p34's left pane, and the caption set single-spaced over a table (rows 5.47 apart:
   its own 2.73) was padded 8.87 under its last row, over the upper half of the table's header labels 2 pt under it; p50's
   cell over the cell under it, p59's paragraph to its neighbour's middle. The hit test reads the same pads (what is painted is
