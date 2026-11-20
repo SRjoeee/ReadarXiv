@@ -61,6 +61,10 @@ export const SCRIPT_SIZE = 0.85
 export const LEAD_SHARE = 0.05
 /** an accent set apart (TeX's \accent: a modifier symbol or letter, or a combining mark, alone in its run) is no script */
 export const ACCENT = /^[\p{Sk}\p{Lm}\p{M}\s]+$/u
+/** the characters a reader reads in a run (letters, digits, marks, punctuation, symbols): a glyph PDF.js maps to no text (a
+ *  private-use or a control character: a rule's piece, a delimiter's segment, 2610.10069v1 p12; an accent its font maps to no
+ *  character, PDF.js giving the glyph's code, "\x01", 2610.21376v1 p9's "é") is none, no script a drawn text could carry */
+export const read = (s) => [...String(s ?? '')].filter((ch) => /[\p{L}\p{N}\p{M}\p{P}\p{S}]/u.test(ch)).length
 /** a letter of any script, cased or not (Unicode L) */
 const LETTER = /^\p{L}$/u
 /** a text by its letters and digits, case aside: what a drawn text and its source are compared by (`groups`, `shown`) */
@@ -140,10 +144,10 @@ export function mathDrawn(lines, math = []) {
   return out
 }
 
-/** whether an element's glyphs on A (the runs in its ink's boxes) stand on two baselines or at two sizes: scripts a flat text
- *  cannot carry */
+/** whether an element's glyphs on A (the runs in its ink's boxes that hold a character a reader reads, `read`) stand on two
+ *  baselines or at two sizes: scripts a flat text cannot carry */
 export function scriptedOf(runs, boxes) {
-  const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]))
+  const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]) && read(r[7]))
   if (rs.length < 2) return false
   const big = Math.max(...rs.map((r) => r[5]))
   const bases = rs.map((r) => r[4])
@@ -364,15 +368,27 @@ export function measureFidelity(c) {
   // the unit's lowest original line on the page whose column (TeX's measure) it meets, the space below its own last line
   // there: a line over another of its own original lines in its column (laid on from the unit before over the rows it left,
   // beside a float TeX set inside the paragraph: 2608.16117v1 p17 t57, p19 t59) borrows nothing under its last. A run the
-  // part states no room under, no judgement (no TeX fact to judge by); one with no separation stated, its bottom alone
+  // part states no room under, no judgement (no TeX fact to judge by); one with no separation stated, its bottom alone. A joined
+  // group (verdict.mjs pieceGroups: a unit of today's cut into members of v2's) is its members' facts together, each original
+  // line with its own member's Room: a line of v2's judged against its own member's lines (v2 lays each member in its own
+  // block, so a member's line past its own room nears the next member's text), a line of today's (one unit over the group's
+  // rows) against all of them
   const borrowed = { today: new Map(), v2: new Map() }
   const pastLines = { today: new Map(), v2: new Map() }
   const roomOf = (key) => {
     const o = orig.get(key)
-    const m = o?.part !== null && o?.part !== undefined ? c.facts.get(o.part) : null
-    if (!m?.lines?.length || /figure/.test(o.kind ?? '')) return null
-    const runs = new Map((m.room?.runs ?? []).map(([j, ink, foot]) => [j, { ink, foot }]))
-    return { lines: m.lines.map((l, j) => ({ j, y: l[4], m0: Math.min(l[7], l[2]), m1: Math.max(l[8], l[3]), kept: l[9] & 1 })).filter((l, j) => m.lines[j][0] === n), runs, sep: m.room?.sep }
+    if (!o || /figure/.test(o.kind ?? '')) return null
+    const lines = [],
+      runs = new Map()
+    for (const ord of o.parts ?? []) {
+      const m = c.facts.get(ord)
+      if (!m?.lines?.length) continue
+      for (const [j, ink, foot] of m.room?.runs ?? []) runs.set(`${ord}:${j}`, { ink, foot })
+      m.lines.forEach((l, j) => {
+        if (l[0] === n) lines.push({ j: `${ord}:${j}`, ord, y: l[4], m0: Math.min(l[7], l[2]), m1: Math.max(l[8], l[3]), kept: l[9] & 1, sep: m.room?.sep })
+      })
+    }
+    return lines.length || runs.size ? { lines, runs } : null
   }
   for (const [side, M] of [['today', T], ['v2', V]])
     for (const [key, ls] of M) {
@@ -380,11 +396,15 @@ export function measureFidelity(c) {
       if (!r?.runs.size) continue
       let k = 0
       for (const l of flat(ls)) {
-        const column = r.lines.filter((o) => o.m1 > l.x0 && o.m0 < l.x1)
+        const own = side === 'v2' ? c.memberOf?.(l) : undefined
+        const byOwn = own !== undefined && r.lines.some((o) => o.ord === own)
+        const mine = byOwn ? r.lines.filter((o) => o.ord === own) : r.lines
+        const column = mine.filter((o) => o.m1 > l.x0 && o.m0 < l.x1)
         const over = column.length && column.every((o) => o.y > l.y + NEAR.room) ? column.sort((a, b) => a.y - b.y)[0] : null
         const run = over && r.runs.get(over.j)
         if (!run) continue
-        const free = r.sep === undefined ? run.foot : Math.min(run.foot, run.ink - r.sep)
+        const sep = over.sep
+        const free = sep === undefined ? run.foot : Math.min(run.foot, run.ink - sep)
         const past = over.y - Math.max(0, free) - l.y
         if (!(past > NEAR.room)) continue
         // (the borrow past TeX's text block bottom, the owner's ruling of 2026-11-12: a last line under the bottom by no more than
@@ -393,15 +413,15 @@ export function measureFidelity(c) {
         // state to read) where it is within the bound. Past the bound, nearer the next ink, or a v2 line no state names: as before)
         const below = over.y - run.foot - l.y,
           toInk = l.y - (over.y - run.ink)
-        const sepKept = r.sep === undefined || toInk >= r.sep - NEAR.room
+        const sepKept = sep === undefined || toInk >= sep - NEAR.room
         const bound = c.pastFoot ?? 0
-        const stated = side === 'v2' ? (c.laidOf?.(key)?.fit?.over ?? 0) : bound
+        const stated = side === 'v2' ? ((byOwn ? c.laidMember?.(own) : c.laidOf?.(key))?.fit?.over ?? 0) : bound
         if (sepKept && stated > 0 && below <= Math.min(stated, bound) + NEAR.room) continue
         k++
         // (each such line: how far under TeX's text block bottom it stands, and how far over the next ink's baseline, the room's
         // separation beside: the owner's ruling Fm reads them, rulings.mjs)
-        ;(pastLines[side].get(key) ?? pastLines[side].set(key, []).get(key)).push({ below: r2(below), toInk: r2(toInk), sep: r.sep ?? null })
-        fault(side, 'block', r.sep !== undefined && run.ink - r.sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
+        ;(pastLines[side].get(key) ?? pastLines[side].set(key, []).get(key)).push({ below: r2(below), toInk: r2(toInk), sep: sep ?? null })
+        fault(side, 'block', sep !== undefined && run.ink - sep < run.foot ? `${name(key)}: a line ${r2(past)} pt nearer the next ink than TeX's paragraph separation` : `${name(key)}: a line ${r2(past)} pt past TeX's text block bottom`)
       }
       borrowed[side].set(key, k)
     }
@@ -466,13 +486,17 @@ export function measureFidelity(c) {
   // id where today's placeholder there is that source (a unit joined by its id, the same pieces), or where the part states no
   // source; else today's placeholder of that source, the same occurrence (a unit whose content moved, stage 1a's (o) or (k) by
   // group: today's `\%` a placeholder v2 writes as text, each piece after it numbered otherwise; round 8 B8, 1810.04805 p4 t47,
-  // v2's \citet read as today's \ref two pieces on); none where today's unit holds no such placeholder)
+  // v2's \citet read as today's \ref two pieces on); none where today's unit holds no such placeholder. The same piece id is
+  // today's element only where it is the same occurrence of that source too: the two prepares number a unit's pieces each its
+  // own way, and two numbers that happen to name one source can name two of its occurrences (2610.21547v1 p17 t237: v2's piece
+  // 41 the 7th `\cls{circle}`, today's 41 the 5th, set a page apart))
   const todayElementOf = (tu, k, src, rank) => {
     if (!tu) return undefined
     const flat = (x) => (x ?? '').replace(/\s+/g, ' ').trim()
+    const same = (tu.pieces ?? []).filter((q) => q.kind === 'ph' && flat(q.src) === flat(src))
     const at = tu.pieces?.find((p) => String(p.k) === k)
-    if (src == null || flat(at?.src) === flat(src)) return tu.elements?.find((e) => String(e.k) === k)
-    const p = (tu.pieces ?? []).filter((q) => q.kind === 'ph' && flat(q.src) === flat(src))[rank]
+    if (src == null || (flat(at?.src) === flat(src) && same.indexOf(at) === rank)) return tu.elements?.find((e) => String(e.k) === k)
+    const p = same[rank]
     return p ? tu.elements?.find((e) => e.k === p.k) : undefined
   }
   // ---------------- elements: an element drawn otherwise than the original sets it: its pieces apart that TeX set on one line,
@@ -543,7 +567,7 @@ export function measureFidelity(c) {
   // p2 t14's \approach, faked small capitals v2 draws at the original's two sizes, today flat)
   const scripted = { today: new Map(), v2: new Map() }
   const pend = (side, key, unit, k, boxes) => {
-    const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]))
+    const rs = runsIn(runs, boxes).filter((r) => !r[8] && !ACCENT.test(r[7]) && read(r[7]))
     const id = `${key}\u0000${rs.map((r) => r[7]).join('')}`
     if (!scripted[side].has(id)) scripted[side].set(id, { key, unit, rs, ks: [] })
     scripted[side].get(id).ks.push(k)
@@ -566,10 +590,13 @@ export function measureFidelity(c) {
       if (cropped('v2', ord, boxes) || keptHere('v2', id)) continue
       // (with ink here and no crop cut from it, drawn as its text: its scripts flat where its glyphs on A have them; a literal
       // element (a URL, a code mark: TeX sets its characters as written, so it has no scripts) TeX broke over lines is drawn as
-      // its text by design, its glyphs on two baselines its lines', no scripts)
+      // its text by design, its glyphs on two baselines its lines', no scripts. Its glyphs are read a TeX line at a time, each
+      // of its ink's boxes alone (El.ink: one box a line, on that line's baseline): TeX sets a line's glyphs on its baseline, a
+      // script off it, and an element it broke over lines stands on its lines' baselines, which are no scripts: 2610.21084v1
+      // p30's citations over a cell's six lines)
       if (boxes.length) {
-        if (text === 1 && !raised && !literal && runs && scriptedOf(runs, boxes.map((b) => [b[0], b[1], b[2], b[3]])))
-          pend('v2', key, ord, k, boxes.map((b) => [b[0], b[1], b[2], b[3]]))
+        if (text === 1 && !raised && !literal && runs)
+          for (const b of boxes) if (scriptedOf(runs, [[b[0], b[1], b[2], b[3]]])) pend('v2', key, ord, k, [[b[0], b[1], b[2], b[3]]])
         continue
       }
       // (with no ink here, drawn as nothing (typeset lay/read.ts: a visible class with no ink is none), but a symbol, drawn from
@@ -594,13 +621,21 @@ export function measureFidelity(c) {
       const id = `${key.slice(1)}:${e.k}`
       // (today's `url` and `code` elements are literal as v2's: no scripts to set flat)
       if (!boxes.length || LITERAL_KINDS.has(e.kind) || cropped('today', Number(key.slice(1)), boxes) || keptHere('today', id) || e.flags?.includes('RAISED') || e.flags?.includes('EMPTY')) continue
-      if (runs && scriptedOf(runs, boxes)) pend('today', key, Number(key.slice(1)), e.k, boxes)
+      // (a TeX line at a time, as v2's: today's segments are one a line, each on its baseline)
+      if (runs) for (const b of boxes) if (scriptedOf(runs, [b])) pend('today', key, Number(key.slice(1)), e.k, [b])
     }
   }
+  // (an element is set flat once, however many of its lines a side draws flat: each line is read alone, the element counted once)
+  const flatSaid = new Set()
   for (const side of ['today', 'v2'])
     for (const { key, unit, rs, ks } of scripted[side].values()) {
       const lines = (rec[side].units ?? []).filter((u) => u.id === unit).flatMap((u) => u.lines)
-      for (const k of ks.slice(carriedOf(rs, lines, c.raisedOver))) note(side, key, `element ${k}: its scripts or sizes set flat as text`)
+      for (const k of ks.slice(carriedOf(rs, lines, c.raisedOver))) {
+        const said = `${side}\u0000${unit}\u0000${k}`
+        if (flatSaid.has(said)) continue
+        flatSaid.add(said)
+        note(side, key, `element ${k}: its scripts or sizes set flat as text`)
+      }
     }
   for (const side of ['today', 'v2']) for (const [key, ws] of wrong[side]) for (const w of ws) fault(side, 'elements', `${name(key)}: ${w}`)
   for (const key of new Set([...wrong.today.keys(), ...wrong.v2.keys()])) {

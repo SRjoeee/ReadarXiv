@@ -5,7 +5,7 @@
 // set apart by the typesetter's glue (2608.16117 p37: the original's 4.49 and 6.73 pt).
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — a plain node module of the lab
-import { linesOfSvg } from '../../lab/typeset/parity/measure-dom.mjs'
+import { glueRunsOf, linesOfSvg } from '../../lab/typeset/parity/measure-dom.mjs'
 
 /** a run: its text, its x, whether it is placed at its own x (a <tspan x>), a gap between its letters, its face's weight and
  *  style (the computed style's) */
@@ -64,6 +64,64 @@ describe('a drawn line read back: word spaces and letter gaps', () => {
     ])
     expect(l.letter).toBeCloseTo(3 / SIZE, 2)
     expect(l.word).toBe(0)
+  })
+})
+
+describe("a drawn line read back: the gap TeX's infinite glue opens is the line's free room, no word space (§18.104)", () => {
+  // (2610.40394v1-zh pp25-26: a proof's last line `… \hfill $\square$`, the square set at the line's right end as TeX sets it,
+  // its translation's last characters 1.7 to 37 em before it; the run the glue places is marked by the parity's lay, hook.mjs,
+  // and found by its rank among the member's <tspan>s, glueRunsOf)
+  const SQUARE = String.fromCharCode(0x25a1)
+  const glued = (runs: Run[], glues: [number, number][]) =>
+    linesOfSvg(svgOf(runs), 'data-axt-ord', [0, 0, 595, 842], 1, [], glues)[0].lines[0]
+  const proof = [
+    { s: 'Thus done. ', x: 72 },
+    { s: SQUARE, x: 500 },
+  ]
+  it('the gap before the run the glue places is no word space: the line reads its own spaces alone', () => {
+    const l = glued(proof, [[108, 1]])
+    expect(l.word).toBeCloseTo(W / SIZE, 2)
+    expect(l.letter).toBe(0)
+  })
+  it('the same line with no glue stated reads that gap as a word space, as before', () => {
+    expect(glued(proof, []).word).toBeCloseTo((500 - (72 + 10 * W)) / SIZE, 2)
+    expect(glued(proof, [[109, 1]]).word).toBeCloseTo((500 - (72 + 10 * W)) / SIZE, 2)
+  })
+  it('a word space stretched past 1 em on a line holding a glue is still read (the defect the flag is for)', () => {
+    // (a justified line's words set 30 pt apart, a run of its own placed at its x, then the glue's square: the glue's gap
+    // aside, the stretched one stands)
+    const l = glued(
+      [
+        { s: 'Thus', x: 72 },
+        { s: 'done. ', x: 72 + 4 * W + 30 },
+        { s: SQUARE, x: 500 },
+      ],
+      [[108, 2]],
+    )
+    expect(l.word).toBeCloseTo(30 / SIZE, 2)
+    expect(l.word).toBeGreaterThan(1)
+  })
+})
+
+describe("the runs TeX's infinite glue places, found on a laid page (glueRunsOf)", () => {
+  it("ranks a member's text items in its lines' order, a crop none, and names those the parity's lay marks `glue`", () => {
+    const members = [
+      {
+        ord: 5,
+        state: 'laid',
+        lines: [
+          [700, 72, 500, [{ s: 'a', x: 72 }, { s: '', x: 90, src: [1, 0, 0, 1, 1, 0] }, { s: 'b', x: 100, glue: 1 }]],
+          [688, 72, 500, [{ s: 'c', x: 72, glue: 1 }, { s: 'd', x: 90 }]],
+        ],
+      },
+      { ord: 6, state: 'waiting', lines: [] },
+      { ord: 7, state: 'laid', lines: [[676, 72, 500, [{ s: 'e', x: 72 }]]] },
+    ]
+    expect(glueRunsOf(members)).toEqual([
+      [5, 1],
+      [5, 2],
+    ])
+    expect(glueRunsOf(undefined)).toEqual([])
   })
 })
 

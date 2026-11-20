@@ -14,7 +14,9 @@ export const PAINT_RADIUS = (3 * 72) / 96
 
 /**
  * What v2's reader paints of one shape on a pane, as rectangles [x0, y0, x1, y1] (PDF units, y up): its rows (the reader's
- * paintRows: the union of its boxes, padded by `lead` above and below and met where two one over the other share their pads)
+ * paintRows: the union of its boxes, padded by `lead` above and below, the page's half leading or the member's pads as the
+ * reader computes them (verdict.mjs padsOn), whichever the reader's paintRows takes, and met where two one over the other share
+ * their pads)
  * padded `pad` beside; and for two next to each other that meet across by more than two radii and that no other block stands
  * between in the member's `column` (apartRows over `others`, every box lit on the pane: paintRows' `apart`), the room between
  * them, from the upper one's left to the lower one's right (the outline steps at the upper's foot on the right and at the

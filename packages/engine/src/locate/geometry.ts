@@ -125,7 +125,11 @@ export function lineGeometry(w: Work, owned: Owned): void {
     // (a kept block of a display TeX set: its rows by the display rule, as a unit's display's (rows.ts), its rules with them: the
     // text line rule cut display (4) of 2111.09276v1 p5 after its number's "(", 13.7 pt over its second row's baseline, which
     // stayed on that row's line as a script, its "4)" a line of its own: §17.9)
-    const cut = unit?.display ? rowsOf(inline, atA, boxesOf_(mem.textBoxes)) : cutLines(inline, atA)
+    // (the unit's text and its inline elements, a formula's glyphs told apart from its text: lines.ts cutLines)
+    const ownText = new Set(mem.text)
+    const cut = unit?.display
+      ? rowsOf(inline, atA, boxesOf_(mem.textBoxes))
+      : cutLines(inline, atA, (a) => !ownText.has(a))
     // (the lines whose ink stays, KEPT, in their place in the stream: a display's rows; and a held line, the glyphs inside its
     // span on A that B printed and no unit owns: the lines its source does not write (ownership says it, never a share of
     // the source's words))
@@ -650,6 +654,12 @@ export function lineGeometry(w: Work, owned: Owned): void {
           mem.told.add(id)
         }
       }
+      // (a symbol or a space of no ink TeX set before the unit's start point, outside its text (the instrument's `outside`): the
+      // unit's edge the start mark passes over, its ink the original's, kept with the label (PDF-READER §18.83), El.keep, drawn
+      // as nothing. Stated as a symbol to draw, it was drawn beside the bullet that stays: 2610.19159v1's 44 items of a
+      // hand-made list, `\noindent\textbullet\ The …`, read "• •")
+      else if (!ink.length && (stated === 'symbol' || stated === 'space') && outsidePiece.has(`${mem.unit}|${id}`))
+        el.keep = 1
       mem.elements.push([id, el])
     }
     // its trail (phase 2, trails.ts): an element of no piece, its ink a crop's, its text its glyphs'

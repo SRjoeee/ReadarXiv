@@ -1,11 +1,12 @@
 // A unit's lines, cut in its own glyph run in stream order by one rule (its geometry A's own, ARCHITECTURE.md): the next
 // glyph starts a line where it leaves the line's baseline band (half a size about the baseline its body glyphs so far share)
 // and jumps back left of the glyph before it, or far on to its right (two sizes), or its ink more than one and a half sizes up
-// or down (a column's top: no script is that far); and wherever the page changes; two lines so cut one after the other on one baseline,
-// across each other, are one (a tall fraction's denominator under its line's band). A glyph off the band that goes on along it (a
-// script, a fraction's parts), or whose ink reaches across the line's (a big delimiter, its origin at its top), is the line's. A line's
-// baseline is the one most of its body glyphs' characters share (to 0.01 pt); its extent their
-// advances'; its top and bottom their own ink's; its size lineSize's.
+// or down (a column's top: no script is that far); and wherever the page changes. Two lines so cut one after the other are one
+// where TeX could not have set them as two: on one baseline, crossing or nearer than two sizes (a tall fraction's denominator
+// under its line's band); their inks meeting, one of them a formula's glyphs alone (docs/PDF-READER.md §18.103). A glyph off the
+// band that goes on along it (a script, a fraction's parts), or whose ink reaches across the line's (a big delimiter, its origin
+// at its top), is the line's. A line's baseline is the one most of its body glyphs' characters share (to 0.01 pt), its text's
+// where the caller tells them apart; its extent their advances'; its top and bottom their own ink's; its size lineSize's.
 // A glyph is cut into a line by its ink (isInk), never by its Unicode: TeX's math extension pieces are blank to PDF.js.
 import type { DocGlyph } from '../doc.ts'
 
@@ -74,8 +75,13 @@ export function lineSize(gs: readonly DocGlyph[]): number {
   return r2(Math.min(SIZE_MAX, sizes[sizes.length >> 1] as number))
 }
 
-/** the lines of `list` (each an index `at` resolves to its page and glyph), of its glyphs that are ink (isInk) */
-export function cutLines(list: readonly number[], at: (i: number) => { page: number; g: DocGlyph }): CutLine[] {
+/** the lines of `list` (each an index `at` resolves to its page and glyph), of its glyphs that are ink (isInk); `formula`,
+ *  where the caller tells it, the glyphs of a formula the unit holds (lineGeometry: its elements'), the rest its text */
+export function cutLines(
+  list: readonly number[],
+  at: (i: number) => { page: number; g: DocGlyph },
+  formula?: (i: number) => boolean,
+): CutLine[] {
   type Open = {
     page: number
     y0: number
@@ -176,12 +182,14 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
   }
   const finish = (l: { page: number; gs: number[]; size: number }): CutLine => {
     // (its baseline the one most of its body glyphs' characters share, to a hundredth: its glyphs within BODY of its size,
-    // all where none is)
+    // all where none is; of them its text's where it holds text: TeX sets a line's text on its baseline, and the rows of a
+    // formula in it, a cases' or a matrix's, may outnumber its words)
     const glyphs = l.gs.map((i) => at(i).g)
     const lsize = lineSize(glyphs)
-    const body = glyphs.filter((g) => Math.abs(g.size - lsize) <= BODY * lsize)
+    const body = l.gs.filter((i) => Math.abs(at(i).g.size - lsize) <= BODY * lsize)
+    const text = body.filter((i) => !formula?.(i))
     const votes = new Map<number, number>()
-    for (const g of body.length ? body : glyphs) {
+    for (const g of (text.length ? text : body.length ? body : l.gs).map((i) => at(i).g)) {
       const y = r2(g.y)
       votes.set(y, (votes.get(y) ?? 0) + Math.max(1, g.u.length))
     }
@@ -203,21 +211,31 @@ export function cutLines(list: readonly number[], at: (i: number) => { page: num
     const most = [...sizes].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0]![0]
     return { page: l.page, gs: l.gs, x0, x1, base, top, bottom, size: l.size, most }
   }
-  // (two lines cut one after the other on one page, on one baseline, across each other, are one line of TeX's: TeX never sets two
-  // lines of a box on one baseline over each other. A tall fraction's denominator, wholly under its line's band and back left of
-  // its numerator's end, began a line of its own that the rest of its line's words then stood on (2610.21026v1 p5: lines 3
-  // and 4 both on 277.19, 107.25-287.67 and 257.53-504))
+  // (two lines cut one after the other on one page are one line of TeX's where TeX could not have set them as two. TeX never
+  // sets two lines of a box on one baseline over each other or beside each other: two on one baseline that cross or stand
+  // nearer than the rule's far (two sizes) are one (a tall fraction's denominator, wholly under its line's band and back left of
+  // its numerator's end, began a line of its own that the rest of its line's words then stood on: 2610.21026v1 p5, lines 3 and
+  // 4 both on 277.19, 107.25-287.67 and 257.53-504). And TeX sets a formula inside its line, its parts shifted up and down within
+  // the line's box, a line's text on its baseline: two whose inks meet, one of them a formula's glyphs alone (none of the
+  // unit's text), are one (a fraction's parts and a script of its numerator, a cases' rows and conditions, a matrix's entries, a
+  // big delimiter's pieces, a line that opens with a numerator or an accented nucleus). Two lines of text are never joined so,
+  // whatever their inks: TeX stacks a paragraph's lines box under box, and the ink of two such boxes touching meets by the
+  // hundredths their glyphs stand past them (a subscript over a superscript of the next line, 0.03 pt), as does a line of text
+  // beside ink TeX smashed over it. Joined again with the line before while one: a delimiter's top piece meets the line it
+  // stands on only with the pieces under it)
+  const alone = (c: CutLine) => !!formula && c.gs.every((i) => formula(i))
+  const one = (a: CutLine, b: CutLine) =>
+    a.page === b.page &&
+    ((a.base === b.base && a.x0 < b.x1 && b.x0 < a.x1 + 2 * Math.max(a.size, b.size)) ||
+      (a.bottom < b.top && b.bottom < a.top && (alone(a) || alone(b))))
   const lines: CutLine[] = []
   for (const l of out) {
-    const cur = finish(l)
-    const prev = lines.at(-1)
-    if (prev && prev.page === cur.page && prev.base === cur.base && prev.x0 < cur.x1 && cur.x0 < prev.x1)
-      lines[lines.length - 1] = finish({
-        page: cur.page,
-        gs: [...prev.gs, ...cur.gs],
-        size: Math.max(prev.size, cur.size),
-      })
-    else lines.push(cur)
+    let cur = finish(l)
+    for (let prev = lines.at(-1); prev && one(prev, cur); prev = lines.at(-1)) {
+      lines.pop()
+      cur = finish({ page: cur.page, gs: [...prev.gs, ...cur.gs], size: Math.max(prev.size, cur.size) })
+    }
+    lines.push(cur)
   }
   return lines
 }

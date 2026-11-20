@@ -252,6 +252,49 @@ describe("block: the borrow past TeX's text block bottom, the owner's ruling of 
   })
 })
 
+describe("block: a joined group's lines each judged against its own member's original lines and room (2610.21106v1 p12 t51)", () => {
+  // (today's t7 one unit over three rows TeX's source parts by a vertical command (an acknowledgement on two lines, then two
+  // statements, each after a \vskip); v2's members 50, 51 and 52 the three, joined to it by their pieces (join.mjs piecesJoin).
+  // Each member's Room.runs states the room under its last line: for 50 and 51 the next ink's baseline (the next member's first)
+  // 18 pt down, TeX's separation 12: a line no lower than 6 pt under it; for 52 the next ink 60 pt down and TeX's text block
+  // bottom 24: a line no lower than 628)
+  const fact = (ord: number, ys: number[], runs: number[][]) => ({ ord, kind: 'para', align: 'j', style: { size: 10 }, lines: ys.map((y) => factLine(72, 300, y)), room: { runs, sep: 12 } })
+  const v2 = v2Of({
+    members: [laid(50), laid(51), laid(52)],
+    facts: [fact(50, [700, 688], [[1, 18, 200]]), fact(51, [670], [[0, 18, 200]]), fact(52, [652], [[0, 60, 24]])],
+  })
+  const ctx = { prepByOrd: new Map(), todayOf: new Map(), turned: new Set(), led: new Map(), top: new Set(), pieceGroups: [{ today: [7], members: [50, 51, 52] }] }
+  const at = (ys: number[]) => ys.map((y) => drawnLine(72, 300, y, 'x'.repeat(20)))
+  const page = (today: number[], members: Record<number, number[]>) =>
+    measurePage('p-zh', v2, rec({ today: { units: [{ id: 7, lines: at(today) }] }, v2: { units: Object.entries(members).map(([id, ys]) => ({ id: Number(id), lines: at(ys) })) } }), ctx)
+  it("each of v2's members on its own original's baseline, today's one unit over their rows: no line borrowed on either side", () => {
+    // (v2 sets the three where TeX set them, 700, 670 and 652; today the acknowledgement on 700 and the two statements on one
+    // line at 676, among the group's own rows. Read against the first member's lines alone, v2's 670 and 652 and today's 676
+    // stood "under" the acknowledgement's last line, 688, by more than its room)
+    const p = page([700, 676], { 50: [700], 51: [670], 52: [652] })
+    expect(of('block')(p)).toEqual([])
+    expect(p.faults.block).toBeUndefined()
+  })
+  it("a line under the group's last original line, past its last member's room: still flagged, on either side", () => {
+    // (the last member's line at 652, TeX's text block bottom 24 under it: v2's third line at 616, 12 pt past it; today keeping
+    // within it, at 640)
+    const p = page([700, 676, 652, 640], { 50: [700], 51: [670], 52: [652, 640, 628, 616] })
+    expect(of('block')(p)).toMatchObject([{ unit: 't7 para', worse: true, today: { value: 0 }, v2: { value: 1 } }])
+    expect(p.faults.block.v2Says[0]).toMatch(/12 pt past TeX's text block bottom/)
+    const t = page([700, 676, 652, 640, 628, 616], { 50: [700], 51: [670], 52: [652, 640, 628] })
+    expect(of('block')(t)).toMatchObject([{ worse: false, nearer: 'v2', today: { value: 1 }, v2: { value: 0 } }])
+  })
+  it("v2's line of a middle member past its own room, into the next member's row: flagged; today's one unit there is not", () => {
+    // (v2's member 51 on two lines, 670 and 658: its second 6 pt past the room under its own last original line, 6 pt over the
+    // next member's first baseline (652), which v2 sets there: nearer it than TeX's separation, the next ink the part states.
+    // Today's one unit draws a line at 658 too, over the group's own lower row (652) in its column: its own rows, borrowing
+    // nothing under its last, as a single unit's line over its own lower lines)
+    const p = page([700, 676, 658], { 50: [700], 51: [670, 658], 52: [652] })
+    expect(of('block')(p)).toMatchObject([{ unit: 't7 para', worse: true, today: { value: 0 }, v2: { value: 1 } }])
+    expect(p.faults.block.v2Says).toEqual(["t7 para: a line 6 pt nearer the next ink than TeX's paragraph separation"])
+  })
+})
+
 describe('over: text drawn over ink that stays (2609.36054 p13, 2608.06701 p8, 2610.20967 p4, 2610.21312 p2)', () => {
   const f = one(100, 'para', [factLine(46.99, 290, 700)])
   const l = [drawnLine(46.99, 290, 700, 'x'.repeat(20))]

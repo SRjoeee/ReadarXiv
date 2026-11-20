@@ -37,17 +37,28 @@ export const CHROME_OFF = Object.freeze(['PMProcessPriorityPolicy'])
  *   `chrome.i18n.getUILanguage()` in the extension's pages reads it, whatever the system. Measured on macOS 2026-11-19 (Chrome
  *   for Testing 153, Playwright 1.63's), on a browser whose own language is English: the settings page reads zh-CN with it
  *   stated, en-US without. The extension's service worker is no page: it keeps the browser's own.
- * - Chromium's `--lang`: the browser's own interface language, its service worker's included, where Chromium takes it from the
- *   command line (Linux and Windows, by its own switch; not run here: the hosted runner's run shows it). macOS takes the
- *   browser's from the system's preferences alone: there `--lang`, LANGUAGE and LANG, and a profile's intl.app_locale change
- *   nothing (measured the same day), and the preferences' own argument (`-AppleLanguages (xx)`) is a page to open to Playwright
- *   and to Chromium both.
+ * - The browser's own interface language, its service worker's, set to the same: Playwright's locale is not enough alone. The
+ *   override is the extension's renderer process's, held by the first page that set it: when that page closes, its sibling
+ *   extension pages read the browser's own language again (measured 2026-11-21, Chromium 153: three extension pages under an
+ *   en-US override on a browser whose own is zh-CN; one closed, the other two read zh-CN). A reader page painted in one language
+ *   and reading the other at its next settings landing reloads itself (src/ui/locale-stale.ts), and on the hosted runner, whose
+ *   browser's own language is English, a close sent as a page so reloaded was lost (round c4: e2e:reader stood at its close).
+ *   Where Chromium takes its own language from: Windows, `--lang`; Linux, the environment, not `--lang` (the runner's browser
+ *   stayed English with it), so the browser's LANGUAGE, LC_MESSAGES and LANG are set; macOS, the system's preferences alone
+ *   (there `--lang`, LANGUAGE and LANG, and a profile's intl.app_locale change nothing, measured 2026-11-19, and the
+ *   preferences' own argument, `-AppleLanguages (xx)`, is a page to open to Playwright and to Chromium both): on a Mac whose
+ *   system language is not the one stated, the two differ, and extension.mjs's launch says so.
+ *
+ * `platform`: the system the browser runs on (process.platform's; a test states another).
  */
-export function chromiumOptions(options = {}, { partitioned = false, language = null } = {}) {
+export function chromiumOptions(options = {}, { partitioned = false, language = null, platform = process.platform } = {}) {
   const off = [...PLAYWRIGHT_OFF.filter(f => !(partitioned && f === 'ThirdPartyStoragePartitioning')), ...CHROME_OFF]
   const own = options.args ?? []
   const clash = own.find(a => a.startsWith('--disable-features='))
   if (clash) throw new Error(`${clash}: the features a check turns off are tests/e2e/lib/chromium.mjs's list, one list (a second --disable-features replaces it)`)
   if (language && (options.locale || own.some(a => a.startsWith('--lang')))) throw new Error(`${language}: the interface language a check states is tests/e2e/lib/chromium.mjs's to state (a locale or a --lang of the launch's own would contradict it)`)
-  return { ...options, ...(language ? { locale: language } : {}), args: [`--disable-features=${off.join(',')}`, ...(language ? [`--lang=${language}`] : []), ...own] }
+  // (the POSIX form of the language, `zh_CN`: what Linux's Chromium reads its interface language from)
+  const posix = language?.replace('-', '_')
+  const env = language && platform === 'linux' ? { env: { ...(options.env ?? process.env), LANGUAGE: posix, LC_MESSAGES: `${posix}.UTF-8`, LANG: `${posix}.UTF-8` } } : {}
+  return { ...options, ...(language ? { locale: language } : {}), ...env, args: [`--disable-features=${off.join(',')}`, ...(language ? [`--lang=${language}`] : []), ...own] }
 }

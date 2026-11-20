@@ -19,14 +19,34 @@
 // packages/typeset/src/breaker/break.ts a CJK line no longer squeezes to take the group it misses (`squeezes`: its marks' blank
 // halves and SQUEEZE em a gap, light compression before stretching) while `globalThis.__parityNoSqueeze` is set, which v2.mjs sets
 // alone, around another lay of the pair whose pages it does not keep: each member's line count without that punctuation rule, the
-// counterfactual the owner's ruling L2 reads (rulings.mjs, 2026-11-12). Nothing else of any module is touched; a gate-l1.ts that no
-// longer holds the call once, a fill-pass.ts or slots.ts its anchor, or a tokens.ts or break.ts its line once, throws.
+// counterfactual the owner's ruling L2 reads (rulings.mjs, 2026-11-12). And in packages/typeset/src/emit/display.ts a page's text
+// item that TeX's infinite glue places (the item after a token holding Token.fill, the spaces after it passed over, or a unit's
+// first holding Token.fillLead: §18.104) is marked `glue: 1`, which the painter ignores and the spacing measure reads
+// (measure-dom.mjs glueRunsOf, linesOfSvg: the gap before it is the line's free room TeX gives the glue, no word space). Nothing
+// else of any module is touched; a gate-l1.ts that no longer holds the call once, a fill-pass.ts or slots.ts its anchor, or a
+// tokens.ts, break.ts or display.ts its line once, throws.
 const CALL = /const page = layPage\(\n[\s\S]*?\n {6}\)\n(?= {6}out\.entry\.ms\.push)/g
 const FILL = '  const { units, ...told } = fillUnitsOf(\n'
 const OPTION_I = '  if ((b.B.at(-1) as number) - low > 1e-9) floor = Math.min(floor, low + (L - 1) * p0)\n'
 
 const BLANK_SIDES = '    if (markBlankEdge(before, true, cjkFace) || markBlankEdge(after, false, cjkFace)) return false\n'
 const SQUEEZES = '  const squeezes = !!P.cjk && !P.keepAll && !(st.track > (st.fitTrack ?? P.trackStart ?? 0) + 1e-9)\n'
+const TEXT_ITEM = '      items.push(item)\n'
+/** the mark of a text item TeX's infinite glue places: the token before its run's first item holds Token.fill (spaces between
+ *  passed over, a fill on one of them counted), or its first item Token.fillLead */
+export const GLUE_MARK = [
+  '      {',
+  '        const n0 = run.items[0]?.[0] ?? 0',
+  '        let held = !!line.items[n0]?.t?.fillLead',
+  '        for (let k = n0 - 1; k >= 0 && !held; k--) {',
+  '          const t = line.items[k].t',
+  '          if (t.fill) held = true',
+  '          if (!t.space) break',
+  '        }',
+  '        if (held) item.glue = 1',
+  '      }',
+  '',
+].join('\n')
 
 export async function load(url, context, nextLoad) {
   const r = await nextLoad(url, context)
@@ -45,6 +65,11 @@ export async function load(url, context, nextLoad) {
     const source = String(r.source)
     once(source, OPTION_I, 'slots.ts')
     return { ...r, source: source.replace(OPTION_I, `  if (!globalThis.__parityNoOptionI) ${OPTION_I.trimStart()}`) }
+  }
+  if (url.endsWith('/packages/typeset/src/emit/display.ts')) {
+    const source = String(r.source)
+    if (source.split(TEXT_ITEM).length !== 2) throw new Error('parity hook: display.ts no longer holds its text item line once')
+    return { ...r, source: source.replace(TEXT_ITEM, `${GLUE_MARK}${TEXT_ITEM}`) }
   }
   if (url.endsWith('/packages/typeset/src/breaker/break.ts')) {
     const source = String(r.source)

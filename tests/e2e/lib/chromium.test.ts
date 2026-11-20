@@ -46,6 +46,14 @@ describe('the launch options', () => {
     expect(() => chromiumOptions({ locale: 'en-US' }, { language: 'zh-CN' })).toThrow(/chromium\.mjs's to state/)
     expect(() => chromiumOptions({ args: ['--lang=en-US'] }, { language: 'zh-CN' })).toThrow(/chromium\.mjs's to state/)
   })
+  it('state it as the browser\'s own language too where Chromium reads that from the environment (Linux), and nowhere else', () => {
+    // (the locale override is the renderer's, held by one page: a sibling reads the browser's own once that page closes)
+    const linux = chromiumOptions({ args: [], env: { PATH: '/bin', LANG: 'C.UTF-8' } }, { language: 'zh-CN', platform: 'linux' })
+    expect(linux.env).toEqual({ PATH: '/bin', LANGUAGE: 'zh_CN', LC_MESSAGES: 'zh_CN.UTF-8', LANG: 'zh_CN.UTF-8' })
+    expect(linux.locale).toBe('zh-CN')
+    expect('env' in chromiumOptions({ args: [] }, { language: 'zh-CN', platform: 'darwin' })).toBe(false)
+    expect('env' in chromiumOptions({ args: [] }, { platform: 'linux' })).toBe(false)
+  })
 })
 
 describe('the suites that find the extension by its Chinese words', () => {

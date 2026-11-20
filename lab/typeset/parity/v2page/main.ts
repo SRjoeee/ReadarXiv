@@ -12,7 +12,7 @@ import { cropsOf } from '../../../../packages/reader/src/compose/paint.ts'
 import type { Laid, Page } from '../../../../packages/reader/src/compose/page.ts'
 import { DEFAULTS } from '../../../../packages/reader/src/prefs.ts'
 import { openReader, type Reader } from '../../../../packages/reader/src/reader.ts'
-import { linesOfSvg } from '../measure-dom.mjs'
+import { glueRunsOf, linesOfSvg } from '../measure-dom.mjs'
 
 type Metrics = { ready(face: string, text: string): boolean | 'never' }
 const root = document.getElementById('root') as HTMLElement
@@ -125,7 +125,8 @@ const p = {
     const k = svg && vb[2] ? vb[2] / (view[2] - view[0]) : 1
     return {
       committed: !!svg,
-      units: svg ? linesOfSvg(svg, 'data-axt-ord', view, k, crops) : [],
+      // (the gap before a run TeX's infinite glue places is the glue's, no word space: glueRunsOf)
+      units: svg ? linesOfSvg(svg, 'data-axt-ord', view, k, crops, glueRunsOf(page?.members)) : [],
       crops,
       links: got?.links.length ?? 0,
       // (the links a reader can follow on the page: the overlay's anchors on a laid page, PDF.js's annotation layer's on a page

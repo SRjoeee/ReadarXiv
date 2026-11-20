@@ -23,7 +23,7 @@ import { doorRows } from '../../../packages/typeset/tests/replay/rows.ts'
 import { LAB, ledger } from '../../../packages/typeset/tests/replay/tap.ts'
 import { keptFacts, originalFacts, scriptsPass } from './blind.mjs'
 import { frameOf, labelsPass } from './fidelity.mjs'
-import { piecesJoin } from './join.mjs'
+import { candidateUnlaid, piecesJoin } from './join.mjs'
 import { bundleCheck, bundleOf, pdfOf, whyNot } from './inputs.mjs'
 import { FIRST } from './pairs.mjs'
 import { coverageOf, FLAGS, freshOf, freshResolve, judgedChanged, linesPass, linksPass, measurePage, offOriginalOf, tagFresh, NEAR, BOUNDS, pastRoomPass, recount, SAYS, sharePass, staleOf, stylePass, summaryOf, unmeasuredOf, verdictOf } from './verdict.mjs'
@@ -180,6 +180,10 @@ for (const [pair, raw] of drawn) {
   // (the ruling CT: why today's reader leaves a unit the original's, its dump's notLaid or left `why`, by its key)
   const todayWhys = new Map([...(todayDump?.notLaid ?? []), ...(todayDump?.left ?? [])].map((u) => [`t${u.ord}`, u.why ?? null]))
   const todayWhy = (key) => todayWhys.get(String(key)) ?? null
+  // (the units the candidate's prepare made no member of, by today's ord: its dump's statement of each, join.mjs candidateUnlaid;
+  // the rulings read a cell's state there where no member of v2's holds it, CU)
+  const unlaid = candidateUnlaid(raw.paper, prep.units, new Set(todayOf.values()))
+  const unlaidOf = (key) => (/^t\d+$/.test(String(key)) ? (unlaid.get(Number(String(key).slice(1))) ?? null) : null)
   const cuts = new Map()
   const todayCut = (key) => {
     if (!cuts.has(key)) {
@@ -305,7 +309,7 @@ for (const [pair, raw] of drawn) {
       const rec = raw.pages.find((r) => r.page === pg)
       return rec && v2.relay.pages[pg] && rec.relay && !rec.relay.error ? { ...rec, v2: { ...rec.v2, ...rec.relay } } : rec
     }
-    rulingsPass(drawnAgain, { recOf: relayRec, v2: relayV2, laid: relayV2.pages, unsqueezed: v2.relay.unsqueezed ?? null, todayCut, todayWhy }, recount)
+    rulingsPass(drawnAgain, { recOf: relayRec, v2: relayV2, laid: relayV2.pages, unsqueezed: v2.relay.unsqueezed ?? null, todayCut, todayWhy, unlaidOf }, recount)
     for (const p of mine) freshResolve(p, again.find((q) => q?.page === p.page) ?? null, { incomparable, unsentenced })
     relayTimes.push({ pair, lay: v2.relay.ms ?? null, drawing: raw.relayMs ?? null, pages: Object.keys(v2.relay.pages).length })
   }
@@ -372,7 +376,7 @@ for (const [pair, raw] of drawn) {
   // covered, listed apart; the pair's lay with no CJK line squeezed, `unsqueezed`, for the ruling L2)
   rulingsPass(
     mine.filter((p) => !p.error),
-    { recOf: (pg) => raw.pages.find((r) => r.page === pg), v2, laid: v2.pages, unsqueezed: v2.unsqueezed ?? null, todayCut, todayWhy },
+    { recOf: (pg) => raw.pages.find((r) => r.page === pg), v2, laid: v2.pages, unsqueezed: v2.unsqueezed ?? null, todayCut, todayWhy, unlaidOf },
     recount,
   )
   pages.push(...mine)

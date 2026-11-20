@@ -77,10 +77,12 @@ export function sourcePieces(content: readonly Piece[]): V0Piece[] {
 /** the source a rule reads of an element, made of what the part states of it (El: its glue, its command and whether its
  *  source is that command alone, a forced break, a citation's note, its identity): every test the rules make of a source
  *  (glueOf, FORCED_BREAK, the style commands' and GENERATED_REF's names, CITE_NOTE, a declaration's /^\\[A-Za-z]+$/, the
- *  macros learnt by their source) answers on it as on the source itself */
+ *  macros learnt by their source) answers on it as on the source itself. A forced break is `\\` (LaTeX's `\\` and its forms,
+ *  `\newline`, which is `\\`, and a cell's row end), but TeX's `\break` where the part states it so (El.cmd, El.bare): a
+ *  penalty, which takes no glue before it as `\\` does (B.tokens) */
 export function srcOfEl(id: string, el: El | undefined): string {
   if (!el) return `{=${id}}`
-  if (el.brk) return '\\\\'
+  if (el.brk) return el.cmd === 'break' && el.bare ? '\\break' : '\\\\'
   if (el.glue) return `\\${el.glue[2] ? 'hskip' : 'kern'} ${el.glue[0]}${el.glue[1]}`
   if (el.cmd !== undefined && el.bare) return `\\${el.cmd}`
   const key = `{=${el.same ?? id}}`
@@ -291,7 +293,12 @@ function readingsOf(
     // drawn as nothing, its glyphs may have been erased with the text group and never drawn again (2608.06007v1 p10's \sys,
     // "TensorCast"; 2608.25210v2 p7's algorithm under one line; 2402.10294v1's reference [1] without its year), so the unit is
     // unproven, left the original's whole)
-    if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
+    // (a symbol or a space of no ink TeX set before the unit's start, El.keep: the unit's edge, its ink the original's, kept
+    // with the label (a hand-made list's typed bullet, PDF-READER §18.83): drawn as nothing, in place. Drawn from its symbol, it
+    // stood beside the bullet that stays, "• •")
+    if (el?.keep && !ink.length && (cls === 'symbol' || cls === 'space'))
+      fixed = { mode: 'none', text: '', proof: true, inPlace: true }
+    else if (VISIBLE.has(cls) && cls !== 'symbol' && !ink.length && !textOnly)
       fixed =
         el?.text === ''
           ? { mode: 'none', text: '', proof: true, ...(MACRO_CLASSES.has(cls) ? {} : { empty: true as const }) }

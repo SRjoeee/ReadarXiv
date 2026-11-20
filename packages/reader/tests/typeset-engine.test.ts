@@ -154,8 +154,8 @@ describe("the reader's own typesetter (openReader's engine where the host gives 
     expect(at('chrome-extension://abcdefghijklmnop/pdf-reader.html?axt-borrow=0')).toBeUndefined()
     // (a paragraph of two lines at 10 pt whose translation is three characters too long for them, TeX's text block bottom 11 pt
     // under its last line and no ink under it: a third line at the pitch of 12 stands 1 pt past the bottom. The rule lays it
-    // there at its size, which the page's fill, the page's one paragraph, then grows to 1.1 on that line; off, it shrinks a
-    // step onto its two lines)
+    // there at its size, which the page's fill keeps: the page's one size does not grow, its one paragraph set on room it
+    // borrowed under its lines, no room of its own (§18.11); off, it shrinks a step onto its two lines)
     const id = 'a'.repeat(64)
     const member: Placed = {
       ord: 0,
@@ -188,7 +188,7 @@ describe("the reader's own typesetter (openReader's engine where the host gives 
       const m = lay(part, rowsOf([row])).members[0]!
       return [m.fit?.size, m.lines.map(([y]) => y)]
     }
-    expect(await laid('https://readarxiv.com/abs/1?to=de')).toEqual([11, [700, 688, 676]])
+    expect(await laid('https://readarxiv.com/abs/1?to=de')).toEqual([10, [700, 688, 676]])
     expect(await laid('https://readarxiv.com/abs/1?to=de&axt-borrow=0')).toEqual([9.75, [700, 688]])
   })
   it("sets the rule set's languages, Chinese by its script too", () => {

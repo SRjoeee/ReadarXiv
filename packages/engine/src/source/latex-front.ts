@@ -3085,10 +3085,7 @@ const joinSkips = <Q extends SourcePiece<WalkFile>>(a: TextPiece, b: TextPiece, 
  */
 export function textSymbolHere(char: string, before: readonly PieceLike[]): boolean {
   if (char.charCodeAt(0) < 0x80) return true
-  const begun = before.some(
-    (p) => (p.t === 'text' && /\S/.test(p.s ?? '')) || (p.t === 'ph' && firstWordPiece(p.src ?? '')),
-  )
-  if (!begun) return false
+  if (!textBegun(before)) return false
   if (!NOTE_MARKS.has(char)) return true
   for (let k = before.length - 1; k >= 0; k--) {
     const p = before[k]!
@@ -3099,6 +3096,28 @@ export function textSymbolHere(char: string, before: readonly PieceLike[]): bool
 }
 /** a piece as textSymbolHere reads one: its kind, its text, its source */
 type PieceLike = { t: string; s?: string; src?: string }
+/** whether a unit's text has begun after the pieces `before`: its first word come, as the start mark reads it (a text piece, or a
+ *  placeholder that is a first word, firstWordPiece) */
+const textBegun = (before: readonly PieceLike[]) =>
+  before.some((p) => (p.t === 'text' && /\S/.test(p.s ?? '')) || (p.t === 'ph' && firstWordPiece(p.src ?? '')))
+/**
+ * TeX's vertical commands: in horizontal mode TeX inserts \par before each and reads it again in vertical mode (the TeXbook,
+ * chapter 25, "Summary of horizontal mode", ⟨vertical command⟩; tex.web §1094, head_for_vmode): \vskip and its forms \vfil,
+ * \vfill, \vss, \vfilneg; \hrule; \unvbox, \unvcopy; \halign; \end, \dump. TeX's \end is LaTeX's \@@end (latex.ltx
+ * redefines \end as an environment's, which the walk reads as one) and \dump no document's, so the walk's are the first nine.
+ * LaTeX's \vspace is none (a \vadjust in a paragraph), nor \\, \newline, \vadjust: they stay inside it
+ */
+const VERTICAL_COMMANDS: ReadonlySet<string> = new Set([
+  'vskip',
+  'vfil',
+  'vfill',
+  'vss',
+  'vfilneg',
+  'hrule',
+  'unvbox',
+  'unvcopy',
+  'halign',
+])
 class Builder<F extends WalkFile = WalkFile> {
   declare file: F
   declare units: SourceUnit<F>[]
@@ -4306,6 +4325,12 @@ function frontValues(s: string, from: number, to: number, b: Builder, ctx: Ctx) 
  *  table ends the paragraph before the command and is walked as an environment's body is, the command's own source left
  *  as it stands (\\IfFileExists{…}{\\begin{figure}…}{}, whose caption stayed in English: 2608.28697) */
 function walkArgs(s: string, i: number, end: number, walked: readonly CallArg[], b: Builder, ctx: Ctx) {
+  // (each argument a group of TeX's: a caption type its \\captionsetup sets ends with it)
+  const groupType = b.captype
+  walkArgsIn(s, i, end, walked, b, ctx)
+  b.captype = groupType
+}
+function walkArgsIn(s: string, i: number, end: number, walked: readonly CallArg[], b: Builder, ctx: Ctx) {
   // content given as an optional argument is set apart from the paragraph: \\twocolumn[…], ICML's title block and a
   // CVPR teaser's figure across the page's top
   if (walked.some((a) => a.shape === '[' || holdsBlock(s.slice(a.start + 1, a.end - 1)))) {
@@ -4658,9 +4683,12 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
       endText()
+      // (a group is TeX's: a caption type its \\captionsetup sets ends with it)
+      const groupType = b.captype
       const id = b.open('{', i)
       walk(s, i + 1, e - 1, b, ctx)
       b.close(id, '}', e)
+      b.captype = groupType
       i = e
       continue
     }
@@ -5549,7 +5577,9 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
         continue
       }
     }
-    if (name === '\\') {
+    // (\\tabularnewline is `\\\\` in a table, latex.ltx's and array.sty's \\let\\tabularnewline\\\\ there: the end of the grid's row,
+    // as the grid reads it (tableGrid), the cell's unit ends with it. Anywhere else it is read as any command, as before)
+    if (name === '\\' || (name === 'tabularnewline' && b.cellMode && !inGridCell(b, s, i))) {
       const { args, end: e } = argsAfter(s, end, 1)
       const stop = args[0]?.kind === 'opt' ? e : end
       endText()
@@ -5582,6 +5612,18 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       b.ph(s.slice(i, call.end), i, call.end)
       i = call.end
       continue
+    }
+    // caption.sty's \\captionsetup{…type=<t>…}: its `type` option (\\setcaptiontype, whose \\caption@settype sets \\@captype) is the
+    // type of the captions after it in its environment or group, the counter they step and the name their label prints, as
+    // \\captionof's first argument is (`b.captype`); the body around it is read as before, and the command is kept as any other
+    // below. One with an optional argument (\\captionsetup[figure]{…}) sets a type's own options, never the type
+    if (name === 'captionsetup') {
+      const opt = argsAfter(s, end, 1).args[0]
+      const ty =
+        opt?.kind === 'req'
+          ? /(?:^|,)\s*type\*?\s*=\s*([a-z][a-z0-9]*)\s*(?=,|$)/.exec(s.slice(opt.start + 1, opt.end - 1))
+          : null
+      if (ty) b.captype = ty[1]
     }
     // any other command: its arguments as the role table reads them (commandArgs) — its text and a box's content among
     // them walked (walkArgs), the rest kept with it —, or with every adjacent argument where the table does not know it
@@ -5691,6 +5733,12 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       if (m) e += m[0].length
     }
     endText()
+    // (a vertical command where the unit's text has begun ends the paragraph TeX is setting, as \par does (VERTICAL_COMMANDS):
+    // the unit ends before it, and it is read again as the next one's head, which the start mark passes over, its ink the
+    // original's. Read inside the unit, 2610.21765v1 p3's `{\bf Protocol …} \vspace{…} \hrule \vspace{…} \textbf{Procedure}` was one
+    // unit of two of TeX's paragraphs, the rule between them drawn as an inline element of its translation; before the text, as
+    // the rules over that title, nothing ends. A name the paper defines is its own command)
+    if (VERTICAL_COMMANDS.has(name) && !ctx.macros.has(name) && textBegun(b.cur?.pieces ?? [])) b.flush()
     b.ph(s.slice(i, e), i, e)
     // a command with a letter name eats the following spaces in TeX; keep them with it
     i = e

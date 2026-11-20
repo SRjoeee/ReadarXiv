@@ -24,11 +24,19 @@ const worse = (flag: string, unit: string, original: unknown, today: unknown, v2
   nearer: 'today',
   worse: true,
 })
-type Ctx = { rec: object; v2: object; laid?: object; unsqueezed?: object | null; todayCut?: ((key: string) => object | null) | null; todayWhy?: ((key: string) => string | null) | null }
+type Ctx = {
+  rec: object
+  v2: object
+  laid?: object
+  unsqueezed?: object | null
+  todayCut?: ((key: string) => object | null) | null
+  todayWhy?: ((key: string) => string | null) | null
+  unlaidOf?: ((key: string) => { kind: string; why: string } | null) | null
+}
 /** the pass over one page: its diffs as they come out (each worse or covered, by which ruling) */
 const judged = (p: { diffs: Diff[]; units?: object[]; figurePairs?: [number, string][]; pastRoom?: object }, c: Ctx) => {
   const page = { pair: 'p-zh', page: N, worse: 0, units: [], figurePairs: [], ...p }
-  rulingsPass([page], { recOf: () => c.rec, v2: c.v2, laid: c.laid ?? {}, unsqueezed: c.unsqueezed ?? null, todayCut: c.todayCut ?? null, todayWhy: c.todayWhy ?? null }, recount)
+  rulingsPass([page], { recOf: () => c.rec, v2: c.v2, laid: c.laid ?? {}, unsqueezed: c.unsqueezed ?? null, todayCut: c.todayCut ?? null, todayWhy: c.todayWhy ?? null, unlaidOf: c.unlaidOf ?? null }, recount)
   return { page, out: page.diffs.map((d) => [d.unit, d.worse, d.covered ?? null]) }
 }
 const rec = (today: object = {}, v2: object = {}, px: object = {}) => ({ page: N, today: { units: [], crops: [], ...today }, v2: { units: [], crops: [], ...v2 }, px })
@@ -766,6 +774,25 @@ describe('CU: a cell that cannot be drawn stays the original by itself; today ke
   it('not a cell v2 lays past the block or leaves for no failure of its own (no row): worse', () => {
     expect(column({ member: (ord) => (ord === 170 ? { fit: { size: 9, lead: 1.2, over: 3.5 } } : {}) })).toEqual([true, null, null])
     expect(column({ member: (ord) => (ord === 174 ? { state: 'none' } : {}) })).toEqual([true, null, null])
+  })
+  it("a cell the prepare left unlocated (no member of the part, its dump's unit `unlaid`) stays the original's by itself: covered by CU (M11)", () => {
+    // (2610.40576v1 p17 t240: the prepare states the cell `unlaid`, "unlocated: text past its source"; no Page member, no facts,
+    // no join of v2's: its state read from the candidate's own statement, joined to today's unit by its id)
+    const gone = (o: O & { unlaid?: Record<string, { kind: string; why: string }> }) => {
+      const c = ctx(o)
+      const v2 = c.v2 as { today: Record<number, object>; facts: Record<number, { members: { ord: number }[] }>; pages: Record<number, { members: { ord: number }[] }> }
+      delete v2.today[174]
+      v2.facts[N]!.members = v2.facts[N]!.members.filter((m) => m.ord !== 174)
+      v2.pages[N]!.members = v2.pages[N]!.members.filter((m) => m.ord !== 174)
+      const d = { ...worse('groups', 'group 9:c0', 'whole', 'original', 'mixed'), cells: ['t170', 't173', 't174'], asOriginal: { today: ['t170', 't173', 't174'], v2: ['t173', 't174'] } } as Diff
+      const { page: p } = judged({ diffs: [d], units: unitsOf([170, 173]) }, { ...c, unlaidOf: (key) => o.unlaid?.[key] ?? null })
+      const x = (p.diffs as (Diff & { coveredSays?: string })[])[0]!
+      return [x.worse, x.covered ?? null, x.coveredSays ?? null]
+    }
+    expect(gone({ unlaid: { t174: { kind: 'cell', why: 'unlocated: text past its source' } } })).toEqual([false, 'CU', "its cells t173, t174 the original's by themselves (unfit, unlocated), t170 laid; today withheld the group for them"])
+    // (no statement of it, or one of no failure of its own: not this rule's; the group stays worse)
+    expect(gone({})).toEqual([true, null, null])
+    expect(gone({ unlaid: { t174: { kind: 'cell', why: 'content difference' } } })).toEqual([true, null, null])
   })
 })
 
