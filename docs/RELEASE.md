@@ -19,9 +19,9 @@ The release commit is made **on the branch, before the merge**, so that the tree
 5. A GitHub release for the tag, with the archive attached and the changelog section as its notes.
 6. The Chrome Web Store submission (below), with the privacy policy URL. Until it is listed, the README's "load unpacked" path is the install.
 
-**The reader's entries online, before the first release of the rebuilt reader** (lane V5, 2026-11-13): run on a staging
-build (`pnpm build:staging`, the rebuilt reader by default) against a staging that serves the release's round, by the
-coordinator, with the owner's word for the translator calls; once each, `AXT_E2E_ONLINE=1`, stopping at the first sign
+**The reader's entries online, before the first release of the rebuilt reader** (2026-11-13): run on a staging
+build (`pnpm build:staging`, the rebuilt reader by default) against a staging that serves the release's round, with the
+maintainer's word for the translator calls; once each, `AXT_E2E_ONLINE=1`, stopping at the first sign
 arXiv or staging slows or refuses (`tests/e2e/lib/online.mjs` refuses a build that talks to production). Not run on the
 rebuild line, where staging serves another round behind a tester gate a fresh profile does not pass:
 
