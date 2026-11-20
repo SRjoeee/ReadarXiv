@@ -8,7 +8,11 @@ import { bare, judgeJoined, joinedOf, mathDrawn, measureFidelity, mutualBest as 
 import { measureBlind, raisedOver } from './blind.mjs'
 import { unitClass } from '../../../packages/engine/src/locate/content-classes.ts'
 import { litColumn, paintedEntries } from './paint.mjs'
-import { halfLeadingOf } from '../../../packages/reader/src/compose/highlight.ts'
+// (the reader's highlight module whole: the measure reads each pad by the function the reader states for it, padsOf where it
+// states one, M13 below)
+import * as readerHighlight from '../../../packages/reader/src/compose/highlight.ts'
+
+const { halfLeadingOf } = readerHighlight
 import { sentencesPaired } from './sentences.mjs'
 
 const r2 = (v) => (v === null || v === undefined ? v : Math.round(v * 100) / 100)
@@ -1293,12 +1297,32 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   // `band`))
   const leadOf = (side) => halfLeadingOf((v2.pages[n]?.members ?? []).map((m) => (m.lit?.dir ? [] : (m.lit?.[side] ?? []))))
   const halfLead = { right: leadOf('right'), left: leadOf('left') }
-  /** v2's boxes of a member on a side as its reader paints them (its sentences' and its kept ink's) */
-  // (a turned member's boxes are in its run's frame, Laid.lit's dir: first the page's box each stands in, then the paint)
-  const paintedV2 = (lit, side) =>
-    [...(lit?.[side] ?? []).flat(), ...(lit?.own ?? []).flatMap(([, b]) => b)]
+  // (each member's pads over and under its rows on a pane as the reader computes them, read from the reader's own function:
+  // padsOf where the reader states one (its member's own leading, never past half the room to the next block: the reader's
+  // compose/highlight.ts from round c4's highlight fix), else the page's half leading, the one pad the reader paints every row
+  // with; a number, or a box's [under, over], as the reader's paintRows takes either. Never a second model of the reader's
+  // padding: what it states, the measure reads)
+  const paneOf = (side) => (v2.pages[n]?.members ?? []).filter((m) => m.lit && !m.lit.dir).map((m) => ({ ord: m.ord, per: m.lit[side] ?? [], own: m.lit.own ?? [] }))
+  const panes = { right: paneOf('right'), left: paneOf('left') }
+  const padsMemo = new Map()
+  const padsOn = (ord, side) => {
+    const k = `${side}:${ord}`
+    if (!padsMemo.has(k)) padsMemo.set(k, typeof readerHighlight.padsOf === 'function' ? readerHighlight.padsOf(panes[side], ord, halfLead[side]) : halfLead[side])
+    return padsMemo.get(k)
+  }
+  const padOf = (pads, b) => (typeof pads === 'number' ? [pads, pads] : pads(b))
+  /** v2's boxes of a member (`ord`) on a side as its reader paints them (its sentences' and its kept ink's) */
+  // (a turned member's boxes are in its run's frame, Laid.lit's dir: first the page's box each stands in, then the paint, by the
+  // page's half leading, as the reader pads a turned member)
+  const paintedV2 = (lit, side, ord) => {
+    const pads = lit?.dir ? halfLead[side] : padsOn(ord, side)
+    return [...(lit?.[side] ?? []).flat(), ...(lit?.own ?? []).flatMap(([, b]) => b)]
       .map((b) => (lit?.dir ? pageBoxOf(b, lit.dir) : b))
-      .map((b) => [b[0] - PAINT_PAD, b[1] - halfLead[side], b[2] + PAINT_PAD, b[3] + halfLead[side]])
+      .map((b) => {
+        const [under, over] = lit?.dir ? [halfLead[side], halfLead[side]] : padOf(pads, b)
+        return [b[0] - PAINT_PAD, b[1] - under, b[2] + PAINT_PAD, b[3] + over]
+      })
+  }
   /** the original's lines of part member `ord` on this page, as boxes (the part's line boxes on A) */
   const origBoxes = (ord) => (facts.get(ord)?.lines ?? []).filter((l) => l[0] === n).map((l) => ({ x0: l[2], y0: Math.min(l[5], l[6]), x1: l[3], y1: Math.max(l[5], l[6]) }))
   /** a drawn line's band a column at a time where it stands in two or more of the paper's columns and its unit's lines on A each
@@ -1331,13 +1355,12 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
     const left = ords.flatMap(origBoxes)
     const tb = rec.today.litBoxes[key.slice(1)] ?? { right: [], left: [] }
-    const vbs = ords.map((o) => laidV2.get(o)?.lit)
     const t = missOf(T.get(key), left, tb.right, tb.left),
       v = missOf(
         V.get(key),
         left,
-        vbs.flatMap((vb) => paintedV2(vb, 'right')),
-        vbs.flatMap((vb) => paintedV2(vb, 'left')),
+        ords.flatMap((o) => paintedV2(laidV2.get(o)?.lit, 'right', o)),
+        ords.flatMap((o) => paintedV2(laidV2.get(o)?.lit, 'left', o)),
       )
     const dt = t.r + t.l,
       dv = v.r + v.l
@@ -1361,9 +1384,8 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     if (T.has(key)) hl.unlit++
     else if (both) hl.figures++
     else hl.alone++
-    const lits = ords.map((o) => laidV2.get(o)?.lit)
-    const rb = lits.flatMap((lit) => paintedV2(lit, 'right')),
-      lb = lits.flatMap((lit) => paintedV2(lit, 'left'))
+    const rb = ords.flatMap((o) => paintedV2(laidV2.get(o)?.lit, 'right', o)),
+      lb = ords.flatMap((o) => paintedV2(laidV2.get(o)?.lit, 'left', o))
     if (!rb.length && !lb.length) continue
     const m = missOf(ls, ords.flatMap(origBoxes), rb, lb)
     const name = `${key} ${facts.get(ord)?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
@@ -1416,7 +1438,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
   hl.fillsV2 = 0
   for (const key of new Set([...todays, ...V.keys()])) {
     const ords = ordsOfKey.get(key) ?? []
-    const lits = ords.map((o) => laidV2.get(o)?.lit).filter((lit) => lit && !lit.dir)
+    const lits = ords.map((o) => [o, laidV2.get(o)?.lit]).filter(([, lit]) => lit && !lit.dir)
     if (!lits.length) continue
     const name = `${key} ${facts.get(ords[0])?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
     // (another unit's lines: none of the key's own members', which the join by pieces makes one unit, nor the run-in that leads
@@ -1428,10 +1450,10 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const tShapes = (side) => (!tb ? [] : tb.by ? (tb[`${side}By`] ?? []) : [tb[side] ?? []])
     const dt = filled(tShapes('left'), onA) + filled(tShapes('right'), displaysHere)
     const dv = lits.reduce(
-      (s, lit) =>
+      (s, [o, lit]) =>
         s +
-        filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, halfLead.left), onA, litColumn(lit, 'left')) +
-        filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, halfLead.right), displaysHere, litColumn(lit, 'right')),
+        filled(paintedEntries(lit, 'left', others.left, PAINT_PAD, padsOn(o, 'left')), onA, litColumn(lit, 'left')) +
+        filled(paintedEntries(lit, 'right', others.right, PAINT_PAD, padsOn(o, 'right')), displaysHere, litColumn(lit, 'right')),
       0,
     )
     hl.fillsToday += dt

@@ -359,6 +359,33 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       expect(filledBlocks(fills({}))).toMatchObject([{ unit: 'p31 para', worse: true }])
     })
   })
+  describe("a lit row's pads are the reader's own, whatever the reader states them as (M13)", () => {
+    // (the reader pads a row over and under: by the page's half leading, or, where it states padsOf, by its member's own leading,
+    // never past half the room to the next block. The measure reads the reader's function, never a model of its own: a member
+    // of one row is padded by the page's half leading either way. Here a paragraph of rows 4 pt apart makes it 2 pt)
+    const body = { ord: 40, state: 'laid', lines: [], lit: { left: [[[71, 600, 301, 608], [71, 588, 301, 596], [71, 576, 301, 584]]], right: [[[71, 600, 301, 608], [71, 588, 301, 596], [71, 576, 301, 584]]], own: [] } }
+    const v2With = (lit: object, extra: object[] = []) =>
+      v2Of({
+        members: [body, { ord: 41, state: 'laid', lines: [], lit: { left: [], right: [], own: [], ...lit } }, ...extra],
+        facts: [
+          { ord: 40, kind: 'para', align: 'j', style: { size: 6 }, lines: [factLine(72, 300, 601, 6), factLine(72, 300, 589, 6), factLine(72, 300, 577, 6)] },
+          { ord: 41, kind: 'heading', align: 'l', style: { size: 10 }, lines: [factLine(72, 300, 400)] },
+          { ord: 42, kind: 'para', align: 'j', style: { size: 10 }, lines: [factLine(72, 300, 300)], els: [['3', 'display', [[100, 352, 250, 372, 360]], 1, 0, 0, 1, 0]] },
+        ],
+      })
+    const page = (lines = [line(400)]) => rec({ v2: { units: [{ id: 41, lines }], lit: [41] } })
+    const covers = (p: { diffs: { flag: string; what?: string }[] }) => highlights(p).filter((d) => !/fill or bridge/.test((d as { what?: string }).what ?? ''))
+    const fills = (p: { diffs: { flag: string; what?: string }[] }) => highlights(p).filter((d) => /fill or bridge/.test((d as { what?: string }).what ?? ''))
+    it("a one-row member's box 1 pt short of its line, padded by the page's half leading (2 pt): covered", () => {
+      expect(covers(measure(v2With({ right: [[[71, 399, 301, 407]]], left: [[[71, 397, 301, 409]]] }), page()))).toEqual([])
+    })
+    it('a row left uncovered is still unlit', () => {
+      expect(covers(measure(v2With({ right: [[[71, 399, 301, 407]]], left: [[[71, 397, 301, 409]]] }), page([line(400), line(380)])))).toMatchObject([{ unit: 'p41 heading', worse: true }])
+    })
+    it('a lit shape that covers the block below (a display) still fills it', () => {
+      expect(fills(measure(v2With({ right: [[[71, 397, 301, 409]], [[71, 340, 301, 396]]], left: [[[71, 397, 301, 409]]] }), page()))).toMatchObject([{ unit: 'p41 heading', worse: true }])
+    })
+  })
   describe('a figure text both translate, matched by its original box (today has no highlight on figure texts)', () => {
     it('v2 without boxes: equal', () => {
       expect(highlights(measure(fig({}), rec({ today: todayFig, v2: v2Fig }), prepFig))).toEqual([])
