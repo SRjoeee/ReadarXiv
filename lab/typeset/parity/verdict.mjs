@@ -1266,12 +1266,6 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
       ? null
       : { original: rec.original.bordered, today: rec.today.shownOriginal ? rec.original.bordered : rec.today.bordersDrawn, v2: rec.v2.bordersDrawn }
   if (B) judge('borders', null, "link borders missing against the original's bordered annotations", B.original, { value: B.today, d: Math.max(0, B.original - B.today) }, { value: B.v2, d: Math.max(0, B.original - B.v2) }, 0.5)
-  // (which of each side's annotations or anchors are bordered, where the page states it whole: all of them or none (the drawing
-  // counts its bordered ones, never which); a page bordered in part, null: the paper's pass reads them, bordersPass)
-  if (B && out.links) {
-    const whole = (k, list) => (k === 0 ? 'none' : k === list.length ? 'all' : null)
-    out.bordersOf = { original: whole(B.original, out.links.original), today: whole(B.today, out.links.today), v2: whole(B.v2, out.links.v2) }
-  }
   // (the highlight is a feature of today's for the units today highlights: there each side's sentence boxes are judged by the
   // lines they leave uncovered, its drawn lines on the right and its original's lines on arXiv's page on the left, and v2 is
   // worse where it leaves more of them than today does (today's own misses are not held against v2), nearer where fewer.
@@ -1655,74 +1649,6 @@ export function sharePass(pages, recount) {
       d.nearer = 'ruling'
       d.ruling = SHARE_RULING
     }
-    recount(p)
-  }
-}
-/**
- * The link borders of a unit over two pages or more counted over them all (the paper's pass), as linksPass counts its links: a
- * translation moves a cited word over a page break with its text, its border with it (2608.27728v1 t57 over pages 10 and 11, a
- * citation A sets on page 10 drawn by v2 on page 11, read as a border missing on page 10). Each side's bordered annotations or
- * anchors of the unit (measurePage's `links`, by the unit each stands on), counted over its pages, judged on its first; every
- * other one on its page. A border is read off the page's own statement (`bordersOf`: all of the page's annotations or anchors
- * bordered, or none; the drawing counts them, never which): a unit with a page bordered in part, on any side, is left as
- * measured, and so are the pages it stands on. Runs before linksPass, which drops the pages' `links`
- */
-export function bordersPass(pages, recount) {
-  try {
-    bordersOver(pages, recount)
-  } finally {
-    for (const p of pages) delete p.bordersOf
-  }
-}
-function bordersOver(pages, recount) {
-  const ps = pages.filter((p) => !p.error && p.links && p.bordersOf)
-  const sides = ['original', 'today', 'v2']
-  const at = new Map()
-  for (const p of ps)
-    for (const s of sides)
-      for (const [, k] of p.links[s]) {
-        if (!k) continue
-        if (!at.has(k)) at.set(k, new Set())
-        at.get(k).add(p.page)
-      }
-  const byPage = new Map(ps.map((p) => [p.page, p]))
-  const known = (p) => !!p && sides.every((s) => p.bordersOf[s] !== null)
-  // (a unit over two pages or more, every page of it known on every side)
-  const across = new Set([...at].filter(([, pg]) => pg.size > 1 && [...pg].every((n) => known(byPage.get(n)))).map(([k]) => k))
-  if (!across.size) return
-  const first = (k) => Math.min(...at.get(k))
-  const bordered = (p, s, keep) => (p.bordersOf[s] === 'all' ? p.links[s].filter(([, k]) => keep(k)).length : 0)
-  for (const p of ps) {
-    const mine = [...across].filter((k) => first(k) === p.page)
-    const touched = sides.some((s) => p.links[s].some(([, k]) => k && across.has(k)))
-    if (!touched && !mine.length) continue
-    const rest = (s) => bordered(p, s, (k) => !(k && across.has(k)))
-    const sum = { original: rest('original'), today: rest('today'), v2: rest('v2') }
-    sum.dt = Math.max(0, sum.original - sum.today)
-    sum.dv = Math.max(0, sum.original - sum.v2)
-    for (const k of mine) {
-      const over = (s) => [...at.get(k)].reduce((n, pg) => n + bordered(byPage.get(pg), s, (x) => x === k), 0)
-      const o = over('original'),
-        t = over('today'),
-        v = over('v2')
-      sum.original += o
-      sum.today += t
-      sum.v2 += v
-      sum.dt += Math.max(0, o - t)
-      sum.dv += Math.max(0, o - v)
-    }
-    p.diffs = p.diffs.filter((d) => d.flag !== 'borders')
-    if (Math.abs(sum.dv - sum.dt) > 0.5)
-      p.diffs.push({
-        flag: 'borders',
-        unit: null,
-        what: "link borders missing against the original's bordered annotations (a unit over two pages or more counted over them all, on its first page)",
-        original: sum.original,
-        today: { value: sum.today, off: sum.dt },
-        v2: { value: sum.v2, off: sum.dv },
-        nearer: sum.dv < sum.dt ? 'v2' : 'today',
-        worse: sum.dv > sum.dt,
-      })
     recount(p)
   }
 }
