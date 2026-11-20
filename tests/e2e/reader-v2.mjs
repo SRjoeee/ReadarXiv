@@ -609,12 +609,27 @@ try {
     // (lib/settles.mjs): three hosted runs of round c4 printed the check above and then nothing for 43 minutes, until the job's
     // limit cancelled them. An extension page whose main thread does not come back holds an evaluate on any of them for good)
     const readers = { a, b, c, e }
-    // (each step's time, and the one that stands named with when it was sent: "closing e", a, b and c's closes beside it)
+    // (each step's time, and the one that stands named with when it was sent: "closing e", the steps before it beside it)
     const took = []
     const stalled = (what, at) => () => stall.report(readers, () => `the step: ${what}; the steps before it: ${took.join(', ') || 'none'}; ${known(readers)}`, note, { what, at })
-    const timed = async (what, step) => { const at = Date.now(); await settles(what, step, { tell: stalled(what.replace(/^reader (\w) closed$/, 'closing $1'), at), tellMs: 120_000 }); took.push(`${what} in ${Date.now() - at} ms`) }
-    await timed('the settings put back (patch on reader e)', () => patch(e, { mode: 'side', pdfReader: { original: false, sync: true }, reading: { openIn: 'new-tab' } }))
-    for (const [name, page] of Object.entries(readers)) await timed(`reader ${name} closed`, () => page.close())
+    const timed = async (what, step) => { const at = Date.now(); const value = await settles(what, step, { tell: stalled(what.replace(/^reader (\w) closed$/, 'closing $1'), at), tellMs: 120_000 }); took.push(`${what} in ${Date.now() - at} ms`); return value }
+    // (a reader is closed only once it shows the configuration storage holds, its document complete: a reader whose language
+    // reads stale when its settings land reloads itself rather than land them (src/shared/surface-config.ts `read`,
+    // `reloadWhenFree`), and a close sent while an extension page reloaded itself was lost on the hosted runner, the tab never
+    // closed (round c4). Its surface's landed configuration is the product's own word that the last write reached it. The
+    // settings are put back after the closes, through the extension's worker, when no reader is open to react to them)
+    const inStorage = await worker.evaluate(() => chrome.storage.local.get('config').then(r => r.config))
+    const want = { mode: inStorage.mode, original: inStorage.pdfReader.original, sync: inStorage.pdfReader.sync, openIn: inStorage.reading.openIn, target: inStorage.targetLanguage }
+    const shows = page => page.waitForFunction(w => {
+      const s = window.__reader?.controller?.getState().settings
+      return document.readyState === 'complete' && !!s && s.mode === w.mode && s.pdfReader.original === w.original && s.pdfReader.sync === w.sync && s.reading.openIn === w.openIn && s.targetLanguage === w.target
+    }, want, { timeout: 15_000 }).then(() => true, () => false)
+    for (const [name, page] of Object.entries(readers)) {
+      if (!(await timed(`reader ${name} shows the stored settings`, () => shows(page)))) note(`reader ${name} did not show the stored settings in 15 s: closed as it is`)
+      await timed(`reader ${name} closed`, () => page.close())
+    }
+    await timed('the settings put back (through the extension\'s worker, no reader open)', () => setConfig({ mode: 'side', pdfReader: { original: false, sync: true }, reading: { openIn: 'new-tab' } }))
+    note(`the readers' end: ${took.join(', ')}`)
     await stall.end()
   }
 
