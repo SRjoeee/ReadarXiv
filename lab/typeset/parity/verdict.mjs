@@ -1421,7 +1421,7 @@ export function measurePage(pair, v2, rec, { prepByOrd, todayOf, turned, led, to
     const name = `${key} ${facts.get(ords[0])?.kind ?? orig.get(key)?.kind ?? ''}`.trim()
     // (another unit's lines: none of the key's own members', which the join by pieces makes one unit, nor the run-in that leads
     // one of them or follows it (`led`: a bound name's lead, Placed.join), whose text its translation says: a proof's "Proof.",
-    // which the translation's "证明." begins with, 2610.21377v1 p35)
+    // which the translation begins with in the target's word, 2610.21377v1 p35)
     const own = new Set([...ords, ...ords.map((o) => led?.get(o)).filter((o) => o !== undefined), ...[...(led ?? new Map())].filter(([, h]) => ords.includes(h)).map(([f]) => f)])
     const onA = [...displaysHere, ...linesOnA.filter((b) => !own.has(b.ord))]
     const tb = litT.has(key) ? rec.today.litBoxes[key.slice(1)] : null
@@ -2194,7 +2194,7 @@ function covered(b, boxes, tol = NEAR.positionMin) {
 
 /** a CJK character (its punctuation and the full-width forms among them), whose ink stays inside its face's em box: 0.12 of the
  *  size under the baseline (the typesetter's box of a CJK token, packages/typeset/src/emit/sentences.ts CJK_DESC) */
-const CJK_INK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-￯ー]/u
+const CJK_INK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff00-\uffef\u30fc]/u
 function band(l) {
   // (a turned line's band as a level line's, turned with it (measure-dom's `band`); a raw file before it, its box)
   if (l.rot && l.band) return { x0: l.band[0], y0: l.band[1], x1: l.band[2], y1: l.band[3] }

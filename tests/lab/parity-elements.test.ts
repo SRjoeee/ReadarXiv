@@ -50,7 +50,7 @@ describe('elements: an element TeX broke over lines is read a line at a time (M1
   const cell = { ord: 50, kind: 'cell', lines: [factLine(75, 134.9, 578.92, 6.97), factLine(75, 134.9, 570.95, 6.97)], els: [cite] }
   const runs = [run(95.2, 124.2, 578.92, 6.97, '(Ada and Bo,'), run(75, 134.9, 570.95, 6.97, '2024; Cy et al., 2025)')]
   it('a citation over two lines, each its line\'s baseline at the text\'s size, holds no script: none set flat', () => {
-    const drawn = [drawnLine(75, 134.9, 578.92, '方法 (Ada and Bo,', 6.97), drawnLine(75, 134.9, 570.95, '2024; Cy et al., 2025)', 6.97)]
+    const drawn = [drawnLine(75, 134.9, 578.92, '\u65b9\u6cd5 (Ada and Bo,', 6.97), drawnLine(75, 134.9, 570.95, '2024; Cy et al., 2025)', 6.97)]
     expect(elements(measure(cell, rec({ runs, v2: { units: [{ id: 50, lines: drawn }] } })))).toEqual([])
   })
   it('a script in one of its lines drawn flat is still set flat (the defect the flag exists for)', () => {
@@ -58,20 +58,20 @@ describe('elements: an element TeX broke over lines is read a line at a time (M1
     const formula = ['6', 'math', [[75, 600, 160, 612, 602], [75, 586, 120, 598, 588]], 2, 1, 0, 0, 0, '$a + b^{2025}$']
     const para = { ord: 51, kind: 'para', lines: [factLine(75, 300, 602), factLine(75, 300, 588)], els: [formula] }
     const scripted = [run(75, 160, 602, 9.96, 'a +'), run(75, 85, 588, 9.96, 'b'), run(85, 100, 591.5, 6.97, '2025', 2)]
-    const flat = [drawnLine(75, 300, 602, '于是 a +'), drawnLine(75, 300, 588, 'b2025 成立')]
+    const flat = [drawnLine(75, 300, 602, '\u4e8e\u662f a +'), drawnLine(75, 300, 588, 'b2025 \u6210\u7acb')]
     const [d] = elements(measure(para, rec({ runs: scripted, v2: { units: [{ id: 51, lines: flat }] } })))
     expect(d).toMatchObject({ unit: 't51 para', worse: true, v2: { value: 'element 6: its scripts or sizes set flat as text', off: 1 } })
     // (and on one line, the script beside its nucleus)
     const one = ['7', 'math', [[75, 600, 120, 612, 602]], 1, 1, 0, 0, 0, '$x^{2}$']
     const line = { ord: 52, kind: 'para', lines: [factLine(75, 300, 602)], els: [one] }
-    const [e] = elements(measure(line, rec({ runs: [run(75, 85, 602, 9.96, 'x'), run(85, 90, 605.5, 6.97, '2', 2)], v2: { units: [{ id: 52, lines: [drawnLine(75, 300, 602, '于是 x2 成立')] }] } })))
+    const [e] = elements(measure(line, rec({ runs: [run(75, 85, 602, 9.96, 'x'), run(85, 90, 605.5, 6.97, '2', 2)], v2: { units: [{ id: 52, lines: [drawnLine(75, 300, 602, '\u4e8e\u662f x2 \u6210\u7acb')] }] } })))
     expect(e).toMatchObject({ worse: true, v2: { off: 1 } })
   })
   it('an element whose two lines each hold a script, drawn flat, is one element set flat', () => {
     const formula = ['6', 'math', [[75, 600, 160, 612, 602], [75, 586, 120, 598, 588]], 2, 1, 0, 0, 0, '$a^{2} + b^{3}$']
     const para = { ord: 53, kind: 'para', lines: [factLine(75, 300, 602), factLine(75, 300, 588)], els: [formula] }
     const runs = [run(75, 85, 602, 9.96, 'a'), run(85, 90, 605.5, 6.97, '2', 2), run(90, 100, 602, 9.96, '+'), run(75, 85, 588, 9.96, 'b'), run(85, 90, 591.5, 6.97, '3', 2)]
-    const flat = [drawnLine(75, 300, 602, '于是 a2 +'), drawnLine(75, 300, 588, 'b3 成立')]
+    const flat = [drawnLine(75, 300, 602, '\u4e8e\u662f a2 +'), drawnLine(75, 300, 588, 'b3 \u6210\u7acb')]
     const [d] = elements(measure(para, rec({ runs, v2: { units: [{ id: 53, lines: flat }] } })))
     expect(d).toMatchObject({ worse: true, v2: { off: 1 } })
   })
@@ -83,7 +83,7 @@ describe('elements: a glyph its font maps to no character is no script (M2)', ()
   const cite = ['12', 'cite', [[260, 634, 324, 643, 636.17]], 1, 1, 0, 0, 0, '\\citet{demo2024}']
   const para = { ord: 85, kind: 'theorem', lines: [factLine(140.6, 504, 636.17)], els: [cite] }
   const line = run(140.6, 504, 636.17, 9.96, 'as in the convention of Demo et al. [5], and so')
-  const drawn = [drawnLine(140.6, 504, 636.17, '按照 Démo et al. [5] 的约定')]
+  const drawn = [drawnLine(140.6, 504, 636.17, '\u6309\u7167 Démo et al. [5] \u7684\u7ea6\u5b9a')]
   it('an accent PDF.js reads as a control character holds no script', () => {
     const runs = [line, run(279.1, 283.7, 633.34, 9.96, '\x01', 1)]
     expect(elements(measure(para, rec({ runs, v2: { units: [{ id: 85, lines: drawn }] } })))).toEqual([])
@@ -119,7 +119,7 @@ describe("elements: today's element of v2's is the same occurrence of its source
       { k: 71, kind: 'macro', segs: [seg(third, 72)], flags: [] },
     ],
   })
-  const drawn = { units: [{ id: 237, lines: [drawnLine(72, 540, 601, '标记 ￼ 和 ￼ 和')] }] }
+  const drawn = { units: [{ id: 237, lines: [drawnLine(72, 540, 601, '\u6807\u8bb0 ￼ \u548c ￼ \u548c')] }] }
   const runs = [run(72, 540, 601, 9.96, 'marks and and')]
   it("v2's third mark, on the next page on both, is not today's second mark drawn on this page", () => {
     expect(elements(measure(para, rec({ runs, v2: drawn }), [today(N + 1)]))).toEqual([])

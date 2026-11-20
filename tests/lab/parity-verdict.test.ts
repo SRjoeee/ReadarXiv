@@ -282,11 +282,11 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
       return v2Of({ members: [{ ord: 50, state: 'laid', lines: [], lit: { left: [[[99.5, 297, 240.5, 313]]], right: [[b]], own: [] } }], facts: [{ ord: 50, kind: 'heading', align: 'l', style: { size: s }, lines: [factLine(100, 240, 300, s)] }] })
     }
     it("CJK characters alone, boxed by the em box: covered", () => {
-      expect(highlights(measure(heading(-0.12), rec({ v2: cjk('入门：矩阵与向量积规则') })))).toEqual([])
+      expect(highlights(measure(heading(-0.12), rec({ v2: cjk('\u5165\u95e8\uff1a\u77e9\u9635\u4e0e\u5411\u91cf\u79ef\u89c4\u5219') })))).toEqual([])
     })
     it('a box short of the line, or a line with a character that reaches lower (a Latin descender), boxed so: not covered', () => {
-      expect(highlights(measure(heading(0.1), rec({ v2: cjk('入门：矩阵与向量积规则') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
-      expect(highlights(measure(heading(-0.12), rec({ v2: cjk('入门：Matrix 规则') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
+      expect(highlights(measure(heading(0.1), rec({ v2: cjk('\u5165\u95e8\uff1a\u77e9\u9635\u4e0e\u5411\u91cf\u79ef\u89c4\u5219') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
+      expect(highlights(measure(heading(-0.12), rec({ v2: cjk('\u5165\u95e8\uff1aMatrix \u89c4\u5219') })))).toMatchObject([{ unit: 'p50 heading', worse: true }])
     })
   })
   describe("a unit of today's that is two members of v2's (the join by pieces): both members' boxes read (M6)", () => {
@@ -336,7 +336,7 @@ describe("the highlight: today's feature for the units today highlights; elsewhe
   })
   describe("a unit's lit shape over the name that leads it on A (a proof's \"Proof.\") fills no other block (M6)", () => {
     // (2610.21377v1 p35: the babel name "Proof." a member of its own, bound to the proof it leads (Placed.bound); the translation
-    // begins with "证明." and is lit whole, its shape on arXiv's page over the name's line too, which is the proof's own lead)
+    // begins with the name in the target's word and is lit whole, its shape on arXiv's page over the name's line too, which is the proof's own lead)
     const fills = (o: { led?: Record<number, number>; heading?: boolean }) =>
       measurePage(
         'p-zh',
