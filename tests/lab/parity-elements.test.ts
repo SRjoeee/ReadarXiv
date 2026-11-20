@@ -67,6 +67,14 @@ describe('elements: an element TeX broke over lines is read a line at a time (M1
     const [e] = elements(measure(line, rec({ runs: [run(75, 85, 602, 9.96, 'x'), run(85, 90, 605.5, 6.97, '2', 2)], v2: { units: [{ id: 52, lines: [drawnLine(75, 300, 602, '于是 x2 成立')] }] } })))
     expect(e).toMatchObject({ worse: true, v2: { off: 1 } })
   })
+  it('an element whose two lines each hold a script, drawn flat, is one element set flat', () => {
+    const formula = ['6', 'math', [[75, 600, 160, 612, 602], [75, 586, 120, 598, 588]], 2, 1, 0, 0, 0, '$a^{2} + b^{3}$']
+    const para = { ord: 53, kind: 'para', lines: [factLine(75, 300, 602), factLine(75, 300, 588)], els: [formula] }
+    const runs = [run(75, 85, 602, 9.96, 'a'), run(85, 90, 605.5, 6.97, '2', 2), run(90, 100, 602, 9.96, '+'), run(75, 85, 588, 9.96, 'b'), run(85, 90, 591.5, 6.97, '3', 2)]
+    const flat = [drawnLine(75, 300, 602, '于是 a2 +'), drawnLine(75, 300, 588, 'b3 成立')]
+    const [d] = elements(measure(para, rec({ runs, v2: { units: [{ id: 53, lines: flat }] } })))
+    expect(d).toMatchObject({ worse: true, v2: { off: 1 } })
+  })
 })
 
 describe('elements: a glyph its font maps to no character is no script (M2)', () => {

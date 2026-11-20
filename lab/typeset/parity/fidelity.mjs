@@ -609,10 +609,17 @@ export function measureFidelity(c) {
       if (runs) for (const b of boxes) if (scriptedOf(runs, [b])) pend('today', key, Number(key.slice(1)), e.k, [b])
     }
   }
+  // (an element is set flat once, however many of its lines a side draws flat: each line is read alone, the element counted once)
+  const flatSaid = new Set()
   for (const side of ['today', 'v2'])
     for (const { key, unit, rs, ks } of scripted[side].values()) {
       const lines = (rec[side].units ?? []).filter((u) => u.id === unit).flatMap((u) => u.lines)
-      for (const k of ks.slice(carriedOf(rs, lines, c.raisedOver))) note(side, key, `element ${k}: its scripts or sizes set flat as text`)
+      for (const k of ks.slice(carriedOf(rs, lines, c.raisedOver))) {
+        const said = `${side}\u0000${unit}\u0000${k}`
+        if (flatSaid.has(said)) continue
+        flatSaid.add(said)
+        note(side, key, `element ${k}: its scripts or sizes set flat as text`)
+      }
     }
   for (const side of ['today', 'v2']) for (const [key, ws] of wrong[side]) for (const w of ws) fault(side, 'elements', `${name(key)}: ${w}`)
   for (const key of new Set([...wrong.today.keys(), ...wrong.v2.keys()])) {
