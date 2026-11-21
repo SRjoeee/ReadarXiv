@@ -420,7 +420,7 @@ const R = {
     goToArxiv: '前往 arXiv', // S-R-20's action
     unreadable: '设置读取失败，当前使用默认设置', // S-R-21: the note while the settings cannot be read, as S-O-02 words it
     unreadableHint: '设置读取失败', // S-R-21: the tooltip's second thought on a control that needs them
-    facesLost: '部分字体加载失败，请刷新页面重试', // S-R-28: a face the translation is set in could not be had; the website's too
+    facesLost: '部分字体加载失败，恢复后会自动显示译文', // S-R-28: a face the translation is set in could not be had; the website's too
   },
 }
 

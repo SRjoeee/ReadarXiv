@@ -11,9 +11,14 @@
 // which cannot be told afterwards from the bare transform it leaves; the `oplist` intent only turns the queue optimizer off.
 //
 // WHAT. `liteWorkerSource(source)` takes the text of `pdfjs-dist/legacy/build/pdf.worker.mjs` (the host reads it; this module
-// imports nothing) and returns it with one guard added before that single `createImageData` call: a document opened with
-// `maxImageSize: NO_IMAGE_PIXELS` throws there, which the evaluator's own `.catch` turns into a null image (a few bytes) and a
-// recorded decode failure. The operator list is the same, bit for bit (spikes and tests/pdf-reader/pdf-lite.test.ts hold it). The
+// imports nothing) and returns it with one guard added before that single `createImageData` call: for a document opened with
+// `maxImageSize: NO_IMAGE_PIXELS` the image is resolved there, in place of its pixels, with a record of none (`data` empty) that
+// says whether its samples carry alpha (`alpha`: its /SMask, its /Mask, or alpha in its data, a JPX's /SMaskInData or a JPX of no
+// /ColorSpace, the PDFImage's own test of whether createImageData would give alpha: its smask, its mask, a DeviceRGBA colour
+// space), read from the image's dictionaries and a JPX's header, which PDFImage has read by then, never its samples: an image
+// painted after a figure's text covers it where every sample paints (ink.ts imageOpaque, PDF-READER §18.98). An image PDFImage
+// cannot read is a null image, by the evaluator's own `.catch`, as before. The operator list is the same, bit for bit (spikes and
+// tests/pdf-reader/pdf-lite.test.ts hold it). The
 // opt-in is per document: Number.MAX_SAFE_INTEGER is "no image is larger than this" to a stock worker, and the patched worker
 // applies the guard to a document that passes it and to no other, so a document opened without it in the same process decodes as
 // ever. Masks and small inline images are decoded and awaited inside the operator list's own stream; they are not touched.
@@ -51,7 +56,8 @@
 // BUMPING PDFJS: the anchor is one line of the worker. Install the new version, run
 // tests/pdf-reader/pdf-lite.test.ts: it counts the anchor in the installed worker and compares an operator list's digest with and
 // without the guard. If the line moved, read buildPaintImageXObject again (is the decode still unawaited, and is `this.options` still
-// the evaluator's?), change ANCHOR and GUARD (TEXT_ANCHOR and TEXT_GUARD: read Page.getAnnotationsData again) together, and set LITE_PDFJS.
+// the evaluator's? are `objId`, `cacheGlobally` and `_sendImgData` still in scope, and PDFImage's `smask`, `mask` and
+// `colorSpace` still what createImageData decides alpha by?), change ANCHOR and GUARD (TEXT_ANCHOR and TEXT_GUARD: read Page.getAnnotationsData again) together, and set LITE_PDFJS.
 // Read again where PDF.js asks isFloat16ArraySupported (Commands.getPath, CompiledFont.NOOP, FontPathInfo.path: still the only
 // readers of a glyph's outline?) and that the worker module still ends with EXPORT_ANCHOR (tests/pdf-reader/pdf-lite-outlines.test.ts).
 // Nothing else in the engine knows of the patch.
@@ -69,7 +75,9 @@ export const LINK_TEXT_PIXELS = Number.MAX_SAFE_INTEGER - 1
 
 /** the one line of buildPaintImageXObject that decodes an image's pixels, in the callback of the unawaited buildImage */
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
-const GUARD = `if (this.options.maxImageSize >= ${LINK_TEXT_PIXELS}) throw new Error("image pixels not decoded");\n      `
+/** in its place, for a document that opts in: the record of no pixels, sent as the decoded image would be (`_sendImgData`, which
+ *  transfers its data's buffer: an empty one) */
+const GUARD = `if (this.options.maxImageSize >= ${LINK_TEXT_PIXELS}) return this._sendImgData(objId, { data: new Uint8Array(0), alpha: !!(imageObj.smask || imageObj.mask || imageObj.colorSpace?.name === "DeviceRGBA") }, cacheGlobally); // image pixels not decoded\n      `
 /** the one condition of Page.getAnnotationsData under which a Link annotation's overlaid text is made: the page's whole text
  *  extracted again, through an Intersector, for every page that holds a link. The server's readers (the marks read,
  *  locate) take an annotation's rectangle and destination and find the glyphs under it themselves: for a document that
