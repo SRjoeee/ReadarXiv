@@ -233,7 +233,10 @@ export { LayoutRefusal } from './json.mjs'
   source reader's cut, which this maker reads through @readarxiv/engine/today, reads a file a paper names through a macro
   (`\input{\subpath sections/a.tex}`) as the one TeX reads, its name expanded by the bodies the package defines the macro with
   (PDF-READER §18.105), so that a file of 43 holds such a paper with none of that file's units: 2609.35143v1, every section of
-  it; none of the lab's 245 papers, nor the gate pack's seven, names a file so, their files the same but their version */
+  it; none of the lab's 245 papers, nor the gate pack's seven, names a file so, their files the same but their version; and the
+  page's ink, which this maker reads through @readarxiv/engine (pageInk), takes a glyph an opaque image painted after it covers
+  whole as not on the page (§18.98), so that a file of 43 holds such a figure's text as units: 2606.07636v2 p2, and of the 245
+  2608.16745v1 p23; none of the gate pack's seven papers holds such a glyph */
 export const LAYOUT = '44'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
