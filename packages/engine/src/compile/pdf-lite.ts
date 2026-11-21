@@ -16,9 +16,9 @@
 // says whether its samples carry alpha (`alpha`: its /SMask, its /Mask, or alpha in its data, a JPX's /SMaskInData or a JPX of no
 // /ColorSpace, the PDFImage's own test of whether createImageData would give alpha: its smask, its mask, a DeviceRGBA colour
 // space), read from the image's dictionaries and a JPX's header, which PDFImage has read by then, never its samples: an image
-// painted after a figure's text covers it where every sample paints (ink.ts imageOpaque; the owner's report of 2026-11-22,
-// PDF-READER §18.98). An image PDFImage cannot read is a null image, by the evaluator's own `.catch`, as before. The operator
-// list is the same, bit for bit (spikes and tests/pdf-reader/pdf-lite.test.ts hold it). The
+// painted after a figure's text covers it where every sample paints (ink.ts imageOpaque, PDF-READER §18.98). An image PDFImage
+// cannot read is a null image, by the evaluator's own `.catch`, as before. The operator list is the same, bit for bit (spikes and
+// tests/pdf-reader/pdf-lite.test.ts hold it). The
 // opt-in is per document: Number.MAX_SAFE_INTEGER is "no image is larger than this" to a stock worker, and the patched worker
 // applies the guard to a document that passes it and to no other, so a document opened without it in the same process decodes as
 // ever. Masks and small inline images are decoded and awaited inside the operator list's own stream; they are not touched.

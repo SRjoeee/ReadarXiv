@@ -5127,11 +5127,14 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
       // import.sty: \import{dir}{file} reads dir/file and puts dir first on the path an \input in it is looked for on,
       // \subimport the same from the directory imported last; subfiles loads \subfile{dir/file} by \subimport{dir}{file}
       // (the file read inside a float is the float's: its units in `inFloat`, as TeX sets them there)
+      // (the directory these put on the path is the name's own, written out: one a macro gives, \\subfile{\\chapterfile} or
+      // \\import{\\dir}{file}, is read nowhere, since the file's nested \\input would be looked for from the unexpanded one)
       const imported = (dir: string, file: string) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs], b.inFloat)
       if (IMPORTS.has(name)) {
-        if (f !== undefined) imported(IMPORTS.get(name) ? `${ctx.dirs[0] ?? ''}/${a}` : a!, f)
+        if (f !== undefined && !NAME_MACRO.test(a!)) imported(IMPORTS.get(name) ? `${ctx.dirs[0] ?? ''}/${a}` : a!, f)
       } else if (name === 'subfile') {
-        if (a) imported(`${ctx.dirs[0] ?? ''}/${a.slice(0, a.lastIndexOf('/') + 1)}`, a.slice(a.lastIndexOf('/') + 1))
+        if (a && !NAME_MACRO.test(a))
+          imported(`${ctx.dirs[0] ?? ''}/${a.slice(0, a.lastIndexOf('/') + 1)}`, a.slice(a.lastIndexOf('/') + 1))
       } else if (a) ctx.visit(a, ctx.dirs, b.inFloat)
       i = e
       continue
@@ -6951,13 +6954,13 @@ const foldOf = (f: string) => {
 /** a control word in a file's name, and the spaces TeX skips after it: group 1 its name */
 const NAME_MACRO = /\\([A-Za-z@]+)\s*/
 /** every body the package's own parameterless definitions give each macro, as TeX reads them with the comments out:
- *  latex.ltx's \\newcommand, \\renewcommand and \\providecommand with no argument, TeX's \\def, \\gdef, \\edef and \\xdef with no
+ *  latex.ltx's \\newcommand, \\renewcommand and \\providecommand with no argument (none stated, or [0]), TeX's \\def, \\gdef, \\edef and \\xdef with no
  *  parameter; a macro defined in each branch of a test (\\IfFileExists{…}{\\def\\x{a/}}{\\def\\x{}}) has a body for each */
 function plainBodiesOf(texts: readonly string[]) {
   const out = new Map<string, string[]>()
   for (const t of texts.map(texUncommented)) {
     for (const m of t.matchAll(
-      /\\(?:(?:(?:re)?newcommand|providecommand)\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?|[gex]?def\s*\\([A-Za-z@]+))\s*(?=\{)/g,
+      /\\(?:(?:(?:re)?newcommand|providecommand)\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?(?:\s*\[\s*0\s*\])?|[gex]?def\s*\\([A-Za-z@]+))\s*(?=\{)/g,
     )) {
       const at = m.index + m[0].length,
         e = matchGroup(t, at)
@@ -6969,31 +6972,60 @@ function plainBodiesOf(texts: readonly string[]) {
   }
   return out
 }
+/** a budget: the expansions one file's name may take, a count (a macro given one of its bodies is one), past which the name is
+ *  read nowhere, as before names were expanded. Measured: the lab's corpus of 245 papers names no file through a macro;
+ *  2609.35143v1 asks 2 a name (one macro of two bodies); a name of 18 macros of two bodies each (the review's shape) made 2^18
+ *  names in 558 ms before the bound, and stops here at its 257th expansion, in about 10 ms. Up to seven macros of two bodies in
+ *  one name fit */
+const NAME_EXPANSIONS_MAX = 256
 /** the names a file's name stands for once TeX has expanded it (latex.ltx's \\input{#1} is \\InputIfFileExists{#1}, whose
- *  \\IfFileExists expands the name before kpathsea looks it up): each of its macros given one of its bodies, the same one
- *  wherever it stands in the name (TeX's one value when it reads it), a body's own macros expanded the same way. A macro the
- *  package gives no body gives no name, nor does one met inside its own body, whose expansion TeX would never end */
-function namesThrough(name: string, bodies: ReadonlyMap<string, readonly string[]>): string[] {
-  const expand = (
+ *  \\IfFileExists expands the name before kpathsea looks it up), one at a time: each of its macros given one of its bodies, the
+ *  same one wherever it stands in the name (TeX's one value when it reads it), a body's own macros expanded the same way. A macro
+ *  the package gives no body gives no name, nor does one met inside its own body, whose expansion TeX would never end. Past
+ *  NAME_EXPANSIONS_MAX expansions it ends with `over` set: the names given so far are not all the name stands for */
+function namesThrough(
+  name: string,
+  bodies: ReadonlyMap<string, readonly string[]>,
+  work: { over: boolean },
+): Iterable<string> {
+  let left = NAME_EXPANSIONS_MAX
+  function* expand(
     s: string,
     chosen: ReadonlyMap<string, string>,
     open: ReadonlySet<string>,
-  ): [string, ReadonlyMap<string, string>][] => {
+  ): Generator<[string, ReadonlyMap<string, string>]> {
     const m = NAME_MACRO.exec(s)
-    if (!m) return [[s, chosen]]
-    const macro = m[1]!
-    if (open.has(macro)) return []
-    const head = s.slice(0, m.index),
-      tail = s.slice(m.index + m[0].length),
-      out: [string, ReadonlyMap<string, string>][] = []
-    for (const body of chosen.has(macro) ? [chosen.get(macro)!] : (bodies.get(macro) ?? [])) {
-      const given = new Map(chosen).set(macro, body)
-      for (const [b, c1] of expand(body, given, new Set(open).add(macro)))
-        for (const [t, c2] of expand(tail, c1, open)) out.push([head + b + t, c2])
+    if (!m) {
+      yield [s, chosen]
+      return
     }
-    return out
+    const macro = m[1]!
+    if (open.has(macro)) return
+    const head = s.slice(0, m.index),
+      tail = s.slice(m.index + m[0].length)
+    for (const body of chosen.has(macro) ? [chosen.get(macro)!] : (bodies.get(macro) ?? [])) {
+      if (left-- <= 0) {
+        work.over = true
+        return
+      }
+      const given = new Map(chosen).set(macro, body)
+      for (const [b, c1] of expand(body, given, new Set(open).add(macro))) {
+        for (const [t, c2] of expand(tail, c1, open)) yield [head + b + t, c2]
+        if (work.over) return
+      }
+      if (work.over) return
+    }
   }
-  return [...new Set(expand(name, new Map(), new Set()).map(([s]) => s))]
+  return (function* () {
+    const given = new Set<string>()
+    for (const [s] of expand(name, new Map(), new Set())) {
+      if (work.over) return
+      if (!given.has(s)) {
+        given.add(s)
+        yield s
+      }
+    }
+  })()
 }
 function readProject(
   fsys: Fsys,
@@ -7029,13 +7061,16 @@ function readProject(
     const whole = [rel, ...dirs].join('\0')
     if (!NAME_MACRO.test(whole)) return readNamed(rel, dirs)
     bodies ??= plainBodiesOf(ownTexts)
-    const found = new Map<string, { rel: string; text: string }>()
-    for (const name of namesThrough(whole, bodies)) {
+    // (two files found already decide it: none; a name past the budget is read nowhere, whatever it found)
+    const found = new Map<string, { rel: string; text: string }>(),
+      work = { over: false }
+    for (const name of namesThrough(whole, bodies, work)) {
       const [r, ...ds] = name.split('\0')
       const f = readNamed(r!, ds)
       if (f) found.set(f.rel, f)
+      if (found.size > 1) return null
     }
-    return found.size === 1 ? [...found.values()][0]! : null
+    return found.size === 1 && !work.over ? [...found.values()][0]! : null
   }
   const readNamed = (rel: string, dirs: readonly string[] = []) => {
     const keys = [...dirs, ''].flatMap((dir) => [rel, `${rel}.tex`].map((cand) => normalizePath(`${dir}/${cand}`)))
