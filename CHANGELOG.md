@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a figure's text that a picture painted over it hides on the page, such as the labels of a mock interface under a pasted screenshot, is no longer translated. Its translation had been drawn over the picture.
 - Changed: in the PDF reader, the first scroll through a paper stutters less while its fonts arrive: the text of pages far off screen is no longer laid out again each time a font loads.
 - Fixed: in the PDF reader, a paragraph whose lines hold tall formulas, such as a fraction with a raised exponent, a `cases` or a matrix set inside the line, or big brackets, is translated with each formula in its line at its size. Its formulas' parts had been read as lines of their own: such a paragraph could stay in English, a line of its translation could be drawn over its formula, or a formula drawn squashed, raised or in pieces.
 - Fixed: in the PDF reader, a list whose items the paper opens with a bullet of its own shows one bullet before each item, as printed. It showed two, "• •".

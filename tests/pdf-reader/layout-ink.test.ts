@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { BOXES_PAGE, displayTextMask, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@readarxiv/engine'
+import { BOXES_PAGE, displayTextMask, GLYPHS_PAGE, type Glyph, inkReader, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@readarxiv/engine'
 import { figureUnitsOf } from '../../packages/engine/src/locate/figure-text.ts'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
@@ -908,12 +908,12 @@ describe('ink an opaque fill painted after it covers whole is not shown (the fig
     expect(ringed(OPS.fill, true)).toEqual([false, false, false])
     expect(ringed(OPS.fill, false)).toEqual([true, true, true])
   })
-  it('a stroke, an image, a shading and an annotation\'s appearance painted over a glyph cover nothing it states', () => {
+  it('a stroke, an image read with no page objects, a shading and an annotation\'s appearance painted over a glyph cover nothing it states', () => {
     const over = (...ops: Op[]) => unseenOf(figureInk(form(...hid, ...ops)), 0)
     const shows = [false, false, false]
     // (a stroke paints its line's width, not its path's region: a line 40 wide over the word)
     expect(over([OPS.setLineWidth, [40]], [OPS.setStrokeRGBColor, ['#ffffff']], path(OPS.stroke, [0, 40, 102, 1, 120, 102]))).toEqual(shows)
-    // (an image: its samples and its mask say what of it is opaque, and the operator list holds neither)
+    // (an image: what of it is opaque its object says, which a reading given the page's objects reads, below; this one is given none)
     expect(over([OPS.save, []], [OPS.transform, [80, 0, 0, 25, 40, 90]], [OPS.paintImageXObject, ['img0', 8, 8]], [OPS.restore, []])).toEqual(shows)
     // (a shading: what it paints is its own domain's, not read)
     expect(over([OPS.save, []], [OPS.clip, []], rect(40, 90, 120, 115, OPS.endPath), [OPS.shadingFill, ['sh0']], [OPS.restore, []])).toEqual(shows)
@@ -924,6 +924,71 @@ describe('ink an opaque fill painted after it covers whole is not shown (the fig
     const plain = pageInk(OPS, list(form(...hid, colour('#ffffff'), rect(40, 90, 120, 115))), commonObjs, { rotate: 0 })
     expect(plain.glyphs.map(x => x.unseen)).toEqual([undefined, undefined, undefined])
     expect(unseenOf(figureInk(form(colour('#ffffff'), rect(40, 90, 120, 115), colour('#000000'), ...hid)), 0)).toEqual([false, false, false])
+  })
+
+  // An image painted after a glyph covers it as an opaque fill does, where every sample of it paints (the owner's report of
+  // 2026-11-22: a screenshot pasted over a figure's mock of the same interface): its object, which PDF.js resolves after the list
+  // (the box's lite worker: a record of no pixels saying whether its samples carry alpha), read at the walk's end over the glyphs
+  // painted before it; an inline image by its data in the list; a stencil of one sample that paints in an opaque fill. Its region
+  // the unit square under its matrix, as a fill's path's
+  describe('with the page\'s image objects (`images`)', () => {
+    const objects = (o: Record<string, unknown>) => ({ has: (id: string) => id in o, get: (id: string) => o[id] })
+    const imaged = (ops: Op[], o: Record<string, unknown>) => {
+      const reader = inkReader(OPS, commonObjs, { rotate: 0, turned: true, indices: true, images: objects(o) })
+      const l = list(ops)
+      reader.read(l.fnArray, l.argsArray)
+      return { asks: reader.asks(), ink: reader.end() }
+    }
+    /** an image XObject `id` painted over [x, x + w] x [y, y + h] */
+    const image = (id: string, x = 40, y = 90, w = 80, h = 25): Op[] => [[OPS.save, []], [OPS.transform, [w, 0, 0, h, x, y]], [OPS.paintImageXObject, [id, 8, 8]], [OPS.restore, []]]
+    const covered = [true, true, true], shows = [false, false, false]
+
+    it('an image whose samples carry no alpha covers the glyphs painted before it, whole, inside its square; its object asked once', () => {
+      const r = imaged(form(...hid, ...image('i1'), ...image('i1')), { i1: { alpha: false } })
+      expect(r.asks).toEqual(['i1'])
+      expect(unseenOf(r.ink, 0)).toEqual(covered)
+      // (a glyph its square covers in part shows: the square from 40 to 62 holds H and i, not d)
+      expect(unseenOf(imaged(form(...hid, ...image('i1', 40, 90, 22)), { i1: { alpha: false } }).ink, 0)).toEqual([true, true, false])
+      // (a word painted after it shows: "Lab" on the image)
+      const after = imaged(form(...image('i1'), ...lab), { i1: { alpha: false } })
+      expect(unseenOf(after.ink, 0)).toEqual(shows)
+    })
+    it('one whose samples carry alpha, or whose object is none, not yet there or not given, covers nothing', () => {
+      for (const o of [{ i1: { alpha: true } }, { i1: null }, {}]) expect(unseenOf(imaged(form(...hid, ...image('i1')), o).ink, 0)).toEqual(shows)
+      expect(unseenOf(figureInk(form(...hid, ...image('i1'))), 0)).toEqual(shows)
+    })
+    it('decoded data alike: a kind of no alpha channel covers, RGBA only where every sample\'s alpha is 255', () => {
+      const rgba = (a: number) => ({ kind: 3, width: 1, height: 2, data: Uint8ClampedArray.from([1, 2, 3, 255, 4, 5, 6, a]) })
+      expect(unseenOf(imaged(form(...hid, ...image('i1')), { i1: { kind: 2, data: new Uint8ClampedArray(3) } }).ink, 0)).toEqual(covered)
+      expect(unseenOf(imaged(form(...hid, ...image('i1')), { i1: rgba(255) }).ink, 0)).toEqual(covered)
+      expect(unseenOf(imaged(form(...hid, ...image('i1')), { i1: rgba(254) }).ink, 0)).toEqual(shows)
+      // (an inline image, its data in the list)
+      const inline = (data: unknown): Op[] => [[OPS.save, []], [OPS.transform, [80, 0, 0, 25, 40, 90]], [OPS.paintInlineImageXObject, [data]], [OPS.restore, []]]
+      expect(unseenOf(imaged(form(...hid, ...inline(rgba(255))), {}).ink, 0)).toEqual(covered)
+      expect(unseenOf(imaged(form(...hid, ...inline(rgba(0))), {}).ink, 0)).toEqual(shows)
+    })
+    it('the state covers as for a fill: an alpha of 1, Normal, no soft mask, every clip a rectangle on the page\'s axes; nothing asked where it does not', () => {
+      const o = { i1: { alpha: false } }
+      for (const pre of [gs(['ca', 0.5]), gs(['BM', 'multiply']), gs(['SMask', true])]) {
+        const r = imaged(form(...hid, pre, ...image('i1')), o)
+        expect(r.asks).toEqual([])
+        expect(unseenOf(r.ink, 0)).toEqual(shows)
+      }
+      const clipTo = (pts: number[]): Op[] => [[OPS.clip, []], path(OPS.endPath, [0, pts[0]!, pts[1]!, ...pts.slice(2).flatMap((v, i) => (i % 2 ? [v] : [1, v])), 4])]
+      // (a triangle's clip: no cover; a rectangle's that keeps the image clear of the word: none; one that keeps it over H and i)
+      expect(unseenOf(imaged(form(...hid, [OPS.save, []], ...clipTo([40, 90, 120, 90, 40, 115]), ...image('i1'), [OPS.restore, []]), o).ink, 0)).toEqual(shows)
+      expect(unseenOf(imaged(form(...hid, [OPS.save, []], ...clipTo([40, 80, 120, 80, 120, 95, 40, 95]), ...image('i1'), [OPS.restore, []]), o).ink, 0)).toEqual(shows)
+      expect(unseenOf(imaged(form(...hid, [OPS.save, []], ...clipTo([40, 90, 62, 90, 62, 115, 40, 115]), ...image('i1'), [OPS.restore, []]), o).ink, 0)).toEqual([true, true, false])
+      // (and PDF.js's wrapper round an image of a mask of its own, its gstate's soft mask set to none: the object's alpha decides)
+      const wrapped: Op[] = [[OPS.save, []], [OPS.transform, [80, 0, 0, 25, 40, 90]], [OPS.save, []], gs(['SMask', false]), [OPS.paintImageXObject, ['i2', 8, 8]], [OPS.restore, []], [OPS.restore, []]]
+      expect(unseenOf(imaged(form(...hid, ...wrapped), { i2: { alpha: true } }).ink, 0)).toEqual(shows)
+    })
+    it('a stencil of one sample that paints covers in an opaque fill; one of many samples covers nothing', () => {
+      const stencil = (op: Op): Op[] => [[OPS.save, []], [OPS.transform, [80, 0, 0, 25, 40, 90]], op, [OPS.restore, []]]
+      expect(unseenOf(imaged(form(...hid, colour('#ffffff'), ...stencil([OPS.paintSolidColorImageMask, []])), {}).ink, 0)).toEqual(covered)
+      expect(unseenOf(imaged(form(...hid, [OPS.setFillTransparent, []], ...stencil([OPS.paintSolidColorImageMask, []])), {}).ink, 0)).toEqual(shows)
+      expect(unseenOf(imaged(form(...hid, colour('#ffffff'), ...stencil([OPS.paintImageMaskXObject, [{ data: 'm1', width: 8, height: 8, count: 1 }]])), {}).ink, 0)).toEqual(shows)
+    })
   })
 })
 

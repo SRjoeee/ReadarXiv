@@ -19,10 +19,11 @@
 //
 // What zeros change in PDF.js's reading (read in the worker, held by tests/pdf-reader/sparse.test.ts on an image, a PNG, a soft
 // mask, a JPX and a DCT image, stencil masks and a Type 3 glyph's): at fetch, a Flate stream of zeros fails its header and is
-// read as an empty stream, its dictionary kept on it; a JPX image's header fails in PDFImage, which the guard's own failure
-// would have stopped a step later, in the same `.catch` (a null image). Their warnings are none of the recoveries the engine
-// counts (warnings.ts siteOf). The operator lists, the glyph lists, the masks, the text and the recoveries are the same, bit
-// for bit. A reading that one day wants B's pixels takes A's: B is the page as TeX set it, never what a reader is shown.
+// read as an empty stream, its dictionary kept on it; a JPX image's header fails in PDFImage, in the evaluator's own `.catch`
+// (a null image, where B whole gives the guard's record of no pixels: no reading of B reads an image's object, read.ts
+// reading them on arXiv's page alone). Their warnings are none of the recoveries the engine counts (warnings.ts siteOf). The
+// operator lists, the glyph lists, the masks, the text and the recoveries are the same, bit for bit, and no image's pixels
+// come either way. A reading that one day wants B's pixels takes A's: B is the page as TeX set it, never what a reader is shown.
 //
 // An original module (no port statement); @cantoo/pdf-lib (MIT) is given, as to the wrap and the delta.
 import { DELTA_OBJECTS_MAX } from './delta-wire.ts'
