@@ -146,6 +146,14 @@ describe('loadProject: a file named through a macro is the one TeX reads, the ma
     expect(filesOf(read('\\input{defs}', '\\input{\\subpath sec}', [['defs.tex', '\\def\\subpath{parts/}\n'], ['parts/sec.tex', SECTION]]))).toEqual(['parts/sec.tex'])
     expect(filesOf(read('', '\\input{\\subpath sec}\n\n\\def\\subpath{parts/}'))).toEqual(['parts/sec.tex'])
   })
+  it('reads none where a macro defined again later names a second file the package holds: the order of definitions is not read', () => {
+    // (TeX reads new/sec.tex, the body in force at the \input; the reader takes every body the package gives the macro, the
+    // ruling's bound of 2026-11-22: two files named, none read, as before the expansion. Where only one of them exists, it is
+    // read: the case the bound answers)
+    const redefined = '\\def\\subpath{old/}\n\\renewcommand{\\subpath}{new/}'
+    expect(filesOf(read(redefined, '\\input{\\subpath sec}', [['old/sec.tex', SECTION], ['new/sec.tex', SECTION]]))).toEqual([])
+    expect(filesOf(read(redefined, '\\input{\\subpath sec}', [['new/sec.tex', SECTION]]))).toEqual(['new/sec.tex'])
+  })
   it('reads none through a macro with an argument, or one met inside its own body', () => {
     expect(filesOf(read('\\newcommand{\\p}[1]{parts/#1}', '\\input{\\p{sec}}'))).toEqual([])
     expect(filesOf(read('\\def\\loop{\\loop}', '\\input{\\loop parts/sec}'))).toEqual([])

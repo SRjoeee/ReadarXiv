@@ -9140,6 +9140,9 @@ report of 2026-11-21 on production; the released reader did the same).
 - **Out of contract, answered by a test each**: a macro with an argument in a name, and one met inside its own body (TeX never
   ends its expansion), name no file; a definition given after the `\input` is a body too (TeX meets the macro undefined there
   and drops it, so a paper so written compiles on arXiv only where both name the same file); a control symbol (`\_`) is no macro.
+  The order of definitions is not read: a macro defined, then defined again (`\def\subpath{old/}`, later
+  `\renewcommand{\subpath}{new/}`) where the package holds both files is read nowhere, though TeX reads the later body's (the
+  local review of round c5, declined under the ruling's bound: never a wrong file; where only one of them exists it is read).
 - **Reach** (the source reader over the lab's 245 papers): no name a paper's source reader asks for holds a control word, so no
   unit, mark or object of theirs moves. 2609.35143v1: its 23 files read, its source units 53 -> 587 (every caption, all 20, and
   every table's cells among them, each translated as any caption and cell), its ink prose units 154 -> 2.
