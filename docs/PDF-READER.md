@@ -8883,7 +8883,14 @@ by ink reads what the part states, so the covered word, no member, is no ink the
   was a figure text; the room reading found it crowded by the image painted over its band, and the relation reading (since
   2026-11-11: ink that is no text keeps no figure text, figure-lines.ts' judge, untouched here) took the picture over it for
   ink about it: the 16 labels' translations were drawn over the screenshot, some over its own labels. The released reader had
-  kept them crowded (not sent, not drawn). Now their glyphs are `unseen` and they make no unit.
+  kept them crowded (not sent, not drawn). Now their glyphs are `unseen` and they make no unit. Measured (arXiv's page read
+  with and without its image objects over the 245 papers and this one, figureUnitsOf; the chain over the papers that moved,
+  from the stored compiles): 192 glyphs newly not shown on 4 pages of 4 papers, no unit comes. 2606.07636v2 p2: 132, its 16
+  labels leave, every other unit as before but its running number. 2608.16745v1 p23: 31, three labels its pictures cover
+  leave (kept as the original by the one-pitch rule before), and the two shown labels painted over two of them are read
+  without their glyphs; its units' object byte for byte, its parts by the paper's count of its faces' glyphs. 2608.12502v1
+  p4 and 2111.09276v1 p3: 29 spaces under pictures, every object byte for byte. Over the 245 papers' 20,485 placed figure
+  units, those the page showed no glyph of were these three, by pixels one; none is left.
 - **Measured** (the walk over arXiv's PDFs of the 245 papers, the base's and this one's; the chain over the 245 from their stored
   compiles against the base's): 802 level glyphs and 50 turned ones newly not shown, in 181 shows on 19 papers, each covered
   by a fill of a colour at an alpha of 1 under Normal; every other glyph, box, shape and cap of every page as before, the walk
