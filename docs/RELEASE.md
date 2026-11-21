@@ -89,17 +89,17 @@ such a build:
    an upload of 0.5.2's tree (20) is no way back, and neither is `next` at `065c1d973` or `c7e44a94b`, each at 21 with
    today's reader;
 3. runs a PDF reader whose API the website still serves. Today's reader reads the first API; this tree holds it no more (the
-   cut-over deleted it). The one commit that holds it and reads configuration 22 is `566721e66`, the last before the cut-over
-   (an ancestor of this tree, so it stays in the history): there `AXT_READER=today pnpm build` builds the extension with
-   today's reader (`566721e66:wxt.config.ts:69-82` reads the switch, `:92` hands it to the build, and the reader page opens
-   today's session by it, `566721e66:src/entrypoints/pdf-reader/main.tsx:25`, `:46-49`). No build of this tree, or of any
-   commit after it, can be that build. Once the website stops answering the first API, the reader has no way back, only
+   cut-over deleted it). The commit to build is `0c1c9d9cb`, the line's last before the cut-over, which holds it and
+   reads configuration 22 (an ancestor of this tree, so it stays in the history): there `AXT_READER=today pnpm build` builds the
+   extension with today's reader (`0c1c9d9cb:wxt.config.ts:69-82` reads the switch, `:92` hands it to the build, and the reader
+   page opens today's session by it, `0c1c9d9cb:src/entrypoints/pdf-reader/main.tsx:25`, `:46-49`). No build of this tree, or
+   of any commit after it, can be that build. Once the website stops answering the first API, the reader has no way back, only
    forward;
 4. needs no store step to work (measured, the next section); the release that comes forward after it carries the null steps
    of the recipe there.
 
 Whether that build is made ready before the upload, and kept for how long, is the maintainer's to choose. There is one to
-make: `566721e66` built with `AXT_READER=today` under a version above the release's. It has not been uploaded or installed over
+make: `0c1c9d9cb` built with `AXT_READER=today` under a version above the release's. It has not been uploaded or installed over
 this release's stores; the stores' half of it is measured, the rest is read from the code.
 
 ## Going back a version: the reader's stores
