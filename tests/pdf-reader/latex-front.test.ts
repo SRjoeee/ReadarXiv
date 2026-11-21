@@ -162,6 +162,42 @@ describe('loadProject: a file named through a macro is the one TeX reads, the ma
     expect(filesOf(read('', '\\input{parts/sec}'))).toEqual(['parts/sec.tex'])
     expect(filesOf(read('', '\\input{parts/my\\_sec}', [['parts/my\\_sec.tex', SECTION]]))).toEqual(['parts/my\\_sec.tex'])
   })
+  it('reads none, and within its budget, where the name\'s macros take more expansions than the budget: N macros of two bodies', () => {
+    // (a paper's author writes the macros: 18 macros, each empty in one branch of a test and `x` in the other, are 2^18 names
+    // if every combination is made; the reader gives a name NAME_EXPANSIONS_MAX expansions and reads none past them, as before
+    // the expansion: never a wrong file)
+    const n = 18
+    const macro = (i: number) => `\\m${String.fromCharCode(97 + Math.floor(i / 26))}${String.fromCharCode(97 + (i % 26))}`
+    const defs = Array.from({ length: n }, (_, i) => `\\IfFileExists{flag.tex}{\\def${macro(i)}{x}}{\\def${macro(i)}{}}`).join('\n')
+    const name = Array.from({ length: n }, (_, i) => macro(i)).join('')
+    const t0 = performance.now()
+    expect(filesOf(read(defs, `\\input{${name} parts/sec.tex}`))).toEqual([])
+    expect(performance.now() - t0).toBeLessThan(1000)
+    // (a few macros of two bodies stay within it and are read as before)
+    expect(filesOf(read(Array.from({ length: 3 }, (_, i) => `\\IfFileExists{flag.tex}{\\def${macro(i)}{x}}{\\def${macro(i)}{}}`).join('\n'), `\\input{${macro(0)}${macro(1)}${macro(2)} parts/sec.tex}`))).toEqual(['parts/sec.tex'])
+  })
+  it('reads none where a macro gives \\subfile or import.sty\'s commands their directory: the nested \\input never looked up from a wrong one', () => {
+    // (TeX puts the expanded directory on the path the nested \input is looked for on; the walker's directory is the name's own,
+    // so a name whose directory comes through a macro is read nowhere, as before the expansion: never root's table.tex for
+    // parts/table.tex)
+    const chapter: [string, string] = ['parts/chapter.tex', 'Prose of the chapter.\n\n\\input{table}\n']
+    const tables: [string, string][] = [['parts/table.tex', 'Prose of the chapter\'s table.\n'], ['table.tex', 'Prose of a root table TeX does not read here.\n']]
+    expect(filesOf(read('\\def\\chapterfile{parts/chapter}', '\\subfile{\\chapterfile}', [chapter, ...tables]))).toEqual([])
+    expect(filesOf(read('\\def\\chapterdir{parts}', '\\subfile{\\chapterdir/chapter}', [chapter, ...tables]))).toEqual([])
+    expect(filesOf(read('\\def\\chapterdir{parts/}', '\\import{\\chapterdir}{chapter}', [chapter, ...tables]))).toEqual([])
+    expect(filesOf(read('\\def\\chapterdir{parts/}', '\\subimport{\\chapterdir}{chapter}', [chapter, ...tables]))).toEqual([])
+    // (a macro in the file's name alone, its directory written out: read, the nested \input from the written directory)
+    expect(filesOf(read('\\def\\chaptername{chapter}', '\\import{parts/}{\\chaptername}', [chapter, ...tables]))).toEqual(['parts/chapter.tex', 'parts/table.tex'])
+  })
+  it('reads none where a comment stands in the name after a macro (TeX ends the control word there: not read as TeX reads it)', () => {
+    // (`\input{\dir% note⏎chapter.tex}` is parts/chapter.tex to TeX; taking the comment and the line's end out leaves
+    // `\dirchapter.tex`, another control word, so the name is left unread: never a wrong file)
+    expect(filesOf(read('\\def\\dir{parts/}', '\\input{\\dir% the section\'s directory\n  sec.tex}'))).toEqual([])
+  })
+  it('reads a macro \\newcommand defines with [0], no parameter, as LaTeX does', () => {
+    expect(filesOf(read('\\newcommand{\\subpath}[0]{}', '\\input{\\subpath parts/sec.tex}'))).toEqual(['parts/sec.tex'])
+    expect(filesOf(read('\\newcommand\\subpath[0]{parts/}', '\\input{\\subpath sec}'))).toEqual(['parts/sec.tex'])
+  })
 })
 const project = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex')
 const textOf = (u: Unit) => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
