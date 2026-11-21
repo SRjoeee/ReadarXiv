@@ -4519,6 +4519,25 @@ function nestedCellLines(
   }
   return false
 }
+/** an \\input, \\include, \\subfile or one of import.sty's commands at `end` (past its name): the file it names walked as a file
+ *  of its own (Ctx.visit); the index past its arguments */
+function fileCommand(name: string, s: string, end: number, b: Builder, ctx: Ctx): number {
+  const { args, end: e } = argsAfter(s, end, IMPORTS.has(name) ? 2 : 1)
+  const [a, f] = args.map((x) => s.slice(x.start + 1, x.end - 1).trim())
+  // import.sty: \import{dir}{file} reads dir/file and puts dir first on the path an \input in it is looked for on,
+  // \subimport the same from the directory imported last; subfiles loads \subfile{dir/file} by \subimport{dir}{file}
+  // (the file read inside a float is the float's: its units in `inFloat`, as TeX sets them there)
+  // (the directory these put on the path is the name's own, written out: one a macro gives, \\subfile{\\chapterfile} or
+  // \\import{\\dir}{file}, is read nowhere, since the file's nested \\input would be looked for from the unexpanded one)
+  const imported = (dir: string, file: string) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs], b.inFloat)
+  if (IMPORTS.has(name)) {
+    if (f !== undefined && !NAME_MACRO.test(a!)) imported(IMPORTS.get(name) ? `${ctx.dirs[0] ?? ''}/${a}` : a!, f)
+  } else if (name === 'subfile') {
+    if (a && !NAME_MACRO.test(a))
+      imported(`${ctx.dirs[0] ?? ''}/${a.slice(0, a.lastIndexOf('/') + 1)}`, a.slice(a.lastIndexOf('/') + 1))
+  } else if (a) ctx.visit(a, ctx.dirs, b.inFloat)
+  return e
+}
 /** a table's body walked with its grid known to inGridCell (Builder.cells, §18.75: a `\\` inside a grid cell a forced break of
  *  its text), the grid of the table around it back after */
 function walkInGrid(s: string, from: number, to: number, grid: readonly GridCell[], b: Builder, ctx: Ctx): void {
@@ -5122,21 +5141,7 @@ function walk(s: string, from: number, to: number, b: Builder, ctx: Ctx): void {
     if (name === 'input' || name === 'include' || name === 'subfile' || IMPORTS.has(name)) {
       endText()
       b.flush()
-      const { args, end: e } = argsAfter(s, end, IMPORTS.has(name) ? 2 : 1)
-      const [a, f] = args.map((x) => s.slice(x.start + 1, x.end - 1).trim())
-      // import.sty: \import{dir}{file} reads dir/file and puts dir first on the path an \input in it is looked for on,
-      // \subimport the same from the directory imported last; subfiles loads \subfile{dir/file} by \subimport{dir}{file}
-      // (the file read inside a float is the float's: its units in `inFloat`, as TeX sets them there)
-      // (the directory these put on the path is the name's own, written out: one a macro gives, \\subfile{\\chapterfile} or
-      // \\import{\\dir}{file}, is read nowhere, since the file's nested \\input would be looked for from the unexpanded one)
-      const imported = (dir: string, file: string) => ctx.visit(file, [normalizePath(dir), ...ctx.dirs], b.inFloat)
-      if (IMPORTS.has(name)) {
-        if (f !== undefined && !NAME_MACRO.test(a!)) imported(IMPORTS.get(name) ? `${ctx.dirs[0] ?? ''}/${a}` : a!, f)
-      } else if (name === 'subfile') {
-        if (a && !NAME_MACRO.test(a))
-          imported(`${ctx.dirs[0] ?? ''}/${a.slice(0, a.lastIndexOf('/') + 1)}`, a.slice(a.lastIndexOf('/') + 1))
-      } else if (a) ctx.visit(a, ctx.dirs, b.inFloat)
-      i = e
+      i = fileCommand(name, s, end, b, ctx)
       continue
     }
     if (HEADINGS.has(name) || OWN_UNIT_ARG.has(name)) {
