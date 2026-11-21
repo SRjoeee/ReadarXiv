@@ -1,9 +1,9 @@
-// Moved to src/pdf-reader/engine/source/paper-meta.mjs, where the reader loads it too (one implementation for Node and the browser).
+// Moved to packages/engine/src/source/paper-meta.ts, where the reader loads it too (one implementation for Node and the browser).
 // The scripts' roots are directories: analyze takes a path here, read by node-files.mjs (Node only), which the reader's own
 // modules do not import.
-import { analyze as analyzeFiles } from '../../../src/pdf-reader/engine/source/paper-meta.mjs'
+import { analyze as analyzeFiles } from '../../../packages/engine/src/source/paper-meta.ts'
 import { pathToFileURL } from 'node:url'
-import { folder } from '../../../src/pdf-reader/engine/source/node-files.mjs'
+import { folder } from './node-files.mjs'
 
 export const analyze = dir => analyzeFiles(typeof dir === 'string' ? folder(dir) : dir)
 

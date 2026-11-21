@@ -116,4 +116,4 @@ const plain = (pieces: readonly ShownPiece[], textOf: (p: Extract<ShownPiece, { 
     .trim()
 /** a unit's plain text in its translation, as the compiled PDF shows it */
 export const plainTranslated = (pieces: readonly ShownPiece[]): string => plain(pieces, shown)
-export { breaks, plain }
+export { plain }

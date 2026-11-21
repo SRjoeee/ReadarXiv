@@ -13,8 +13,8 @@ type EngineDisplay = 'original' | 'translation' | 'bilingual'
  *  the reader), or for this language (`target`) */
 export type Unavailable =
   | 'no-source'
-  /** no PDF of the paper to be had: the v1 layer API's word, which the extension's v1 session tells this chrome as it is
-   *  (src/pdf-reader/session/server.ts LAYER_WHYS, host/today.ts); our server's v2 says none such */
+  /** no PDF of the paper to be had: the v1 layer API's word, which a v1 session tells this chrome as it is; our server's v2
+   *  says none such */
   | 'no-pdf'
   | 'cannot-prepare'
   /** the paper too large for our server to prepare (a host may say it in words of its own; else as `cannot-prepare`) */

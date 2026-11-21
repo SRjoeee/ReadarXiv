@@ -310,7 +310,7 @@ type PercentScan = {
 export function inMemory(map: ReadonlyMap<string, Uint8Array>): Fsys {
   return { list: () => [...map.keys()], read: (p) => map.get(p) ?? null }
 }
-/** a/./b/../c → a/c: a file as the package holds it (tar.ts untar names each so) and as TeX's file system has it,
+/** a/./b/../c → a/c: a file as the package holds it (the lab's prepare-back/tar.ts untar names each so) and as TeX's file system has it,
  *  whatever spelling named it — one name for one file, so that a file written back replaces it rather than sitting
  *  beside it (2608.08350's \input{./sections/a.tex}: the compile set the English over the translation) */
 export const normalizePath = (p: string): string => {

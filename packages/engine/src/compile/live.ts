@@ -1,6 +1,6 @@
 // The paper's pipeline before any compile (docs/PDF-READER.md §19.3): a paper's files opened into its units (openPaper), and
 // the files the prepare compiles from them — the mark probe (probeFiles), the marked original (originalFiles, markedPreamble) —
-// with the readings of a compile (ranThrough, stoppedShort, listsMissing, notFound). No translation is set by TeX here: the
+// with the readings of a compile (ranThrough, stoppedShort). No translation is set by TeX here: the
 // layer draws the translation over our base page, and the web's rows hold it.
 import { analyze } from '../source/paper-meta.ts'
 import { paperNames, theoremNames } from '../source/paper-names.ts'
@@ -235,43 +235,6 @@ const DRAFT = `${[
 /** where the main file's \\begin{document} stands as TeX finds it (source/latex-front.ts documentBounds: none in a comment, a
  *  definition or a filecontents), -1 where it has none: what goes before the document goes there */
 const beginDocument = (text: string): number => documentBounds(text).begin
-/** an aux's lines of one command, those whose braces close on the line: a line cut short would stop TeX reading the
- *  aux it is given */
-const auxLines = (aux: string | null | undefined, command: string): string =>
-  (aux ?? '')
-    .split('\n')
-    .filter((l) => l.startsWith(`\\${command}{`) && closed(l))
-    .join('\n')
-const closed = (line: string): boolean => {
-  let depth = 0
-  for (const c of line.replace(/\\./g, ''))
-    if (c === '{') depth++
-    else if (c === '}' && --depth < 0) return false
-  return depth === 0
-}
-/** the lists a pass writes at its end from an aux's \@writefile{<ext>}{<entry>} lines (LaTeX's \enddocument), by
- *  extension: \tableofcontents's toc, \listoffigures' lof, \listoftables' lot, any list a package keeps so (backref's
- *  brf) — each line's entry, in order */
-const listsOf = (aux: string | null | undefined): Map<string, string> => {
-  const out = new Map<string, string>()
-  for (const [, ext, entry] of auxLines(aux, '@writefile').matchAll(/^\\@writefile\{(\w+)\}\{(.*)\}$/gm))
-    out.set(ext!, `${out.get(ext!) ?? ''}${entry}\n`)
-  return out
-}
-/** TeX writes its log in lines of 79 characters at most, a warning about a long key over two: joined again (a line of
- *  79 of its own is joined to the next too, so what is looked for in it is not anchored to a line's start) */
-const unwrapped = (log: string): string => log.replace(/^(.{79})\n/gm, '$1')
-/** whether a pass set a contents list from nothing: one its aux writes (listsOf) whose file the pass did not find
- *  (LaTeX's \@input: "No file <job>.<ext>."), as a pass does that was given no aux of its own —
- *  the list set empty, every unit after it early by its height. `main`, the project's main file (the job's name) */
-export const listsMissing = (r: { log?: string; aux?: string | null }, main: string): boolean => {
-  const log = unwrapped(lastTexLog(r.log))
-  return [...listsOf(r.aux).keys()].some((ext) => log.includes(`No file ${jobName(main)}.${ext}.`))
-}
-/** the files a compile's last pass looked for and did not find, as LaTeX's \@input says it ("No file <name>.": a list,
- *  the bibliography, the index; biblatex's bibliography says so too) */
-export const notFound = (log: string | null | undefined): Set<string> =>
-  new Set([...unwrapped(lastTexLog(log)).matchAll(/No file (\S+?)\.(?=\s|$)/g)].map((m) => m[1]!))
 
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
  *  float (`inFloat`, their indices, latex-front.ts loadProject's), each caption's float type (`floatTypes`, [index, type]), the
@@ -733,4 +696,3 @@ function unitLines(
   }
   return found
 }
-export { auxLines, closed }

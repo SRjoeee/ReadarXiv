@@ -6,7 +6,7 @@ import { openPaper } from '../../packages/engine/src/compile/live.ts'
 import { bundleUnitsOf } from '../../packages/engine/src/instrument/units.ts'
 import { inMemory, loadProject } from '../../packages/engine/src/source/latex-front.ts'
 import { sourceHash, unitText } from '../../packages/engine/tests/helpers/unit-harness.ts'
-import { unpackSource } from '../../packages/engine/src/source/tar.ts'
+import { unpackSource } from '../../lab/pdf/prepare-back/tar.ts'
 import { LAB } from './helpers/lab-data'
 
 // The units written inside a float (`inFloat`, the front end's: their indices in `units`, beside them): TeX sets a float away from

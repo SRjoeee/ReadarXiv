@@ -6,7 +6,7 @@
 // from the different text; still there, it is judged as any; with no text of today's to lay, not comparable, its reason said.
 import { readingOf } from '../../../packages/typeset/tests/replay/l1.ts'
 import { doorSentences } from '../../../packages/typeset/tests/replay/rows.ts'
-import * as instrument from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import * as instrument from '../../../packages/engine/src/instrument/instrument.ts'
 
 /** TeX's special characters a backslash escapes, each printing itself */
 const ESCAPED = /^\\([#$%&_{}])$/

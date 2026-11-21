@@ -10,7 +10,7 @@
 // (a read that has not answered within its budget resolves as one, its late answer let go), and of a write, nothing kept: the
 // store is never a reason a paper does not open.
 //
-// The database is the old reader's (`axt-layer`, cache/layer-store.ts), at version 5: the step deletes the old reader's three
+// The database is the old reader's (`axt-layer`: its store, release 0.5.2's, frozen in tests/cache/layer-v4.ts), at version 5: the step deletes the old reader's three
 // tables (its layers' objects by digest, its catalogs, who held what), which no address of the rebuilt reader's reaches, once,
 // on the first open by this build (hard rule 7: a named step, tests/cache/paper-store.test.ts opens a database made by
 // version 4's schema; the way back to a build of version 4: PDF-READER §9.3).
@@ -72,16 +72,15 @@ export interface PaperStore {
   clear(): Promise<void>
 }
 
-// (digestOf, copyOf and within are the old reader's store's too: layer-store.ts imports them)
 const hexOf =(b: ArrayBuffer) => { let s = ''; for (const x of new Uint8Array(b)) s += x.toString(16).padStart(2, '0'); return s }
 /** the SHA-256 of bytes, in hex */
-export async function digestOf(bytes: Uint8Array): Promise<string> {
+async function digestOf(bytes: Uint8Array): Promise<string> {
   return hexOf(await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>))
 }
 /** bytes as a buffer of their own (a view's bytes copied out of the buffer it stands in) */
-export const copyOf = (b: Uint8Array): ArrayBuffer => b.slice().buffer as ArrayBuffer
+const copyOf = (b: Uint8Array): ArrayBuffer => b.slice().buffer as ArrayBuffer
 /** a promise's answer, or `miss` once `ms` have gone by (its late answer let go) */
-export function within<T, M>(p: Promise<T>, ms: number, miss: M): Promise<T | M> {
+function within<T, M>(p: Promise<T>, ms: number, miss: M): Promise<T | M> {
   return new Promise(resolve => {
     const t = setTimeout(() => resolve(miss), ms)
     p.then(v => { clearTimeout(t); resolve(v) }, () => { clearTimeout(t); resolve(miss) })

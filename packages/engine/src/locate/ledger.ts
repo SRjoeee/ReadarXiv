@@ -1,8 +1,5 @@
-// COPIED as it is from src/pdf-reader/engine/layout/ledger.mjs (abe884b5e), its imports pointed at the package's modules and, where
-// marked COPY, nothing else but two changes, marked CHANGED (a formula's interior: an orphan line between two of a formula's lines
-// the formula's; a float of a type with no counter no float: its text the page's own outside the bodies): run by locate over
-// arXiv's page (../ink.ts).
-// ADDED (no class moves): the float lines, each line the depth rule reads as its float's text (RULES' last `figures`), stated
+// Run by locate over arXiv's page (../ink.ts).
+// The float lines, each line the depth rule reads as its float's text (RULES' last `figures`), stated
 // with its float and why no unit owns it, and counted (`floatLines`, `floatCount`): PDF-READER §18.45.
 // The ledger of our final pass (docs/route/orphan-text.md, stage 1): every text glyph of every page given exactly one content
 // class (content-classes.ts), so that what no class explains — an orphan — is counted, listed and gated (orphan-text.md §3's
@@ -114,11 +111,11 @@ export interface TodayLedger {
   orphanLetters: number
   orphans: Orphan[]
   lines: LedgerLine[]
-  /** (ADDED) the lines the depth rule reads as their float's text, stated (listed at most ORPHAN_LINES_MAX) and counted */
+  /** the lines the depth rule reads as their float's text, stated (listed at most ORPHAN_LINES_MAX) and counted */
   floatLines: FloatLine[]
   floatCount: { lines: number; letters: number; why: Record<FloatWhy, number> }
 }
-/** a line TeX set inside a counted float that no unit owns, read as its float's text by its depth alone (ADDED; PDF-READER
+/** a line TeX set inside a counted float that no unit owns, read as its float's text by its depth alone (PDF-READER
  *  §18.45): its page, its float's bracket number (`fs<n>`) and caption type, why, its text's characters, letters and words of
  *  three letters, its box (x0, x1, baseline y, size) and its text (a paper's words: the lab's run alone holds them) */
 export interface FloatLine {
@@ -205,12 +202,12 @@ const FLOAT_UNCOUNTED = /^fn\d+$/
 /** the orphan lines a ledger lists, at most (all are counted): a count of lines, the ledger's bound (PDF-READER §18.45);
  *  unmeasured */
 const ORPHAN_LINES_MAX = 200
-/** ADDED: a float's caption type that is an algorithm's (latex-front.ts FLOAT_ENVS `algorithm`, every float the walk reads an
+/** a float's caption type that is an algorithm's (latex-front.ts FLOAT_ENVS `algorithm`, every float the walk reads an
  *  algorithm's by, algorithm.sty's and algorithm2e's alike: its body's lines are the original's, PSEUDOCODE), and a table's
  *  (FLOAT_ENVS' table, table*, wraptable and sidewaystable: floatTypeOf) */
 const ALGORITHM_FLOAT = 'algorithm',
   TABLE_FLOAT = 'table'
-/** ADDED: why no unit owns a float line, as far as the ledger knows: `code` its glyphs TeX set in part in a code region, or its
+/** why no unit owns a float line, as far as the ledger knows: `code` its glyphs TeX set in part in a code region, or its
  *  float an algorithm's; `cells` its float holds a cell, none of which owns it (a row label, a header, a cell no unit is);
  *  `nocells` its float a table's that holds no cell (a table the front end read as none: a tabular inside a command whose
  *  argument it does not walk); `other` the rest (a figure's text no reading took, a sub-caption of a package not read) */
@@ -307,7 +304,7 @@ const RULES: readonly LineRule[] = Object.freeze(
       // (a line TeX set in the body of an environment the source sets as code, by its points (pageInk's `regions`, marks/marks.ts
       // regionsTex), wherever it stands — in a picture, a box, a float —: code, kept as the paper has it, never by its face alone)
       ['code', (l) => l.code > 0 && l.code >= CODE_SHARE * l.n],
-      // (CHANGED: a line TeX set in a display, by its points (pageInk's `regions`, marks.ts POINTS_TEX), wherever it stands — under
+      // (a line TeX set in a display, by its points (pageInk's `regions`, marks.ts POINTS_TEX), wherever it stands — under
       // a footnote rule, in a box, a float, beside a column — and whatever its face: the formula's, kept as the paper has it.
       // 2608.08481v1 p7's displays (7) and (8), REVTeX's widetext at the page's foot and set in a text face by \mathrm, read by
       // their place alone, would be the foot's notes and translated. A glyph TeX set in text mode there (an \hbox in its math,
@@ -341,7 +338,7 @@ const RULES: readonly LineRule[] = Object.freeze(
     ] satisfies [ClassId, (l: RuledLine) => boolean | undefined][]
   ).map(([cls, test]) => Object.freeze({ cls, code: CLASS_CODE[cls], test })),
 )
-/** ADDED: the line rule that reads a line no unit owns inside a float as that float's text by its depth alone */
+/** the line rule that reads a line no unit owns inside a float as that float's text by its depth alone */
 const DEPTH_RULE = RULES.findLast((r) => r.cls === 'figures')
 
 /** a glyph's owner as own/own.ts names its group: a unit's id, or a babel name's (`name`) */
@@ -404,7 +401,7 @@ export function ledgerOf(
     orphanLetters = 0,
     para: number | null = null,
     entry: number | null = null
-  // (ADDED: the float lines, listed and counted)
+  // (the float lines, listed and counted)
   // (Object.fromEntries' string index: one entry a reason)
   const floatLines: FloatLine[] = [],
     floatCount = {
@@ -425,7 +422,7 @@ export function ledgerOf(
       code = regionMask(pg.regions, n, 'code'),
       display = regionMask(pg.regions, n, 'display'),
       dtext = displayTextMask(pg.regions, n)
-    // (CHANGED: each glyph's floats of a type with no counter, `fn<n>` beside the float's `fs<n>` (marks.ts POINTS): no \\caption
+    // (each glyph's floats of a type with no counter, `fn<n>` beside the float's `fs<n>` (marks.ts POINTS): no \\caption
     // can number such a float, so TeX says it is no figure, table or algorithm but the page's own text the float mechanism
     // placed: NeurIPS's notice, \\@float{noticebox}[b]. Its lines are read at the depth of the counted floats around them, so
     // that the rules read one at no float's depth as text outside the bodies, a note (PDF-READER §18.34), not `figures` by
@@ -555,7 +552,7 @@ export function ledgerOf(
       }
     }
     let line: RuledLine | null = null
-    // (CHANGED: the page's lines classed once the page is read, so that a line's class may read the lines TeX set right before
+    // (the page's lines classed once the page is read, so that a line's class may read the lines TeX set right before
     // and after it: a formula's interior, below)
     const made: [RuledLine, LineRule][] = []
     // (`!`: a line's glyphs are its page's; `line!` after `!line` returned; RULES' last test holds for every line)
@@ -657,7 +654,7 @@ export function ledgerOf(
       if (RELATION.test(x.u)) line.relation = true
     }
     close()
-    // (CHANGED: an orphan line inside a formula is the formula's: between two of the formula's lines in TeX's stream — math or
+    // (an orphan line inside a formula is the formula's: between two of the formula's lines in TeX's stream — math or
     // symbols, its glyphs and theirs one run of no unit's, in one region —, with fewer words than a formula's line holds
     // (MATH_WORDS), and the formula's ink of that run standing left and right of it across its band. An operator's name in a
     // text face, 2610.21765v1 p10's "tr" between a fraction and a big bracket, was an orphan ink unit translated "TR" over the
@@ -694,7 +691,7 @@ export function ledgerOf(
         )
       if (beside(-1) && beside(1)) made[i]![1] = RULES.find((r) => r.cls === 'math')!
     })
-    // (ADDED: each line the depth rule reads as its float's text, stated: its float, the float's caption type and why no unit owns it)
+    // (each line the depth rule reads as its float's text, stated: its float, the float's caption type and why no unit owns it)
     let floatAt: ReturnType<typeof floatsOf> | null = null
     for (const [l, rule] of made) {
       if (rule !== DEPTH_RULE) continue
@@ -784,7 +781,7 @@ const kindOf = (units: readonly TodayUnit[] | null, id: number) => {
   return Array.isArray(u) ? u[0] : u?.kind
 }
 /**
- * ADDED: a page's counted floats as the float lines read them: `at`, each glyph's innermost counted float open at it (its bracket's
+ * a page's counted floats as the float lines read them: `at`, each glyph's innermost counted float open at it (its bracket's
  * number, `fs<n>`, read in stream order as regionsOf reads a float's depth; -1 for none), and `held`, what each float holds: `cells`,
  * whether a cell's start mark stands inside its bracket, and `type`, its caption's float type (`floats`, by unit id: InstrumentUnit's
  * `float`) — the caption whose start mark stands inside the bracket, else the caption TeX set against it, no glyph between: its end

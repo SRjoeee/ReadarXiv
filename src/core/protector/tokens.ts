@@ -9,6 +9,8 @@
 //   both. Paired markers measured only 70.6%, unusable, so on this format every paired placeholder is flattened
 //   (inline styling lost, content kept).
 
+import { fromAlpha, toAlpha } from '@readarxiv/translate'
+
 export type WireFormat = 'tags' | 'markers'
 
 export type Token =
@@ -35,7 +37,7 @@ export const MARKER_RE = /@@|@([a-z]+)#/g
  * marker may be the paper's, moved. The marker set is the same either way — the closer takes only `#`, spaces and tabs,
  * none of which begins a marker — so validation (`tokenize`, MARKER_RE) needs no reading of its own.
  */
-export const MARKER_CLOSER = '#(?:[ \\t]*#)*'
+const MARKER_CLOSER = '#(?:[ \\t]*#)*'
 
 export interface MarkerReading {
   /** The source's text holds no `#` of its own (`isHashFree`): a `#` the reply sets right after a marker is the marker's */
@@ -67,23 +69,9 @@ export function markerReader({ hashFree, bare }: MarkerReading): RegExp {
 /** Whether a markers wire text of ours holds no `#` of its own, outside its markers */
 export const isHashFree = (wire: string): boolean => !wire.replace(MARKER_RE, '').includes('#')
 
-/** id → bijective base-26 letters (1→a, 26→z, 27→aa). Letters, not digits: MT engines reorder, merge and thousands-separate digits */
-export function toAlpha(id: number): string {
-  let n = id
-  let out = ''
-  while (n > 0) {
-    const r = (n - 1) % 26
-    out = String.fromCharCode(97 + r) + out
-    n = (n - 1 - r) / 26
-  }
-  return out
-}
-
-export function fromAlpha(s: string): number {
-  let n = 0
-  for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 96)
-  return n
-}
+/** id → bijective base-26 letters (1→a, 26→z, 27→aa), the translate package's markers wire's own. Letters, not digits: MT
+ *  engines reorder, merge and thousands-separate digits */
+export { fromAlpha, toAlpha }
 
 export function tokenize(s: string, format: WireFormat = 'tags'): Token[] {
   return format === 'markers' ? tokenizeMarkers(s) : tokenizeTags(s)

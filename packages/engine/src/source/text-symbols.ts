@@ -13,7 +13,15 @@
  * writes them in its text has made them its own as often as not (2608.23818's indices, a coloured italic i and j with \xspace),
  * and the table would draw ı and ȷ for them. Each is one character;
  * most are one glyph in every encoding, but OT1 sets \l, \L, \aa and \AA of two (a bar or a ring over a letter), which a page's
- * text then gives as two characters, not the one: there none is found, and its ink stays the placeholder's (own/own.ts)
+ * text then gives as two characters, not the one: there none is found, and its ink stays the placeholder's (own/own.ts).
+ * Their definition is the kernel's own declarations, as the compile image's TeX Live holds them (tex/latex/base/): the
+ * encodings' UTF-8 declarations (\DeclareUnicodeCharacter in t1enc.dfu, ts1enc.dfu, ot1enc.dfu, omsenc.dfu, utf8enc.dfu), the
+ * T1 and TS1 slots of the printable ASCII symbols (\DeclareTextSymbol in t1enc.def, ts1enc.def), and latex.ltx's own \chardef,
+ * \let and definitions of the rest (\S is \textsection outside math, \ldots is \dots, \aa is \r a). Where the kernel
+ * declares a command for more than one character, the table holds the one the command is named for: \textasciitilde ~ and
+ * \textasciicircum ^ (not U+02DC and U+02C6), \textendash U+2013 (not the figure dash U+2012), \textemdash U+2014 (not the bar
+ * U+2015). tests/pdf-reader/text-symbols-kernel.test.ts holds every entry to those files in each pinned image
+ * (lab/pdf/compile-images.json), where the image is on the machine
  */
 export const TEXT_SYMBOLS: Readonly<Record<string, string>> = Object.freeze({
   '\\%': '%',

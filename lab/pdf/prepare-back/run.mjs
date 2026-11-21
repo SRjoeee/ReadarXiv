@@ -22,12 +22,13 @@
 //   it: the summary line alone, nothing written.
 //   node --max-old-space-size=6144 --import tsx lab/pdf/prepare-back/run.mjs --dir=<paper dir> --id=<id> --out=<dir> --caches=<dir>:<dir>…
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import * as PL from '@cantoo/pdf-lib'
 import { analyze, inMemory, originalFactsOf, prepare, readArxiv, stateOf, treeOf } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { filesUnder } from '../spikes/files-under.mjs'
 import { deflate, inflate } from './codec.mjs'
 import { flatOf, pieceKOf } from './pieces.mjs'
 import { silentInkOf } from './silent-gate.mjs'
@@ -43,7 +44,7 @@ const PINS = JSON.parse(readFileSync(join(ROOT, 'lab/pdf/compile-images.json'), 
 const { LITE } = await import(pathToFileURL(join(ROOT, 'lab/pdf/spikes/lite-pdfjs.mjs')).href)
 // (layer2.mjs makes a measuring canvas at its load: a stub, nothing here measures)
 globalThis.OffscreenCanvas ??= class { getContext() { return { measureText: () => ({ width: 0 }), font: '' } } }
-const tar = await import(pathToFileURL(join(ROOT, 'packages/engine/src/source/tar.ts')).href)
+const tar = await import(pathToFileURL(join(ROOT, 'lab/pdf/prepare-back/tar.ts')).href)
 const NM = join(ROOT, 'node_modules/pdfjs-dist/')
 // (--warnings: PDF.js's warnings, the channel its recover branches tell on (a page's list ended early, a font read as none, …),
 // kept by the step whose documents were being read: arXiv's PDF for the front half (`front`), the compiles' PDFs the front half
@@ -79,7 +80,6 @@ const tree = treeOf({ files: source, banner: facts.banner, served: SERVED, fallb
 const year = tree.tree, declared = tree.declared, banner = facts.banner
 const IMAGE = PINS.images[year].texlive
 // ---- compiles: only read, by the cache key every lane computes (the image, the request's shape and every file)
-const filesUnder = (d, rel = '') => readdirSync(join(d, rel), { withFileTypes: true }).flatMap(x => (x.isDirectory() ? filesUnder(d, join(rel, x.name)) : [join(rel, x.name)]))
 async function compile(req) {
   const all = new Map(source)
   for (const [p, b] of req.overrides ?? []) all.set(p, b)

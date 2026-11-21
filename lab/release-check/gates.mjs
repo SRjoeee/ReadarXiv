@@ -727,20 +727,6 @@ const e2e = (script, title, holds = [], extra = {}) => ({
   judge: (ctx, steps) => ({ pass: steps.every(s => s.exit === 0), numbers: checksOf(steps.at(-1).text) }),
   ...extra,
 })
-/** the build of today's reader the full tier makes (build-today) */
-const todayBuild = ctx => join(ctx.work, 'today-reader', '.output', 'chrome-mv3')
-/** an e2e script on today's reader's build: passed where it ran on that build (no rebuilt reader's pdfjs/ in it) and passed */
-const todayE2e = (script, title) => ({
-  ...e2e(script, title),
-  id: `${script}-today`,
-  tier: 'full',
-  after: ['build-today'],
-  steps: ctx => [{ cmd: ['pnpm', script], slot: 'e2e', env: { AXT_EXT_DIR: todayBuild(ctx) } }],
-  judge: (ctx, steps) => {
-    const rebuilt = existsSync(join(todayBuild(ctx), 'pdfjs'))
-    return { pass: !rebuilt && steps.every(s => s.exit === 0), numbers: checksOf(steps.at(-1).text), ...(rebuilt ? { note: `${todayBuild(ctx)} carries the rebuilt reader (pdfjs/): its checks ran in place of today's` } : {}) }
-  },
-})
 const lab = (ctx, ...p) => join(ctx.refactor, ...p)
 /** the five corpus papers the reader package's harness opens (its I8 on the corpus) */
 const HARNESS_PAPERS = ['1512.03385v1', '1706.03762v7', '2609.26457v1', '2307.16209v1', '2610.20030v1']
@@ -945,14 +931,12 @@ export const GATES = [
       return { pass: steps[0].exit === 0 && !/route table violated/.test(text), numbers }
     },
   },
-  // (a default build carries the rebuilt reader (AXT_READER v2, pdfjs/ at its root), on which tests/e2e/reader.mjs and
-  // registration.mjs run the rebuilt reader's checks: today's reader's are the full tier's, on a build of its own, below)
+  // (the build carries the rebuilt reader, pdfjs/ at its root: today's reader and its checks went at the cut-over)
   e2e('e2e:reader', "the rebuilt reader in the extension (the shipped build's) on the stand-in of our server's /api/v2 (tests/e2e/reader-v2.mjs, reader-v2-layer.mjs)"),
   e2e('e2e:framing', 'the reader and the popup framed: every way the extension opens them works, a framing page gets nothing'),
   e2e('e2e:a11y', 'the A/B axe audit: no finding the extension adds'),
   e2e('e2e:viewer', "the figure viewer's control under a pinned header"),
   e2e('e2e:registration', "the rebuilt reader in the extension: a laid page's drawing, overlay and links registered at every zoom (tests/e2e/registration-v2.mjs)"),
-  e2e('e2e:small-caps', "today's layer's small capitals in Chromium, Firefox and WebKit", [], { after: [] }),
   // ---------------------------------------------------------------- pipeline (the self-hosted runner, with lab data)
   {
     id: 'prepare',
@@ -1124,7 +1108,7 @@ export const GATES = [
     holds: [],
     // (today's engine at 065c1d973, read only: AXT_TODAY, else the worktree beside this one that packages/typeset/tests/replay/tap.ts names)
     needs: ctx => [exists("today's engine at 065c1d973 (AXT_TODAY)", join(process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read'), 'src/pdf-reader/engine/rules/tex-names.json'))],
-    // (not move-fit.mjs --check, which held the breaker's five moved files to today's code and the changes it lists: the
+    // (not move-fit.mjs --check (deleted at the cut-over with the replays), which held the breaker's five moved files to today's code and the changes it lists: the
     // typesetter's rulings edit those files in place since a8c36be1f (2026-11-08, a URL broken where its url package lets TeX
     // break it), about forty commits of PDF-READER §18 and §19, so the file it would write is no longer the package's and the
     // check failed on every one; the moved code is held as the ported files are, by the reader's gates and the display gates;
@@ -1182,19 +1166,6 @@ export const GATES = [
     // (a member read out of order is held to its record, text-order.json, textOrderJudge: none stands there now)
     judge: (ctx, steps) => textOrderJudge(steps.at(-1).text, textOrderRecord(ctx.root)),
   },
-  // today's reader, the way back until the cut-over deletes it: a build of its own (a default build carries the rebuilt reader,
-  // on which reader.mjs and registration.mjs run the rebuilt reader's checks), today's checks run on it; a build that carries the
-  // rebuilt reader's PDF.js files is refused, so that the rebuilt reader's checks never stand in for today's
-  {
-    id: 'build-today',
-    title: "the extension built with today's reader (AXT_READER=today) from this commit, apart from the checkout (lab/release-check/today-build.sh): the way back, until the cut-over deletes it",
-    tier: 'full',
-    stage: 'reader',
-    holds: [],
-    steps: ctx => [{ cmd: ['bash', 'lab/release-check/today-build.sh', ctx.root, join(ctx.work, 'today-reader')], slot: 'test' }],
-  },
-  todayE2e('e2e:reader', "today's reader (AXT_READER=today, the way back) on the stand-in of the v1 layer API: tests/e2e/reader.mjs's own checks"),
-  todayE2e('e2e:registration', "today's reader (AXT_READER=today): a laid page's copy, SVG and links registered at every zoom"),
   // ---------------------------------------------------------------- the definitions the engine's lists mirror, in the TeX trees
   // (a list of a package's names whose header names the file it copies, held to that file as each pinned compile image holds it:
   // design 3c's second kind of list. The files are copied out of the local images, never pulled: `--pull never`)
@@ -1307,27 +1278,6 @@ export const GATES = [
     // (the split shows' residue stands (INVARIANTS I1's gap): each paper's is held to its record, canvas.json, canvasJudge)
     judge: (ctx, steps) => canvasJudge(steps[0].text, canvasIds(ctx), canvasRecord(ctx.root)),
   },
-  {
-    id: 'speed',
-    title: "today's engine's speed check, head against the released tree (lab/pdf/spikes/layer-gate/run-speed.sh; CLAUDE.md's rule before a release): src/pdf-reader/engine, which the extension's reader still runs (AXT_READER 'today', stage 5a) and which perf-batch and perf-release, measuring the website's readers, do not",
-    tier: 'release',
-    stage: 'corpus',
-    holds: [],
-    // (the driver is a zsh script and only measures: its runs' logs go to the work directory, and the verdict is speed.mjs's
-    // over them, exit 0 PASS, 1 FAIL, 2 INCOMPARABLE; a measurement with no verdict is no pass. It goes with today's engine,
-    // deleted at the cut-over: design §6.2 stage 6, "nothing of the old paths in either tree")
-    needs: ctx => [exists("the base: today's released engine at 065c1d973 (RELEASE_CHECK_BASE, else AXT_TODAY, else the worktree beside this one)", join(speedBase(ctx), 'src/pdf-reader/engine')), exists('the layer gate\'s fixture pack (PACK)', packOf(ctx)), exists('zsh', which('zsh'))],
-    steps: ctx => [
-      { cmd: ['zsh', 'lab/pdf/spikes/layer-gate/run-speed.sh', ctx.root, speedBase(ctx), '3'], slot: 'e2e', env: { PACK: packOf(ctx), SPEED_LOGS: join(ctx.work, 'speed') }, fresh: join(ctx.work, 'speed') },
-      { cmd: ['node', 'lab/pdf/spikes/layer-gate/speed.mjs', join(ctx.work, 'speed')] },
-    ],
-    judge: (ctx, steps) => {
-      const analysis = steps[1]
-      if (!analysis) return { pass: false, note: 'no verdict: the analysis did not run' }
-      const verdict = analysis.exit === 0 ? 'PASS' : analysis.exit === 1 ? 'FAIL' : analysis.exit === 2 ? 'INCOMPARABLE' : `exit ${analysis.exit}`
-      return { pass: analysis.exit === 0, note: `the analysis: ${verdict}` }
-    },
-  },
   // ---------------------------------------------------------------- performance (the owner's base threshold: better than
   // production, measured; lab/release-check/perf.mjs judges, the lab's perf/tools measure: each reader built as its website
   // builds it and served offline from stored data, each prepare in its own compile image under one CPU and 3 GiB as the box.
@@ -1388,8 +1338,8 @@ export const GATES = [
 
 /**
  * The gates retired, each with its reason and what holds its question now. A retired gate is not run and not judged: naming it
- * to --only says why, and the report lists them. Its tools stay runnable in the lab until the cut-over deletes them with today's
- * engine (design 3i, C1).
+ * to --only says why, and the report lists them. The replays' tools went at the cut-over (design 3i, C1); a record that cites
+ * them keeps its sentence.
  */
 export const RETIRED = [
   {
@@ -1440,11 +1390,6 @@ function perfJudge(steps) {
 
 /** the canvas gate's papers: spike S1c's, as lane L1's canvas runs list them */
 const canvasIds = ctx => readFileSync(lab(ctx, 'lanes/L1-canvas.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l).id)
-/** the layer gate's fixture pack: PACK, else where the rules gate restores it */
-const packOf = ctx => process.env.PACK ?? join(ctx.root, 'lab/pdf/out/gate-pack')
-/** the speed check's base: RELEASE_CHECK_BASE, else the last release's tree, today's engine at 065c1d973, as the gates that
- *  read today's engine take it (AXT_TODAY, else the worktree beside this one) */
-const speedBase = ctx => process.env.RELEASE_CHECK_BASE ?? process.env.AXT_TODAY ?? join(ctx.root, '..', 'refactor-read')
 
 const lastLine = t => t.trim().split('\n').filter(l => !/^\s*at /.test(l)).at(-1)?.slice(0, 200) ?? ''
 

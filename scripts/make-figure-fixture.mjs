@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { POINTS_TEX } from '../src/pdf-reader/engine/layout/marks.mjs'
+import { POINTS_TEX } from '../packages/engine/src/marks/marks.ts'
 import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from '../lab/pdf/spikes/compile-image.mjs'
 
 const run = promisify(execFile)

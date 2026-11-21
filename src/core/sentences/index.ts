@@ -21,8 +21,8 @@
 // larger list removes 5 cuts and adds none, and all 5 are journal abbreviations in bibliographies
 // (`Theor. Comput. Sci.`, `J. Fac. Sci. Univ. Tokyo`, `Sci. Rep. 14`).
 
-// (relative, and from the tokens module alone: the reader's engine imports this module, so its closure stays alias-free and
-// reaches nothing else of the protector; scripts/check-boundary.mjs, ENGINE_ALLOW)
+// (relative, and from the tokens module alone: the old reader's engine imported this module by relative path, and its
+// closure stayed alias-free, reaching nothing else of the protector)
 import { fromAlpha, type WireFormat } from '../protector/tokens.ts'
 
 /**
@@ -43,7 +43,7 @@ import { fromAlpha, type WireFormat } from '../protector/tokens.ts'
  * 116 of 1566, each after a sentence ending on a formula, and lose 2 (`(Alg.`, `w.r.t.`); the
  * reader's units lose 6 (`Oregon v.` ×5, `Mt.`) and gain none — every change read.
  */
-export const ABBR =
+const ABBR =
   /\b(?:[A-Z]|Fig|Figs|Eq|Eqs|Sec|Secs|Ref|Refs|Thm|Def|Lem|Prop|Cor|Rev|Phys|Lett|Nucl|Astron|Astrophys|Mon|Not|Proc|Conf|Int|J|vs|etc|cf|al|approx|resp|viz|ca|c|Dr|Mr|Mrs|Ms|Prof|St|Mt|Jr|No|Vol|pp|Ed|Eds|Sci|Rep|Univ|Dept|Inst|Inc|Ltd|Corp|Co|e\.g|i\.e|w\.r\.t|a\.k\.a|i\.i\.d|a\.e)\.$/
 /** A case's `v.` — after a capitalised name: `Oregon v. Mitchell`, `Roe v. Wade`; `a vertex v.` ends its sentence */
 const CASE_V = /\b[A-Z][\w'\u2019-]*\s+v\.$/
@@ -99,7 +99,7 @@ const OPENING = /^<t(?:\s+id="\d+")?>$/
 /** Abbreviations that genuinely end sentences, so the text after them decides whether to merge: a
  *  list's `etc.`, `et al.`, a measure's `a.e.` and `i.i.d.` (`… holds a.e. Moreover …`, in the
  *  corpus), a company's name, a generation's `Jr.`, and `ca.`, `c.` before a year */
-export const TERMINAL_ABBR = /\b(?:etc|al|a\.e|i\.i\.d|Inc|Ltd|Corp|Co|Jr|ca|c)\.$/
+const TERMINAL_ABBR = /\b(?:etc|al|a\.e|i\.i\.d|Inc|Ltd|Corp|Co|Jr|ca|c)\.$/
 /**
  * A short capitalised label before its number ends no sentence there — `Exer. 5`, `Supp. 2.6`,
  * listed or not — where a sentence closing on a short capitalised word ("… made in Rome. The …") is

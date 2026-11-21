@@ -1,14 +1,4 @@
-// COPIED as it is from src/pdf-reader/engine/layout/ink-units.mjs (abe884b5e), its imports pointed at this package's modules and, where
-// marked COPY, nothing else but twelve changes, marked CHANGED (wordsOf's order: glyphs at one x in the stream's order, leftOf; a running
-// head's number of its phrase no folio, phrased; a unit's label's glyphs stated, `glyphs.label`; each kept run's glyphs by its
-// placeholder stated, `glyphs.runs`; an e-mail address or an identifier a kept run of its own, addressed, and a group of local parts before their
-// domain one over its words and lines, groupedAddresses; a formula's TeX specials written as TeX sets
-// them, never stripped, MATH_SPECIAL; a script a kept run whatever its face, written as TeX writes one, a label a first line's
-// leading raised scripts, no run over a line's break at a script, scriptsOf; a line of no text word the next of its paragraph's unit;
-// a paragraph TeX ended between two lines parts them; a display TeX set one kept block, its number with it, keptUnitsOf; rule 8 by
-// the source's ties, no share; a leader dot set against a contents line's text on the leaders' grid the leaders', leaderOf;
-// a link annotation over part of a unit's text a link group round the glyphs it holds, linkGroupsOf): run
-// by locate over arXiv's page (../ink.ts).
+// Run by locate over arXiv's page (../ink.ts).
 // The ink units of our final pass (docs/route/orphan-text.md, stage 2): text TeX sets that no source unit owns — the running
 // heads and feet, the contents and the lists, a note with no unit, prose the front end did not cut — made units from our own
 // glyphs, so that it is translated and drawn as any unit. Read from the ledger's lines (ledger.ts: each line of glyphs
@@ -43,7 +33,7 @@
 //      their one domain, every glyph of it whatever its face, over its words and the break of lines TeX set one after the other
 //      (a note of addresses alone is then no unit, a kept block that says so, `address`; a line of no text word, an address or a
 //      URL TeX broke onto a line of its own, is the next line of the unit its line before belongs to in one of TeX's paragraphs as
-//      the compile marked them, and starts none: CHANGED);
+//      the compile marked them, and starts none);
 //   5. echo: a unit whose letters (own/stream.ts spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
@@ -58,7 +48,7 @@
 //      its names (`inknames`): of the names toggle, as the author block is, not always translated (REVTeX's names its marks do
 //      not own); so is one that echoes a unit of the author block (rule 5: an affiliation REVTeX prints from its own lists, its
 //      source unit laid nowhere); and one that holds whole an author command's argument a macro stores (`stored`: ICML's footnote
-//      of its places) is the names' wherever it stands (CHANGED: by the source's ties, never a share of its letters:
+//      of its places) is the names' wherever it stands (by the source's ties, never a share of its letters:
 //      PDF-READER §18.71);
 //   9. its style: the weight, slant and fill most of its text glyphs hold is the unit's, which the reader measures on them; a
 //      run of words in another is a group of the commands that set it (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`,
@@ -75,7 +65,7 @@
 //      its size across in its column (its label, its number); a line part an ink unit claimed keeps its other runs (a running
 //      head's folio). Its rows the lines' boxes alone (no erase, no placeholder: nothing is
 //      drawn over it), no pieces (nothing is sent), its glyphs in no group (no unit's to the wrap or ledger). A display TeX set
-//      (its region, pageInk's `regions`) is one block whatever its lines' places, its number with it (CHANGED).
+//      (its region, pageInk's `regions`) is one block whatever its lines' places, its number with it.
 // Pure arithmetic; an original module (no port statement).
 import type { KnownElKind } from '@readarxiv/format'
 import type { InkRegion } from '../ink.ts'
@@ -379,7 +369,7 @@ export interface InkLink {
   pts: ReadonlySet<number>
 }
 /**
- * CHANGED: the glyphs of an ink unit a link holds where it holds part of the unit, by `page|glyph`, each its group's open
+ * the glyphs of an ink unit a link holds where it holds part of the unit, by `page|glyph`, each its group's open
  * (InkLink.src). An ink unit is A's glyphs alone, so an annotation's glyph points, the rule locate owns links by, say exactly
  * which of its characters the link holds ("2," holds it on "2" alone): biblatex's back-references "(cit. on pp. 2, 8)", a running
  * foot's "page N of 14", a reference inside a list of figures' caption copy, a proof title's theorem number, a DOI printed as text
@@ -456,13 +446,13 @@ const MATH_SPECIAL: Readonly<Record<string, string>> = { $: '\\$', '{': '\\{', '
 /** a kept run's placeholder source: a formula of its characters, or an address; a run of scripts of one sign (`sign`, scriptsOf)
  *  written as TeX writes a script, `$^{…}$` raised and `$_{…}$` lowered, so that every reader of the source reads it as it reads a
  *  source unit's mark (the instrument adapter: a symbol drawn raised, `sym`, a superscript's copy text): written `$*$`, a note's
- *  mark of one symbol would be drawn as that symbol on the line's baseline at its size (CHANGED, with scriptsOf). CHANGED: stripped
+ *  mark of one symbol would be drawn as that symbol on the line's baseline at its size (with scriptsOf). Stripped
  *  of `$ \ { }`, a formula's
  *  characters would make a run of a brace alone (2610.21377v1's `\{0,\dots,J-1\}`, 2608.06007v1's `$\{$Intra-Operator$\}$`) `$$`,
  *  which every reader takes as a display (mt.ts DISPLAY, classOf, phClassProven): drawn in its own ink, a kept display row in the
  *  middle of its line. Each is written as TeX sets it, so a run's source is an inline formula of every character it has */
 const phSource = (fam: Fam, text: string, sign = 0, group = false): string => {
-  // (CHANGED: a run that holds a group of addresses, groupedAddresses, keeps the group's braces, balanced by its syntax, as
+  // (a run that holds a group of addresses, groupedAddresses, keeps the group's braces, balanced by its syntax, as
   // `\url{…}` holds balanced braces: its source the characters the page sets, `{ada,alan}@example.org`, where the stripped
   // `ada,alan@example.org` read as one address of another local part)
   if (fam !== 'math')
@@ -484,7 +474,7 @@ const signOf = (w: Word): number => (w.sc?.every((v) => v === w.sc![0]) ? w.sc[0
 /** two glyphs' order along a line by their starts, those at one x in the stream's order (the line's own, `gs`): a stack, a
  *  fraction's numerator over its denominator, TeX ships top first. One x is one up to the float arithmetic PDF.js composes a
  *  position with (2307.16209v1 p14's 1 and 2 of ½ at 451.282: 451.28200000000004 and 451.282 on one page, 451.28199999999993
- *  and 451.282 on the other), which an order by x0 alone would read as their order. CHANGED */
+ *  and 451.282 on the other), which an order by x0 alone would read as their order. */
 const leftOf = (a: number, b: number) =>
   Math.abs(a - b) <= 64 * Number.EPSILON * Math.max(Math.abs(a), Math.abs(b)) ? 0 : a - b
 /** a line's words, left to right: { gs (glyph indices), ts (each glyph's text), text, fam (math, mono, or text) }. A glyph's text
@@ -529,7 +519,7 @@ function wordsOf(G: readonly InkGlyph[], gs: readonly number[], fams: Map<string
  *  or under it, whatever its face: C_n²'s "2" in a text face (2610.19274v1), an affiliation's `$^{1,2}$` under Times, whose
  *  digits are the text face's (2610.30854v1 p1's names: read as their text, drawn flat at the names' size, "Jiang1,2"), a
  *  footnote's mark Computer Modern sets in CMR7. A glyph set smaller on the baseline (small capitals) or off it at the line's
- *  size (a capital's accent, a raised box) is none. CHANGED: a script in a text face is one wherever it stands, not only after a
+ *  size (a capital's accent, a raised box) is none. A script in a text face is one wherever it stands, not only after a
  *  math run: read as the line's text, it would be translated and drawn on its baseline at its size. A figure text's own glyphs
  *  are read by it
  *  too (figure-lines.ts setApart, F3's `script`: one definition of a script for both), its row's text size its `largest`: a short
@@ -550,10 +540,10 @@ export function scriptsOf(
 
 /** each e-mail address in a word: a kept run of its own (fam `mono`, rule 4), the address alone, the word's characters around it
  *  the text's (an address's stop, a bracket), as the front end keeps one in a source unit's text (latex-front.ts keepAddresses,
- *  its pattern EMAIL_ADDRESS: an address is no prose, never translated). CHANGED: said as text, in a colour group of its
+ *  its pattern EMAIL_ADDRESS: an address is no prose, never translated). Said as text, in a colour group of its
  *  run where its ink has another colour, which no translation kept (2609.36054v2 p1's grey addresses drawn black); kept, it is
  *  an element every reply brings back, its ink the original's. A word's text is its glyphs' (`ts`): an address that begins or
- *  ends inside a glyph's text takes that glyph whole. CHANGED too: so is an identifier in a word, a token holding two letters or
+ *  ends inside a glyph's text takes that glyph whole; so is an identifier in a word, a token holding two letters or
  *  digits joined by underscores, whole but its edges' sentence punctuation (the front end's identifiersIn, as keepIdentifiers keeps one: `llm_equal_human` set in a text face, its
  *  words sent, came back with its last part in Chinese), read on its glyphs' compatibility forms (NFKC: a ligature's glyph its letters, as a
  *  figure's text reads it); an address first, so that one holding an underscore stays one address */
@@ -605,7 +595,7 @@ function addressed(w: Word): Word[] {
   return out
 }
 
-/** CHANGED: each group of local parts written once before their one domain (`{jyeoj251, bmw5779}@gmail.com`: the front end's
+/** each group of local parts written once before their one domain (`{jyeoj251, bmw5779}@gmail.com`: the front end's
  *  pattern, latex-front.ts ADDRESS_GROUP, as keepGroups keeps one in a source unit's text) a kept run (fam `mono`, rule 4), every
  *  glyph of it whatever its face, as an address in a word is (addressed). Read over the words of a run of lines TeX set one
  *  right after the other (each line's first glyph the one after the last of the line before in TeX's stream, in one region: a
@@ -687,7 +677,7 @@ function groupedAddresses(
  * of the line's own after them; 0 for none. Such a label is stated as the unit's (`glyphs.label`; ink.ts Made.label: a role of
  * its own, kept where it stands, never erased with the text), so the unit's text does not say it: said there, it would be drawn
  * twice, the original's beside the translation's (2610.20716v1 p1).
- * CHANGED: a mark of any face, by scriptsOf; read in a text face alone, under 0.85 of the line's size and raised over 0.2 of it,
+ * a mark of any face, by scriptsOf; read in a text face alone, under 0.85 of the line's size and raised over 0.2 of it,
  * 2610.40394v1 p1's "*", 7.77 pt on its note's 7.97 and raised 0.20 pt, would be no label, nor any mark in a math face (CMSY's ∗)
  */
 function labelLength(G: readonly InkGlyph[], words: readonly Word[]): number {
@@ -706,7 +696,7 @@ function labelLength(G: readonly InkGlyph[], words: readonly Word[]): number {
 
 /** a first line's words with its label's `n` glyphs (labelLength) a text word's, a label's glyphs read as text: a run of
  *  scripts the label takes whole read as text, one it begins cut after it, its glyphs after the label a run of their own.
- *  CHANGED: a label may hold scripts of any face (labelLength), which are text here */
+ *  A label may hold scripts of any face (labelLength), which are text here */
 function labelAsText(words: readonly Word[], n: number): Word[] {
   const out: Word[] = []
   for (const w of words) {
@@ -769,7 +759,7 @@ function gapBefore(G: readonly InkGlyph[], w: Word, v: Word): boolean {
 const SAME_GLUE = 0.002
 /** whether a head's line's number at its end (`b`) or its start (`a`) stands from the word beside it, a word of letters or digits,
  *  at the line's word space: as far as two of its other words stand from each other, or, the line holding no two others, a word's
- *  gap (CHANGED: a number of the head's phrase, "5 of 21", 2610.30875v1, is no folio) */
+ *  gap (a number of the head's phrase, "5 of 21", 2610.30875v1, is no folio) */
 function phrased(G: readonly InkGlyph[], words: readonly Word[], side: 'a' | 'b'): boolean {
   const n = words.length
   // (`!`: a word's glyphs are its page's; a line of two words at least, trimmed's test; i in range by the loop's test)
@@ -822,7 +812,7 @@ function trimmed(
     b = words.length
   let ended = false
   // (a running head's folio however close TeX set it: amsart's \llap{\thepage} after a title as wide as the line, its two digits
-  // nearer its last word than its words are to each other, 2610.21884v1. CHANGED: not where it stands from the word beside it at
+  // nearer its last word than its words are to each other, 2610.21884v1. Not where it stands from the word beside it at
   // the line's word space, a word of the head's phrase: "5 of 21", whose 5 stands from "of" as "of" from "21", was taken for the
   // folio and "of 21" translated beside the original's 5, 2610.30875v1 — the head is one unit, each page's its own, phrased)
   const folio = (side: 'a' | 'b') => cls === 'heads' && !!folios?.has(folioKey(words, side)) && !phrased(G, words, side)
@@ -839,7 +829,7 @@ function trimmed(
   // word before it, a word of its own by its face alone, is the sentence's: "… strength $C_n^2$." in 2610.19274v1's list of
   // figures, which was left the original's ink beside the drawn entry)
   while (b > a && LEADER.test(words[b - 1]!.text) && (b - 1 === a || gapBefore(G, words[b - 2]!, words[b - 1]!))) b--
-  // (CHANGED: and a leader dot set against the word before it: TeX's \leaders set the run's boxes on one grid, a box's width apart,
+  // (and a leader dot set against the word before it: TeX's \leaders set the run's boxes on one grid, a box's width apart,
   // whatever stands before the first, so a dot that stands one of the run's own steps before its first dot is the run's however
   // near its text ends (2610.40394v1 p13's six entries, §19.10: the entry claimed it, its whole link missed that glyph). The steps
   // read off the run itself, at least three dots, within their own spread (the page's rounding of TeX's places); a stop of the
@@ -917,9 +907,9 @@ const ECHO_ORDER: Readonly<Record<string, number>> = { heading: 0, caption: 1 }
  * paper's structural names' (units.ts bundleUnitsOf), units.length where it is not given. Returns [{ id, kind, cls, echo, pieces, glyphs: { text:
  * [[page, g]], ph: [[page, g]], runs: [[k, [[page, g]]]], label?: [[page, g]] }, rows: { unit: [id, kind, depth, flags, pieces],
  * lines (8 a line, the face's name at 7), frames, erase, ph } }]: `runs` each kept run's glyphs by its placeholder's index among
- * the pieces (CHANGED: not one list, `ph`: locate gives each
+ * the pieces (not one list, `ph`: locate gives each
  * element the glyphs it is told, and told one list gives the first every run's ink); `label` the glyphs of its label
- * (labelLength), among its text's, where it has one (CHANGED: stated, never left to a reader to read off the unit's
+ * (labelLength), among its text's, where it has one (stated, never left to a reader to read off the unit's
  * characters; locate states a member's label from the glyphs it is told, as a source unit's, 2610.22065v1 p1's "2" erased with
  * the translated affiliation and drawn by nobody)
  */
@@ -959,7 +949,7 @@ export function inkUnitsOf(
       if (at === undefined || (ECHO_ORDER[u!.kind] ?? 9) < (ECHO_ORDER[units[at]!.kind] ?? 9)) echoOf.set(key, i)
     })
   // each line of a class made units, its words trimmed (rule 2)
-  // (CHANGED: every line's words read first, a group of addresses over lines TeX set one after the other one kept run,
+  // (every line's words read first, a group of addresses over lines TeX set one after the other one kept run,
   // groupedAddresses)
   const lineWords = new Map(
     (ledger.lines ?? []).map((L): [LedgerLine, Word[]] => [L, wordsOf(pages[L.page - 1]?.glyphs ?? [], L.gs, fams)]),
@@ -1004,7 +994,7 @@ export function inkUnitsOf(
     // set it in that entry, and left out of the unit it stood the original's where the drawn entry ran over it, 2610.35877v1)
     if (!words.length) continue
     // (a line of no text word — an address, a URL, a formula, a script — is no unit's line but the next of one of TeX's paragraphs
-    // whose line before it a unit holds (below). CHANGED: joined there, never left out of that unit)
+    // whose line before it a unit holds (below). Joined there, never left out of that unit)
     const bare = L.cls !== 'references' && !words.some(textual)
     // (a list's line whose page number the ledger cut as a line of its own ends its entry as well: ledger.ts listedOf)
     segs.push({
@@ -1059,7 +1049,7 @@ export function inkUnitsOf(
       s.x1 > prev.x0
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
-    // (CHANGED: a paragraph TeX ended between the two lines parts them, a start of TeX's after the end marked or not (ink.mjs
+    // (a paragraph TeX ended between the two lines parts them, a start of TeX's after the end marked or not (ink.ts
     // `paraEnds`): a class's paragraph begun with no point of its own read as the one before. 2610.22065v1 p1, acmart's reference
     // format: its "ACM Reference Format:" line, a paragraph of its own, and the paragraph of the paper's front matter set again
     // under it, which no unit owns there, one unit)
@@ -1090,7 +1080,7 @@ export function inkUnitsOf(
     }
     // (a line of no text word joins the unit its line before belongs to, in one of TeX's paragraphs as the compile marked them —
     // never by the lines' places alone — and starts none: left out, it is a kept block's (rule 10). JCAP's e-mail line
-    // broken before its last address, 2609.20976v1; ACM's permission note before its DOI. CHANGED, with the line's filter above)
+    // broken before its last address, 2609.20976v1; ACM's permission note before its DOI, with the line's filter above)
     if (s.bare) {
       if (joins && paras && prev.para === s.para) last!.push(s)
       continue
@@ -1101,7 +1091,7 @@ export function inkUnitsOf(
   const out: TodayInkUnit[] = []
   // (the ink units an ink unit may echo, by their letters: each one echoing none, rule 5)
   const inkEchoOf = new Map<string, number>()
-  // (CHANGED, rule 8 by the source, no share (PDF-READER §18.71): a block of notes or orphans
+  // (rule 8 by the source, no share (PDF-READER §18.71): a block of notes or orphans
   // that holds whole the letters of an author or affiliation unit with no place of its own on A (`unplaced`, locate's: one that
   // owns no glyph of A, or whose only place is a paragraph that sets a unit again) is its names, of the names toggle: what TeX
   // set of the block's own text where no unit's marks stand (REVTeX's names, acmart's names a paper's own \@mkauthors types out);
@@ -1172,7 +1162,7 @@ export function inkUnitsOf(
       open: number[] = []
     let runKey = styleKey(style0, style0),
       pairs = 0
-    // (CHANGED, §19.10: a link annotation over part of its text, linkGroupsOf: a group whose source names its target round the
+    // (§19.10: a link annotation over part of its text, linkGroupsOf: a group whose source names its target round the
     // glyphs it holds, inside the run's style groups, closed where its glyphs end, at a style's change and before a kept run)
     const linkAt = linkGroupsOf(lines, links, pages)
     let link: string | null = null,
@@ -1196,7 +1186,7 @@ export function inkUnitsOf(
     lines.forEach((l, li) => {
       // (its label, the glyphs its first line begins with that the class set before its text: kept as the original's, no text of
       // the unit's, its glyphs the unit's still, claimed and erased with its line, so that the reader keeps them where they stand;
-      // CHANGED: stated, `labelled`, as the glyphs of the unit's label)
+      // stated, `labelled`, as the glyphs of the unit's label)
       let label = li === 0 ? labelLength(pages[l.page - 1]!.glyphs!, l.words) : 0,
         first = 0
       if (label > 0) l.words = labelAsText(l.words, label)
@@ -1266,7 +1256,7 @@ export function inkUnitsOf(
           // kept the first word's alone. Never over a line where a script stands at the break: TeX sets a script on its line after
           // the atom it belongs to, and breaks a formula only after a binary operation or a relation, so a run that ends its line
           // or opens the next with a script is no formula's part on the other, 2610.20030v1 p1's "Krajnc¹" and "¹Jožef Stefan
-          // Institute" two marks. CHANGED: a script read in a text face too, and no run of one face joined over such a break)
+          // Institute" two marks. A script read in a text face too, and no run of one face joined over such a break)
           const broken = wi === 0 && !!lastPh && (lastPh.tail !== 0 || (w.sc?.[0] ?? 0) !== 0)
           if (lastPh && lastPh.open && lastPh.fam === w.fam && !broken) {
             lastPh.gs.push(...w.gs.map((g): [number, number] => [l.page, g]))
@@ -1381,7 +1371,7 @@ export function keptUnitsOf(
         my = (x.top + x.bottom) / 2
       return mx >= x0! && mx <= x1! && my >= y0! && my <= y1!
     })
-  // (CHANGED: each line's display, the one TeX set it in — pageInk's `regions` of kind `display`, from the display's start point
+  // (each line's display, the one TeX set it in — pageInk's `regions` of kind `display`, from the display's start point
   // to its last end (PDF-READER §18.19) — that holds at least half of its inked glyphs, as the ledger reads a display's line; and
   // the first glyph TeX inked at or after a place of a page's stream, -1 for none)
   const displaysOn = new Map<number, InkRegion[]>()
@@ -1424,7 +1414,7 @@ export function keptUnitsOf(
       lines.push({ ...part, words, body, lo: Math.min(...run), hi: Math.max(...run), display: displayOf(L.page, run) })
     }
   }
-  // CHANGED: a display TeX set is one block, its number with it (PDF-READER §18.58). Its lines join its block whatever their
+  // a display TeX set is one block, its number with it (PDF-READER §18.58). Its lines join its block whatever their
   // baselines and extents across — a fraction's numerator above the formula's baseline and right of what TeX set before it, its
   // denominator, a big operator's limits, an alignment's rows — and whatever TeX set between them inside it (its text a unit
   // translates, an \underbrace's label: that unit's own), and no other block; its number joins it too: TeX sets it right after
@@ -1466,7 +1456,7 @@ export function keptUnitsOf(
       kind =
         (INK_KIND as Readonly<Record<string, string | undefined>>)[b.cls] ?? (b.body ? INK_KIND.orphan : INK_KIND.heads)
     const rows = rowsOf(id, kind, b.cls, b.lines, [], 0, pages)
-    // (CHANGED: a block of a display TeX set says so, `display`, so that its lines on A are its rows by the display rule, as a
+    // (a block of a display TeX set says so, `display`, so that its lines on A are its rows by the display rule, as a
     // unit's display's are: locate/geometry.ts, rows.ts. PDF-READER §17.9)
     return {
       id,
@@ -1483,7 +1473,7 @@ export function keptUnitsOf(
   })
 }
 
-/** CHANGED (with groupedAddresses): whether a kept block's lines are e-mail addresses and their separators alone — its text (a
+/** (with groupedAddresses) whether a kept block's lines are e-mail addresses and their separators alone — its text (a
  *  word's gap a space, a line's break white space) holding one address at least, plain (EMAIL_ADDRESS) or a group (ADDRESS_GROUP),
  *  and no letter or digit outside them —, stated on the block (`address`) for the lab, which reads such a block as the original's
  *  text (PDF-READER §18.62); nothing the bundle carries */
@@ -1558,7 +1548,7 @@ function besideUnit(
   return (a >= 0 && near(a)) || (b < G.length && near(b))
 }
 
-/** CHANGED: whether a page's glyph `g` is ink TeX set: a glyph, no blank */
+/** whether a page's glyph `g` is ink TeX set: a glyph, no blank */
 const inkedAt = (G: readonly InkGlyph[], g: number): boolean => !!G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')
 
 /** whether no glyph between two of a page's stream places (exclusive) is a unit's; false where they are not in stream order */
@@ -1610,7 +1600,7 @@ const OPENS = /^(?:\d+|[th]\d+)s$/
 const endCode = (name: string) => name.at(-1)
 
 /**
- * An ink unit's alignment as TeX set its paragraph (rule 6), from the paragraphs' ends of our compile (ink.mjs `paraEnds`,
+ * An ink unit's alignment as TeX set its paragraph (rule 6), from the paragraphs' ends of our compile (ink.ts `paraEnds`,
  * marks/marks.ts POINTS_TEX `qe<n><code>`): c, l, r or j, or null where no paragraph tells it. The end right after the unit's last
  * glyph, no paragraph begun and no other point between them, is its paragraph's end, and so is the end after a unit that its
  * paragraph's start (`q<n>`) stands before with nothing ended between, no other start between it and that end (a line of the
@@ -1691,7 +1681,7 @@ function alignOf(
     if (!after || !x.b) return true
     return after[2 * last[1]] === x.b[0] && after[2 * last[1] + 1] === x.b[1]
   }
-  // (a unit inside a paragraph, not its last line: its paragraph's start (q<n>, ink.mjs `paras`) before its first glyph on its page
+  // (a unit inside a paragraph, not its last line: its paragraph's start (q<n>, ink.ts `paras`) before its first glyph on its page
   // with no paragraph end and no unit's end mark or bracket between them, and nothing between its last glyph and the end
   // (nothingBetween): the lines of one paragraph TeX broke with \\, a tabular's cell inside a centred paragraph)
   // (`first!`: set in the loop that set `last`, with it)

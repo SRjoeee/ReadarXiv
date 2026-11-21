@@ -7,6 +7,7 @@ export const TRANSLATE_PURPOSE =
   'the translator contract, its adapters and the chain that falls back between them' as const
 
 export { ACCEPT_DIGEST, accept, asOut, projectionOf, type Refusal, validSentences } from './accept.ts'
+export { FIRST_BATCH_MAX, NEXT_BATCH_MAX } from './batches.ts'
 export { askedOf, NESTED_KIND, unitInOf } from './bundle.ts'
 export { chainOf, identityOf, keyOf, realClock, rowContextOf } from './chain.ts'
 export { sha256Hex } from './sha256.ts'
@@ -45,3 +46,5 @@ export {
 export { type ChromeApi, type ChromeOptions, type ChromeSession, chrome, chromeTarget } from './adapters/chrome.ts'
 export { type GoogleOptions, google, tagsWire } from './adapters/google.ts'
 export { type MicrosoftOptions, microsoft, microsoftServesTarget } from './adapters/microsoft.ts'
+/** the markers wire's ids as letters (bijective base 26), which the HTML page's markers are written with too */
+export { fromAlpha, toAlpha } from './wire/alpha.ts'

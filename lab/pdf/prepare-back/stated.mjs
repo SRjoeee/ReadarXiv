@@ -16,9 +16,9 @@ import { readingOf, scriptsKeptAsElements, scriptsKeptInAnotherOrder } from '../
 import { classifyFont } from '../../../packages/engine/src/locate/facts.ts'
 import { unitClass } from '../../../packages/engine/src/locate/content-classes.ts'
 import { TEXT_CHARACTERS, textSymbolHere } from '../../../packages/engine/src/source/latex-front.ts'
-import { symbolText } from '../../../src/pdf-reader/engine/rules/text-symbols.mjs'
-import { identifiersIn, inMemory, loadProject } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { passThroughOf, switchesOf } from '../../../src/pdf-reader/engine/pipeline/instrument.mjs'
+import { symbolText } from '../../../packages/engine/src/source/text-symbols.ts'
+import { identifiersIn, inMemory, loadProject } from '../../../packages/engine/src/source/latex-front.ts'
+import { passThroughOf, switchesOf } from '../../../packages/engine/src/instrument/instrument.ts'
 
 /** how a unit made on arXiv's page reads where it stands for one of the baseline's */
 export const CAUSE = Object.freeze({

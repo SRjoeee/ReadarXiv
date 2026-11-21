@@ -127,8 +127,11 @@ export const ENDPOINTS = [
 ]
 /** a citation of a definition, in a declaration's comment: TeX's, LaTeX's, a file of a TeX distribution named by its
  *  extension (cite.sty, article.cls, latex.ltx: a package's name alone is no citation), the PDF's, Unicode's, a font's, a
- *  standard's; plain.tex by name (`.tex` is every paper's extension) */
-export const CITES_DEFINITION = /\b(?:TeX(?:book)?|LaTeX|[\w@-]+\.(?:sty|cls|clo|def|ltx|bst|bbx|cbx|lbx|fd|cfg|dtx)|plain\.tex|PDF(?:'s| spec| reference)|ISO[ -]32000|Unicode|UAX ?#?\d+|UTS ?#?\d+|CLDR|OpenType|TrueType|PostScript|Type ?1|the font's|font's own|JIS ?X ?4051|W3C|clreq|jlreq|klreq|CSS'?s?|ECMA|RFC ?\d+|IEEE ?754|PDF\.js's|Chromium's)\b/
+ *  standard's (POSIX's, IEEE Std 1003.1); plain.tex by name (`.tex` is every paper's extension); a manual page by its name
+ *  and section in the manual that holds it (Linux's namespaces(7): a page named alone, `kill(2)`, reads as a call does, and a
+ *  call written in a comment, `f(2)`, `FontInfo#readString(3)`, is no citation); Node's documents (its documentation, a
+ *  module's); a test that holds the list to its writer's own text (`<x>.test.ts holds`) */
+export const CITES_DEFINITION = /\b(?:TeX(?:book)?|LaTeX|[\w@-]+\.(?:sty|cls|clo|def|ltx|bst|bbx|cbx|lbx|fd|cfg|dtx)|plain\.tex|PDF(?:'s| spec| reference)|ISO[ -]32000|Unicode|UAX ?#?\d+|UTS ?#?\d+|CLDR|OpenType|TrueType|PostScript|Type ?1|the font's|font's own|JIS ?X ?4051|W3C|clreq|jlreq|klreq|CSS'?s?|ECMA|RFC ?\d+|IEEE ?754|PDF\.js's|Chromium's|POSIX|IEEE Std 1003\.1|(?:Linux|POSIX)'s [a-z][\w.+-]*\([1-8][a-z]?(?=\))|Node(?:\.js)?'s (?:documentation|docs|[a-z_]+ module|child_process|fs|net|stream)|[\w/.-]+\.test\.ts[\s*]+holds)\b/
 /** a citation of evidence: a paper, the corpus, a measurement */
 export const CITES_EVIDENCE = /\b\d{4}\.\d{4,5}(?:v\d+)?\b|\bcorpus\b|\bmeasured\b|\btuned\b|\bempiric|\bon the \d+ papers\b|\bseen on\b/i
 /** the exact factors between units and the bounds of a representation: a literal of one of these values whose name or comment
@@ -1230,12 +1233,15 @@ export function listsByUse(files, resolve, only = null) {
     if (!t || l.form !== 'list') return null
     if (t.enum) return "a schema's enum"
     const own = t.top && t.path.length === 1
+    // (a list inside an `as const` object whose type a product type reads off the object: an event schema's columns)
+    const nested = !!t.top && t.path.length > 1 && !!t.asConst
     if (own && enumReads.has(`${path}#${t.top}`)) return "a schema's enum"
     const e = elementOf(l, path)
     const typed = e ? closed(e.desc, e.path) : false
     // (a JavaScript module's list: a type read off its declaration file's value is read off it)
     const read = typeReads.has(`${path}#${t.top}`) || (declFile(path) != null && typeReads.has(`${declFile(path)}#${t.top}`))
     if (own && (t.asConst || typed) && read) return 'a type read off it'
+    if (nested && read) return 'a type read off its object'
     if (!typed) return null
     const n = namedOf(e.desc, e.path)
     if (n === '') return 'a type read off a vocabulary'

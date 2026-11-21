@@ -157,7 +157,7 @@ export function rulesFor(writes: Record<string, string[]>): Record<string, Rule>
       return [
         ...out,
         ...events.filter(e => !EVENTS.includes(e)).map(e => `event ${e}`),
-        // (and no line names one an outsider can cause, in a comment or not: the rules-gate's own test refuses the name too)
+        // (and no line names one an outsider can cause, in a comment or not)
         ...[...yml.matchAll(/pull_request_target|workflow_run|issue_comment|workflow_call/gi)].map(m => `names ${m[0]}`),
       ]
     },

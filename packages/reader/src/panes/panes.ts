@@ -31,6 +31,11 @@ export type Side = 'left' | 'right'
 export type Display = 'original' | 'bilingual' | 'translation'
 export type Zoom = 'page-width' | 'page-fit' | 'page-actual' | number
 const DISPLAYS: readonly Display[] = ['original', 'bilingual', 'translation']
+/** the reader's marks of the display, which the panes write on the reader's root and never on <html>: the display shown
+ *  (`data-axt-pdf-mode`, one of DISPLAYS), one pane at a narrow width (`data-axt-narrow`), the sides swapped
+ *  (`data-axt-swapped`). They go with the panes and with the reader's other marks of its root when it is closed. A host whose
+ *  sheet reads them elsewhere copies them there by this list (the package's entry gives it) */
+export const DISPLAY_MARKS = ['data-axt-pdf-mode', 'data-axt-narrow', 'data-axt-swapped'] as const
 /** CSS px: the widest a page is fitted in a single display (the reader's design, §3) */
 const READING_WIDTH = 1060
 /** a zoom's or a pinch's step: scaled by CSS at once, drawn this long after the last step (one redraw a burst) */
@@ -1623,9 +1628,7 @@ export function createPanes(o: PanesOptions): Panes {
       for (const x of observers) x.disconnect()
       observers.clear()
       listeners.clear()
-      root.removeAttribute('data-axt-pdf-mode')
-      root.removeAttribute('data-axt-narrow')
-      root.removeAttribute('data-axt-swapped')
+      for (const a of DISPLAY_MARKS) root.removeAttribute(a)
       if (givenLeft) leftStack.replaceChildren()
       else leftStack.remove()
     },

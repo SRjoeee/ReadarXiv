@@ -1,6 +1,6 @@
 // lab/pdf/spikes/one-pass.mjs
-// A one-pass compile as the box's host makes it, for the lab's Docker compiles (layer-fixtures.mjs; the lab's fills of the
-// prepare's compiles): TeX's pass and, for `latex` (arXiv's DVI compiler), the DVI made a PDF by dvipdfmx, quiet, where the
+// A one-pass compile as the box's host makes it, for the lab's Docker compiles (the lab's fills of the prepare's compiles):
+// TeX's pass and, for `latex` (arXiv's DVI compiler), the DVI made a PDF by dvipdfmx, quiet, where the
 // pass wrote a DVI, its terminal output written to a file of its own; then the compile's log, by the host's contract the
 // engine reads (packages/engine/src/compile/base.ts DRIVER_OUTPUT_MARK): TeX's log, then a line that is the mark alone and the
 // driver's output, each a whole line. Never the container's terminal: TeX writes its log's rows to the terminal as well, so a

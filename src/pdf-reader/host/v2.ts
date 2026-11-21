@@ -1,4 +1,4 @@
-// The reader package whole behind the one chrome (AXT_READER 'v2'): `openReader` with the extension's Host (the host
+// The reader package whole behind the one chrome: `openReader` with the extension's Host (the host
 // decision, design-a §2 caller 2). The host gives the network (our server and arXiv, nothing else; no credentials, no
 // referrer), where arXiv's bytes are read (the tab's own PDF), the preferences over the extension's configuration, and the
 // rows made here through the background; the reader's state is told to the chrome as the chrome's events (the package's

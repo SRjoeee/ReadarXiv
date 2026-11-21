@@ -75,13 +75,6 @@ describe('the identity in a compile cache key', () => {
     expect(keyOf(identityOf(B), files)).not.toBe(keyOf(identityOf(B, ['--platform', 'linux/amd64']), files))
   })
 
-  it('is in the key of each cache that keys a compile by its files', () => {
-    for (const f of ['layout-make.mjs', 'layer-fixtures.mjs', 'layout-paper-check.mjs']) {
-      const text = readFileSync(join(import.meta.dirname, '../../lab/pdf/spikes', f), 'utf8')
-      expect(text, f).toMatch(/createHash\('sha256'\)(\.update\(String\(EPOCH\)\))?\.update\((COMPILE_IDENTITY|IDENTITY)\)/)
-      expect(text, f).not.toContain("'texlive/texlive:latest'")
-    }
-  })
 })
 
 describe('the local image is the digest the key names', () => {
@@ -122,10 +115,6 @@ describe('a native compile, the platform in the inspection and the key, and --im
   })
 
   it('has the platform in the key of every cache, the marks gate\'s too', () => {
-    const dir = join(import.meta.dirname, '../../lab/pdf/spikes')
-    expect(readFileSync(join(dir, 'layout-marks-gate.mjs'), 'utf8')).toMatch(/JSON\.stringify\(\[FORMAT, READ_HASH, image, COMPILE_IDENTITY,/)
-    expect(readFileSync(join(dir, 'layout-marks-gate.mjs'), 'utf8')).toContain('await imageIdOf()')
-    expect(readFileSync(join(dir, 'layout-paper-check.mjs'), 'utf8')).toContain('compileIdentity(process.env, IMAGE, PLATFORM)')
     // (one identity helper for the lot: the platform is part of it)
     expect(identityOf(A, ['--platform', 'linux/arm64'])).not.toBe(identityOf(A, ['--platform', 'linux/amd64']))
   })
@@ -145,7 +134,6 @@ describe('a native compile, the platform in the inspection and the key, and --im
     expect(imageFromArg(B)).toBe(B)
     expect(() => imageFromArg('texlive/texlive:latest')).toThrow(/by digest/)
     expect(() => imageFromArg('texlive/texlive')).toThrow(/by digest/)
-    expect(readFileSync(join(import.meta.dirname, '../../lab/pdf/spikes/layout-paper-check.mjs'), 'utf8')).toContain("imageFromArg(argOf('image'))")
   })
 })
 

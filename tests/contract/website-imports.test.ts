@@ -19,46 +19,18 @@ import { describe, expect, it } from 'vitest'
  * compiles against these sources (three of the controller's types it imports, ReaderEvent, ReaderHost and ReaderPrefs,
  * exist only there), and its bundlers erase type imports. A test of its own holds those declarations
  * to the pin's source.
+ *
+ * At the cut-over (package C1) the 32 paths the website's old reader and Worker took (the controller, the old reader's
+ * interface under pdf-reader/ui, the locale packs, the controls, the Worker's providers and today's sheet) went with today's
+ * engine; the website's own cut-over stops importing them. The six here are what its kept code may still take (the
+ * seventh, core/rules/latexml, went with RULES_VERSION, which no key reads: design 3d, R7).
  */
 const WEBSITE_IMPORTS: readonly { path: string; names: readonly string[] }[] = [
   { path: 'config/appearance', names: ['BUILT_IN_HIGHLIGHTS', 'DEFAULT_APPEARANCE', 'HL_OPACITY_MAX', 'HL_OPACITY_MIN', 'lookOf'] },
   { path: 'core/renderer/style-preset', names: ['appearanceRule'] },
-  { path: 'core/rules/latexml', names: ['RULES_VERSION'] },
   { path: 'entrypoints/pdf-reader/reader.css', names: [] },
-  { path: 'locales', names: ['LOCALE_CODES', 'LOCALES', 'pickLocale'] },
-  { path: 'pdf-reader/controller', names: ['createController', 'INITIAL', 'reduce'] },
-  { path: 'pdf-reader/engine/view/engine.css', names: [] },
   { path: 'pdf-reader/support', names: ['readerRuns'] },
-  { path: 'pdf-reader/ui/appearance', names: ['applyAppearance', 'dimmed', 'themeOf', 'withoutTransitions'] },
-  { path: 'pdf-reader/ui/Capsule', names: ['Capsule'] },
-  { path: 'pdf-reader/ui/capsule-words', names: ['words'] },
-  { path: 'pdf-reader/ui/DisplaySwitch', names: ['DisplaySwitch'] },
-  { path: 'pdf-reader/ui/link-names', names: ['linkNameOf'] },
-  { path: 'pdf-reader/ui/Menus', names: ['LanguageMenu', 'ZoomMenu'] },
-  { path: 'pdf-reader/ui/Outline', names: ['Outline'] },
-  { path: 'pdf-reader/ui/PagePill', names: ['PagePill'] },
-  { path: 'pdf-reader/ui/PaperTitle', names: ['PaperTitle'] },
-  { path: 'pdf-reader/ui/pinch', names: ['usePinch'] },
-  { path: 'pdf-reader/ui/ProgressLine', names: ['ProgressLine'] },
-  { path: 'pdf-reader/ui/scroll-show', names: ['useScrollShow'] },
-  { path: 'pdf-reader/ui/ScrollIndicator', names: ['ScrollIndicator'] },
-  { path: 'pdf-reader/ui/settings-lock', names: ['useSettingsLock'] },
-  { path: 'pdf-reader/ui/status', names: ['capsuleOf', 'cardOf', 'lineOf', 'spokenOf'] },
-  { path: 'pdf-reader/ui/StatusCapsule', names: ['NARROW_MS', 'useTimedLeave'] },
-  { path: 'pdf-reader/ui/ToolbarButton', names: ['ToolbarButton'] },
-  { path: 'pdf-reader/ui/use-reader', names: ['useReader'] },
-  { path: 'providers/google-web', names: ['createGoogleWebProvider'] },
-  { path: 'providers/microsoft', names: ['createMicrosoftProvider', 'supportsTarget'] },
-  { path: 'providers/request/retry-policy', names: ['getRequestErrorMeta', 'RATE_LIMIT_BASE_PAUSE_MS'] },
   { path: 'styles/image.css', names: [] },
-  { path: 'ui/controls/Icon', names: ['Icon'] },
-  { path: 'ui/controls/MenuList', names: ['MenuList'] },
-  { path: 'ui/controls/modality', names: ['trackModality'] },
-  { path: 'ui/controls/Popover', names: ['Popover', 'usePopover'] },
-  { path: 'ui/controls/radio', names: ['radioKeys'] },
-  { path: 'ui/controls/Switch', names: ['Switch'] },
-  { path: 'ui/controls/tip', names: ['useTip'] },
-  { path: 'ui/menu-nav', names: ['useMenuNav'] },
   { path: 'ui/strings', names: ['languageName', 'profileName', 'R', 'S', 'setLocale'] },
 ]
 

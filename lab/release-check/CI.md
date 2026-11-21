@@ -23,8 +23,7 @@ The private repository's tiers run on its own runners (below); the report names 
 This repository is public. Anyone can open a pull request, and a pull request's run takes its workflow files from the pull
 request itself, so a rule about which workflow is meant to run is no boundary: what a run can reach is. The rules every workflow
 obeys are readers of its text (`tests/scripts/workflow-rules.ts`), held by `tests/scripts/ci-workflows.test.ts` over every file
-of `.github/workflows`, with what is particular to the rules gate's workflows and to the fixtures' token in
-`tests/scripts/rules-workflows.test.ts`. No YAML parser: the files are held to the one plain form they are written in, and every
+of `.github/workflows`. No YAML parser: the files are held to the one plain form they are written in, and every
 reader fails closed on form. A spelling of YAML or of an expression it does not read is itself a violation, never a pass: a quoted
 key, a flow mapping, a key at another indentation, a script in double quotes (YAML reads its escapes before GitHub reads its
 expressions), an anchor, an alias, a merge, a tag, an escape, a step at another indentation (rule 0, `forms`). A line led by `#`
@@ -49,8 +48,7 @@ refuse what it is for in every spelling that could carry it (`tests/scripts/work
    workflow's or a job's environment or an action's input, never passed on whole; the step that holds it names none of the job's
    files a step writes for the steps after it (`GITHUB_ENV`, `GITHUB_OUTPUT`, `GITHUB_PATH`, `GITHUB_STATE`). No expression is
    spliced into a script, whatever the script's style (no `${{` in a `run:` body: an expression's value is passed through the
-   environment). `check`'s fixtures fetch and the rules gate's two pack restores are the steps that hold the bucket's read token;
-   the publish and rollback steps hold the publish secret.
+   environment). `check`'s fixtures fetch is the step that holds the bucket's read token.
 4. **GitHub's own actions, listed and pinned.** Every `uses:` is a plain step key naming one of the actions the rules list
    (`actions/checkout`, `actions/setup-node`, `actions/cache/restore`, `actions/cache/save`, `actions/upload-artifact`: none runs
    an input as a script) at a full commit with its version beside it, one commit an action across the workflows; pnpm comes from
@@ -58,8 +56,7 @@ refuse what it is for in every spelling that could carry it (`tests/scripts/work
 5. **The least token.** Every workflow's permissions begin with `contents: read`. A `permissions:` key stands only at the
    workflow's level or a job's, as a block of `<scope>: read|write|none` entries and nothing else; any other spelling or place is
    refused. And, whatever that reading sees, every `write` anywhere in a workflow is a scope its file may write: a write is held
-   only where the rules' list says why (the rules gate's comment on its own pull request; the rollback's cancel of unfinished
-   publishes).
+   only where the rules' list says why, and the list names none.
 6. **No credential kept.** Every checkout is a plain step with `persist-credentials: false` in its block of inputs;
    `persist-credentials` in any other spelling is refused; nothing pushes with git.
 7. **The browser jobs hold nothing.** `reader` and `extension` name no secret, variable or token in any spelling or case, and hold
@@ -103,7 +100,6 @@ scripts on the job's own build.
 | `contract` | 1 s | in `check` (inside `pnpm test`) |
 | `census` (this tree alone) | 8 s | in `check` |
 | `harness` (93 checks) | 239 to 310 s | about 8 min |
-| `e2e:small-caps` (three browsers) | 4 to 15 s | not run there (below) |
 | `e2e:reader` (81 checks on the default build: `tests/e2e/reader-v2.mjs`, `reader-v2-layer.mjs`) | 77 s | about 3 min |
 | `e2e:framing` (22) | 64 to 66 s | about 2 min |
 | `e2e:a11y` (15) | 33 to 34 s | about 1 min |
@@ -111,20 +107,12 @@ scripts on the job's own build.
 | `e2e:registration` (74 on the default build) | 31 to 34 s | about 1 min |
 | the three jobs, in parallel | | `check` 5 to 8 min, `reader` 6 (run 44432025091), `extension` about 12 (Chromium's system libraries alone took 8 min of it there): about 12 min of a pull request's wall clock |
 
-**Kept off GitHub's runners: `e2e:small-caps`.** It holds today's layer (`src/pdf-reader/engine`), which the cut-over deletes.
-Its two measures of a run are today's layer's own: the width it lays a run at, measured on a canvas at 100 px and scaled, and the
-width the run's `<tspan>` is drawn at, read by `getSubStringLength` at the drawn size (20 px). On the hosted runner's Chromium
-(Linux, a device scale of 1) glyph advances come whole pixels at each of those sizes (its own synthesis of the same words reads
-247.00, 319.00, 239.00 px in SVG and canvas alike), so the two disagree by up to 4.48 px over a heading, and the layout, laid on
-those whole-pixel measures, stands 0.18 to 0.70 PDF units off Firefox's and WebKit's (run 44432025091: 13 of 28; Firefox and WebKit
-pass every case there). On macOS Chromium measures and draws with fractional advances (250.00 against 249.99 px, WebKit's own
-249.99), and all 28 pass. A platform difference of today's reader, production's, not of a change here: the check stays the
-maintainer's machine's, in the fast tier run there, until its code goes. The rebuilt reader's checks that hold a drawn run against
+**Not shown by the hosted tier.** The rebuilt reader's checks that hold a drawn run against
 its layout (the harness's full-width punctuation, laid by the reader's own typesetter over the served faces) skip on the runner
 for want of those faces: the rebuilt reader's drawing against its layout on Linux is not shown by the hosted tier.
 
-**The rules gate** (`.github/workflows/rules-gate.yml`, path-filtered on today's engine): unchanged until today's engine is
-deleted at the cut-over.
+**The rules gate**: today's layout rules' workflows (`rules-gate.yml`, `rules-publish.yml`, `rules-point.yml`) went with today's
+engine at the cut-over.
 
 ## full: by hand on the maintainer's machine, recorded
 
@@ -162,7 +150,7 @@ started by hand, not by a runner (Security, rule 1).
 - **Minutes**: 26 of the gates' own at `13216ac44` (the heavy slot's waits for other lanes' jobs left out), and 16 for
   `display` (at `a7a6e4097`). At `6b91f86ff` (2026-11-13, the machine shared with a round's gates, loads 4 to 146): 110 in all,
   of them `display` 51 (both modes, the added pairs apart), `reader-parts` 11, `prepare-same` 10, `harness-lab` 9, `prepare` 8,
-  `sentence-cover` 6, `pnpm test` 2.5, `e2e:reader-today` 3.
+  `sentence-cover` 6, `pnpm test` 2.5, `e2e:reader-today` 3 (gone at the cut-over).
 - **Secret**: none. The tier reads no network.
 
 | Gate | Here |
@@ -178,14 +166,13 @@ started by hand, not by a runner (Security, rule 1).
 | `reader-parts` (this run's parts laid by the entry over each rows store; I3 by ink, I4, I5) | 641 s: pass at `6b91f86ff`, at its record (`reader-parts.json`) |
 | `harness-lab` (the harness with five corpus papers, this run's bundles and rows) | 559 s: pass over `46dd8fcdf`, 130 of 130 |
 | `text-order` (I8: every page this run lays read by the composer's text module in Node, in reading order; out-of-order members held to `text-order.json`, which names none) | after `reader-parts` (its Google rows); a `run` slot |
-| `build-today`, `e2e:reader-today`, `e2e:registration-today` (today's reader, the way back until the cut-over) | 6 s, 169 s, 54 s: pass at `6b91f86ff`, 159 of 159 and 84 of 84 |
 | `display` (display ≥ today, under the default options and with every switch on; **a cut-over blocker**) | 16 min at `a7a6e4097` |
 | `perf-batch` (NEW's prepare in the round's box and its reader built from this commit, against the last round recorded) | about 9 min and the waits for its slots |
 
 **Retired.** `typeset-parts` and `typeset-replays` (2026-11-13, design 3i), and `layout-marks-gate` (the lab's corpus check of
 today's layout marks, retired in `lab/pdf/README.md` on 2026-11-13, named among them since 2026-11-19): their reasons stand in
-`gates.mjs` (`RETIRED`), the report lists them, and naming one to `--only` says why. Their tools stay runnable in the lab until
-the cut-over deletes them with today's engine.
+`gates.mjs` (`RETIRED`), the report lists them, and naming one to `--only` says why. The replays' tools went at the cut-over;
+the records that cite them keep their sentences.
 
 **Today's rows are production's.** Today's side of the display gates lays the release's stored rows, and each display gate first
 checks, pair by pair, that production's own row path gives every stored row back (`production-rows.mjs`, its answers recorded in
@@ -209,14 +196,13 @@ window the coordinator gives.
 
 ## release: before a release, by hand on the same machine
 
-- **Command**: `pnpm release-check --tier release --online --work=<external disk>` (the speed check's base
-  `RELEASE_CHECK_BASE`, else the last release's tree; `PACK` the layer gate's fixture pack at the digest `lab/pdf/gate-pack.json`
-  names). The speed check measures `src/pdf-reader/engine`, which the extension's reader runs until it moves to the reader
-  package; it goes with today's engine at the cut-over.
+- **Command**: `pnpm release-check --tier release --online --work=<external disk>` (today's engine at `065c1d973`, which
+  `typeset-data` reads, as `AXT_TODAY`, else `.worktrees/refactor-read` beside this one). The performance gates measure the
+  website's readers; today's engine's speed check went with that engine at the cut-over.
 - **Adds to full**: `display-wide` (the display gate over every pair of the stored rows, about 2.5 hours of browser slots,
   overnight, once per candidate; **a cut-over blocker**); the prepare's pixel proofs on every page (poppler); the reader's canvas
   on spike S1c's papers (Chromium's software 2D canvas, every draw call rasterised as it is made, no stand-in for a reader
-  change; each paper's split residue held to its record, `canvas.json`); today's engine's speed check; `babel-names` and `csquotes-styles` (each pinned compile image's TeX
+  change; each paper's split residue held to its record, `canvas.json`); `babel-names` and `csquotes-styles` (each pinned compile image's TeX
   Live, the docker slot, the images already local, never pulled); `face-files` (the lab's 83 face files, fontTools); the online
   scripts (`pnpm build:staging`, then `e2e`, `e2e:pdf`, `e2e:floating`, `e2e:popup`, `e2e:layout`, `e2e:local-endpoint`,
   `e2e:image`) and the live placeholder run, each under the project's User-Agent and never against our production server
@@ -231,7 +217,7 @@ window the coordinator gives.
   (`canvas.json`) until the coordinator's ruling; I8 has none (`text-order` reads no member out of order, and `text-order.json`
   names none).
 - **Minutes**: about 80 in all (the full tier's, the pixel proofs 25, the canvas 2 on the software canvas, its two runs' lines
-  equal, the speed check about 12, the online scripts about 15), and `perf-release`'s 100 to 130.
+  equal, the online scripts about 15), and `perf-release`'s 100 to 130.
 - **Secret**: none for this repository's gates (the free engines need no key; an LLM service in the placeholder run would take
   its key from the browser's settings, never from CI).
 

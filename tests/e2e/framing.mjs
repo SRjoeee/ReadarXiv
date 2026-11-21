@@ -1,7 +1,7 @@
 // The extension's two framed pages, the PDF reader and the popup, in a real browser and with no network (DESIGN §4.0c,
 // PDF-READER §11.1): every way the extension itself opens them still works, and a page that frames them gets nothing.
-// The paper is the repository's sample (tests/fixtures/pdf/sample-1/), served at arXiv's addresses by one route table that
-// is also the guard (lib/route-table.mjs); the layer API is its stand-in (lib/layer-api.mjs), translation the echo
+// The paper is the reader package's fixture (s1-columns, lib/v2-api.mjs), served at arXiv's addresses by one route table that
+// is also the guard (lib/route-table.mjs); our server is its stand-in of /api/v2 (lib/v2-api.mjs), translation the echo
 // endpoint (lib/echo-endpoint.mjs).
 //
 // The extension's own flows: the PDF page's entry, a reload of that tab, the reader's own reload (a new target language
@@ -15,15 +15,11 @@
 //
 // Usage: pnpm build && pnpm e2e:framing     (first time: npx playwright install chromium)
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { FACES } from '../../src/pdf-reader/engine/rules/font-roles.mjs'
 import { copyWithGrants } from './ext-copy.mjs'
 import { startEchoEndpoint } from './lib/echo-endpoint.mjs'
 import { launchWithReader } from './lib/extension.mjs'
-import { layerApi, serves } from './lib/layer-api.mjs'
-import { cutSample, sampleFiles } from './lib/layer-cut.mjs'
 import { RESOLVER_WALL, routeTable } from './lib/route-table.mjs'
 import { loadFixture, v2Api } from './lib/v2-api.mjs'
 import { seedService } from './options-page.mjs'
@@ -32,16 +28,13 @@ const HERE = fileURLToPath(new URL('.', import.meta.url))
 const BUILD = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../.output/chrome-mv3', import.meta.url))
 const EXT = `${HERE}.ext-framing`
 
-// ---- the paper and the stand-in of our server (as reader.mjs has them): a build of the rebuilt reader (AXT_READER=v2: the reader
-// package's PDF.js files at its root) reads the reader package's fixture through the stand-in of /api/v2 (lib/v2-api.mjs), made
-// once the extension's origin is known; the old reader the sample through the stand-in of the layer API
-const V2 = existsSync(join(BUILD, 'pdfjs'))
-const fixture = V2 ? loadFixture('s1-columns') : null
-const sampleCut = V2 ? null : await cutSample(sampleFiles())
-const LATIN_FACE = readFileSync(fileURLToPath(new URL('../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url)))
-let api = V2 ? null : layerApi({ layer4: sampleCut, faces: { ids: Object.keys(FACES), ranges: [32, 126, 160, 255, 0x2010, 0x2027], bytes: new Uint8Array(LATIN_FACE) } })
-const sample = V2 ? { id: fixture.paper, version: fixture.version, pdf: fixture.pdf } : api.sample
-console.log(`(${V2 ? 'the rebuilt reader: the stand-in of /api/v2' : 'the old reader: the stand-in of the layer API'})`)
+// ---- the paper and the stand-in of our server (as reader-v2.mjs has them): the rebuilt reader (the reader package's PDF.js
+// files at the build's root) reads the reader package's fixture through the stand-in of /api/v2 (lib/v2-api.mjs), made once the
+// extension's origin is known
+const fixture = loadFixture('s1-columns')
+let api = null
+const sample = { id: fixture.paper, version: fixture.version, pdf: fixture.pdf }
+console.log('(the rebuilt reader: the stand-in of /api/v2)')
 const PAPER = sample.id
 const manifest = readFileSync(`${BUILD}/manifest.json`, 'utf8')
 const LAYER_HOSTS = ['https://readarxiv.com', ...['https://app-staging.readarxiv.org'].filter(host => manifest.includes(host))]
@@ -90,14 +83,14 @@ const elsewhere = (route, url) => (url.pathname === '/framer' ? route.fulfill({ 
 const echo = await startEchoEndpoint()
 copyWithGrants(BUILD, EXT, { hostPermissions: ['http://127.0.0.1/*', ...LAYER_HOSTS.map(host => `${host}/*`)] })
 const { context, worker, id } = await launchWithReader({ profile: 'framing-checks', extension: EXT, topLevel: false, headless: !process.env.AXT_HEADED, viewport: { width: 1280, height: 860 }, args: [RESOLVER_WALL] })
-if (V2) api = v2Api({ fixtures: [fixture], base: LAYER_HOSTS[0], extension: `chrome-extension://${id}` })
+api = v2Api({ fixtures: [fixture], base: LAYER_HOSTS[0], extension: `chrome-extension://${id}` })
 const guard = await routeTable(context, [
   ['https://arxiv.org', arxiv],
   ['https://example.invalid', elsewhere],
   // the full text's web fonts' style sheet: not served
   ['https://use.typekit.net', route => route.fulfill({ status: 404, contentType: 'text/plain', body: 'none' })],
   [echo.origin, route => route.continue()],
-  ...LAYER_HOSTS.map(host => [host, (route, url) => (V2 ? api.route(route, url) : serves(url.pathname) ? api.route(route) : false)]),
+  ...LAYER_HOSTS.map(host => [host, (route, url) => api.route(route, url)]),
 ])
 // (polled until the worker's extension bindings are there: Chrome 131 binds them a moment after the worker starts)
 for (let tries = 0; tries < 50 && !(await worker.evaluate(() => chrome.storage.local.get('config').then(r => !!r.config)).catch(() => false)); tries++) await sleep(200)
@@ -113,8 +106,8 @@ const setReader = change => worker.evaluate(async change => {
 }, change)
 /** the session's dynamic addresses of the two pages, as `runtime.getURL` gives them */
 const dynamic = await worker.evaluate(() => ({ reader: chrome.runtime.getURL('/pdf-reader.html'), popup: chrome.runtime.getURL('/popup.html') }))
-/** our server's answers for the sample so far: a run asks it (the rebuilt reader's open and follow; the old reader's layer) */
-const layerAsks = () => api.requests.filter(r => (V2 ? r.path === '/api/v2/open' || r.path.startsWith('/api/v2/papers/') : r.path.startsWith(`/api/v1/layer/${PAPER}v`))).length
+/** our server's answers for the sample so far: a run asks it (the rebuilt reader's open and follow) */
+const layerAsks = () => api.requests.filter(r => r.path === '/api/v2/open' || r.path.startsWith('/api/v2/papers/')).length
 
 /** the reader over a PDF page: its frame's address, whether it acts (its controller), the sample's pages, its run */
 async function readerOn(page, { wait = 30_000, run = true } = {}) {
@@ -124,7 +117,7 @@ async function readerOn(page, { wait = 30_000, run = true } = {}) {
   const src = (await el.getAttribute('src')) ?? ''
   const frame = await el.contentFrame()
   const pages = await frame?.waitForFunction(() => window.__reader?.controller?.getState().sides.left.pages, null, { timeout: 60_000 }).then(h => h.jsonValue(), () => 0)
-  const ran = run ? await frame?.waitForFunction(v2 => (v2 ? !!window.__reader?.reader : !!window.__reader?.run), V2, { timeout: 30_000 }).then(() => true, () => false) : null
+  const ran = run ? await frame?.waitForFunction(() => !!window.__reader?.reader, undefined, { timeout: 30_000 }).then(() => true, () => false) : null
   const display = pages ? await frame.evaluate(() => window.__reader.controller.getState().display) : null
   const at = new URL(src).host
   return { frame, src, pages, ran, display, dynamicAddress: at !== id, detail: `${src.replace(/^chrome-extension:\/\/[^/]+/, '')} (${at === id ? 'the static id' : 'the session\'s dynamic id'}); ${pages} pages, display ${display}, run ${ran}` }
@@ -275,11 +268,11 @@ try {
     await other.bringToFront()
     await sleep(1500)
     const pressedA = panelA ? await press(panelA, 'pdf') : false
-    let onA = await readerOn(page, V2 ? { wait: 30_000 } : undefined)
+    let onA = await readerOn(page, { wait: 30_000 })
     const frontWas = other.url()
     // (the rebuilt reader draws nothing in a tab no one sees: its pages are counted once its tab is in front, the tab that was
     // in front read before)
-    if (V2 && onA.frame && !onA.pages) {
+    if (onA.frame && !onA.pages) {
       await page.bringToFront()
       const shown = await readerOn(page)
       onA = { ...shown, detail: `${shown.detail} (counted once its tab was brought to the front)` }

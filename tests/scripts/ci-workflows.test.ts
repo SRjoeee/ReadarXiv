@@ -14,27 +14,20 @@ import { browserJobs, codeOf, rulesFor } from './workflow-rules'
 // is one of GitHub's own the list names, pinned by its commit, every token reads and nothing more unless the list below says why, no
 // checkout keeps a credential, no lab tier runs here. Each reader fails closed on form (a spelling it does not read is refused), and
 // each rule is shown to refuse what it is for, every spelling that could carry it included (tests/scripts/workflow-controls.ts).
-// And the hosted jobs run the release check's fast tier as gates.mjs states it, gate by gate. tests/scripts/rules-workflows.test.ts
-// holds what is particular to the rules gate's three workflows and to the fixtures' token in ci.yml; `actionlint` checks the syntax
-// where it is installed.
+// And the hosted jobs run the release check's fast tier as gates.mjs states it, gate by gate; and what is particular to ci.yml's
+// fixtures: their read token in the one step that fetches them, their cache a pull request's of this repository alone. `actionlint`
+// checks the syntax where it is installed.
 
 const ROOT = resolve(__dirname, '../..')
 const DIR = join(ROOT, '.github/workflows')
 const NAMES = readdirSync(DIR).filter(n => /\.ya?ml$/.test(n)).sort()
 const text = (name: string) => readFileSync(join(DIR, name), 'utf8')
-/** every write a token holds, where and why: the rules gate's comment on its own pull request, and the rollback's cancel of the
- *  publishes not finished (rules-point.yml, the one job that holds it, with no secret) */
-const WRITES: Record<string, string[]> = {
-  'rules-gate.yml': ['workflow: pull-requests'],
-  'rules-point.yml': ['cancel-publishes: actions'],
-}
+/** every write a token holds, where and why: none */
+const WRITES: Record<string, string[]> = {}
 const RULES = { ...rulesFor(WRITES), 'browser jobs': browserJobs }
 /** the fast tier's gates no hosted job runs, each with its reason: they run on the maintainer's machine, in the fast tier run
- *  there (lab/release-check/CI.md) */
-const NOT_HOSTED: Record<string, string> = {
-  'e2e:small-caps':
-    "it holds today's layer (src/pdf-reader/engine), which the cut-over deletes. On the hosted runner's Chromium (Linux, a device scale of 1) glyph advances come whole pixels at the size a run is drawn and at the size today's layer measures it, so a run is drawn up to 4.5 px off its measured width and laid up to 0.7 PDF units off Firefox's and WebKit's (run 44432025091): a platform difference of today's reader, production's, not of a change here. A check of the maintainer's machine until its code goes",
-}
+ *  there (lab/release-check/CI.md); none */
+const NOT_HOSTED: Record<string, string> = {}
 
 /** a workflow's jobs by name, each with its text (the comments before the next job's name stay with the one above it) */
 const jobsOf = (yml: string) => new Map(yml.slice(yml.indexOf('\njobs:\n') + 7).split(/\n(?= {2}[a-z][a-z-]*:\n)/).flatMap(part => { const name = /^ {2}([a-z][a-z-]*):/m.exec(part)?.[1]; return name ? [[name, part] as [string, string]] : [] }))
@@ -45,8 +38,8 @@ const escaped = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const runs = (step: string, command: string) => new RegExp(`(^|\\n)\\s*run: ${escaped(command)}$`, 'm').test(step)
 
 describe('every workflow', () => {
-  it('is read here, the four there are among them (a workflow added later is read without a line here)', () => {
-    expect(NAMES).toEqual(expect.arrayContaining(['ci.yml', 'rules-gate.yml', 'rules-point.yml', 'rules-publish.yml']))
+  it('is read here, the one there is among them (a workflow added later is read without a line here)', () => {
+    expect(NAMES).toEqual(expect.arrayContaining(['ci.yml']))
   })
 
   it('obeys every rule', () => {
@@ -138,5 +131,50 @@ describe('the fast tier on GitHub\'s runners (ci.yml)', () => {
     expect(check.some(s => s.startsWith('name: census\n') && runs(s, 'node lab/release-check/census.mjs --no-today')), 'census').toBe(true)
     ran.push('census')
     expect(ran.sort()).toEqual(fast.map(g => g.id).sort())
+  })
+})
+
+describe('the secrets', () => {
+  it('reach the fixtures fetch of ci.yml in that step\'s environment and in no other step', () => {
+    const ci = text('ci.yml')
+    const steps = ci.slice(ci.indexOf('\n    steps:\n')).split(/\n {6}- /).slice(1)
+    const holding = steps.filter(step => /READARXIV_CI_TOKEN|CF_ACCOUNT_ID|secrets\./.test(step))
+    expect(holding).toHaveLength(1)
+    expect(holding[0]).toMatch(/^run: node scripts\/fetch-fixtures\.mjs\n {8}env:\n {10}READARXIV_CI_TOKEN: \$\{\{ secrets\.READARXIV_CI_TOKEN \}\}\n {10}CF_ACCOUNT_ID: \$\{\{ vars\.CF_ACCOUNT_ID \}\}\s*$/)
+    // not the job's, the workflow's or any other step's, and no environment to take it from
+    expect(ci).not.toMatch(/^env:/m)
+    expect(ci).not.toMatch(/^\s+environment:/m)
+    expect(ci.match(/READARXIV_CI_TOKEN/g)).toHaveLength(2)
+    expect(ci.match(/CF_ACCOUNT_ID/g)).toHaveLength(2)
+    expect(ci).not.toMatch(/pull_request_target/)
+    // the job that holds the token reads the repository alone, and keeps no git credential in the checkout
+    expect(ci).toMatch(/^permissions:\n {2}contents: read\n/m)
+    expect(ci).toMatch(/uses: actions\/checkout@[0-9a-f]{40} # v[\d.]+\n {8}with:\n {10}persist-credentials: false\n/)
+    // the order of the fetch among the steps stays: after the cache is restored, before the tests that read the fixtures
+    const order = steps.map(step => (step.startsWith('id: fixtures-cache') ? 'restore' : step.startsWith('run: node scripts/fetch-fixtures.mjs') ? 'fetch' : step.startsWith('run: pnpm test') ? 'test' : ''))
+    expect(order.filter(Boolean)).toEqual(['restore', 'fetch', 'test'])
+  })
+})
+
+describe('the fixtures\' cache (ci.yml)', () => {
+  // arXiv's papers under its non-exclusive licence, never redistributed (tests/fixtures/README.md): ci.yml runs on a push to main
+  // too, and a cache saved there is restorable by any pull request, a fork's included, whose own copy of the workflow decides what
+  // happens to it (#88 E8). A pull request's cache is that pull request's alone
+  const ci = text('ci.yml')
+  const steps = ci.slice(ci.indexOf('\n    steps:\n')).split(/\n {6}- /).slice(1)
+  const SAME_REPO = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
+  it('is restored and saved only in a pull request of this repository', () => {
+    const caching = steps.filter(step => /uses: actions\/cache\//.test(step))
+    expect(caching).toHaveLength(2)
+    for (const step of caching) {
+      const condition = /^(?:id: .*\n\s+)?if: (.*)$/m.exec(step)?.[1]
+      expect(condition, step.split('\n')[0]).toBeDefined()
+      expect(condition!.startsWith(`${SAME_REPO}`), step.split('\n')[0]).toBe(true)
+    }
+    // the save after a miss alone
+    expect(caching.find(step => step.includes('actions/cache/save'))).toContain(`if: ${SAME_REPO} && steps.fixtures-cache.outputs.cache-hit != 'true'`)
+  })
+  it('is keyed apart from the entry main saved before the guard, which no run reads again and so expires', () => {
+    for (const m of ci.matchAll(/key: (\S+)\$\{\{/g)) expect(m[1]).toBe('remote-fixtures-pr-')
   })
 })

@@ -15,16 +15,17 @@
 // Nothing here is an arXiv paper's: the source and everything made from it are ours, CC0. No request leaves this machine; the image
 // is never pulled.
 import { execFile } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { openPaper } from '../src/pdf-reader/engine/pipeline/live.mjs'
-import { markedOfPaper } from '../src/pdf-reader/engine/layout/paper.mjs'
-import { DRIVER_OUTPUT_MARK, textOfPdf } from '../src/pdf-reader/engine/layout/base.mjs'
+import { openPaper } from '../packages/engine/src/compile/live.ts'
+import { markedOfPaper } from '../packages/engine/src/compile/paper.ts'
+import { DRIVER_OUTPUT_MARK, textOfPdf } from '../packages/engine/src/compile/base.ts'
 import { checkCompileImage, COMPILE_IMAGE, PLATFORM } from '../lab/pdf/spikes/compile-image.mjs'
+import { filesUnder } from '../lab/pdf/spikes/files-under.mjs'
 
 const run = promisify(execFile)
 const FIXTURE = fileURLToPath(new URL('../tests/fixtures/pdf/highlights/', import.meta.url))
@@ -34,7 +35,6 @@ const EPOCH = 1794441600
 const check = process.argv.includes('--check')
 const NM = fileURLToPath(new URL('../node_modules/pdfjs-dist/', import.meta.url))
 const DOC = { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }
-const filesUnder = (d, rel = '') => readdirSync(join(d, rel), { withFileTypes: true }).flatMap(x => (x.isDirectory() ? filesUnder(d, join(rel, x.name)) : [join(rel, x.name)]))
 
 /** one compile in the pinned image, no network, as the box answers a CompileRequest (lab/marks/today.mjs's compiler, uncached):
  *  `files` the paper's with the request's overrides, in a folder of its own */

@@ -12,6 +12,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./early": "./src/early.ts",
+    "./testing": "./src/testing/index.ts",
     "./vite": "./src/vite.ts",
     "./pdfjs-legacy": "./src/pdfjs/legacy.ts",
     "./reader.css": "./src/chrome/reader.css"

@@ -1,5 +1,5 @@
 // lab/pdf/spikes/layout-cell-cases.mjs
-// A table cell's alignment under TeX (src/pdf-reader/engine/layout/marks.mjs LAYOUT_TEX's AXT-CELL, the class LaTeX built the
+// A table cell's alignment under TeX (packages/engine/src/marks/marks.ts LAYOUT_TEX's AXT-CELL, the class LaTeX built the
 // cell's column template from, and AXT-ALIGN at a cell's end mark, its own paragraph's; read by packages/engine/src/marks/
 // channels.ts readAlign): small documents, each cell unit's start and end mark set by hand as layoutMarking sets them
 // (`\leavevmode\axtmark{t<i>s}` … `\axtend{t<i>e}`), compiled in each pinned TeX Live year's image under pdfLaTeX, XeLaTeX,
@@ -38,8 +38,8 @@ import { join, resolve } from 'node:path'
 import { pageInk } from '@readarxiv/engine'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { readAlign } from '../../../packages/engine/src/marks/channels.ts'
-import { DVI_MARK_DEF, MARK_DEF } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { DVI_LAYOUT_TEX, LAYOUT_TEX } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { DVI_MARK_DEF, MARK_DEF } from '../../../packages/engine/src/source/latex-front.ts'
+import { DVI_LAYOUT_TEX, LAYOUT_TEX } from '../../../packages/engine/src/marks/marks.ts'
 import { checkCompileImage, compileImageRef } from './compile-image.mjs'
 
 const arg = name => { const a = process.argv.find(x => x.startsWith(`--${name}=`)); return a ? a.slice(name.length + 3) : null }

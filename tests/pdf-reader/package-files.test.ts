@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { inMemory } from '../../packages/engine/src/source/latex-front.ts'
 import { openPaper, originalFiles } from '../../packages/engine/src/compile/live.ts'
 import { analyze } from '../../packages/engine/src/source/paper-meta.ts'
-import { untar } from '../../packages/engine/src/source/tar.ts'
+import { untar } from '../../lab/pdf/prepare-back/tar.ts'
 
 // One name for one file across the PDF reader's engine: the name the source package holds it under, which is the one
 // TeX's file system has too (the TeX page writes each file at its path joined to the project's directory). Under two

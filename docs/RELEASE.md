@@ -19,9 +19,9 @@ The release commit is made **on the branch, before the merge**, so that the tree
 5. A GitHub release for the tag, with the archive attached and the changelog section as its notes.
 6. The Chrome Web Store submission (below), with the privacy policy URL. Until it is listed, the README's "load unpacked" path is the install.
 
-**The reader's entries online, before the first release of the rebuilt reader** (lane V5, 2026-11-13): run on a staging
-build (`pnpm build:staging`, the rebuilt reader by default) against a staging that serves the release's round, by the
-coordinator, with the owner's word for the translator calls; once each, `AXT_E2E_ONLINE=1`, stopping at the first sign
+**The reader's entries online, before the first release of the rebuilt reader** (2026-11-13): run on a staging
+build (`pnpm build:staging`, the rebuilt reader by default) against a staging that serves the release's round, with the
+maintainer's word for the translator calls; once each, `AXT_E2E_ONLINE=1`, stopping at the first sign
 arXiv or staging slows or refuses (`tests/e2e/lib/online.mjs` refuses a build that talks to production). Not run on the
 rebuild line, where staging serves another round behind a tester gate a fresh profile does not pass:
 
@@ -44,19 +44,21 @@ rebuild line, where staging serves another round behind a tester gate a fresh pr
 
 ## Going back from the rebuilt reader's release
 
-The first release whose PDF reader is the rebuilt one (`AXT_READER` `v2`, the build's default: `wxt.config.ts:69-82`) changes
+The first release whose PDF reader is the rebuilt one (the one reader this tree builds: the switch `AXT_READER` went with
+today's reader at the cut-over) changes
 what a reader's machine holds against 0.5.2, the version the Chrome Web Store holds. Contract by contract: what is migrated
 forward, what 0.5.2 refuses, what a reader on 0.5.2 sees, and what this release meets when it comes back. Read from the code at
 the release's head and at the tag `v0.5.2`; the two IndexedDB stores are measured (the next section).
 
-- **The settings** (`local:config`). This release reads and writes `CONFIG_VERSION` 21 at the time of writing
-  (`src/config/schema.ts:9`; a step added before the release raises it, and what follows holds for any number above 20); 0.5.2
-  knows 20. *Forward*: the step 20 → 21 (`src/config/storage.ts:142-157`) adds the PDF reader's "What to translate", each
-  toggle as it was in effect; nothing else changes. *Back*: 0.5.2 reads a stored 21 as `tooNew`
+- **The settings** (`local:config`). This release reads and writes `CONFIG_VERSION` 22 (`src/config/schema.ts:9`; a step
+  added before the release raises it, and what follows holds for any number above 20); 0.5.2 knows 20. *Forward*: the step
+  20 → 21 (`src/config/storage.ts:142-156`) adds the PDF reader's "What to translate", each toggle as it was in effect, and
+  the step 21 → 22 (`:157-163`) marks whether the reader chose a translator (`providerChosen`: a stored Microsoft, the
+  install's default, reads as no choice); nothing else changes. *Back*: 0.5.2 reads a stored 22 as `tooNew`
   (`v0.5.2:src/config/storage.ts:200-204`), runs on its defaults, and refuses every write while the stored value cannot be
   read (`:260-266`), so nothing the reader set is written over. *What the reader sees on 0.5.2*: the settings page's card
   S-O-02 with its reset, and in the PDF reader the capsule S-R-21 (`docs/UI.md` at 0.5.2); the default service translates;
-  the reader's own services, keys, prompts and glossary stay in storage, out of effect. *Coming forward again*: the stored 21
+  the reader's own services, keys, prompts and glossary stay in storage, out of effect. *Coming forward again*: the stored 22
   is read as it was and nothing is lost, unless the reset was pressed on 0.5.2: it writes 0.5.2's defaults at version 20
   (`:276-281`), which this release then migrates, and the reader's own settings are gone. A reader who goes back alone
   should not press it.
@@ -83,24 +85,26 @@ reader is a new upload of older code under a higher number, the maintainer's act
 such a build:
 
 1. carries a `package.json` version above the release's;
-2. reads the release's `CONFIG_VERSION`. A tree at a lower number puts every reader who updated on the defaults (above): an
-   upload of 0.5.2's tree is no way back, and `next` at `065c1d973` (21, today's reader) is one only while the release is
-   at 21;
-3. runs a PDF reader whose API the website still serves. Today's reader (`AXT_READER=today pnpm build`, `wxt.config.ts:69-82`;
-   `lab/release-check/today-build.sh` builds it for the release check's full tier) reads the first API, and it goes with the
-   cut-over's deletion of today's reader. After that deletion, and once the website stops answering the first API, the
-   reader has no way back, only forward;
+2. reads the release's `CONFIG_VERSION`, 22. A tree at a lower number puts every reader who updated on the defaults (above):
+   an upload of 0.5.2's tree (20) is no way back, and neither is `next` at `065c1d973` or `c7e44a94b`, each at 21 with
+   today's reader;
+3. runs a PDF reader whose API the website still serves. Today's reader reads the first API; this tree holds it no more (the
+   cut-over deleted it). The commit to build is `0c1c9d9cb`, the line's last before the cut-over, which holds it and
+   reads configuration 22 (an ancestor of this tree, so it stays in the history): there `AXT_READER=today pnpm build` builds the
+   extension with today's reader (`0c1c9d9cb:wxt.config.ts:69-82` reads the switch, `:92` hands it to the build, and the reader
+   page opens today's session by it, `0c1c9d9cb:src/entrypoints/pdf-reader/main.tsx:25`, `:46-49`). No build of this tree, or
+   of any commit after it, can be that build. Once the website stops answering the first API, the reader has no way back, only
+   forward;
 4. needs no store step to work (measured, the next section); the release that comes forward after it carries the null steps
    of the recipe there.
 
-Which build is made ready before the upload, and kept for how long, is the maintainer's to choose: a commit of this release's
-line that still holds today's reader and the release's configuration steps, built with `AXT_READER=today` under a higher
-number, or `next`'s tree while the release is at 21. Neither has been uploaded or installed over this release's stores; the
-stores' half of it is measured, the rest is read from the code.
+Whether that build is made ready before the upload, and kept for how long, is the maintainer's to choose. There is one to
+make: `0c1c9d9cb` built with `AXT_READER=today` under a version above the release's. It has not been uploaded or installed over
+this release's stores; the stores' half of it is measured, the rest is read from the code.
 
 ## Going back a version: the reader's stores
 
-The first release whose PDF reader is the rebuilt one (`AXT_READER` `v2`, the build's default since 2026-11-13) steps two
+The first release whose PDF reader is the rebuilt one (the build's one reader since the cut-over; its default since 2026-11-13) steps two
 of the reader's stores in IndexedDB. What a reader who goes back to the version before it (0.5.2) finds, measured with Dexie
 4.4 (`tests/cache/paper-store.test.ts`, `tests/cache/translate-store.test.ts`; PDF-READER §9.3):
 

@@ -6,7 +6,7 @@
 // extension page is no tab the background watches). A unit goes as a translator is given it (packages/translate unitInOf: what
 // the wires read of it, a nested unit its mark), never format's unit itself, whose nested unit no wire can write.
 import type { Row as Result, Unit, Why } from '@readarxiv/format'
-import { type UnitIn, unitInOf } from '@readarxiv/translate'
+import { FIRST_BATCH_MAX, NEXT_BATCH_MAX, type UnitIn, unitInOf } from '@readarxiv/translate'
 import type { TranslationTransport } from '@/providers/transport'
 import type { ProviderErrorKind } from '@/providers/types'
 import { sendMessage } from '@/shared/messages'
@@ -48,20 +48,17 @@ export const WHY_OF: Readonly<Record<ProviderErrorKind, Why>> = {
 }
 const failed = (id: string, kind: string): Result => ({ id, ok: false, why: WHY_OF[kind as ProviderErrorKind] ?? { kind: 'unavailable' } })
 
-/**
- * The characters of plain source a call holds at most, as production's reader batches a paper (its names and values, the PDF
- * engine's mt.mjs FIRST_BATCH and NEXT_BATCH, layer-proto/rows.mjs runRows): the first small, so that it comes back soon,
- * then larger. A call goes once the one before it has answered, in the reader's order (the page in view, then outward):
- * one call is out at a time, so the order calls are issued in is the order the nearest are served in, and the chain cuts
- * each into its translators' requests in array order, as many in flight as each allows (production's queue: 8 for
- * Microsoft and an LLM). In chain-sized calls one after another a 3-page open was 10 requests in series where production
- * takes about 3 round trips
+/*
+ * A paper's units go in calls of plain source, the first at most FIRST_BATCH_MAX characters and every later one at most
+ * NEXT_BATCH_MAX (the translate package's: the sizes both hosts cut a paper by). A call goes once the one before it has
+ * answered, in the reader's order (the page in view, then outward): one call is out at a time, so the order calls are issued
+ * in is the order the nearest are served in, and the chain cuts each into its translators' requests in array order, as many
+ * in flight as each allows (production's queue: 8 for Microsoft and an LLM). In chain-sized calls one after another a
+ * 3-page open was 10 requests in series where production takes about 3 round trips
  */
-export const FIRST_BATCH = 2500
-export const NEXT_BATCH = 12000
 
-/** a unit's plain source, by whose length a call is planned: its text, an element a space, white space collapsed (mt.mjs
- *  plainSource) */
+/** a unit's plain source, by whose length a call is planned: its text, an element a space, white space collapsed (as
+ *  production's wire's plainSource) */
 const plainOf = (pieces: UnitIn['content']): string => pieces.map(p => (p.t === 'text' ? p.s : p.t === 'span' ? plainOf(p.content) : ' ')).join('')
 const plainLength = (pieces: UnitIn['content']): number => plainOf(pieces).replace(/\s+/g, ' ').trim().length
 
@@ -79,14 +76,14 @@ export function hostTranslate(o: { transport: TranslationTransport; paper: strin
         for (const u of units) yield failed(u.id, kind)
         return
       }
-      // calls of FIRST_BATCH then NEXT_BATCH characters, in the reader's order (the nearest first), a unit never split and a
-      // call never empty (mt.mjs batchOf): each call's results are given as it answers; a later call of the reader's (a new
+      // calls of FIRST_BATCH_MAX then NEXT_BATCH_MAX characters, in the reader's order (the nearest first), a unit never split and a
+      // call never empty (as production's wire's batchOf): each call's results are given as it answers; a later call of the reader's (a new
       // reading place's) the chain puts first
       const calls: UnitIn[][] = []
       let cur: UnitIn[] = [], n = 0
       for (const u of units.map(unitInOf)) {
         const len = plainLength(u.content)
-        if (cur.length && n + len > (calls.length ? NEXT_BATCH : FIRST_BATCH)) { calls.push(cur); cur = []; n = 0 }
+        if (cur.length && n + len > (calls.length ? NEXT_BATCH_MAX : FIRST_BATCH_MAX)) { calls.push(cur); cur = []; n = 0 }
         cur.push(u)
         n += len
       }

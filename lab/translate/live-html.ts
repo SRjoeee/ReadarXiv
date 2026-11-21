@@ -15,6 +15,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { accept, type Fetch, type UnitIn } from '../../packages/translate/src/index.ts'
 import { microsoft } from '../../packages/translate/src/adapters/microsoft.ts'
+import { toAlpha } from '../../packages/translate/src/wire/alpha.ts'
 import { planMarkers } from '../../packages/translate/src/wire/markers.ts'
 import { expectationsFromText, validate } from '../../src/core/protector/validate.ts'
 import { tokenize } from '../../src/core/protector/tokens.ts'
@@ -115,17 +116,6 @@ if (which === 'today') {
       out.push({ id: b.id, paper: b.paper, elements, back: Math.min(back, elements), accepted: ok, refused: !ok, wire: ms.write(unit, 'zh-Hans'), reply: text, raw })
     })
   })
-}
-
-function toAlpha(id: number): string {
-  let n = id
-  let s = ''
-  while (n > 0) {
-    const r = (n - 1) % 26
-    s = String.fromCharCode(97 + r) + s
-    n = (n - 1 - r) / 26
-  }
-  return s
 }
 
 const sum = (f: (r: (typeof out)[number]) => number) => out.reduce((n, r) => n + f(r), 0)
