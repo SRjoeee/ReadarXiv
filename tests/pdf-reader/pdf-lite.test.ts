@@ -25,7 +25,8 @@ describe('liteWorkerSource', () => {
     expect(LINK_TEXT_PIXELS).toBe(NO_IMAGE_PIXELS - 1)
     expect(out).toContain(`annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS}) {`)
     expect(out).not.toContain(TEXT_ANCHOR)
-    expect(out.length).toBeLessThan(src.length + 300)
+    // (the three insertions alone: the guard with its record of no pixels, the text's condition, FeatureTest's export)
+    expect(out.length).toBeLessThan(src.length + 400)
   })
 
   it('refuses a worker without the decode, with it twice, a source that is no string, and a PDF.js it was not made for', () => {
@@ -92,7 +93,7 @@ const IMAGES = pdfOf([
 async function read(data: Uint8Array, lite: boolean | 'links') {
   const task = getDocument({ data: data.slice(), verbosity: 0, ...(lite === 'links' ? { maxImageSize: LINK_TEXT_PIXELS } : lite ? LITE : {}) })
   const doc = await task.promise
-  const out: { fn: number[]; args: unknown[]; decoded: (boolean | null)[] }[] = []
+  const out: { fn: number[]; args: unknown[]; decoded: unknown[] }[] = []
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p)
     const list = await page.getOperatorList()
@@ -101,7 +102,13 @@ async function read(data: Uint8Array, lite: boolean | 'links') {
     const ids = list.argsArray.filter((a, i) => list.fnArray[i] === OPS.paintImageXObject && Array.isArray(a)).map(a => (a as unknown[])[0] as string)
     await new Promise(r => setTimeout(r, 300))
     const objs = (id: string) => (id.startsWith('g_') ? page.commonObjs : page.objs)
-    const decoded = ids.map(id => (objs(id).has(id) ? (objs(id).get(id) ? true : null) : false))
+    // (each its pixels, a record of none that says whether its samples carry alpha (the lite worker's), or none (null); false
+    // where nothing came)
+    const decoded = ids.map(id => {
+      if (!objs(id).has(id)) return false
+      const o = objs(id).get(id) as { data?: { length: number }; bitmap?: unknown; alpha?: boolean } | null
+      return o === null ? null : o.bitmap || (o.data?.length ?? 0) > 0 ? 'pixels' : { alpha: o.alpha }
+    })
     out.push({ fn: Array.from(list.fnArray), args: JSON.parse(JSON.stringify(list.argsArray).replace(/_d\d+_/g, '_dN_')), decoded })
     page.cleanup()
   }
@@ -122,14 +129,46 @@ describe('a document read without its images\' pixels', () => {
 
   it('decodes no pixel for it, while a document opened without the option in the same process decodes as ever', async () => {
     const stock = await read(IMAGES, false), lite = await read(IMAGES, true), links = await read(IMAGES, 'links')
-    // stock: each image's pixels came; lite: the decode failed (a null image) and nothing was kept; the draw's opt-in the same
-    expect(stock.out.flatMap(p => p.decoded)).toEqual([true, true, true])
-    expect(lite.out.flatMap(p => p.decoded)).toEqual([null, null, null])
-    expect(links.out.flatMap(p => p.decoded)).toEqual([null, null, null])
+    // stock: each image's pixels came; lite: a record of no pixels in their place, each of an image whose samples carry no alpha;
+    // the draw's opt-in the same
+    const opaque = { alpha: false }
+    expect(stock.out.flatMap(p => p.decoded)).toEqual(['pixels', 'pixels', 'pixels'])
+    expect(lite.out.flatMap(p => p.decoded)).toEqual([opaque, opaque, opaque])
+    expect(links.out.flatMap(p => p.decoded)).toEqual([opaque, opaque, opaque])
     expect(links.out.map(p => [p.fn, p.args])).toEqual(stock.out.map(p => [p.fn, p.args]))
     // and a stock reading after a lite one in the same process still decodes
     const again = await read(IMAGES, false)
-    expect(again.out.flatMap(p => p.decoded)).toEqual([true, true, true])
+    expect(again.out.flatMap(p => p.decoded)).toEqual(['pixels', 'pixels', 'pixels'])
+  })
+
+  // (one page, six images side by side: an RGB one; one with a soft mask; one with a colour-key /Mask; one with a stencil /Mask; a
+  // JPX of a /ColorSpace and no /SMaskInData; a JPX whose data holds its soft mask (/SMaskInData 1))
+  const JPX = Buffer.from(
+    '/0//UQAvAAAAAAAIAAAACAAAAAAAAAAAAAAACAAAAAgAAAAAAAAAAAADBwEBBwEBBwEB/1IADAAAAAEBAQQEAAH/XAAHQEBISFD/ZAAlAAFDcmVhdGVkIGJ5IE9wZW5KUEVHIHZlcnNpb24gMi41LjT/kAAKAAAAAABbAAH/k8+0OBDiOPgtKH0c7yKSSMyb34BIFTFrrB4pUAh/34BoBkGUjLQHNu5nGNP/f8D5AcHzgwAiGg8Df+uh9QGAAM/jw+oDh9QGIhoVAM/j/9k=',
+    'base64',
+  ).toString('latin1')
+  const RGB = '/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8'
+  const px = String.fromCharCode(10, 20, 30).repeat(4)
+  const KINDS = pdfOf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /A 5 0 R /B 6 0 R /C 8 0 R /D 9 0 R /E 11 0 R /F 12 0 R >> >> /Contents 4 0 R >>',
+    ['', ['A', 'B', 'C', 'D', 'E', 'F'].map((n, i) => `q 50 0 0 50 ${60 + 80 * i} 300 cm /${n} Do Q`).join(' ')],
+    [RGB, px],
+    [`${RGB} /SMask 7 0 R`, px],
+    ['/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceGray /BitsPerComponent 8', String.fromCharCode(255, 0, 0, 255)],
+    [`${RGB} /Mask [10 10 20 20 30 30]`, px],
+    [`${RGB} /Mask 10 0 R`, px],
+    ['/Type /XObject /Subtype /Image /Width 2 /Height 2 /BitsPerComponent 1 /ImageMask true', String.fromCharCode(0x40, 0x80)],
+    ['/Type /XObject /Subtype /Image /Width 8 /Height 8 /ColorSpace /DeviceGray /Filter /JPXDecode', JPX],
+    ['/Type /XObject /Subtype /Image /Width 8 /Height 8 /ColorSpace /DeviceGray /Filter /JPXDecode /SMaskInData 1', JPX],
+  ])
+  it('states, with no pixel, whether each image\'s samples carry alpha: its soft mask, its mask (a colour key or a stencil), a JPX\'s soft mask in its data', async () => {
+    const lite = await read(KINDS, true)
+    expect(lite.out.flatMap(p => p.decoded)).toEqual([false, true, true, true, false, true].map(alpha => ({ alpha })))
+    // (the same list as the stock reading's)
+    const stock = await read(KINDS, false)
+    expect(lite.out.map(p => [p.fn, p.args])).toEqual(stock.out.map(p => [p.fn, p.args]))
   })
 })
 

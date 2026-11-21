@@ -75,6 +75,8 @@ export function readArxiv(
     turned: true,
     // (every path's lines: the figure texts locate makes on A read a figure's lines where B's pictures and forms say it is one)
     shapesAll: true,
+    // (its images: one painted after a figure's text covers it where every sample paints, as on the page a reader is shown)
+    images: true,
     extra: (OPS) => alignReader(OPS),
     annotations: true,
     // (each font's own map: a glyph it gives no Unicode of is no reading of its text)
