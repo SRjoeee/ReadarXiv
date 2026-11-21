@@ -129,6 +129,31 @@ describe('loadProject: a file named through a macro is the one TeX reads, the ma
     expect(filesOf(read('\\def\\subpath{elsewhere/}', '\\input{\\subpath parts/sec.tex}'))).toEqual([])
     expect(filesOf(read('', '\\input{\\undefined parts/sec.tex}'))).toEqual([])
   })
+  it('reads the file two definitions both name: they are one file, whichever TeX takes', () => {
+    expect(filesOf(read('\\IfFileExists{flag.tex}{\\def\\subpath{./}}{\\def\\subpath{}}', '\\input{\\subpath parts/sec.tex}'))).toEqual(['parts/sec.tex'])
+  })
+  it('expands a macro inside a macro\'s body, and gives a macro one body wherever it stands in the name', () => {
+    expect(filesOf(read('\\def\\base{parts}\n\\def\\sub{\\base/}', '\\input{\\sub sec}'))).toEqual(['parts/sec.tex'])
+    // (\s is a/ or b/ when TeX reads the name, never a/ in one place and b/ in the other)
+    const test = '\\IfFileExists{flag.tex}{\\def\\s{a}}{\\def\\s{b}}'
+    expect(filesOf(read(test, '\\input{\\s/\\s}', [['a/a.tex', SECTION]]))).toEqual(['a/a.tex'])
+    expect(filesOf(read(test, '\\input{\\s/\\s}', [['a/b.tex', SECTION]]))).toEqual([])
+  })
+  it('reads a macro defined in a file the paper reads before, and one the package defines after the \\input', () => {
+    // (every definition the package gives is a body the name may take, wherever it stands: one given after the \input, which
+    // TeX meets undefined there and drops, leaves it the name without the macro, a file TeX reports missing unless the package
+    // holds it, so a paper so written compiles on arXiv only where both name the same file)
+    expect(filesOf(read('\\input{defs}', '\\input{\\subpath sec}', [['defs.tex', '\\def\\subpath{parts/}\n'], ['parts/sec.tex', SECTION]]))).toEqual(['parts/sec.tex'])
+    expect(filesOf(read('', '\\input{\\subpath sec}\n\n\\def\\subpath{parts/}'))).toEqual(['parts/sec.tex'])
+  })
+  it('reads none through a macro with an argument, or one met inside its own body', () => {
+    expect(filesOf(read('\\newcommand{\\p}[1]{parts/#1}', '\\input{\\p{sec}}'))).toEqual([])
+    expect(filesOf(read('\\def\\loop{\\loop}', '\\input{\\loop parts/sec}'))).toEqual([])
+  })
+  it('reads a name of no macro byte for byte as before: a control symbol is no macro', () => {
+    expect(filesOf(read('', '\\input{parts/sec}'))).toEqual(['parts/sec.tex'])
+    expect(filesOf(read('', '\\input{parts/my\\_sec}', [['parts/my\\_sec.tex', SECTION]]))).toEqual(['parts/my\\_sec.tex'])
+  })
 })
 const project = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex')
 const textOf = (u: Unit) => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')

@@ -9113,6 +9113,38 @@ the count flush right; the typesetter read `\hfill` as no glue, and drew the two
   the glue places is marked by the parity's lay); a line's other gaps are read as before.
 - **Versions**: lay only; no stored object moves (PIPELINE, TRANSLATE, LAYOUT and the digests stay).
 
+### 18.105 A paper's file is the one TeX reads, a macro in its name expanded (the coordinator's ruling of 2026-11-22)
+
+2609.35143v1 names each of its 23 files through a macro, `\input{\subpath submission/sections/06-analysis.tex}`, its preamble
+setting `\IfFileExists{arxiv/submission/macros.tex}{\def\subpath{arxiv/}…}{\def\subpath{}}`. TeX expands the name (latex.ltx's
+`\input{#1}` is `\InputIfFileExists{#1}`, whose `\IfFileExists` expands it before kpathsea looks it up): `\subpath` is empty in
+arXiv's package, and TeX read `submission/sections/06-analysis.tex`. The source reader asked the package for the name as letters,
+`\subpath submission/sections/06-analysis.tex`, found no file and walked none: no unit past the title, the author block and the
+references. The paper's prose was then translated from the page's own lines alone (the ink units, §19.10), which leave the text
+inside a float to the float, so every figure's caption, every table's caption and every table's cell stayed English (the owner's
+report of 2026-11-21 on production; the released reader did the same).
+
+- **How the source reader finds a file** (`source/latex-front.ts` readProject's `read`, the one place the body's `\input`,
+  `\include`, `\subfile` and import.sty's commands and the preamble's `\input` and `\include` resolve a name). A name with no
+  control word is looked up as before (`readNamed`): in the directories import.sty puts on the path, the last imported first,
+  then at the package's root; as given, then with `.tex`; by the name the package holds the file under, whatever spelling named
+  it; and, where none is of the name as given, kpathsea's case fold (one file whose last component is the name's, case aside;
+  none where two fold alike). A name holding a control word is first expanded as TeX expands it (`namesThrough`): each macro
+  given a body the package's own files define it with, comments out, with no parameter (`\def`, `\gdef`, `\edef`, `\xdef`,
+  `\newcommand`, `\renewcommand`, `\providecommand`; a definition in each branch of a test is a body each,
+  `plainBodiesOf`), the same body wherever the macro stands in the name and in the directories (TeX's one value when it reads
+  the name), a body's own macros expanded in turn. The file read is the one those names find: where they find exactly one file
+  of the package (two names of one file are one file), that file; where they find none, or two (which one TeX reads is a test it
+  runs), none, as before. No list of macros, no guess of a path: TeX's expansion and kpathsea's lookup.
+- **Out of contract, answered by a test each**: a macro with an argument in a name, and one met inside its own body (TeX never
+  ends its expansion), name no file; a definition given after the `\input` is a body too (TeX meets the macro undefined there
+  and drops it, so a paper so written compiles on arXiv only where both name the same file); a control symbol (`\_`) is no macro.
+- **Reach** (the source reader over the lab's 245 papers): no name a paper's source reader asks for holds a control word, so no
+  unit, mark or object of theirs moves. 2609.35143v1: its 23 files read, its source units 53 -> 587 (every caption, all 20, and
+  every table's cells among them, each translated as any caption and cell), its ink prose units 154 -> 2.
+- **Versions**: PIPELINE 110 (what the units are); LAYOUT 44 (today's layout maker reads the cut through the same front end);
+  the marks digest moves (the front end is in the compile child's closure): every stored paper is prepared and compiled again.
+
 ## 19. The engine's contract
 
 **Today's engine and the rebuild's.** This chapter describes today's engine, `src/pdf-reader/engine/`, which our server

@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paper that names its section files through a macro of its own, such as `\input{\subpath sections/intro.tex}`, is read from its source: its figures' and tables' captions and its tables' cells are translated. They had stayed English, with the rest of the text translated only from the printed page.
 - Changed: in the PDF reader, the first scroll through a paper stutters less while its fonts arrive: the text of pages far off screen is no longer laid out again each time a font loads.
 - Fixed: in the PDF reader, a paragraph whose lines hold tall formulas, such as a fraction with a raised exponent, a `cases` or a matrix set inside the line, or big brackets, is translated with each formula in its line at its size. Its formulas' parts had been read as lines of their own: such a paragraph could stay in English, a line of its translation could be drawn over its formula, or a formula drawn squashed, raised or in pieces.
 - Fixed: in the PDF reader, a list whose items the paper opens with a bullet of its own shows one bullet before each item, as printed. It showed two, "• •".

@@ -6948,6 +6948,53 @@ const foldOf = (f: string) => {
   const i = f.lastIndexOf('/')
   return f.slice(0, i + 1) + f.slice(i + 1).replace(/[A-Z]/g, (c) => c.toLowerCase())
 }
+/** a control word in a file's name, and the spaces TeX skips after it: group 1 its name */
+const NAME_MACRO = /\\([A-Za-z@]+)\s*/
+/** every body the package's own parameterless definitions give each macro, as TeX reads them with the comments out:
+ *  latex.ltx's \\newcommand, \\renewcommand and \\providecommand with no argument, TeX's \\def, \\gdef, \\edef and \\xdef with no
+ *  parameter; a macro defined in each branch of a test (\\IfFileExists{…}{\\def\\x{a/}}{\\def\\x{}}) has a body for each */
+function plainBodiesOf(texts: readonly string[]) {
+  const out = new Map<string, string[]>()
+  for (const t of texts.map(texUncommented)) {
+    for (const m of t.matchAll(
+      /\\(?:(?:(?:re)?newcommand|providecommand)\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?|[gex]?def\s*\\([A-Za-z@]+))\s*(?=\{)/g,
+    )) {
+      const at = m.index + m[0].length,
+        e = matchGroup(t, at)
+      if (e < 0) continue
+      const bodies = out.get((m[1] ?? m[2])!) ?? out.set((m[1] ?? m[2])!, []).get((m[1] ?? m[2])!)!
+      const body = t.slice(at + 1, e - 1)
+      if (!bodies.includes(body)) bodies.push(body)
+    }
+  }
+  return out
+}
+/** the names a file's name stands for once TeX has expanded it (latex.ltx's \\input{#1} is \\InputIfFileExists{#1}, whose
+ *  \\IfFileExists expands the name before kpathsea looks it up): each of its macros given one of its bodies, the same one
+ *  wherever it stands in the name (TeX's one value when it reads it), a body's own macros expanded the same way. A macro the
+ *  package gives no body gives no name, nor does one met inside its own body, whose expansion TeX would never end */
+function namesThrough(name: string, bodies: ReadonlyMap<string, readonly string[]>): string[] {
+  const expand = (
+    s: string,
+    chosen: ReadonlyMap<string, string>,
+    open: ReadonlySet<string>,
+  ): [string, ReadonlyMap<string, string>][] => {
+    const m = NAME_MACRO.exec(s)
+    if (!m) return [[s, chosen]]
+    const macro = m[1]!
+    if (open.has(macro)) return []
+    const head = s.slice(0, m.index),
+      tail = s.slice(m.index + m[0].length),
+      out: [string, ReadonlyMap<string, string>][] = []
+    for (const body of chosen.has(macro) ? [chosen.get(macro)!] : (bodies.get(macro) ?? [])) {
+      const given = new Map(chosen).set(macro, body)
+      for (const [b, c1] of expand(body, given, new Set(open).add(macro)))
+        for (const [t, c2] of expand(tail, c1, open)) out.push([head + b + t, c2])
+    }
+    return out
+  }
+  return [...new Set(expand(name, new Map(), new Set()).map(([s]) => s))]
+}
 function readProject(
   fsys: Fsys,
   main: string,
@@ -6970,7 +7017,27 @@ function readProject(
     const k = foldOf(f)
     folded.set(k, [...(folded.get(k) ?? []), f])
   }
+  // A name TeX expands first (\input{\subpath sections/a.tex}, under \def\subpath{}): the file read is the one of the package
+  // the name stands for once each of its macros is given a body the package defines it with (namesThrough), found as any name
+  // is; where the bodies name no file of the package, or two (a test TeX runs decides which it reads), none. 2609.35143v1 read
+  // every section so: the front end asked for "\subpath submission/sections/…", found none, cut no unit past the title, and its
+  // prose was translated from the page's own lines alone (the ink units), every float's caption and every table's cell left
+  // English. A name with no macro is looked up as it always was (readNamed)
+  let bodies: Map<string, string[]> | null = null
   const read = (rel: string, dirs: readonly string[] = []) => {
+    // (the name and the directories on its path expanded together, a macro one body in all of them)
+    const whole = [rel, ...dirs].join('\0')
+    if (!NAME_MACRO.test(whole)) return readNamed(rel, dirs)
+    bodies ??= plainBodiesOf(ownTexts)
+    const found = new Map<string, { rel: string; text: string }>()
+    for (const name of namesThrough(whole, bodies)) {
+      const [r, ...ds] = name.split('\0')
+      const f = readNamed(r!, ds)
+      if (f) found.set(f.rel, f)
+    }
+    return found.size === 1 ? [...found.values()][0]! : null
+  }
+  const readNamed = (rel: string, dirs: readonly string[] = []) => {
     const keys = [...dirs, ''].flatMap((dir) => [rel, `${rel}.tex`].map((cand) => normalizePath(`${dir}/${cand}`)))
     for (const key of keys) {
       const bytes = fsys.read(key)
