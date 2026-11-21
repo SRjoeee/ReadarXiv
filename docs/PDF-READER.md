@@ -9143,9 +9143,13 @@ report of 2026-11-21 on production; the released reader did the same).
   The order of definitions is not read: a macro defined, then defined again (`\def\subpath{old/}`, later
   `\renewcommand{\subpath}{new/}`) where the package holds both files is read nowhere, though TeX reads the later body's (the
   local review of round c5, declined under the ruling's bound: never a wrong file; where only one of them exists it is read).
-- **Reach** (the source reader over the lab's 245 papers): no name a paper's source reader asks for holds a control word, so no
-  unit, mark or object of theirs moves. 2609.35143v1: its 23 files read, its source units 53 -> 587 (every caption, all 20, and
-  every table's cells among them, each translated as any caption and cell), its ink prose units 154 -> 2.
+- **Reach**: no name the source reader asks for in the lab's 245 papers holds a control word; their chain from the stored
+  compiles is the base's byte for byte (6,888 bundle files, every prepare dump and ownership file; the located files but their
+  timings), their compile keys the same. 2609.35143v1: its 23 files read; in its prepare's dump the source side's units 76 ->
+  587 (paragraphs 92, headings 52, captions 20 of 20, cells 335, each drawn), its ink prose units (`inkorphan`) 154 -> 2, the
+  float text no unit owns 8,836 letters -> 13. One paragraph is now a source unit the locate keeps the original's, its claimed
+  glyphs past the letters its pieces write (`text past its source`): its `\figpanel{…}{b}`, a macro of the paper's that prints
+  "Figure 2" inside a group, is read as a pair around "b"; the fallback had translated it as prose.
 - **Versions**: PIPELINE 110 (what the units are); LAYOUT 44 (today's layout maker reads the cut through the same front end);
   the marks digest moves (the front end is in the compile child's closure): every stored paper is prepared and compiled again.
 
