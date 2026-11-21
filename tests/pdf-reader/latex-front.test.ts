@@ -82,6 +82,54 @@ describe('loadProject: a file named through import.sty or subfiles is the one Te
     ])).toEqual(['chapters/ch1.tex', 'chapters/table.tex'])
   })
 })
+
+describe('loadProject: a file named through a macro is the one TeX reads, the macro expanded', () => {
+  // (TeX expands the name \input reads: LaTeX's \input{#1} is \InputIfFileExists{#1}, whose \IfFileExists expands it in full
+  // before kpathsea looks it up; so \input{\subpath sections/a.tex} under \def\subpath{} reads sections/a.tex. The front end
+  // took the name as letters, asked the package for "\subpath sections/a.tex", found none, and cut no unit of the file: a paper
+  // whose every section is read so had no unit past its title, its prose translated from the page's own lines (the ink units)
+  // and every figure's and table's caption and every table's cell, which those units leave to the float, in English)
+  const enc = (s: string) => new TextEncoder().encode(s)
+  const SECTION = 'A paragraph of the section, which is prose.\n\n\\begin{figure}[t]\n\\centering\n\\rule{2cm}{1cm}\n\\caption{\\textbf{A bold head.} The rest of the caption.}\n\\end{figure}\n\n\\begin{table}[h]\n\\caption{A table.}\n\\begin{tabular}{ll}\nName & A cell of words\\\\\n\\end{tabular}\n\\end{table}\n'
+  const read = (preamble: string, body: string, rest: [string, string][] = [['parts/sec.tex', SECTION]]) =>
+    loadProject(inMemory(new Map([['main.tex', enc(`\\documentclass{article}\n${preamble}\n\\begin{document}\n${body}\n\\end{document}\n`)], ...rest.map(([f, t]) => [f, enc(t)] as [string, Uint8Array])])), 'main.tex', { tables: true })
+  const filesOf = (p: ReturnType<typeof read>) => [...new Set((p.units as (Unit & { file: string })[]).map((u) => u.file))]
+  const kindsOf = (p: ReturnType<typeof read>) => (p.units as Unit[]).map((u) => u.kind)
+  it('reads the file a macro of one definition names: \\def, \\newcommand, a directory or nothing, with or without .tex', () => {
+    for (const [preamble, body] of [
+      ['\\def\\subpath{}', '\\input{\\subpath parts/sec.tex}'],
+      ['\\newcommand{\\subpath}{}', '\\input{\\subpath parts/sec}'],
+      ['\\def\\dir{parts/}', '\\input{\\dir sec}'],
+      ['\\newcommand\\dir{parts}', '\\input{\\dir/sec.tex}'],
+    ]) {
+      const p = read(preamble!, body!)
+      expect(filesOf(p), `${preamble} ${body}`).toEqual(['parts/sec.tex'])
+    }
+  })
+  it('cuts the file\'s units as any file\'s: its paragraph, its figure\'s and its table\'s captions, the table\'s cells', () => {
+    const p = read('\\def\\subpath{}', '\\input{\\subpath parts/sec.tex}')
+    expect(kindsOf(p).filter((k) => k === 'caption')).toHaveLength(2)
+    expect((p.units as Unit[]).filter((u) => u.kind === 'caption').map((u) => textOf(u))).toEqual(['A bold head. The rest of the caption.', 'A table.'])
+    expect((p.units as Unit[]).some((u) => u.kind === 'para' && textOf(u).startsWith('A paragraph of the section'))).toBe(true)
+    expect((p.units as Unit[]).some((u) => u.kind === 'cell' && textOf(u).trim() === 'A cell of words')).toBe(true)
+  })
+  it('reads the file where the macro is defined in the branches of a test and the package holds the file of one of them alone', () => {
+    // (\IfFileExists{other/x.tex}{\def\subpath{other/}}{\def\subpath{}}: TeX takes the branch whose definition names the file
+    // it then finds; the package holds parts/sec.tex and no other/parts/sec.tex, so TeX's \subpath is empty)
+    const p = read('\\makeatletter\n\\IfFileExists{other/x.tex}{\\def\\subpath{other/}}{\\def\\subpath{}}\n\\makeatother', '\\input{\\subpath parts/sec.tex}')
+    expect(filesOf(p)).toEqual(['parts/sec.tex'])
+  })
+  it('reads a file the preamble \\inputs through a macro, as the body\'s', () => {
+    const p = read('\\def\\subpath{}\n\\input{\\subpath parts/front}', 'Words.', [['parts/front.tex', '\\title{A Title Read From Its Own File}\n']])
+    expect((p.units as Unit[]).filter((u) => u.kind === 'heading').map((u) => textOf(u).trim())).toEqual(['A Title Read From Its Own File'])
+  })
+  it('reads none where the definitions name two files the package holds (which TeX reads, a test it runs decides), nor where none names one', () => {
+    const two: [string, string][] = [['parts/sec.tex', SECTION], ['other/parts/sec.tex', SECTION]]
+    expect(filesOf(read('\\IfFileExists{flag.tex}{\\def\\subpath{other/}}{\\def\\subpath{}}', '\\input{\\subpath parts/sec.tex}', two))).toEqual([])
+    expect(filesOf(read('\\def\\subpath{elsewhere/}', '\\input{\\subpath parts/sec.tex}'))).toEqual([])
+    expect(filesOf(read('', '\\input{\\undefined parts/sec.tex}'))).toEqual([])
+  })
+})
 const project = (tex: string) => loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode(tex)]])), 'main.tex')
 const textOf = (u: Unit) => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
 /** every unit's words replaced by a mark of its own, and the main file as it is then typeset */
