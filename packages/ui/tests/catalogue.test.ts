@@ -14,7 +14,7 @@ const BEFORE = JSON.parse(
 
 /** the words the catalogue gained since 3f4da971c, each a pack's path, with its id in docs/UI.md */
 const ADDED: readonly string[] = [
-  // S-R-28: a font lost (the owner's words, 2026-11-19)
+  // S-R-28: a font lost (added 2026-11-19; the owner's sentence approved 2026-11-21)
   'R.status.facesLost',
 ]
 

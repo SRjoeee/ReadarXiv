@@ -229,8 +229,13 @@ export { LayoutRefusal } from './json.mjs'
  *  `\vfill`, …) meets it once its text has begun, as TeX's `\par` (PDF-READER §19.10), and a table's cell at `\tabularnewline` as
  *  at `\\` (§18.75), so that a file of 42 holds a paper holding a vertical command inside a paragraph, or `\tabularnewline`, with
  *  its units as cut before: of the lab's 245 papers 2608.18502v1, 2610.21765v1, 2610.21106v1, 2610.39068v1, 2501.14787v1 and
- *  2608.12502v1; the gate pack's seven papers hold neither, their files the same but their version */
-export const LAYOUT = '43'
+ *  2608.12502v1; the gate pack's seven papers hold neither, their files the same but their version; 44 (with PIPELINE 110): the
+  source reader's cut, which this maker reads through @readarxiv/engine/today, reads a file a paper names through a macro
+  (`\input{\subpath sections/a.tex}`) as the one TeX reads, its name expanded by the bodies the package defines the macro with
+  (PDF-READER §18.105), so that a file of 43 holds such a paper with none of that file's units: 2609.35143v1, every section of
+  it; none of the lab's 245 papers, nor the gate pack's seven, names a file so, their files the same but their version (the
+  image cover of §18.98 does not reach this maker: its pageInk calls are given no image objects) */
+export const LAYOUT = '44'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

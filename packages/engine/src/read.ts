@@ -37,6 +37,8 @@ export interface PdfDocument {
 interface PdfPage extends OpsPage {
   rotate?: number
   view: number[]
+  /** the page's own objects (PDF.js's PDFObjects: its images; `get` with a callback calls it once the object is resolved) */
+  objs?: { has(id: string): boolean; get(id: string, callback?: (data: unknown) => void): unknown }
   getAnnotations?(): Promise<unknown[]>
   cleanup(): void
 }
@@ -66,6 +68,11 @@ interface ReadOptions<X> {
   mapped?: boolean
   /** false: no figure path's lines (pageInk's `shapes`), which a reader of B's figures never reads (the front half's adapter) */
   shapes?: boolean
+  /** with `turned`: each page's image objects read (pageInk's `images`), so that an image painted after a glyph covers it where
+   *  every sample of it paints: arXiv's page, the one a reader is shown. Each object the reading asks for is awaited once the
+   *  page's list is read (PDF.js's worker resolves an image after its operator; on the box's lite worker a record of no pixels,
+   *  compile/pdf-lite.ts) */
+  images?: boolean
   /** false: each page's raw glyphs (pageInk's) let go once its Doc page is made, its raw page kept without them (`glyphs` empty):
    *  a reader that reads the Doc's glyphs alone holds one copy of a document's glyphs, never two (the front half's adapter
    *  reading B) */
@@ -144,6 +151,13 @@ export async function readPdf<X = never>(
             }
           : null,
       )
+      // (an image's object where PDF.js's canvas finds it: an id that starts `g_` the document's, any other the page's own)
+      const own = page.objs
+      const objsOf = (id: string) => (id.startsWith('g_') ? page.commonObjs : own)
+      const images =
+        o.images && own
+          ? { has: (id: string) => objsOf(id)?.has(id) ?? false, get: (id: string) => objsOf(id)?.get(id) }
+          : null
       const reader = inkReader(pdfjs.OPS, page.commonObjs, {
         rotate: page.rotate ?? 0,
         indices: true,
@@ -153,6 +167,7 @@ export async function readPdf<X = never>(
         glyphsMax: GLYPHS_PAGE,
         boxesMax: BOXES_PAGE,
         names,
+        images,
       })
       // (each piece read by `extra` before its glyphs are tagged, and by pageInk after: the order the whole list was read in)
       await readOps(page, pdfjs.OPS, (fnArray, argsArray) => {
@@ -162,6 +177,19 @@ export async function readPdf<X = never>(
       })
       // (a failed allocation PDF.js's worker recovered from while it read the page: its list or a font of it cut short)
       heard()
+      // (the image objects the reading's covers read, each once PDF.js has resolved it: its worker sends every image it lists,
+      // a record, its pixels or null where it failed, until the page is cleaned up below)
+      if (images)
+        await Promise.all(
+          reader.asks().map(
+            (id) =>
+              new Promise<unknown>((resolve) => {
+                const objs = objsOf(id)
+                if (objs) objs.get(id, resolve)
+                else resolve(null)
+              }),
+          ),
+        )
       const ink = reader.end()
       // (annotations PDF.js cannot read are none of the page's links; a failed allocation is the paper's, never a page without
       // its links)

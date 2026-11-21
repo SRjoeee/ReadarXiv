@@ -365,7 +365,7 @@ const R: Locale['R'] = {
     goToArxiv: '前往 arXiv',
     unreadable: '無法讀取設定，目前使用預設設定',
     unreadableHint: '無法讀取設定',
-    facesLost: '部分字型載入失敗，請重新整理頁面再試一次',
+    facesLost: '部分字型載入失敗，恢復後會自動顯示譯文',
   },
 }
 
